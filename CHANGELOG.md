@@ -7,6 +7,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### v2 Phase 0 — Claude workbench, repo hygiene, triage, F&O recorders (2026-07-03)
+
+The first phase of the approved v2 upgrade (`docs/UPGRADE_PLAN.md`). Full
+report: `docs/phases/phase-00-workbench.md`.
+
+#### Repo & tooling
+- **Git initialized** (the 12-phase codebase was unversioned); pristine baseline commit, `.gitignore` hardened (fixed `lib/` pattern that would have ignored `frontend/src/lib/`)
+- **Backend venv rebuilt** on a snap-proof Python 3.12 (previous interpreter was garbage-collected by a snap refresh — tests could not run)
+- **Claude Code workbench**: `.claude/settings.json` permissions + 3 hooks (auto-format per language; destructive-command guard, 12 cases verified; protected-file guard for SIGNAL_ENGINE.md/applied migrations/.env, 7 cases verified) · 5 review agents with strict evidence contracts (quant-verifier, bug-hunter, ui-reviewer, perf-auditor, test-guardian) · 6 rules files · 4 skills (/vertical-slice, /phase-gate, /signal-audit, /perf-bench)
+- **Ruff + mypy brought to zero** across the backend (48 + 18 baseline findings)
+
+#### Critical fixes (each with regression tests)
+- **100× position undersizing**: signal_tasks pre-divided risk% by 100 and compute_quantity divided again — every system-generated signal risked 0.02% instead of 2%. **Paper-trading history before this fix is invalid; the 30-day gate restarts.**
+- **Live tick pipeline repaired** (it had never worked end-to-end): asyncio.get_event_loop on the KiteTicker thread (RuntimeError on 3.12); .format() on a TextClause (AttributeError on first candle); flush-without-commit (candles invisible all day); LTP published to a channel but never SET as the key paper_broker reads (intraday SL/TP silently ran on stale EOD closes)
+- **From bug-hunter agent review** (3 confirmed by reproduction): batch failures no longer kill the tick loop (one Redis blip used to end live data for the day; task now supervised + loud); candle timestamps converted with astimezone (kiteconnect sends naive HOST-LOCAL datetimes in `exchange_timestamp` — every live candle was mislabelled +5:30 on an IST host); /ws/live pubsub reader anchored with a keepalive subscription (redis-py listen() exits on an unsubscribed pubsub — the stream was dead on arrival); candle volume now diffs cumulative `volume_traded` (snapshot-quantity summing fed garbage to the volume factor); Celery publishes batched off the event loop; `asyncio.run` replaces `get_event_loop().run_until_complete` in all Celery tasks
+- **Signal idempotency**: active-signal dedup guard — candle-close regeneration no longer mints near-duplicate signals every period
+- **/ws/live authenticates**: JWT required on the upgrade (close code 4401; refresh tokens rejected); useLiveQuotes sends the token, supports wss, stops reconnect-looping on auth failure
+- **Redis eviction**: allkeys-lru → volatile-lru so Celery broker keys can never be silently evicted; stale container recreated (it predated the port mapping)
+- **Backtests off the event loop** (asyncio.to_thread) — running a backtest no longer freezes the API and live WebSocket
+
+#### F&O data recorders (recording starts now; analytics consume it in Phase 4)
+- `fo_bhavcopy` — NSE UDiFF derivatives EOD (futures+options close/settle/OI/volume), idempotent, Celery beat 18:45 IST
+- `india_vix_daily` — VIX EOD from the NSE indices bhavcopy (interim IV-regime proxy)
+- `option_chain_snapshots` (Timescale hypertable) — 1-minute nearest-expiry chain snapshots via kite.quote for NIFTY/BANKNIFTY (2N+1 strikes around spot); idles without a Kite token
+- `kite_instruments`: NFO segment synced with strikes; tokens widened to BIGINT; migration `k7l8m9n0p1q2` verified reversible
+
+#### Docs
+- Approved plan committed as `docs/UPGRADE_PLAN.md`; `docs/phases/` reports started; CLAUDE.md/README/PHASES rewritten to current truth; ARCHITECTURE.md + PERFORMANCE.md started; Rust rationale added to TECH_STACK_RATIONALE.md; CLAUDE_CODE_GUIDE.md updated for the workbench
+
+#### Tests
+- **+45 backend tests** (sizing 3, tick consumer 7 + loop survival 1, dedup 5, WS auth 9, aggregator regressions 4 + fixture truth-up, F&O recorders 16) — backend total 439, frontend 131
+
 ### UI Polish v2 — pre-Phase-12 sprint
 
 #### Frontend

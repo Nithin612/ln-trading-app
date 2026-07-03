@@ -171,3 +171,33 @@ We can swap brokers behind a `BrokerInterface` abstraction (Phase 7+); the rest 
 | Webpack | Vite is strictly better |
 | ESLint + Prettier separately | Use Biome (single tool) — TBD whether we adopt it in Phase 1 |
 | Yarn / npm | Use `pnpm` — disk-efficient, faster, strict |
+
+---
+
+## Rust compute core (added v2, 2026-07-03 — UPGRADE_PLAN.md)
+
+**Why Rust + PyO3 (`engine/` workspace → `tradecore` wheel):** the honest
+bottleneck is not the tick path (500 instruments ≈ 500–2000 ticks/s is
+trivial) but the **backtest/tuning loop**: the pandas engine re-slices and
+recomputes full-window indicators per candle — O(n²) — and weight-grid /
+walk-forward searches over minute data are simply not feasible in Python.
+Rayon-parallel Rust makes the strategy lab 100–1000× faster, and reusing
+the SAME compiled engine live eliminates the live-vs-backtest drift class
+of bugs this repo has already exhibited.
+
+**Why not Python multiprocessing:** pickling/IPC overhead per task drowns
+µs-scale math, and the GIL blocks shared-memory threading. **Why not
+Numba/Cython:** JIT warmup, typing friction, and still no clean path to a
+shared live+backtest core. **Why not a standalone Rust service speaking
+Kite WS directly:** we'd re-own auth/reconnect/binary parsing that
+kiteconnect already battle-tests, for single-digit-ms gain — instead the
+Python live-worker feeds tick batches into the embedded Rust LiveEngine
+(one PyO3 call per batch, GIL released during compute). An `engine-cli`
+binary keeps replay/bench usable without Python.
+
+**Migration safety:** the pandas implementation is frozen at parity time
+and committed golden fixtures become the oracle; tiered tolerances
+(1e-9 EMA-family, 1e-6 Wilder-family, EXACT factor scores/confidence/
+signal decisions); one live shadow week; then the Python factor code and
+the `ENGINE_IMPL` flag are deleted together. Numeric canon: money i64
+scaled 1e-4, indicators f64 — details in `.claude/rules/rust.md`.

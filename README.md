@@ -1,145 +1,73 @@
 # Trading Platform
 
-Intelligent stock-suggestion and (future) algorithmic-trading system for Indian markets (NSE/BSE).
+Personal stock-suggestion and algo-trading platform for Indian markets
+(NSE/BSE). Confluence-based signals (never single-indicator), four trading
+styles (Intraday · Swing · F&O · Investment), paper-first discipline with a
+non-disableable daily-loss circuit breaker, and — in progress — a Rust
+compute core with a tick-to-tick realtime layer on Zerodha Kite.
 
-**Status:** Phase 0 — local dev infrastructure. No app code yet.
+**Status:** v1 phases 0–11 complete (439 backend + 131 frontend tests).
+v2 upgrade underway — Phase 0 (workbench + triage + F&O recorders) done.
+Roadmap: [`docs/PHASES.md`](docs/PHASES.md) · rationale:
+[`docs/UPGRADE_PLAN.md`](docs/UPGRADE_PLAN.md) · per-phase results:
+[`docs/phases/`](docs/phases/).
 
----
-
-## What this is
-
-A personal-first, rentable-later platform that:
-
-1. Ingests live NSE/BSE data via the Zerodha Kite Connect WebSocket API.
-2. Computes candlestick patterns, technical indicators (RSI, MACD, EMA, ADX, Bollinger), support/resistance zones, Fibonacci levels, and Dow-theory trend on multiple timeframes.
-3. Combines them with a weighted confluence scorer to produce signals like *"Buy TATAMOTORS — Bullish engulfing at 50 EMA support, RSI 32, volume 1.6x avg, 78% confidence, SL ₹482, TP ₹512, qty 24."*
-4. Stores every signal with its outcome for backtesting and continuous strategy tuning.
-5. Starts in paper-trading mode; switches to live trading via broker API once strategies prove profitable.
-
-The full 12-phase build plan lives in [`docs/PHASES.md`](docs/PHASES.md).
-
----
-
-## Prerequisites
-
-| Tool | Version | Verify |
-|---|---|---|
-| Docker | 20.10+ | `docker --version` |
-| Docker Compose v2 | 2.0+ | `docker compose version` |
-| Make | any recent | `make --version` |
-| Git | 2.30+ | `git --version` |
-
-If `docker compose version` says "command not found", you're on Compose v1. Either upgrade Docker Desktop, or replace `docker compose` with `docker-compose` everywhere — the Makefile auto-detects this.
-
----
-
-## Quick start (Phase 0)
+## Quickstart (local dev)
 
 ```bash
-# 1. Clone & enter
-git clone <your-repo-url> trading-platform
-cd trading-platform
-
-# 2. Copy env template and generate a real JWT secret
-cp .env.example .env
-# Open .env and replace JWT_SECRET_KEY with output of:
-#   openssl rand -hex 32
-
-# 3. Start the infrastructure
+# 1. Infrastructure (Postgres+TimescaleDB on 5433, Redis on 6379)
 make up
 
-# 4. Verify Postgres + TimescaleDB are alive
-make db-extensions
+# 2. Backend (Python 3.12 via uv)
+cd backend && uv sync && cd ..
+make migrate                # alembic upgrade head
+make create-admin           # first admin user (interactive)
+make backend                # FastAPI on :8000
+
+# 3. Frontend (React 19 + Vite 8)
+cd frontend && npm install && cd ..
+make frontend               # Vite dev server on :5173
+
+# 4. Background jobs (optional in dev; required for recorders/signals)
+cd backend && uv run celery -A app.celery_app worker -l info   # worker
+cd backend && uv run celery -A app.celery_app beat -l info     # scheduler
 ```
 
-You should see output similar to:
+Environment: copy `.env.example` → `.env` and fill it in. Never commit
+`.env`. Zerodha credentials are optional until v2 Phase 3 (live data);
+the F&O EOD recorders run off free NSE archives without them.
 
-```
-                                List of installed extensions
-    Name     | Version |   Schema   |                            Description
--------------+---------+------------+--------------------------------------------------------------------
- pg_trgm     | 1.6     | public     | text similarity measurement
- pgcrypto    | 1.3     | public     | cryptographic functions
- plpgsql     | 1.0     | pg_catalog | PL/pgSQL procedural language
- timescaledb | 2.x.x   | public     | Enables scalable inserts and complex queries for time-series data
- uuid-ossp   | 1.1     | public     | generate universally unique identifiers (UUIDs)
-```
-
-If TimescaleDB is in that list, **Phase 0 is complete**. You're ready for Phase 1 (backend skeleton).
-
----
-
-## Common commands
+## The full gate
 
 ```bash
-make help          # show all available commands
-make up            # start postgres + redis
-make up-tools      # also start pgAdmin web UI at http://localhost:5050
-make down          # stop everything (data preserved)
-make status        # health check
-make db-shell      # open psql inside postgres container
-make redis-shell   # open redis-cli inside redis container
-make logs          # tail all logs
-make clean         # DELETE ALL DATA (with confirmation)
+make check    # pytest + ruff + mypy + vitest + eslint + tsc
+make test     # both test suites only
 ```
 
----
+Definition of done, phase workflow, and review agents: see
+[`CLAUDE.md`](CLAUDE.md) and `.claude/` (this repo is built with Claude
+Code; hooks auto-format, guard destructive commands, and protect
+`docs/SIGNAL_ENGINE.md` — the strategy spec).
 
-## Project layout (target)
+## Layout
 
 ```
-trading-platform/
-├── backend/                  # FastAPI + Celery + SQLAlchemy + TA libs        (Phase 1+)
-│   ├── app/
-│   │   ├── api/v1/           # REST endpoints
-│   │   ├── core/             # config, security, dependencies
-│   │   ├── db/               # models + Alembic migrations
-│   │   ├── ingestion/        # broker_ws, bhavcopy_loader, candle_aggregator
-│   │   ├── analysis/         # patterns, indicators, S&R, fibonacci, dow
-│   │   ├── signals/          # generator, expiry sweeper, confluence scorer
-│   │   ├── trading/          # paper_broker, kite_broker
-│   │   ├── backtest/         # engine, metrics, reports
-│   │   ├── ws/               # WebSocket connection manager
-│   │   └── tasks/            # Celery scheduled jobs
-│   ├── tests/
-│   ├── alembic/
-│   └── pyproject.toml
-│
-├── frontend/                 # React + TypeScript + Vite + Tailwind            (Phase 1+)
-│   └── src/
-│       ├── pages/
-│       ├── features/
-│       ├── components/
-│       └── hooks/
-│
-├── docker/                   # Service-specific docker config
-│   └── postgres/init/        # SQL run once on first container start
-│
-├── docs/                     # Architecture docs, runbooks
-│   └── PHASES.md             # the 12-phase build plan
-│
-├── .env.example
-├── .gitignore
-├── docker-compose.yml
-├── Makefile
-└── README.md
+backend/    FastAPI app, analysis engine, Celery tasks, pytest suite
+frontend/   React SPA (token-driven 5-theme UI)
+engine/     Rust compute core (arrives v2 Phase 1)
+docs/       specs & plans (SIGNAL_ENGINE is protected), phase reports
+docker/     postgres init scripts
 ```
 
----
+## Safety rails that are not up for debate
 
-## Why these tech choices
+- Paper trading is the default; live mode needs explicit opt-in **plus** 30
+  profitable paper-trading days, enforced in code.
+- The daily-loss circuit breaker cannot be disabled in live mode.
+- Position sizing (`floor(capital × risk% / |entry − SL|)`) attaches to
+  every signal; signals whose natural stop exceeds the classification cap
+  are rejected, not tightened.
+- No look-ahead anywhere: signals compute on candle N, act from N+1.
 
-Brief reasoning; full discussion in [`docs/TECH_STACK.md`](docs/TECH_STACK.md) (added in Phase 1).
-
-- **PostgreSQL + TimescaleDB** — relational data (users, signals, journals) and time-series data (5 years of 1-minute OHLCV) in one database with SQL joins between them. TimescaleDB hypertables make a 50-million-row candle table feel like 50 thousand rows.
-- **Redis** — sub-millisecond reads for latest tick prices, Pub/Sub for WebSocket fan-out to many browser clients, Celery broker for scheduled jobs.
-- **Python + FastAPI** — the entire quant ecosystem (pandas, numpy, TA-Lib, vectorbt) is Python-first. FastAPI's native async is essential for handling broker WebSockets + frontend WebSockets on one process.
-- **React + Vite + TypeScript** — TypeScript catches half the frontend bugs at compile time. Vite has 10x faster hot-reload than CRA.
-- **Tailwind + shadcn/ui** — you own the component code (unlike MUI), accessible by default, no vendor lock-in.
-- **TradingView Lightweight Charts** — the same charting engine TradingView uses, free and open source. Best-in-class candlestick rendering.
-
----
-
-## License
-
-Personal use. Not for redistribution without owner consent.
+⚠️ This platform assists trading decisions; it does not guarantee profits.
+Its job is disciplined risk, measured signal quality, and honest tracking.
