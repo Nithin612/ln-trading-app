@@ -14,7 +14,7 @@ import csv
 import io
 import logging
 from datetime import UTC, datetime, timedelta
-from typing import Any
+from typing import Any, cast
 
 from kiteconnect import KiteConnect
 from sqlalchemy import select, update
@@ -49,7 +49,7 @@ def _next_expiry() -> datetime:
 def get_login_url() -> str:
     """Return the Zerodha login redirect URL for step 1 of OAuth."""
     kc = KiteConnect(api_key=settings.kite_api_key)
-    return kc.login_url()
+    return str(kc.login_url())
 
 
 async def exchange_token(
@@ -117,10 +117,10 @@ async def sync_instruments(db: AsyncSession, access_token: str) -> int:
     kc = build_kite(access_token)
 
     # kiteconnect returns raw CSV bytes from instruments()
-    raw: bytes | str = kc.instruments()  # type: ignore[assignment]
+    raw: bytes | str = kc.instruments()
     if isinstance(raw, (list, dict)):
         # Newer SDK versions return parsed list
-        rows = raw  # type: ignore[assignment]
+        rows = raw
     else:
         reader = csv.DictReader(io.StringIO(raw if isinstance(raw, str) else raw.decode()))
         rows = list(reader)
@@ -201,4 +201,4 @@ async def fetch_historical(
             continuous=False,
         ),
     )
-    return data  # type: ignore[return-value]
+    return cast("list[dict[str, Any]]", data)

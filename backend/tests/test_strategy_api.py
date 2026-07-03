@@ -11,8 +11,6 @@ Covers:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
-
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -127,7 +125,9 @@ class TestStrategyRunList:
     async def test_list_sort_by_sharpe(
         self, client: AsyncClient, auth_headers: dict[str, str]
     ) -> None:
-        await client.post("/api/v1/strategy/runs", json={**_BASE_REQ, "name": "X"}, headers=auth_headers)
+        await client.post(
+            "/api/v1/strategy/runs", json={**_BASE_REQ, "name": "X"}, headers=auth_headers
+        )
         resp = await client.get("/api/v1/strategy/runs?sort_by=sharpe", headers=auth_headers)
         assert resp.status_code == 200
 

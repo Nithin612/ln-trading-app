@@ -1,9 +1,6 @@
 """Tests for gap detection logic in gap_fill.py (pure logic, no DB/Kite calls)."""
 
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
-
-import pytest
 
 from app.broker.candle_aggregator import _floor_to_period
 
@@ -41,7 +38,7 @@ def test_gap_timeframe_kite_mapping():
 
 def test_gap_model_mapping():
     from app.broker.gap_fill import _TF_TO_MODEL
-    from app.models.market_data import Ohlcv1m, Ohlcv5m, Ohlcv15m, Ohlcv1h
+    from app.models.market_data import Ohlcv1h, Ohlcv1m, Ohlcv5m, Ohlcv15m
 
     assert _TF_TO_MODEL["1m"] is Ohlcv1m
     assert _TF_TO_MODEL["5m"] is Ohlcv5m

@@ -50,8 +50,8 @@ class JournalEntry(Base):
     lesson: Mapped[str | None] = mapped_column(Text, nullable=True)
     emotion_before: Mapped[str | None] = mapped_column(String(16), nullable=True)
     emotion_after: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    screenshot_paths: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
-    tags: Mapped[list] = mapped_column(JSONB, nullable=False, default=list)
+    screenshot_paths: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
+    tags: Mapped[list[str]] = mapped_column(JSONB, nullable=False, default=list)
     entry_type: Mapped[str] = mapped_column(String(8), nullable=False, default="manual")
     created_at: Mapped[datetime] = mapped_column(TZ, nullable=False, server_default=func.now())
     updated_at: Mapped[datetime] = mapped_column(

@@ -2,12 +2,10 @@
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
+from app.models.filing import CorporateFiling
+from app.signals.event_guard import is_signal_suppressed
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.filing import CorporateFiling
-from app.models.stock import Stock
-from app.signals.event_guard import is_signal_suppressed
 from tests.helpers import make_stock
 
 

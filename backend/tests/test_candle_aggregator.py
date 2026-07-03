@@ -3,8 +3,6 @@
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
-import pytest
-
 from app.broker.candle_aggregator import (
     AggregatorRegistry,
     CandleAggregator,

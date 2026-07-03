@@ -23,8 +23,7 @@ from app.schemas.portfolio import (
     MfSummary,
     NetWorthOut,
 )
-from app.services.cas_parser import CASHolding, parse_cas_pdf
-
+from app.services.cas_parser import parse_cas_pdf
 
 # ── CAS import ─────────────────────────────────────────────────────────────────
 
@@ -163,7 +162,7 @@ async def _manual_summary(db: AsyncSession, user_id: int) -> ManualSummary:
     )
     rows = result.all()
 
-    _TYPE_LABELS = {
+    type_labels = {
         "gold": "Gold",
         "fd": "Fixed Deposits",
         "ppf": "PPF",
@@ -183,7 +182,7 @@ async def _manual_summary(db: AsyncSession, user_id: int) -> ManualSummary:
         breakdown.append(
             AssetBreakdownItem(
                 asset_type=row.asset_type,
-                label=_TYPE_LABELS.get(row.asset_type, row.asset_type.title()),
+                label=type_labels.get(row.asset_type, row.asset_type.title()),
                 total_value=val,
                 count=row.cnt,
             )

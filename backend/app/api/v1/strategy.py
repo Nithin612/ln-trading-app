@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 from datetime import UTC, datetime
 from decimal import Decimal
-from typing import Annotated
+from typing import Annotated, Any
 
 import pandas as pd
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -116,7 +116,7 @@ async def _resolve_stock_ids(
     return ids, sym_map
 
 
-def _trades_to_json(trades: list) -> list[dict]:
+def _trades_to_json(trades: list[Any]) -> list[dict[str, Any]]:
     out = []
     for t in trades:
         out.append({

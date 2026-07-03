@@ -2,15 +2,16 @@
 
 from datetime import UTC, datetime, timedelta
 
-import pytest
+from app.models.filing import CorporateFiling
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.filing import CorporateFiling
 from tests.helpers import create_test_user, get_auth_headers, make_stock
 
 
-async def _auth(client: AsyncClient, email: str = "test@example.com", password: str = "Secret123") -> dict:
+async def _auth(
+    client: AsyncClient, email: str = "test@example.com", password: str = "Secret123"
+) -> dict:
     return await get_auth_headers(client, email=email, password=password)
 
 
@@ -117,7 +118,9 @@ class TestFilingsRecent:
 
 
 class TestFilingsByStock:
-    async def test_returns_404_for_unknown_stock(self, client: AsyncClient, db: AsyncSession) -> None:
+    async def test_returns_404_for_unknown_stock(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
         await create_test_user(db)
         headers = await _auth(client)
         r = await client.get("/api/v1/filings/by-stock/99999", headers=headers)
@@ -136,7 +139,9 @@ class TestFilingsByStock:
 
 
 class TestEventGuardEndpoint:
-    async def test_not_suppressed_when_no_filings(self, client: AsyncClient, db: AsyncSession) -> None:
+    async def test_not_suppressed_when_no_filings(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
         await create_test_user(db)
         headers = await _auth(client)
         stock = await make_stock(db, symbol="FREECO")

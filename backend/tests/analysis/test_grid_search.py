@@ -1,18 +1,16 @@
 """Tests for the grid search engine and weight multiplier application."""
 
-from decimal import Decimal
 
 import numpy as np
 import pandas as pd
 import pytest
-
+from app.analysis.types import FactorResult
 from app.backtest.engine import (
     BacktestConfig,
     BacktestEngine,
     apply_weight_multipliers,
 )
 from app.backtest.grid_search import PRESETS, run_custom_grid, run_preset_scan
-from app.analysis.types import FactorResult
 
 
 def _candles(n: int = 200, drift: float = 0.002) -> pd.DataFrame:

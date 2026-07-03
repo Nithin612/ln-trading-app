@@ -14,20 +14,17 @@ Covers:
 
 from __future__ import annotations
 
-import io
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-
-import pytest
-from httpx import AsyncClient
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.signal import Signal
 from app.models.stock import Stock
 from app.models.trading import Position
 from app.models.user import User
-from tests.helpers import create_test_user, get_auth_headers, make_stock
+from httpx import AsyncClient
+from sqlalchemy.ext.asyncio import AsyncSession
 
+from tests.helpers import create_test_user, get_auth_headers, make_stock
 
 # ── Factories ─────────────────────────────────────────────────────────────────
 
@@ -612,7 +609,7 @@ class TestJournalOwnership:
         from app.core.security import hash_password
 
         await create_test_user(db, email="owner@example.com")
-        User2 = User(
+        user2 = User(
             email="other@example.com",
             password_hash=hash_password("Secret123"),
             full_name="Other",
@@ -620,7 +617,7 @@ class TestJournalOwnership:
             is_active=True,
             trading_mode="paper",
         )
-        db.add(User2)
+        db.add(user2)
         await db.commit()
 
         owner_headers = await get_auth_headers(client, email="owner@example.com")
@@ -642,7 +639,7 @@ class TestJournalOwnership:
         from app.core.security import hash_password
 
         await create_test_user(db, email="owner2@example.com")
-        User2 = User(
+        user2 = User(
             email="other2@example.com",
             password_hash=hash_password("Secret123"),
             full_name="Other2",
@@ -650,7 +647,7 @@ class TestJournalOwnership:
             is_active=True,
             trading_mode="paper",
         )
-        db.add(User2)
+        db.add(user2)
         await db.commit()
 
         owner_headers = await get_auth_headers(client, email="owner2@example.com")

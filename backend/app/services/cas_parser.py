@@ -19,9 +19,8 @@ from __future__ import annotations
 
 import io
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import date
-
 
 # ── Data classes ──────────────────────────────────────────────────────────────
 
@@ -47,7 +46,10 @@ class CASHolding:
 # ── Regex helpers ─────────────────────────────────────────────────────────────
 
 _RE_PAN = re.compile(r"\bPAN\s*[:\-]\s*([A-Z]{5}[0-9]{4}[A-Z])\b")
-_RE_FOLIO = re.compile(r"Folio\s*(?:No\.?|Number)\s*[:\-]?\s*([\w\d/\- ]+?)(?:\s+PAN|\s+KYC|\s*$)", re.IGNORECASE)
+_RE_FOLIO = re.compile(
+    r"Folio\s*(?:No\.?|Number)\s*[:\-]?\s*([\w\d/\- ]+?)(?:\s+PAN|\s+KYC|\s*$)",
+    re.IGNORECASE,
+)
 _RE_ISIN = re.compile(r"\bISIN\s*[:\-]\s*([A-Z]{2}[A-Z0-9]{10})\b", re.IGNORECASE)
 _RE_UNITS = re.compile(r"(?:Closing\s+)?Units?\s*[:\-]\s*([\d,]+\.?\d*)", re.IGNORECASE)
 _RE_NAV = re.compile(
@@ -168,13 +170,27 @@ def _flush_scheme(
         holdings.append(h)
 
 
-def _extract_holdings(lines: list[str]) -> list[CASHolding]:
+def _extract_holdings(lines: list[str]) -> list[CASHolding]:  # noqa: C901
+    # State-machine parser: complexity is inherent to the format's ambiguity;
+    # splitting it further would scatter the state transitions. Covered by
+    # the TestCasParser suite.
     holdings: list[CASHolding] = []
     current_amc: str = "Unknown AMC"
     current_folio: str = ""
     current_scheme: str = ""
     current_isin: str | None = None
     scheme_lines: list[str] = []
+
+    def flush() -> None:
+        """Emit the current scheme block (if any) and reset scheme state."""
+        nonlocal current_scheme, current_isin, scheme_lines
+        _flush_scheme(
+            holdings, scheme_lines, current_amc,
+            current_scheme, current_folio, current_isin,
+        )
+        current_scheme = ""
+        current_isin = None
+        scheme_lines = []
 
     for line in lines:
         # ── Detect AMC name ───────────────────────────────────────────────────
@@ -184,10 +200,7 @@ def _extract_holdings(lines: list[str]) -> list[CASHolding]:
             and len(line) < 120
         ):
             if current_scheme:
-                _flush_scheme(holdings, scheme_lines, current_amc, current_scheme, current_folio, current_isin)
-                current_scheme = ""
-                current_isin = None
-                scheme_lines = []
+                flush()
             current_amc = line
             continue
 
@@ -195,10 +208,7 @@ def _extract_holdings(lines: list[str]) -> list[CASHolding]:
         m_folio = _RE_FOLIO.match(line)
         if m_folio:
             if current_scheme:
-                _flush_scheme(holdings, scheme_lines, current_amc, current_scheme, current_folio, current_isin)
-                current_scheme = ""
-                current_isin = None
-                scheme_lines = []
+                flush()
             current_folio = _clean(m_folio.group(1).split("/")[0])
             continue
 
@@ -223,10 +233,7 @@ def _extract_holdings(lines: list[str]) -> list[CASHolding]:
             # Before starting a new scheme, flush the previous one IF it already
             # has complete data (units + NAV + value).  If not, keep accumulating.
             if current_scheme and _has_complete_data(scheme_lines):
-                _flush_scheme(holdings, scheme_lines, current_amc, current_scheme, current_folio, current_isin)
-                current_scheme = ""
-                current_isin = None
-                scheme_lines = []
+                flush()
             if not current_scheme:
                 current_scheme = line
                 scheme_lines = []
@@ -237,14 +244,11 @@ def _extract_holdings(lines: list[str]) -> list[CASHolding]:
             # Auto-flush when we have complete data and the block looks closed
             # (i.e., we've seen "valuation" which typically ends the block)
             if _RE_VALUE.search(line) and _has_complete_data(scheme_lines):
-                _flush_scheme(holdings, scheme_lines, current_amc, current_scheme, current_folio, current_isin)
-                current_scheme = ""
-                current_isin = None
-                scheme_lines = []
+                flush()
 
     # Flush trailing scheme
     if current_scheme:
-        _flush_scheme(holdings, scheme_lines, current_amc, current_scheme, current_folio, current_isin)
+        flush()
 
     return holdings
 

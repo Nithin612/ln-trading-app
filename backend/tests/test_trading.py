@@ -14,16 +14,15 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from app.models.signal import Signal
+from app.models.stock import Stock
+from app.models.trading import Position
+from app.models.user import User
+from app.trading.trail_sl import advance_trail, compute_pnl, is_sl_hit, is_tp_hit
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.signal import Signal
-from app.models.stock import Stock
-from app.models.trading import Order, Position
-from app.models.user import User
-from app.trading.trail_sl import advance_trail, compute_pnl, is_sl_hit, is_tp_hit
 from tests.helpers import create_test_user, get_auth_headers, make_stock
-
 
 # ── Factories ────────────────────────────────────────────────────────────────
 
@@ -222,15 +221,21 @@ class TestTrailSl:
         assert not is_tp_hit(side="LONG", current_price=Decimal("539"), current_tp=Decimal("540"))
 
     def test_compute_pnl_long_profit(self) -> None:
-        pnl = compute_pnl(side="LONG", entry=Decimal("500"), exit_price=Decimal("540"), quantity=100)
+        pnl = compute_pnl(
+            side="LONG", entry=Decimal("500"), exit_price=Decimal("540"), quantity=100
+        )
         assert pnl == Decimal("4000")
 
     def test_compute_pnl_long_loss(self) -> None:
-        pnl = compute_pnl(side="LONG", entry=Decimal("500"), exit_price=Decimal("480"), quantity=100)
+        pnl = compute_pnl(
+            side="LONG", entry=Decimal("500"), exit_price=Decimal("480"), quantity=100
+        )
         assert pnl == Decimal("-2000")
 
     def test_compute_pnl_short_profit(self) -> None:
-        pnl = compute_pnl(side="SHORT", entry=Decimal("500"), exit_price=Decimal("460"), quantity=100)
+        pnl = compute_pnl(
+            side="SHORT", entry=Decimal("500"), exit_price=Decimal("460"), quantity=100
+        )
         assert pnl == Decimal("4000")
 
 
@@ -412,7 +417,7 @@ class TestTradingApi:
     async def test_place_order_creates_position(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        user = await create_test_user(db)
+        await create_test_user(db)
         headers = await get_auth_headers(client)
         stock = await make_stock(db)
         signal = await _make_signal(db, stock.id)

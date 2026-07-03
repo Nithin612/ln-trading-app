@@ -2,6 +2,7 @@
 
 from datetime import UTC, datetime
 from decimal import Decimal
+from typing import Any
 
 import pandas as pd
 from sqlalchemy import select
@@ -222,7 +223,7 @@ async def run_live_signal_generation(
     """
     from app.models.market_data import Ohlcv1h, Ohlcv1m, Ohlcv5m, Ohlcv15m
 
-    _tf_model = {
+    _tf_model: dict[str, type[Any]] = {
         "1m": Ohlcv1m,
         "5m": Ohlcv5m,
         "15m": Ohlcv15m,
@@ -240,8 +241,8 @@ async def run_live_signal_generation(
 
     result = await db.execute(
         select(model)
-        .where(model.stock_id == stock_id, model.is_complete.is_(True))  # type: ignore[attr-defined]
-        .order_by(model.time.desc())  # type: ignore[attr-defined]
+        .where(model.stock_id == stock_id, model.is_complete.is_(True))
+        .order_by(model.time.desc())
         .limit(300)
     )
     rows = result.scalars().all()

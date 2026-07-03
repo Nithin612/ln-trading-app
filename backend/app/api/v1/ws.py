@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import json
 import logging
+from collections.abc import AsyncIterator
 from typing import Any
 
 import jwt as pyjwt
@@ -145,7 +146,7 @@ async def ws_live(websocket: WebSocket) -> None:  # noqa: C901
         await r.aclose()
 
 
-async def _ws_iter(ws: WebSocket):  # type: ignore[return]
+async def _ws_iter(ws: WebSocket) -> AsyncIterator[str]:
     """Yield raw text messages from a WebSocket until disconnect."""
     while True:
         try:

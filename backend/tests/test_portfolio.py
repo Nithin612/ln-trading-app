@@ -30,18 +30,14 @@ Covers:
 
 from __future__ import annotations
 
-import io
 from datetime import date
 from decimal import Decimal
 
-import pytest
+from app.services.cas_parser import parse_cas_text
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.portfolio import ManualAsset, MfImportBatch
-from app.services.cas_parser import parse_cas_text
 from tests.helpers import create_test_user, get_auth_headers
-
 
 # ── CAS parser unit tests ─────────────────────────────────────────────────────
 
