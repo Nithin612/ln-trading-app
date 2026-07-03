@@ -84,13 +84,20 @@ def bench_single_eval(df: pd.DataFrame) -> float:
     return min(times)
 
 
+async def _gather_data() -> tuple[dict[str, pd.DataFrame], dict[str, pd.DataFrame]]:
+    """One event loop for all DB work — the app engine binds to the first
+    loop it sees, so multiple asyncio.run() calls break asyncpg."""
+    two_years_ago = datetime.now(UTC) - timedelta(days=365 * 2 + 30)
+    n50_2y = await load_universe(True, min_rows=200, since=two_years_ago)
+    all_latest = await load_universe(False, min_rows=60)
+    return n50_2y, all_latest
+
+
 def main() -> int:
     print(f"# Baseline bench — {datetime.now(UTC).isoformat(timespec='seconds')}")
 
     # ── data ──
-    two_years_ago = datetime.now(UTC) - timedelta(days=365 * 2 + 30)
-    n50_2y = asyncio.run(load_universe(True, min_rows=200, since=two_years_ago))
-    all_latest = asyncio.run(load_universe(False, min_rows=60))
+    n50_2y, all_latest = asyncio.run(_gather_data())
     print(f"corpus: nifty50 2y = {len(n50_2y)} stocks · universe = {len(all_latest)} stocks")
     if not n50_2y:
         print("NO DATA — run scripts/backfill_eod.py first")

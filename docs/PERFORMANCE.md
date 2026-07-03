@@ -18,14 +18,23 @@ Hardware context for all local numbers: i7-1355U (2P+8E, 12 threads),
 15 GB RAM, laptop thermals — bench on AC power, note RAYON_NUM_THREADS,
 close the Vite dev server for engine benches.
 
-## Baselines to capture in Phase 1 (pandas, pre-Rust)
+## Baselines captured 2026-07-03 (pandas, pre-Rust) — the "before" column
 
-- [ ] Full-universe nightly scan (all active stocks, 1d)
-- [ ] 2y × 50-stock daily backtest wall-clock
-- [ ] 200-combo preset scan wall-clock
-- [ ] Single-stock confluence eval (300 candles)
+Corpus: 3y NSE bhavcopy backfill (1.29M daily candles, 2,330 stocks);
+benches on the 2y × 49-Nifty50 slice. Machine idle during runs.
 
-These become the "before" column of the Phase-1 comparison table.
+| Benchmark | pandas baseline | Notes |
+|---|---|---|
+| Single confluence eval (300 candles) | **44.5 ms** | best of 5, ADANIENT |
+| Full-universe scan (2,207 stocks) | **91.4 s** | one eval per stock |
+| 2y × 49-stock daily backtest | **883.8 s (14.7 min)** | 863 trades; O(n²) growing-window recompute |
+| 200-combo weight grid (49 stocks) | **≈ 50.5 h (extrapolated)** | 185.6 s/combo measured on 10 stocks × 3 combos |
+
+The 50-hour grid is why the strategy lab moves to Rust (target: minutes).
+Baseline trading metrics on this corpus, for regression context: win% 39.8,
+Sharpe −0.07, maxDD 94.2% — the untuned engine is not profitable on real
+2023–26 daily data; tuning (Phase 6) and the adjudication decisions get a
+honest starting line, not a flattering one.
 
 ---
 
