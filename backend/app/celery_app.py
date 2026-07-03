@@ -21,7 +21,12 @@ celery_app = Celery(
     "trading_platform",
     broker=settings.celery_broker_url,
     backend=settings.celery_result_backend,
-    include=["app.tasks.signal_tasks", "app.tasks.filing_tasks", "app.tasks.position_monitor"],
+    include=[
+        "app.tasks.signal_tasks",
+        "app.tasks.filing_tasks",
+        "app.tasks.position_monitor",
+        "app.tasks.fo_tasks",
+    ],
 )
 
 celery_app.conf.update(
@@ -53,6 +58,22 @@ celery_app.conf.beat_schedule = {
         "schedule": crontab(
             minute="*/1",
             hour="3-9",
+            day_of_week="1-5",
+        ),
+    },
+    # F&O EOD recorders: bhavcopy + India VIX after NSE publishes (~18:30 IST)
+    # 18:45 IST = 13:15 UTC
+    "fo-eod-ingestion": {
+        "task": "app.tasks.fo_tasks.fo_eod_ingestion",
+        "schedule": crontab(hour=13, minute=15, day_of_week="1-5"),
+    },
+    # Option-chain snapshots every minute in the market window (task itself
+    # re-checks 9:15–15:30 IST and idles without a Kite token)
+    "record-option-chains": {
+        "task": "app.tasks.fo_tasks.record_option_chains",
+        "schedule": crontab(
+            minute="*/1",
+            hour="3-10",
             day_of_week="1-5",
         ),
     },

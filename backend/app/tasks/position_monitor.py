@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 @celery_app.task(name="app.tasks.position_monitor.monitor_positions", bind=True, max_retries=0)  # type: ignore[untyped-decorator]
 def monitor_positions(self: object) -> dict[str, int]:  # noqa: ARG001
     """Scan all open paper positions and auto-close on SL/TP hit."""
-    return asyncio.get_event_loop().run_until_complete(_run_monitor())
+    return asyncio.run(_run_monitor())
 
 
 async def _run_monitor() -> dict[str, int]:

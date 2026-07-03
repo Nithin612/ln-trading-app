@@ -22,14 +22,20 @@ from app.trading.trail_sl import compute_pnl
 async def get_current_price(db: AsyncSession, stock_id: int) -> Decimal | None:
     """Best-effort current price: Redis LTP first, then latest daily close."""
     try:
+        import contextlib
+
         import redis.asyncio as aioredis
 
         from app.broker.tick_consumer import LTP_KEY
         from app.core.config import settings
 
         r = aioredis.from_url(settings.redis_url, decode_responses=True)
-        ltp_str: str | None = await r.get(LTP_KEY.format(stock_id=stock_id))
-        await r.aclose()
+        try:
+            ltp_str: str | None = await r.get(LTP_KEY.format(stock_id=stock_id))
+        finally:
+            # aclose in finally — a raised GET must not leak the connection
+            with contextlib.suppress(Exception):
+                await r.aclose()
         if ltp_str:
             return Decimal(ltp_str)
     except Exception:

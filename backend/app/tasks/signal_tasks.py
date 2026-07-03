@@ -26,7 +26,7 @@ def _default_risk_params() -> tuple[Decimal, Decimal]:
 @celery_app.task(name="app.tasks.signal_tasks.nightly_signal_generation", bind=True, max_retries=3)  # type: ignore[untyped-decorator]
 def nightly_signal_generation(self: object) -> dict[str, int]:  # noqa: ARG001
     """Generate signals for all active stocks. Runs at 18:00 IST on weekdays."""
-    return asyncio.get_event_loop().run_until_complete(_run_generation())
+    return asyncio.run(_run_generation())
 
 
 async def _run_generation() -> dict[str, int]:
@@ -43,7 +43,7 @@ async def _run_generation() -> dict[str, int]:
 @celery_app.task(name="app.tasks.signal_tasks.live_signal_generation", bind=True, max_retries=0)  # type: ignore[untyped-decorator]
 def live_signal_generation(self: object, stock_id: int, timeframe: str) -> dict[str, int]:  # noqa: ARG001
     """Re-run the confluence engine for one stock after a live candle closes."""
-    return asyncio.get_event_loop().run_until_complete(
+    return asyncio.run(
         _run_live_generation(stock_id, timeframe)
     )
 

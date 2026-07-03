@@ -91,7 +91,15 @@ class TickConsumer:
         self._ticker.on_close = self._on_close
 
         self._loop = asyncio.get_running_loop()
-        self._loop.run_in_executor(None, self._ticker.connect, True)  # non-blocking connect
+        try:
+            # threaded=True returns immediately (Twisted reactor on its own
+            # thread) — a synchronous raise here (bad API key) must surface,
+            # not vanish into a discarded executor future.
+            self._ticker.connect(threaded=True)
+        except Exception:
+            log.exception("KiteTicker connect failed; consumer not started")
+            self._running = False
+            return
         await self._process_loop()
 
     async def stop(self) -> None:
@@ -135,40 +143,73 @@ class TickConsumer:
 
     # ── Async processing loop ────────────────────────────────────────────────
 
-    async def _process_loop(self) -> None:
+    def _make_redis(self) -> Any:
+        """Redis client factory — a seam so tests can inject a fake."""
         import redis.asyncio as aioredis
 
-        r = aioredis.from_url(self._redis_url, decode_responses=True)
+        return aioredis.from_url(self._redis_url, decode_responses=True)
+
+    async def _process_loop(self) -> None:
+        import contextlib
+
+        r = self._make_redis()
         from app.db.session import AsyncSessionFactory
 
-        async with AsyncSessionFactory() as db:
-            while self._running:
-                try:
-                    ticks: list[dict[str, Any]] = await asyncio.wait_for(
-                        self._queue.get(), timeout=1.0
-                    )
-                except TimeoutError:
-                    continue
-
-                wrote = False
-                for tick in ticks:
-                    wrote = await self._handle_tick(tick, r, db) or wrote
-
-                # Commit once per Kite batch (~1/sec). flush() alone left the
-                # transaction open all day and candles invisible to readers.
-                if wrote:
+        try:
+            async with AsyncSessionFactory() as db:
+                while self._running:
                     try:
-                        await db.commit()
-                    except Exception:
-                        log.exception("DB commit error in tick batch")
-                        await db.rollback()
-                        self._pending_triggers.clear()
+                        ticks: list[dict[str, Any]] = await asyncio.wait_for(
+                            self._queue.get(), timeout=1.0
+                        )
+                    except TimeoutError:
                         continue
 
-                # Fire signal regeneration only after the candles are visible.
-                for trig_stock_id, trig_timeframe in self._pending_triggers:
-                    _maybe_trigger_signal(trig_stock_id, trig_timeframe)
+                    # One bad batch (Redis blip, DB hiccup) must NEVER kill the
+                    # loop — that silently ends live data for the whole day.
+                    try:
+                        await self._process_batch(ticks, r, db)
+                    except Exception:
+                        log.exception("Tick batch failed; dropping batch, loop continues")
+                        with contextlib.suppress(Exception):
+                            await db.rollback()
+                        self._log_dropped_triggers()
+                        self._pending_triggers.clear()
+        finally:
+            with contextlib.suppress(Exception):
+                await r.aclose()
+
+    async def _process_batch(self, ticks: list[dict[str, Any]], r: Any, db: Any) -> None:
+        wrote = False
+        for tick in ticks:
+            wrote = await self._handle_tick(tick, r, db) or wrote
+
+        # Commit once per Kite batch (~1/sec). flush() alone left the
+        # transaction open all day and candles invisible to readers.
+        if wrote:
+            try:
+                await db.commit()
+            except Exception:
+                log.exception("DB commit error in tick batch")
+                await db.rollback()
+                self._log_dropped_triggers()
                 self._pending_triggers.clear()
+                return
+
+        # Fire signal regeneration only after the candles are visible.
+        # kombu publish is a blocking call — keep it off the event loop.
+        triggers, self._pending_triggers = self._pending_triggers, []
+        if triggers:
+            await asyncio.to_thread(_fire_signal_triggers, triggers)
+
+    def _log_dropped_triggers(self) -> None:
+        """Breadcrumb for manual backfill: closed candles whose upsert batch
+        failed are not retried (the aggregator has moved on)."""
+        for stock_id, timeframe in self._pending_triggers:
+            log.error(
+                "Dropped candle-close trigger after failed batch: stock_id=%d tf=%s",
+                stock_id, timeframe,
+            )
 
     async def _handle_tick(
         self,
@@ -278,6 +319,17 @@ async def _upsert_candle(db: Any, table: str, stock_id: int, candle: Any) -> Non
     )
 
 
+def _fire_signal_triggers(triggers: list[tuple[int, str]]) -> None:
+    """Fire Celery tasks for a batch of candle closes.
+
+    Runs on a worker thread (kombu publish blocks); called via
+    asyncio.to_thread so aligned closes (10:00 → every TF for every stock)
+    can't stall the tick loop.
+    """
+    for stock_id, timeframe in triggers:
+        _maybe_trigger_signal(stock_id, timeframe)
+
+
 def _maybe_trigger_signal(stock_id: int, timeframe: str) -> None:
     """Fire a Celery task to regenerate signals on candle close (best-effort)."""
     try:
@@ -293,6 +345,16 @@ def _maybe_trigger_signal(stock_id: int, timeframe: str) -> None:
 # ── Module-level consumer instance (singleton per process) ───────────────────
 
 _consumer: TickConsumer | None = None
+_consumer_task: asyncio.Task[None] | None = None
+
+
+def _on_consumer_done(task: asyncio.Task[None]) -> None:
+    """A dead consumer must be LOUD — silence here once cost a full trading day."""
+    if task.cancelled():
+        return
+    exc = task.exception()
+    if exc is not None:
+        log.critical("Tick consumer task DIED: %r", exc, exc_info=exc)
 
 
 async def start_consumer(user_id: int) -> bool:
@@ -316,12 +378,14 @@ async def start_consumer(user_id: int) -> bool:
             log.warning("No instrument tokens mapped; tick consumer not started")
             return False
 
+    global _consumer_task
     _consumer = TickConsumer(
         access_token=token.access_token,
         token_stock_map=token_stock_map,
         redis_url=settings.redis_url,
     )
-    asyncio.create_task(_consumer.start(), name="tick_consumer")
+    _consumer_task = asyncio.create_task(_consumer.start(), name="tick_consumer")
+    _consumer_task.add_done_callback(_on_consumer_done)
     log.info("Tick consumer started with %d instruments", len(token_stock_map))
     return True
 

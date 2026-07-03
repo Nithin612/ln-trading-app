@@ -184,3 +184,52 @@ class TestLtpKey:
         finally:
             await r.delete(key)
             await r.aclose()
+
+
+class TestLoopSurvival:
+    async def test_bad_batch_does_not_kill_the_loop(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A transient Redis error in one batch must not end live data for
+        the day: the loop drops the batch, logs, and processes the next one."""
+        from app.broker import tick_consumer as tc
+
+        class _NoopAgg:
+            def on_tick(self, tick: dict[str, Any]) -> list[Any]:
+                return []
+
+        class _FlakyRedis(_RedisSpy):
+            def __init__(self) -> None:
+                super().__init__()
+                self.calls = 0
+
+            async def set(self, key: str, value: str, ex: int | None = None) -> None:
+                self.calls += 1
+                if self.calls == 1:
+                    raise ConnectionError("transient redis blip")
+                await super().set(key, value, ex=ex)
+
+            async def aclose(self) -> None:
+                pass
+
+        monkeypatch.setattr(tc._registry, "get_or_create", lambda _sid: _NoopAgg())
+        consumer = _make_consumer()
+        flaky = _FlakyRedis()
+        monkeypatch.setattr(consumer, "_make_redis", lambda: flaky)
+        consumer._running = True
+
+        task = asyncio.create_task(consumer._process_loop())
+        try:
+            consumer._queue.put_nowait([{"instrument_token": 123, "last_price": 100.0}])
+            consumer._queue.put_nowait([{"instrument_token": 123, "last_price": 101.0}])
+            # Wait for the second (good) batch to be processed
+            for _ in range(50):
+                if flaky.set_calls:
+                    break
+                await asyncio.sleep(0.05)
+            assert not task.done(), "loop died on a transient error"
+            assert flaky.set_calls, "second batch was never processed"
+            assert flaky.set_calls[0][1] == "101.0"
+        finally:
+            consumer._running = False
+            await asyncio.wait_for(task, timeout=5)

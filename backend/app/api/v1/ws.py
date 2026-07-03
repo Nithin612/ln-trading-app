@@ -111,6 +111,11 @@ async def ws_live(websocket: WebSocket) -> None:  # noqa: C901
                 symbol = _sid_to_symbol(stock_id, subscribed_sids)
                 await _send({"type": "candle", "data": {**data, "symbol": symbol}})
 
+    # redis-py's PubSub.listen() is `while self.subscribed:` — starting the
+    # reader on an UNsubscribed pubsub exits immediately and the stream is
+    # dead forever. A keepalive channel guarantees `subscribed` stays true
+    # from before the reader starts until teardown.
+    await pubsub.subscribe("__ws_keepalive__")
     reader_task = asyncio.create_task(_redis_reader())
 
     try:

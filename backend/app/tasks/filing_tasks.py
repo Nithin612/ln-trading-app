@@ -12,7 +12,7 @@ log = logging.getLogger(__name__)
 @celery_app.task(name="app.tasks.filing_tasks.poll_filings", bind=True, max_retries=2)  # type: ignore[untyped-decorator]
 def poll_filings(self: object) -> dict[str, int]:  # noqa: ARG001
     """Poll NSE and BSE corporate announcements. Runs every 60 seconds."""
-    return asyncio.get_event_loop().run_until_complete(_run_poll())
+    return asyncio.run(_run_poll())
 
 
 async def _run_poll() -> dict[str, int]:

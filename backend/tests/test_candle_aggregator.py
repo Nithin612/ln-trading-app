@@ -11,10 +11,12 @@ from app.broker.candle_aggregator import (
 
 
 def _tick(ltp: float, ts: datetime, volume: int = 100) -> dict:
+    # Mirrors kiteconnect's actual field names: `exchange_timestamp` (never
+    # "timestamp") and cumulative `volume_traded`.
     return {
         "instrument_token": 12345,
         "last_price": ltp,
-        "timestamp": ts,
+        "exchange_timestamp": ts,
         "last_traded_quantity": volume,
         "volume_traded": volume * 10,
     }
@@ -131,8 +133,80 @@ def test_5m_candle_aggregates_multiple_1m():
 def test_no_events_for_zero_price():
     agg = CandleAggregator(stock_id=3)
     t = datetime(2024, 1, 15, 9, 15, 0, tzinfo=UTC)
-    events = agg.on_tick({"instrument_token": 123, "last_price": 0, "timestamp": t})
+    events = agg.on_tick(
+        {"instrument_token": 123, "last_price": 0, "exchange_timestamp": t}
+    )
     assert events == []
+
+
+# ── Timestamp regression (kiteconnect sends NAIVE host-local datetimes) ──────
+
+def test_naive_host_local_timestamp_converted_not_relabelled():
+    """kiteconnect's exchange_timestamp is naive host-local; the aggregator
+    must CONVERT it to UTC (astimezone), not stamp it as UTC (replace) —
+    on an IST host the old behavior mislabelled every candle by +5:30."""
+    agg = CandleAggregator(stock_id=7)
+    naive_local = datetime(2026, 7, 3, 9, 30, 0)  # naive, host zone
+    expected_utc = naive_local.astimezone(UTC)    # correct conversion
+
+    agg.on_tick(_tick(100.0, naive_local))
+    c = agg.get_current("1m")
+    assert c is not None
+    assert c.period_start == expected_utc.replace(second=0, microsecond=0)
+
+
+def test_legacy_timestamp_key_is_ignored():
+    """kiteconnect never sets a "timestamp" key — a tick carrying only that
+    key must fall back to now(), not silently use a stale value."""
+    agg = CandleAggregator(stock_id=8)
+    stale = datetime(2020, 1, 1, 9, 15, 0, tzinfo=UTC)
+    agg.on_tick({"instrument_token": 1, "last_price": 100.0, "timestamp": stale})
+    c = agg.get_current("1m")
+    assert c is not None
+    assert c.period_start.year >= 2026  # now(), not the stale 2020 stamp
+
+
+# ── Volume regression (cumulative diff, not snapshot-quantity summing) ────────
+
+def test_volume_diffs_cumulative_day_volume():
+    agg = CandleAggregator(stock_id=9)
+    base = datetime(2024, 1, 15, 9, 15, 0, tzinfo=UTC)
+
+    def tick_with_dayvol(ltp: float, ts: datetime, day_vol: int, lastqty: int) -> dict:
+        return {
+            "instrument_token": 1,
+            "last_price": ltp,
+            "exchange_timestamp": ts,
+            "last_traded_quantity": lastqty,
+            "volume_traded": day_vol,
+        }
+
+    # First tick: no baseline → 0 (not the whole day's volume)
+    agg.on_tick(tick_with_dayvol(100.0, base, day_vol=5000, lastqty=50))
+    # Quote-only tick: same cumulative volume, lastqty repeated → adds 0
+    agg.on_tick(tick_with_dayvol(100.5, base + timedelta(seconds=1), day_vol=5000, lastqty=50))
+    # Real trades between snapshots: cumulative jumps 300 → adds 300
+    agg.on_tick(tick_with_dayvol(101.0, base + timedelta(seconds=2), day_vol=5300, lastqty=50))
+
+    c = agg.get_current("1m")
+    assert c is not None
+    assert c.volume == 300  # old summing logic would have said 150
+
+
+def test_volume_falls_back_to_lastqty_without_cumulative():
+    agg = CandleAggregator(stock_id=10)
+    base = datetime(2024, 1, 15, 9, 15, 0, tzinfo=UTC)
+    agg.on_tick(
+        {
+            "instrument_token": 1,
+            "last_price": 100.0,
+            "exchange_timestamp": base,
+            "last_traded_quantity": 75,
+        }
+    )
+    c = agg.get_current("1m")
+    assert c is not None
+    assert c.volume == 75
 
 
 # ── AggregatorRegistry ────────────────────────────────────────────────────────

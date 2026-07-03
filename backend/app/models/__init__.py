@@ -1,5 +1,6 @@
 from app.models.broker import BrokerToken, KiteInstrument
 from app.models.category import Category, StockCategory
+from app.models.fo_data import FoBhavcopy, IndiaVixDaily, OptionChainSnapshot
 from app.models.journal import JournalEntry
 from app.models.market_data import (
     BulkBlockDeal,
@@ -41,4 +42,7 @@ __all__ = [
     "Order",
     "Position",
     "JournalEntry",
+    "FoBhavcopy",
+    "IndiaVixDaily",
+    "OptionChainSnapshot",
 ]

@@ -14,6 +14,7 @@ import csv
 import io
 import logging
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 from typing import Any, cast
 
 from kiteconnect import KiteConnect
@@ -109,6 +110,42 @@ def build_kite(access_token: str) -> KiteConnect:
     return kc
 
 
+def map_instrument_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Filter + normalize raw Kite instrument rows for kite_instruments.
+
+    Kept: NSE/BSE cash instruments AND the NFO derivatives segment (futures +
+    options, with strike) — the option-chain recorder selects instruments
+    from these rows locally instead of hitting Kite per request.
+    """
+    records: list[dict[str, Any]] = []
+    for r in rows:
+        exchange = str(r.get("exchange", ""))
+        instrument_type = str(r.get("instrument_type", ""))
+        if exchange not in ("NSE", "BSE", "NFO"):
+            continue
+        try:
+            records.append(
+                {
+                    "instrument_token": int(r["instrument_token"]),
+                    "exchange_token": int(r["exchange_token"]),
+                    "tradingsymbol": str(r["tradingsymbol"]),
+                    "exchange": exchange,
+                    "instrument_type": instrument_type,
+                    "name": str(r.get("name", "")),
+                    "last_price": float(r.get("last_price", 0) or 0),
+                    "tick_size": float(r.get("tick_size", 0.05) or 0.05),
+                    "lot_size": int(r.get("lot_size", 1) or 1),
+                    "segment": str(r.get("segment", "")),
+                    "expiry": str(r.get("expiry", "") or ""),
+                    "strike": Decimal(str(r.get("strike", 0) or 0)),
+                    "synced_at": datetime.now(UTC),
+                }
+            )
+        except (KeyError, ValueError):
+            continue  # skip malformed rows
+    return records
+
+
 async def sync_instruments(db: AsyncSession, access_token: str) -> int:
     """Download instruments CSV from Kite and upsert into kite_instruments.
 
@@ -129,48 +166,27 @@ async def sync_instruments(db: AsyncSession, access_token: str) -> int:
         log.warning("Kite instruments response was empty")
         return 0
 
-    records: list[dict[str, Any]] = []
-    for r in rows:
-        # Filter: only NSE EQ and BSE EQ for now (F&O tokens fetched separately if needed)
-        exchange = str(r.get("exchange", ""))
-        instrument_type = str(r.get("instrument_type", ""))
-        if exchange not in ("NSE", "BSE"):
-            continue
-        try:
-            records.append(
-                {
-                    "instrument_token": int(r["instrument_token"]),
-                    "exchange_token": int(r["exchange_token"]),
-                    "tradingsymbol": str(r["tradingsymbol"]),
-                    "exchange": exchange,
-                    "instrument_type": instrument_type,
-                    "name": str(r.get("name", "")),
-                    "last_price": float(r.get("last_price", 0) or 0),
-                    "tick_size": float(r.get("tick_size", 0.05) or 0.05),
-                    "lot_size": int(r.get("lot_size", 1) or 1),
-                    "segment": str(r.get("segment", "")),
-                    "expiry": str(r.get("expiry", "") or ""),
-                    "synced_at": datetime.now(UTC),
-                }
-            )
-        except (KeyError, ValueError):
-            continue  # skip malformed rows
-
+    records = map_instrument_rows(rows)
     if not records:
         return 0
 
-    # Batch upsert: insert + on conflict update
-    stmt = pg_insert(KiteInstrument).values(records)
-    stmt = stmt.on_conflict_do_update(
-        index_elements=["instrument_token"],
-        set_={
-            "last_price": stmt.excluded.last_price,
-            "synced_at": stmt.excluded.synced_at,
-            "tradingsymbol": stmt.excluded.tradingsymbol,
-            "name": stmt.excluded.name,
-        },
-    )
-    await db.execute(stmt)
+    # Chunked upsert: with NFO included this is ~80k rows — a single VALUES
+    # clause would exceed asyncpg's bind-parameter limit.
+    chunk = 2000
+    for i in range(0, len(records), chunk):
+        stmt = pg_insert(KiteInstrument).values(records[i : i + chunk])
+        stmt = stmt.on_conflict_do_update(
+            index_elements=["instrument_token"],
+            set_={
+                "last_price": stmt.excluded.last_price,
+                "synced_at": stmt.excluded.synced_at,
+                "tradingsymbol": stmt.excluded.tradingsymbol,
+                "name": stmt.excluded.name,
+                "expiry": stmt.excluded.expiry,
+                "strike": stmt.excluded.strike,
+            },
+        )
+        await db.execute(stmt)
     log.info("Kite instruments synced: %d rows", len(records))
     return len(records)
 
@@ -190,9 +206,7 @@ async def fetch_historical(
     kc = build_kite(access_token)
     # Run in a thread because kiteconnect is sync
     import asyncio
-    loop = asyncio.get_event_loop()
-    data = await loop.run_in_executor(
-        None,
+    data = await asyncio.to_thread(
         lambda: kc.historical_data(
             instrument_token=instrument_token,
             from_date=from_dt,

@@ -80,25 +80,30 @@ class CandleAggregator:
             tf: _TfState(minutes=mins)
             for tf, mins in TIMEFRAMES.items()
         }
+        # Cumulative day volume from the previous tick (Kite MODE_FULL
+        # `volume_traded`) — candle volume is the DIFF of this counter.
+        self._last_day_volume: int | None = None
 
     def on_tick(self, tick: dict[str, Any]) -> list[CandleEvent]:
         """Process one Kite tick dict and return zero or more CandleEvents."""
-        # Kite tick timestamp may be None on some tick modes; fall back to now()
-        ts_raw = tick.get("timestamp") or tick.get("last_trade_time")
+        # kiteconnect sets `exchange_timestamp` (and `last_trade_time`), both
+        # NAIVE datetimes in the HOST's local zone (datetime.fromtimestamp).
+        # `.replace(tzinfo=UTC)` mislabels them by +5:30 on an IST machine —
+        # `.astimezone(UTC)` converts correctly whatever the host zone is.
+        ts_raw = tick.get("exchange_timestamp") or tick.get("last_trade_time")
         if ts_raw is None:
             tick_time = datetime.now(UTC)
         elif isinstance(ts_raw, datetime):
-            tick_time = ts_raw.astimezone(UTC) if ts_raw.tzinfo else ts_raw.replace(tzinfo=UTC)
+            tick_time = ts_raw.astimezone(UTC)  # naive → assume host-local
         else:
-            # string "2024-01-15 09:16:00"
+            # string "2024-01-15 09:16:00" (test fixtures) — treated as UTC
             tick_time = datetime.strptime(str(ts_raw), "%Y-%m-%d %H:%M:%S").replace(tzinfo=UTC)
 
         ltp = tick.get("last_price") or tick.get("last_traded_price", 0)
         if not ltp:
             return []
         price = Decimal(str(ltp))
-        traded_volume = int(tick.get("last_traded_quantity") or tick.get("last_quantity", 0))
-        vol_delta = traded_volume if traded_volume else 0
+        vol_delta = self._volume_delta(tick)
 
         events: list[CandleEvent] = []
         for tf, state in self._state.items():
@@ -138,6 +143,30 @@ class CandleAggregator:
                 events.append(CandleEvent(candle=state.current, is_new=False, is_closed=False))
 
         return events
+
+    def _volume_delta(self, tick: dict[str, Any]) -> int:
+        """Traded volume represented by THIS tick.
+
+        Kite ticks are throttled snapshots: summing `last_traded_quantity`
+        double-counts the same trade on quote-only ticks and misses trades
+        between snapshots. The cumulative `volume_traded` (MODE_FULL) diffed
+        against the previous tick is the honest measure. Falls back to
+        `last_traded_quantity` when the cumulative field is absent
+        (MODE_LTP / synthetic test ticks).
+        """
+        day_vol_raw = tick.get("volume_traded")
+        if day_vol_raw is None:
+            return int(tick.get("last_traded_quantity") or tick.get("last_quantity", 0) or 0)
+
+        day_vol = int(day_vol_raw)
+        if self._last_day_volume is None or day_vol < self._last_day_volume:
+            # First tick of the session (or counter reset at a new session):
+            # no baseline to diff against — count zero rather than the whole day.
+            self._last_day_volume = day_vol
+            return 0
+        delta = day_vol - self._last_day_volume
+        self._last_day_volume = day_vol
+        return delta
 
     def get_current(self, timeframe: str) -> Candle | None:
         return self._state[timeframe].current if timeframe in self._state else None

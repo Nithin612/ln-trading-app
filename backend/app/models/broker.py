@@ -47,10 +47,11 @@ class KiteInstrument(Base):
 
     __tablename__ = "kite_instruments"
 
-    instrument_token: Mapped[int] = mapped_column(Integer, primary_key=True)
-    exchange_token: Mapped[int] = mapped_column(Integer, nullable=False)
+    # BIGINT: Kite tokens are uint32 — int32 can overflow on derivative segments
+    instrument_token: Mapped[int] = mapped_column(BigInteger, primary_key=True)
+    exchange_token: Mapped[int] = mapped_column(BigInteger, nullable=False)
     tradingsymbol: Mapped[str] = mapped_column(String(64), nullable=False)
-    exchange: Mapped[str] = mapped_column(String(16), nullable=False)
+    exchange: Mapped[str] = mapped_column(String(16), nullable=False)  # NSE, BSE, NFO
     instrument_type: Mapped[str] = mapped_column(String(16), nullable=False)  # EQ, FUT, CE, PE
     name: Mapped[str] = mapped_column(String(255), nullable=False)
     last_price: Mapped[Decimal] = mapped_column(
@@ -63,6 +64,10 @@ class KiteInstrument(Base):
     segment: Mapped[str] = mapped_column(String(32), nullable=False)
     # ISO date string e.g. "2024-11-28" for F&O expiries; empty for EQ
     expiry: Mapped[str] = mapped_column(String(16), nullable=False, default="")
+    # Option strike price; 0 for EQ and futures
+    strike: Mapped[Decimal] = mapped_column(
+        Numeric(12, 2), nullable=False, default=Decimal("0"), server_default="0"
+    )
     synced_at: Mapped[datetime] = mapped_column(TZ, nullable=False, server_default=func.now())
 
     def __repr__(self) -> str:

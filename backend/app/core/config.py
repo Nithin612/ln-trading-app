@@ -51,6 +51,12 @@ class Settings(BaseSettings):
     kite_redirect_url: str = "http://localhost:8000/api/v1/broker/kite/callback"
     kite_access_token: str = ""
 
+    # ── F&O chain recorder (Phase 0 recorders) ──────────────────────────────
+    # Comma-separated underlyings to snapshot every minute during market hours
+    fo_chain_underlyings: str = "NIFTY,BANKNIFTY"
+    # Distinct strikes kept around spot (2N+1 nearest), per expiry side
+    fo_chain_strikes_each_side: int = 10
+
     # ── File uploads ────────────────────────────────────────────────────────
     uploads_dir: str = "uploads"          # relative to backend root; created on first use
     max_screenshot_bytes: int = 5_242_880  # 5 MB
