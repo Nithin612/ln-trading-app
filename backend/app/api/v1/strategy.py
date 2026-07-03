@@ -9,6 +9,7 @@ POST /strategy/preset-scan   — run all named presets, return ranked comparison
 
 from __future__ import annotations
 
+import asyncio
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated
@@ -173,7 +174,10 @@ async def create_run(
         min_confidence=req.min_confidence,
         weight_multipliers=req.weight_multipliers,
     )
-    bt_result = BacktestEngine(cfg).run(candles)
+    # CPU-bound pandas loop — run it on a worker thread so it can't freeze
+    # the event loop (REST + /ws/live share it). Proper job-queue offload
+    # arrives with the Rust engine in Phase 1/6.
+    bt_result = await asyncio.to_thread(BacktestEngine(cfg).run, candles)
 
     run = StrategyRun(
         name=req.name,
@@ -299,7 +303,9 @@ async def preset_scan(
         _utc(req.period_start), _utc(req.period_end),
     )
 
-    entries = run_preset_scan(
+    # Same event-loop protection as create_run: N backtests, CPU-bound.
+    entries = await asyncio.to_thread(
+        run_preset_scan,
         candles,
         timeframe=req.timeframe,
         capital=req.capital,

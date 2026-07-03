@@ -21,6 +21,7 @@ import json
 import logging
 from typing import Any
 
+import jwt as pyjwt
 import redis.asyncio as aioredis
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import text
@@ -28,20 +29,50 @@ from sqlalchemy import text
 from app.broker.candle_aggregator import TIMEFRAME_TABLE
 from app.broker.tick_consumer import CANDLE_CHANNEL, LTP_CHANNEL
 from app.core.config import settings
+from app.core.security import decode_token
 
 log = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/ws", tags=["websocket"])
 
+WS_CLOSE_UNAUTHORIZED = 4401  # app-level close code mirroring HTTP 401
+
+
+def _validate_ws_token(token: str | None) -> int | None:
+    """Return the user_id for a valid ACCESS token, else None.
+
+    Signature + expiry validated; no DB round-trip — access tokens live
+    45 minutes, which bounds revocation lag on the read-only stream.
+    """
+    if not token:
+        return None
+    try:
+        payload = decode_token(token)
+    except pyjwt.InvalidTokenError:
+        return None
+    if payload.get("type") != "access":
+        return None
+    try:
+        return int(payload["sub"])
+    except (KeyError, TypeError, ValueError):
+        return None
+
 
 @router.websocket("/live")
 async def ws_live(websocket: WebSocket) -> None:  # noqa: C901
-    """Main WebSocket endpoint.  No auth on the WS upgrade itself — the client
-    is expected to pass its JWT as a query param (?token=...) or we rely on
-    cookie auth.  For now we accept any connection (frontend is same-origin).
+    """Main WebSocket endpoint.
 
-    TODO: validate JWT from query param before accepting in Phase 8.
+    Auth: the client passes its JWT access token as `?token=...` on the
+    upgrade request. Invalid/missing tokens are rejected BEFORE accept().
     """
+    user_id = _validate_ws_token(websocket.query_params.get("token"))
+    if user_id is None:
+        # Reject the upgrade: handshake completes then closes with 4401 so
+        # the client can distinguish auth failure from a network drop.
+        await websocket.accept()
+        await websocket.close(code=WS_CLOSE_UNAUTHORIZED, reason="invalid or missing token")
+        return
+
     await websocket.accept()
     r = aioredis.from_url(settings.redis_url, decode_responses=True)
     pubsub = r.pubsub()

@@ -9,6 +9,8 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { useAuthStore } from "@/store/authStore";
+
 export interface LtpQuote {
   symbol: string;
   ltp: number;
@@ -38,7 +40,15 @@ interface UseQuotesResult {
   connected: boolean;
 }
 
-const WS_URL = `ws://${window.location.host}/api/v1/ws/live`;
+// wss under https, ws under http; JWT goes as ?token= (validated server-side
+// before the upgrade is accepted — close code 4401 means auth failure).
+function buildWsUrl(token: string | null): string {
+  const proto = window.location.protocol === "https:" ? "wss" : "ws";
+  const base = `${proto}://${window.location.host}/api/v1/ws/live`;
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+}
+
+const WS_CLOSE_UNAUTHORIZED = 4401;
 
 export function useLiveQuotes(symbols: string[]): UseQuotesResult {
   const [quotes, setQuotes] = useState<Record<string, LtpQuote>>({});
@@ -61,7 +71,9 @@ export function useLiveQuotes(symbols: string[]): UseQuotesResult {
     let unmounted = false;
 
     function connect() {
-      ws = new WebSocket(WS_URL);
+      // Read the token at (re)connect time so a refreshed token is picked up.
+      const token = useAuthStore.getState().accessToken;
+      ws = new WebSocket(buildWsUrl(token));
       wsRef.current = ws;
 
       ws.onopen = () => {
@@ -87,9 +99,12 @@ export function useLiveQuotes(symbols: string[]): UseQuotesResult {
         }
       };
 
-      ws.onclose = () => {
+      ws.onclose = (ev) => {
         setConnected(false);
-        if (!unmounted) {
+        // 4401 = server rejected the token; reconnecting with the same
+        // credentials would just loop. Wait for a fresh token (next mount
+        // or manual retry) instead.
+        if (!unmounted && ev.code !== WS_CLOSE_UNAUTHORIZED) {
           reconnectTimeout = setTimeout(connect, 3000);
         }
       };
