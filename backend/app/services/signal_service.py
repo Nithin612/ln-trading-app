@@ -48,6 +48,34 @@ async def _load_candles(
     ).set_index("time")
 
 
+async def _has_active_signal(
+    db: AsyncSession,
+    stock_id: int,
+    timeframe: str,
+    direction: str,
+) -> bool:
+    """True if an unexpired active signal already exists for this setup.
+
+    Idempotency guard: a persistent setup would otherwise insert a
+    near-identical signal on every candle close / nightly rerun while the
+    previous one is still valid. Supersede-on-stronger-signal is a Phase 2
+    design decision; triage only prevents duplicates.
+    """
+    now = datetime.now(tz=UTC)
+    result = await db.execute(
+        select(Signal.id)
+        .where(
+            Signal.stock_id == stock_id,
+            Signal.timeframe == timeframe,
+            Signal.direction == direction,
+            Signal.status == "active",
+            Signal.validity_until > now,
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 def _swing_levels(candles: pd.DataFrame, n: int = 5) -> tuple[Decimal | None, Decimal | None]:
     """Return last swing low and swing high as Decimal prices."""
     if len(candles) < n * 2 + 1:
@@ -88,6 +116,9 @@ async def generate_signal_for_stock(
         stock_block_deal_net_cr=stock_block_deal_net_cr,
     )
     if result is None:
+        return None
+
+    if await _has_active_signal(db, stock.id, timeframe, result.direction):
         return None
 
     classification = classify_signal(timeframe, result.factors, result.is_multibagger)
@@ -233,6 +264,9 @@ async def run_live_signal_generation(
         candles, timeframe=timeframe, min_confidence=settings.min_signal_confidence
     )
     if score is None:
+        return 0
+
+    if await _has_active_signal(db, stock_id, timeframe, score.direction):
         return 0
 
     classification = classify_signal(timeframe, score.factors, score.is_multibagger)
