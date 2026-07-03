@@ -1,0 +1,4 @@
+# Pinned so parity results are reproducible; bump deliberately, not by drift.
+[toolchain]
+channel = "1.96.1"
+components = ["clippy", "rustfmt"]

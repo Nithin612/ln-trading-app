@@ -1,0 +1,27 @@
+[workspace]
+resolver = "2"
+members = ["crates/engine-core", "crates/engine-py", "crates/engine-cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "UNLICENSED"
+publish = false
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
+
+[workspace.lints.clippy]
+# Library discipline per .claude/rules/rust.md: no panicking shortcuts in
+# engine code. Tests/benches may #[allow] locally.
+unwrap_used = "deny"
+expect_used = "deny"
+panic = "deny"
+indexing_slicing = "warn"
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+[profile.bench]
+inherits = "release"

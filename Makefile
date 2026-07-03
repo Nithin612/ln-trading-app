@@ -4,6 +4,10 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
+# Rust toolchain lives in ~/.cargo (rustup); make targets must find it even
+# when the invoking shell hasn't sourced cargo env.
+export PATH := $(HOME)/.cargo/bin:$(PATH)
+
 # Auto-detect docker compose v2 (`docker compose`) vs v1 (`docker-compose`)
 DC := $(shell docker compose version >/dev/null 2>&1 && echo "docker compose" || echo "docker-compose")
 
@@ -113,6 +117,35 @@ migrate:  ## Apply pending Alembic migrations
 create-admin:  ## Interactively create the first admin user
 	@cd backend && uv run python scripts/create_admin.py
 
+# ════════════════════════ Engine (Rust) ════════════════════════
+
+.PHONY: engine-build
+engine-build:  ## Build tradecore wheel into the backend venv (maturin develop --release)
+	@cd backend && uv run maturin develop --release -m ../engine/crates/engine-py/Cargo.toml
+
+.PHONY: engine-test
+engine-test:  ## Run Rust unit + golden tests
+	@cd engine && cargo test --workspace
+
+.PHONY: engine-lint
+engine-lint:  ## cargo fmt --check + clippy -D warnings
+	@echo "$(BLUE)▶ cargo fmt$(NC)"
+	@cd engine && cargo fmt --all --check
+	@echo "$(BLUE)▶ cargo clippy$(NC)"
+	@cd engine && cargo clippy --workspace --all-targets -- -D warnings
+
+.PHONY: engine-bench
+engine-bench:  ## Run criterion benches (record results in docs/PERFORMANCE.md)
+	@cd engine && RAYON_NUM_THREADS=6 cargo bench
+
+.PHONY: parity
+parity:  ## Python-vs-Rust parity suite (golden fixtures; arrives with P1 task 22)
+	@if [ -d backend/tests/parity ]; then \
+		cd backend && uv run pytest tests/parity -q; \
+	else \
+		echo "$(YELLOW)Parity suite not generated yet (P1: after adjudication + goldens).$(NC)"; \
+	fi
+
 # ════════════════════════ Quality ══════════════════════════════
 
 .PHONY: test
@@ -138,4 +171,4 @@ typecheck:  ## Type-check backend (mypy) + frontend (tsc)
 	@cd frontend && pnpm typecheck
 
 .PHONY: check
-check: lint typecheck test  ## Run lint + typecheck + tests (full CI gate)
+check: lint typecheck engine-lint engine-test test parity  ## Full CI gate (python + rust + frontend)

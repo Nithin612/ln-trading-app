@@ -1,0 +1,16 @@
+[package]
+name = "engine-core"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "Pure trading-engine logic: indicators, patterns, structure, confluence, risk, backtest. No I/O, no clocks, no randomness."
+
+[lints]
+workspace = true
+
+[dependencies]
+thiserror = "2"
+
+[dev-dependencies]
+approx = "0.5"

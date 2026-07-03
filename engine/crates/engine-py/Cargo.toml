@@ -1,0 +1,18 @@
+[package]
+name = "engine-py"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish.workspace = true
+description = "PyO3 bindings for engine-core, built as the `tradecore` Python module via maturin."
+
+[lints]
+workspace = true
+
+[lib]
+name = "tradecore"
+crate-type = ["cdylib"]
+
+[dependencies]
+engine-core = { path = "../engine-core" }
+pyo3 = { version = "0.27", features = ["extension-module", "abi3-py312"] }
