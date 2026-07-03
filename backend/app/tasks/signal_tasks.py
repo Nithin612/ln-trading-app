@@ -11,6 +11,18 @@ from app.core.config import settings
 log = logging.getLogger(__name__)
 
 
+def _default_risk_params() -> tuple[Decimal, Decimal]:
+    """Capital and per-trade risk for system-generated signals.
+
+    risk_pct is a WHOLE percentage (2.0 means 2%): compute_quantity performs
+    the /100 conversion itself (SIGNAL_ENGINE.md §6). Dividing here as well
+    silently sized every signal at 1/100th of intended risk.
+    """
+    capital = Decimal("500000")
+    risk_pct = Decimal(str(settings.default_risk_per_trade_pct))
+    return capital, risk_pct
+
+
 @celery_app.task(name="app.tasks.signal_tasks.nightly_signal_generation", bind=True, max_retries=3)  # type: ignore[untyped-decorator]
 def nightly_signal_generation(self: object) -> dict[str, int]:  # noqa: ARG001
     """Generate signals for all active stocks. Runs at 18:00 IST on weekdays."""
@@ -22,8 +34,7 @@ async def _run_generation() -> dict[str, int]:
     from app.services.signal_service import run_nightly_signal_generation
 
     async with AsyncSessionFactory() as db:
-        capital = Decimal("500000")
-        risk_pct = Decimal(str(settings.default_risk_per_trade_pct / 100))
+        capital, risk_pct = _default_risk_params()
         signals = await run_nightly_signal_generation(db, capital, risk_pct)
         log.info("Nightly signal generation: %d signals produced", len(signals))
         return {"signals_generated": len(signals)}
@@ -42,7 +53,6 @@ async def _run_live_generation(stock_id: int, timeframe: str) -> dict[str, int]:
     from app.services.signal_service import run_live_signal_generation
 
     async with AsyncSessionFactory() as db:
-        capital = Decimal("500000")
-        risk_pct = Decimal(str(settings.default_risk_per_trade_pct / 100))
+        capital, risk_pct = _default_risk_params()
         count = await run_live_signal_generation(db, stock_id, timeframe, capital, risk_pct)
         return {"signals_generated": count}
