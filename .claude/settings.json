@@ -1,0 +1,68 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Edit",
+      "Write",
+      "Bash(make:*)",
+      "Bash(git:*)",
+      "Bash(uv:*)",
+      "Bash(pytest:*)",
+      "Bash(ruff:*)",
+      "Bash(mypy:*)",
+      "Bash(alembic:*)",
+      "Bash(npm:*)",
+      "Bash(npx:*)",
+      "Bash(pnpm:*)",
+      "Bash(node:*)",
+      "Bash(cargo:*)",
+      "Bash(rustup:*)",
+      "Bash(maturin:*)",
+      "Bash(docker compose:*)",
+      "Bash(docker inspect:*)",
+      "Bash(docker exec tp_postgres:*)",
+      "Bash(docker exec tp_redis:*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./backend/.env)",
+      "Read(./.secrets/**)",
+      "Bash(git push --force:*)",
+      "Bash(docker volume rm:*)",
+      "Bash(docker volume prune:*)"
+    ]
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-bash.sh\""
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard-files.sh\""
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/format.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}
