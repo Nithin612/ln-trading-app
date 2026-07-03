@@ -1,0 +1,124 @@
+"""Signal endpoints — Phase 5/6 (offline signal engine + event guard).
+
+GET  /signals/active          — list active signals, sortable by confidence
+GET  /signals/{id}            — full detail including factor breakdown
+POST /signals/generate        — (admin) trigger generation for a stock
+"""
+
+from datetime import UTC, datetime
+from decimal import Decimal
+from typing import Annotated
+
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.deps import get_current_user as get_current_active_user
+from app.core.deps import get_db, require_admin
+from app.models.signal import Signal
+from app.models.stock import Stock
+from app.models.user import User
+from app.schemas.signal import SignalListResponse, SignalOut
+from app.signals.event_guard import is_signal_suppressed
+
+router = APIRouter(prefix="/signals", tags=["signals"])
+
+
+class GenerateRequest(BaseModel):
+    stock_id: int
+    timeframe: str = "1d"
+    capital: Decimal = Decimal("500000")
+    risk_pct: Decimal = Decimal("0.02")
+
+
+async def _enrich(signal: Signal, db: AsyncSession) -> SignalOut:
+    """Attach stock symbol to a signal."""
+    stock = await db.get(Stock, signal.stock_id)
+    out = SignalOut.model_validate(signal)
+    out.symbol = stock.symbol if stock else ""
+    return out
+
+
+@router.get("/active", response_model=SignalListResponse)
+async def list_active_signals(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_active_user)],
+    direction: str | None = Query(default=None, description="BUY | SELL"),
+    classification: str | None = Query(default=None),
+    min_confidence: int = Query(default=70, ge=0, le=100),
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> SignalListResponse:
+    now = datetime.now(tz=UTC)
+    q = (
+        select(Signal)
+        .where(Signal.status == "active", Signal.validity_until > now)
+        .where(Signal.confidence_pct >= min_confidence)
+    )
+    if direction:
+        q = q.where(Signal.direction == direction.upper())
+    if classification:
+        q = q.where(Signal.classification == classification.lower())
+
+    q = q.order_by(Signal.confidence_pct.desc(), Signal.created_at.desc())
+
+    count_q = q.with_only_columns(Signal.id)
+    total_result = await db.execute(count_q)
+    total = len(total_result.scalars().all())
+
+    result = await db.execute(q.offset(offset).limit(limit))
+    signals = result.scalars().all()
+    enriched = [await _enrich(s, db) for s in signals]
+    return SignalListResponse(total=total, signals=enriched)
+
+
+@router.get("/{signal_id}", response_model=SignalOut)
+async def get_signal(
+    signal_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_active_user)],
+) -> SignalOut:
+    signal = await db.get(Signal, signal_id)
+    if not signal:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Signal not found")
+    return await _enrich(signal, db)
+
+
+@router.post("/generate", response_model=SignalOut, status_code=status.HTTP_201_CREATED)
+async def generate_signal(
+    req: GenerateRequest,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _admin: Annotated[User, Depends(require_admin)],
+) -> SignalOut:
+    """Admin-only: run the signal engine for one stock, respecting the event guard."""
+    stock = await db.get(Stock, req.stock_id)
+    if not stock:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stock not found")
+
+    guard = await is_signal_suppressed(db, req.stock_id)
+    if guard.suppressed:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=f"Signal suppressed by event guard: {guard.reason}",
+        )
+
+    from app.services.signal_service import generate_signal_for_stock
+
+    signal = await generate_signal_for_stock(
+        db=db,
+        stock=stock,
+        capital=req.capital,
+        risk_pct=req.risk_pct,
+        timeframe=req.timeframe,
+    )
+    if signal is None:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="Confidence below threshold or insufficient data",
+        )
+
+    db.add(signal)
+    await db.commit()
+    await db.refresh(signal)
+    return await _enrich(signal, db)

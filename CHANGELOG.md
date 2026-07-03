@@ -1,0 +1,166 @@
+# Changelog
+
+All notable changes to this project are documented here.
+Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
+
+---
+
+## [Unreleased]
+
+### UI Polish v2 — pre-Phase-12 sprint
+
+#### Frontend
+- **4-theme design system** (`src/styles/tokens.css`) — full CSS token rewrite; four named themes (midnight/carbon/ocean/daybreak) replacing the old dark/light binary; backward-compat mappings for old localStorage values; new tokens: `--color-border-strong`, `--color-warning-bg`, `--color-info-bg`, `--color-accent-bg`, `--font-ui`, `--font-num`
+- **Theme switcher** (`src/pages/admin/SettingsPage.tsx`) — 2×2 card grid replacing the old radio list; each card shows bg swatch + accent dot + active badge; daybreak (light) card correctly previews light surface
+- **Continuous font size** — slider (12–22 px, step 1) + five preset chips (Compact/Default/Comfortable/Large/X-Large) writing `--ui-font-size` CSS variable; replaces the old three-state discrete toggle
+- **Split font system** — separate UI font selector (Inter/Geist/IBM Plex Sans/Roboto) and numeric font selector (JetBrains Mono/IBM Plex Mono/Roboto Mono/Inter tabular) stored in `uiPrefsStore`; applied via `data-ui-font` and `data-num-font` attributes on `<html>`
+- **Profile dropdown** (`src/components/ui/profile-dropdown.tsx`) — ported to `createPortal` + `getBoundingClientRect` so it escapes `overflow: hidden` clipping; solid `--color-surface` background (no semi-transparent bleed)
+- **Login page redesign** (`src/pages/LoginPage.tsx`) — glow-orb + subtle grid background layer; brand logo + monospace heading + tagline; shadcn `Input` for email; new `PasswordInput` component for password
+- **PasswordInput component** (`src/components/ui/PasswordInput.tsx`) — show/hide toggle with Eye/EyeOff icons; aria-label `Show characters` / `Hide characters` avoids collision with `getByLabelText(/password/i)` in tests
+- **KpiCard component** (`src/components/ui/KpiCard.tsx`) — card with 4 px left accent border, value in tabular-nums mono, optional sub-line with trend coloring; supports profit/loss/warning/info/accent variants
+- **Action icon colors** — delete/trash hover color unified to `--color-loss` (was `--color-bear` in JournalPage)
+- **Market status chip** (AppShell) — raw `text-green-400`/`bg-green-900` replaced with `--color-profit-bg`/`--color-profit`; yellow PRE-MARKET uses `--color-warning-bg`/`--color-warning`
+- **Native `<select>` elimination** — replaced in `Pagination` (page-size picker), `UsersPage` (role and trading_mode), previously `DashboardPage`, `FilingsPage`, `TagPicker`; all now use `SimpleSelect` backed by base-ui portal
+- **`themeStore`** — extended with `carbon` and `ocean` themes, `setTheme()` action, backward-compat toggle (daybreak ↔ midnight); old `'dark'`/`'light'` localStorage values auto-migrated
+- **`uiPrefsStore`** — extended with `fontSizePx`, `uiFont`, `numFont` state and setters; `setFontSizePx` writes `--ui-font-size` inline; boot hydration in `main.tsx`
+- **Select popup styling** (`src/components/ui/select.tsx`) — replaced shadcn defaults with `--color-surface`/`--color-border-strong` tokens; no semi-transparent backgrounds
+
+### Phase 11 — External Portfolio
+
+#### Backend
+- **Alembic migration** `j1k2l3m4n5o6` — creates `mf_import_batches`, `mf_holdings`, `manual_assets` tables with UUID PKs, BigInteger FKs to users, and covering indexes; fully reversible
+- **ORM models** (`app/models/portfolio.py`) — `MfImportBatch` (source PDF metadata, totals), `MfHolding` (amc, scheme, folio, isin, units/NAV/value as Numeric), `ManualAsset` (gold/FD/PPF/NPS/bonds/real_estate/other with cost basis and maturity fields)
+- **CAS PDF parser** (`app/services/cas_parser.py`) — state-machine parser for CAMS Consolidated Account Statement PDFs via `pdfplumber`; extracts header (investor name, PAN, statement date) and holdings (AMC, scheme, folio, ISIN, units, NAV, current value, valuation date); flush-when-complete design avoids look-ahead bias
+- **Portfolio service** (`app/services/portfolio_service.py`) — `import_cas_pdf` (parse + upsert batch + holdings in one transaction), `get_batch_with_holdings` (selectinload), `get_net_worth` (aggregates equity open positions + latest MF batch + manual assets into `NetWorthOut`)
+- **Portfolio API** (`app/api/v1/portfolio.py`) — `POST /portfolio/cas/upload` (20 MB limit, PDF-only), `GET /portfolio/cas/batches`, `GET /portfolio/cas/batches/{id}`, `DELETE /portfolio/cas/batches/{id}`, `POST /portfolio/assets`, `GET /portfolio/assets`, `PUT /portfolio/assets/{id}`, `DELETE /portfolio/assets/{id}`, `GET /portfolio/net-worth`; all JWT-protected, ownership enforced
+- **pdfplumber** added to backend dependencies
+
+#### Frontend
+- **Portfolio API client** (`src/lib/api/portfolio.ts`) — TypeScript interfaces and typed functions using the `api` fetch wrapper for all portfolio endpoints
+- **PortfolioPage** (`/portfolio`) — three-tab layout (Net Worth, Mutual Funds, Other Assets)
+  - *Net Worth tab*: total value card, stacked segment bar (equity/MF/manual), per-segment cards, manual asset type breakdown
+  - *Mutual Funds tab*: drag-drop CAS upload zone (20 MB limit), batch history table with expandable holdings, delete batch
+  - *Other Assets tab*: asset table with add/edit/delete, `AssetFormModal` with conditional fields per asset type
+- **SimpleSelect** shared component (`src/components/ui/simple-select.tsx`) — thin wrapper around base-ui Select primitives accepting a flat `options` array; fixes Journal pages that used incorrect `options` prop on raw `SelectPrimitive.Root`
+- **AppShell** — Portfolio nav item with Wallet icon added
+- **Router** — `/portfolio` route registered
+
+#### Bug fixes (Phase 10 Journal)
+- `JournalPage` / `JournalEntryModal`: replaced `const { toast } = useToast()` with `const { success, error } = useToast()` (API mismatch)
+- `JournalEntryModal`: fixed `<Dialog>` without `<DialogContent>` (no overlay rendered); now uses `<Dialog><DialogContent>` correctly
+- `JournalPage`: fixed `Pagination` missing `pages` prop; fixed page state from 0-indexed to 1-indexed
+- Removed invalid `variant="neutral"/"bull"/"bear"` Badge usage; replaced with themed inline spans
+
+#### Tests (32 new passing — 327 total backend, 126 total frontend)
+- `TestCasParser` (8) — header extraction, holding count, value parsing, multi-folio same AMC, missing closing balance, as-of-date from NAV line
+- `TestCasUpload` (7) — upload creates batch, non-PDF rejected, auth required, list batches, get batch detail with holdings, 404 on missing, delete cascade
+- `TestManualAssets` (10) — create gold/FD, invalid type 422, negative value 422, all 6 valid types, list, filter by type, update, delete, ownership isolation
+- `TestNetWorth` (7) — empty state, manual assets aggregate, breakdown sorted by value, MF batch included, auth required
+
+---
+
+### Phase 8 — Paper Trading
+
+#### Backend
+- **Alembic migration** `g8h9i0j1k2l3` — creates `orders` and `positions` tables with partial indexes for open positions and time-based lookups; UUID PKs generated at Python level (no `server_default`)
+- **ORM models** (`app/models/trading.py`) — `Order` (BUY/SELL, fill details, broker_payload JSONB) and `Position` (LONG/SHORT, avg_entry_price, trail_state, unrealized_pnl, realized_pnl, opened_at/closed_at)
+- **Paper broker** (`app/broker/paper_broker.py`) — `place_paper_order` fills at Redis LTP → latest daily close fallback → signal entry_price; averages into existing open position for same stock/user/side; `close_position` creates closing order and computes realized P&L; `update_position_pnl` refreshes unrealized P&L
+- **Circuit breaker** (`app/trading/circuit_breaker.py`) — blocks new orders when daily realized loss exceeds `capital_inr × daily_loss_limit_pct / 100` or `max_trades_per_day` is reached; uses IST calendar day window; never disableable
+- **Trail SL state machine** (`app/trading/trail_sl.py`) — monotonic 4-state machine (none → breakeven → trailing_1 → trailing_2) based on R multiples; `advance_trail`, `is_sl_hit`, `is_tp_hit`, `compute_pnl`
+- **Position monitor Celery task** (`app/tasks/position_monitor.py`) — runs every minute during market hours (9:15–15:30 IST = UTC 3:45–10:00, Mon–Fri); auto-closes on SL/TP hit; advances trail SL; refreshes unrealized P&L
+- **Trading API** (`app/api/v1/trading.py`) — `POST /trading/orders` (circuit breaker enforced), `GET /trading/positions`, `POST /trading/positions/{id}/close`, `POST /trading/positions/{id}/update-sl`, `GET /trading/history` (paginated), `GET /trading/daily-pnl`
+
+#### Frontend
+- **Trading API client** (`src/lib/api/trading.ts`) — TypeScript interfaces and `tradingApi` with `placeOrder`, `getOpenPositions`, `closePosition`, `updateSl`, `getHistory`, `getDailyPnl`
+- **DailyPnlCard** — shows realized P&L, loss limit progress bar, circuit breaker status; refetches every 60 s
+- **PositionsPage** (`/trading/positions`) — open positions table with unrealized P&L, edit-SL and close buttons; `ClosePositionDialog` and `UpdateSlDialog` rendered via `createPortal` per floating-panel rules
+- **TradeHistoryPage** (`/trading/history`) — paginated closed positions table with summary cards (page P&L, win rate, trade count)
+- **Dashboard** — "Paper Buy" button added to each signal row; green-tinted with cart icon; shows loading state during mutation
+- **AppShell** — Positions and Trade History nav links added
+
+#### Tests (34 new passing, 302 total backend, 114 total frontend)
+- `TestTrailSl` — 9 pure unit tests covering all state transitions (LONG/SHORT, breakeven, trailing_1, trailing_2, no-regression, zero-risk guard)
+- `TestCircuitBreaker` — 3 async DB tests (loss-limit trigger, within-limit pass, max-trades trigger)
+- `TestPaperBroker` — 5 integration tests (open+close full lifecycle, average-in, SL hit auto-close, TP hit auto-close, double-close raises)
+- `TestTradingApi` — 17 API tests (auth, 404, circuit-breaker block, positions list, manual close, already-closed 409, SL update, invalid SL direction 422, history pagination, daily-pnl, cross-user isolation)
+- Frontend: 12 tests across DailyPnlCard, PositionsPage, TradeHistoryPage
+
+---
+
+### Phase 7 — Live Data via Kite WebSocket
+
+#### Backend
+- **Kite OAuth flow** — `/broker/kite/login` returns Zerodha login URL; `/broker/kite/callback` exchanges `request_token` for `access_token`, persists `BrokerToken` (expires next 6 AM IST)
+- **KiteInstrument sync** — `/broker/kite/instruments/sync` downloads Kite CSV and upserts into `kite_instruments` table; maps `exchange:symbol` → `instrument_token` for tick subscription
+- **Candle aggregator** (`app/broker/candle_aggregator.py`) — stateful tick → OHLCV for 1m/5m/15m/1h; emits `CandleEvent` on new candle or close; look-ahead safe (compute N → signal valid from N+1)
+- **Tick consumer** (`app/broker/tick_consumer.py`) — `KiteTicker` (thread) bridges to asyncio via `Queue`; publishes `ltp:{token}` and `candle:{table}:{stock_id}` to Redis pub/sub; upserts candles to DB; fires Celery task on candle close for signal regeneration
+- **Gap fill** (`app/broker/gap_fill.py`) — on reconnect fetches Kite REST historical data for each missed timeframe and upserts
+- **Live signal generation** — new Celery task `live_signal_generation` runs confluence engine on intraday candles (5m/15m/1h) for a single stock after each candle close
+- **FastAPI WebSocket** (`/api/v1/ws/live`) — browser subscribes by symbol; server subscribes to Redis channels and fans out LTP + candle + signal events
+- **Auto-resume** — FastAPI lifespan queries DB for active admin token and restarts tick consumer on server restart
+- **Alembic migration** `f1g2h3i4j5k6` — creates `ohlcv_1m`, `ohlcv_5m`, `ohlcv_15m`, `ohlcv_1h` (TimescaleDB hypertables), `broker_tokens`, `kite_instruments`
+- **Kite credentials** loaded from `.env` (`KITE_API_KEY`, `KITE_API_SECRET`, `KITE_REDIRECT_URL`)
+
+#### Frontend
+- **KiteConnectPage** (`/broker/kite`) — OAuth connect button, token status, sync instruments, start/stop consumer, setup checklist; admin-only route
+- **`useLiveQuotes` hook** — WebSocket connection to `/api/v1/ws/live`; subscribes by symbol list; exposes `quotes` (LTP) and `candles` (latest per timeframe) maps; auto-reconnects every 3 s
+- **Dashboard** — live LTP column in signals table; WebSocket connection indicator (green dot when connected)
+- **AppShell** — "Kite" nav link for admin users
+
+#### Tests (26 new passing)
+- Candle aggregator: `_floor_to_period`, OHLC update, candle close event, 5m aggregation, zero-price guard, registry operations
+- Gap fill: timeframe → Kite interval mapping, model mapping, gap calculation logic
+- Broker API: login URL, auth guard, status endpoint, OAuth exchange (mocked Kite), bad token error, admin-only instrument sync
+
+---
+
+### Phase 5 — Signal Engine (Offline)
+
+#### Backend — Analysis Engine
+- **15 candlestick pattern detectors** — 6 single-candle (Marubozu ±0.8, Doji, Spinning Top, Hammer/Paper Umbrella +0.4/+0.7, Hanging Man −0.6, Shooting Star −0.7) and 4 multi-candle (Engulfing ±0.9, Harami ±0.5, Piercing/Dark Cloud ±0.7, Morning/Evening Star ±0.95) — scores match SIGNAL_ENGINE.md §2.1–2.2
+- **10 indicator factors** — RSI level + divergence (wt 10), MACD cross + histogram (wt 10), EMA cross + price structure + multibagger bonus (wt 15/15/10), ADX regime (wt 5), BBands reversal (wt 10), Volume spike (wt 10)
+- **Structural factors** — Dow Theory trend (wt 20), S/R zone + demand/supply detection (wt 10), Fibonacci retracement 0.5/0.618/0.786 levels (wt 5), FII/DII institutional flow (wt 5)
+- **Confluence scorer** (`app/analysis/confluence.py`) — weighted average of all 14 factors, ADX regime adjustments (±5% threshold), min 70% confidence gate; returns `ConfluenceResult | None`
+- **Risk sizer** (`app/analysis/risk.py`) — `compute_quantity = floor(capital × risk% / |entry − SL|)`; `compute_levels` per-classification SL/TP rules with max-SL guards (scalp 0.5%, intraday 0.5%, swing 8%)
+- **Signal classifier** — maps timeframe → scalp/intraday/swing/positional
+- **Expiry sweeper** — classification-correct validity (scalp +30 min, intraday 3:15 PM IST, swing +7 days, positional +42 days)
+- **Signal generation service** — loads candles from DB, runs full pipeline, persists `Signal` ORM rows
+- **Signal API** (`GET /signals/active`, `GET /signals/{id}`) — filterable by direction/classification/min_confidence, sorted by confidence desc; JWT-protected
+- **Backtest harness** (`app/backtest/engine.py`) — anti-look-ahead (compute on N, fill at N+1 open); reports win_rate, avg_RR, max_drawdown, Sharpe, Sortino
+- **Alembic migration** `d1e2f3a4b5c6` — creates `sr_levels`, `signals`, `signal_outcomes`, `strategy_runs`; fully reversible
+
+#### Tests
+- **219 total tests passing** — 189 new Phase 5 tests covering all pattern detectors, all indicators, Dow Theory, S/R/Fibonacci/institutional flow, confluence worked example from spec §3, risk sizer per-classification, signal API endpoints (auth, filters, pagination, 404)
+- Anti-look-ahead bias verified in both fibonacci (uses `candles.iloc[:-1]` for prior swing) and backtest harness
+
+---
+
+### Phase 1 — Auth & User Master
+
+#### Backend
+- **JWT authentication** — access token (45 min, JS memory) + refresh token (7 d, httpOnly cookie)
+- **Refresh token rotation** — each `/auth/refresh` call revokes the old session and issues a new one; JTI hash stored in `user_sessions` (raw token never persisted)
+- **User CRUD API** (`/api/v1/users`) — admin-only list/create; self-service profile update; admin role-change gate; soft deactivation (no hard deletes)
+- **Role-based deps** — `get_current_user` (Bearer + DB lookup) and `require_admin` FastAPI Depends
+- **Alembic migration** `b4945c2d75aa` — creates `users` and `user_sessions` tables with `RESTART IDENTITY CASCADE` support
+- **`scripts/create_admin.py`** — idempotent first-admin seed script
+- **30 backend tests** — all passing; real Postgres test DB (`trading_platform_test`), `NullPool` isolation, no mocks
+
+#### Frontend
+- **Vite 8 + React 19 + TypeScript 6** scaffold with `@tailwindcss/vite` plugin
+- **Design tokens** (`src/styles/tokens.css`) — trading-specific color palette: bull/bear/neutral, chart surface, brand dark theme
+- **Global styles** (`src/styles/globals.css`) — base reset plus `card`, `btn`, `input`, `label`, `error-text` CSS primitives
+- **API client** (`src/lib/api/client.ts`) — typed `fetch` wrapper with `ApiError` class
+- **Auth & Users API modules** (`auth.ts`, `users.ts`)
+- **Zustand auth store** — in-memory `accessToken` + `user`; survives re-renders, clears on logout
+- **`useAuth` hook** — login, logout, refreshToken callbacks with 401 auto-clear
+- **`AppShell`** — sticky header with brand logo, admin nav link, signed-in user email
+- **`PageHeader`** — reusable title / subtitle / action-slot component
+- **`LoginPage`** — email/password form with loading state and per-status error messages
+- **`UsersPage`** (admin) — table with live TanStack Query fetch + "New user" modal
+- **Protected routes** — `RequireAuth` and `RequireAdmin` guards in React Router v7
+- **12 frontend tests** — Vitest + RTL; useAuth hook, LoginPage, UsersPage
+
+#### Infrastructure
+- Fixed postgres port mapping to 5433 (5432 was occupied by local Postgres)
+- Added `make backend`, `make frontend`, `make migrate`, `make create-admin`, `make test`, `make lint`, `make typecheck`, `make check` targets

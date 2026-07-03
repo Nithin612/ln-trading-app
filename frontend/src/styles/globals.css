@@ -1,0 +1,122 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "@fontsource-variable/geist/index.css";
+@import "@fontsource-variable/inter/index.css";
+@import "@fontsource-variable/jetbrains-mono/index.css";
+@import "./tokens.css";
+
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html {
+  /* --ui-font-size is set by the slider JS on :root inline style.
+     Falls back to the discrete data-font-size system, then 15px. */
+  font-size: var(--ui-font-size, var(--font-size-base, 15px));
+  font-family: var(--font-ui, var(--font-family-body, var(--font-sans)));
+  background-color: var(--color-bg, var(--color-surface));
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+/* Numeric font — applied to any element with font-num class or data-numeric */
+.font-num,
+[data-numeric] {
+  font-family: var(--font-num);
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+}
+
+/* Shared component primitives */
+
+.card {
+  background-color: var(--color-surface-2);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: 1.5rem;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875em;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s, box-shadow 0.15s;
+  border: 1px solid transparent;
+}
+
+.btn-primary {
+  background-color: var(--color-accent);
+  color: #fff;
+}
+
+.btn-primary:hover {
+  background-color: var(--color-accent-hover);
+}
+
+.btn-ghost {
+  background-color: transparent;
+  color: var(--color-text-muted);
+  border-color: var(--color-border);
+}
+
+.btn-ghost:hover {
+  background-color: var(--color-surface-3);
+  color: var(--color-text);
+}
+
+.input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  background-color: var(--color-surface-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: 0.875em;
+  outline: none;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.input:focus {
+  border-color: var(--color-accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--color-accent) 20%, transparent);
+}
+
+.input::placeholder {
+  color: var(--color-text-muted);
+}
+
+.label {
+  display: block;
+  font-size: 0.8125em;
+  font-weight: 500;
+  color: var(--color-text-muted);
+  margin-bottom: 0.25rem;
+}
+
+.error-text {
+  font-size: 0.75em;
+  color: var(--color-error);
+  margin-top: 0.25rem;
+}
+
+/* ── Index badge component classes ──────────────────────────────────── */
+@layer components {
+  .badge-n50  { @apply bg-blue-950   text-blue-300   border border-blue-800; }
+  .badge-bn   { @apply bg-purple-950 text-purple-300 border border-purple-800; }
+  .badge-fn   { @apply bg-teal-950   text-teal-300   border border-teal-800; }
+  .badge-fno  { @apply bg-amber-950  text-amber-300  border border-amber-800; }
+}

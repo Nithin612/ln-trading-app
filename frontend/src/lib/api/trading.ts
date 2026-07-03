@@ -1,0 +1,103 @@
+import { api } from './client'
+
+export interface PositionOut {
+  id: string
+  user_id: number
+  stock_id: number
+  symbol: string
+  mode: string
+  side: 'LONG' | 'SHORT'
+  quantity: number
+  avg_entry_price: string
+  current_sl: string | null
+  current_tp: string | null
+  trail_state: 'none' | 'breakeven' | 'trailing_1' | 'trailing_2'
+  unrealized_pnl: string | null
+  realized_pnl: string
+  opened_at: string
+  closed_at: string | null
+  signal_id: string | null
+}
+
+export interface PositionListResponse {
+  total: number
+  positions: PositionOut[]
+}
+
+export interface OrderOut {
+  id: string
+  user_id: number
+  signal_id: string | null
+  stock_id: number
+  symbol: string
+  mode: string
+  side: 'BUY' | 'SELL'
+  order_type: string
+  quantity: number
+  price: string | null
+  status: string
+  placed_at: string
+  filled_at: string | null
+  filled_price: string | null
+  filled_qty: number | null
+  error_message: string | null
+}
+
+export interface DailyPnlOut {
+  trade_date: string
+  realized_pnl: string
+  open_count: number
+  closed_count: number
+  circuit_breaker_triggered: boolean
+  daily_loss_limit_inr: string
+  trades_taken_today: number
+  max_trades_per_day: number
+}
+
+export const tradingApi = {
+  placeOrder(
+    params: { signal_id: string; side?: string; quantity?: number },
+    token: string,
+  ): Promise<OrderOut> {
+    return api.post<OrderOut>('/trading/orders', params, token)
+  },
+
+  getOpenPositions(token: string): Promise<PositionListResponse> {
+    return api.get<PositionListResponse>('/trading/positions', token)
+  },
+
+  closePosition(
+    positionId: string,
+    exitPrice: string | undefined,
+    token: string,
+  ): Promise<PositionOut> {
+    return api.post<PositionOut>(
+      `/trading/positions/${positionId}/close`,
+      { exit_price: exitPrice ?? null },
+      token,
+    )
+  },
+
+  updateSl(positionId: string, newSl: string, token: string): Promise<PositionOut> {
+    return api.post<PositionOut>(
+      `/trading/positions/${positionId}/update-sl`,
+      { new_sl: newSl },
+      token,
+    )
+  },
+
+  getHistory(
+    params: { limit?: number; offset?: number },
+    token: string,
+  ): Promise<PositionListResponse> {
+    const q = new URLSearchParams()
+    if (params.limit != null) q.set('limit', String(params.limit))
+    if (params.offset != null) q.set('offset', String(params.offset))
+    const qs = q.toString() ? `?${q.toString()}` : ''
+    return api.get<PositionListResponse>(`/trading/history${qs}`, token)
+  },
+
+  getDailyPnl(token: string): Promise<DailyPnlOut> {
+    return api.get<DailyPnlOut>('/trading/daily-pnl', token)
+  },
+}

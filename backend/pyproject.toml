@@ -1,0 +1,60 @@
+[project]
+name = "trading-platform-backend"
+version = "0.1.0"
+description = "Intelligent stock-suggestion and algo-trading platform for Indian markets (NSE/BSE)"
+requires-python = ">=3.12"
+dependencies = [
+    "fastapi[standard]>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "sqlalchemy[asyncio]>=2.0.36",
+    "asyncpg>=0.30.0",
+    "alembic>=1.14.0",
+    "psycopg[binary]>=3.2.0",
+    "pydantic-settings>=2.6.0",
+    "pydantic[email]>=2.10.0",
+    "PyJWT>=2.10.0",
+    "bcrypt>=4.2.0",
+    "redis>=5.2.0",
+    "celery>=5.4.0",
+    "httpx>=0.28.0",
+    "pandas>=2.3.3",
+    "numpy>=2.2.6",
+    "pandas-ta>=0.4.71b0",
+    "kiteconnect>=5.0.1",
+    "websockets>=13.0",
+    "pdfplumber>=0.11.0",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0,<1.0",
+    "httpx>=0.28.0",
+    "ruff>=0.9.0",
+    "mypy>=1.13.0",
+]
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["app", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "N", "UP", "B", "A", "C90"]
+ignore = [
+    "B008",   # FastAPI uses function calls in Depends()
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101"]   # allow assert in tests
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+plugins = ["pydantic.mypy"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]

@@ -1,0 +1,291 @@
+/* ══════════════════════════════════════════════════════════════════════════
+   Design tokens — single source of truth.
+   Four themes: midnight (default) · carbon · ocean · daybreak
+   Theme is set via data-theme="..." on <html>.
+   ══════════════════════════════════════════════════════════════════════════ */
+
+@theme {
+  /* ── Midnight defaults (registered for Tailwind utility generation) ── */
+  --color-bg:             #0a0f1c;
+  --color-surface:        #0f172a;
+  --color-surface-2:      #182338;
+  --color-surface-3:      #1f2d47;
+  --color-border:         #1e293b;
+  --color-border-strong:  #334155;
+
+  --color-text:           #e2e8f0;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted:     #64748b;
+
+  --color-profit:         #10b981;
+  --color-profit-bg:      #022c22;
+  --color-loss:           #ef4444;
+  --color-loss-bg:        #450a0a;
+  --color-neutral:        #64748b;
+  --color-warning:        #f59e0b;
+  --color-warning-bg:     #451a03;
+  --color-info:           #3b82f6;
+  --color-info-bg:        #172554;
+
+  --color-accent:         #06b6d4;
+  --color-accent-hover:   #22d3ee;
+  --color-accent-bg:      #083344;
+
+  /* ── Trading signal colors (alias for profit/loss for clarity) ─────── */
+  --color-bull:           #10b981;
+  --color-bear:           #ef4444;
+
+  /* ── Chart ──────────────────────────────────────────────────────────── */
+  --color-chart-bg:       #0f172a;
+  --color-chart-grid:     #1e293b;
+  --color-chart-text:     #64748b;
+
+  /* ── Status ─────────────────────────────────────────────────────────── */
+  --color-success:        #10b981;
+  --color-error:          #ef4444;
+
+  /* ── Sidebar / topbar ────────────────────────────────────────────────── */
+  --color-sidebar:        #060d18;
+  --color-topbar:         #060d18;
+
+  /* ── Table zebra stripe ──────────────────────────────────────────────── */
+  --color-row-alt:        #192233;
+  --color-surface-hover:  #1f2d47;
+
+  /* ── Typography ──────────────────────────────────────────────────────── */
+  --font-ui:  'Inter Variable', 'Inter', ui-sans-serif, system-ui, sans-serif;
+  --font-num: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace;
+  --font-sans: var(--font-ui);
+  --font-mono: var(--font-num);
+
+  /* ── Layout ──────────────────────────────────────────────────────────── */
+  --sidebar-width:           240px;
+  --sidebar-collapsed-width: 64px;
+  --topbar-height:           56px;
+
+  /* ── Radius ──────────────────────────────────────────────────────────── */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+
+  /* ── shadcn/base-ui aliases ──────────────────────────────────────────── */
+  --color-background:           var(--color-surface);
+  --color-foreground:           var(--color-text);
+  --color-card:                 var(--color-surface-2);
+  --color-card-foreground:      var(--color-text);
+  --color-popover:              var(--color-surface);
+  --color-popover-foreground:   var(--color-text);
+  --color-primary:              var(--color-accent);
+  --color-primary-foreground:   #ffffff;
+  --color-secondary:            var(--color-surface-3);
+  --color-secondary-foreground: var(--color-text);
+  --color-muted:                var(--color-surface-3);
+  --color-muted-foreground:     var(--color-text-secondary);
+  --color-destructive:          var(--color-error);
+  --color-destructive-foreground: #ffffff;
+  --color-input:                var(--color-surface-3);
+  --color-ring:                 var(--color-accent);
+  --radius:                     var(--radius-md);
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MIDNIGHT — deep navy with cyan accents (default / "dark" alias)
+   ══════════════════════════════════════════════════════════════════════════ */
+:root,
+:root[data-theme="midnight"],
+:root[data-theme="dark"] {
+  --color-bg:             #0a0f1c;
+  --color-surface:        #0f172a;
+  --color-surface-2:      #182338;
+  --color-surface-3:      #1f2d47;
+  --color-surface-hover:  #1f2d47;
+  --color-border:         #1e293b;
+  --color-border-strong:  #334155;
+
+  --color-text:           #e2e8f0;
+  --color-text-secondary: #94a3b8;
+  --color-text-muted:     #64748b;
+
+  --color-profit:         #10b981;
+  --color-profit-bg:      #022c22;
+  --color-loss:           #ef4444;
+  --color-loss-bg:        #450a0a;
+  --color-warning:        #f59e0b;
+  --color-warning-bg:     #451a03;
+  --color-info:           #3b82f6;
+  --color-info-bg:        #172554;
+
+  --color-accent:         #06b6d4;
+  --color-accent-hover:   #22d3ee;
+  --color-accent-bg:      #083344;
+  --color-bull:           #10b981;
+  --color-bear:           #ef4444;
+  --color-neutral:        #64748b;
+  --color-success:        #10b981;
+  --color-error:          #ef4444;
+
+  --color-chart-bg:       #0f172a;
+  --color-chart-grid:     #1e293b;
+  --color-chart-text:     #64748b;
+  --color-sidebar:        #060d18;
+  --color-topbar:         #060d18;
+  --color-row-alt:        #13203a;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   CARBON — pure black with amber accents (Bloomberg terminal feel)
+   ══════════════════════════════════════════════════════════════════════════ */
+:root[data-theme="carbon"] {
+  --color-bg:             #000000;
+  --color-surface:        #0a0a0a;
+  --color-surface-2:      #141414;
+  --color-surface-3:      #1f1f1f;
+  --color-surface-hover:  #1f1f1f;
+  --color-border:         #1f1f1f;
+  --color-border-strong:  #3f3f3f;
+
+  --color-text:           #fafafa;
+  --color-text-secondary: #a3a3a3;
+  --color-text-muted:     #737373;
+
+  --color-profit:         #22c55e;
+  --color-profit-bg:      #052e16;
+  --color-loss:           #ef4444;
+  --color-loss-bg:        #450a0a;
+  --color-warning:        #f59e0b;
+  --color-warning-bg:     #451a03;
+  --color-info:           #fb923c;
+  --color-info-bg:        #431407;
+
+  --color-accent:         #f59e0b;
+  --color-accent-hover:   #fbbf24;
+  --color-accent-bg:      #451a03;
+  --color-bull:           #22c55e;
+  --color-bear:           #ef4444;
+  --color-neutral:        #737373;
+  --color-success:        #22c55e;
+  --color-error:          #ef4444;
+
+  --color-chart-bg:       #000000;
+  --color-chart-grid:     #1f1f1f;
+  --color-chart-text:     #737373;
+  --color-sidebar:        #000000;
+  --color-topbar:         #000000;
+  --color-row-alt:        #0f0f0f;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   OCEAN — dark teal with mint accents (calmer alternative)
+   ══════════════════════════════════════════════════════════════════════════ */
+:root[data-theme="ocean"] {
+  --color-bg:             #0c1c1f;
+  --color-surface:        #11272b;
+  --color-surface-2:      #173238;
+  --color-surface-3:      #1e4046;
+  --color-surface-hover:  #1e4046;
+  --color-border:         #1d3a40;
+  --color-border-strong:  #2a5760;
+
+  --color-text:           #d1fae5;
+  --color-text-secondary: #6ee7b7;
+  --color-text-muted:     #4ade80;
+
+  --color-profit:         #34d399;
+  --color-profit-bg:      #064e3b;
+  --color-loss:           #fb7185;
+  --color-loss-bg:        #4c0519;
+  --color-warning:        #fbbf24;
+  --color-warning-bg:     #451a03;
+  --color-info:           #38bdf8;
+  --color-info-bg:        #0c4a6e;
+
+  --color-accent:         #2dd4bf;
+  --color-accent-hover:   #5eead4;
+  --color-accent-bg:      #134e4a;
+  --color-bull:           #34d399;
+  --color-bear:           #fb7185;
+  --color-neutral:        #4ade80;
+  --color-success:        #34d399;
+  --color-error:          #fb7185;
+
+  --color-chart-bg:       #11272b;
+  --color-chart-grid:     #1d3a40;
+  --color-chart-text:     #4ade80;
+  --color-sidebar:        #081214;
+  --color-topbar:         #081214;
+  --color-row-alt:        #142e33;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   DAYBREAK — off-white with indigo accents (light mode / "light" alias)
+   ══════════════════════════════════════════════════════════════════════════ */
+:root[data-theme="daybreak"],
+:root[data-theme="light"] {
+  --color-bg:             #f8fafc;
+  --color-surface:        #ffffff;
+  --color-surface-2:      #f1f5f9;
+  --color-surface-3:      #e2e8f0;
+  --color-surface-hover:  #e2e8f0;
+  --color-border:         #e2e8f0;
+  --color-border-strong:  #94a3b8;
+
+  --color-text:           #0f172a;
+  --color-text-secondary: #475569;
+  --color-text-muted:     #94a3b8;
+
+  --color-profit:         #059669;
+  --color-profit-bg:      #d1fae5;
+  --color-loss:           #dc2626;
+  --color-loss-bg:        #fee2e2;
+  --color-warning:        #d97706;
+  --color-warning-bg:     #fef3c7;
+  --color-info:           #2563eb;
+  --color-info-bg:        #dbeafe;
+
+  --color-accent:         #4f46e5;
+  --color-accent-hover:   #6366f1;
+  --color-accent-bg:      #eef2ff;
+  --color-bull:           #059669;
+  --color-bear:           #dc2626;
+  --color-neutral:        #94a3b8;
+  --color-success:        #059669;
+  --color-error:          #dc2626;
+
+  --color-chart-bg:       #ffffff;
+  --color-chart-grid:     #f1f5f9;
+  --color-chart-text:     #64748b;
+  --color-sidebar:        #dde3ef;
+  --color-topbar:         #dde3ef;
+  --color-row-alt:        #eff2f8;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Font size — driven by --ui-font-size CSS variable (set by JS on root)
+   Falls back to data-font-size discrete steps for backward compat.
+   ══════════════════════════════════════════════════════════════════════════ */
+:root                        { --font-size-base: 15px; }
+:root[data-font-size="sm"]   { --font-size-base: 13px; }
+:root[data-font-size="md"]   { --font-size-base: 15px; }
+:root[data-font-size="lg"]   { --font-size-base: 17px; }
+
+/* ══════════════════════════════════════════════════════════════════════════
+   Font family — UI font driven by data-ui-font, numeric font by data-num-font
+   ══════════════════════════════════════════════════════════════════════════ */
+:root                              { --font-family-body: var(--font-ui); }
+:root[data-font-family="inter"]    { --font-family-body: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, sans-serif; }
+:root[data-font-family="geist"]    { --font-family-body: 'Geist Variable', 'Geist', ui-sans-serif, system-ui, sans-serif; }
+:root[data-font-family="system"]   { --font-family-body: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif; }
+
+/* UI font overrides */
+:root[data-ui-font="inter"]         { --font-ui: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, sans-serif; }
+:root[data-ui-font="geist"]         { --font-ui: 'Geist Variable', 'Geist', ui-sans-serif, system-ui, sans-serif; }
+:root[data-ui-font="ibm-plex-sans"] { --font-ui: 'IBM Plex Sans', ui-sans-serif, system-ui, sans-serif; }
+:root[data-ui-font="roboto"]        { --font-ui: 'Roboto', ui-sans-serif, system-ui, sans-serif; }
+:root[data-ui-font="system"]        { --font-ui: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif; }
+
+/* Numeric font overrides */
+:root[data-num-font="jetbrains-mono"]  { --font-num: 'JetBrains Mono Variable', 'JetBrains Mono', ui-monospace, monospace; }
+:root[data-num-font="ibm-plex-mono"]   { --font-num: 'IBM Plex Mono', ui-monospace, monospace; }
+:root[data-num-font="roboto-mono"]     { --font-num: 'Roboto Mono', ui-monospace, monospace; }
+:root[data-num-font="inter"]           { --font-num: 'Inter Variable', 'Inter', ui-sans-serif, system-ui, sans-serif; }
