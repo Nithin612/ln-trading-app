@@ -24,10 +24,11 @@ async def get_current_price(db: AsyncSession, stock_id: int) -> Decimal | None:
     try:
         import redis.asyncio as aioredis
 
+        from app.broker.tick_consumer import LTP_KEY
         from app.core.config import settings
 
         r = aioredis.from_url(settings.redis_url, decode_responses=True)
-        ltp_str: str | None = await r.get(f"ltp:{stock_id}")
+        ltp_str: str | None = await r.get(LTP_KEY.format(stock_id=stock_id))
         await r.aclose()
         if ltp_str:
             return Decimal(ltp_str)

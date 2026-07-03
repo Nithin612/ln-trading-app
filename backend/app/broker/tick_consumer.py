@@ -41,6 +41,12 @@ log = logging.getLogger(__name__)
 LTP_CHANNEL = "ltp:{instrument_token}"
 CANDLE_CHANNEL = "candle:{table}:{stock_id}"
 
+# Redis KEY holding the latest price per stock (plain Decimal-parseable string).
+# paper_broker.get_current_price reads this exact key — import it from here,
+# never retype the pattern.
+LTP_KEY = "ltp:{stock_id}"
+LTP_KEY_TTL_SECONDS = 600  # stale after 10 min without ticks
+
 _registry = AggregatorRegistry()
 # instrument_token → stock_id (populated during subscribe)
 _token_to_stock: dict[int, int] = {}
@@ -61,6 +67,12 @@ class TickConsumer:
         self._queue: asyncio.Queue[list[dict[str, Any]]] = asyncio.Queue(maxsize=10_000)
         self._ticker: KiteTicker | None = None
         self._running = False
+        # Captured in start(); KiteTicker callbacks run on the ticker's own
+        # thread where asyncio.get_event_loop() raises on Python 3.12.
+        self._loop: asyncio.AbstractEventLoop | None = None
+        # Candle-close signal triggers held until the batch COMMITs — the
+        # Celery task reads candles from its own session.
+        self._pending_triggers: list[tuple[int, str]] = []
 
     # ── Public interface ─────────────────────────────────────────────────────
 
@@ -78,8 +90,8 @@ class TickConsumer:
         self._ticker.on_error = self._on_error
         self._ticker.on_close = self._on_close
 
-        loop = asyncio.get_event_loop()
-        loop.run_in_executor(None, self._ticker.connect, True)  # non-blocking connect
+        self._loop = asyncio.get_running_loop()
+        self._loop.run_in_executor(None, self._ticker.connect, True)  # non-blocking connect
         await self._process_loop()
 
     async def stop(self) -> None:
@@ -90,8 +102,23 @@ class TickConsumer:
     # ── KiteTicker callbacks (run on ticker's thread) ─────────────────────────
 
     def _on_ticks_thread(self, ws: Any, ticks: list[dict[str, Any]]) -> None:
-        loop = asyncio.get_event_loop()
-        loop.call_soon_threadsafe(self._queue.put_nowait, ticks)
+        # Runs on the KiteTicker thread: never touch asyncio state directly here.
+        if self._loop is None or self._loop.is_closed():
+            return
+        self._loop.call_soon_threadsafe(self._enqueue, ticks)
+
+    def _enqueue(self, ticks: list[dict[str, Any]]) -> None:
+        """Runs on the event-loop thread. Drops the oldest batch when full —
+        losing a stale LTP batch beats crashing the callback chain."""
+        try:
+            self._queue.put_nowait(ticks)
+        except asyncio.QueueFull:
+            try:
+                self._queue.get_nowait()
+            except asyncio.QueueEmpty:
+                pass
+            self._queue.put_nowait(ticks)
+            log.warning("Tick queue full; dropped oldest batch")
 
     def _on_connect(self, ws: Any, response: Any) -> None:
         tokens = list(self._token_stock_map.keys())
@@ -123,28 +150,50 @@ class TickConsumer:
                 except TimeoutError:
                     continue
 
+                wrote = False
                 for tick in ticks:
-                    await self._handle_tick(tick, r, db)
+                    wrote = await self._handle_tick(tick, r, db) or wrote
+
+                # Commit once per Kite batch (~1/sec). flush() alone left the
+                # transaction open all day and candles invisible to readers.
+                if wrote:
+                    try:
+                        await db.commit()
+                    except Exception:
+                        log.exception("DB commit error in tick batch")
+                        await db.rollback()
+                        self._pending_triggers.clear()
+                        continue
+
+                # Fire signal regeneration only after the candles are visible.
+                for trig_stock_id, trig_timeframe in self._pending_triggers:
+                    _maybe_trigger_signal(trig_stock_id, trig_timeframe)
+                self._pending_triggers.clear()
 
     async def _handle_tick(
         self,
         tick: dict[str, Any],
         redis: Any,
         db: Any,
-    ) -> None:
+    ) -> bool:
+        """Process one tick. Returns True if it wrote to the DB session."""
         instrument_token = tick.get("instrument_token")
         if instrument_token is None:
-            return
+            return False
 
         stock_id = self._token_stock_map.get(instrument_token)
         if stock_id is None:
-            return
+            return False
 
         ltp = tick.get("last_price") or tick.get("last_traded_price")
         if ltp is None:
-            return
+            return False
 
-        # Publish LTP update
+        # Latest-price KEY (read by paper_broker for fills and SL/TP checks) …
+        await redis.set(
+            LTP_KEY.format(stock_id=stock_id), str(ltp), ex=LTP_KEY_TTL_SECONDS
+        )
+        # … and pub/sub CHANNEL for the live WebSocket fan-out.
         ltp_payload = json.dumps(
             {
                 "instrument_token": instrument_token,
@@ -159,6 +208,7 @@ class TickConsumer:
         agg = _registry.get_or_create(stock_id)
         events = agg.on_tick(tick)
 
+        wrote = False
         for event in events:
             candle = event.candle
             table = TIMEFRAME_TABLE[candle.timeframe]
@@ -185,42 +235,43 @@ class TickConsumer:
             # Persist to DB: always upsert (live updates in-place, closed marks complete)
             if event.is_new or event.is_closed:
                 await _upsert_candle(db, table, stock_id, candle)
+                wrote = True
 
             if event.is_closed:
                 log.debug(
                     "Candle closed: stock_id=%d tf=%s time=%s",
                     stock_id, candle.timeframe, candle.period_start,
                 )
-                _maybe_trigger_signal(stock_id, candle.timeframe)
+                self._pending_triggers.append((stock_id, candle.timeframe))
 
-        # Flush after each batch of events
-        try:
-            await db.flush()
-        except Exception:
-            log.exception("DB flush error in tick handler")
-            await db.rollback()
+        return wrote
 
 
 async def _upsert_candle(db: Any, table: str, stock_id: int, candle: Any) -> None:
     from sqlalchemy import text
 
+    if table not in TIMEFRAME_TABLE.values():  # defence-in-depth for the f-string SQL
+        raise ValueError(f"Unknown candle table: {table}")
+
+    # NOTE: former code called .format() on the TextClause (AttributeError —
+    # killed the loop on the first candle) and bound prices as float.
     await db.execute(
         text(
             f"INSERT INTO {table} (time, stock_id, open, high, low, close, volume, is_complete)"  # noqa: S608
             " VALUES (:time, :sid, :open, :high, :low, :close, :volume, :complete)"
             " ON CONFLICT (time, stock_id) DO UPDATE SET"
-            "   high        = GREATEST(EXCLUDED.high, {table}.high),"
-            "   low         = LEAST(EXCLUDED.low, {table}.low),"
+            f"   high        = GREATEST(EXCLUDED.high, {table}.high),"
+            f"   low         = LEAST(EXCLUDED.low, {table}.low),"
             "   close       = EXCLUDED.close,"
             "   volume      = EXCLUDED.volume,"
             "   is_complete = EXCLUDED.is_complete"
-        ).format(table=table).bindparams(
+        ).bindparams(
             time=candle.period_start,
             sid=stock_id,
-            open=float(candle.open),
-            high=float(candle.high),
-            low=float(candle.low),
-            close=float(candle.close),
+            open=candle.open,
+            high=candle.high,
+            low=candle.low,
+            close=candle.close,
             volume=candle.volume,
             complete=candle.is_complete,
         )

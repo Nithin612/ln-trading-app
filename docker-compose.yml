@@ -33,7 +33,10 @@ services:
       - "6379:6379"
     volumes:
       - redis_data:/data
-    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "allkeys-lru"]
+    # volatile-lru: only keys WITH a TTL are evictable. Celery broker/queue keys
+    # carry no TTL, so they can never be silently dropped under memory pressure;
+    # cache keys (ltp:*, etc.) must always be SET with an expiry.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "volatile-lru"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s
