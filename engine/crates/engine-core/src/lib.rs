@@ -7,6 +7,8 @@
 //! - semantics replicate the frozen Python reference (pandas-ta 0.4.71b0)
 //!   exactly — "better" behavior without a spec change is a bug.
 
+pub mod confluence;
+pub mod factors;
 pub mod indicators;
 pub mod patterns;
 pub mod pivots;
