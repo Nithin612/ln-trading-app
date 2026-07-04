@@ -70,6 +70,7 @@ pub fn ema(values: &[f64], length: usize) -> Vec<f64> {
 }
 
 #[cfg(test)]
+#[allow(clippy::indexing_slicing)]
 mod tests {
     use super::*;
     use approx::assert_relative_eq;
