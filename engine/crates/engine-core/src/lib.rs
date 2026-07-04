@@ -8,6 +8,10 @@
 //!   exactly — "better" behavior without a spec change is a bug.
 
 pub mod indicators;
+pub mod patterns;
+pub mod pivots;
+pub mod structure;
+pub mod types;
 
 /// Crate version, re-exported for the Python module banner.
 pub const VERSION: &str = env!("CARGO_PKG_VERSION");
