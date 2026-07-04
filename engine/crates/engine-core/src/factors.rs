@@ -13,26 +13,34 @@ pub struct Factor {
     pub score: f64,
     pub is_pattern: bool,
     pub is_indicator: bool,
+    /// Weight-multiplier group — replicates Python _factor_group where TAG
+    /// matches beat NAME matches (so DOW_TREND→structure, BBANDS→volume,
+    /// MULTIBAGGER_EMA→institutional, ADX→structure).
+    pub group: &'static str,
 }
 
 impl Factor {
-    pub const fn new(name: &'static str, weight: f64, score: f64) -> Self {
+    pub const fn grouped(name: &'static str, weight: f64, score: f64, group: &'static str) -> Self {
         Self {
             name,
             weight,
             score,
             is_pattern: false,
             is_indicator: false,
+            group,
         }
     }
-    pub const fn indicator(name: &'static str, weight: f64, score: f64) -> Self {
-        Self {
-            name,
-            weight,
-            score,
-            is_pattern: false,
-            is_indicator: true,
-        }
+}
+
+/// Python _factor_group resolution, precomputed per factor name.
+pub const fn group_of(name: &str) -> &'static str {
+    match name.as_bytes() {
+        b"DOW_TREND" | b"SR_ZONE" | b"FIBONACCI" | b"ADX" => "structure",
+        b"EMA_CROSS" | b"PRICE_VS_EMA" => "trend",
+        b"RSI_LEVEL" | b"RSI_DIVERGENCE" | b"MACD_CROSS" | b"MACD_HISTOGRAM" => "momentum",
+        b"VOLUME" | b"BBANDS" => "volume",
+        b"FII_DII_FLOW" | b"MULTIBAGGER_EMA" => "institutional",
+        _ => "pattern",
     }
 }
 
@@ -59,21 +67,21 @@ pub fn ema_cross_factor(bars: &[Bar]) -> Factor {
         let any_valid =
             e20.last().is_some_and(|v| !v.is_nan()) && e50.last().is_some_and(|v| !v.is_nan());
         let _ = any_valid; // both paths score 0.0, matching Python
-        return Factor::new("EMA_CROSS", 15.0, 0.0);
+        return Factor::grouped("EMA_CROSS", 15.0, 0.0, group_of("EMA_CROSS"));
     };
     if e20_prev <= e50_prev && e20_now > e50_now {
         return Factor {
             is_indicator: true,
-            ..Factor::new("EMA_CROSS", 15.0, 0.6)
+            ..Factor::grouped("EMA_CROSS", 15.0, 0.6, group_of("EMA_CROSS"))
         };
     }
     if e20_prev >= e50_prev && e20_now < e50_now {
         return Factor {
             is_indicator: true,
-            ..Factor::new("EMA_CROSS", 15.0, -0.6)
+            ..Factor::grouped("EMA_CROSS", 15.0, -0.6, group_of("EMA_CROSS"))
         };
     }
-    Factor::new("EMA_CROSS", 15.0, 0.0)
+    Factor::grouped("EMA_CROSS", 15.0, 0.0, group_of("EMA_CROSS"))
 }
 
 pub fn price_vs_ema_factor(bars: &[Bar]) -> Factor {
@@ -82,15 +90,21 @@ pub fn price_vs_ema_factor(bars: &[Bar]) -> Factor {
     let e50 = indicators::ema(&c, 50).last().copied().unwrap_or(f64::NAN);
     let e200 = indicators::ema(&c, 200).last().copied().unwrap_or(f64::NAN);
     if e50.is_nan() || e200.is_nan() {
-        return Factor::new("PRICE_VS_EMA", 15.0, 0.0);
+        return Factor::grouped("PRICE_VS_EMA", 15.0, 0.0, group_of("PRICE_VS_EMA"));
     }
     if close_now > e50 && e50 > e200 {
-        return Factor::indicator("PRICE_VS_EMA", 15.0, 0.5);
+        return Factor {
+            is_indicator: true,
+            ..Factor::grouped("PRICE_VS_EMA", 15.0, 0.5, group_of("PRICE_VS_EMA"))
+        };
     }
     if close_now < e50 && e50 < e200 {
-        return Factor::indicator("PRICE_VS_EMA", 15.0, -0.5);
+        return Factor {
+            is_indicator: true,
+            ..Factor::grouped("PRICE_VS_EMA", 15.0, -0.5, group_of("PRICE_VS_EMA"))
+        };
     }
-    Factor::new("PRICE_VS_EMA", 15.0, 0.0)
+    Factor::grouped("PRICE_VS_EMA", 15.0, 0.0, group_of("PRICE_VS_EMA"))
 }
 
 /// Multibagger bonus (1d only): 20 EMA within 2% of 200 EMA + green
@@ -100,26 +114,29 @@ pub fn multibagger_ema_factor(bars: &[Bar]) -> Factor {
     let e20 = indicators::ema(&c, 20).last().copied().unwrap_or(f64::NAN);
     let e200 = indicators::ema(&c, 200).last().copied().unwrap_or(f64::NAN);
     if e20.is_nan() || e200.is_nan() || e200 == 0.0 {
-        return Factor::new("MULTIBAGGER_EMA", 10.0, 0.0);
+        return Factor::grouped("MULTIBAGGER_EMA", 10.0, 0.0, group_of("MULTIBAGGER_EMA"));
     }
     let proximity_pct = (e20 - e200).abs() / e200 * 100.0;
     if proximity_pct > 2.0 {
-        return Factor::new("MULTIBAGGER_EMA", 10.0, 0.0);
+        return Factor::grouped("MULTIBAGGER_EMA", 10.0, 0.0, group_of("MULTIBAGGER_EMA"));
     }
     let Some(last) = bars.last() else {
-        return Factor::new("MULTIBAGGER_EMA", 10.0, 0.0);
+        return Factor::grouped("MULTIBAGGER_EMA", 10.0, 0.0, group_of("MULTIBAGGER_EMA"));
     };
     let tail_start = bars.len().saturating_sub(20);
     let tail = bars.get(tail_start..).unwrap_or(&[]);
     if tail.is_empty() {
-        return Factor::new("MULTIBAGGER_EMA", 10.0, 0.0);
+        return Factor::grouped("MULTIBAGGER_EMA", 10.0, 0.0, group_of("MULTIBAGGER_EMA"));
     }
     let avg_body = tail.iter().map(Bar::body).sum::<f64>() / tail.len() as f64;
     let breakout = last.close > last.open && last.body() >= 1.5 * avg_body;
     if breakout {
-        return Factor::indicator("MULTIBAGGER_EMA", 10.0, 0.9);
+        return Factor {
+            is_indicator: true,
+            ..Factor::grouped("MULTIBAGGER_EMA", 10.0, 0.9, group_of("MULTIBAGGER_EMA"))
+        };
     }
-    Factor::new("MULTIBAGGER_EMA", 10.0, 0.0)
+    Factor::grouped("MULTIBAGGER_EMA", 10.0, 0.0, group_of("MULTIBAGGER_EMA"))
 }
 
 // ── RSI (§2.3) ───────────────────────────────────────────────────────────────
@@ -127,7 +144,7 @@ pub fn multibagger_ema_factor(bars: &[Bar]) -> Factor {
 pub fn rsi_level_factor(bars: &[Bar]) -> Factor {
     let rsi = indicators::rsi(&closes(bars), 14);
     let Some((prev, last)) = last2(&rsi) else {
-        return Factor::new("RSI_LEVEL", 10.0, 0.0);
+        return Factor::grouped("RSI_LEVEL", 10.0, 0.0, group_of("RSI_LEVEL"));
     };
     // Adjudicated 2026-07-04 (item B): no ±0.4 bands — spec §2.3 only.
     let score = if (30.0..=50.0).contains(&last) && last > prev {
@@ -138,27 +155,30 @@ pub fn rsi_level_factor(bars: &[Bar]) -> Factor {
         0.0
     };
     if score == 0.0 {
-        Factor::new("RSI_LEVEL", 10.0, 0.0)
+        Factor::grouped("RSI_LEVEL", 10.0, 0.0, group_of("RSI_LEVEL"))
     } else {
-        Factor::indicator("RSI_LEVEL", 10.0, score)
+        Factor {
+            is_indicator: true,
+            ..Factor::grouped("RSI_LEVEL", 10.0, score, "momentum")
+        }
     }
 }
 
 pub fn rsi_divergence_factor(bars: &[Bar], lookback: usize) -> Factor {
     if bars.len() < lookback + 1 {
-        return Factor::new("RSI_DIVERGENCE", 10.0, 0.0);
+        return Factor::grouped("RSI_DIVERGENCE", 10.0, 0.0, group_of("RSI_DIVERGENCE"));
     }
     let c = closes(bars);
     let rsi = indicators::rsi(&c, 14);
     let valid = rsi.iter().filter(|v| !v.is_nan()).count();
     if valid < lookback + 1 {
-        return Factor::new("RSI_DIVERGENCE", 10.0, 0.0);
+        return Factor::grouped("RSI_DIVERGENCE", 10.0, 0.0, group_of("RSI_DIVERGENCE"));
     }
     let w_start = bars.len().saturating_sub(lookback + 1);
     let cw = c.get(w_start..).unwrap_or(&[]);
     let rw = rsi.get(w_start..).unwrap_or(&[]);
     let (Some(&price_now), Some(&rsi_now)) = (cw.last(), rw.last()) else {
-        return Factor::new("RSI_DIVERGENCE", 10.0, 0.0);
+        return Factor::grouped("RSI_DIVERGENCE", 10.0, 0.0, group_of("RSI_DIVERGENCE"));
     };
     let prior_c = cw.get(..cw.len() - 1).unwrap_or(&[]);
     let prior_r = rw.get(..rw.len() - 1).unwrap_or(&[]);
@@ -168,12 +188,18 @@ pub fn rsi_divergence_factor(bars: &[Bar], lookback: usize) -> Factor {
     let rsi_high_prev = prior_r.iter().copied().fold(f64::NEG_INFINITY, f64::max);
 
     if price_now < price_low_prev && rsi_now > rsi_low_prev {
-        return Factor::indicator("RSI_DIVERGENCE", 10.0, 0.8);
+        return Factor {
+            is_indicator: true,
+            ..Factor::grouped("RSI_DIVERGENCE", 10.0, 0.8, group_of("RSI_DIVERGENCE"))
+        };
     }
     if price_now > price_high_prev && rsi_now < rsi_high_prev {
-        return Factor::indicator("RSI_DIVERGENCE", 10.0, -0.8);
+        return Factor {
+            is_indicator: true,
+            ..Factor::grouped("RSI_DIVERGENCE", 10.0, -0.8, group_of("RSI_DIVERGENCE"))
+        };
     }
-    Factor::new("RSI_DIVERGENCE", 10.0, 0.0)
+    Factor::grouped("RSI_DIVERGENCE", 10.0, 0.0, group_of("RSI_DIVERGENCE"))
 }
 
 // ── MACD (§2.3) ──────────────────────────────────────────────────────────────
@@ -181,29 +207,41 @@ pub fn rsi_divergence_factor(bars: &[Bar], lookback: usize) -> Factor {
 pub fn macd_cross_factor(bars: &[Bar]) -> Factor {
     let (line, signal, _hist) = indicators::macd(&closes(bars), 12, 26, 9);
     let (Some((m_prev, m_now)), Some((s_prev, s_now))) = (last2(&line), last2(&signal)) else {
-        return Factor::new("MACD_CROSS", 10.0, 0.0);
+        return Factor::grouped("MACD_CROSS", 10.0, 0.0, group_of("MACD_CROSS"));
     };
     if m_prev < s_prev && m_now >= s_now {
-        return Factor::indicator("MACD_CROSS", 10.0, 0.7);
+        return Factor {
+            is_indicator: true,
+            ..Factor::grouped("MACD_CROSS", 10.0, 0.7, group_of("MACD_CROSS"))
+        };
     }
     if m_prev > s_prev && m_now <= s_now {
-        return Factor::indicator("MACD_CROSS", 10.0, -0.7);
+        return Factor {
+            is_indicator: true,
+            ..Factor::grouped("MACD_CROSS", 10.0, -0.7, group_of("MACD_CROSS"))
+        };
     }
-    Factor::new("MACD_CROSS", 10.0, 0.0)
+    Factor::grouped("MACD_CROSS", 10.0, 0.0, group_of("MACD_CROSS"))
 }
 
 pub fn macd_histogram_factor(bars: &[Bar]) -> Factor {
     let (_line, _signal, hist) = indicators::macd(&closes(bars), 12, 26, 9);
     let Some((h_prev, h_now)) = last2(&hist) else {
-        return Factor::new("MACD_HISTOGRAM", 10.0, 0.0);
+        return Factor::grouped("MACD_HISTOGRAM", 10.0, 0.0, group_of("MACD_HISTOGRAM"));
     };
     if h_now < 0.0 && h_now > h_prev {
-        return Factor::indicator("MACD_HISTOGRAM", 10.0, 0.4);
+        return Factor {
+            is_indicator: true,
+            ..Factor::grouped("MACD_HISTOGRAM", 10.0, 0.4, group_of("MACD_HISTOGRAM"))
+        };
     }
     if h_now > 0.0 && h_now < h_prev {
-        return Factor::indicator("MACD_HISTOGRAM", 10.0, -0.4);
+        return Factor {
+            is_indicator: true,
+            ..Factor::grouped("MACD_HISTOGRAM", 10.0, -0.4, group_of("MACD_HISTOGRAM"))
+        };
     }
-    Factor::new("MACD_HISTOGRAM", 10.0, 0.0)
+    Factor::grouped("MACD_HISTOGRAM", 10.0, 0.0, group_of("MACD_HISTOGRAM"))
 }
 
 // ── Volume (§2.3) ────────────────────────────────────────────────────────────
@@ -214,19 +252,22 @@ pub fn macd_histogram_factor(bars: &[Bar]) -> Factor {
 pub fn volume_factor(bars: &[Bar]) -> Factor {
     const AVG_PERIOD: usize = 20;
     if bars.len() < AVG_PERIOD + 1 {
-        return Factor::new("VOLUME", 10.0, 0.0);
+        return Factor::grouped("VOLUME", 10.0, 0.0, group_of("VOLUME"));
     }
     let start = bars.len() - AVG_PERIOD - 1;
     let window = bars.get(start..bars.len() - 1).unwrap_or(&[]);
     let avg = window.iter().map(|b| b.volume).sum::<f64>() / AVG_PERIOD as f64;
     let curr = bars.last().map(|b| b.volume).unwrap_or(0.0);
     if avg == 0.0 {
-        return Factor::new("VOLUME", 10.0, 0.0);
+        return Factor::grouped("VOLUME", 10.0, 0.0, group_of("VOLUME"));
     }
     if curr / avg >= 1.5 {
-        return Factor::indicator("VOLUME", 10.0, 0.5);
+        return Factor {
+            is_indicator: true,
+            ..Factor::grouped("VOLUME", 10.0, 0.5, group_of("VOLUME"))
+        };
     }
-    Factor::new("VOLUME", 10.0, 0.0)
+    Factor::grouped("VOLUME", 10.0, 0.0, group_of("VOLUME"))
 }
 
 // ── Bollinger reversal (§2.3) ────────────────────────────────────────────────
@@ -237,15 +278,21 @@ pub fn bbands_factor(bars: &[Bar]) -> Factor {
     let (Some((lo_prev, lo_now)), Some((up_prev, up_now)), Some((c_prev, c_now))) =
         (last2(&lower), last2(&upper), last2(&c))
     else {
-        return Factor::new("BBANDS", 10.0, 0.0);
+        return Factor::grouped("BBANDS", 10.0, 0.0, group_of("BBANDS"));
     };
     if c_prev <= lo_prev && c_now > lo_now {
-        return Factor::indicator("BBANDS", 10.0, 0.5);
+        return Factor {
+            is_indicator: true,
+            ..Factor::grouped("BBANDS", 10.0, 0.5, group_of("BBANDS"))
+        };
     }
     if c_prev >= up_prev && c_now < up_now {
-        return Factor::indicator("BBANDS", 10.0, -0.5);
+        return Factor {
+            is_indicator: true,
+            ..Factor::grouped("BBANDS", 10.0, -0.5, group_of("BBANDS"))
+        };
     }
-    Factor::new("BBANDS", 10.0, 0.0)
+    Factor::grouped("BBANDS", 10.0, 0.0, group_of("BBANDS"))
 }
 
 // ── ADX (§2.3) ───────────────────────────────────────────────────────────────
@@ -263,15 +310,21 @@ fn last_adx(bars: &[Bar]) -> Option<(f64, f64, f64)> {
 
 pub fn adx_factor(bars: &[Bar]) -> Factor {
     let Some((adx, dmp, dmn)) = last_adx(bars) else {
-        return Factor::new("ADX", 5.0, 0.0);
+        return Factor::grouped("ADX", 5.0, 0.0, group_of("ADX"));
     };
     if adx > 25.0 {
         if dmp > dmn {
-            return Factor::indicator("ADX", 5.0, 0.6);
+            return Factor {
+                is_indicator: true,
+                ..Factor::grouped("ADX", 5.0, 0.6, group_of("ADX"))
+            };
         }
-        return Factor::indicator("ADX", 5.0, -0.6);
+        return Factor {
+            is_indicator: true,
+            ..Factor::grouped("ADX", 5.0, -0.6, group_of("ADX"))
+        };
     }
-    Factor::new("ADX", 5.0, 0.0)
+    Factor::grouped("ADX", 5.0, 0.0, group_of("ADX"))
 }
 
 pub fn adx_is_strong(bars: &[Bar]) -> bool {
@@ -311,5 +364,6 @@ pub fn fii_dii_factor(fii_net_5d: f64, dii_net_5d: f64, block_deal_net_cr: f64) 
         score,
         is_pattern: false,
         is_indicator: false,
+        group: "institutional",
     }
 }

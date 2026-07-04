@@ -29,6 +29,15 @@ user instruction + backtest regression per §8).
   · swing 5 TRADING days · positional 30 TRADING days. Trading days need the
   NSE holiday calendar — calendar-day arithmetic is a bug.
 
+## Python engine freeze (Phase 1, since 2026-07-04)
+
+`backend/app/analysis/`, `app/backtest/engine.py`, and the swing/window
+canon are FROZEN at the adjudicated state (commit ea4b06d): bugfix-only,
+and any fix must regenerate the Rust oracle fixtures in the same commit.
+The committed fixtures under `engine/crates/engine-core/tests/fixtures/`
+are the parity oracle — the Python code becomes deletable after the
+Phase-3 shadow week.
+
 ## Money and time
 
 - Prices/P&L/capital: `Decimal` in Python, `Numeric(12,4)` in Postgres,

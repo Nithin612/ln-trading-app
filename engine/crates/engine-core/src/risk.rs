@@ -56,7 +56,11 @@ pub fn money_from_str(s: &str) -> Option<Money> {
     let mut value = int_v.checked_mul(MONEY_SCALE)?.checked_add(frac4)?;
 
     // Half-even on the remainder digits
-    let rest: Vec<u32> = frac_part.chars().skip(4).filter_map(|c| c.to_digit(10)).collect();
+    let rest: Vec<u32> = frac_part
+        .chars()
+        .skip(4)
+        .filter_map(|c| c.to_digit(10))
+        .collect();
     if let Some(&first) = rest.first() {
         let round_up = match first {
             0..=4 => false,
@@ -74,15 +78,20 @@ pub fn money_from_str(s: &str) -> Option<Money> {
 /// §6 formula: floor(capital × risk% / |entry − SL|). risk_pct is a WHOLE
 /// percent scaled 1e-4 (2% == 20_000). Returns None when entry == SL
 /// (Python raises ValueError).
-pub fn compute_quantity(capital: Money, risk_pct: Money, entry: Money, stop_loss: Money) -> Option<i64> {
+pub fn compute_quantity(
+    capital: Money,
+    risk_pct: Money,
+    entry: Money,
+    stop_loss: Money,
+) -> Option<i64> {
     if entry == stop_loss {
         return None;
     }
     // risk_amount = capital * risk_pct / 100  (exact in i128)
     let risk_amount_num = i128::from(capital) * i128::from(risk_pct); // scale 1e-8
     let risk_per_share = i128::from((entry - stop_loss).abs()); // scale 1e-4
-    // qty = floor(risk_amount / 100 / risk_per_share)
-    //     = floor(capital·risk_pct / (100·SCALE·risk_per_share)) with scales folded
+                                                                // qty = floor(risk_amount / 100 / risk_per_share)
+                                                                //     = floor(capital·risk_pct / (100·SCALE·risk_per_share)) with scales folded
     let denom = risk_per_share * 100 * i128::from(MONEY_SCALE);
     let qty = risk_amount_num / denom; // truncation == floor for non-negative
     i64::try_from(qty.max(0)).ok()
@@ -229,7 +238,10 @@ mod tests {
 
     #[test]
     fn equal_entry_sl_rejected() {
-        assert_eq!(compute_quantity(m("100000"), m("2"), m("490"), m("490")), None);
+        assert_eq!(
+            compute_quantity(m("100000"), m("2"), m("490"), m("490")),
+            None
+        );
     }
 
     #[test]
@@ -253,8 +265,8 @@ mod tests {
     #[test]
     fn scalp_levels_buy() {
         // entry 100: SL 99.70, TP 100.45
-        let (sl, tp) = compute_levels(Side::Buy, Classification::Scalp, m("100"), None, None, None)
-            .unwrap();
+        let (sl, tp) =
+            compute_levels(Side::Buy, Classification::Scalp, m("100"), None, None, None).unwrap();
         assert_eq!(sl, m("99.70"));
         assert_eq!(tp, m("100.45"));
     }

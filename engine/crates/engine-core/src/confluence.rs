@@ -29,7 +29,7 @@ pub struct ConfluenceOutcome {
 /// high/low (NOT pivot-based — Python parity).
 fn best_pattern_factor(bars: &[Bar]) -> Factor {
     let Some(last) = bars.last() else {
-        return Factor::new("PATTERN", 15.0, 0.0);
+        return Factor::grouped("PATTERN", 15.0, 0.0, "pattern");
     };
     let close = last.close;
     let start = bars.len().saturating_sub(20);
@@ -68,6 +68,7 @@ fn best_pattern_factor(bars: &[Bar]) -> Factor {
         score: if best.detected { best.score } else { 0.0 },
         is_pattern: true,
         is_indicator: false,
+        group: "pattern",
     }
 }
 
@@ -102,6 +103,7 @@ pub fn run_all_factors(bars: &[Bar], timeframe: &str, flows: FlowInputs) -> Vec<
             score: structure::dow_trend_score(bars, 20, swing_n),
             is_pattern: false,
             is_indicator: false,
+            group: "structure",
         },
         factors::ema_cross_factor(bars),
         factors::price_vs_ema_factor(bars),
@@ -124,6 +126,7 @@ pub fn run_all_factors(bars: &[Bar], timeframe: &str, flows: FlowInputs) -> Vec<
             ),
             is_pattern: false,
             is_indicator: false,
+            group: "structure",
         },
         Factor {
             name: "FIBONACCI",
@@ -131,6 +134,7 @@ pub fn run_all_factors(bars: &[Bar], timeframe: &str, flows: FlowInputs) -> Vec<
             score: structure::fibonacci_score(bars),
             is_pattern: false,
             is_indicator: false,
+            group: "structure",
         },
         factors::fii_dii_factor(
             flows.fii_net_5d,
@@ -174,7 +178,10 @@ pub fn score_from_factors(
                 } else {
                     0.0
                 };
-                Factor { score: new_score, ..*f }
+                Factor {
+                    score: new_score,
+                    ..*f
+                }
             } else {
                 *f
             }
