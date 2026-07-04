@@ -8,7 +8,8 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.analysis.confluence import score_signal
+from app.analysis.confluence import ConfluenceResult
+from app.analysis.confluence import score_signal as _score_signal_python
 from app.analysis.indicators.ema import _ema
 from app.analysis.risk import compute_levels, compute_quantity
 from app.core.config import settings
@@ -18,6 +19,49 @@ from app.models.stock import Stock
 from app.signals.classifier import classify_signal
 from app.signals.expiry import compute_validity_until
 from app.signals.headline import build_headline
+
+
+def score_signal(
+    candles: pd.DataFrame,
+    timeframe: str = "1d",
+    min_confidence: int = 70,
+    **flows: Decimal,
+) -> "ConfluenceResult | None":
+    """ENGINE_IMPL dispatch (Phase 1): frozen Python engine or tradecore.
+
+    Rust path is parity-gated (tests/parity) — factor scores, confidence
+    integers, and decisions are exact-equal by test.
+    """
+    if settings.engine_impl == "rust":
+        import tradecore
+
+        from app.analysis.types import FactorResult
+
+        result = tradecore.score_signal(
+            [float(v) for v in candles["open"]],
+            [float(v) for v in candles["high"]],
+            [float(v) for v in candles["low"]],
+            [float(v) for v in candles["close"]],
+            [float(v) for v in candles["volume"]],
+            timeframe,
+            min_confidence,
+        )
+        if result is None:
+            return None
+        factors = [
+            FactorResult(name, w, s, "tradecore", [])
+            for name, (w, s) in result["factors"].items()
+        ]
+        return ConfluenceResult(
+            direction=result["direction"],
+            confidence_pct=result["confidence"],
+            normalized_score=result["normalized"],
+            factors=factors,
+            triggering_patterns=[],
+            triggering_indicators=[],
+            is_multibagger=result["multibagger"],
+        )
+    return _score_signal_python(candles, timeframe, min_confidence, **flows)
 
 
 async def _load_candles(

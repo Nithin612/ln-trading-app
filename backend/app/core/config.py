@@ -61,6 +61,10 @@ class Settings(BaseSettings):
     uploads_dir: str = "uploads"          # relative to backend root; created on first use
     max_screenshot_bytes: int = 5_242_880  # 5 MB
 
+    # ── Engine selection (Phase 1) ──────────────────────────────────────────
+    # "python" = frozen pandas reference · "rust" = tradecore (parity-gated)
+    engine_impl: str = "python"
+
     # ── Trading defaults ────────────────────────────────────────────────────
     default_risk_per_trade_pct: float = 2.0
     min_signal_confidence: int = 70

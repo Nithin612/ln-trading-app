@@ -50,3 +50,24 @@ wins recorded for context, not as benchmarks:
 - Chain recorder budget check: NIFTY+BANKNIFTY nearest-expiry (2×10+1
   strikes × CE/PE + FUT ≈ 86 instruments) = 1 × kite.ltp + 2 × kite.quote
   per minute — comfortably inside Kite's ~1 rps quote budget.
+
+---
+
+## 2026-07-04 — Phase 1: Rust engine vs pandas (adjudicated canon)
+
+Hardware: i7-1355U 12t, 15GB · RAYON_NUM_THREADS=6 · release build (thin
+LTO). Identical corpus: 2y × 49 Nifty50 daily from ohlcv_1d. Parity proven
+first (tests/parity: exact factor scores, confidence integers, decisions,
+trade lists), THEN timed — the two engines produce identical output.
+
+| Benchmark | pandas (frozen) | Rust engine-core | Speedup |
+|---|---|---|---|
+| 2y × 49-stock full backtest | 883.8 s | **0.143 s** (807 trades) | **~6,180×** |
+| 200-combo weight grid (extrapolated) | ≈ 50.5 h | **≈ 29 s** (200 × 0.143) | ~6,200× |
+| Single confluence eval (amortized) | 44.5 ms | ~6.5 µs (22k evals / 143 ms / 6 threads) | ~6,800× |
+
+Notes: pandas number is the pre-adjudication measurement (same O(n²)
+structure; canon changes don't affect its complexity). Rust number from
+`engine-cli backtest corpus_2y_nifty50.json`. The strategy lab moves from
+"overnight batch, maybe" to interactive. Budget "2y×50 backtest < 5 s"
+beaten by 35×.

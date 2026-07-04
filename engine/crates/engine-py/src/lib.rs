@@ -108,6 +108,129 @@ fn bbands(
     Ok(py.detach(|| engine_core::indicators::bbands(&values, length, k)))
 }
 
+
+// ── Full-engine surface (Phase 1 task 22) ───────────────────────────────────
+
+use pyo3::types::{PyDict, PyList};
+
+fn bars_from(
+    open: &[f64],
+    high: &[f64],
+    low: &[f64],
+    close: &[f64],
+    volume: &[f64],
+) -> PyResult<Vec<engine_core::types::Bar>> {
+    let n = open.len();
+    if [high.len(), low.len(), close.len(), volume.len()].iter().any(|&l| l != n) {
+        return Err(PyValueError::new_err("OHLCV arrays must have equal length"));
+    }
+    Ok(open
+        .iter()
+        .zip(high)
+        .zip(low)
+        .zip(close)
+        .zip(volume)
+        .map(|((((&o, &h), &l), &c), &v)| engine_core::types::Bar {
+            open: o,
+            high: h,
+            low: l,
+            close: c,
+            volume: v,
+        })
+        .collect())
+}
+
+/// Full confluence evaluation. Returns None below the gate, else a dict:
+/// {direction, confidence, normalized, multibagger, factors: {name: [w, s]}}
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn score_signal(
+    py: Python<'_>,
+    open: Vec<f64>,
+    high: Vec<f64>,
+    low: Vec<f64>,
+    close: Vec<f64>,
+    volume: Vec<f64>,
+    timeframe: String,
+    min_confidence: i32,
+) -> PyResult<Option<Py<PyDict>>> {
+    let bars = bars_from(&open, &high, &low, &close, &volume)?;
+    let outcome = py.detach(|| {
+        engine_core::confluence::score_signal(
+            &bars,
+            &timeframe,
+            min_confidence,
+            engine_core::confluence::FlowInputs::default(),
+        )
+    });
+    let Some(o) = outcome else { return Ok(None) };
+    let d = PyDict::new(py);
+    d.set_item(
+        "direction",
+        match o.direction {
+            engine_core::confluence::Direction::Buy => "BUY",
+            engine_core::confluence::Direction::Sell => "SELL",
+        },
+    )?;
+    d.set_item("confidence", o.confidence_pct)?;
+    d.set_item("normalized", o.normalized)?;
+    d.set_item("multibagger", o.is_multibagger)?;
+    let f = PyDict::new(py);
+    for fac in &o.factors {
+        f.set_item(fac.name, (fac.weight, fac.score))?;
+    }
+    d.set_item("factors", f)?;
+    Ok(Some(d.into()))
+}
+
+/// Adjudicated-canon backtest for one stock. Trades as list of dicts.
+#[pyfunction]
+#[allow(clippy::too_many_arguments)]
+fn run_backtest_single(
+    py: Python<'_>,
+    open: Vec<f64>,
+    high: Vec<f64>,
+    low: Vec<f64>,
+    close: Vec<f64>,
+    volume: Vec<f64>,
+    timeframe: String,
+    capital: String,
+    risk_pct: String,
+    min_confidence: i32,
+) -> PyResult<Py<PyList>> {
+    let bars = bars_from(&open, &high, &low, &close, &volume)?;
+    let params = engine_core::backtest::BacktestParams {
+        capital: engine_core::risk::money_from_str(&capital)
+            .ok_or_else(|| PyValueError::new_err("bad capital"))?,
+        risk_pct: engine_core::risk::money_from_str(&risk_pct)
+            .ok_or_else(|| PyValueError::new_err("bad risk_pct"))?,
+        min_confidence,
+        weight_multipliers: Vec::new(),
+    };
+    let trades = py.detach(|| engine_core::backtest::run_single_stock(&bars, &timeframe, &params));
+    let out = PyList::empty(py);
+    for t in trades {
+        let d = PyDict::new(py);
+        d.set_item("fill_idx", t.fill_idx)?;
+        d.set_item("exit_idx", t.exit_idx)?;
+        d.set_item(
+            "direction",
+            if t.side == engine_core::risk::Side::Buy { "BUY" } else { "SELL" },
+        )?;
+        d.set_item("confidence", t.confidence_pct)?;
+        d.set_item("entry", t.entry)?;
+        d.set_item("sl", t.stop_loss)?;
+        d.set_item("tp", t.take_profit)?;
+        d.set_item("qty", t.qty)?;
+        d.set_item("exit_price", t.exit_price)?;
+        d.set_item("pnl_pct", t.pnl_pct)?;
+        d.set_item("hit_sl", t.hit_sl)?;
+        d.set_item("hit_target", t.hit_target)?;
+        out.append(d)?;
+    }
+    Ok(out.into())
+}
+
 #[pymodule]
 fn tradecore(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(version, m)?)?;
@@ -118,5 +241,7 @@ fn tradecore(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(atr, m)?)?;
     m.add_function(wrap_pyfunction!(adx, m)?)?;
     m.add_function(wrap_pyfunction!(bbands, m)?)?;
+    m.add_function(wrap_pyfunction!(score_signal, m)?)?;
+    m.add_function(wrap_pyfunction!(run_backtest_single, m)?)?;
     Ok(())
 }

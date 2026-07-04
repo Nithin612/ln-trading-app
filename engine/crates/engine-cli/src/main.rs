@@ -17,11 +17,85 @@ fn main() -> ExitCode {
             ExitCode::SUCCESS
         }
         Some(cmd @ ("ema" | "rsi")) => run_indicator(cmd, args.get(1)),
+        Some("backtest") => run_backtest_bench(args.get(1)),
         Some(other) => {
             eprintln!("unknown command: {other} (try: version | ema N | rsi N)");
             ExitCode::FAILURE
         }
     }
+}
+
+fn run_backtest_bench(path: Option<&String>) -> ExitCode {
+    use std::collections::BTreeMap;
+    use std::time::Instant;
+
+    let Some(path) = path else {
+        eprintln!("usage: engine-cli backtest <corpus.json>");
+        return ExitCode::FAILURE;
+    };
+    let Ok(raw) = std::fs::read_to_string(path) else {
+        eprintln!("cannot read {path}");
+        return ExitCode::FAILURE;
+    };
+    #[derive(serde::Deserialize)]
+    struct Cols {
+        open: Vec<f64>,
+        high: Vec<f64>,
+        low: Vec<f64>,
+        close: Vec<f64>,
+        volume: Vec<f64>,
+    }
+    let Ok(corpus): Result<BTreeMap<String, Cols>, _> = serde_json::from_str(&raw) else {
+        eprintln!("bad corpus json");
+        return ExitCode::FAILURE;
+    };
+    let stocks: Vec<(String, Vec<engine_core::types::Bar>)> = corpus
+        .into_iter()
+        .map(|(sym, c)| {
+            let bars = c
+                .open
+                .iter()
+                .zip(&c.high)
+                .zip(&c.low)
+                .zip(&c.close)
+                .zip(&c.volume)
+                .map(|((((&o, &h), &l), &cl), &v)| engine_core::types::Bar {
+                    open: o,
+                    high: h,
+                    low: l,
+                    close: cl,
+                    volume: v,
+                })
+                .collect();
+            (sym, bars)
+        })
+        .collect();
+
+    let params = engine_core::backtest::BacktestParams {
+        capital: match engine_core::risk::money_from_str("500000") {
+            Some(v) => v,
+            None => return ExitCode::FAILURE,
+        },
+        risk_pct: match engine_core::risk::money_from_str("2") {
+            Some(v) => v,
+            None => return ExitCode::FAILURE,
+        },
+        min_confidence: 70,
+        weight_multipliers: Vec::new(),
+    };
+
+    // Warm run then timed run
+    let t0 = Instant::now();
+    let results = engine_core::backtest::run_universe(&stocks, "1d", &params);
+    let elapsed = t0.elapsed();
+    let trades: usize = results.iter().map(|(_, t)| t.len()).sum();
+    println!(
+        "stocks={} trades={} elapsed_ms={}",
+        results.len(),
+        trades,
+        elapsed.as_millis()
+    );
+    ExitCode::SUCCESS
 }
 
 fn run_indicator(cmd: &str, length_arg: Option<&String>) -> ExitCode {
