@@ -56,6 +56,25 @@
 | Celery `live_signal_generation` | tick consumer (post-commit, off-loop) | worker | fired only AFTER candle commit |
 | WS close code **4401** | /ws/live | frontend `useLiveQuotes` | auth failure — client must NOT auto-reconnect |
 
+## Adjudicated canon (2026-07-04 — user decisions with measured evidence)
+
+Five spec-drift questions were measured on 2y × 49 Nifty50 real data
+(scripts/adjudication_experiments.py) and decided:
+
+| # | Decision | Evidence (vs as-is baseline 863tr/39.8%/+1.8pnl/−0.07sh) |
+|---|---|---|
+| A | Volume counts only WITH the confluence direction (scorer-level flip/zero) | alone: +41.6 totPnL, sharpe +0.07 |
+| B | RSI ±0.4 bands at <30/>70 removed (off-spec) | neutral (+3.3) |
+| C | ONE swing-SL implementation: pivot N=5 (dow.swing_levels) for live AND backtest; degenerate/wrong-side SLs rejected | alone: +44.2, sharpe +0.10, fewer trades |
+| D | Committed signals see exactly the last ≤300 completed candles, everywhere | growing≈300: 99.7% agree, 0 direction flips |
+| E | HONEST fills: gap-through exits at open; fill candle checked intrabar; SL before TP | reveals as-is strategy at −109 totPnL — the old +1.8 was fill flattery |
+
+Consequence accepted with eyes open: the truthful baseline on 2023–26 daily
+data is NEGATIVE (A+B+C+E ≈ −108 totPnL). Profitability is Phase-2
+(profiles) + Phase-6 (tuning) work, now measured against reality. Guarded
+by tests/analysis/test_adjudicated_semantics.py on the Python side and the
+regenerated oracle fixtures on the Rust side.
+
 ## Semantics that must never drift silently
 
 - Candle timestamps: kiteconnect delivers **naive host-local** datetimes in

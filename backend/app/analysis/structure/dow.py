@@ -4,6 +4,8 @@ Computes swing highs/lows and determines trend direction.
 Scores match SIGNAL_ENGINE.md §2.4.
 """
 
+from decimal import Decimal
+
 import pandas as pd
 
 from app.analysis.types import FactorResult
@@ -101,3 +103,20 @@ def dow_trend_factor(candles: pd.DataFrame, lookback: int = 20, swing_n: int = 3
         "Mixed swing structure — sideways market",
         ["structure"],
     )
+
+
+def swing_levels(
+    candles: pd.DataFrame, n: int = 5
+) -> tuple[Decimal | None, Decimal | None]:
+    """Last pivot swing low and swing high as Decimal prices.
+
+    THE swing-level implementation — live signal generation and the
+    backtest both use this (SL canon, adjudicated 2026-07-04).
+    """
+    if len(candles) < n * 2 + 1:
+        return None, None
+    lo_idx = _find_swing_lows(candles["low"].astype(float).reset_index(drop=True), n)
+    hi_idx = _find_swing_highs(candles["high"].astype(float).reset_index(drop=True), n)
+    swing_low = Decimal(str(candles["low"].iloc[lo_idx[-1]])) if lo_idx else None
+    swing_high = Decimal(str(candles["high"].iloc[hi_idx[-1]])) if hi_idx else None
+    return swing_low, swing_high

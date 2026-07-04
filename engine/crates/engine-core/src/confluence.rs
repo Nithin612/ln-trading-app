@@ -155,6 +155,33 @@ pub fn score_from_factors(
     bars: &[Bar],
     min_confidence: i32,
 ) -> Option<ConfluenceOutcome> {
+    // Adjudicated 2026-07-04 (item A): volume "only counts if direction
+    // matches" — a surge confirms the OTHER factors, never opposes them,
+    // never fires alone. Mirrors Python exactly.
+    let rest: f64 = factors
+        .iter()
+        .filter(|f| f.name != "VOLUME")
+        .map(|f| f.weight * f.score)
+        .sum();
+    let factors: Vec<Factor> = factors
+        .iter()
+        .map(|f| {
+            if f.name == "VOLUME" && f.score > 0.0 {
+                let new_score = if rest > 0.0 {
+                    0.5
+                } else if rest < 0.0 {
+                    -0.5
+                } else {
+                    0.0
+                };
+                Factor { score: new_score, ..*f }
+            } else {
+                *f
+            }
+        })
+        .collect();
+    let factors = factors.as_slice();
+
     let total_weighted: f64 = factors.iter().map(|f| f.weight * f.score).sum();
     let total_weight: f64 = factors
         .iter()

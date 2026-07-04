@@ -153,6 +153,14 @@ class VariantEngine(BacktestEngine):
             if levels is None:
                 continue
             stop_loss, take_profit = levels
+            # Experiment guard: pivot swings can coincide with (or cross) the
+            # next open — degenerate/wrong-side SLs are skipped, mirroring the
+            # reject-don't-clamp rule. (Latent in prod too: compute_quantity
+            # abs()'s wrong-side SLs — flagged for quant-verifier.)
+            if result.direction == "BUY" and stop_loss >= entry_price:
+                continue
+            if result.direction == "SELL" and stop_loss <= entry_price:
+                continue
             qty = compute_quantity(
                 self.config.capital, self.config.risk_pct, entry_price, stop_loss
             )
@@ -267,6 +275,7 @@ def fmt_row(name: str, r: BacktestResult, seconds: float) -> str:
 
 
 def main() -> int:
+    only = set(sys.argv[1].split(",")) if len(sys.argv) > 1 else None
     two_years_ago = datetime.now(UTC) - timedelta(days=365 * 2 + 30)
     frames = asyncio.run(load_universe(True, min_rows=200, since=two_years_ago))
     print(f"corpus: {len(frames)} Nifty50 stocks, 2y daily\n")
@@ -287,6 +296,8 @@ def main() -> int:
     print("| variant                | trades | win%  | avgPnL% | totPnL%  | sharpe | maxDD% | time  |")
     print("|------------------------|--------|-------|---------|----------|--------|--------|-------|")
     for name, flags in variants:
+        if only is not None and name.split(" ")[0] not in only:
+            continue
         t0 = time.perf_counter()
         result = VariantEngine(CFG, **flags).run(frames)
         print(fmt_row(name, result, time.perf_counter() - t0), flush=True)

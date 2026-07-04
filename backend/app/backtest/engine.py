@@ -19,6 +19,7 @@ import pandas as pd
 
 from app.analysis.confluence import run_all_factors, score_from_factors
 from app.analysis.risk import compute_levels, compute_quantity
+from app.analysis.structure.dow import swing_levels
 from app.analysis.types import FactorResult  # noqa: F401 — re-exported for callers
 from app.signals.classifier import classify_signal
 
@@ -213,38 +214,41 @@ class BacktestEngine:
             qty=qty,
         )
 
-        # Walk forward to check TP/SL
-        for i in range(fill_idx + 1, len(candles)):
-            c = candles.iloc[i]
-            high = float(c["high"])
-            low = float(c["low"])
+        # Walk forward checking SL/TP — HONEST fills (adjudicated 2026-07-04):
+        # the fill candle itself is checked intrabar, and gaps through a
+        # level exit at the OPEN (the real executable price), not at the
+        # level. SL checked before TP (conservative on both-hit candles).
+        buy = direction == "BUY"
 
-            if direction == "BUY":
-                if low <= stop_loss:
-                    record.exit_date = pd.Timestamp(candles.index[i])
-                    record.exit_price = stop_loss
-                    record.hit_sl = True
-                    record.pnl_pct = (stop_loss - entry_price) / entry_price * 100
-                    return record
-                if high >= take_profit:
-                    record.exit_date = pd.Timestamp(candles.index[i])
-                    record.exit_price = take_profit
-                    record.hit_target = True
-                    record.pnl_pct = (take_profit - entry_price) / entry_price * 100
-                    return record
-            else:  # SELL
-                if high >= stop_loss:
-                    record.exit_date = pd.Timestamp(candles.index[i])
-                    record.exit_price = stop_loss
-                    record.hit_sl = True
-                    record.pnl_pct = (entry_price - stop_loss) / entry_price * 100
-                    return record
-                if low <= take_profit:
-                    record.exit_date = pd.Timestamp(candles.index[i])
-                    record.exit_price = take_profit
-                    record.hit_target = True
-                    record.pnl_pct = (entry_price - take_profit) / entry_price * 100
-                    return record
+        def _exit(i: int, price: float, sl: bool) -> TradeRecord:
+            record.exit_date = pd.Timestamp(candles.index[i])
+            record.exit_price = price
+            record.hit_sl = sl
+            record.hit_target = not sl
+            sign = 1 if buy else -1
+            record.pnl_pct = sign * (price - entry_price) / entry_price * 100
+            return record
+
+        for i in range(fill_idx, len(candles)):
+            c = candles.iloc[i]
+            o, high, low = float(c["open"]), float(c["high"]), float(c["low"])
+
+            # Gap exits apply from the bar AFTER the fill (on the fill bar
+            # the entry IS the open, so a same-bar "gap" can't beat it).
+            if i > fill_idx:
+                sl_gap = o <= stop_loss if buy else o >= stop_loss
+                tp_gap = o >= take_profit if buy else o <= take_profit
+                if sl_gap:
+                    return _exit(i, o, sl=True)
+                if tp_gap:
+                    return _exit(i, o, sl=False)
+
+            hit_sl = low <= stop_loss if buy else high >= stop_loss
+            hit_tp = high >= take_profit if buy else low <= take_profit
+            if hit_sl:
+                return _exit(i, stop_loss, sl=True)
+            if hit_tp:
+                return _exit(i, take_profit, sl=False)
 
         # Signal expired without hitting TP or SL — mark as break-even at last close
         last = candles.iloc[-1]
@@ -265,7 +269,9 @@ class BacktestEngine:
             return trades
 
         for i in range(50, len(candles) - 1):
-            window = candles.iloc[: i + 1]
+            # Window canon (adjudicated 2026-07-04): factors see exactly the
+            # last ≤300 completed candles — identical to live evaluation.
+            window = candles.iloc[max(0, i + 1 - 300) : i + 1]
             factors = run_all_factors(window, timeframe=self.config.timeframe)
             if self.config.weight_multipliers:
                 factors = apply_weight_multipliers(factors, self.config.weight_multipliers)
@@ -278,21 +284,27 @@ class BacktestEngine:
             )
             entry_price = Decimal(str(float(candles.iloc[i + 1]["open"])))
 
-            # Derive swing levels from window
-            low_20 = Decimal(str(float(window["low"].iloc[-20:].min())))
-            high_20 = Decimal(str(float(window["high"].iloc[-20:].max())))
+            # SL canon (adjudicated 2026-07-04): the same pivot-based swing
+            # levels live uses — the backtest must test what live does.
+            swing_low, swing_high = swing_levels(window)
 
             levels = compute_levels(
                 direction=result.direction,
                 classification=classification,
                 entry=entry_price,
-                swing_low=low_20 if result.direction == "BUY" else None,
-                swing_high=high_20 if result.direction == "SELL" else None,
+                swing_low=swing_low if result.direction == "BUY" else None,
+                swing_high=swing_high if result.direction == "SELL" else None,
             )
             if levels is None:
                 continue
 
             stop_loss, take_profit = levels
+            # Pivot swings can coincide with (or cross) the next open —
+            # degenerate/wrong-side SLs are rejected, never clamped.
+            if result.direction == "BUY" and stop_loss >= entry_price:
+                continue
+            if result.direction == "SELL" and stop_loss <= entry_price:
+                continue
             qty = compute_quantity(
                 self.config.capital, self.config.risk_pct, entry_price, stop_loss
             )

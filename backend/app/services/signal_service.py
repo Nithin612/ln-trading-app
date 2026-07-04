@@ -11,7 +11,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.analysis.confluence import score_signal
 from app.analysis.indicators.ema import _ema
 from app.analysis.risk import compute_levels, compute_quantity
-from app.analysis.structure.dow import _find_swing_highs, _find_swing_lows
 from app.core.config import settings
 from app.models.market_data import OhlcvDaily
 from app.models.signal import Signal
@@ -78,14 +77,10 @@ async def _has_active_signal(
 
 
 def _swing_levels(candles: pd.DataFrame, n: int = 5) -> tuple[Decimal | None, Decimal | None]:
-    """Return last swing low and swing high as Decimal prices."""
-    if len(candles) < n * 2 + 1:
-        return None, None
-    lo_idx = _find_swing_lows(candles["low"].astype(float).reset_index(drop=True), n)
-    hi_idx = _find_swing_highs(candles["high"].astype(float).reset_index(drop=True), n)
-    swing_low = Decimal(str(candles["low"].iloc[lo_idx[-1]])) if lo_idx else None
-    swing_high = Decimal(str(candles["high"].iloc[hi_idx[-1]])) if hi_idx else None
-    return swing_low, swing_high
+    """Delegates to the shared implementation (SL canon, 2026-07-04)."""
+    from app.analysis.structure.dow import swing_levels
+
+    return swing_levels(candles, n)
 
 
 async def generate_signal_for_stock(

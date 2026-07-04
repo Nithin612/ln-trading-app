@@ -67,7 +67,31 @@ fn full_pipeline_matches_python() {
             })
             .collect();
 
-        let factors = run_all_factors(&bars, "1d", FlowInputs::default());
+        let raw = run_all_factors(&bars, "1d", FlowInputs::default());
+        // The fixture records POST-adjustment scores (item A lives in the
+        // scorer); apply the same volume adjustment before comparing.
+        let rest: f64 = raw
+            .iter()
+            .filter(|f| f.name != "VOLUME")
+            .map(|f| f.weight * f.score)
+            .sum();
+        let factors: Vec<_> = raw
+            .iter()
+            .map(|f| {
+                if f.name == "VOLUME" && f.score > 0.0 {
+                    let s = if rest > 0.0 {
+                        0.5
+                    } else if rest < 0.0 {
+                        -0.5
+                    } else {
+                        0.0
+                    };
+                    engine_core::factors::Factor { score: s, ..*f }
+                } else {
+                    *f
+                }
+            })
+            .collect();
 
         // Every Python factor present with the same weight and EXACT score.
         // (PATTERN factor's name varies with the winning detector.)
@@ -95,7 +119,7 @@ fn full_pipeline_matches_python() {
             );
         }
 
-        let outcome = score_from_factors(&factors, &bars, 70);
+        let outcome = score_from_factors(&raw, &bars, 70);
         match (&outcome, &case.outcome) {
             (None, None) => {}
             (Some(got), Some(want)) => {

@@ -34,12 +34,6 @@ def rsi_level_factor(candles: pd.DataFrame) -> FactorResult:
     elif 50 < last <= 70 and last < prev:
         score = -0.6
         explanation = f"RSI={last:.1f} in 50-70 and falling from {prev:.1f}"
-    elif last < 30:
-        score = +0.4
-        explanation = f"RSI={last:.1f} oversold (below 30)"
-    elif last > 70:
-        score = -0.4
-        explanation = f"RSI={last:.1f} overbought (above 70)"
     else:
         score = 0.0
         explanation = f"RSI={last:.1f} neutral zone"

@@ -139,6 +139,23 @@ def score_from_factors(
 
     Separated from score_signal so BacktestEngine can inject custom weights.
     """
+    # Volume "only counts if direction matches" (SIGNAL_ENGINE.md §3 weights
+    # table; adjudicated 2026-07-04): a surge confirms whatever the OTHER
+    # factors say — it never pushes against them and never fires alone.
+    rest = sum(f.weight * f.score for f in factors if f.name != "VOLUME")
+    adjusted: list[FactorResult] = []
+    for f in factors:
+        if f.name == "VOLUME" and f.score > 0:
+            if rest > 0:
+                new_score = +0.5
+            elif rest < 0:
+                new_score = -0.5
+            else:
+                new_score = 0.0
+            f = FactorResult(f.name, f.weight, new_score, f.explanation, f.tags)
+        adjusted.append(f)
+    factors = adjusted
+
     total_weighted = sum(f.weight * f.score for f in factors)
     total_weight = sum(f.weight for f in factors if f.score != 0.0)
 

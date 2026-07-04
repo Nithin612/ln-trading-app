@@ -129,14 +129,11 @@ pub fn rsi_level_factor(bars: &[Bar]) -> Factor {
     let Some((prev, last)) = last2(&rsi) else {
         return Factor::new("RSI_LEVEL", 10.0, 0.0);
     };
+    // Adjudicated 2026-07-04 (item B): no ±0.4 bands — spec §2.3 only.
     let score = if (30.0..=50.0).contains(&last) && last > prev {
         0.6
     } else if last > 50.0 && last <= 70.0 && last < prev {
         -0.6
-    } else if last < 30.0 {
-        0.4
-    } else if last > 70.0 {
-        -0.4
     } else {
         0.0
     };
@@ -211,9 +208,9 @@ pub fn macd_histogram_factor(bars: &[Bar]) -> Factor {
 
 // ── Volume (§2.3) ────────────────────────────────────────────────────────────
 
-/// AS-IS port: +0.5 on any ≥1.5× surge regardless of direction (the
-/// direction-match question is adjudication item A — applied to both
-/// engines together once decided).
+/// Raw surge detector: +0.5 on any ≥1.5× surge. Direction-matching
+/// (adjudicated item A) happens in confluence::score_from_factors, exactly
+/// as in Python.
 pub fn volume_factor(bars: &[Bar]) -> Factor {
     const AVG_PERIOD: usize = 20;
     if bars.len() < AVG_PERIOD + 1 {
