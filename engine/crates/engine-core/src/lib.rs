@@ -12,6 +12,7 @@ pub mod factors;
 pub mod indicators;
 pub mod patterns;
 pub mod pivots;
+pub mod risk;
 pub mod structure;
 pub mod types;
 
