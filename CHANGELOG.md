@@ -7,6 +7,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### v2 Phase 2 — Strategy profiles (in progress, started 2026-07-05)
+
+- **Fixed a 100×-family sizing hazard on `POST /signals/generate`**: the admin endpoint defaulted `risk_pct=0.02` (fractional style) in a whole-percent convention — a default request risked 0.02% instead of 2%. Default is now 2.0 with a [0.1, 10] validation floor that rejects fractional-style values loudly (+3 regression tests)
+
 ### Adjudications F/G/H — star gap, volatility sizing, weight semantics (2026-07-05)
 
 User rulings on the three spec-vs-code drifts found at the Phase-1 exit gate, applied per SIGNAL_ENGINE.md §8 (both engines in lockstep, oracles regenerated in the same commit; evidence: `scripts/adjudication_experiments_fgh.py`, table in the phase-01 report §Exit gate):

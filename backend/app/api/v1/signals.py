@@ -10,7 +10,7 @@ from decimal import Decimal
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,7 +29,13 @@ class GenerateRequest(BaseModel):
     stock_id: int
     timeframe: str = "1d"
     capital: Decimal = Decimal("500000")
-    risk_pct: Decimal = Decimal("0.02")
+    # risk_pct is a WHOLE percent (2.0 = 2%) — compute_quantity divides by
+    # 100 itself. The old 0.02 default undersized every manual signal 100×;
+    # the floor rejects fractional-style values loudly instead of sizing
+    # them silently wrong.
+    risk_pct: Decimal = Field(
+        default=Decimal("2.0"), ge=Decimal("0.1"), le=Decimal("10")
+    )
 
 
 async def _enrich(signal: Signal, db: AsyncSession) -> SignalOut:

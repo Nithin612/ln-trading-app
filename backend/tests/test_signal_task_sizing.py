@@ -47,3 +47,35 @@ class TestDefaultRiskParams:
         capital, risk_pct = _default_risk_params()
         qty = compute_quantity(capital, risk_pct, Decimal("100"), Decimal("98"))
         assert qty != 50
+
+
+class TestGenerateEndpointRiskPct:
+    """Regression (Phase-2 slice 0): POST /signals/generate defaulted
+    risk_pct=0.02 — fractional style in a whole-percent convention, the same
+    family as the Phase-0 100× bug, live on the admin endpoint. The default
+    is now 2.0 and fractional-style values are rejected, not resized."""
+
+    def test_default_is_whole_percent(self) -> None:
+        from app.api.v1.signals import GenerateRequest
+
+        req = GenerateRequest(stock_id=1)
+        assert req.risk_pct == Decimal("2.0")  # NOT 0.02
+
+    def test_old_fractional_default_is_rejected(self) -> None:
+        """Canary: the old default value must now fail validation loudly."""
+        from app.api.v1.signals import GenerateRequest
+        from pydantic import ValidationError
+
+        with pytest.raises(ValidationError):
+            GenerateRequest(stock_id=1, risk_pct=Decimal("0.02"))
+
+    def test_bounds(self) -> None:
+        from app.api.v1.signals import GenerateRequest
+        from pydantic import ValidationError
+
+        assert GenerateRequest(stock_id=1, risk_pct=Decimal("0.1")).risk_pct == Decimal("0.1")
+        assert GenerateRequest(stock_id=1, risk_pct=Decimal("10")).risk_pct == Decimal("10")
+        with pytest.raises(ValidationError):
+            GenerateRequest(stock_id=1, risk_pct=Decimal("10.5"))
+        with pytest.raises(ValidationError):
+            GenerateRequest(stock_id=1, risk_pct=Decimal("0"))
