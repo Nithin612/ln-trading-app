@@ -18,6 +18,7 @@ Full report: `docs/phases/phase-01-rust-engine.md`.
 - **Cross-language parity suite** (`make parity`): exact factor scores/confidence/decisions on 96 real windows; exact 125-trade backtest lists; ENGINE_IMPL flag (python|rust) wired through signal_service with dispatch tests
 - **Benchmark** (docs/PERFORMANCE.md): 2y×49 full backtest **883.8 s → 0.143 s (~6,180×, RAYON=6)**; 200-combo grid ≈50.5 h → ≈29 s
 - Python engine frozen (bugfix-only; sunset after Phase-3 shadow week)
+- **Exit gate passed 2026-07-05** (`/phase-gate`): full `make check` green — Rust 30 · backend 453 · frontend 131 · parity 6; quant-verifier signoff (adjudicated canon in both engines, look-ahead hygiene, money discipline, exact parity). Gate fixes: missed rustfmt pass committed (+ `backtest` added to the engine-cli usage hint); `ENGINE_IMPL=rust` dispatch now fails loud on FII/DII flows and answers off-1d timeframes with the python engine — only 1d is fixture-pinned (+2 regression tests); `parity` pytest mark registered; smoke reproduced the recorded bench to the trade (807 on the bench-day corpus). Three pre-existing spec-vs-code drifts recorded for user adjudication (§4 ATR>3% sizing · §2.2 star gap condition · sub-factor weight semantics) — see phase report §Exit gate
 
 
 ### v2 Phase 0 — Claude workbench, repo hygiene, triage, F&O recorders (2026-07-03)

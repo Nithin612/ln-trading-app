@@ -1,7 +1,9 @@
 # Phase 1 — Rust engine core, adjudication, parity, benchmarks
 
-**Completed:** 2026-07-04 · **Plan:** `docs/UPGRADE_PLAN.md` (Phase 1)
-**Commits:** `3c87028` (scaffold) → `e29cc75` (parity+bench), 11 commits.
+**Completed:** 2026-07-04 · **Exit gate passed:** 2026-07-05 ·
+**Plan:** `docs/UPGRADE_PLAN.md` (Phase 1)
+**Commits:** `3c87028` (scaffold) → `e29cc75` (parity+bench), 11 commits,
+plus the gate commit (fmt fix + dispatch guards + docs).
 
 ## Goal
 
@@ -65,7 +67,7 @@ tests + regenerated Rust oracles.
 
 | Gate | Result |
 |---|---|
-| Rust tests | 29 (unit+property+4 oracle fixtures) — parity exact on first run for patterns/structure, confluence, and backtest |
+| Rust tests | 30 (unit+property+4 oracle fixtures) — parity exact on first run for patterns/structure, confluence, and backtest |
 | Cross-language parity | 96 confluence windows + 125-trade lists: EXACT |
 | Backend suite | 447 passed (post-adjudication) · +8 canon regression tests |
 | **2y × 49-stock backtest** | pandas **883.8 s** → Rust **0.143 s** (**~6,180×**, RAYON=6) |
@@ -107,3 +109,63 @@ cd engine && PATH=$HOME/.cargo/bin:$PATH cargo build --release -p engine-cli
 RAYON_NUM_THREADS=6 ./target/release/engine-cli backtest <corpus.json>
 # ENGINE_IMPL=rust make backend  → live scoring through tradecore
 ```
+
+## Exit gate (2026-07-05, `/phase-gate`)
+
+- **Static:** ruff · mypy (112 files) · eslint · tsc · cargo fmt · clippy —
+  green after fixing a missed rustfmt pass on `engine-py/lib.rs` +
+  `engine-cli/main.rs` (3 cosmetic diffs the "final lint sweep" had skipped;
+  the stale usage hint gained `backtest` while there).
+- **Suites:** Rust **30** · backend **453** · frontend **131** · parity **6**
+  — all green.
+- **Smoke:** ENGINE_IMPL seam on all 49 Nifty50 windows — 2 fire at the
+  70-gate (EICHERMOT BUY conf 82, POWERGRID BUY conf 76), EXACT across
+  engines factor-for-factor; at gate 0, 39/49 fire, all exact. Native
+  `engine-cli backtest` on the corpus regenerated with the bench-day anchor
+  reproduces the recorded run **to the trade** (49 stocks, 807 trades,
+  154 ms).
+- **Regression:** metric deltas vs v1 goldens are the five adjudicated
+  decisions, user-approved 2026-07-04; the committed fixtures are the new
+  goldens and cargo test + `make parity` pin them exactly.
+- **Review:** quant-verifier — adjudicated canon (A–E) implemented
+  consistently in both engines, look-ahead hygiene, i64/Decimal money
+  discipline, and exact 96-window/125-trade parity all verified sound.
+  Initial BLOCKED was solely the uncommitted fmt fix (finding 1), resolved
+  in the gate commit.
+
+### Gate fixes applied
+
+- `score_signal` rust branch fails loud (`NotImplementedError`) on non-zero
+  FII/DII flows — tradecore has no flow inputs yet; silently dropping a
+  weight-5 factor could flip decisions (+ regression test).
+- `score_signal` rust branch answers timeframes ≠ 1d with the python
+  reference engine (warning logged) — only 1d is fixture-pinned; Rust
+  intraday classification/pivots are unpinned until Phase 3
+  (+ regression test). Parity suite 4 → 6 tests.
+- `parity` pytest mark registered; ARCHITECTURE.md fixture path corrected.
+
+### Carried forward from review
+
+- **Phase 3, before shadow week:** expose factor `is_pattern`/`is_indicator`
+  through the FFI so rust-path signals persist real
+  `triggering_patterns`/`triggering_indicators` + explanations (today:
+  empty lists and `"tradecore"` placeholder strings — decision/levels/qty
+  are identical, the stored envelope is not). Add intraday parity goldens,
+  then remove the off-1d fallback.
+- **User adjudication needed (§8 process, same ritual as A–E) — none of
+  these block Phase 1 (pre-existing v1 behavior, identical in both engines,
+  fixture-pinned):**
+  - **F)** Spec §4 "ATR(14) > 3% of price → reduce position size 25%" is
+    implemented in NEITHER engine (`atr_pct_of_price` in bbands.py is dead
+    code). Implement in both + regenerate fixtures, or amend the spec.
+  - **G)** Spec §2.2 Morning/Evening Star: the gap condition is omitted in
+    both engines (star patterns fire more often than spec).
+  - **H)** Weight semantics: every sub-factor carries its full group weight
+    (EMA_CROSS 15 + PRICE_VS_EMA 15, RSI 10+10, MACD 10+10, BBANDS 10 has
+    no §3 row) → max fired weight 150+10, not §3's 105; §7's worked example
+    is internally inconsistent (70+0.75+2 ≠ 73.75). Needs a one-line ruling
+    recorded in ARCHITECTURE.md §Adjudicated canon.
+- **Benign, noted:** ADX>40 gate is `max(65, min_conf−5)` — equals spec at
+  the configured 70, diverges for other minimums; swing/positional expiry
+  approximates trading days as 7/42 calendar days (expires EARLY — safe
+  direction) until the NSE calendar lands in Phase 2.

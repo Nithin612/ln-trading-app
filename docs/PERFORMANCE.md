@@ -71,3 +71,10 @@ structure; canon changes don't affect its complexity). Rust number from
 `engine-cli backtest corpus_2y_nifty50.json`. The strategy lab moves from
 "overnight batch, maybe" to interactive. Budget "2y×50 backtest < 5 s"
 beaten by 35×.
+
+**2026-07-05 exit-gate re-run:** corpus regenerated with the bench-day
+anchor reproduces the run exactly — 49 stocks, **807 trades, 154 ms**
+(machine not fully idle; same class as 143 ms). Caveat for future benches:
+the corpus recipe is date-anchored (`now() − 760 d`), so regenerating a day
+later shifts the window one session and yields 791 trades — same engine,
+different corpus. Pin an explicit `since` date when comparing across days.

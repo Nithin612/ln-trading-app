@@ -108,7 +108,6 @@ fn bbands(
     Ok(py.detach(|| engine_core::indicators::bbands(&values, length, k)))
 }
 
-
 // ── Full-engine surface (Phase 1 task 22) ───────────────────────────────────
 
 use pyo3::types::{PyDict, PyList};
@@ -121,7 +120,10 @@ fn bars_from(
     volume: &[f64],
 ) -> PyResult<Vec<engine_core::types::Bar>> {
     let n = open.len();
-    if [high.len(), low.len(), close.len(), volume.len()].iter().any(|&l| l != n) {
+    if [high.len(), low.len(), close.len(), volume.len()]
+        .iter()
+        .any(|&l| l != n)
+    {
         return Err(PyValueError::new_err("OHLCV arrays must have equal length"));
     }
     Ok(open
@@ -215,7 +217,11 @@ fn run_backtest_single(
         d.set_item("exit_idx", t.exit_idx)?;
         d.set_item(
             "direction",
-            if t.side == engine_core::risk::Side::Buy { "BUY" } else { "SELL" },
+            if t.side == engine_core::risk::Side::Buy {
+                "BUY"
+            } else {
+                "SELL"
+            },
         )?;
         d.set_item("confidence", t.confidence_pct)?;
         d.set_item("entry", t.entry)?;

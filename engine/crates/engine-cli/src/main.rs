@@ -19,7 +19,9 @@ fn main() -> ExitCode {
         Some(cmd @ ("ema" | "rsi")) => run_indicator(cmd, args.get(1)),
         Some("backtest") => run_backtest_bench(args.get(1)),
         Some(other) => {
-            eprintln!("unknown command: {other} (try: version | ema N | rsi N)");
+            eprintln!(
+                "unknown command: {other} (try: version | ema N | rsi N | backtest <corpus.json>)"
+            );
             ExitCode::FAILURE
         }
     }

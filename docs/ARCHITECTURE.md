@@ -102,4 +102,5 @@ pipeline. Backpressure: drop-oldest LTP, never a candle-closing tick.
 engine-core (pure, no I/O, no clocks) · engine-py (tradecore, GIL released
 around compute, batch calls) · engine-cli (replay/bench). Parity canon and
 numeric conventions: `.claude/rules/rust.md`. Golden fixtures under
-`backend/tests/fixtures/engine/` (pandas-ta version recorded inside).
+`engine/crates/engine-core/tests/fixtures/` (pandas-ta version recorded
+inside); the cross-language pytest side lives in `backend/tests/parity/`.

@@ -1,5 +1,6 @@
 """Signal generation service — ties together analysis engine, risk sizer, and persistence."""
 
+import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -20,6 +21,8 @@ from app.signals.classifier import classify_signal
 from app.signals.expiry import compute_validity_until
 from app.signals.headline import build_headline
 
+log = logging.getLogger(__name__)
+
 
 def score_signal(
     candles: pd.DataFrame,
@@ -30,9 +33,26 @@ def score_signal(
     """ENGINE_IMPL dispatch (Phase 1): frozen Python engine or tradecore.
 
     Rust path is parity-gated (tests/parity) — factor scores, confidence
-    integers, and decisions are exact-equal by test.
+    integers, and decisions are exact-equal by test. The pinned domain is
+    timeframe="1d" with zero flows; outside it the reference engine answers.
     """
     if settings.engine_impl == "rust":
+        if any(flows.values()):
+            # tradecore.score_signal has no flow inputs yet; a weighted factor
+            # (±5 pts) silently dropped could flip decisions — fail loud.
+            raise NotImplementedError(
+                "ENGINE_IMPL=rust cannot score FII/DII flows yet — "
+                "plumb FlowInputs through tradecore before passing flows"
+            )
+        if timeframe != "1d":
+            # Only 1d is fixture-pinned; Rust intraday classification/pivots
+            # stay unpinned until the Phase-3 goldens land.
+            log.warning(
+                "engine_impl=rust is unpinned for timeframe=%s — answering "
+                "with the python reference engine",
+                timeframe,
+            )
+            return _score_signal_python(candles, timeframe, min_confidence, **flows)
         import tradecore
 
         from app.analysis.types import FactorResult

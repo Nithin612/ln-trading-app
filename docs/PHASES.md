@@ -15,21 +15,26 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 | # | Phase | Status | Report | Key deliverable |
 |---|-------|--------|--------|-----------------|
 | 0 | Claude workbench · repo hygiene · triage · F&O recorders | **✅ done 2026-07-03** | [phase-00](phases/phase-00-workbench.md) | git + hooks/agents/rules/skills · 9 defects fixed (incl. dead live pipeline, 100× sizing) · F&O bhavcopy/VIX/chain recorders live |
-| 1 | Rust engine core + parity + benchmarks | **🔶 code complete 2026-07-04** — gate: quant-verifier signoff + one full `make check` remain | [phase-01](phases/phase-01-rust-engine.md) | tradecore wheel · 4 oracle fixtures · cross-language parity EXACT (96 windows + 125 trades) · 5 adjudicated canon decisions · **2y×49 backtest 883.8s → 0.143s (~6,180×)** |
+| 1 | Rust engine core + parity + benchmarks | **✅ done 2026-07-05** (gate: `make check` green + quant-verifier signoff) | [phase-01](phases/phase-01-rust-engine.md) | tradecore wheel · 4 oracle fixtures · cross-language parity EXACT (96 windows + 125 trades) · 5 adjudicated canon decisions · **2y×49 backtest 883.8s → 0.143s (~6,180×)** |
 | 2 | Strategy profiles — 4 style engines, offline | planned | — | profiles table + seeds (DC1/DC2, PDH/PDL/ORB, RRBO, multibagger…), NSE holiday calendar, per-style suggestions API, walk-forward backtests |
-| 3 | Realtime v2 — tick-to-tick | planned | — | live-worker + Rust LiveEngine, committed vs forming layers, record/replay harness, p99 < 10 ms tick→publish. **Kite subscription required here.** |
+| 3 | Realtime v2 — tick-to-tick | planned | — | live-worker + Rust LiveEngine, committed vs forming layers, record/replay harness, p99 < 10 ms tick→publish. **Kite subscription required here.** Pre-shadow-week: rust-path signal envelope (patterns/indicators via FFI) + intraday parity goldens (then drop the off-1d python fallback) — see phase-01 §Exit gate |
 | 4 | F&O analytics | planned | — | chain builder, Rust IV/Greeks, IV-rank/PCR/max-pain from recorded history, option-selling suggestions (calibrated with user) |
 | 5 | UI overhaul | planned | — | new sidebar IA, slate theme default, 4 style pages, chain ladder, virtualized live tables @60fps |
 | 6 | Outcome tracking + strategy lab v2 | planned | — | per-style hit-rate/expectancy dashboards, factor attribution, Rayon weight tuning + promotion workflow |
 | 7 | Live-trading hardening | planned | — | Kite orders behind trading_mode + 30-day gate, kill switch, reconciliation, VPS runbook |
 
-**▶ CONTINUE HERE (next session, any account):** run the Phase-1 exit gate —
-(1) `make check` end-to-end (all stages incl. parity), (2) quant-verifier
-agent on the engine diff (agents in `.claude/agents/` register at session
-start), (3) CHANGELOG + this table flipped to ✅. Then Phase 2 kickoff
-(strategy profiles — see UPGRADE_PLAN.md). Session state that matters is
-all in-repo: this file, docs/phases/phase-01-rust-engine.md,
-docs/ARCHITECTURE.md §Adjudicated canon, docs/PERFORMANCE.md.
+**▶ CONTINUE HERE (next session, any account):** Phase 2 kickoff — strategy
+profiles (UPGRADE_PLAN.md §Phase 2): profiles table + seeds (DC1/DC2,
+PDH/PDL/ORB, RRBO, multibagger…), NSE holiday calendar, per-style
+suggestions API, walk-forward backtests. At kickoff, put the three
+spec-vs-code drifts found at the Phase-1 gate to the user for adjudication
+(F: §4 ATR>3% size reduction unimplemented · G: star patterns missing the
+gap condition · H: sub-factor weight semantics vs §3's table — details in
+phases/phase-01-rust-engine.md §Exit gate); any change follows
+SIGNAL_ENGINE.md §8: both engines + regenerated fixtures in one commit,
+backtest regression. Session state is all in-repo: this file,
+docs/phases/phase-01-rust-engine.md, docs/ARCHITECTURE.md §Adjudicated
+canon, docs/PERFORMANCE.md.
 
 **Decision gates (unchanged in spirit from v1):**
 - End Phase 1: parity green or no cutover.
