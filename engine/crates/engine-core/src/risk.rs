@@ -97,6 +97,23 @@ pub fn compute_quantity(
     i64::try_from(qty.max(0)).ok()
 }
 
+/// §4 volatility-regime threshold: ATR(14) above this % of price.
+pub const VOLATILE_ATR_PCT: f64 = 3.0;
+
+/// §4 (adjudicated 2026-07-05, item F): volatile regime → position size
+/// reduced 25%. `3·qty / 4` (qty ≥ 0) is the exact Python `qty * 3 // 4`;
+/// a reduction to zero means the caller rejects the signal.
+pub fn volatility_reduced_qty(qty: i64, atr_pct: f64) -> i64 {
+    if qty <= 0 {
+        return 0;
+    }
+    if atr_pct > VOLATILE_ATR_PCT {
+        qty * 3 / 4
+    } else {
+        qty
+    }
+}
+
 /// Python `_pct`: (price × pct / 100).quantize(1e-4, ROUND_HALF_EVEN).
 /// pct is scaled 1e-4 (0.30% == 3_000).
 fn pct_of(price: Money, pct: Money) -> Money {
@@ -249,6 +266,17 @@ mod tests {
         // risk 2000, per-share 7.3 → 273.97 → 273
         let qty = compute_quantity(m("100000"), m("2"), m("500"), m("492.7"));
         assert_eq!(qty, Some(273));
+    }
+
+    #[test]
+    fn volatility_reduction_matches_python_floor() {
+        // strictly above 3% → floor(qty × 0.75); at/below → unchanged
+        assert_eq!(volatility_reduced_qty(100, 3.0001), 75);
+        assert_eq!(volatility_reduced_qty(101, 3.0001), 75); // floor(75.75)
+        assert_eq!(volatility_reduced_qty(1, 3.0001), 0); // reduces to reject
+        assert_eq!(volatility_reduced_qty(100, 3.0), 100); // boundary is NOT volatile
+        assert_eq!(volatility_reduced_qty(100, 0.5), 100);
+        assert_eq!(volatility_reduced_qty(0, 9.0), 0);
     }
 
     #[test]

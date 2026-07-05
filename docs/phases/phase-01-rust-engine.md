@@ -195,6 +195,17 @@ runtime monkeypatches; frozen code untouched. Awaiting user rulings.
 - Caveats: one corpus (2y × Nifty50 daily), untuned weights. G/H effects
   are structural and far beyond the §8 5% bar; F's delta is thin evidence
   either way (46 trades).
+
+**Rulings (user, 2026-07-05): G implement · H keep-code-amend-spec ·
+F implement — applied the same day** in both engines in lockstep with
+regenerated oracles (backtest fixture 125→101 trades; generator now
+committed as `scripts/generate_engine_fixtures.py`). SIGNAL_ENGINE.md
+§3/§7 amended under explicit user authorization (guard lifted for exactly
+two edits, then restored — verified byte-identical). New standing
+baseline: **599 trades · win% 40.1 · totPnL +52.1 · sharpe +0.13 ·
+maxDD 96.2**; Rust engine-cli reproduces 599 exactly (172 ms). +8
+regression tests (backend 461 · Rust 33 · parity 6). Full ruling table:
+docs/ARCHITECTURE.md §Adjudicated canon, second round.
 - **Benign, noted:** ADX>40 gate is `max(65, min_conf−5)` — equals spec at
   the configured 70, diverges for other minimums; swing/positional expiry
   approximates trading days as 7/42 calendar days (expires EARLY — safe

@@ -18,7 +18,7 @@ from decimal import Decimal
 import pandas as pd
 
 from app.analysis.confluence import run_all_factors, score_from_factors
-from app.analysis.risk import compute_levels, compute_quantity
+from app.analysis.risk import compute_levels, compute_quantity, volatility_adjusted_qty
 from app.analysis.structure.dow import swing_levels
 from app.analysis.types import FactorResult  # noqa: F401 — re-exported for callers
 from app.signals.classifier import classify_signal
@@ -308,6 +308,9 @@ class BacktestEngine:
             qty = compute_quantity(
                 self.config.capital, self.config.risk_pct, entry_price, stop_loss
             )
+            # Volatility regime (§4, adjudicated 2026-07-05): ATR(14) > 3% of
+            # price on the decision window → size reduced 25%; zero rejects.
+            qty = volatility_adjusted_qty(qty, window)
             if qty == 0:
                 continue
 

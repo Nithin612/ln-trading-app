@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.analysis.confluence import ConfluenceResult
 from app.analysis.confluence import score_signal as _score_signal_python
 from app.analysis.indicators.ema import _ema
-from app.analysis.risk import compute_levels, compute_quantity
+from app.analysis.risk import compute_levels, compute_quantity, volatility_adjusted_qty
 from app.core.config import settings
 from app.models.market_data import OhlcvDaily
 from app.models.signal import Signal
@@ -205,6 +205,9 @@ async def generate_signal_for_stock(
 
     stop_loss, take_profit = levels
     qty = compute_quantity(capital, risk_pct, entry, stop_loss)
+    # §4 volatility regime (adjudicated 2026-07-05): same reduction the
+    # backtest applies — the decision window here IS the loaded candles.
+    qty = volatility_adjusted_qty(qty, candles)
     if qty == 0:
         return None
 
@@ -348,6 +351,8 @@ async def run_live_signal_generation(
 
     stop_loss, take_profit = levels
     qty = compute_quantity(capital, risk_pct, entry, stop_loss)
+    # §4 volatility regime (adjudicated 2026-07-05, item F)
+    qty = volatility_adjusted_qty(qty, candles)
     if qty == 0:
         return 0
 

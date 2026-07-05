@@ -12,7 +12,9 @@ use rayon::prelude::*;
 use crate::confluence::{run_all_factors, score_from_factors, Direction, FlowInputs};
 use crate::factors::Factor;
 use crate::pivots::{swing_high_indices, swing_low_indices};
-use crate::risk::{classify, compute_levels, compute_quantity, money_from_f64, Money, Side};
+use crate::risk::{
+    classify, compute_levels, compute_quantity, money_from_f64, volatility_reduced_qty, Money, Side,
+};
 use crate::types::Bar;
 
 pub const WINDOW_CANON: usize = 300;
@@ -79,6 +81,24 @@ fn window_swings(window: &[Bar]) -> (Option<Money>, Option<Money>) {
 #[inline]
 fn money_to_f64(m: Money) -> f64 {
     m as f64 / 10_000.0
+}
+
+/// Python `atr_pct_of_price` on the decision window: pandas-ta ATR(14)
+/// last value as % of last close; 0.0 when unavailable (→ not volatile).
+fn window_atr_pct(window: &[Bar]) -> f64 {
+    let Some(last) = window.last() else {
+        return 0.0;
+    };
+    if last.close == 0.0 {
+        return 0.0;
+    }
+    let high: Vec<f64> = window.iter().map(|b| b.high).collect();
+    let low: Vec<f64> = window.iter().map(|b| b.low).collect();
+    let close: Vec<f64> = window.iter().map(|b| b.close).collect();
+    match crate::indicators::atr(&high, &low, &close, 14).last() {
+        Some(v) if v.is_finite() => v / last.close * 100.0,
+        _ => 0.0,
+    }
 }
 
 /// Everything decided about an order before simulation.
@@ -216,6 +236,9 @@ pub fn run_single_stock(bars: &[Bar], timeframe: &str, params: &BacktestParams) 
         let Some(qty) = compute_quantity(params.capital, params.risk_pct, entry, sl) else {
             continue;
         };
+        // Volatility regime (§4, adjudicated 2026-07-05, item F): ATR(14)
+        // > 3% of price on the decision window → size reduced 25%.
+        let qty = volatility_reduced_qty(qty, window_atr_pct(window));
         if qty == 0 {
             continue;
         }

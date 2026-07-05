@@ -7,6 +7,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Adjudications F/G/H — star gap, volatility sizing, weight semantics (2026-07-05)
+
+User rulings on the three spec-vs-code drifts found at the Phase-1 exit gate, applied per SIGNAL_ENGINE.md §8 (both engines in lockstep, oracles regenerated in the same commit; evidence: `scripts/adjudication_experiments_fgh.py`, table in the phase-01 report §Exit gate):
+
+- **G — implemented in both engines**: Morning/Evening Star now require the star's real body to gap fully beyond the first candle's body (§2.2). 78% of previous detections were gap-false and their ±0.95 dominated best-pattern selection; the pinned 2y×49 corpus flips 807→599 trades, totPnL −78.7% → **+52.1%**, sharpe −0.27 → +0.13
+- **F — implemented in both engines**: ATR(14) > 3% of price on the decision window → quantity reduced 25% (`volatility_adjusted_qty` / `volatility_reduced_qty`, exact `3·q // 4` integer arithmetic both sides; reduction to zero rejects). Applied in the backtest engine and BOTH live signal_service call sites
+- **H — code semantics kept, spec amended**: per-sub-factor weights are canon (max applicable weight 150 + 10 multibagger). SIGNAL_ENGINE.md §3 table rewritten to match the code (+ Bollinger Bands 10 row + semantics note); §7 worked example regenerated from real engine output (POWERGRID, conf 75 — the old TATAMOTORS example never reconciled). Protected-spec guard lifted for exactly two edits on explicit user instruction, restored byte-identical
+- **Fixture regeneration is now repeatable**: new `scripts/generate_engine_fixtures.py` recomputes all Python-oracle fixtures from the live engine while keeping the committed bars verbatim (backtest oracle 125→101 trades; 3 confluence windows re-scored; analysis fixture unchanged). Rust reproduces all three exactly
+- **New standing baseline** (pinned corpus, anchor 2024-06-04): **599 trades · win% 40.1 · totPnL +52.1% · sharpe +0.13 · maxDD 96.2%** — the first positive corpus baseline; Rust `engine-cli` reproduces 599 in 172 ms. Star detections drop 1,778 → 394
+- Tests: backend 453→**461** (8 new adjudication regressions) · Rust 30→**33** · parity 6 · quant-verifier signoff
+
 ### v2 Phase 1 — Rust engine core, adjudication, parity, 6,180× (2026-07-04)
 
 Full report: `docs/phases/phase-01-rust-engine.md`.

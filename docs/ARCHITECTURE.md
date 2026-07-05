@@ -75,6 +75,24 @@ data is NEGATIVE (A+B+C+E ≈ −108 totPnL). Profitability is Phase-2
 by tests/analysis/test_adjudicated_semantics.py on the Python side and the
 regenerated oracle fixtures on the Rust side.
 
+**Second round (2026-07-05 — Phase-1 exit-gate findings, measured by
+scripts/adjudication_experiments_fgh.py on the pinned 2y × 49 corpus;
+baseline reproduced the 807-trade parity oracle exactly before ruling):**
+
+| # | Decision | Evidence |
+|---|---|---|
+| F | IMPLEMENT §4: ATR(14) > 3% of price → qty reduced 25% (`3·q // 4`, strict `>`; reduction to 0 rejects; ATR computed on the decision window, never the fill candle) | 46/807 trades were volatile-regime and net WINNERS: costs ₹37,195 P&L for ₹1,15,481 less capital-at-risk — accepted knowingly as a risk rule, not an alpha rule |
+| G | IMPLEMENT §2.2: star's real body must gap fully beyond the first candle's body (strict inequalities) | 78% of old star detections were gap-false; corpus flips 807→599 trades, totPnL −78.7 → +52.1, sharpe −0.27 → +0.13 |
+| H | KEEP per-sub-factor weights; SIGNAL_ENGINE.md §3/§7 amended to match code (BBANDS 10 row added; §7 regenerated from live output — POWERGRID conf 75) | sharing group weights loosened the gate: 1,212 trades, totPnL −744.4, sharpe −1.10 — per-sub-factor dilution IS the conservative filter |
+
+New standing baseline (post F+G, same corpus): **599 trades · win% 40.1 ·
+totPnL +52.1 · sharpe +0.13 · maxDD 96.2** — first positive corpus
+baseline; Rust engine-cli reproduces the 599 exactly (172 ms). Oracle
+fixtures regenerated in the same commit via the new
+scripts/generate_engine_fixtures.py (backtest oracle 125→101 trades).
+Guarded by TestStarGapRequired / TestVolatilitySizing in
+tests/analysis/test_adjudicated_semantics.py.
+
 ## Semantics that must never drift silently
 
 - Candle timestamps: kiteconnect delivers **naive host-local** datetimes in

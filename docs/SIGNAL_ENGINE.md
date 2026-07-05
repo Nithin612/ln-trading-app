@@ -163,19 +163,34 @@ def score_signal(stock_id: int, timeframe: str, candles: pd.DataFrame) -> Signal
 
 These are starting values. **Phase 9 strategy lab will re-tune them per market regime** based on backtested win rate.
 
-| Factor group | Default weight | Notes |
+| Factor | Default weight | Notes |
 |---|---|---|
 | Candlestick pattern (any) | 15 | Single highest-scoring pattern, not summed |
 | Dow trend | 20 | The "macro" context — heavy weight |
-| EMA structure (price vs 50/200, cross) | 15 | |
-| RSI (level + divergence) | 10 | |
-| MACD (cross + histogram) | 10 | |
+| EMA cross (20/50) | 15 | |
+| Price vs EMA (close > 50 EMA > 200 EMA) | 15 | |
+| RSI level | 10 | |
+| RSI divergence | 10 | |
+| MACD cross | 10 | |
+| MACD histogram | 10 | |
 | Volume confirmation | 10 | Multiplier-style: only counts if direction matches |
+| Bollinger Bands | 10 | |
 | Support / Resistance / Zones | 10 | |
 | Fibonacci | 5 | |
 | ADX strength | 5 | Filters out weak-trend setups |
 | FII/DII flow | 5 | Lighter weight; sector-level not stock-level for most stocks |
 | Multibagger EMA setup (1d only) | bonus +10 | Adds on top, doesn't replace |
+
+**Weight semantics (adjudicated 2026-07-05, item H):** every row carries its
+listed weight independently — related indicators are separate factors, not
+shares of a group budget (maximum applicable weight 150, plus the +10
+multibagger bonus). Confidence normalizes by the sum of weights of factors
+that actually scored (see the algorithm above), so a moderate score on any
+applicable factor dilutes the average. The alternative — sub-factors sharing
+one group weight — was measured on 2y × 49 Nifty50 and loosened the ≥70%
+gate badly (≈400 extra weak trades, totPnL −78.7 → −744.4):
+`scripts/adjudication_experiments_fgh.py`, evidence table in
+`docs/phases/phase-01-rust-engine.md` §Exit gate.
 
 **Threshold:** Only signals scoring ≥ 70% confidence are surfaced to the dashboard. Lower-confidence signals are logged for backtest learning but hidden from the UI.
 
@@ -272,34 +287,37 @@ The system tracks this state in the `positions` table with fields `trail_state` 
 
 ## 7. Worked example (verification)
 
-Stock: TATAMOTORS, timeframe: 1d.
+Regenerated 2026-07-05 from the live engine (adjudication item H — the
+previous hand-written example did not reconcile with itself). These are
+real engine outputs: POWERGRID, timeframe 1d, last 300 completed candles
+(corpus anchored 2024-06-04).
 
-Factor outputs for today's candle:
-- Bullish Engulfing detected: weight 15, score +0.9 → +13.5
-- Dow trend = uptrend: weight 20, score +0.7 → +14.0
-- Price > 50 EMA > 200 EMA: weight 15, score +0.5 → +7.5
-- RSI 32 and rising: weight 10, score +0.6 → +6.0
-- MACD bullish cross last candle: weight 10, score +0.7 → +7.0
-- Volume 1.6× avg: weight 10, score +0.5 → +5.0
-- At demand zone with bullish reversal pattern: weight 10, score +0.85 → +8.5
-- Fib bounce from 0.618: weight 5, score +0.6 → +3.0
-- ADX = 28, +DI > −DI: weight 5, score +0.6 → +3.0
-- FII net buying auto sector last 5 days: weight 5, score +0.5 → +2.5
+Factor outputs on the decision candle — ten of the fourteen factors scored
+0.0 (not applicable) and are therefore EXCLUDED from the weight denominator:
+- Bullish Engulfing: weight 15, score +0.90 → +13.50
+- RSI 30–50 and rising: weight 10, score +0.60 → +6.00
+- At support with bullish pattern present: weight 10, score +0.85 → +8.50
+- Fib bounce from 0.5 retracement: weight 5, score +0.40 → +2.00
 
-Total weighted = +70.0 across total weight = 105 (all factors fired).
-Normalized = 70 / 105 = 0.667 → confidence = 66.7%.
+Total weighted = +30.00 across applicable weight = 40.
+Normalized = 30 / 40 = 0.75 → confidence = int(0.75 × 100) = **75% → BUY**
+(≥ 70% gate; ADX regime gates (§4) did not adjust the threshold here).
 
-**Result: no signal surfaced** (below 70% threshold). This is the correct behavior — even with many factors aligned, not all were maximum strength. The user sees nothing; the system logs it for backtest.
+This example pins the §3 weight semantics (item H): the denominator is the
+sum of weights of the factors that actually scored — four factors firing
+decisively beat fourteen firing weakly. A window where many factors fire
+with middling scores dilutes the average and correctly stays below the gate.
 
-Now imagine bumping a few factor scores (cleaner engulfing pattern, RSI divergence detected too):
-- Bullish Engulfing → +0.95 → +14.25
-- Add RSI divergence under RSI factor weight → +0.8 → +8.0
+Then the risk sizer (§6): entry ₹288.20 (last close), swing classification,
+SL = last pivot swing low ₹278.40 (3.4% from entry — inside the 8% swing
+cap), TP ₹305.49 (flat 6% RRBO target). Capital ₹5,00,000 at 2% risk:
+qty = floor(₹10,000 / ₹9.80) = 1020 shares. ATR(14) = 1.96% of price —
+below the §4 volatility threshold (3%), so no size reduction applies; in a
+volatile regime the quantity would become 3·1020 // 4 = 765 (adjudication
+item F).
 
-New total = +73.75, weight = 105, normalized = 0.703 → **70.3% confidence → BUY signal surfaced**.
-
-Then risk sizer: entry ₹490, SL ₹482 (below recent swing low, within 8% rule), TP ₹506 (1:2 RR), suggested qty = floor(₹2000 risk / ₹8) = 250 shares.
-
-Final signal: `"Buy TATAMOTORS — Bullish Engulfing with RSI divergence at demand zone, FII net positive, 70.3% confidence. Entry ₹490, SL ₹482, TP ₹506, Qty 250."`
+Final signal: `"Buy POWERGRID — Bullish Engulfing at support, RSI rising,
+75% confidence. Entry ₹288.20, SL ₹278.40, TP ₹305.49, Qty 1020."`
 
 ---
 

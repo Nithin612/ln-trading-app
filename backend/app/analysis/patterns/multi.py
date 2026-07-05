@@ -98,33 +98,42 @@ def detect_piercing_dark_cloud(candles: pd.DataFrame) -> PatternResult:
 
 
 def detect_morning_evening_star(candles: pd.DataFrame) -> PatternResult:
-    """Morning Star (bullish) or Evening Star (bearish) — 3-candle patterns."""
+    """Morning Star (bullish) or Evening Star (bearish) — 3-candle patterns.
+
+    Spec §2.2 requires the star's real body to GAP fully beyond the first
+    candle's real body (adjudicated 2026-07-05, item G — without it 78% of
+    detections were false and the ±0.95 score dominated pattern selection).
+    """
     if len(candles) < 3:
         return PatternResult(False, 0.0, "need ≥3 candles", "STAR")
     first, star, third = candles.iloc[-3], candles.iloc[-2], candles.iloc[-1]
 
     first_body_mid = (_body_bot(first) + _body_top(first)) / 2
 
-    # Morning Star: red → small star gapping down → green closing > 50% into first red
+    # Morning Star: red → small star gapping below first body → green closing
+    # > 50% into first red
     if _is_red(first) and _is_green(third):
         star_small = abs(float(star["close"]) - float(star["open"])) < abs(
             float(first["close"]) - float(first["open"])
         ) * 0.5
+        gaps_down = _body_top(star) < _body_bot(first)
         third_recovers = float(third["close"]) > first_body_mid
-        if star_small and third_recovers:
+        if star_small and gaps_down and third_recovers:
             return PatternResult(
                 True, +0.95,
                 f"Morning Star third_close={float(third['close']):.2f} > mid={first_body_mid:.2f}",
                 "MORNING_STAR",
             )
 
-    # Evening Star: green → small star → red closing < 50% into first green
+    # Evening Star: green → small star gapping above first body → red closing
+    # < 50% into first green
     if _is_green(first) and _is_red(third):
         star_small = abs(float(star["close"]) - float(star["open"])) < abs(
             float(first["close"]) - float(first["open"])
         ) * 0.5
+        gaps_up = _body_bot(star) > _body_top(first)
         third_drops = float(third["close"]) < first_body_mid
-        if star_small and third_drops:
+        if star_small and gaps_up and third_drops:
             return PatternResult(
                 True, -0.95,
                 f"Evening Star third_close={float(third['close']):.2f} < mid={first_body_mid:.2f}",

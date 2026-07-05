@@ -1,10 +1,33 @@
 """Position sizing and stop-loss/take-profit placement.
 
-Implements SIGNAL_ENGINE.md §6 exactly.
+Implements SIGNAL_ENGINE.md §6 exactly, plus the §4 volatility-regime
+size reduction (adjudicated 2026-07-05, item F).
 All prices are Decimal to avoid float rounding.
 """
 
 from decimal import ROUND_DOWN, Decimal
+
+import pandas as pd
+
+from app.analysis.indicators.bbands import atr_pct_of_price
+
+# §4 volatility regime: ATR(14) above this % of price → reduce size 25%.
+VOLATILE_ATR_PCT = 3.0
+
+
+def volatility_adjusted_qty(qty: int, candles: pd.DataFrame) -> int:
+    """§4 (adjudicated 2026-07-05, item F): ATR(14) > 3% of price → volatile
+    regime → position size reduced 25%.
+
+    Integer arithmetic (3·qty // 4) is the exact floor(qty × 0.75) and is
+    what the Rust engine replicates. A reduction to zero means the caller
+    rejects the signal, same as any zero-quantity outcome.
+    """
+    if qty <= 0:
+        return 0
+    if atr_pct_of_price(candles) > VOLATILE_ATR_PCT:
+        return qty * 3 // 4
+    return qty
 
 
 def compute_quantity(

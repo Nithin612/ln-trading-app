@@ -26,17 +26,14 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 **▶ CONTINUE HERE (next session, any account):** Phase 2 kickoff — strategy
 profiles (UPGRADE_PLAN.md §Phase 2): profiles table + seeds (DC1/DC2,
 PDH/PDL/ORB, RRBO, multibagger…), NSE holiday calendar, per-style
-suggestions API, walk-forward backtests. At kickoff, put the three
-spec-vs-code drifts found at the Phase-1 gate to the user for adjudication
-(F: §4 ATR>3% size reduction unimplemented · G: star patterns missing the
-gap condition · H: sub-factor weight semantics vs §3's table — **evidence
-already measured**, table in phases/phase-01-rust-engine.md §Exit gate:
-G strongly positive, H1/H2 strongly negative, F = risk-preference call);
-any change follows
-SIGNAL_ENGINE.md §8: both engines + regenerated fixtures in one commit,
-backtest regression. Session state is all in-repo: this file,
-docs/phases/phase-01-rust-engine.md, docs/ARCHITECTURE.md §Adjudicated
-canon, docs/PERFORMANCE.md.
+suggestions API, walk-forward backtests. Adjudications **F/G/H were ruled
+and applied 2026-07-05** (both engines in lockstep + regenerated oracles;
+canon table in docs/ARCHITECTURE.md §Adjudicated canon; SIGNAL_ENGINE.md
+§3/§7 amended under explicit authorization). Standing baseline is now
+**599 trades / win% 40.1 / totPnL +52.1 / sharpe +0.13** on the pinned
+2y×49 corpus — the first positive one. Session state is all in-repo: this
+file, docs/phases/phase-01-rust-engine.md, docs/ARCHITECTURE.md
+§Adjudicated canon, docs/PERFORMANCE.md.
 
 **Decision gates (unchanged in spirit from v1):**
 - End Phase 1: parity green or no cutover.

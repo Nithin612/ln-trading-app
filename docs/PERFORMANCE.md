@@ -78,3 +78,25 @@ anchor reproduces the run exactly — 49 stocks, **807 trades, 154 ms**
 the corpus recipe is date-anchored (`now() − 760 d`), so regenerating a day
 later shifts the window one session and yields 791 trades — same engine,
 different corpus. Pin an explicit `since` date when comparing across days.
+
+---
+
+## 2026-07-05 — Adjudications F/G/H applied (new standing canon)
+
+Same pinned corpus (anchor 2024-06-04, 49 stocks × 2y, 24,878 rows).
+Python engine and Rust engine-cli agree on the trade count exactly.
+
+| Metric | A–E canon | post-F/G canon |
+|---|---|---|
+| Trades | 807 | **599** |
+| win% | 38.9 | **40.1** |
+| totPnL% | −78.7 | **+52.1** |
+| sharpe | −0.27 | **+0.13** |
+| maxDD% | 99.4 | 96.2 |
+| Rust wall-clock (RAYON=6) | 154 ms | **172 ms** |
+
+The +18 ms is §4's ATR(14) now computed per decision window (item F);
+budget "2y×50 < 5 s" still beaten ~29×. Star detections on the corpus drop
+1,778 → 394 (gap-conformant only, item G). F resizes volatile trades'
+quantities without dropping any trade on this corpus; quantities enter
+rupee P&L, not the pnl_pct metrics above.

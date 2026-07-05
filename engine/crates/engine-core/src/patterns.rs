@@ -192,12 +192,67 @@ pub fn detect_morning_evening_star(bars: &[Bar]) -> PatternHit {
     };
     let first_mid = (first.body_bot() + first.body_top()) / 2.0;
     let star_small = star.body() < first.body() * 0.5;
+    // Spec §2.2 gap (adjudicated 2026-07-05, item G): the star's real body
+    // must sit fully beyond the first candle's real body.
+    let gaps_down = star.body_top() < first.body_bot();
+    let gaps_up = star.body_bot() > first.body_top();
 
-    if first.is_red() && third.is_green() && star_small && third.close > first_mid {
+    if first.is_red() && third.is_green() && star_small && gaps_down && third.close > first_mid {
         return PatternHit::hit(0.95, "MORNING_STAR");
     }
-    if first.is_green() && third.is_red() && star_small && third.close < first_mid {
+    if first.is_green() && third.is_red() && star_small && gaps_up && third.close < first_mid {
         return PatternHit::hit(-0.95, "EVENING_STAR");
     }
     PatternHit::miss("STAR")
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn bar(open: f64, high: f64, low: f64, close: f64) -> Bar {
+        Bar {
+            open,
+            high,
+            low,
+            close,
+            volume: 1000.0,
+        }
+    }
+
+    #[test]
+    fn morning_star_requires_body_gap() {
+        // big red, star gapping BELOW its body, green recovering past mid
+        let with_gap = [
+            bar(120.0, 125.0, 98.0, 100.0),
+            bar(98.0, 100.0, 97.0, 99.0),
+            bar(100.0, 116.0, 99.0, 115.0),
+        ];
+        assert_eq!(detect_morning_evening_star(&with_gap).score, 0.95);
+
+        // same shape but the star's body overlaps the first body → no star
+        let no_gap = [
+            bar(120.0, 125.0, 98.0, 100.0),
+            bar(100.5, 103.0, 99.0, 102.0),
+            bar(100.0, 116.0, 99.0, 115.0),
+        ];
+        assert_eq!(detect_morning_evening_star(&no_gap).score, 0.0);
+    }
+
+    #[test]
+    fn evening_star_requires_body_gap() {
+        let with_gap = [
+            bar(100.0, 122.0, 98.0, 120.0),
+            bar(121.0, 123.0, 120.0, 121.5),
+            bar(120.0, 121.0, 99.0, 103.0),
+        ];
+        assert_eq!(detect_morning_evening_star(&with_gap).score, -0.95);
+
+        let no_gap = [
+            bar(100.0, 122.0, 98.0, 120.0),
+            bar(119.0, 123.0, 118.0, 118.5),
+            bar(120.0, 121.0, 99.0, 103.0),
+        ];
+        assert_eq!(detect_morning_evening_star(&no_gap).score, 0.0);
+    }
 }
