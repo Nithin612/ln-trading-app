@@ -30,10 +30,18 @@ def nightly_signal_generation(self: object) -> dict[str, int]:  # noqa: ARG001
 
 
 async def _run_generation() -> dict[str, int]:
+    from datetime import UTC, datetime
+    from zoneinfo import ZoneInfo
+
     from app.db.session import AsyncSessionFactory
+    from app.services.market_calendar import is_trading_day
     from app.services.signal_service import run_nightly_signal_generation
 
     async with AsyncSessionFactory() as db:
+        today_ist = datetime.now(UTC).astimezone(ZoneInfo("Asia/Kolkata")).date()
+        if not await is_trading_day(db, today_ist):
+            log.info("Nightly signal generation skipped: %s is a market holiday", today_ist)
+            return {"signals_generated": 0}
         capital, risk_pct = _default_risk_params()
         signals = await run_nightly_signal_generation(db, capital, risk_pct)
         log.info("Nightly signal generation: %d signals produced", len(signals))

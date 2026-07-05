@@ -3,6 +3,7 @@ from fastapi import APIRouter
 from app.api.v1 import (
     auth,
     broker,
+    calendar,
     categories,
     filings,
     journal,
@@ -24,6 +25,7 @@ api_router.include_router(stocks.router)
 api_router.include_router(screener.router)
 api_router.include_router(categories.router)
 api_router.include_router(market_data.router)
+api_router.include_router(calendar.router)
 api_router.include_router(signals.router)
 api_router.include_router(filings.router)
 api_router.include_router(broker.router)

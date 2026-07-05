@@ -10,6 +10,7 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ### v2 Phase 2 — Strategy profiles (in progress, started 2026-07-05)
 
 - **Fixed a 100×-family sizing hazard on `POST /signals/generate`**: the admin endpoint defaulted `risk_pct=0.02` (fractional style) in a whole-percent convention — a default request risked 0.02% instead of 2%. Default is now 2.0 with a [0.1, 10] validation floor that rejects fractional-style values loudly (+3 regression tests)
+- **NSE market calendar** (slice 1): `nse_holidays` table + `market_calendar` service (`is_trading_day`, `add_trading_days`, `last_n_trading_days`, `validity_offset_days`) + admin CRUD at `/api/v1/calendar/*`. Seeded with **46 holidays derived from bhavcopy session gaps** (2023-07→2026-07 — data is the authority for the past) + published future dates; the service warns when queried beyond coverage. Swing/positional signal validity now uses **real trading days** (5/30) instead of the 7/42 calendar-day approximation — a Diwali-week swing signal now correctly lives to the 5th session. Nightly generation, F&O EOD ingestion, and the chain recorder skip market holidays (+15 tests)
 
 ### Adjudications F/G/H — star gap, volatility sizing, weight semantics (2026-07-05)
 

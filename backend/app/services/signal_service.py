@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.models.market_data import OhlcvDaily
 from app.models.signal import Signal
 from app.models.stock import Stock
+from app.services import market_calendar
 from app.signals.classifier import classify_signal
 from app.signals.expiry import compute_validity_until
 from app.signals.headline import build_headline
@@ -212,7 +213,9 @@ async def generate_signal_for_stock(
         return None
 
     now = datetime.now(tz=UTC)
-    validity = compute_validity_until(classification, now)
+    # §5 validity in real TRADING days via the NSE calendar (Phase 2).
+    offset = await market_calendar.validity_offset_days(db, classification, now)
+    validity = compute_validity_until(classification, now, trading_days_offset=offset)
     headline = build_headline(stock.symbol, result, entry, stop_loss, take_profit, qty)
 
     factor_scores = {
@@ -357,7 +360,9 @@ async def run_live_signal_generation(
         return 0
 
     now = datetime.now(tz=UTC)
-    validity = compute_validity_until(classification, now)
+    # §5 validity in real TRADING days via the NSE calendar (Phase 2).
+    offset = await market_calendar.validity_offset_days(db, classification, now)
+    validity = compute_validity_until(classification, now, trading_days_offset=offset)
     headline = build_headline(stock.symbol, score, entry, stop_loss, take_profit, qty)
     factor_scores = {
         f.name: {"weight": f.weight, "score": round(f.score, 4), "explanation": f.explanation}

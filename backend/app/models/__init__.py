@@ -2,6 +2,7 @@ from app.models.broker import BrokerToken, KiteInstrument
 from app.models.category import Category, StockCategory
 from app.models.fo_data import FoBhavcopy, IndiaVixDaily, OptionChainSnapshot
 from app.models.journal import JournalEntry
+from app.models.market_calendar import NseHoliday
 from app.models.market_data import (
     BulkBlockDeal,
     FiiDiiDaily,
@@ -33,6 +34,7 @@ __all__ = [
     "Ohlcv1h",
     "FiiDiiDaily",
     "BulkBlockDeal",
+    "NseHoliday",
     "SrLevel",
     "Signal",
     "SignalOutcome",

@@ -25,9 +25,8 @@ _IST = ZoneInfo("Asia/Kolkata")
 def _within_market_hours(now_utc: datetime | None = None) -> bool:
     """True during NSE cash-market hours (9:15–15:30 IST, Mon–Fri).
 
-    Holiday awareness arrives with the market-calendar service (Phase 2);
-    until then holidays just record nothing (quotes are stale, inserts are
-    idempotent).
+    Pure wall-clock check; holiday awareness is a separate async
+    market_calendar.is_trading_day() check inside the task bodies.
     """
     now_ist = (now_utc or datetime.now(UTC)).astimezone(_IST)
     if now_ist.weekday() > 4:  # Sat/Sun
@@ -45,10 +44,14 @@ def fo_eod_ingestion(self: object) -> dict[str, object]:  # noqa: ARG001
 async def _run_fo_eod() -> dict[str, object]:
     from app.db.session import AsyncSessionFactory
     from app.services.fo_bhavcopy_service import ingest_fo_bhavcopy_date
+    from app.services.market_calendar import is_trading_day
     from app.services.vix_service import ingest_vix_date
 
     today_ist = datetime.now(UTC).astimezone(_IST).date()
     async with AsyncSessionFactory() as db:
+        if not await is_trading_day(db, today_ist):
+            log.info("F&O EOD ingestion skipped: %s is not a trading day", today_ist)
+            return {"status": "skipped", "message": "not a trading day"}
         fo_result = await ingest_fo_bhavcopy_date(db, today_ist)
         vix_result = await ingest_vix_date(db, today_ist)
 
@@ -74,6 +77,10 @@ async def _run_chain_snapshot() -> dict[str, object]:
         return {"status": "skipped", "message": "outside market hours"}
 
     async with AsyncSessionFactory() as db:
+        from app.services.market_calendar import is_trading_day
+
+        if not await is_trading_day(db, datetime.now(UTC).astimezone(_IST).date()):
+            return {"status": "skipped", "message": "market holiday"}
         access_token = await get_any_active_admin_token(db)
         if access_token is None:
             # Normal in Phases 0–2 (no Kite subscription yet) — stay quiet.
