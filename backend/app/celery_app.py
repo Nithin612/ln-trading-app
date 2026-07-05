@@ -26,6 +26,7 @@ celery_app = Celery(
         "app.tasks.filing_tasks",
         "app.tasks.position_monitor",
         "app.tasks.fo_tasks",
+        "app.tasks.expiry_tasks",
     ],
 )
 
@@ -76,5 +77,12 @@ celery_app.conf.beat_schedule = {
             hour="3-10",
             day_of_week="1-5",
         ),
+    },
+    # Signal expiry sweeper (SIGNAL_ENGINE.md §5: every 5 minutes). Weekday
+    # window covers intraday cutoffs through post-close swing expiries;
+    # scalp signals minted off-hours expire on the next sweep.
+    "sweep-expired-signals": {
+        "task": "app.tasks.expiry_tasks.sweep_expired_signals",
+        "schedule": crontab(minute="*/5", day_of_week="1-5"),
     },
 }
