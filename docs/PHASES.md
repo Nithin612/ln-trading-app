@@ -29,8 +29,10 @@ PDH/PDL/ORB, RRBO, multibagger…), NSE holiday calendar, per-style
 suggestions API, walk-forward backtests. At kickoff, put the three
 spec-vs-code drifts found at the Phase-1 gate to the user for adjudication
 (F: §4 ATR>3% size reduction unimplemented · G: star patterns missing the
-gap condition · H: sub-factor weight semantics vs §3's table — details in
-phases/phase-01-rust-engine.md §Exit gate); any change follows
+gap condition · H: sub-factor weight semantics vs §3's table — **evidence
+already measured**, table in phases/phase-01-rust-engine.md §Exit gate:
+G strongly positive, H1/H2 strongly negative, F = risk-preference call);
+any change follows
 SIGNAL_ENGINE.md §8: both engines + regenerated fixtures in one commit,
 backtest regression. Session state is all in-repo: this file,
 docs/phases/phase-01-rust-engine.md, docs/ARCHITECTURE.md §Adjudicated

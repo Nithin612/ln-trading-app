@@ -165,6 +165,36 @@ RAYON_NUM_THREADS=6 ./target/release/engine-cli backtest <corpus.json>
     no §3 row) → max fired weight 150+10, not §3's 105; §7's worked example
     is internally inconsistent (70+0.75+2 ≠ 73.75). Needs a one-line ruling
     recorded in ARCHITECTURE.md §Adjudicated canon.
+
+### F/G/H evidence (measured 2026-07-05, `scripts/adjudication_experiments_fgh.py`)
+
+Pinned corpus (anchor 2024-06-04T12:00Z, 49 stocks × 2y, 24,878 rows);
+BASELINE reproduces the 807-trade parity oracle exactly. Variants are
+runtime monkeypatches; frozen code untouched. Awaiting user rulings.
+
+| variant | trades | win% | avgPnL% | totPnL% | sharpe | maxDD% |
+|---|---|---|---|---|---|---|
+| BASELINE (adjudicated engine) | 807 | 38.9 | −0.10 | −78.7 | −0.27 | 99.4 |
+| G — star real-body gap required | 599 | 40.1 | +0.09 | **+52.1** | +0.13 | 96.2 |
+| H1 — pairs share group weight | 1,212 | 37.0 | −0.61 | −744.4 | −1.10 | 100.0 |
+| H2 — H1 + BBANDS excluded | 1,241 | 36.8 | −0.60 | −740.4 | −1.07 | 100.0 |
+| G+H1 combined | 892 | 38.3 | −0.52 | −464.7 | −0.87 | 100.0 |
+
+- **G:** 1,384 of 1,778 star detections (78%) fail the §2.2 gap — the
+  gap-less ±0.95 stars out-score every other pattern and mint bad trades.
+  Adding the gap flips the corpus positive. Strong case to implement.
+- **H:** sharing group weights LOOSENS the gate (moderate-scoring pair
+  members stop diluting the normalized score) → ~400 extra, worse trades.
+  Current per-sub-factor weights act as a conservative filter. Strong case
+  to keep code semantics and amend §3/§7 instead. BBANDS in/out immaterial.
+- **F** (post-processed from the baseline trade list — sizing never enters
+  pnl_pct metrics): 46/807 trades (5.7%) were in the ATR>3% regime, 0
+  dropped by the reduction; those trades were net **winners** (+₹1.49L), so
+  the −25% cut costs ₹37,195 realized P&L while removing ₹1,15,481
+  capital-at-risk. A pure risk-preference call, not an accuracy one.
+- Caveats: one corpus (2y × Nifty50 daily), untuned weights. G/H effects
+  are structural and far beyond the §8 5% bar; F's delta is thin evidence
+  either way (46 trades).
 - **Benign, noted:** ADX>40 gate is `max(65, min_conf−5)` — equals spec at
   the configured 70, diverges for other minimums; swing/positional expiry
   approximates trading days as 7/42 calendar days (expires EARLY — safe
