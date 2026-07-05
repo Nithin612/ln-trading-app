@@ -206,6 +206,15 @@ baseline: **599 trades · win% 40.1 · totPnL +52.1 · sharpe +0.13 ·
 maxDD 96.2**; Rust engine-cli reproduces 599 exactly (172 ms). +8
 regression tests (backend 461 · Rust 33 · parity 6). Full ruling table:
 docs/ARCHITECTURE.md §Adjudicated canon, second round.
+
+Quant-verifier on the applied diff (commit f14552f): **SIGNOFF,
+pass-with-notes** — operators/boundaries/integer arithmetic/decision
+windows verified identical cross-language, zero look-ahead, oracle delta
+fully decomposed into F/G, guard restoration byte-verified. Two INFO
+follow-ups carried to Phase 2: persist a `volatility_reduced` flag (or
+pre-reduction qty) on Signal rows so journal review can attribute §4
+sizing cuts; make the §7 example window mechanically checkable via the
+fixture generator.
 - **Benign, noted:** ADX>40 gate is `max(65, min_conf−5)` — equals spec at
   the configured 70, diverges for other minimums; swing/positional expiry
   approximates trading days as 7/42 calendar days (expires EARLY — safe
