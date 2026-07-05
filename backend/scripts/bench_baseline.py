@@ -24,11 +24,10 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pandas as pd  # noqa: E402
-from sqlalchemy import text  # noqa: E402
-
 from app.analysis.confluence import run_all_factors, score_from_factors  # noqa: E402
 from app.backtest.engine import BacktestConfig, BacktestEngine  # noqa: E402
 from app.db.session import AsyncSessionFactory  # noqa: E402
+from sqlalchemy import text  # noqa: E402
 
 
 async def load_universe(

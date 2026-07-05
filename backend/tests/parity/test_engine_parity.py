@@ -11,10 +11,9 @@ from decimal import Decimal
 import pandas as pd
 import pytest
 import tradecore
-from sqlalchemy import text
-
 from app.analysis.confluence import run_all_factors, score_from_factors
 from app.backtest.engine import BacktestConfig, BacktestEngine
+from sqlalchemy import text
 
 pytestmark = pytest.mark.parity
 
@@ -95,8 +94,8 @@ class TestConfluenceParity:
                 w = df.iloc[end - 300 : end]
                 factors = run_all_factors(w, timeframe="1d")
                 py = score_from_factors(factors, w, 70)
-                o, h, l, c, v = _cols(w)
-                rs = tradecore.score_signal(o, h, l, c, v, "1d", 70)
+                o, h, lo, c, v = _cols(w)
+                rs = tradecore.score_signal(o, h, lo, c, v, "1d", 70)
                 evals += 1
                 assert (py is None) == (rs is None), f"{sym}@{end}: decision"
                 if py is None:
@@ -128,12 +127,12 @@ class TestBacktestParity:
             dfi.index = pd.date_range("2020-01-01", periods=len(dfi), freq="D")
             date_to_idx = {d: i for i, d in enumerate(dfi.index)}
             py_trades = eng.run_single_stock(sym, dfi)
-            o, h, l, c, v = _cols(df)
+            o, h, lo, c, v = _cols(df)
             rs_trades = tradecore.run_backtest_single(
-                o, h, l, c, v, "1d", "500000", "2", 70
+                o, h, lo, c, v, "1d", "500000", "2", 70
             )
             assert len(rs_trades) == len(py_trades), f"{sym}: count"
-            for rt, pt in zip(rs_trades, py_trades):
+            for rt, pt in zip(rs_trades, py_trades, strict=True):
                 assert rt["fill_idx"] == date_to_idx[pt.entry_date], f"{sym}: fill idx"
                 assert rt["exit_idx"] == date_to_idx[pt.exit_date], f"{sym}: exit idx"
                 assert rt["direction"] == pt.direction

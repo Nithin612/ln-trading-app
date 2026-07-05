@@ -7,6 +7,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### v2 Phase 1 — Rust engine core, adjudication, parity, 6,180× (2026-07-04)
+
+Full report: `docs/phases/phase-01-rust-engine.md`.
+
+- **3y EOD backfill** (ohlcv_1d was EMPTY despite v1 claims): 1.29M candles, 2,330 stocks + `scripts/backfill_eod.py`
+- **engine/ Rust workspace** (rustc 1.96.1): engine-core (indicators/patterns/structure/factors/confluence/risk/backtest — incremental state + batch on top), engine-py → `tradecore` (PyO3 abi3), engine-cli (bench)
+- **pandas-ta 0.4.71b0 semantics decoded** (SMA-seeded EMA, first-diff-seeded RSI, prenan ADX with first-DX seed, ddof=1 BBands) and locked by committed reference fixtures — machine-precision parity (≤1e-12 real-data error)
+- **Five spec drifts adjudicated by the user with measured evidence** (see ARCHITECTURE.md): volume direction-match · RSI bands removed · pivot swing-SL shared live+backtest · last-300 window canon · HONEST fills (which revealed the old +1.8% totPnL as fill flattery — truthful baseline ≈ −108%; tuning is Phase 2/6 against reality). Applied to BOTH engines in lockstep + 8 regression tests
+- **Cross-language parity suite** (`make parity`): exact factor scores/confidence/decisions on 96 real windows; exact 125-trade backtest lists; ENGINE_IMPL flag (python|rust) wired through signal_service with dispatch tests
+- **Benchmark** (docs/PERFORMANCE.md): 2y×49 full backtest **883.8 s → 0.143 s (~6,180×, RAYON=6)**; 200-combo grid ≈50.5 h → ≈29 s
+- Python engine frozen (bugfix-only; sunset after Phase-3 shadow week)
+
+
 ### v2 Phase 0 — Claude workbench, repo hygiene, triage, F&O recorders (2026-07-03)
 
 The first phase of the approved v2 upgrade (`docs/UPGRADE_PLAN.md`). Full

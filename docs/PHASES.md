@@ -15,13 +15,21 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 | # | Phase | Status | Report | Key deliverable |
 |---|-------|--------|--------|-----------------|
 | 0 | Claude workbench · repo hygiene · triage · F&O recorders | **✅ done 2026-07-03** | [phase-00](phases/phase-00-workbench.md) | git + hooks/agents/rules/skills · 9 defects fixed (incl. dead live pipeline, 100× sizing) · F&O bhavcopy/VIX/chain recorders live |
-| 1 | Rust engine core + parity + benchmarks | ⏳ next | — | `engine/` workspace, tradecore wheel, golden parity vs frozen Python (zero signal diffs on 2y×Nifty50), bench table |
+| 1 | Rust engine core + parity + benchmarks | **🔶 code complete 2026-07-04** — gate: quant-verifier signoff + one full `make check` remain | [phase-01](phases/phase-01-rust-engine.md) | tradecore wheel · 4 oracle fixtures · cross-language parity EXACT (96 windows + 125 trades) · 5 adjudicated canon decisions · **2y×49 backtest 883.8s → 0.143s (~6,180×)** |
 | 2 | Strategy profiles — 4 style engines, offline | planned | — | profiles table + seeds (DC1/DC2, PDH/PDL/ORB, RRBO, multibagger…), NSE holiday calendar, per-style suggestions API, walk-forward backtests |
 | 3 | Realtime v2 — tick-to-tick | planned | — | live-worker + Rust LiveEngine, committed vs forming layers, record/replay harness, p99 < 10 ms tick→publish. **Kite subscription required here.** |
 | 4 | F&O analytics | planned | — | chain builder, Rust IV/Greeks, IV-rank/PCR/max-pain from recorded history, option-selling suggestions (calibrated with user) |
 | 5 | UI overhaul | planned | — | new sidebar IA, slate theme default, 4 style pages, chain ladder, virtualized live tables @60fps |
 | 6 | Outcome tracking + strategy lab v2 | planned | — | per-style hit-rate/expectancy dashboards, factor attribution, Rayon weight tuning + promotion workflow |
 | 7 | Live-trading hardening | planned | — | Kite orders behind trading_mode + 30-day gate, kill switch, reconciliation, VPS runbook |
+
+**▶ CONTINUE HERE (next session, any account):** run the Phase-1 exit gate —
+(1) `make check` end-to-end (all stages incl. parity), (2) quant-verifier
+agent on the engine diff (agents in `.claude/agents/` register at session
+start), (3) CHANGELOG + this table flipped to ✅. Then Phase 2 kickoff
+(strategy profiles — see UPGRADE_PLAN.md). Session state that matters is
+all in-repo: this file, docs/phases/phase-01-rust-engine.md,
+docs/ARCHITECTURE.md §Adjudicated canon, docs/PERFORMANCE.md.
 
 **Decision gates (unchanged in spirit from v1):**
 - End Phase 1: parity green or no cutover.

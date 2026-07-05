@@ -28,12 +28,11 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 import pandas as pd  # noqa: E402
-
-import app.backtest.engine as engine_mod  # noqa: E402
 from app.analysis.confluence import (  # noqa: E402
     run_all_factors,
     score_from_factors,
 )
+from app.analysis.risk import compute_levels, compute_quantity  # noqa: E402
 from app.backtest.engine import (  # noqa: E402
     BacktestConfig,
     BacktestEngine,
@@ -41,10 +40,8 @@ from app.backtest.engine import (  # noqa: E402
     TradeRecord,
     apply_weight_multipliers,
 )
-from app.analysis.risk import compute_levels, compute_quantity  # noqa: E402
 from app.services.signal_service import _swing_levels  # noqa: E402
 from app.signals.classifier import classify_signal  # noqa: E402
-
 from bench_baseline import load_universe  # noqa: E402  (same scripts dir)
 
 CFG = BacktestConfig(
@@ -103,7 +100,7 @@ class VariantEngine(BacktestEngine):
         self.directional_volume = directional_volume
         self.rsi_no_bands = rsi_no_bands
 
-    def run_single_stock(self, stock: str, candles: pd.DataFrame) -> list[TradeRecord]:
+    def run_single_stock(self, stock: str, candles: pd.DataFrame) -> list[TradeRecord]:  # noqa: C901
         trades: list[TradeRecord] = []
         if len(candles) < 60:
             return trades
@@ -293,7 +290,10 @@ def main() -> int:
                               "pivot_sl": True, "realistic_fills": True}),
     ]
 
-    print("| variant                | trades | win%  | avgPnL% | totPnL%  | sharpe | maxDD% | time  |")
+    print(
+        "| variant                | trades | win%  | avgPnL% "
+        "| totPnL%  | sharpe | maxDD% | time  |"
+    )
     print("|------------------------|--------|-------|---------|----------|--------|--------|-------|")
     for name, flags in variants:
         if only is not None and name.split(" ")[0] not in only:

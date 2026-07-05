@@ -2,9 +2,9 @@
 settings.engine_impl == "rust", and both paths agree on real data."""
 
 import pytest
-
 from app.core.config import settings
 from app.services.signal_service import score_signal
+
 from tests.parity.test_engine_parity import SYMBOLS, _load
 
 pytestmark = pytest.mark.parity

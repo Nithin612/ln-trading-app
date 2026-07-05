@@ -62,7 +62,10 @@ class TestRsiBandsRemoved:
         assert result.score == 0.0  # was +0.4
 
     def test_overbought_scores_zero(self) -> None:
-        rows = [(float(p) - 0.2, float(p) + 0.5, float(p) - 0.5, float(p), 1000) for p in range(140, 200)]
+        rows = [
+            (float(p) - 0.2, float(p) + 0.5, float(p) - 0.5, float(p), 1000)
+            for p in range(140, 200)
+        ]
         result = rsi_level_factor(_candles(rows))
         assert result.score == 0.0  # was -0.4
 
