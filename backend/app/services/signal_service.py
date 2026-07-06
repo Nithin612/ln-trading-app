@@ -205,10 +205,11 @@ async def generate_signal_for_stock(
         return None
 
     stop_loss, take_profit = levels
-    qty = compute_quantity(capital, risk_pct, entry, stop_loss)
+    qty_raw = compute_quantity(capital, risk_pct, entry, stop_loss)
     # §4 volatility regime (adjudicated 2026-07-05): same reduction the
     # backtest applies — the decision window here IS the loaded candles.
-    qty = volatility_adjusted_qty(qty, candles)
+    qty = volatility_adjusted_qty(qty_raw, candles)
+    volatility_reduced = qty != qty_raw
     if qty == 0:
         return None
 
@@ -232,6 +233,7 @@ async def generate_signal_for_stock(
         direction=result.direction,
         classification=classification,
         timeframe=timeframe,
+        volatility_reduced=volatility_reduced,
         entry_price=entry,
         stop_loss=stop_loss,
         take_profit=take_profit,
@@ -391,9 +393,10 @@ async def run_live_signal_generation(
         return 0
 
     stop_loss, take_profit = levels
-    qty = compute_quantity(capital, risk_pct, entry, stop_loss)
+    qty_raw = compute_quantity(capital, risk_pct, entry, stop_loss)
     # §4 volatility regime (adjudicated 2026-07-05, item F)
-    qty = volatility_adjusted_qty(qty, candles)
+    qty = volatility_adjusted_qty(qty_raw, candles)
+    volatility_reduced = qty != qty_raw
     if qty == 0:
         return 0
 
@@ -412,6 +415,7 @@ async def run_live_signal_generation(
         direction=score.direction,
         classification=classification,
         timeframe=timeframe,
+        volatility_reduced=volatility_reduced,
         entry_price=entry,
         stop_loss=stop_loss,
         take_profit=take_profit,

@@ -22,7 +22,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.backtest.engine import BacktestConfig, BacktestEngine
 from app.backtest.grid_search import run_preset_scan
 from app.core.deps import get_current_user, get_db
-from app.models.stock import Stock
 from app.models.strategy import StrategyRun
 from app.models.user import User
 from app.schemas.strategy import (
@@ -89,31 +88,14 @@ async def _resolve_stock_ids(
     universe: str,
     symbols: list[str] | None,
 ) -> tuple[list[int], dict[int, str]]:
-    """Return (stock_id_list, {stock_id: symbol}) for the requested universe/symbols."""
-    if symbols:
-        q = select(Stock.id, Stock.symbol).where(
-            Stock.symbol.in_(symbols), Stock.is_active.is_(True)
-        )
-    elif universe.upper() == "NIFTY50":
-        q = select(Stock.id, Stock.symbol).where(
-            Stock.is_nifty50.is_(True), Stock.is_active.is_(True)
-        )
-    elif universe.upper() == "BANKNIFTY":
-        q = select(Stock.id, Stock.symbol).where(
-            Stock.is_banknifty.is_(True), Stock.is_active.is_(True)
-        )
-    elif universe.upper() == "FNO":
-        q = select(Stock.id, Stock.symbol).where(
-            Stock.is_fno.is_(True), Stock.is_active.is_(True)
-        )
-    else:
-        q = select(Stock.id, Stock.symbol).where(Stock.is_active.is_(True))
+    """Return (stock_id_list, {stock_id: symbol}) for the requested universe/symbols.
 
-    rows = await db.execute(q)
-    pairs = rows.fetchall()
-    ids = [r[0] for r in pairs]
-    sym_map = {r[0]: r[1] for r in pairs}
-    return ids, sym_map
+    Delegates to the shared resolver (Phase 2 slice 4) — profiles and the
+    walk-forward runner use the same code path.
+    """
+    from app.services.universe_service import resolve_legacy
+
+    return await resolve_legacy(db, universe, symbols)
 
 
 def _trades_to_json(trades: list[Any]) -> list[dict[str, Any]]:

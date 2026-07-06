@@ -90,6 +90,20 @@ class Signal(Base):
     resolved_at: Mapped[datetime | None] = mapped_column(TZ, nullable=True)
     outcome_pnl_pct: Mapped[Decimal | None] = mapped_column(Numeric(7, 3), nullable=True)
 
+    # Strategy-profile linkage (Phase 2 slice 4). profile_id pins the exact
+    # version row; profile_key is denormalized so the active-suggestion
+    # dedup index spans version bumps. NULL on legacy/non-profile signals.
+    profile_id: Mapped[int | None] = mapped_column(
+        BigInteger,
+        ForeignKey("strategy_profiles.id", ondelete="RESTRICT"),
+        nullable=True,
+    )
+    profile_key: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    setup_trigger: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
+    # §4 volatility attribution (Phase-1 review carry-over): True when the
+    # ATR>3% reduction changed suggested_qty; NULL = unknown (legacy rows).
+    volatility_reduced: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+
     stock: Mapped["Stock"] = relationship("Stock")  # type: ignore[name-defined]  # noqa: F821
     outcome: Mapped["SignalOutcome | None"] = relationship(
         "SignalOutcome", back_populates="signal", uselist=False
