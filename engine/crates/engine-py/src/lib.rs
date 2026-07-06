@@ -185,8 +185,75 @@ fn score_signal(
     Ok(Some(d.into()))
 }
 
+/// Parse the FFI (kind, value) TP rule; money-scaled strings, never f64.
+fn parse_tp_rule(tp_rule: Option<(String, String)>) -> PyResult<Option<engine_core::risk::TpRule>> {
+    let Some((kind, value)) = tp_rule else {
+        return Ok(None);
+    };
+    let v = engine_core::risk::money_from_str(&value)
+        .ok_or_else(|| PyValueError::new_err(format!("bad tp_rule value {value:?}")))?;
+    match kind.as_str() {
+        "rr" => Ok(Some(engine_core::risk::TpRule::Rr(v))),
+        "flat_pct" => Ok(Some(engine_core::risk::TpRule::FlatPct(v))),
+        other => Err(PyValueError::new_err(format!(
+            "unknown tp_rule kind {other:?} (rr | flat_pct)"
+        ))),
+    }
+}
+
+fn build_params(
+    capital: &str,
+    risk_pct: &str,
+    min_confidence: i32,
+    weight_multipliers: Vec<(String, f64)>,
+    tp_rule: Option<(String, String)>,
+) -> PyResult<engine_core::backtest::BacktestParams> {
+    Ok(engine_core::backtest::BacktestParams {
+        capital: engine_core::risk::money_from_str(capital)
+            .ok_or_else(|| PyValueError::new_err("bad capital"))?,
+        risk_pct: engine_core::risk::money_from_str(risk_pct)
+            .ok_or_else(|| PyValueError::new_err("bad risk_pct"))?,
+        min_confidence,
+        weight_multipliers,
+        tp_rule: parse_tp_rule(tp_rule)?,
+    })
+}
+
+fn trade_to_dict<'py>(
+    py: Python<'py>,
+    t: &engine_core::backtest::Trade,
+) -> PyResult<Bound<'py, PyDict>> {
+    let d = PyDict::new(py);
+    d.set_item("fill_idx", t.fill_idx)?;
+    d.set_item("exit_idx", t.exit_idx)?;
+    d.set_item(
+        "direction",
+        if t.side == engine_core::risk::Side::Buy {
+            "BUY"
+        } else {
+            "SELL"
+        },
+    )?;
+    d.set_item("confidence", t.confidence_pct)?;
+    d.set_item("entry", t.entry)?;
+    d.set_item("sl", t.stop_loss)?;
+    d.set_item("tp", t.take_profit)?;
+    d.set_item("qty", t.qty)?;
+    d.set_item("exit_price", t.exit_price)?;
+    d.set_item("pnl_pct", t.pnl_pct)?;
+    d.set_item("hit_sl", t.hit_sl)?;
+    d.set_item("hit_target", t.hit_target)?;
+    let f = PyDict::new(py);
+    for (name, weight, score) in &t.factors {
+        f.set_item(name, (*weight, *score))?;
+    }
+    d.set_item("factors", f)?;
+    Ok(d)
+}
+
 /// Adjudicated-canon backtest for one stock. Trades as list of dicts.
 #[pyfunction]
+#[pyo3(signature = (open, high, low, close, volume, timeframe, capital, risk_pct, min_confidence, weight_multipliers=Vec::new(), tp_rule=None))]
 #[allow(clippy::too_many_arguments)]
 fn run_backtest_single(
     py: Python<'_>,
@@ -199,40 +266,60 @@ fn run_backtest_single(
     capital: String,
     risk_pct: String,
     min_confidence: i32,
+    weight_multipliers: Vec<(String, f64)>,
+    tp_rule: Option<(String, String)>,
 ) -> PyResult<Py<PyList>> {
     let bars = bars_from(&open, &high, &low, &close, &volume)?;
-    let params = engine_core::backtest::BacktestParams {
-        capital: engine_core::risk::money_from_str(&capital)
-            .ok_or_else(|| PyValueError::new_err("bad capital"))?,
-        risk_pct: engine_core::risk::money_from_str(&risk_pct)
-            .ok_or_else(|| PyValueError::new_err("bad risk_pct"))?,
+    let params = build_params(
+        &capital,
+        &risk_pct,
         min_confidence,
-        weight_multipliers: Vec::new(),
-    };
+        weight_multipliers,
+        tp_rule,
+    )?;
     let trades = py.detach(|| engine_core::backtest::run_single_stock(&bars, &timeframe, &params));
     let out = PyList::empty(py);
-    for t in trades {
-        let d = PyDict::new(py);
-        d.set_item("fill_idx", t.fill_idx)?;
-        d.set_item("exit_idx", t.exit_idx)?;
-        d.set_item(
-            "direction",
-            if t.side == engine_core::risk::Side::Buy {
-                "BUY"
-            } else {
-                "SELL"
-            },
-        )?;
-        d.set_item("confidence", t.confidence_pct)?;
-        d.set_item("entry", t.entry)?;
-        d.set_item("sl", t.stop_loss)?;
-        d.set_item("tp", t.take_profit)?;
-        d.set_item("qty", t.qty)?;
-        d.set_item("exit_price", t.exit_price)?;
-        d.set_item("pnl_pct", t.pnl_pct)?;
-        d.set_item("hit_sl", t.hit_sl)?;
-        d.set_item("hit_target", t.hit_target)?;
-        out.append(d)?;
+    for t in &trades {
+        out.append(trade_to_dict(py, t)?)?;
+    }
+    Ok(out.into())
+}
+
+/// Rayon-parallel universe backtest → [(symbol, [trade dicts])].
+/// stocks: [(symbol, open, high, low, close, volume)]; money as strings.
+#[pyfunction]
+#[pyo3(signature = (stocks, timeframe, capital, risk_pct, min_confidence, weight_multipliers=Vec::new(), tp_rule=None))]
+#[allow(clippy::type_complexity, clippy::too_many_arguments)]
+fn run_universe(
+    py: Python<'_>,
+    stocks: Vec<(String, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>, Vec<f64>)>,
+    timeframe: String,
+    capital: String,
+    risk_pct: String,
+    min_confidence: i32,
+    weight_multipliers: Vec<(String, f64)>,
+    tp_rule: Option<(String, String)>,
+) -> PyResult<Py<PyList>> {
+    let params = build_params(
+        &capital,
+        &risk_pct,
+        min_confidence,
+        weight_multipliers,
+        tp_rule,
+    )?;
+    let mut universe: Vec<(String, Vec<engine_core::types::Bar>)> =
+        Vec::with_capacity(stocks.len());
+    for (sym, open, high, low, close, volume) in &stocks {
+        universe.push((sym.clone(), bars_from(open, high, low, close, volume)?));
+    }
+    let results = py.detach(|| engine_core::backtest::run_universe(&universe, &timeframe, &params));
+    let out = PyList::empty(py);
+    for (sym, trades) in &results {
+        let trade_list = PyList::empty(py);
+        for t in trades {
+            trade_list.append(trade_to_dict(py, t)?)?;
+        }
+        out.append((sym.as_str(), trade_list))?;
     }
     Ok(out.into())
 }
@@ -249,5 +336,6 @@ fn tradecore(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(bbands, m)?)?;
     m.add_function(wrap_pyfunction!(score_signal, m)?)?;
     m.add_function(wrap_pyfunction!(run_backtest_single, m)?)?;
+    m.add_function(wrap_pyfunction!(run_universe, m)?)?;
     Ok(())
 }

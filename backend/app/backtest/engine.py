@@ -93,6 +93,11 @@ class BacktestConfig:
     risk_pct: Decimal = Decimal("2")
     min_confidence: int = 70
     weight_multipliers: dict[str, float] = field(default_factory=dict)
+    # Freeze-extension (Phase 2 slice 8a): profile risk-template TP override
+    # ({"kind": "rr"|"flat_pct", ...} via app.backtest.tp_rules). None keeps
+    # the classification-canon TP — byte-identical to the frozen engine, as
+    # proven by the unchanged oracle fixtures.
+    tp_rule: dict[str, object] | None = None
 
 
 @dataclass
@@ -261,7 +266,9 @@ class BacktestEngine:
             record.pnl_pct = (entry_price - last_close) / entry_price * 100
         return record
 
-    def run_single_stock(self, stock: str, candles: pd.DataFrame) -> list[TradeRecord]:
+    def run_single_stock(  # noqa: C901 — frozen canon + sanctioned slice-8a extension
+        self, stock: str, candles: pd.DataFrame
+    ) -> list[TradeRecord]:
         """Run backtest on one stock's full candle history."""
         trades: list[TradeRecord] = []
         # Need at least 60 candles for warm-up
@@ -305,6 +312,12 @@ class BacktestEngine:
                 continue
             if result.direction == "SELL" and stop_loss <= entry_price:
                 continue
+            if self.config.tp_rule is not None:
+                from app.backtest.tp_rules import tp_from_template
+
+                take_profit = tp_from_template(
+                    self.config.tp_rule, result.direction, entry_price, stop_loss
+                )
             qty = compute_quantity(
                 self.config.capital, self.config.risk_pct, entry_price, stop_loss
             )

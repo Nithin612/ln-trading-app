@@ -97,6 +97,38 @@ pub fn compute_quantity(
     i64::try_from(qty.max(0)).ok()
 }
 
+/// Profile risk-template take-profit override (Phase 2 slice 8a).
+/// Ratios/percentages cross the FFI as Money-scaled strings (1.5 → 15_000)
+/// — never through f64. Semantics mirror app/backtest/tp_rules.py exactly:
+/// the full expression is computed in i128 at expanded scale and rounded
+/// ONCE to 1e-4 half-even, matching Python `(...).quantize(Decimal("0.0001"))`.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum TpRule {
+    /// TP = entry ± |entry − SL| × ratio
+    Rr(Money),
+    /// TP = entry × (1 ± pct/100)
+    FlatPct(Money),
+}
+
+/// Apply a TpRule. Buy adds toward profit, Sell subtracts.
+pub fn apply_tp_rule(rule: &TpRule, side: Side, entry: Money, stop_loss: Money) -> Money {
+    let sign: i128 = if side == Side::Buy { 1 } else { -1 };
+    match rule {
+        TpRule::Rr(ratio) => {
+            // exact at 1e-8: entry·1e4 ± risk_u·ratio_u, then one 1e-4 round
+            let risk = i128::from((entry - stop_loss).abs());
+            let total_1e8 = i128::from(entry) * 10_000 + sign * risk * i128::from(*ratio);
+            div_half_even(total_1e8, 10_000)
+        }
+        TpRule::FlatPct(pct) => {
+            // exact at 1e-10: entry·1e6 ± entry_u·pct_u, then one 1e-4 round
+            let total_1e10 =
+                i128::from(entry) * 1_000_000 + sign * i128::from(entry) * i128::from(*pct);
+            div_half_even(total_1e10, 1_000_000)
+        }
+    }
+}
+
 /// §4 volatility-regime threshold: ATR(14) above this % of price.
 pub const VOLATILE_ATR_PCT: f64 = 3.0;
 
@@ -124,7 +156,7 @@ fn pct_of(price: Money, pct: Money) -> Money {
     div_half_even(n, 1_000_000)
 }
 
-fn div_half_even(n: i128, d: i128) -> Money {
+pub(crate) fn div_half_even(n: i128, d: i128) -> Money {
     let q = n.div_euclid(d);
     let r = n.rem_euclid(d);
     let double = r * 2;
@@ -266,6 +298,33 @@ mod tests {
         // risk 2000, per-share 7.3 → 273.97 → 273
         let qty = compute_quantity(m("100000"), m("2"), m("500"), m("492.7"));
         assert_eq!(qty, Some(273));
+    }
+
+    #[test]
+    fn tp_rule_matches_python_decimal_quantize() {
+        // rr: entry 100, SL 96, ratio 2 → TP 108 (Buy) / 92 (Sell w/ SL 104)
+        let tp = apply_tp_rule(&TpRule::Rr(m("2")), Side::Buy, m("100"), m("96"));
+        assert_eq!(tp, m("108"));
+        let tp = apply_tp_rule(&TpRule::Rr(m("2")), Side::Sell, m("100"), m("104"));
+        assert_eq!(tp, m("92"));
+        // rr 1.5 with fractional risk: entry 100.05, SL 99.98 → risk 0.07 →
+        // TP = 100.05 + 0.105 = 100.155 → quantize → 100.155 stays (4dp: 100.1550)
+        let tp = apply_tp_rule(&TpRule::Rr(m("1.5")), Side::Buy, m("100.05"), m("99.98"));
+        assert_eq!(tp, m("100.155"));
+        // flat_pct: entry 288.20 × 1.06 = 305.492 (the §7 worked example)
+        let tp = apply_tp_rule(&TpRule::FlatPct(m("6")), Side::Buy, m("288.20"), m("280"));
+        assert_eq!(tp, m("305.492"));
+        let tp = apply_tp_rule(&TpRule::FlatPct(m("6")), Side::Sell, m("100"), m("104"));
+        assert_eq!(tp, m("94"));
+        // half-even at the 1e-4 boundary: entry 0.0001 × (1 + 5/100) =
+        // 0.000105 → tie at 1e-4 → round to even → 0.0001 (not 0.0002)
+        let tp = apply_tp_rule(
+            &TpRule::FlatPct(m("5")),
+            Side::Buy,
+            m("0.0001"),
+            m("0.00005"),
+        );
+        assert_eq!(tp, m("0.0001"));
     }
 
     #[test]

@@ -84,6 +84,7 @@ fn run_backtest_bench(path: Option<&String>) -> ExitCode {
         },
         min_confidence: 70,
         weight_multipliers: Vec::new(),
+        tp_rule: None,
     };
 
     // Warm run then timed run

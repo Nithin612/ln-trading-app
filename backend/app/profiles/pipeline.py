@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.analysis.risk import compute_levels, compute_quantity, volatility_adjusted_qty
 from app.analysis.structure.dow import swing_levels
+from app.backtest.tp_rules import tp_from_template as _tp_from_template
 from app.models.profile import StrategyProfile
 from app.models.signal import Signal
 from app.profiles.setups import SetupContext, evaluate_conditions
@@ -82,28 +83,6 @@ async def _load_window(
             "volume": [int(r.volume) for r in rows],
         }
     ).set_index("time")
-
-
-def _tp_from_template(
-    template: dict[str, object], direction: str, entry: Decimal, stop_loss: Decimal
-) -> Decimal:
-    """§6 take-profit per the profile's risk template. SL is never touched
-    (classification canon, reject-don't-clamp happened upstream)."""
-    kind = str(template.get("kind"))
-    sign = 1 if direction == "BUY" else -1
-    if kind == "rr":
-        ratio = Decimal(str(template["ratio"]))
-        risk = abs(entry - stop_loss)
-        tp = entry + sign * risk * ratio
-    elif kind in ("flat_pct", "flat_pct_trailing"):
-        pct = Decimal(str(template["target_pct"]))
-        tp = entry * (Decimal("1") + sign * pct / Decimal("100"))
-    elif kind == "ema_trail":
-        pct = Decimal(str(template["min_target_pct"]))
-        tp = entry * (Decimal("1") + sign * pct / Decimal("100"))
-    else:  # unreachable — schema rejects unknown kinds at load
-        raise ValueError(f"unknown risk template kind {kind!r}")
-    return tp.quantize(Decimal("0.0001"))
 
 
 async def _validity_for(

@@ -13,13 +13,14 @@ use crate::confluence::{run_all_factors, score_from_factors, Direction, FlowInpu
 use crate::factors::Factor;
 use crate::pivots::{swing_high_indices, swing_low_indices};
 use crate::risk::{
-    classify, compute_levels, compute_quantity, money_from_f64, volatility_reduced_qty, Money, Side,
+    apply_tp_rule, classify, compute_levels, compute_quantity, money_from_f64,
+    volatility_reduced_qty, Money, Side, TpRule,
 };
 use crate::types::Bar;
 
 pub const WINDOW_CANON: usize = 300;
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct Trade {
     pub fill_idx: usize,
     pub exit_idx: usize,
@@ -33,6 +34,9 @@ pub struct Trade {
     pub pnl_pct: f64,
     pub hit_sl: bool,
     pub hit_target: bool,
+    /// Post-adjustment factor snapshot at signal time (name, weight, score)
+    /// — lets the walk-forward runner apply setup gates without rescoring.
+    pub factors: Vec<(&'static str, f64, f64)>,
 }
 
 #[derive(Debug, Clone, Default)]
@@ -43,6 +47,9 @@ pub struct BacktestParams {
     pub min_confidence: i32,
     /// (group, multiplier) pairs — Python apply_weight_multipliers.
     pub weight_multipliers: Vec<(String, f64)>,
+    /// Profile risk-template TP override (Phase 2 slice 8a). None = the
+    /// classification-canon TP — byte-identical to the pre-extension engine.
+    pub tp_rule: Option<TpRule>,
 }
 
 fn apply_weight_multipliers(factors: &mut [Factor], mults: &[(String, f64)]) {
@@ -102,7 +109,7 @@ fn window_atr_pct(window: &[Bar]) -> f64 {
 }
 
 /// Everything decided about an order before simulation.
-#[derive(Clone, Copy)]
+#[derive(Clone)]
 struct PlannedOrder {
     side: Side,
     confidence_pct: i32,
@@ -110,6 +117,7 @@ struct PlannedOrder {
     stop_loss: Money,
     take_profit: Money,
     qty: i64,
+    factors: Vec<(&'static str, f64, f64)>,
 }
 
 /// Honest-fill walk from the fill candle to the end of data.
@@ -118,6 +126,7 @@ fn simulate_trade(bars: &[Bar], fill_idx: usize, order: PlannedOrder) -> Option<
         side,
         confidence_pct,
         qty,
+        factors,
         ..
     } = order;
     let entry = money_to_f64(order.entry);
@@ -139,6 +148,7 @@ fn simulate_trade(bars: &[Bar], fill_idx: usize, order: PlannedOrder) -> Option<
         pnl_pct: sign * (price - entry) / entry * 100.0,
         hit_sl: sl,
         hit_target: tp,
+        factors: factors.clone(),
     };
 
     for (off, c) in bars.get(fill_idx..)?.iter().enumerate() {
@@ -233,6 +243,11 @@ pub fn run_single_stock(bars: &[Bar], timeframe: &str, params: &BacktestParams) 
         if side == Side::Sell && sl <= entry {
             continue;
         }
+        // Profile TP override (slice 8a) — SL is never touched.
+        let tp = match &params.tp_rule {
+            Some(rule) => apply_tp_rule(rule, side, entry, sl),
+            None => tp,
+        };
         let Some(qty) = compute_quantity(params.capital, params.risk_pct, entry, sl) else {
             continue;
         };
@@ -250,6 +265,11 @@ pub fn run_single_stock(bars: &[Bar], timeframe: &str, params: &BacktestParams) 
             stop_loss: sl,
             take_profit: tp,
             qty,
+            factors: outcome
+                .factors
+                .iter()
+                .map(|f| (f.name, f.weight, f.score))
+                .collect(),
         };
         if let Some(trade) = simulate_trade(bars, i + 1, order) {
             trades.push(trade);

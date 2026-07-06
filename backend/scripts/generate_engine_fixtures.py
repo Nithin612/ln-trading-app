@@ -192,17 +192,96 @@ def regen_backtest(doc: dict) -> tuple[dict, list[str]]:
     return doc, diffs
 
 
+# ── backtest EXT fixture: weight-multiplier + tp_rule axes (slice 8a) ────────
+# Bars are NOT duplicated: the Rust test joins on symbol against the base
+# python_backtest_reference.json.
+
+EXT_VARIANTS: list[tuple[str, dict, dict | None]] = [
+    ("mult_momentum", {"momentum": 1.5, "trend": 0.5}, None),
+    ("tp_rr2", {}, {"kind": "rr", "ratio": "2"}),
+    ("tp_flat6", {}, {"kind": "flat_pct", "target_pct": "6"}),
+]
+
+
+def regen_backtest_ext(doc: dict) -> tuple[dict, list[str]]:
+    base = json.loads((FIXTURE_DIR / "python_backtest_reference.json").read_text())
+    meta = base["_meta"]
+    diffs: list[str] = []
+    old_cases = {(c["symbol"], c["variant"]): c["trades"] for c in doc.get("cases", [])}
+    cases = []
+    for variant, mults, tp_rule in EXT_VARIANTS:
+        cfg = BacktestConfig(
+            timeframe="1d",
+            universe="FIXTURE",
+            capital=Decimal(meta["capital"]),
+            risk_pct=Decimal(meta["risk_pct"]),
+            min_confidence=70,
+            weight_multipliers=mults,
+            tp_rule=tp_rule,
+        )
+        engine = BacktestEngine(cfg)
+        for case in base["cases"]:
+            bars = case["bars"]
+            idx = pd.date_range("2000-01-03", periods=len(bars), freq="D", tz="UTC")
+            df = _df(bars).set_index(idx)
+            base_ts = idx[0]
+            trades = [
+                {
+                    "fill_idx": int((t.entry_date - base_ts).days),
+                    "exit_idx": int((t.exit_date - base_ts).days),
+                    "direction": t.direction,
+                    "confidence": t.confidence_pct,
+                    "entry": t.entry_price,
+                    "sl": t.stop_loss,
+                    "tp": t.take_profit,
+                    "qty": t.qty,
+                    "exit_price": t.exit_price,
+                    "pnl_pct": t.pnl_pct,
+                    "hit_sl": t.hit_sl,
+                    "hit_target": t.hit_target,
+                }
+                for t in engine.run_single_stock(case["symbol"], df)
+            ]
+            key = (case["symbol"], variant)
+            if old_cases.get(key) != trades:
+                diffs.append(
+                    f"{case['symbol']}/{variant}: "
+                    f"{len(old_cases.get(key, []))} -> {len(trades)} trades"
+                )
+            cases.append(
+                {
+                    "symbol": case["symbol"],
+                    "variant": variant,
+                    "weight_multipliers": mults,
+                    "tp_rule": tp_rule,
+                    "trades": trades,
+                }
+            )
+    return (
+        {
+            "_meta": {
+                "canon": "slice 8a ext axes over the base backtest fixture bars",
+                "capital": meta["capital"],
+                "risk_pct": meta["risk_pct"],
+            },
+            "cases": cases,
+        },
+        diffs,
+    )
+
+
 def main() -> int:
     check_only = "--check" in sys.argv
     jobs = [
         ("python_analysis_reference.json", regen_analysis),
         ("python_confluence_reference.json", regen_confluence),
         ("python_backtest_reference.json", regen_backtest),
+        ("python_backtest_ext_reference.json", regen_backtest_ext),
     ]
     dirty = False
     for name, regen in jobs:
         path = FIXTURE_DIR / name
-        doc = json.loads(path.read_text())
+        doc = json.loads(path.read_text()) if path.exists() else {"_meta": {}, "cases": []}
         doc, diffs = regen(doc)
         print(f"{name}: {len(diffs)} case-level diffs")
         for d in diffs[:12]:

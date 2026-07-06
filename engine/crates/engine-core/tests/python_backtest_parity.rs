@@ -54,6 +54,7 @@ fn trade_lists_match_python_exactly() {
         risk_pct: money_from_str("2").expect("risk"),
         min_confidence: 70,
         weight_multipliers: Vec::new(),
+        tp_rule: None,
     };
 
     let mut total = 0usize;
