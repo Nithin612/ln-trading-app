@@ -205,6 +205,34 @@ class TestSignalProfileIdempotency:
         await db.rollback()
 
 
+class TestSeedIntegrity:
+    """The seed migration froze config dicts + hashes as literals (so it
+    never imports app code). Verify every literal still validates against
+    the live schema and its hash still matches the live canonicalization —
+    fails if either the schema or the canonical JSON form drifts."""
+
+    def test_seed_literals_validate_and_hash(self) -> None:
+        import importlib.util
+        from pathlib import Path
+
+        mig_path = (
+            Path(__file__).resolve().parent.parent
+            / "alembic" / "versions" / "o1p2q3r4s5t6_phase2_profile_seeds.py"
+        )
+        spec = importlib.util.spec_from_file_location("profile_seeds", mig_path)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        assert len(module.SEEDS) == 8
+        for config, frozen_hash, status in module.SEEDS:
+            cfg = StrategyProfileConfig(**config)
+            assert compute_config_hash(cfg) == frozen_hash, config["key"]
+            assert status in ("active", "inactive")
+        active = {c["key"] for c, _, s in module.SEEDS if s == "active"}
+        assert active == {"dc1", "dc2", "rrbo_basic", "rrbo_trailing", "multibagger"}
+
+
 class TestUniverseService:
     async def test_kinds_resolve(self, db: AsyncSession) -> None:
         n50 = await make_stock(db, symbol="UNIV1", is_nifty50=True)
