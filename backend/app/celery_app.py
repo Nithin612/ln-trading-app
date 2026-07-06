@@ -28,6 +28,7 @@ celery_app = Celery(
         "app.tasks.fo_tasks",
         "app.tasks.expiry_tasks",
         "app.tasks.market_data_tasks",
+        "app.tasks.profile_tasks",
     ],
 )
 
@@ -98,5 +99,11 @@ celery_app.conf.beat_schedule = {
     "ingest-equities-eod": {
         "task": "app.tasks.market_data_tasks.ingest_equities_eod",
         "schedule": crontab(hour=13, minute=10, day_of_week="1-5"),
+    },
+    # Per-profile suggestion pipelines — 19:25 IST = 13:55 UTC, after the
+    # legacy nightly generation so both consume the same fresh EOD data.
+    "nightly-profile-suggestions": {
+        "task": "app.tasks.profile_tasks.nightly_suggestions",
+        "schedule": crontab(hour=13, minute=55, day_of_week="1-5"),
     },
 }

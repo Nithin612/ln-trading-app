@@ -80,3 +80,93 @@ async def make_stock(
     await db.commit()
     await db.refresh(stock)
     return stock
+
+
+async def make_profile(
+    db: AsyncSession,
+    key: str = "test_profile",
+    style: str = "swing",
+    timeframe: str = "1d",
+    schedule: str = "eod",
+    universe_spec: dict | None = None,
+    setup_conditions: list | None = None,
+    risk_template: dict | None = None,
+    status: str = "active",
+    min_confidence: int = 70,
+):
+    """Insert a StrategyProfile version row (config hash computed live)."""
+    from app.models.profile import StrategyProfile
+    from app.schemas.profile import StrategyProfileConfig, compute_config_hash
+
+    cfg = StrategyProfileConfig(
+        key=key,
+        name=key.replace("_", " ").title(),
+        style=style,
+        timeframe=timeframe,
+        schedule=schedule,
+        universe_spec=universe_spec or {"kind": "all_active"},
+        setup_conditions=setup_conditions or [],
+        weight_multipliers={},
+        min_confidence=min_confidence,
+        risk_template=risk_template or {"kind": "rr", "ratio": "2"},
+    )
+    row = StrategyProfile(
+        key=cfg.key,
+        version=1,
+        name=cfg.name,
+        style=cfg.style,
+        timeframe=cfg.timeframe,
+        schedule=cfg.schedule,
+        universe_spec=cfg.universe_spec.model_dump(mode="json"),
+        setup_conditions=[c.model_dump(mode="json") for c in cfg.setup_conditions],
+        weight_multipliers=cfg.weight_multipliers,
+        min_confidence=cfg.min_confidence,
+        risk_template=cfg.risk_template.model_dump(mode="json"),
+        validity_spec=None,
+        status=status,
+        config_hash=compute_config_hash(cfg),
+    )
+    db.add(row)
+    await db.commit()
+    await db.refresh(row)
+    return row
+
+
+async def make_daily_candles(
+    db: AsyncSession,
+    stock_id: int,
+    n: int = 60,
+    base: float = 100.0,
+) -> None:
+    """n completed daily candles around `base` with a pivot low (−4%) and a
+    pivot high (+4%) so swing SL/TP levels resolve inside the 8% swing cap."""
+    from datetime import UTC, datetime, timedelta
+    from decimal import Decimal as Dec
+
+    from app.models.market_data import OhlcvDaily
+
+    start = datetime(2026, 1, 5, 10, 0, tzinfo=UTC)
+    for i in range(n):
+        o = c = base
+        # monotone-drifting extremes: tied pivots count as pivots (canon),
+        # so drift keeps every low/high unique and ONLY the designed
+        # dip/spike become swing levels
+        h = base + 0.5 - 0.005 * i
+        lo = base - 0.5 + 0.005 * i
+        if i == n - 30:  # the one swing high, +4%
+            h = base * 1.04
+        if i == n - 20:  # the one swing low, −4%
+            lo = base * 0.96
+        db.add(
+            OhlcvDaily(
+                time=start + timedelta(days=i),
+                stock_id=stock_id,
+                open=Dec(str(o)),
+                high=Dec(str(round(h, 4))),
+                low=Dec(str(round(lo, 4))),
+                close=Dec(str(c)),
+                volume=100_000,
+                is_complete=True,
+            )
+        )
+    await db.commit()
