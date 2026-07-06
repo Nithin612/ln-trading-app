@@ -67,5 +67,12 @@ async def _run_equities_eod() -> dict[str, object]:
             log.info("Equities EOD skipped: %s is not a trading day", today_ist)
             return {"status": "skipped", "message": "not a trading day"}
         result = await ingest_bhavcopy_date(db, today_ist)
-    log.info("Equities EOD ingestion: %s", result)
-    return result.model_dump(mode="json")
+        # CA quarantine sweep (slice 6): catch split/bonus discontinuities
+        # in the fresh session BEFORE tonight's generation scores them.
+        from app.services.ca_detector import scan_for_discontinuities
+
+        flagged = await scan_for_discontinuities(db, today_ist)
+    log.info("Equities EOD ingestion: %s (CA flags: %d)", result, len(flagged))
+    payload = result.model_dump(mode="json")
+    payload["ca_flagged"] = len(flagged)
+    return payload

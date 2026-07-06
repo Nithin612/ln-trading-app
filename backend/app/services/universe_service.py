@@ -29,7 +29,11 @@ async def resolve_universe(
         else TypeAdapter(UniverseSpec).validate_python(spec)
     )
 
-    base = select(Stock.id, Stock.symbol).where(Stock.is_active.is_(True))
+    # CA-quarantined stocks never enter a suggestion universe (slice 6) —
+    # their unadjusted history would be scored across a split/bonus.
+    base = select(Stock.id, Stock.symbol).where(
+        Stock.is_active.is_(True), Stock.ca_flagged_at.is_(None)
+    )
     if parsed.kind == "index":
         col = Stock.is_nifty50 if parsed.value == "NIFTY50" else Stock.is_banknifty
         q = base.where(col.is_(True))

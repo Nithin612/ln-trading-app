@@ -103,8 +103,16 @@ tests/analysis/test_adjudicated_semantics.py.
 - Known debt, scheduled: 1h candles are UTC-hour floored (9:30-IST anchored)
   while Kite's 60minute history is 9:15-anchored — same table, two time
   bases. **Rebuild session-aligned in Phase 3** with spec §8 sign-off.
-- Corporate actions: Kite history is split-adjusted; NSE bhavcopy raw is
-  not. Adjustment policy lands in Phase 2 — until then do not mix sources
+- Corporate actions (policy adopted 2026-07-06, Phase 2 slice 6): the raw
+  NSE bhavcopy series stays CANONICAL and is never auto-adjusted. A
+  discontinuity detector (services/ca_detector.py, |open ÷ prev_close − 1|
+  > 20% between consecutive sessions) runs after each equities-EOD ingest
+  and QUARANTINES the stock (`stocks.ca_flagged_at/_reason`); quarantined
+  stocks are excluded from every suggestion universe until manually
+  reviewed. Walk-forward goldens pin per-symbol row counts + trade digests,
+  so any future adjusted-history adoption (candidate: Kite history after
+  Phase 3, which is split-adjusted) surfaces as an explicit golden
+  regeneration, never silent drift. Do not mix adjusted and raw sources
   within one indicator window.
 
 ## Process model *(Phase 3 fills this in)*

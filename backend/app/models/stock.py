@@ -48,6 +48,12 @@ class Stock(Base):
     is_finnifty: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
+    # Corporate-action quarantine (Phase 2 slice 6): unadjusted bhavcopy
+    # history poisons indicator windows across a split/bonus — flagged
+    # stocks are excluded from suggestion universes until reviewed.
+    ca_flagged_at: Mapped[datetime | None] = mapped_column(TZ, nullable=True)
+    ca_flag_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
     listed_on: Mapped[date | None] = mapped_column(Date, nullable=True)
 
     created_at: Mapped[datetime] = mapped_column(
