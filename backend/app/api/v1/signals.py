@@ -109,7 +109,17 @@ async def generate_signal(
             detail=f"Signal suppressed by event guard: {guard.reason}",
         )
 
+    from zoneinfo import ZoneInfo
+
+    from app.services.fii_dii_service import (
+        get_market_flow_5d,
+        get_stock_block_deal_net_cr,
+    )
     from app.services.signal_service import generate_signal_for_stock
+
+    as_of = datetime.now(tz=UTC).astimezone(ZoneInfo("Asia/Kolkata")).date()
+    fii_net_5d, dii_net_5d = await get_market_flow_5d(db, as_of)
+    block_net_cr = await get_stock_block_deal_net_cr(db, req.stock_id, as_of)
 
     signal = await generate_signal_for_stock(
         db=db,
@@ -117,6 +127,9 @@ async def generate_signal(
         capital=req.capital,
         risk_pct=req.risk_pct,
         timeframe=req.timeframe,
+        fii_net_5d=fii_net_5d,
+        dii_net_5d=dii_net_5d,
+        stock_block_deal_net_cr=block_net_cr,
     )
     if signal is None:
         raise HTTPException(

@@ -316,3 +316,56 @@ async def upsert_bulk_deals(
 
     await db.commit()
     return inserted, skipped
+
+
+# ── §2.7 flow rollups for signal generation (Phase 2 slice 3) ────────────────
+
+
+async def get_market_flow_5d(db: AsyncSession, as_of: date) -> tuple[Decimal, Decimal]:
+    """(fii_net_5d, dii_net_5d): cumulative net CASH-segment flow in ₹ crore
+    over the last 5 NSE trading days ending at `as_of`.
+
+    SIGNAL_ENGINE.md §2.7 measures "last 5 trading days, aggregated" — the
+    cash segment is the institutional-conviction measure (futures/options
+    legs are hedging-dominated and excluded).
+    """
+    from app.services.market_calendar import last_n_trading_days
+
+    days = await last_n_trading_days(db, as_of, 5)
+    rows = (
+        await db.execute(
+            text(
+                "SELECT investor_type,"
+                " COALESCE(SUM(buy_value_cr - sell_value_cr), 0) AS net"
+                " FROM fii_dii_daily"
+                " WHERE trade_date = ANY(:days) AND segment = 'cash'"
+                " GROUP BY investor_type"
+            ),
+            {"days": days},
+        )
+    ).all()
+    nets = {r.investor_type: Decimal(r.net) for r in rows}
+    return nets.get("FII", Decimal("0")), nets.get("DII", Decimal("0"))
+
+
+async def get_stock_block_deal_net_cr(
+    db: AsyncSession, stock_id: int, as_of: date
+) -> Decimal:
+    """Net bulk/block-deal value in ₹ crore for one stock over the last 5
+    NSE trading days ending at `as_of` (BUY positive, SELL negative)."""
+    from app.services.market_calendar import last_n_trading_days
+
+    days = await last_n_trading_days(db, as_of, 5)
+    row = (
+        await db.execute(
+            text(
+                "SELECT COALESCE(SUM("
+                " CASE WHEN transaction = 'BUY' THEN quantity * price"
+                "      ELSE -(quantity * price) END), 0) AS net"
+                " FROM bulk_block_deals"
+                " WHERE stock_id = :sid AND trade_date = ANY(:days)"
+            ),
+            {"sid": stock_id, "days": days},
+        )
+    ).one()
+    return (Decimal(row.net) / Decimal(10**7)).quantize(Decimal("0.01"))

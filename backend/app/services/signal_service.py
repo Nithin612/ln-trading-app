@@ -255,15 +255,36 @@ async def run_nightly_signal_generation(
     timeframe: str = "1d",
 ) -> list[Signal]:
     """Generate signals for all active stocks and persist new ones."""
+    from zoneinfo import ZoneInfo
+
+    from app.services.fii_dii_service import (
+        get_market_flow_5d,
+        get_stock_block_deal_net_cr,
+    )
+
     stocks_result = await db.execute(
         select(Stock).where(Stock.is_active.is_(True))
     )
     stocks = stocks_result.scalars().all()
 
+    # §2.7 flows (Phase 2 slice 3): market-wide FII/DII computed once per
+    # run; per-stock block-deal net inside the loop. Empty tables → zeros,
+    # identical to the pre-wiring behavior.
+    as_of = datetime.now(tz=UTC).astimezone(ZoneInfo("Asia/Kolkata")).date()
+    fii_net_5d, dii_net_5d = await get_market_flow_5d(db, as_of)
+
     generated: list[Signal] = []
     for stock in stocks:
+        block_net_cr = await get_stock_block_deal_net_cr(db, stock.id, as_of)
         signal = await generate_signal_for_stock(
-            db, stock, capital, risk_pct, timeframe
+            db,
+            stock,
+            capital,
+            risk_pct,
+            timeframe,
+            fii_net_5d=fii_net_5d,
+            dii_net_5d=dii_net_5d,
+            stock_block_deal_net_cr=block_net_cr,
         )
         if signal:
             db.add(signal)
@@ -326,8 +347,25 @@ async def run_live_signal_generation(
         }
     ).set_index("time")
 
+    # §2.7 flows (Phase 2 slice 3) — same rollup the nightly path uses.
+    from zoneinfo import ZoneInfo
+
+    from app.services.fii_dii_service import (
+        get_market_flow_5d,
+        get_stock_block_deal_net_cr,
+    )
+
+    as_of = datetime.now(tz=UTC).astimezone(ZoneInfo("Asia/Kolkata")).date()
+    fii_net_5d, dii_net_5d = await get_market_flow_5d(db, as_of)
+    block_net_cr = await get_stock_block_deal_net_cr(db, stock_id, as_of)
+
     score = score_signal(
-        candles, timeframe=timeframe, min_confidence=settings.min_signal_confidence
+        candles,
+        timeframe=timeframe,
+        min_confidence=settings.min_signal_confidence,
+        fii_net_5d=fii_net_5d,
+        dii_net_5d=dii_net_5d,
+        stock_block_deal_net_cr=block_net_cr,
     )
     if score is None:
         return 0

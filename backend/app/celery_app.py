@@ -27,6 +27,7 @@ celery_app = Celery(
         "app.tasks.position_monitor",
         "app.tasks.fo_tasks",
         "app.tasks.expiry_tasks",
+        "app.tasks.market_data_tasks",
     ],
 )
 
@@ -42,10 +43,12 @@ celery_app.conf.update(
 )
 
 celery_app.conf.beat_schedule = {
-    # 18:00 IST = 12:30 UTC; runs Mon–Fri only
+    # 19:15 IST = 13:45 UTC — AFTER FII/DII (18:30) and equities EOD (18:40)
+    # so generation scores same-day candles + flows. (Was 18:00 IST, which
+    # always consumed stale data — no EOD ingestion even existed then.)
     "nightly-signal-generation": {
         "task": "app.tasks.signal_tasks.nightly_signal_generation",
-        "schedule": crontab(hour=12, minute=30, day_of_week="1-5"),
+        "schedule": crontab(hour=13, minute=45, day_of_week="1-5"),
     },
     # Poll filings every 60 seconds (Celery beat minimum granularity is seconds)
     "poll-filings": {
@@ -84,5 +87,16 @@ celery_app.conf.beat_schedule = {
     "sweep-expired-signals": {
         "task": "app.tasks.expiry_tasks.sweep_expired_signals",
         "schedule": crontab(minute="*/5", day_of_week="1-5"),
+    },
+    # FII/DII daily flows — NSE publishes EOD; 18:30 IST = 13:00 UTC.
+    "ingest-fii-dii": {
+        "task": "app.tasks.market_data_tasks.ingest_fii_dii",
+        "schedule": crontab(hour=13, minute=0, day_of_week="1-5"),
+    },
+    # Equities bhavcopy → ohlcv_1d; 18:40 IST = 13:10 UTC (before nightly
+    # generation at 19:15 IST).
+    "ingest-equities-eod": {
+        "task": "app.tasks.market_data_tasks.ingest_equities_eod",
+        "schedule": crontab(hour=13, minute=10, day_of_week="1-5"),
     },
 }
