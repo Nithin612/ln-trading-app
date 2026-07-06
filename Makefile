@@ -170,5 +170,9 @@ typecheck:  ## Type-check backend (mypy) + frontend (tsc)
 	@echo "$(BLUE)▶ TypeScript$(NC)"
 	@cd frontend && pnpm typecheck
 
+.PHONY: walkforward
+walkforward:  ## Walk-forward golden harness (§8 drift gate; skips cleanly without goldens/DB)
+	@cd backend && uv run pytest tests/goldens -q
+
 .PHONY: check
-check: lint typecheck engine-lint engine-test test parity  ## Full CI gate (python + rust + frontend)
+check: lint typecheck engine-lint engine-test test parity walkforward  ## Full CI gate (python + rust + frontend)

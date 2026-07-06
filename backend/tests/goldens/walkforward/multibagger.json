@@ -1,0 +1,8567 @@
+{
+  "aggregate": {
+    "avg_holding_days": 22.23,
+    "avg_pnl_pct": -1.047,
+    "avg_rr": 3.0,
+    "losing_trades": 1117,
+    "max_drawdown_pct": 100.0,
+    "sharpe": -2.07,
+    "sortino": -10.578,
+    "total_pnl_pct": -1491.313,
+    "total_trades": 1425,
+    "win_rate_pct": 21.61,
+    "winning_trades": 308
+  },
+  "config_hash": "32920d878bd6f962fb43e476b6f39ccacbe6be77f82f69be9713eed7918330bd",
+  "exclusions": [
+    {
+      "bars_before_eval": 209,
+      "reason": "<300 bars before eval_start",
+      "symbol": "20MICRONS"
+    },
+    {
+      "bars_before_eval": 120,
+      "reason": "<300 bars before eval_start",
+      "symbol": "21STCENMGM"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "3BBLACKBIO"
+    },
+    {
+      "bars_before_eval": 172,
+      "reason": "<300 bars before eval_start",
+      "symbol": "3PLAND"
+    },
+    {
+      "bars_before_eval": 244,
+      "reason": "<300 bars before eval_start",
+      "symbol": "63MOONS"
+    },
+    {
+      "bars_before_eval": 11,
+      "reason": "<300 bars before eval_start",
+      "symbol": "A2ZINFRA"
+    },
+    {
+      "bars_before_eval": 196,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AAATECH"
+    },
+    {
+      "bars_before_eval": 96,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AADHARHFC"
+    },
+    {
+      "bars_before_eval": 99,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AAKASH"
+    },
+    {
+      "bars_before_eval": 73,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AAREYDRUGS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AARNAV"
+    },
+    {
+      "bars_before_eval": 243,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AARON"
+    },
+    {
+      "bars_before_eval": 152,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AARTECH"
+    },
+    {
+      "bars_before_eval": 126,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ABAN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ABANSENT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ABCOTS"
+    },
+    {
+      "bars_before_eval": 63,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ABDL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ABINFRA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ABLBL"
+    },
+    {
+      "bars_before_eval": 102,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ABMINTLLTD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ABMKNO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ABREL"
+    },
+    {
+      "bars_before_eval": 37,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ACCURACY"
+    },
+    {
+      "bars_before_eval": 246,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ACEINTEG"
+    },
+    {
+      "bars_before_eval": 269,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ACL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ACMESOLAR"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ACSTECH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ACUTAAS"
+    },
+    {
+      "bars_before_eval": 272,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ADANIENSOL"
+    },
+    {
+      "bars_before_eval": 245,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ADANIPOWER"
+    },
+    {
+      "bars_before_eval": 128,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ADL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ADOR"
+    },
+    {
+      "bars_before_eval": 137,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ADROITINFO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ADVAIT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ADVANCE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ADVENTHTL"
+    },
+    {
+      "bars_before_eval": 79,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AEGISLOG"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AEGISVOPAK"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AEPL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AEQUS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AEROENTER"
+    },
+    {
+      "bars_before_eval": 267,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AEROFLEX"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AERONEU"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AFCONS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AFFORDABLE"
+    },
+    {
+      "bars_before_eval": 57,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AFIL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AFSL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AGARWALEYE"
+    },
+    {
+      "bars_before_eval": 54,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AGIIL"
+    },
+    {
+      "bars_before_eval": 245,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AGRITECH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AHCL"
+    },
+    {
+      "bars_before_eval": 246,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AHLADA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AHLWEST"
+    },
+    {
+      "bars_before_eval": 111,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AIIL"
+    },
+    {
+      "bars_before_eval": 148,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AIRAN"
+    },
+    {
+      "bars_before_eval": 239,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AIROLAM"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AJAXENGG"
+    },
+    {
+      "bars_before_eval": 299,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AJMERA"
+    },
+    {
+      "bars_before_eval": 176,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AJOONI"
+    },
+    {
+      "bars_before_eval": 216,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AKASH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AKCAPIT"
+    },
+    {
+      "bars_before_eval": 260,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AKG"
+    },
+    {
+      "bars_before_eval": 111,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AKI"
+    },
+    {
+      "bars_before_eval": 101,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AKSHAR"
+    },
+    {
+      "bars_before_eval": 281,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AKSHARCHEM"
+    },
+    {
+      "bars_before_eval": 128,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AKSHOPTFBR"
+    },
+    {
+      "bars_before_eval": 39,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AKUMS"
+    },
+    {
+      "bars_before_eval": 194,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ALANKIT"
+    },
+    {
+      "bars_before_eval": 291,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ALBERTDAVD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ALGOQUANT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ALIVUS"
+    },
+    {
+      "bars_before_eval": 278,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ALKALI"
+    },
+    {
+      "bars_before_eval": 2,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ALLDIGI"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ALLTIME"
+    },
+    {
+      "bars_before_eval": 186,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ALMONDZ"
+    },
+    {
+      "bars_before_eval": 255,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ALOKINDS"
+    },
+    {
+      "bars_before_eval": 260,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ALPHAGEO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AMAGI"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AMANTA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AMBALALSA"
+    },
+    {
+      "bars_before_eval": 193,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AMBICAAGAR"
+    },
+    {
+      "bars_before_eval": 189,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AMDIND"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AMIRCHAND"
+    },
+    {
+      "bars_before_eval": 257,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AMJLAND"
+    },
+    {
+      "bars_before_eval": 219,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AMNPLST"
+    },
+    {
+      "bars_before_eval": 124,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ANIKINDS"
+    },
+    {
+      "bars_before_eval": 167,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ANMOL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ANTELOPUS"
+    },
+    {
+      "bars_before_eval": 120,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ANTGRAPHIC"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ANTHEM"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ANUHPHR"
+    },
+    {
+      "bars_before_eval": 220,
+      "reason": "<300 bars before eval_start",
+      "symbol": "APOLLO"
+    },
+    {
+      "bars_before_eval": 232,
+      "reason": "<300 bars before eval_start",
+      "symbol": "APOLSINHOT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AQYLON"
+    },
+    {
+      "bars_before_eval": 94,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ARCHIDPLY"
+    },
+    {
+      "bars_before_eval": 180,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ARCHIES"
+    },
+    {
+      "bars_before_eval": 229,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ARE&M"
+    },
+    {
+      "bars_before_eval": 157,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ARENTERP"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ARFIN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ARIHANT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ARIS"
+    },
+    {
+      "bars_before_eval": 5,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ARKADE"
+    },
+    {
+      "bars_before_eval": 247,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AROGRANITE"
+    },
+    {
+      "bars_before_eval": 246,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ARROWGREEN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ARSSBL"
+    },
+    {
+      "bars_before_eval": 122,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ARTNIRMAN"
+    },
+    {
+      "bars_before_eval": 66,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ARVEE"
+    },
+    {
+      "bars_before_eval": 284,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ASAHISONG"
+    },
+    {
+      "bars_before_eval": 214,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ASHAPURMIN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ASHIKA"
+    },
+    {
+      "bars_before_eval": 276,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ASHIMASYN"
+    },
+    {
+      "bars_before_eval": 149,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ASHOKAMET"
+    },
+    {
+      "bars_before_eval": 260,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ASIANENE"
+    },
+    {
+      "bars_before_eval": 84,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ASIANHOTNR"
+    },
+    {
+      "bars_before_eval": 217,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ASKAUTOLTD"
+    },
+    {
+      "bars_before_eval": 154,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ASMS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ASTAR"
+    },
+    {
+      "bars_before_eval": 105,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ASTRON"
+    },
+    {
+      "bars_before_eval": 116,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ATALREAL"
+    },
+    {
+      "bars_before_eval": 220,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ATAM"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ATHERENERG"
+    },
+    {
+      "bars_before_eval": 271,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ATL"
+    },
+    {
+      "bars_before_eval": 21,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ATLANTAA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ATLANTAELE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ATLASCYCLE"
+    },
+    {
+      "bars_before_eval": 256,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ATULAUTO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AURIGROW"
+    },
+    {
+      "bars_before_eval": 108,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AURIONPRO"
+    },
+    {
+      "bars_before_eval": 227,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AURUM"
+    },
+    {
+      "bars_before_eval": 157,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AUSOMENT"
+    },
+    {
+      "bars_before_eval": 246,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AUTOIND"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AVAILFC"
+    },
+    {
+      "bars_before_eval": 43,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AVANTEL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AVL"
+    },
+    {
+      "bars_before_eval": 175,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AVONMORE"
+    },
+    {
+      "bars_before_eval": 291,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AVROIND"
+    },
+    {
+      "bars_before_eval": 85,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AWFIS"
+    },
+    {
+      "bars_before_eval": 243,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AXISCADES"
+    },
+    {
+      "bars_before_eval": 246,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AXITA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AYE"
+    },
+    {
+      "bars_before_eval": 276,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AYMSYNTEX"
+    },
+    {
+      "bars_before_eval": 188,
+      "reason": "<300 bars before eval_start",
+      "symbol": "AZAD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BAFNAPH"
+    },
+    {
+      "bars_before_eval": 93,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BAGFILMS"
+    },
+    {
+      "bars_before_eval": 212,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BAIDFIN"
+    },
+    {
+      "bars_before_eval": 299,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BAJAJELEC"
+    },
+    {
+      "bars_before_eval": 11,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BAJAJHFL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BAJAJINDEF"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BAJAJST"
+    },
+    {
+      "bars_before_eval": 184,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BAJEL"
+    },
+    {
+      "bars_before_eval": 3,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BALAJEE"
+    },
+    {
+      "bars_before_eval": 276,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BALAJITELE"
+    },
+    {
+      "bars_before_eval": 242,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BALKRISHNA"
+    },
+    {
+      "bars_before_eval": 288,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BALPHARMA"
+    },
+    {
+      "bars_before_eval": 107,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BALUFORGE"
+    },
+    {
+      "bars_before_eval": 208,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BANG"
+    },
+    {
+      "bars_before_eval": 148,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BANKA"
+    },
+    {
+      "bars_before_eval": 57,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BANSALWIRE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BATLIBOI"
+    },
+    {
+      "bars_before_eval": 199,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BBOX"
+    },
+    {
+      "bars_before_eval": 201,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BCG"
+    },
+    {
+      "bars_before_eval": 107,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BCONCEPTS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BCPL"
+    },
+    {
+      "bars_before_eval": 138,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BEARDSELL"
+    },
+    {
+      "bars_before_eval": 195,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BEDMUTHA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BEEKAY"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BELLACASA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BELRISE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BENGALASM"
+    },
+    {
+      "bars_before_eval": 136,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BESTAGRO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BETA"
+    },
+    {
+      "bars_before_eval": 167,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BGRENERGY"
+    },
+    {
+      "bars_before_eval": 249,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BHAGYANGR"
+    },
+    {
+      "bars_before_eval": 218,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BHANDARI"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BHARATCOAL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BHARATSE"
+    },
+    {
+      "bars_before_eval": 249,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BHARATWIRE"
+    },
+    {
+      "bars_before_eval": 117,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BHARTIHEXA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BI"
+    },
+    {
+      "bars_before_eval": 92,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BIL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BILVYAPAR"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BIMETAL"
+    },
+    {
+      "bars_before_eval": 223,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BIRLAMONEY"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BIRLANU"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BIRLAPREC"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BLACKBUCK"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BLACKROSE"
+    },
+    {
+      "bars_before_eval": 150,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BLBLIMITED"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BLIL"
+    },
+    {
+      "bars_before_eval": 161,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BLSE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BLUECHIP"
+    },
+    {
+      "bars_before_eval": 12,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BLUECOAST"
+    },
+    {
+      "bars_before_eval": 226,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BLUEJET"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BLUESTONE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BLUSPRING"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BMWVENTLTD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BNAGROCHEM"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BNALTD"
+    },
+    {
+      "bars_before_eval": 8,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BOHRAIND"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BONLON"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BORANA"
+    },
+    {
+      "bars_before_eval": 299,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BOROLTD"
+    },
+    {
+      "bars_before_eval": 69,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BOROSCI"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BOSCH-HCIL"
+    },
+    {
+      "bars_before_eval": 192,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BPL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BRIGHOTEL"
+    },
+    {
+      "bars_before_eval": 196,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BRNL"
+    },
+    {
+      "bars_before_eval": 107,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BROOKS"
+    },
+    {
+      "bars_before_eval": 254,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BSHSL"
+    },
+    {
+      "bars_before_eval": 246,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BSL"
+    },
+    {
+      "bars_before_eval": 182,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BTML"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BTTL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BUILDPRO"
+    },
+    {
+      "bars_before_eval": 93,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BVCL"
+    },
+    {
+      "bars_before_eval": 160,
+      "reason": "<300 bars before eval_start",
+      "symbol": "BYKE"
+    },
+    {
+      "bars_before_eval": 145,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CALSOFT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CANHLIFE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CAPILLARY"
+    },
+    {
+      "bars_before_eval": 155,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CAPITALSFB"
+    },
+    {
+      "bars_before_eval": 295,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CAPTRUST"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CARRARO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CCAVENUE"
+    },
+    {
+      "bars_before_eval": 7,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CCCL"
+    },
+    {
+      "bars_before_eval": 125,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CCHHL"
+    },
+    {
+      "bars_before_eval": 37,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CEIGALL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CEINSYS"
+    },
+    {
+      "bars_before_eval": 211,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CELEBRITY"
+    },
+    {
+      "bars_before_eval": 223,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CELLO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CEMPRO"
+    },
+    {
+      "bars_before_eval": 143,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CENTEXT"
+    },
+    {
+      "bars_before_eval": 247,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CENTUM"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CEWATER"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CHEMBONDCH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CIFL"
+    },
+    {
+      "bars_before_eval": 200,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CINELINE"
+    },
+    {
+      "bars_before_eval": 166,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CINEVISTA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "CLCIND"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CLEANMAX"
+    },
+    {
+      "bars_before_eval": 296,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CLEDUCATE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CMPDI"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CNL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "COCKERILL"
+    },
+    {
+      "bars_before_eval": 276,
+      "reason": "<300 bars before eval_start",
+      "symbol": "COFFEEDAY"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "COHANCE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "COMFINTE"
+    },
+    {
+      "bars_before_eval": 244,
+      "reason": "<300 bars before eval_start",
+      "symbol": "COMPUSOFT"
+    },
+    {
+      "bars_before_eval": 170,
+      "reason": "<300 bars before eval_start",
+      "symbol": "COMSYN"
+    },
+    {
+      "bars_before_eval": 276,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CONCORDBIO"
+    },
+    {
+      "bars_before_eval": 243,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CONSOFINVT"
+    },
+    {
+      "bars_before_eval": 207,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CORALFINAC"
+    },
+    {
+      "bars_before_eval": 127,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CORDSCABLE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CORONA"
+    },
+    {
+      "bars_before_eval": 206,
+      "reason": "<300 bars before eval_start",
+      "symbol": "COUNCODOS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CPCAP"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CPEDU"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CPPLUS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CRAMC"
+    },
+    {
+      "bars_before_eval": 126,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CREATIVEYE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CRIZAC"
+    },
+    {
+      "bars_before_eval": 41,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CROWN"
+    },
+    {
+      "bars_before_eval": 120,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CTE"
+    },
+    {
+      "bars_before_eval": 56,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CUBEXTUB"
+    },
+    {
+      "bars_before_eval": 111,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CUPID"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CURAA"
+    },
+    {
+      "bars_before_eval": 138,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CYBERMEDIA"
+    },
+    {
+      "bars_before_eval": 231,
+      "reason": "<300 bars before eval_start",
+      "symbol": "CYBERTECH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DAICHI"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DAMCAPITAL"
+    },
+    {
+      "bars_before_eval": 240,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DANGEE"
+    },
+    {
+      "bars_before_eval": 168,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DAVANGERE"
+    },
+    {
+      "bars_before_eval": 251,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DBCORP"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DBEIL"
+    },
+    {
+      "bars_before_eval": 243,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DBSTOCKBRO"
+    },
+    {
+      "bars_before_eval": 67,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DCI"
+    },
+    {
+      "bars_before_eval": 255,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DCM"
+    },
+    {
+      "bars_before_eval": 49,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DCMFINSERV"
+    },
+    {
+      "bars_before_eval": 256,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DCMNVL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DCMSIL"
+    },
+    {
+      "bars_before_eval": 256,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DCXINDIA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DDEVPLSTIK"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DECNGOLD"
+    },
+    {
+      "bars_before_eval": 67,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DEEDEV"
+    },
+    {
+      "bars_before_eval": 230,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DELPHIFX"
+    },
+    {
+      "bars_before_eval": 248,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DELTAMAGNT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DENTA"
+    },
+    {
+      "bars_before_eval": 229,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DEVIT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DEVX"
+    },
+    {
+      "bars_before_eval": 179,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DGCONTENT"
+    },
+    {
+      "bars_before_eval": 250,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DHANBANK"
+    },
+    {
+      "bars_before_eval": 166,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DHRUV"
+    },
+    {
+      "bars_before_eval": 3,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DIACABS"
+    },
+    {
+      "bars_before_eval": 251,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DIAMINESQ"
+    },
+    {
+      "bars_before_eval": 276,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DICIND"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DIFFNKG"
+    },
+    {
+      "bars_before_eval": 10,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DIGIDRIVE"
+    },
+    {
+      "bars_before_eval": 200,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DIGISPICE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DIGITIDE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DIGJAMLMTD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DISAQ"
+    },
+    {
+      "bars_before_eval": 198,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DJML"
+    },
+    {
+      "bars_before_eval": 127,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DNAMEDIA"
+    },
+    {
+      "bars_before_eval": 6,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DOLPHIN"
+    },
+    {
+      "bars_before_eval": 193,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DOMS"
+    },
+    {
+      "bars_before_eval": 276,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DONEAR"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DRAGARWQ"
+    },
+    {
+      "bars_before_eval": 160,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DRCSYSTEMS"
+    },
+    {
+      "bars_before_eval": 202,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DREDGECORP"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DSFCL"
+    },
+    {
+      "bars_before_eval": 40,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DUCON"
+    },
+    {
+      "bars_before_eval": 246,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DYCL"
+    },
+    {
+      "bars_before_eval": 256,
+      "reason": "<300 bars before eval_start",
+      "symbol": "DYNPRO"
+    },
+    {
+      "bars_before_eval": 20,
+      "reason": "<300 bars before eval_start",
+      "symbol": "E2E"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "EASTSILK"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EBGNG"
+    },
+    {
+      "bars_before_eval": 19,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ECOSMOBLTY"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EFCIL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "EFCIL-RE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EIEL"
+    },
+    {
+      "bars_before_eval": 101,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EIMCOELECO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ELANTAS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ELCIDIN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ELECTHERM"
+    },
+    {
+      "bars_before_eval": 135,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ELGIRUBCO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ELITECON"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ELLEN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ELPROINTL"
+    },
+    {
+      "bars_before_eval": 229,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EMAMIREAL"
+    },
+    {
+      "bars_before_eval": 59,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EMBDL"
+    },
+    {
+      "bars_before_eval": 57,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EMCURE"
+    },
+    {
+      "bars_before_eval": 288,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EMIL"
+    },
+    {
+      "bars_before_eval": 171,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EMKAY"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EMMVEE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EMPOWER"
+    },
+    {
+      "bars_before_eval": 253,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EMSLIMITED"
+    },
+    {
+      "bars_before_eval": 204,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ENERGYDEV"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ENRIN"
+    },
+    {
+      "bars_before_eval": 153,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ENTERO"
+    },
+    {
+      "bars_before_eval": 166,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EPACK"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EPACKPEB"
+    },
+    {
+      "bars_before_eval": 260,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EPIGRAL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "EQUIPPP"
+    },
+    {
+      "bars_before_eval": 219,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ESAFSFB"
+    },
+    {
+      "bars_before_eval": 152,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ESSARSHPNG"
+    },
+    {
+      "bars_before_eval": 74,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ESSENTIA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ETERNAL"
+    },
+    {
+      "bars_before_eval": 14,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EUREKAFORB"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EUROBOND"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EUROPRATIK"
+    },
+    {
+      "bars_before_eval": 132,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EUROTEXIND"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EXCELSOFT"
+    },
+    {
+      "bars_before_eval": 88,
+      "reason": "<300 bars before eval_start",
+      "symbol": "EXICOM"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "FABTECH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "FEDDERSHOL"
+    },
+    {
+      "bars_before_eval": 207,
+      "reason": "<300 bars before eval_start",
+      "symbol": "FEDFINA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "FERMENTA"
+    },
+    {
+      "bars_before_eval": 269,
+      "reason": "<300 bars before eval_start",
+      "symbol": "FIBERWEB"
+    },
+    {
+      "bars_before_eval": 81,
+      "reason": "<300 bars before eval_start",
+      "symbol": "FILATFASH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "FINKURVE"
+    },
+    {
+      "bars_before_eval": 34,
+      "reason": "<300 bars before eval_start",
+      "symbol": "FIRSTCRY"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "FISCHER"
+    },
+    {
+      "bars_before_eval": 206,
+      "reason": "<300 bars before eval_start",
+      "symbol": "FLAIR"
+    },
+    {
+      "bars_before_eval": 126,
+      "reason": "<300 bars before eval_start",
+      "symbol": "FLEXITUFF"
+    },
+    {
+      "bars_before_eval": 144,
+      "reason": "<300 bars before eval_start",
+      "symbol": "FMNL"
+    },
+    {
+      "bars_before_eval": 278,
+      "reason": "<300 bars before eval_start",
+      "symbol": "FOCUS"
+    },
+    {
+      "bars_before_eval": 234,
+      "reason": "<300 bars before eval_start",
+      "symbol": "FORCEMOT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "FRACTAL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "FRONTSP"
+    },
+    {
+      "bars_before_eval": 6,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GALAPREC"
+    },
+    {
+      "bars_before_eval": 149,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GALLANTT"
+    },
+    {
+      "bars_before_eval": 207,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GANDHAR"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GANESHCP"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GANESHHOU"
+    },
+    {
+      "bars_before_eval": 31,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GANGAFORGE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GARUDA"
+    },
+    {
+      "bars_before_eval": 66,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GATECH"
+    },
+    {
+      "bars_before_eval": 44,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GATECHDVR"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GAUDIUMIVF"
+    },
+    {
+      "bars_before_eval": 15,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GAYAHWS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "GAYAPROJ"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GCSL"
+    },
+    {
+      "bars_before_eval": 139,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GEEKAYWIRE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GEMAROMA"
+    },
+    {
+      "bars_before_eval": 125,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GENCON"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "GFSTEELS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GICL"
+    },
+    {
+      "bars_before_eval": 208,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GILLANDERS"
+    },
+    {
+      "bars_before_eval": 228,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GINNIFILA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GKENERGY"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GKSL"
+    },
+    {
+      "bars_before_eval": 127,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GKWLIMITED"
+    },
+    {
+      "bars_before_eval": 95,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GLFL"
+    },
+    {
+      "bars_before_eval": 187,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GLOBAL"
+    },
+    {
+      "bars_before_eval": 2,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GLOBALE"
+    },
+    {
+      "bars_before_eval": 67,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GLOBALVECT"
+    },
+    {
+      "bars_before_eval": 76,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GLOBE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GLOBECIVIL"
+    },
+    {
+      "bars_before_eval": 108,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GLOSTERLTD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GLOTTIS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GMRAIRPORT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GNRL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GODAVARIB"
+    },
+    {
+      "bars_before_eval": 90,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GODIGIT"
+    },
+    {
+      "bars_before_eval": 194,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GOKUL"
+    },
+    {
+      "bars_before_eval": 144,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GOLDTECH"
+    },
+    {
+      "bars_before_eval": 79,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GOODYEAR"
+    },
+    {
+      "bars_before_eval": 135,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GOPAL"
+    },
+    {
+      "bars_before_eval": 54,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GOYALALUM"
+    },
+    {
+      "bars_before_eval": 144,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GPTHEALTH"
+    },
+    {
+      "bars_before_eval": 51,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GPTINFRA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GRADIENTE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GRANDOAK"
+    },
+    {
+      "bars_before_eval": 79,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GRAUWEIL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GRAVISSHO"
+    },
+    {
+      "bars_before_eval": 195,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GREENPOWER"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GROWW"
+    },
+    {
+      "bars_before_eval": 172,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GRPLTD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GSPCROP"
+    },
+    {
+      "bars_before_eval": 208,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GSS"
+    },
+    {
+      "bars_before_eval": 11,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GTECJAINX"
+    },
+    {
+      "bars_before_eval": 96,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GTL"
+    },
+    {
+      "bars_before_eval": 176,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GUJAPOLLO"
+    },
+    {
+      "bars_before_eval": 107,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GUJRAFFIA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GUJTHEM"
+    },
+    {
+      "bars_before_eval": 244,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GULFPETRO"
+    },
+    {
+      "bars_before_eval": 141,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GVKPIL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GVPIL"
+    },
+    {
+      "bars_before_eval": 114,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GVPTECH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "GVT&D"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HALDER"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HALDYNGL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HALEOSLABS"
+    },
+    {
+      "bars_before_eval": 189,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HAPPYFORGE"
+    },
+    {
+      "bars_before_eval": 272,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HARRMALAYA"
+    },
+    {
+      "bars_before_eval": 111,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HAVISHA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HAWKINCOOK"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HBESD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HBLENGINE"
+    },
+    {
+      "bars_before_eval": 174,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HBSL"
+    },
+    {
+      "bars_before_eval": 167,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HCL-INSYS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HDBFS"
+    },
+    {
+      "bars_before_eval": 243,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HEADSUP"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HEALTHX"
+    },
+    {
+      "bars_before_eval": 179,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HECPROJECT"
+    },
+    {
+      "bars_before_eval": 290,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HEXATRADEX"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HEXT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HGM"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HILINFRA"
+    },
+    {
+      "bars_before_eval": 260,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HILTON"
+    },
+    {
+      "bars_before_eval": 95,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HINDCON"
+    },
+    {
+      "bars_before_eval": 232,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HIRECT"
+    },
+    {
+      "bars_before_eval": 247,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HISARMETAL"
+    },
+    {
+      "bars_before_eval": 243,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HITECHCORP"
+    },
+    {
+      "bars_before_eval": 225,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HITECHGEAR"
+    },
+    {
+      "bars_before_eval": 251,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HLVLTD"
+    },
+    {
+      "bars_before_eval": 243,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HMVL"
+    },
+    {
+      "bars_before_eval": 222,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HONASA"
+    },
+    {
+      "bars_before_eval": 166,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HPIL"
+    },
+    {
+      "bars_before_eval": 241,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HSCL"
+    },
+    {
+      "bars_before_eval": 126,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HUBTOWN"
+    },
+    {
+      "bars_before_eval": 75,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HYBRIDFIN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "HYUNDAI"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "IBULLSLTD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ICDSLTD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ICICIAMC"
+    },
+    {
+      "bars_before_eval": 256,
+      "reason": "<300 bars before eval_start",
+      "symbol": "IFBAGRO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "IGCL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "IGIL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "IIFLCAPS"
+    },
+    {
+      "bars_before_eval": 125,
+      "reason": "<300 bars before eval_start",
+      "symbol": "IITL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "IKS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INA"
+    },
+    {
+      "bars_before_eval": 149,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INCREDIBLE"
+    },
+    {
+      "bars_before_eval": 246,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INDBANK"
+    },
+    {
+      "bars_before_eval": 98,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INDGN"
+    },
+    {
+      "bars_before_eval": 193,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INDIASHLTR"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INDIQUBE"
+    },
+    {
+      "bars_before_eval": 253,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INDOBORAX"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INDOFARM"
+    },
+    {
+      "bars_before_eval": 138,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INDOSTAR"
+    },
+    {
+      "bars_before_eval": 98,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INDOTECH"
+    },
+    {
+      "bars_before_eval": 171,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INDOTHAI"
+    },
+    {
+      "bars_before_eval": 2,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INDOUS"
+    },
+    {
+      "bars_before_eval": 76,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INDOWIND"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INDPRUD"
+    },
+    {
+      "bars_before_eval": 138,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INDRAMEDCO"
+    },
+    {
+      "bars_before_eval": 278,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INDSWFTLAB"
+    },
+    {
+      "bars_before_eval": 99,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INFOMEDIA"
+    },
+    {
+      "bars_before_eval": 187,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INNOVACAP"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INNOVANA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INNOVISION"
+    },
+    {
+      "bars_before_eval": 255,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INOXGREEN"
+    },
+    {
+      "bars_before_eval": 192,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INOXINDIA"
+    },
+    {
+      "bars_before_eval": 43,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INSPIRISYS"
+    },
+    {
+      "bars_before_eval": 196,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INTENTECH"
+    },
+    {
+      "bars_before_eval": 26,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INTERARCH"
+    },
+    {
+      "bars_before_eval": 219,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INVENTURE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "INVPRECQ"
+    },
+    {
+      "bars_before_eval": 208,
+      "reason": "<300 bars before eval_start",
+      "symbol": "IREDA"
+    },
+    {
+      "bars_before_eval": 164,
+      "reason": "<300 bars before eval_start",
+      "symbol": "IRIS"
+    },
+    {
+      "bars_before_eval": 230,
+      "reason": "<300 bars before eval_start",
+      "symbol": "IRMENERGY"
+    },
+    {
+      "bars_before_eval": 294,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ISFT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ISHANCH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ITCHOTELS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "IVALUE"
+    },
+    {
+      "bars_before_eval": 139,
+      "reason": "<300 bars before eval_start",
+      "symbol": "IVC"
+    },
+    {
+      "bars_before_eval": 132,
+      "reason": "<300 bars before eval_start",
+      "symbol": "IVP"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "IWP"
+    },
+    {
+      "bars_before_eval": 73,
+      "reason": "<300 bars before eval_start",
+      "symbol": "IXIGO"
+    },
+    {
+      "bars_before_eval": 92,
+      "reason": "<300 bars before eval_start",
+      "symbol": "IZMO"
+    },
+    {
+      "bars_before_eval": 14,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JAIBALAJI"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JAINREC"
+    },
+    {
+      "bars_before_eval": 216,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JAIPURKURT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JARO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JAYKAY"
+    },
+    {
+      "bars_before_eval": 247,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JBMA"
+    },
+    {
+      "bars_before_eval": 220,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JETFREIGHT"
+    },
+    {
+      "bars_before_eval": 136,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JGCHEM"
+    },
+    {
+      "bars_before_eval": 124,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JHS"
+    },
+    {
+      "bars_before_eval": 265,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JIOFIN"
+    },
+    {
+      "bars_before_eval": 244,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JISLDVREQS"
+    },
+    {
+      "bars_before_eval": 81,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JITFINFRA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JKIPL"
+    },
+    {
+      "bars_before_eval": 255,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JLHL"
+    },
+    {
+      "bars_before_eval": 247,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JMA"
+    },
+    {
+      "bars_before_eval": 53,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JNKINDIA"
+    },
+    {
+      "bars_before_eval": 248,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JPPOWER"
+    },
+    {
+      "bars_before_eval": 155,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JSFB"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JSLL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JSWCEMENT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JSWDULUX"
+    },
+    {
+      "bars_before_eval": 246,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JSWINFRA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JUBLCPL"
+    },
+    {
+      "bars_before_eval": 145,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JUNIPER"
+    },
+    {
+      "bars_before_eval": 175,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JYOTICNC"
+    },
+    {
+      "bars_before_eval": 71,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JYOTISTRUC"
+    },
+    {
+      "bars_before_eval": 249,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KALAMANDIR"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KALPATARU"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "KALYANI"
+    },
+    {
+      "bars_before_eval": 81,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KALYANIFRG"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KAMAHOLD"
+    },
+    {
+      "bars_before_eval": 260,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KAMATHOTEL"
+    },
+    {
+      "bars_before_eval": 253,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KAMOPAINTS"
+    },
+    {
+      "bars_before_eval": 189,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KANANIIND"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KANCHI"
+    },
+    {
+      "bars_before_eval": 177,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KAPSTON"
+    },
+    {
+      "bars_before_eval": 70,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KARMAENG"
+    },
+    {
+      "bars_before_eval": 108,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KAUSHALYA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KAVDEFENCE"
+    },
+    {
+      "bars_before_eval": 256,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KAYA"
+    },
+    {
+      "bars_before_eval": 212,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KCPSUGIND"
+    },
+    {
+      "bars_before_eval": 278,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KECL"
+    },
+    {
+      "bars_before_eval": 37,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KEEPLEARN"
+    },
+    {
+      "bars_before_eval": 79,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KENNAMET"
+    },
+    {
+      "bars_before_eval": 138,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KERNEX"
+    },
+    {
+      "bars_before_eval": 253,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KESORAMIND"
+    },
+    {
+      "bars_before_eval": 185,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KEYFINSERV"
+    },
+    {
+      "bars_before_eval": 252,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KHADIM"
+    },
+    {
+      "bars_before_eval": 216,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KHAITANLTD"
+    },
+    {
+      "bars_before_eval": 242,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KHANDSE"
+    },
+    {
+      "bars_before_eval": 256,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KICL"
+    },
+    {
+      "bars_before_eval": 186,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KILITCH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KIRANVYPAR"
+    },
+    {
+      "bars_before_eval": 79,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KIRLFER"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KISSHT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KLBRENG-B"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KMEW"
+    },
+    {
+      "bars_before_eval": 243,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KMSUGAR"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KNAGRI"
+    },
+    {
+      "bars_before_eval": 195,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KOHINOOR"
+    },
+    {
+      "bars_before_eval": 253,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KOKUYOCMLN"
+    },
+    {
+      "bars_before_eval": 244,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KOTARISUG"
+    },
+    {
+      "bars_before_eval": 276,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KOTHARIPRO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KOTIC"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KOTYARK"
+    },
+    {
+      "bars_before_eval": 79,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KOVAI"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KPEL"
+    },
+    {
+      "bars_before_eval": 262,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KPIGREEN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KPL"
+    },
+    {
+      "bars_before_eval": 189,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KREBSBIO"
+    },
+    {
+      "bars_before_eval": 19,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KRIDHANINF"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KRISHIVAL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KRISHNADEF"
+    },
+    {
+      "bars_before_eval": 78,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KRITIKA"
+    },
+    {
+      "bars_before_eval": 189,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KRITINUT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KRN"
+    },
+    {
+      "bars_before_eval": 68,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KRONOX"
+    },
+    {
+      "bars_before_eval": 11,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KROSS"
+    },
+    {
+      "bars_before_eval": 130,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KRYSTAL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KSHINTL"
+    },
+    {
+      "bars_before_eval": 18,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KSHITIJPOL"
+    },
+    {
+      "bars_before_eval": 245,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KSOLVES"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KSR"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "KWIL"
+    },
+    {
+      "bars_before_eval": 141,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LAGNAM"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LAHOTIOV"
+    },
+    {
+      "bars_before_eval": 136,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LAL"
+    },
+    {
+      "bars_before_eval": 260,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LAMBODHARA"
+    },
+    {
+      "bars_before_eval": 111,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LANCORHOL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LANDSMILL"
+    },
+    {
+      "bars_before_eval": 254,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LASA"
+    },
+    {
+      "bars_before_eval": 251,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LATENTVIEW"
+    },
+    {
+      "bars_before_eval": 92,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LATTEYS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LAXMIDENTL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LAXMIINDIA"
+    },
+    {
+      "bars_before_eval": 47,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LCCINFOTEC"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LEMERITE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LENSKART"
+    },
+    {
+      "bars_before_eval": 203,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LEXUS"
+    },
+    {
+      "bars_before_eval": 248,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LFIC"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LGEINDIA"
+    },
+    {
+      "bars_before_eval": 74,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LGHL"
+    },
+    {
+      "bars_before_eval": 222,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LIBERTSHOE"
+    },
+    {
+      "bars_before_eval": 196,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LLOYDSENGG"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LLOYDSENT"
+    },
+    {
+      "bars_before_eval": 299,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LLOYDSME"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LMW"
+    },
+    {
+      "bars_before_eval": 193,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LOKESHMACH"
+    },
+    {
+      "bars_before_eval": 180,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LORDSCHLO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LOTUSDEV"
+    },
+    {
+      "bars_before_eval": 185,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LOTUSEYE"
+    },
+    {
+      "bars_before_eval": 287,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LOVABLE"
+    },
+    {
+      "bars_before_eval": 189,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LPDC"
+    },
+    {
+      "bars_before_eval": 111,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LTF"
+    },
+    {
+      "bars_before_eval": 223,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LTFOODS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LTM"
+    },
+    {
+      "bars_before_eval": 268,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LYKALABS"
+    },
+    {
+      "bars_before_eval": 213,
+      "reason": "<300 bars before eval_start",
+      "symbol": "LYPSAGEMS"
+    },
+    {
+      "bars_before_eval": 228,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MAANALU"
+    },
+    {
+      "bars_before_eval": 83,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MACPOWER"
+    },
+    {
+      "bars_before_eval": 185,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MADHAV"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MADHAVIPL"
+    },
+    {
+      "bars_before_eval": 24,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MADHUCON"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MAFATIND"
+    },
+    {
+      "bars_before_eval": 212,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MAGNUM"
+    },
+    {
+      "bars_before_eval": 223,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MAHAPEXLTD"
+    },
+    {
+      "bars_before_eval": 169,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MAHASTEEL"
+    },
+    {
+      "bars_before_eval": 243,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MAHEPC"
+    },
+    {
+      "bars_before_eval": 251,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MAHESHWARI"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MAJESAUT"
+    },
+    {
+      "bars_before_eval": 201,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MALUPAPER"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MAMATA"
+    },
+    {
+      "bars_before_eval": 185,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MANAKALUCO"
+    },
+    {
+      "bars_before_eval": 114,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MANAKCOAT"
+    },
+    {
+      "bars_before_eval": 198,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MANAKSTEEL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MANBA"
+    },
+    {
+      "bars_before_eval": 32,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MANCREDIT"
+    },
+    {
+      "bars_before_eval": 248,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MANINDS"
+    },
+    {
+      "bars_before_eval": 186,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MANOMAY"
+    },
+    {
+      "bars_before_eval": 220,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MANORAMA"
+    },
+    {
+      "bars_before_eval": 239,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MANORG"
+    },
+    {
+      "bars_before_eval": 165,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MANUGRAPH"
+    },
+    {
+      "bars_before_eval": 143,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MARINE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MARKOLINES"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MARSONS"
+    },
+    {
+      "bars_before_eval": 35,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MASKINVEST"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MASTERTR"
+    },
+    {
+      "bars_before_eval": 218,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MAXESTATES"
+    },
+    {
+      "bars_before_eval": 255,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MAXIND"
+    },
+    {
+      "bars_before_eval": 260,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MAZDA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MBEL"
+    },
+    {
+      "bars_before_eval": 94,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MBLINFRA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MCCHRLS-B"
+    },
+    {
+      "bars_before_eval": 186,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MCL"
+    },
+    {
+      "bars_before_eval": 187,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MCLEODRUSS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MCLOUD"
+    },
+    {
+      "bars_before_eval": 170,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MEDIASSIST"
+    },
+    {
+      "bars_before_eval": 183,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MEDICO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MEESHO"
+    },
+    {
+      "bars_before_eval": 251,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MEGASTAR"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MEIL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MENNPIS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MERCANTILE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "METROGLOBL"
+    },
+    {
+      "bars_before_eval": 5,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MFML"
+    },
+    {
+      "bars_before_eval": 180,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MGEL"
+    },
+    {
+      "bars_before_eval": 173,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MHLXMIRU"
+    },
+    {
+      "bars_before_eval": 132,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MICEL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MIDWESTLTD"
+    },
+    {
+      "bars_before_eval": 218,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MINDTECK"
+    },
+    {
+      "bars_before_eval": 157,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MIRCELECTR"
+    },
+    {
+      "bars_before_eval": 224,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MIRZAINT"
+    },
+    {
+      "bars_before_eval": 248,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MITCON"
+    },
+    {
+      "bars_before_eval": 171,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MITTAL"
+    },
+    {
+      "bars_before_eval": 137,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MKPL"
+    },
+    {
+      "bars_before_eval": 208,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MMP"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MMWL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MOBIKWIK"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MODINATUR"
+    },
+    {
+      "bars_before_eval": 66,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MODIRUBBER"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MODIS"
+    },
+    {
+      "bars_before_eval": 181,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MODISONLTD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MODTHREAD"
+    },
+    {
+      "bars_before_eval": 222,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MOHITIND"
+    },
+    {
+      "bars_before_eval": 120,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MOKSH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MONEYBOXX"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MOSCHIP"
+    },
+    {
+      "bars_before_eval": 180,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MOTISONS"
+    },
+    {
+      "bars_before_eval": 147,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MOTOGENFIN"
+    },
+    {
+      "bars_before_eval": 146,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MSPL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "MTEDUCARE"
+    },
+    {
+      "bars_before_eval": 222,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MUFIN"
+    },
+    {
+      "bars_before_eval": 189,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MUFTI"
+    },
+    {
+      "bars_before_eval": 129,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MUKKA"
+    },
+    {
+      "bars_before_eval": 183,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MUKTAARTS"
+    },
+    {
+      "bars_before_eval": 171,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MURUDCERA"
+    },
+    {
+      "bars_before_eval": 190,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MUTHOOTMF"
+    },
+    {
+      "bars_before_eval": 246,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MVGJL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "MWL"
+    },
+    {
+      "bars_before_eval": 61,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NAGREEKCAP"
+    },
+    {
+      "bars_before_eval": 166,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NAGREEKEXP"
+    },
+    {
+      "bars_before_eval": 276,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NAHARPOLY"
+    },
+    {
+      "bars_before_eval": 148,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NARMADA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NATCAPSUQ"
+    },
+    {
+      "bars_before_eval": 256,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NATHBIOGEN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NATIONSTD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NAVKARURB"
+    },
+    {
+      "bars_before_eval": 256,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NBIFIN"
+    },
+    {
+      "bars_before_eval": 133,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NDGL"
+    },
+    {
+      "bars_before_eval": 254,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NDL"
+    },
+    {
+      "bars_before_eval": 209,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NDLVENTURE"
+    },
+    {
+      "bars_before_eval": 152,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NDRAUTO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NEAGI"
+    },
+    {
+      "bars_before_eval": 195,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NECCLTD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NEPHROPLUS"
+    },
+    {
+      "bars_before_eval": 285,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NETWEB"
+    },
+    {
+      "bars_before_eval": 255,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NETWORK18"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "NEUEON"
+    },
+    {
+      "bars_before_eval": 241,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NEWGEN"
+    },
+    {
+      "bars_before_eval": 188,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NEXTMEDIA"
+    },
+    {
+      "bars_before_eval": 246,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NGIL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NIBE"
+    },
+    {
+      "bars_before_eval": 166,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NIBL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "NIFTYNXT50"
+    },
+    {
+      "bars_before_eval": 273,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NIITMTS"
+    },
+    {
+      "bars_before_eval": 184,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NILAINFRA"
+    },
+    {
+      "bars_before_eval": 55,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NILASPACES"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NILE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NIMBSPROJ"
+    },
+    {
+      "bars_before_eval": 251,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NINSYS"
+    },
+    {
+      "bars_before_eval": 206,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NIPPOBATRY"
+    },
+    {
+      "bars_before_eval": 187,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NIRAJ"
+    },
+    {
+      "bars_before_eval": 2,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NIRAJISPAT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NIRLON"
+    },
+    {
+      "bars_before_eval": 163,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NITCO"
+    },
+    {
+      "bars_before_eval": 116,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NITIRAJ"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NITTAGELA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NIVABUPA"
+    },
+    {
+      "bars_before_eval": 179,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NKIND"
+    },
+    {
+      "bars_before_eval": 100,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NOIDATOLL"
+    },
+    {
+      "bars_before_eval": 133,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NORBTEAEXP"
+    },
+    {
+      "bars_before_eval": 5,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NORTHARC"
+    },
+    {
+      "bars_before_eval": 122,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NOVAAGRI"
+    },
+    {
+      "bars_before_eval": 79,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NOVARTIND"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NPST"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NTPCGREEN"
+    },
+    {
+      "bars_before_eval": 232,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NUCLEUS"
+    },
+    {
+      "bars_before_eval": 260,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NURECA"
+    },
+    {
+      "bars_before_eval": 240,
+      "reason": "<300 bars before eval_start",
+      "symbol": "NUVAMA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "OCCLLTD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ODIGMA"
+    },
+    {
+      "bars_before_eval": 27,
+      "reason": "<300 bars before eval_start",
+      "symbol": "OILCOUNTUB"
+    },
+    {
+      "bars_before_eval": 36,
+      "reason": "<300 bars before eval_start",
+      "symbol": "OLAELEC"
+    },
+    {
+      "bars_before_eval": 145,
+      "reason": "<300 bars before eval_start",
+      "symbol": "OMAXAUTO"
+    },
+    {
+      "bars_before_eval": 256,
+      "reason": "<300 bars before eval_start",
+      "symbol": "OMAXE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "OMFREIGHT"
+    },
+    {
+      "bars_before_eval": 86,
+      "reason": "<300 bars before eval_start",
+      "symbol": "OMINFRAL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "OMNI"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "OMPOWER"
+    },
+    {
+      "bars_before_eval": 120,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ONELIFECAP"
+    },
+    {
+      "bars_before_eval": 160,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ONEPOINT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ONESOURCE"
+    },
+    {
+      "bars_before_eval": 242,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ORBTEXP"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ORCHASP"
+    },
+    {
+      "bars_before_eval": 246,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ORCHPHARMA"
+    },
+    {
+      "bars_before_eval": 242,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ORICONENT"
+    },
+    {
+      "bars_before_eval": 224,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ORIENTALTL"
+    },
+    {
+      "bars_before_eval": 237,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ORIENTCER"
+    },
+    {
+      "bars_before_eval": 269,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ORIENTLTD"
+    },
+    {
+      "bars_before_eval": 14,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ORIENTTECH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ORKLAINDIA"
+    },
+    {
+      "bars_before_eval": 20,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ORTINGLOBE"
+    },
+    {
+      "bars_before_eval": 72,
+      "reason": "<300 bars before eval_start",
+      "symbol": "OSIAHYPER"
+    },
+    {
+      "bars_before_eval": 290,
+      "reason": "<300 bars before eval_start",
+      "symbol": "OSWALAGRO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "OSWALPUMPS"
+    },
+    {
+      "bars_before_eval": 228,
+      "reason": "<300 bars before eval_start",
+      "symbol": "OSWALSEEDS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PACEDIGITK"
+    },
+    {
+      "bars_before_eval": 201,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PALASHSECU"
+    },
+    {
+      "bars_before_eval": 191,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PALREDTEC"
+    },
+    {
+      "bars_before_eval": 142,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PANACHE"
+    },
+    {
+      "bars_before_eval": 199,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PANSARI"
+    },
+    {
+      "bars_before_eval": 251,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PAR"
+    },
+    {
+      "bars_before_eval": 186,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PARACABLES"
+    },
+    {
+      "bars_before_eval": 256,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PARAS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PARASPETRO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PARKHOSPS"
+    },
+    {
+      "bars_before_eval": 157,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PARKHOTELS"
+    },
+    {
+      "bars_before_eval": 160,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PARSVNATH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PASHUPATI"
+    },
+    {
+      "bars_before_eval": 299,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PASUPTAC"
+    },
+    {
+      "bars_before_eval": 226,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PATANJALI"
+    },
+    {
+      "bars_before_eval": 278,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PATELENG"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PATELRMART"
+    },
+    {
+      "bars_before_eval": 245,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PATINTLOG"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PAUSHAKLTD"
+    },
+    {
+      "bars_before_eval": 255,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PAVNAIND"
+    },
+    {
+      "bars_before_eval": 245,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PEARLPOLY"
+    },
+    {
+      "bars_before_eval": 256,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PFOCUS"
+    },
+    {
+      "bars_before_eval": 250,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PFS"
+    },
+    {
+      "bars_before_eval": 240,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PGIL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PICCADIL"
+    },
+    {
+      "bars_before_eval": 52,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PIGL"
+    },
+    {
+      "bars_before_eval": 176,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PILITA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PINELABS"
+    },
+    {
+      "bars_before_eval": 190,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PIONEEREMB"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PIONRINV"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PIRAMALFIN"
+    },
+    {
+      "bars_before_eval": 74,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PKTEA"
+    },
+    {
+      "bars_before_eval": 291,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PLASTIBLEN"
+    },
+    {
+      "bars_before_eval": 131,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PLATIND"
+    },
+    {
+      "bars_before_eval": 163,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PLAZACABLE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PML"
+    },
+    {
+      "bars_before_eval": 10,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PNGJL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PNGSREVA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "POWERICA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PRABHA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PRADPME"
+    },
+    {
+      "bars_before_eval": 128,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PRAENG"
+    },
+    {
+      "bars_before_eval": 247,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PRAKASH"
+    },
+    {
+      "bars_before_eval": 55,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PRAKASHSTL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PRAVEG"
+    },
+    {
+      "bars_before_eval": 4,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PRAXIS"
+    },
+    {
+      "bars_before_eval": 190,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PRECOT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PREMCO"
+    },
+    {
+      "bars_before_eval": 191,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PREMEXPLN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "PREMIER"
+    },
+    {
+      "bars_before_eval": 20,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PREMIERENE"
+    },
+    {
+      "bars_before_eval": 168,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PREMIERPOL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PRIMO"
+    },
+    {
+      "bars_before_eval": 223,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PRITI"
+    },
+    {
+      "bars_before_eval": 165,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PRITIKAUTO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PROSTARM"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PROTEAN"
+    },
+    {
+      "bars_before_eval": 285,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PROZONER"
+    },
+    {
+      "bars_before_eval": 68,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PRUDMOULI"
+    },
+    {
+      "bars_before_eval": 256,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PTCIL"
+    },
+    {
+      "bars_before_eval": 196,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PURVA"
+    },
+    {
+      "bars_before_eval": 141,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PVP"
+    },
+    {
+      "bars_before_eval": 132,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PVSL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PWL"
+    },
+    {
+      "bars_before_eval": 259,
+      "reason": "<300 bars before eval_start",
+      "symbol": "PYRAMID"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "QPOWER"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "QUADFUTURE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "QUINT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "QUINTEGRA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RACLGEAR"
+    },
+    {
+      "bars_before_eval": 64,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RADAAN"
+    },
+    {
+      "bars_before_eval": 260,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RADIOCITY"
+    },
+    {
+      "bars_before_eval": 74,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RAJMET"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RAJOOENG"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RAJPALAYAM"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "RAJRILTD"
+    },
+    {
+      "bars_before_eval": 233,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RAJSREESUG"
+    },
+    {
+      "bars_before_eval": 113,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RAJTV"
+    },
+    {
+      "bars_before_eval": 251,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RAMCOSYS"
+    },
+    {
+      "bars_before_eval": 217,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RATNAVEER"
+    },
+    {
+      "bars_before_eval": 299,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RAYMOND"
+    },
+    {
+      "bars_before_eval": 8,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RAYMONDLSL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RAYMONDREL"
+    },
+    {
+      "bars_before_eval": 87,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RBZJEWEL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "RCOM"
+    },
+    {
+      "bars_before_eval": 270,
+      "reason": "<300 bars before eval_start",
+      "symbol": "REDTAPE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "REGAAL"
+    },
+    {
+      "bars_before_eval": 2,
+      "reason": "<300 bars before eval_start",
+      "symbol": "REGENCERAM"
+    },
+    {
+      "bars_before_eval": 243,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RELCHEMQ"
+    },
+    {
+      "bars_before_eval": 11,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RELIABLE"
+    },
+    {
+      "bars_before_eval": 253,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RELINFRA"
+    },
+    {
+      "bars_before_eval": 44,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RELTD"
+    },
+    {
+      "bars_before_eval": 134,
+      "reason": "<300 bars before eval_start",
+      "symbol": "REMSONSIND"
+    },
+    {
+      "bars_before_eval": 10,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RETAIL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RHETAN"
+    },
+    {
+      "bars_before_eval": 195,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RHL"
+    },
+    {
+      "bars_before_eval": 260,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RISHABH"
+    },
+    {
+      "bars_before_eval": 253,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RITCO"
+    },
+    {
+      "bars_before_eval": 60,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RKDL"
+    },
+    {
+      "bars_before_eval": 252,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RKEC"
+    },
+    {
+      "bars_before_eval": 137,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RKSWAMY"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RMC"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RMDRIP"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RNBDENIMS"
+    },
+    {
+      "bars_before_eval": 11,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ROLLT"
+    },
+    {
+      "bars_before_eval": 243,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ROML"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ROSSTECH"
+    },
+    {
+      "bars_before_eval": 37,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RPEL"
+    },
+    {
+      "bars_before_eval": 255,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RPOWER"
+    },
+    {
+      "bars_before_eval": 52,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RPPINFRA"
+    },
+    {
+      "bars_before_eval": 249,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RPPL"
+    },
+    {
+      "bars_before_eval": 155,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RPTECH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RRIL"
+    },
+    {
+      "bars_before_eval": 254,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RRKABEL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RSDFIN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RSL"
+    },
+    {
+      "bars_before_eval": 46,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RSSOFTWARE"
+    },
+    {
+      "bars_before_eval": 214,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RTNPOWER"
+    },
+    {
+      "bars_before_eval": 37,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RUBFILA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RUBICON"
+    },
+    {
+      "bars_before_eval": 106,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RUCHINFRA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RUDRA"
+    },
+    {
+      "bars_before_eval": 146,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RVHL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "RVTH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "S&SPOWER"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAATVIKGL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "SABEVENTS"
+    },
+    {
+      "bars_before_eval": 106,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SADBHAV"
+    },
+    {
+      "bars_before_eval": 79,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SADBHIN"
+    },
+    {
+      "bars_before_eval": 195,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAGARDEEP"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAGILITY"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAHLIBHFI"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAILIFE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAIPARENT"
+    },
+    {
+      "bars_before_eval": 246,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAKSOFT"
+    },
+    {
+      "bars_before_eval": 226,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAKUMA"
+    },
+    {
+      "bars_before_eval": 82,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SALSTEEL"
+    },
+    {
+      "bars_before_eval": 140,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAMBHAAV"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAMBHV"
+    },
+    {
+      "bars_before_eval": 252,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAMHI"
+    },
+    {
+      "bars_before_eval": 46,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAMMAANCAP"
+    },
+    {
+      "bars_before_eval": 73,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAMPANN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SANATHAN"
+    },
+    {
+      "bars_before_eval": 262,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SANDUMA"
+    },
+    {
+      "bars_before_eval": 210,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SANGINITA"
+    },
+    {
+      "bars_before_eval": 299,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SANOFI"
+    },
+    {
+      "bars_before_eval": 2,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SANOFICONR"
+    },
+    {
+      "bars_before_eval": 46,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SANSTAR"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAPPL"
+    },
+    {
+      "bars_before_eval": 299,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAREGAMA"
+    },
+    {
+      "bars_before_eval": 276,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SARLAPOLY"
+    },
+    {
+      "bars_before_eval": 151,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SARVESHWAR"
+    },
+    {
+      "bars_before_eval": 146,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAURASHCEM"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SAYAJIHOTL"
+    },
+    {
+      "bars_before_eval": 251,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SBC"
+    },
+    {
+      "bars_before_eval": 278,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SBFC"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SCANSTL"
+    },
+    {
+      "bars_before_eval": 249,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SCHNEIDER"
+    },
+    {
+      "bars_before_eval": 122,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SCILAL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SCODATUBES"
+    },
+    {
+      "bars_before_eval": 243,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SCPL"
+    },
+    {
+      "bars_before_eval": 255,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SEAMECLTD"
+    },
+    {
+      "bars_before_eval": 115,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SECMARK"
+    },
+    {
+      "bars_before_eval": 198,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SECURKLOUD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SEDEMAC"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SEIL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SEJALLTD"
+    },
+    {
+      "bars_before_eval": 116,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SELMC"
+    },
+    {
+      "bars_before_eval": 76,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SEMAC"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SENORES"
+    },
+    {
+      "bars_before_eval": 136,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SERVOTECH"
+    },
+    {
+      "bars_before_eval": 27,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SETCO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SETL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "SEYAIND"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SGFIN"
+    },
+    {
+      "bars_before_eval": 205,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SGIL"
+    },
+    {
+      "bars_before_eval": 221,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SGL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SGMART"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHADOWFAX"
+    },
+    {
+      "bars_before_eval": 209,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHAH"
+    },
+    {
+      "bars_before_eval": 192,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHAHALLOYS"
+    },
+    {
+      "bars_before_eval": 184,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHAKTIPUMP"
+    },
+    {
+      "bars_before_eval": 183,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHANTI"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHANTIGOLD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHARDUL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHBAJRG"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHEKHAWATI"
+    },
+    {
+      "bars_before_eval": 251,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHEMAROO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHILCTECH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHINDL"
+    },
+    {
+      "bars_before_eval": 191,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHIVAMAUTO"
+    },
+    {
+      "bars_before_eval": 278,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHIVAMILLS"
+    },
+    {
+      "bars_before_eval": 261,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHIVATEX"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHIVAUM"
+    },
+    {
+      "bars_before_eval": 120,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHRADHA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHREEJISPG"
+    },
+    {
+      "bars_before_eval": 287,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHREEPUSHK"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHREERAMA"
+    },
+    {
+      "bars_before_eval": 167,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHREYANIND"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHRIKRISH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHRINGARMS"
+    },
+    {
+      "bars_before_eval": 248,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHRIPISTON"
+    },
+    {
+      "bars_before_eval": 198,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHYAMCENT"
+    },
+    {
+      "bars_before_eval": 159,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SHYAMTEL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SICAGEN"
+    },
+    {
+      "bars_before_eval": 2,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SICALLOG"
+    },
+    {
+      "bars_before_eval": 186,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SIGIND"
+    },
+    {
+      "bars_before_eval": 282,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SIGMA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SIGMAADV"
+    },
+    {
+      "bars_before_eval": 249,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SIGNATURE"
+    },
+    {
+      "bars_before_eval": 145,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SIGNPOST"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SIKA"
+    },
+    {
+      "bars_before_eval": 131,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SIKKO"
+    },
+    {
+      "bars_before_eval": 95,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SIL"
+    },
+    {
+      "bars_before_eval": 180,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SILGO"
+    },
+    {
+      "bars_before_eval": 221,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SILLYMONKS"
+    },
+    {
+      "bars_before_eval": 78,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SIMPLEXINF"
+    },
+    {
+      "bars_before_eval": 118,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SINCLAIR"
+    },
+    {
+      "bars_before_eval": 253,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SINDHUTRAD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SINGERIND"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SKFINDUS"
+    },
+    {
+      "bars_before_eval": 65,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SKYGOLD"
+    },
+    {
+      "bars_before_eval": 235,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SMARTLINK"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SMARTWORKS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SMLMAH"
+    },
+    {
+      "bars_before_eval": 189,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SMLT"
+    },
+    {
+      "bars_before_eval": 205,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SOFTTECH"
+    },
+    {
+      "bars_before_eval": 256,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SOLARA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SOLARWORLD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SOLEX"
+    },
+    {
+      "bars_before_eval": 85,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SOMATEX"
+    },
+    {
+      "bars_before_eval": 35,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SOMICONVEY"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SONAL"
+    },
+    {
+      "bars_before_eval": 165,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SONAMLTD"
+    },
+    {
+      "bars_before_eval": 176,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SOUTHWEST"
+    },
+    {
+      "bars_before_eval": 255,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SPARC"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SPECTRUM"
+    },
+    {
+      "bars_before_eval": 93,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SPMLINFRA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SRD"
+    },
+    {
+      "bars_before_eval": 275,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SRGHFL"
+    },
+    {
+      "bars_before_eval": 80,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SRM"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SRTL"
+    },
+    {
+      "bars_before_eval": 20,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SSDL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "STALLION"
+    },
+    {
+      "bars_before_eval": 65,
+      "reason": "<300 bars before eval_start",
+      "symbol": "STANLEY"
+    },
+    {
+      "bars_before_eval": 76,
+      "reason": "<300 bars before eval_start",
+      "symbol": "STARTECK"
+    },
+    {
+      "bars_before_eval": 213,
+      "reason": "<300 bars before eval_start",
+      "symbol": "STEL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "STLNETWORK"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "STUDDS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "STYL"
+    },
+    {
+      "bars_before_eval": 17,
+      "reason": "<300 bars before eval_start",
+      "symbol": "STYLEBAAZA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SUDARCOLOR"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SUDEEPPHRM"
+    },
+    {
+      "bars_before_eval": 3,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SUMEETINDS"
+    },
+    {
+      "bars_before_eval": 50,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SUMIT"
+    },
+    {
+      "bars_before_eval": 177,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SUNCLAY"
+    },
+    {
+      "bars_before_eval": 162,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SUNDARAM"
+    },
+    {
+      "bars_before_eval": 215,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SUNDRMBRAK"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SUNDROP"
+    },
+    {
+      "bars_before_eval": 156,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SUPERSPIN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SUPREME"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SUPREMEINF"
+    },
+    {
+      "bars_before_eval": 137,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SURAJEST"
+    },
+    {
+      "bars_before_eval": 13,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SURAJLTD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SURAKSHA"
+    },
+    {
+      "bars_before_eval": 126,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SURANASOL"
+    },
+    {
+      "bars_before_eval": 153,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SURANAT&P"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SURYALA"
+    },
+    {
+      "bars_before_eval": 255,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SUVEN"
+    },
+    {
+      "bars_before_eval": 165,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SUVIDHAA"
+    },
+    {
+      "bars_before_eval": 30,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SUYOG"
+    },
+    {
+      "bars_before_eval": 172,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SUZLON"
+    },
+    {
+      "bars_before_eval": 121,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SVLL"
+    },
+    {
+      "bars_before_eval": 147,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SVPGLOB"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SWANCORP"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "SWANDEF"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SWIGGY"
+    },
+    {
+      "bars_before_eval": 253,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SWSOLAR"
+    },
+    {
+      "bars_before_eval": 255,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SYNCOMF"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "SYSTMTXC"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TAALTECH"
+    },
+    {
+      "bars_before_eval": 224,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TAINWALCHM"
+    },
+    {
+      "bars_before_eval": 269,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TAKE"
+    },
+    {
+      "bars_before_eval": 227,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TALBROAUTO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TAMBOLIIN"
+    },
+    {
+      "bars_before_eval": 57,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TARACHAND"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TARAPUR"
+    },
+    {
+      "bars_before_eval": 194,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TARC"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TARIL"
+    },
+    {
+      "bars_before_eval": 178,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TARMAT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TATACAP"
+    },
+    {
+      "bars_before_eval": 248,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TATAINVEST"
+    },
+    {
+      "bars_before_eval": 207,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TATATECH"
+    },
+    {
+      "bars_before_eval": 96,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TBOTEK"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TCC"
+    },
+    {
+      "bars_before_eval": 8,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TCIFINANCE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TEAMGTY"
+    },
+    {
+      "bars_before_eval": 246,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TECHNOE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TECHNVISN"
+    },
+    {
+      "bars_before_eval": 13,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TECILCHEM"
+    },
+    {
+      "bars_before_eval": 243,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TEMBO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TENNIND"
+    },
+    {
+      "bars_before_eval": 98,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TERASOFT"
+    },
+    {
+      "bars_before_eval": 259,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TEXMOPIPES"
+    },
+    {
+      "bars_before_eval": 145,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TFL"
+    },
+    {
+      "bars_before_eval": 213,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TGBHOTELS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "THACKER"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "THAKDEV"
+    },
+    {
+      "bars_before_eval": 171,
+      "reason": "<300 bars before eval_start",
+      "symbol": "THEINVEST"
+    },
+    {
+      "bars_before_eval": 241,
+      "reason": "<300 bars before eval_start",
+      "symbol": "THEJO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "THELEELA"
+    },
+    {
+      "bars_before_eval": 253,
+      "reason": "<300 bars before eval_start",
+      "symbol": "THOMASCOOK"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "THOMASCOTT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TICL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TIGERLOGS"
+    },
+    {
+      "bars_before_eval": 104,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TIJARIA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TIL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TIMEX"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TINNARUBR"
+    },
+    {
+      "bars_before_eval": 141,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TIPSFILMS"
+    },
+    {
+      "bars_before_eval": 1,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TIPSMUSIC"
+    },
+    {
+      "bars_before_eval": 47,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TIRUPATIFL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TMCV"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TMPV"
+    },
+    {
+      "bars_before_eval": 48,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TNTELE"
+    },
+    {
+      "bars_before_eval": 291,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TOKYOPLAST"
+    },
+    {
+      "bars_before_eval": 1,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TOLINS"
+    },
+    {
+      "bars_before_eval": 189,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TOTAL"
+    },
+    {
+      "bars_before_eval": 152,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TOUCHWOOD"
+    },
+    {
+      "bars_before_eval": 25,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TPHQ"
+    },
+    {
+      "bars_before_eval": 213,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TPLPLASTEH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TRANSPEK"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TRANSRAILL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TRANSWORLD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TRAVELFOOD"
+    },
+    {
+      "bars_before_eval": 248,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TREEHOUSE"
+    },
+    {
+      "bars_before_eval": 28,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TREJHARA"
+    },
+    {
+      "bars_before_eval": 271,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TREL"
+    },
+    {
+      "bars_before_eval": 194,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TRF"
+    },
+    {
+      "bars_before_eval": 246,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TRIGYN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TRUALT"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TSFINV"
+    },
+    {
+      "bars_before_eval": 288,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TVSELECT"
+    },
+    {
+      "bars_before_eval": 271,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TVSHLTD"
+    },
+    {
+      "bars_before_eval": 273,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TVSSCS"
+    },
+    {
+      "bars_before_eval": 35,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TVVISION"
+    },
+    {
+      "bars_before_eval": 223,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UCAL"
+    },
+    {
+      "bars_before_eval": 245,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UDS"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UEL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UFBL"
+    },
+    {
+      "bars_before_eval": 244,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UFO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ULTRAMAR"
+    },
+    {
+      "bars_before_eval": 128,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UMAEXPORTS"
+    },
+    {
+      "bars_before_eval": 105,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UMESLTD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UMIYA-MRO"
+    },
+    {
+      "bars_before_eval": 34,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UNIECOM"
+    },
+    {
+      "bars_before_eval": 174,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UNIINFO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UNIMECH"
+    },
+    {
+      "bars_before_eval": 79,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UNITDSPR"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UNITECH"
+    },
+    {
+      "bars_before_eval": 236,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UNITEDPOLY"
+    },
+    {
+      "bars_before_eval": 7,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UNIVAFOODS"
+    },
+    {
+      "bars_before_eval": 189,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UNIVASTU"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "URAVIDEF"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "URBANCO"
+    },
+    {
+      "bars_before_eval": 250,
+      "reason": "<300 bars before eval_start",
+      "symbol": "URJA"
+    },
+    {
+      "bars_before_eval": 180,
+      "reason": "<300 bars before eval_start",
+      "symbol": "USK"
+    },
+    {
+      "bars_before_eval": 295,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UTKARSHBNK"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UTLSOLAR"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "UYFINCORP"
+    },
+    {
+      "bars_before_eval": 63,
+      "reason": "<300 bars before eval_start",
+      "symbol": "V2RETAIL"
+    },
+    {
+      "bars_before_eval": 233,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VALIANTLAB"
+    },
+    {
+      "bars_before_eval": 84,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VARDMNPOLY"
+    },
+    {
+      "bars_before_eval": 159,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VASWANI"
+    },
+    {
+      "bars_before_eval": 81,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VCL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VEEDOL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VELJAN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VENTIVE"
+    },
+    {
+      "bars_before_eval": 251,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VENUSREM"
+    },
+    {
+      "bars_before_eval": 256,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VERANDA"
+    },
+    {
+      "bars_before_eval": 145,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VERTOZ"
+    },
+    {
+      "bars_before_eval": 287,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VETO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VGL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "no candles in range",
+      "symbol": "VHLTD"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VIDYAWIRES"
+    },
+    {
+      "bars_before_eval": 77,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VIJIFIN"
+    },
+    {
+      "bars_before_eval": 248,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VIKASECO"
+    },
+    {
+      "bars_before_eval": 255,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VIKASLIFE"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VIKRAMSOLR"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VIKRAN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VINCOFE"
+    },
+    {
+      "bars_before_eval": 213,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VINEETLAB"
+    },
+    {
+      "bars_before_eval": 83,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VINNY"
+    },
+    {
+      "bars_before_eval": 200,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VIPCLOTHNG"
+    },
+    {
+      "bars_before_eval": 224,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VIPULLTD"
+    },
+    {
+      "bars_before_eval": 212,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VIRINCHI"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VISASTEEL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VITAL"
+    },
+    {
+      "bars_before_eval": 154,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VIVIDHA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VIVIMEDLAB"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VIYASH"
+    },
+    {
+      "bars_before_eval": 157,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VLEGOV"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VMM"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VMSTMT"
+    },
+    {
+      "bars_before_eval": 264,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VPRPL"
+    },
+    {
+      "bars_before_eval": 52,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VRAJ"
+    },
+    {
+      "bars_before_eval": 52,
+      "reason": "<300 bars before eval_start",
+      "symbol": "VSTL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WAAREEENER"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WAAREEINDO"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WAAREERTL"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WAKEFIT"
+    },
+    {
+      "bars_before_eval": 132,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WALCHANNAG"
+    },
+    {
+      "bars_before_eval": 99,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WANBURY"
+    },
+    {
+      "bars_before_eval": 5,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WCIL"
+    },
+    {
+      "bars_before_eval": 215,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WEALTH"
+    },
+    {
+      "bars_before_eval": 191,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WEBELSOLAR"
+    },
+    {
+      "bars_before_eval": 138,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WEIZMANIND"
+    },
+    {
+      "bars_before_eval": 175,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WEL"
+    },
+    {
+      "bars_before_eval": 185,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WELINV"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WELSPLSOL"
+    },
+    {
+      "bars_before_eval": 197,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WELSPUNLIV"
+    },
+    {
+      "bars_before_eval": 55,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WEWIN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WEWORK"
+    },
+    {
+      "bars_before_eval": 188,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WILLAMAGOR"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WIMPLAST"
+    },
+    {
+      "bars_before_eval": 218,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WINDMACHIN"
+    },
+    {
+      "bars_before_eval": 84,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WIPL"
+    },
+    {
+      "bars_before_eval": 198,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WOCKPHARMA"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WORTHPERI"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WPIL"
+    },
+    {
+      "bars_before_eval": 181,
+      "reason": "<300 bars before eval_start",
+      "symbol": "WSI"
+    },
+    {
+      "bars_before_eval": 189,
+      "reason": "<300 bars before eval_start",
+      "symbol": "XELPMOC"
+    },
+    {
+      "bars_before_eval": 11,
+      "reason": "<300 bars before eval_start",
+      "symbol": "XTGLOBAL"
+    },
+    {
+      "bars_before_eval": 275,
+      "reason": "<300 bars before eval_start",
+      "symbol": "YASHO"
+    },
+    {
+      "bars_before_eval": 284,
+      "reason": "<300 bars before eval_start",
+      "symbol": "YATHARTH"
+    },
+    {
+      "bars_before_eval": 248,
+      "reason": "<300 bars before eval_start",
+      "symbol": "YATRA"
+    },
+    {
+      "bars_before_eval": 252,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ZAGGLE"
+    },
+    {
+      "bars_before_eval": 1,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ZEELEARN"
+    },
+    {
+      "bars_before_eval": 167,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ZENITHEXPO"
+    },
+    {
+      "bars_before_eval": 117,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ZENITHSTL"
+    },
+    {
+      "bars_before_eval": 229,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ZENTEC"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ZFSTEERING"
+    },
+    {
+      "bars_before_eval": 23,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ZODIAC"
+    },
+    {
+      "bars_before_eval": 244,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ZODIACLOTH"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ZSARACOM"
+    }
+  ],
+  "folds": [
+    {
+      "fold": "2024Q4",
+      "metrics": {
+        "avg_holding_days": 16.73,
+        "avg_pnl_pct": -3.172,
+        "avg_rr": 3.0,
+        "losing_trades": 143,
+        "max_drawdown_pct": 99.529,
+        "sharpe": -8.571,
+        "sortino": -118.118,
+        "total_pnl_pct": -501.117,
+        "total_trades": 158,
+        "win_rate_pct": 9.49,
+        "winning_trades": 15
+      }
+    },
+    {
+      "fold": "2025Q1",
+      "metrics": {
+        "avg_holding_days": 15.56,
+        "avg_pnl_pct": -0.458,
+        "avg_rr": 3.0,
+        "losing_trades": 99,
+        "max_drawdown_pct": 78.833,
+        "sharpe": -0.87,
+        "sortino": -5.157,
+        "total_pnl_pct": -59.572,
+        "total_trades": 130,
+        "win_rate_pct": 23.85,
+        "winning_trades": 31
+      }
+    },
+    {
+      "fold": "2025Q2",
+      "metrics": {
+        "avg_holding_days": 34.88,
+        "avg_pnl_pct": 0.848,
+        "avg_rr": 3.0,
+        "losing_trades": 168,
+        "max_drawdown_pct": 80.133,
+        "sharpe": 1.275,
+        "sortino": 8.487,
+        "total_pnl_pct": 201.723,
+        "total_trades": 238,
+        "win_rate_pct": 29.41,
+        "winning_trades": 70
+      }
+    },
+    {
+      "fold": "2025Q3",
+      "metrics": {
+        "avg_holding_days": 24.79,
+        "avg_pnl_pct": -1.94,
+        "avg_rr": 3.0,
+        "losing_trades": 222,
+        "max_drawdown_pct": 99.856,
+        "sharpe": -4.169,
+        "sortino": -48.811,
+        "total_pnl_pct": -508.348,
+        "total_trades": 262,
+        "win_rate_pct": 15.27,
+        "winning_trades": 40
+      }
+    },
+    {
+      "fold": "2025Q4",
+      "metrics": {
+        "avg_holding_days": 27.73,
+        "avg_pnl_pct": -1.894,
+        "avg_rr": 3.0,
+        "losing_trades": 162,
+        "max_drawdown_pct": 99.174,
+        "sharpe": -3.705,
+        "sortino": -9.229,
+        "total_pnl_pct": -369.351,
+        "total_trades": 195,
+        "win_rate_pct": 16.92,
+        "winning_trades": 33
+      }
+    },
+    {
+      "fold": "2026Q1",
+      "metrics": {
+        "avg_holding_days": 15.81,
+        "avg_pnl_pct": -3.0,
+        "avg_rr": 3.0,
+        "losing_trades": 144,
+        "max_drawdown_pct": 99.517,
+        "sharpe": -7.63,
+        "sortino": -91.666,
+        "total_pnl_pct": -482.974,
+        "total_trades": 161,
+        "win_rate_pct": 10.56,
+        "winning_trades": 17
+      }
+    },
+    {
+      "fold": "2026Q2",
+      "metrics": {
+        "avg_holding_days": 15.16,
+        "avg_pnl_pct": 0.813,
+        "avg_rr": 3.0,
+        "losing_trades": 179,
+        "max_drawdown_pct": 89.387,
+        "sharpe": 1.565,
+        "sortino": 9.877,
+        "total_pnl_pct": 228.325,
+        "total_trades": 281,
+        "win_rate_pct": 36.3,
+        "winning_trades": 102
+      }
+    }
+  ],
+  "generated_at": "2026-07-06T10:19:22+00:00",
+  "pre_filter_trade_count": 6341,
+  "profile": {
+    "key": "multibagger",
+    "min_confidence": 70,
+    "name": "Multibagger EMA setup",
+    "risk_template": {
+      "ema_length": 20,
+      "ema_timeframe": "1d",
+      "kind": "ema_trail",
+      "min_target_pct": "15"
+    },
+    "setup_conditions": [
+      {
+        "params": {
+          "factor": "MULTIBAGGER_EMA",
+          "min_score": 0.9
+        },
+        "type": "factor_score"
+      }
+    ],
+    "style": "investment",
+    "timeframe": "1d",
+    "universe_spec": {
+      "kind": "all_active"
+    },
+    "validity_spec": null,
+    "version": 1,
+    "weight_multipliers": {}
+  },
+  "row_counts": {
+    "360ONE": 738,
+    "3IINFOLTD": 738,
+    "3MINDIA": 738,
+    "5PAISA": 738,
+    "AARTIDRUGS": 738,
+    "AARTIIND": 738,
+    "AARTIPHARM": 738,
+    "AARTISURF": 610,
+    "AARVI": 738,
+    "AAVAS": 738,
+    "ABB": 738,
+    "ABBOTINDIA": 738,
+    "ABCAPITAL": 738,
+    "ABFRL": 738,
+    "ABSLAMC": 738,
+    "ACC": 738,
+    "ACCELYA": 738,
+    "ACE": 738,
+    "ACI": 738,
+    "ADANIENT": 738,
+    "ADANIGREEN": 738,
+    "ADANIPORTS": 738,
+    "ADFFOODS": 738,
+    "ADSL": 738,
+    "ADVANIHOTR": 738,
+    "ADVENZYMES": 738,
+    "AETHER": 738,
+    "AFFLE": 738,
+    "AGARIND": 738,
+    "AGI": 738,
+    "AGROPHOS": 676,
+    "AHLEAST": 738,
+    "AHLUCONT": 738,
+    "AIAENG": 738,
+    "AJANTPHARM": 738,
+    "ALEMBICLTD": 738,
+    "ALICON": 738,
+    "ALKEM": 738,
+    "ALKYLAMINE": 738,
+    "ALLCARGO": 728,
+    "ALPA": 674,
+    "AMBER": 738,
+    "AMBIKCO": 738,
+    "AMBUJACEM": 738,
+    "AMRUTANJAN": 738,
+    "ANANDRATHI": 738,
+    "ANANTRAJ": 738,
+    "ANDHRAPAP": 738,
+    "ANDHRSUGAR": 738,
+    "ANGELONE": 738,
+    "ANUP": 738,
+    "ANURAS": 738,
+    "APARINDS": 738,
+    "APCL": 672,
+    "APCOTEXIND": 738,
+    "APEX": 738,
+    "APLAPOLLO": 738,
+    "APLLTD": 738,
+    "APOLLOHOSP": 738,
+    "APOLLOPIPE": 738,
+    "APOLLOTYRE": 738,
+    "APTECHT": 667,
+    "APTUS": 738,
+    "ARIES": 674,
+    "ARIHANTCAP": 738,
+    "ARIHANTSUP": 738,
+    "ARMANFIN": 738,
+    "ARTEMISMED": 738,
+    "ARVIND": 738,
+    "ARVINDFASN": 738,
+    "ARVSMART": 738,
+    "ASAHIINDIA": 738,
+    "ASAL": 738,
+    "ASALCBR": 738,
+    "ASHIANA": 738,
+    "ASHOKA": 738,
+    "ASHOKLEY": 738,
+    "ASIANPAINT": 738,
+    "ASIANTILES": 674,
+    "ASPINWALL": 737,
+    "ASTEC": 738,
+    "ASTERDM": 738,
+    "ASTRAL": 738,
+    "ASTRAMICRO": 738,
+    "ASTRAZEN": 738,
+    "ATGL": 738,
+    "ATUL": 738,
+    "AUBANK": 738,
+    "AUROPHARMA": 738,
+    "AUTOAXLES": 738,
+    "AVADHSUGAR": 692,
+    "AVALON": 738,
+    "AVANTIFEED": 738,
+    "AVG": 658,
+    "AVTNPL": 738,
+    "AWHCL": 738,
+    "AWL": 738,
+    "AXISBANK": 738,
+    "BAJAJ-AUTO": 738,
+    "BAJAJCON": 738,
+    "BAJAJFINSV": 738,
+    "BAJAJHCARE": 738,
+    "BAJAJHIND": 738,
+    "BAJAJHLDNG": 738,
+    "BAJFINANCE": 738,
+    "BALAMINES": 738,
+    "BALAXI": 690,
+    "BALKRISIND": 738,
+    "BALMLAWRIE": 738,
+    "BALRAMCHIN": 738,
+    "BANARBEADS": 674,
+    "BANARISUG": 738,
+    "BANCOINDIA": 738,
+    "BANDHANBNK": 738,
+    "BANKBARODA": 738,
+    "BANKINDIA": 738,
+    "BANSWRAS": 738,
+    "BASF": 738,
+    "BASML": 670,
+    "BATAINDIA": 738,
+    "BAYERCROP": 738,
+    "BBL": 738,
+    "BBTC": 738,
+    "BBTCL": 738,
+    "BCLIND": 738,
+    "BDL": 738,
+    "BECTORFOOD": 738,
+    "BEL": 738,
+    "BEML": 738,
+    "BEPL": 738,
+    "BERGEPAINT": 738,
+    "BFINVEST": 738,
+    "BFUTILITIE": 558,
+    "BHAGCHEM": 738,
+    "BHAGERIA": 667,
+    "BHARATFORG": 738,
+    "BHARATGEAR": 674,
+    "BHARATRAS": 738,
+    "BHARTIARTL": 738,
+    "BHEL": 738,
+    "BIGBLOC": 738,
+    "BIKAJI": 738,
+    "BIOCON": 738,
+    "BIOFILCHEM": 680,
+    "BIRLACABLE": 633,
+    "BIRLACORPN": 738,
+    "BLAL": 738,
+    "BLISSGVS": 738,
+    "BLKASHYAP": 738,
+    "BLS": 738,
+    "BLUEDART": 738,
+    "BLUESTARCO": 738,
+    "BODALCHEM": 714,
+    "BOMDYEING": 738,
+    "BORORENEW": 680,
+    "BOSCHLTD": 738,
+    "BPCL": 738,
+    "BRIGADE": 738,
+    "BRITANNIA": 738,
+    "BSE": 738,
+    "BSOFT": 738,
+    "BUTTERFLY": 738,
+    "CAMLINFINE": 680,
+    "CAMPUS": 738,
+    "CAMS": 738,
+    "CANBK": 738,
+    "CANFINHOME": 738,
+    "CANTABIL": 738,
+    "CAPACITE": 738,
+    "CAPLIPOINT": 738,
+    "CARBORUNIV": 738,
+    "CARERATING": 738,
+    "CARTRADE": 738,
+    "CARYSIL": 738,
+    "CASTROLIND": 738,
+    "CCL": 738,
+    "CDSL": 738,
+    "CEATLTD": 738,
+    "CENTENKA": 738,
+    "CENTRALBK": 738,
+    "CENTRUM": 680,
+    "CENTURYPLY": 738,
+    "CERA": 738,
+    "CESC": 738,
+    "CGCL": 738,
+    "CGPOWER": 738,
+    "CHALET": 738,
+    "CHAMBLFERT": 738,
+    "CHEMBOND": 629,
+    "CHEMCON": 736,
+    "CHEMFAB": 707,
+    "CHEMPLASTS": 738,
+    "CHENNPETRO": 738,
+    "CHEVIOT": 738,
+    "CHOICEIN": 738,
+    "CHOLAFIN": 738,
+    "CHOLAHLDNG": 738,
+    "CIEINDIA": 738,
+    "CIPLA": 738,
+    "CLEAN": 738,
+    "CLSEL": 738,
+    "CMSINFO": 738,
+    "COALINDIA": 738,
+    "COASTCORP": 675,
+    "COCHINSHIP": 674,
+    "COFORGE": 738,
+    "COLPAL": 738,
+    "CONCOR": 738,
+    "CONFIPET": 738,
+    "CONTROLPR": 738,
+    "COROMANDEL": 738,
+    "COSMOFIRST": 738,
+    "CRAFTSMAN": 738,
+    "CREDITACC": 738,
+    "CREST": 738,
+    "CRISIL": 738,
+    "CROMPTON": 738,
+    "CSBBANK": 738,
+    "CSLFINANCE": 738,
+    "CUB": 738,
+    "CUMMINSIND": 738,
+    "CYIENT": 738,
+    "CYIENTDLM": 733,
+    "DABUR": 738,
+    "DALBHARAT": 738,
+    "DALMIASUG": 728,
+    "DAMODARIND": 738,
+    "DATAMATICS": 738,
+    "DATAPATTNS": 738,
+    "DBL": 738,
+    "DBOL": 600,
+    "DBREALTY": 699,
+    "DCAL": 680,
+    "DCBBANK": 738,
+    "DCMSHRIRAM": 738,
+    "DCMSRIND": 728,
+    "DCW": 738,
+    "DECCANCE": 738,
+    "DEEPAKFERT": 738,
+    "DEEPAKNTR": 738,
+    "DEEPINDS": 738,
+    "DELHIVERY": 738,
+    "DELTACORP": 738,
+    "DEN": 738,
+    "DENORA": 738,
+    "DEVYANI": 738,
+    "DHAMPURSUG": 738,
+    "DHANUKA": 738,
+    "DHARMAJ": 674,
+    "DHUNINV": 738,
+    "DIAMONDYD": 738,
+    "DISHTV": 625,
+    "DIVGIITTS": 738,
+    "DIVISLAB": 738,
+    "DIXON": 738,
+    "DLF": 738,
+    "DLINKINDIA": 738,
+    "DMART": 738,
+    "DMCC": 673,
+    "DODLA": 738,
+    "DOLATALGO": 738,
+    "DOLLAR": 738,
+    "DPABHUSHAN": 738,
+    "DPSCLTD": 710,
+    "DPWIRES": 738,
+    "DREAMFOLKS": 675,
+    "DRREDDY": 738,
+    "DSSL": 738,
+    "DTIL": 738,
+    "DVL": 738,
+    "DWARKESH": 738,
+    "DYNAMATECH": 738,
+    "EASEMYTRIP": 738,
+    "ECLERX": 738,
+    "EDELWEISS": 738,
+    "EICHERMOT": 738,
+    "EIDPARRY": 738,
+    "EIFFL": 607,
+    "EIHAHOTELS": 738,
+    "EIHOTEL": 738,
+    "EKC": 738,
+    "ELDEHSG": 738,
+    "ELECON": 738,
+    "ELECTCAST": 738,
+    "ELGIEQUIP": 738,
+    "ELIN": 674,
+    "EMAMILTD": 738,
+    "EMAMIPAP": 738,
+    "EMMBI": 738,
+    "EMUDHRA": 738,
+    "ENDURANCE": 738,
+    "ENGINERSIN": 738,
+    "ENIL": 738,
+    "EPL": 738,
+    "EQUITASBNK": 738,
+    "ERIS": 738,
+    "ESABINDIA": 738,
+    "ESCORTS": 738,
+    "ESTER": 738,
+    "ETHOSLTD": 738,
+    "EVEREADY": 738,
+    "EVERESTIND": 607,
+    "EXCELINDUS": 738,
+    "EXIDEIND": 738,
+    "EXPLEOSOL": 738,
+    "EXXARO": 605,
+    "FACT": 738,
+    "FAIRCHEMOR": 738,
+    "FAZE3Q": 684,
+    "FCL": 738,
+    "FCSSOFT": 688,
+    "FDC": 738,
+    "FEDERALBNK": 738,
+    "FIEMIND": 738,
+    "FILATEX": 738,
+    "FINCABLES": 738,
+    "FINEORG": 738,
+    "FINOPB": 738,
+    "FINPIPE": 738,
+    "FIVESTAR": 738,
+    "FLUOROCHEM": 738,
+    "FMGOETZE": 738,
+    "FOODSIN": 675,
+    "FORTIS": 738,
+    "FOSECOIND": 738,
+    "FSL": 738,
+    "FUSION": 738,
+    "GABRIEL": 738,
+    "GAEL": 738,
+    "GAIL": 738,
+    "GALAXYSURF": 738,
+    "GANDHITUBE": 738,
+    "GANECOS": 738,
+    "GANESHBE": 738,
+    "GANGESSECU": 738,
+    "GARFIBRES": 738,
+    "GATEWAY": 738,
+    "GEECEE": 738,
+    "GENESYS": 738,
+    "GENUSPAPER": 738,
+    "GENUSPOWER": 728,
+    "GEOJITFSL": 738,
+    "GESHIP": 738,
+    "GFLLIMITED": 717,
+    "GHCL": 738,
+    "GHCLTEXTIL": 738,
+    "GICHSGFIN": 738,
+    "GICRE": 738,
+    "GILLETTE": 738,
+    "GIPCL": 738,
+    "GLAND": 738,
+    "GLAXO": 738,
+    "GLENMARK": 738,
+    "GLOBUSSPR": 738,
+    "GMBREW": 738,
+    "GMDCLTD": 738,
+    "GMMPFAUDLR": 738,
+    "GMRP&UI": 738,
+    "GNA": 738,
+    "GNFC": 738,
+    "GOACARBON": 738,
+    "GOCLCORP": 738,
+    "GOCOLORS": 738,
+    "GODFRYPHLP": 738,
+    "GODREJAGRO": 738,
+    "GODREJCP": 738,
+    "GODREJIND": 738,
+    "GODREJPROP": 738,
+    "GOKEX": 738,
+    "GOKULAGRO": 738,
+    "GOLDIAM": 738,
+    "GOODLUCK": 738,
+    "GPIL": 738,
+    "GPPL": 738,
+    "GRANULES": 738,
+    "GRAPHITE": 738,
+    "GRASIM": 738,
+    "GRAVITA": 738,
+    "GREAVESCOT": 738,
+    "GREENLAM": 738,
+    "GREENPANEL": 738,
+    "GREENPLY": 738,
+    "GRINDWELL": 738,
+    "GRINFRA": 738,
+    "GRMOVER": 738,
+    "GROBTEA": 622,
+    "GRSE": 738,
+    "GRWRHITECH": 738,
+    "GSFC": 738,
+    "GSLSU": 681,
+    "GTLINFRA": 738,
+    "GTPL": 738,
+    "GUFICBIO": 738,
+    "GUJALKALI": 738,
+    "GUJGASLTD": 738,
+    "GULFOILLUB": 738,
+    "GULPOLY": 738,
+    "HAL": 738,
+    "HAPPSTMNDS": 738,
+    "HARDWYN": 547,
+    "HARIOMPIPE": 738,
+    "HARSHA": 738,
+    "HATHWAY": 738,
+    "HATSUN": 738,
+    "HAVELLS": 738,
+    "HCC": 680,
+    "HCG": 738,
+    "HCLTECH": 738,
+    "HDFCAMC": 738,
+    "HDFCBANK": 738,
+    "HDFCLIFE": 738,
+    "HEG": 738,
+    "HEIDELBERG": 738,
+    "HEMIPROP": 738,
+    "HERANBA": 662,
+    "HERITGFOOD": 738,
+    "HEROMOTOCO": 738,
+    "HESTERBIO": 738,
+    "HFCL": 738,
+    "HGINFRA": 738,
+    "HGS": 738,
+    "HIKAL": 738,
+    "HIMATSEIDE": 738,
+    "HINDALCO": 738,
+    "HINDCOMPOS": 738,
+    "HINDCOPPER": 738,
+    "HINDOILEXP": 738,
+    "HINDPETRO": 738,
+    "HINDUNILVR": 738,
+    "HINDWAREAP": 738,
+    "HINDZINC": 738,
+    "HITECH": 738,
+    "HLEGLAS": 738,
+    "HMAAGRO": 737,
+    "HNDFDS": 738,
+    "HOMEFIRST": 738,
+    "HONAUT": 738,
+    "HONDAPOWER": 738,
+    "HPAL": 738,
+    "HPL": 738,
+    "HTMEDIA": 621,
+    "HUDCO": 738,
+    "HUHTAMAKI": 738,
+    "ICEMAKE": 738,
+    "ICICIBANK": 738,
+    "ICICIGI": 738,
+    "ICICIPRULI": 738,
+    "ICIL": 738,
+    "ICRA": 738,
+    "IDBI": 738,
+    "IDEA": 738,
+    "IDEAFORGE": 705,
+    "IDFCFIRSTB": 738,
+    "IEX": 738,
+    "IFBIND": 738,
+    "IFCI": 738,
+    "IFGLEXPOR": 738,
+    "IGARASHI": 738,
+    "IGL": 738,
+    "IGPL": 738,
+    "IIFL": 738,
+    "IKIO": 738,
+    "IMAGICAA": 738,
+    "IMFA": 738,
+    "IMPAL": 738,
+    "INDHOTEL": 738,
+    "INDIACEM": 738,
+    "INDIAGLYCO": 738,
+    "INDIAMART": 738,
+    "INDIANB": 738,
+    "INDIANCARD": 676,
+    "INDIANHUME": 738,
+    "INDIGO": 738,
+    "INDIGOPNTS": 738,
+    "INDNIPPON": 738,
+    "INDOAMIN": 736,
+    "INDOCO": 738,
+    "INDORAMA": 680,
+    "INDTERRAIN": 738,
+    "INDUSINDBK": 738,
+    "INDUSTOWER": 738,
+    "INFOBEAN": 738,
+    "INFY": 738,
+    "INGERRAND": 738,
+    "INOXWIND": 738,
+    "INSECTICID": 738,
+    "INTELLECT": 738,
+    "INTLCONV": 738,
+    "IOB": 738,
+    "IOC": 738,
+    "IOLCP": 738,
+    "IONEXCHANG": 738,
+    "IPCALAB": 738,
+    "IPL": 738,
+    "IRB": 738,
+    "IRCON": 738,
+    "IRCTC": 738,
+    "IRFC": 738,
+    "IRISDOREME": 675,
+    "ISGEC": 738,
+    "ITC": 738,
+    "ITDC": 738,
+    "ITI": 677,
+    "J&KBANK": 738,
+    "JAGRAN": 738,
+    "JAGSNPHARM": 738,
+    "JAICORPLTD": 738,
+    "JAMNAAUTO": 738,
+    "JASH": 738,
+    "JAYAGROGN": 738,
+    "JAYBARMARU": 675,
+    "JAYNECOIND": 738,
+    "JAYSREETEA": 738,
+    "JBCHEPHARM": 738,
+    "JINDALPHOT": 673,
+    "JINDALPOLY": 738,
+    "JINDALSAW": 738,
+    "JINDALSTEL": 738,
+    "JINDRILL": 738,
+    "JINDWORLD": 738,
+    "JISLJALEQS": 738,
+    "JKCEMENT": 738,
+    "JKIL": 738,
+    "JKLAKSHMI": 738,
+    "JKPAPER": 738,
+    "JKTYRE": 738,
+    "JMFINANCIL": 738,
+    "JOCIL": 718,
+    "JPOLYINVST": 738,
+    "JSL": 738,
+    "JSWENERGY": 738,
+    "JSWHL": 597,
+    "JSWSTEEL": 738,
+    "JTEKTINDIA": 738,
+    "JTLIND": 738,
+    "JUBLFOOD": 738,
+    "JUBLINGREA": 738,
+    "JUBLPHARMA": 738,
+    "JUSTDIAL": 738,
+    "JWL": 738,
+    "JYOTHYLAB": 738,
+    "KABRAEXTRU": 675,
+    "KAJARIACER": 738,
+    "KAKATCEM": 697,
+    "KALYANKJIL": 738,
+    "KAMDHENU": 731,
+    "KANORICHEM": 709,
+    "KANPRPLA": 671,
+    "KANSAINER": 738,
+    "KARURVYSYA": 738,
+    "KAYNES": 738,
+    "KCP": 738,
+    "KDDL": 738,
+    "KEC": 738,
+    "KEI": 738,
+    "KELLTONTEC": 738,
+    "KFINTECH": 738,
+    "KHAICHEM": 631,
+    "KIMS": 738,
+    "KINGFA": 681,
+    "KIOCL": 721,
+    "KIRIINDUS": 738,
+    "KIRLOSBROS": 738,
+    "KIRLOSENG": 738,
+    "KIRLOSIND": 738,
+    "KIRLPNU": 738,
+    "KITEX": 624,
+    "KKCL": 738,
+    "KNRCON": 738,
+    "KOLTEPATIL": 738,
+    "KOPRAN": 650,
+    "KOTAKBANK": 738,
+    "KOTHARIPET": 738,
+    "KPIL": 738,
+    "KPITTECH": 738,
+    "KPRMILL": 738,
+    "KRBL": 738,
+    "KRISHANA": 738,
+    "KRITI": 572,
+    "KRSNAA": 738,
+    "KSB": 738,
+    "KSCL": 738,
+    "KSL": 738,
+    "KTKBANK": 738,
+    "KUANTUM": 738,
+    "LALPATHLAB": 738,
+    "LANDMARK": 738,
+    "LAOPALA": 738,
+    "LAURUSLABS": 738,
+    "LAXMICOT": 675,
+    "LEMONTREE": 738,
+    "LGBBROSLTD": 738,
+    "LIBAS": 738,
+    "LICHSGFIN": 738,
+    "LICI": 738,
+    "LIKHITHA": 685,
+    "LINC": 674,
+    "LINCOLN": 738,
+    "LINDEINDIA": 738,
+    "LODHA": 738,
+    "LOYALTEX": 455,
+    "LT": 738,
+    "LTTS": 738,
+    "LUMAXIND": 738,
+    "LUMAXTECH": 738,
+    "LUPIN": 738,
+    "LUXIND": 738,
+    "LXCHEM": 738,
+    "M&M": 738,
+    "M&MFIN": 738,
+    "MADRASFERT": 738,
+    "MAGADSUGAR": 738,
+    "MAHABANK": 738,
+    "MAHLIFE": 738,
+    "MAHLOG": 738,
+    "MAHSCOOTER": 714,
+    "MAHSEAMLES": 738,
+    "MAITHANALL": 738,
+    "MALLCOM": 673,
+    "MANAKSIA": 738,
+    "MANALIPETC": 738,
+    "MANAPPURAM": 738,
+    "MANGALAM": 647,
+    "MANGLMCEM": 738,
+    "MANINFRA": 738,
+    "MANKIND": 738,
+    "MANYAVAR": 738,
+    "MAPMYINDIA": 738,
+    "MARALOVER": 706,
+    "MARATHON": 738,
+    "MARICO": 738,
+    "MARKSANS": 738,
+    "MARUTI": 738,
+    "MASFIN": 738,
+    "MASTEK": 738,
+    "MATRIMONY": 738,
+    "MAWANASUG": 702,
+    "MAXHEALTH": 738,
+    "MAYURUNIQ": 738,
+    "MAZDOCK": 738,
+    "MBAPL": 738,
+    "MCX": 738,
+    "MEDANTA": 738,
+    "MEDICAMEQ": 738,
+    "MEDPLUS": 738,
+    "MENONBE": 736,
+    "METROBRAND": 738,
+    "METROPOLIS": 738,
+    "MFSL": 738,
+    "MGL": 738,
+    "MHRIL": 738,
+    "MIDHANI": 738,
+    "MINDACORP": 738,
+    "MMFL": 738,
+    "MMTC": 727,
+    "MOIL": 738,
+    "MOL": 738,
+    "MOLDTECH": 738,
+    "MOLDTKPAC": 738,
+    "MONARCH": 738,
+    "MONTECARLO": 738,
+    "MOREPENLAB": 738,
+    "MOTHERSON": 738,
+    "MOTILALOFS": 738,
+    "MPHASIS": 738,
+    "MPSLTD": 738,
+    "MRF": 738,
+    "MRPL": 738,
+    "MSTCLTD": 738,
+    "MSUMI": 738,
+    "MTARTECH": 735,
+    "MTNL": 738,
+    "MUKANDLTD": 738,
+    "MUNJALAU": 738,
+    "MUNJALSHOW": 738,
+    "MUTHOOTCAP": 738,
+    "MUTHOOTFIN": 738,
+    "NACLIND": 576,
+    "NAHARCAP": 674,
+    "NAHARINDUS": 672,
+    "NAHARSPING": 692,
+    "NAM-INDIA": 738,
+    "NATCOPHARM": 738,
+    "NATIONALUM": 738,
+    "NAUKRI": 738,
+    "NAVA": 738,
+    "NAVINFLUOR": 738,
+    "NAVKARCORP": 738,
+    "NAVNETEDUL": 738,
+    "NAZARA": 738,
+    "NBCC": 738,
+    "NCC": 738,
+    "NCLIND": 738,
+    "NDTV": 680,
+    "NECLIFE": 479,
+    "NELCAST": 738,
+    "NELCO": 738,
+    "NEOGEN": 738,
+    "NESCO": 738,
+    "NESTLEIND": 738,
+    "NEULANDLAB": 738,
+    "NFL": 738,
+    "NGLFINE": 644,
+    "NH": 738,
+    "NHPC": 738,
+    "NIACL": 738,
+    "NIITLTD": 738,
+    "NILKAMAL": 738,
+    "NITINSPIN": 738,
+    "NLCINDIA": 738,
+    "NMDC": 738,
+    "NOCIL": 738,
+    "NRAIL": 672,
+    "NRBBEARING": 738,
+    "NRL": 602,
+    "NSIL": 717,
+    "NSLNISP": 738,
+    "NTPC": 738,
+    "NUVOCO": 738,
+    "NYKAA": 738,
+    "OAL": 738,
+    "OBCL": 738,
+    "OBEROIRLTY": 738,
+    "OFSS": 738,
+    "OIL": 738,
+    "OLECTRA": 738,
+    "ONGC": 738,
+    "ONMOBILE": 738,
+    "ONWARDTEC": 672,
+    "OPTIEMUS": 681,
+    "ORIENTBELL": 738,
+    "ORIENTCEM": 738,
+    "ORIENTELEC": 738,
+    "ORIENTHOT": 738,
+    "ORIENTPPR": 738,
+    "ORISSAMINE": 738,
+    "OSWALGREEN": 738,
+    "PAGEIND": 738,
+    "PAISALO": 738,
+    "PAKKA": 732,
+    "PANACEABIO": 681,
+    "PANAMAPET": 738,
+    "PARADEEP": 738,
+    "PARAGMILK": 738,
+    "PAYTM": 738,
+    "PCBL": 738,
+    "PCJEWELLER": 681,
+    "PDMJEPAPER": 670,
+    "PDSL": 738,
+    "PENIND": 738,
+    "PENINLAND": 604,
+    "PERSISTENT": 738,
+    "PETRONET": 738,
+    "PFC": 738,
+    "PFIZER": 738,
+    "PGEL": 738,
+    "PGHH": 738,
+    "PGHL": 738,
+    "PHOENIXLTD": 738,
+    "PIDILITIND": 738,
+    "PIIND": 738,
+    "PILANIINVS": 716,
+    "PITTIENG": 738,
+    "PIXTRANS": 738,
+    "PNB": 738,
+    "PNBGILTS": 738,
+    "PNBHOUSING": 738,
+    "PNC": 535,
+    "PNCINFRA": 738,
+    "POCL": 738,
+    "PODDARMENT": 738,
+    "POKARNA": 738,
+    "POLICYBZR": 738,
+    "POLYCAB": 738,
+    "POLYMED": 738,
+    "POLYPLEX": 738,
+    "PONNIERODE": 738,
+    "POONAWALLA": 738,
+    "POWERGRID": 738,
+    "POWERINDIA": 738,
+    "POWERMECH": 737,
+    "PPAP": 657,
+    "PPL": 738,
+    "PPLPHARMA": 738,
+    "PRAJIND": 738,
+    "PRECAM": 738,
+    "PRECWIRE": 738,
+    "PRESTIGE": 738,
+    "PRICOLLTD": 738,
+    "PRIMESECU": 738,
+    "PRINCEPIPE": 738,
+    "PRIVISCL": 738,
+    "PRSMJOHNSN": 738,
+    "PRUDENT": 738,
+    "PSB": 738,
+    "PSPPROJECT": 738,
+    "PTC": 738,
+    "PTL": 738,
+    "PUNJABCHEM": 738,
+    "PVRINOX": 738,
+    "QUESS": 728,
+    "QUICKHEAL": 720,
+    "RACE": 685,
+    "RADHIKAJWE": 677,
+    "RADIANTCMS": 738,
+    "RADICO": 738,
+    "RAILTEL": 738,
+    "RAIN": 738,
+    "RAINBOW": 738,
+    "RAJRATAN": 738,
+    "RALLIS": 738,
+    "RAMANEWS": 603,
+    "RAMAPHO": 640,
+    "RAMASTEEL": 736,
+    "RAMCOCEM": 738,
+    "RAMCOIND": 738,
+    "RAMKY": 738,
+    "RAMRAT": 738,
+    "RANASUG": 738,
+    "RANEHOLDIN": 738,
+    "RATEGAIN": 738,
+    "RATNAMANI": 738,
+    "RBA": 738,
+    "RBLBANK": 738,
+    "RCF": 738,
+    "RECLTD": 738,
+    "REDINGTON": 738,
+    "REFEX": 646,
+    "RELAXO": 738,
+    "RELIANCE": 738,
+    "RELIGARE": 738,
+    "RENUKA": 738,
+    "REPCOHOME": 738,
+    "REPL": 631,
+    "REPRO": 738,
+    "RESPONIND": 738,
+    "RGL": 738,
+    "RHIM": 738,
+    "RICOAUTO": 738,
+    "RIIL": 738,
+    "RITES": 738,
+    "RKFORGE": 738,
+    "RML": 738,
+    "ROHLTD": 738,
+    "ROLEXRINGS": 738,
+    "ROSSARI": 738,
+    "ROSSELLIND": 571,
+    "ROTO": 738,
+    "ROUTE": 738,
+    "RPGLIFE": 738,
+    "RPSGVENT": 738,
+    "RSWM": 730,
+    "RSYSTEMS": 738,
+    "RTNINDIA": 738,
+    "RUBYMILLS": 721,
+    "RUCHIRA": 738,
+    "RUPA": 738,
+    "RUSHIL": 738,
+    "RUSTOMJEE": 738,
+    "RVNL": 738,
+    "SADHNANIQ": 498,
+    "SAFARI": 738,
+    "SAGCEM": 738,
+    "SAHYADRI": 738,
+    "SAIL": 738,
+    "SAKAR": 674,
+    "SAKHTISUG": 738,
+    "SALASAR": 738,
+    "SALONA": 738,
+    "SALZERELEC": 738,
+    "SANDESH": 738,
+    "SANDHAR": 738,
+    "SANGAMIND": 738,
+    "SANGHVIMOV": 738,
+    "SANSERA": 738,
+    "SAPPHIRE": 738,
+    "SARDAEN": 738,
+    "SASKEN": 738,
+    "SATIA": 738,
+    "SATIN": 738,
+    "SBCL": 738,
+    "SBGLP": 631,
+    "SBICARD": 738,
+    "SBILIFE": 738,
+    "SBIN": 738,
+    "SCHAEFFLER": 738,
+    "SCHAND": 738,
+    "SCI": 738,
+    "SDBL": 738,
+    "SENCO": 729,
+    "SEPC": 738,
+    "SESHAPAPER": 738,
+    "SFL": 738,
+    "SHAILY": 680,
+    "SHALBY": 738,
+    "SHALPAINTS": 738,
+    "SHANKARA": 663,
+    "SHANTIGEAR": 738,
+    "SHARDACROP": 738,
+    "SHARDAMOTR": 738,
+    "SHAREINDIA": 738,
+    "SHILPAMED": 680,
+    "SHIVALIK": 719,
+    "SHK": 738,
+    "SHOPERSTOP": 738,
+    "SHREDIGCEM": 738,
+    "SHREECEM": 738,
+    "SHRIRAMFIN": 738,
+    "SHRIRAMPPS": 738,
+    "SHYAMMETL": 738,
+    "SIEMENS": 738,
+    "SIGACHI": 695,
+    "SILINV": 662,
+    "SILVERTUC": 738,
+    "SINTERCOM": 736,
+    "SIRCA": 738,
+    "SIS": 738,
+    "SIYSIL": 738,
+    "SJS": 738,
+    "SJVN": 738,
+    "SKFINDIA": 727,
+    "SKIPPER": 738,
+    "SKMEGGPROD": 643,
+    "SMCGLOBAL": 738,
+    "SMSPHARMA": 738,
+    "SNOWMAN": 738,
+    "SOBHA": 738,
+    "SOLARINDS": 738,
+    "SOMANYCERA": 738,
+    "SONACOMS": 738,
+    "SONATSOFTW": 738,
+    "SOTL": 738,
+    "SOUTHBANK": 738,
+    "SPAL": 738,
+    "SPANDANA": 738,
+    "SPCENET": 516,
+    "SPECIALITY": 738,
+    "SPENCERS": 738,
+    "SPIC": 738,
+    "SPLIL": 646,
+    "SPLPETRO": 738,
+    "SPORTKING": 738,
+    "SREEL": 738,
+    "SRF": 738,
+    "SRHHYPOLTD": 738,
+    "SSWL": 738,
+    "STAR": 728,
+    "STARCEMENT": 738,
+    "STARHEALTH": 738,
+    "STARPAPER": 738,
+    "STCINDIA": 674,
+    "STEELCAS": 738,
+    "STEELCITY": 738,
+    "STEELXIND": 738,
+    "STERTOOLS": 736,
+    "STLTECH": 696,
+    "STOVEKRAFT": 738,
+    "STYLAMIND": 738,
+    "STYRENIX": 738,
+    "SUBEXLTD": 647,
+    "SUBROS": 738,
+    "SUDARSCHEM": 738,
+    "SUKHJITS": 738,
+    "SULA": 738,
+    "SUMICHEM": 738,
+    "SUMMITSEC": 738,
+    "SUNDARMFIN": 738,
+    "SUNDRMFAST": 738,
+    "SUNFLAG": 680,
+    "SUNPHARMA": 738,
+    "SUNTECK": 738,
+    "SUNTV": 738,
+    "SUPERHOUSE": 738,
+    "SUPRAJIT": 738,
+    "SUPREMEIND": 738,
+    "SUPRIYA": 738,
+    "SURYALAXMI": 738,
+    "SURYAROSNI": 738,
+    "SURYODAY": 738,
+    "SUTLEJTEX": 660,
+    "SWARAJENG": 738,
+    "SWELECTES": 650,
+    "SYMPHONY": 738,
+    "SYNGENE": 738,
+    "SYRMA": 738,
+    "TAJGVK": 738,
+    "TANLA": 738,
+    "TARSONS": 738,
+    "TASTYBITE": 738,
+    "TATACHEM": 738,
+    "TATACOMM": 738,
+    "TATACONSUM": 738,
+    "TATAELXSI": 738,
+    "TATAPOWER": 738,
+    "TATASTEEL": 738,
+    "TATVA": 738,
+    "TBZ": 738,
+    "TCI": 738,
+    "TCIEXP": 738,
+    "TCPLPACK": 738,
+    "TCS": 738,
+    "TDPOWERSYS": 738,
+    "TEAMLEASE": 738,
+    "TECHM": 738,
+    "TEGA": 738,
+    "TEJASNET": 738,
+    "TEXINFRA": 738,
+    "TEXRAIL": 738,
+    "TFCILTD": 738,
+    "THANGAMAYL": 738,
+    "THEMISMED": 738,
+    "THERMAX": 738,
+    "THYROCARE": 738,
+    "TI": 738,
+    "TIIL": 738,
+    "TIINDIA": 738,
+    "TIMETECHNO": 738,
+    "TIMKEN": 738,
+    "TIRUMALCHM": 738,
+    "TITAGARH": 738,
+    "TITAN": 738,
+    "TMB": 738,
+    "TNPETRO": 673,
+    "TNPL": 738,
+    "TORNTPHARM": 738,
+    "TORNTPOWER": 738,
+    "TRACXN": 738,
+    "TRENT": 738,
+    "TRIDENT": 738,
+    "TRITURBINE": 738,
+    "TRIVENI": 738,
+    "TRU": 504,
+    "TTKHLTCARE": 738,
+    "TTKPRESTIG": 738,
+    "TTL": 553,
+    "TTML": 680,
+    "TVSMOTOR": 738,
+    "TVSSRICHAK": 738,
+    "TVTODAY": 738,
+    "UBL": 738,
+    "UCOBANK": 738,
+    "UFLEX": 738,
+    "UGARSUGAR": 738,
+    "UGROCAP": 738,
+    "UJJIVANSFB": 738,
+    "ULTRACEMCO": 738,
+    "UNICHEMLAB": 738,
+    "UNIDT": 723,
+    "UNIENTER": 738,
+    "UNIONBANK": 738,
+    "UNIPARTS": 738,
+    "UNITEDTEA": 738,
+    "UNIVCABLES": 738,
+    "UNIVPHOTO": 522,
+    "UNOMINDA": 738,
+    "UPL": 738,
+    "USHAMART": 738,
+    "UTIAMC": 738,
+    "UTTAMSUGAR": 738,
+    "VADILALIND": 738,
+    "VAIBHAVGBL": 738,
+    "VAISHALI": 625,
+    "VAKRANGEE": 670,
+    "VALIANTORG": 637,
+    "VARDHACRLC": 738,
+    "VARROC": 738,
+    "VASCONEQ": 699,
+    "VBL": 738,
+    "VEDL": 738,
+    "VENKEYS": 738,
+    "VENUSPIPES": 738,
+    "VESUVIUS": 738,
+    "VGUARD": 738,
+    "VHL": 723,
+    "VIDHIING": 738,
+    "VIJAYA": 738,
+    "VIMTALABS": 738,
+    "VINATIORGA": 738,
+    "VINDHYATEL": 738,
+    "VINYLINDIA": 674,
+    "VIPIND": 738,
+    "VISAKAIND": 674,
+    "VISHNU": 738,
+    "VISHWARAJ": 717,
+    "VLSFINANCE": 738,
+    "VMART": 738,
+    "VOLTAMP": 738,
+    "VOLTAS": 738,
+    "VRLLOG": 738,
+    "VSSL": 738,
+    "VSTIND": 738,
+    "VSTTILLERS": 738,
+    "VTL": 738,
+    "WABAG": 738,
+    "WELCORP": 738,
+    "WELENT": 738,
+    "WENDT": 738,
+    "WESTLIFE": 738,
+    "WHEELS": 738,
+    "WHIRLPOOL": 738,
+    "WINDLAS": 738,
+    "WIPRO": 738,
+    "WONDERLA": 738,
+    "WSTCSTPAPR": 738,
+    "XCHANGING": 738,
+    "XPROINDIA": 738,
+    "YESBANK": 738,
+    "YUKEN": 738,
+    "ZEEL": 738,
+    "ZEEMEDIA": 627,
+    "ZENSARTECH": 738,
+    "ZFCVINDIA": 738,
+    "ZIMLAB": 706,
+    "ZOTA": 738,
+    "ZUARI": 738,
+    "ZUARIIND": 738,
+    "ZYDUSLIFE": 738,
+    "ZYDUSWELL": 738
+  },
+  "run": {
+    "capital": "500000",
+    "eval_end": "2026-06-30",
+    "eval_start": "2024-10-01",
+    "risk_pct": "2",
+    "since": "2023-07-03",
+    "tp_approximated": true,
+    "tp_rule": [
+      "flat_pct",
+      "15"
+    ]
+  },
+  "schema": "walkforward-golden-v1",
+  "symbols": [
+    "360ONE",
+    "3IINFOLTD",
+    "3MINDIA",
+    "5PAISA",
+    "AARTIDRUGS",
+    "AARTIIND",
+    "AARTIPHARM",
+    "AARTISURF",
+    "AARVI",
+    "AAVAS",
+    "ABB",
+    "ABBOTINDIA",
+    "ABCAPITAL",
+    "ABFRL",
+    "ABSLAMC",
+    "ACC",
+    "ACCELYA",
+    "ACE",
+    "ACI",
+    "ADANIENT",
+    "ADANIGREEN",
+    "ADANIPORTS",
+    "ADFFOODS",
+    "ADSL",
+    "ADVANIHOTR",
+    "ADVENZYMES",
+    "AETHER",
+    "AFFLE",
+    "AGARIND",
+    "AGI",
+    "AGROPHOS",
+    "AHLEAST",
+    "AHLUCONT",
+    "AIAENG",
+    "AJANTPHARM",
+    "ALEMBICLTD",
+    "ALICON",
+    "ALKEM",
+    "ALKYLAMINE",
+    "ALLCARGO",
+    "ALPA",
+    "AMBER",
+    "AMBIKCO",
+    "AMBUJACEM",
+    "AMRUTANJAN",
+    "ANANDRATHI",
+    "ANANTRAJ",
+    "ANDHRAPAP",
+    "ANDHRSUGAR",
+    "ANGELONE",
+    "ANUP",
+    "ANURAS",
+    "APARINDS",
+    "APCL",
+    "APCOTEXIND",
+    "APEX",
+    "APLAPOLLO",
+    "APLLTD",
+    "APOLLOHOSP",
+    "APOLLOPIPE",
+    "APOLLOTYRE",
+    "APTECHT",
+    "APTUS",
+    "ARIES",
+    "ARIHANTCAP",
+    "ARIHANTSUP",
+    "ARMANFIN",
+    "ARTEMISMED",
+    "ARVIND",
+    "ARVINDFASN",
+    "ARVSMART",
+    "ASAHIINDIA",
+    "ASAL",
+    "ASALCBR",
+    "ASHIANA",
+    "ASHOKA",
+    "ASHOKLEY",
+    "ASIANPAINT",
+    "ASIANTILES",
+    "ASPINWALL",
+    "ASTEC",
+    "ASTERDM",
+    "ASTRAL",
+    "ASTRAMICRO",
+    "ASTRAZEN",
+    "ATGL",
+    "ATUL",
+    "AUBANK",
+    "AUROPHARMA",
+    "AUTOAXLES",
+    "AVADHSUGAR",
+    "AVALON",
+    "AVANTIFEED",
+    "AVG",
+    "AVTNPL",
+    "AWHCL",
+    "AWL",
+    "AXISBANK",
+    "BAJAJ-AUTO",
+    "BAJAJCON",
+    "BAJAJFINSV",
+    "BAJAJHCARE",
+    "BAJAJHIND",
+    "BAJAJHLDNG",
+    "BAJFINANCE",
+    "BALAMINES",
+    "BALAXI",
+    "BALKRISIND",
+    "BALMLAWRIE",
+    "BALRAMCHIN",
+    "BANARBEADS",
+    "BANARISUG",
+    "BANCOINDIA",
+    "BANDHANBNK",
+    "BANKBARODA",
+    "BANKINDIA",
+    "BANSWRAS",
+    "BASF",
+    "BASML",
+    "BATAINDIA",
+    "BAYERCROP",
+    "BBL",
+    "BBTC",
+    "BBTCL",
+    "BCLIND",
+    "BDL",
+    "BECTORFOOD",
+    "BEL",
+    "BEML",
+    "BEPL",
+    "BERGEPAINT",
+    "BFINVEST",
+    "BFUTILITIE",
+    "BHAGCHEM",
+    "BHAGERIA",
+    "BHARATFORG",
+    "BHARATGEAR",
+    "BHARATRAS",
+    "BHARTIARTL",
+    "BHEL",
+    "BIGBLOC",
+    "BIKAJI",
+    "BIOCON",
+    "BIOFILCHEM",
+    "BIRLACABLE",
+    "BIRLACORPN",
+    "BLAL",
+    "BLISSGVS",
+    "BLKASHYAP",
+    "BLS",
+    "BLUEDART",
+    "BLUESTARCO",
+    "BODALCHEM",
+    "BOMDYEING",
+    "BORORENEW",
+    "BOSCHLTD",
+    "BPCL",
+    "BRIGADE",
+    "BRITANNIA",
+    "BSE",
+    "BSOFT",
+    "BUTTERFLY",
+    "CAMLINFINE",
+    "CAMPUS",
+    "CAMS",
+    "CANBK",
+    "CANFINHOME",
+    "CANTABIL",
+    "CAPACITE",
+    "CAPLIPOINT",
+    "CARBORUNIV",
+    "CARERATING",
+    "CARTRADE",
+    "CARYSIL",
+    "CASTROLIND",
+    "CCL",
+    "CDSL",
+    "CEATLTD",
+    "CENTENKA",
+    "CENTRALBK",
+    "CENTRUM",
+    "CENTURYPLY",
+    "CERA",
+    "CESC",
+    "CGCL",
+    "CGPOWER",
+    "CHALET",
+    "CHAMBLFERT",
+    "CHEMBOND",
+    "CHEMCON",
+    "CHEMFAB",
+    "CHEMPLASTS",
+    "CHENNPETRO",
+    "CHEVIOT",
+    "CHOICEIN",
+    "CHOLAFIN",
+    "CHOLAHLDNG",
+    "CIEINDIA",
+    "CIPLA",
+    "CLEAN",
+    "CLSEL",
+    "CMSINFO",
+    "COALINDIA",
+    "COASTCORP",
+    "COCHINSHIP",
+    "COFORGE",
+    "COLPAL",
+    "CONCOR",
+    "CONFIPET",
+    "CONTROLPR",
+    "COROMANDEL",
+    "COSMOFIRST",
+    "CRAFTSMAN",
+    "CREDITACC",
+    "CREST",
+    "CRISIL",
+    "CROMPTON",
+    "CSBBANK",
+    "CSLFINANCE",
+    "CUB",
+    "CUMMINSIND",
+    "CYIENT",
+    "CYIENTDLM",
+    "DABUR",
+    "DALBHARAT",
+    "DALMIASUG",
+    "DAMODARIND",
+    "DATAMATICS",
+    "DATAPATTNS",
+    "DBL",
+    "DBOL",
+    "DBREALTY",
+    "DCAL",
+    "DCBBANK",
+    "DCMSHRIRAM",
+    "DCMSRIND",
+    "DCW",
+    "DECCANCE",
+    "DEEPAKFERT",
+    "DEEPAKNTR",
+    "DEEPINDS",
+    "DELHIVERY",
+    "DELTACORP",
+    "DEN",
+    "DENORA",
+    "DEVYANI",
+    "DHAMPURSUG",
+    "DHANUKA",
+    "DHARMAJ",
+    "DHUNINV",
+    "DIAMONDYD",
+    "DISHTV",
+    "DIVGIITTS",
+    "DIVISLAB",
+    "DIXON",
+    "DLF",
+    "DLINKINDIA",
+    "DMART",
+    "DMCC",
+    "DODLA",
+    "DOLATALGO",
+    "DOLLAR",
+    "DPABHUSHAN",
+    "DPSCLTD",
+    "DPWIRES",
+    "DREAMFOLKS",
+    "DRREDDY",
+    "DSSL",
+    "DTIL",
+    "DVL",
+    "DWARKESH",
+    "DYNAMATECH",
+    "EASEMYTRIP",
+    "ECLERX",
+    "EDELWEISS",
+    "EICHERMOT",
+    "EIDPARRY",
+    "EIFFL",
+    "EIHAHOTELS",
+    "EIHOTEL",
+    "EKC",
+    "ELDEHSG",
+    "ELECON",
+    "ELECTCAST",
+    "ELGIEQUIP",
+    "ELIN",
+    "EMAMILTD",
+    "EMAMIPAP",
+    "EMMBI",
+    "EMUDHRA",
+    "ENDURANCE",
+    "ENGINERSIN",
+    "ENIL",
+    "EPL",
+    "EQUITASBNK",
+    "ERIS",
+    "ESABINDIA",
+    "ESCORTS",
+    "ESTER",
+    "ETHOSLTD",
+    "EVEREADY",
+    "EVERESTIND",
+    "EXCELINDUS",
+    "EXIDEIND",
+    "EXPLEOSOL",
+    "EXXARO",
+    "FACT",
+    "FAIRCHEMOR",
+    "FAZE3Q",
+    "FCL",
+    "FCSSOFT",
+    "FDC",
+    "FEDERALBNK",
+    "FIEMIND",
+    "FILATEX",
+    "FINCABLES",
+    "FINEORG",
+    "FINOPB",
+    "FINPIPE",
+    "FIVESTAR",
+    "FLUOROCHEM",
+    "FMGOETZE",
+    "FOODSIN",
+    "FORTIS",
+    "FOSECOIND",
+    "FSL",
+    "FUSION",
+    "GABRIEL",
+    "GAEL",
+    "GAIL",
+    "GALAXYSURF",
+    "GANDHITUBE",
+    "GANECOS",
+    "GANESHBE",
+    "GANGESSECU",
+    "GARFIBRES",
+    "GATEWAY",
+    "GEECEE",
+    "GENESYS",
+    "GENUSPAPER",
+    "GENUSPOWER",
+    "GEOJITFSL",
+    "GESHIP",
+    "GFLLIMITED",
+    "GHCL",
+    "GHCLTEXTIL",
+    "GICHSGFIN",
+    "GICRE",
+    "GILLETTE",
+    "GIPCL",
+    "GLAND",
+    "GLAXO",
+    "GLENMARK",
+    "GLOBUSSPR",
+    "GMBREW",
+    "GMDCLTD",
+    "GMMPFAUDLR",
+    "GMRP&UI",
+    "GNA",
+    "GNFC",
+    "GOACARBON",
+    "GOCLCORP",
+    "GOCOLORS",
+    "GODFRYPHLP",
+    "GODREJAGRO",
+    "GODREJCP",
+    "GODREJIND",
+    "GODREJPROP",
+    "GOKEX",
+    "GOKULAGRO",
+    "GOLDIAM",
+    "GOODLUCK",
+    "GPIL",
+    "GPPL",
+    "GRANULES",
+    "GRAPHITE",
+    "GRASIM",
+    "GRAVITA",
+    "GREAVESCOT",
+    "GREENLAM",
+    "GREENPANEL",
+    "GREENPLY",
+    "GRINDWELL",
+    "GRINFRA",
+    "GRMOVER",
+    "GROBTEA",
+    "GRSE",
+    "GRWRHITECH",
+    "GSFC",
+    "GSLSU",
+    "GTLINFRA",
+    "GTPL",
+    "GUFICBIO",
+    "GUJALKALI",
+    "GUJGASLTD",
+    "GULFOILLUB",
+    "GULPOLY",
+    "HAL",
+    "HAPPSTMNDS",
+    "HARDWYN",
+    "HARIOMPIPE",
+    "HARSHA",
+    "HATHWAY",
+    "HATSUN",
+    "HAVELLS",
+    "HCC",
+    "HCG",
+    "HCLTECH",
+    "HDFCAMC",
+    "HDFCBANK",
+    "HDFCLIFE",
+    "HEG",
+    "HEIDELBERG",
+    "HEMIPROP",
+    "HERANBA",
+    "HERITGFOOD",
+    "HEROMOTOCO",
+    "HESTERBIO",
+    "HFCL",
+    "HGINFRA",
+    "HGS",
+    "HIKAL",
+    "HIMATSEIDE",
+    "HINDALCO",
+    "HINDCOMPOS",
+    "HINDCOPPER",
+    "HINDOILEXP",
+    "HINDPETRO",
+    "HINDUNILVR",
+    "HINDWAREAP",
+    "HINDZINC",
+    "HITECH",
+    "HLEGLAS",
+    "HMAAGRO",
+    "HNDFDS",
+    "HOMEFIRST",
+    "HONAUT",
+    "HONDAPOWER",
+    "HPAL",
+    "HPL",
+    "HTMEDIA",
+    "HUDCO",
+    "HUHTAMAKI",
+    "ICEMAKE",
+    "ICICIBANK",
+    "ICICIGI",
+    "ICICIPRULI",
+    "ICIL",
+    "ICRA",
+    "IDBI",
+    "IDEA",
+    "IDEAFORGE",
+    "IDFCFIRSTB",
+    "IEX",
+    "IFBIND",
+    "IFCI",
+    "IFGLEXPOR",
+    "IGARASHI",
+    "IGL",
+    "IGPL",
+    "IIFL",
+    "IKIO",
+    "IMAGICAA",
+    "IMFA",
+    "IMPAL",
+    "INDHOTEL",
+    "INDIACEM",
+    "INDIAGLYCO",
+    "INDIAMART",
+    "INDIANB",
+    "INDIANCARD",
+    "INDIANHUME",
+    "INDIGO",
+    "INDIGOPNTS",
+    "INDNIPPON",
+    "INDOAMIN",
+    "INDOCO",
+    "INDORAMA",
+    "INDTERRAIN",
+    "INDUSINDBK",
+    "INDUSTOWER",
+    "INFOBEAN",
+    "INFY",
+    "INGERRAND",
+    "INOXWIND",
+    "INSECTICID",
+    "INTELLECT",
+    "INTLCONV",
+    "IOB",
+    "IOC",
+    "IOLCP",
+    "IONEXCHANG",
+    "IPCALAB",
+    "IPL",
+    "IRB",
+    "IRCON",
+    "IRCTC",
+    "IRFC",
+    "IRISDOREME",
+    "ISGEC",
+    "ITC",
+    "ITDC",
+    "ITI",
+    "J&KBANK",
+    "JAGRAN",
+    "JAGSNPHARM",
+    "JAICORPLTD",
+    "JAMNAAUTO",
+    "JASH",
+    "JAYAGROGN",
+    "JAYBARMARU",
+    "JAYNECOIND",
+    "JAYSREETEA",
+    "JBCHEPHARM",
+    "JINDALPHOT",
+    "JINDALPOLY",
+    "JINDALSAW",
+    "JINDALSTEL",
+    "JINDRILL",
+    "JINDWORLD",
+    "JISLJALEQS",
+    "JKCEMENT",
+    "JKIL",
+    "JKLAKSHMI",
+    "JKPAPER",
+    "JKTYRE",
+    "JMFINANCIL",
+    "JOCIL",
+    "JPOLYINVST",
+    "JSL",
+    "JSWENERGY",
+    "JSWHL",
+    "JSWSTEEL",
+    "JTEKTINDIA",
+    "JTLIND",
+    "JUBLFOOD",
+    "JUBLINGREA",
+    "JUBLPHARMA",
+    "JUSTDIAL",
+    "JWL",
+    "JYOTHYLAB",
+    "KABRAEXTRU",
+    "KAJARIACER",
+    "KAKATCEM",
+    "KALYANKJIL",
+    "KAMDHENU",
+    "KANORICHEM",
+    "KANPRPLA",
+    "KANSAINER",
+    "KARURVYSYA",
+    "KAYNES",
+    "KCP",
+    "KDDL",
+    "KEC",
+    "KEI",
+    "KELLTONTEC",
+    "KFINTECH",
+    "KHAICHEM",
+    "KIMS",
+    "KINGFA",
+    "KIOCL",
+    "KIRIINDUS",
+    "KIRLOSBROS",
+    "KIRLOSENG",
+    "KIRLOSIND",
+    "KIRLPNU",
+    "KITEX",
+    "KKCL",
+    "KNRCON",
+    "KOLTEPATIL",
+    "KOPRAN",
+    "KOTAKBANK",
+    "KOTHARIPET",
+    "KPIL",
+    "KPITTECH",
+    "KPRMILL",
+    "KRBL",
+    "KRISHANA",
+    "KRITI",
+    "KRSNAA",
+    "KSB",
+    "KSCL",
+    "KSL",
+    "KTKBANK",
+    "KUANTUM",
+    "LALPATHLAB",
+    "LANDMARK",
+    "LAOPALA",
+    "LAURUSLABS",
+    "LAXMICOT",
+    "LEMONTREE",
+    "LGBBROSLTD",
+    "LIBAS",
+    "LICHSGFIN",
+    "LICI",
+    "LIKHITHA",
+    "LINC",
+    "LINCOLN",
+    "LINDEINDIA",
+    "LODHA",
+    "LOYALTEX",
+    "LT",
+    "LTTS",
+    "LUMAXIND",
+    "LUMAXTECH",
+    "LUPIN",
+    "LUXIND",
+    "LXCHEM",
+    "M&M",
+    "M&MFIN",
+    "MADRASFERT",
+    "MAGADSUGAR",
+    "MAHABANK",
+    "MAHLIFE",
+    "MAHLOG",
+    "MAHSCOOTER",
+    "MAHSEAMLES",
+    "MAITHANALL",
+    "MALLCOM",
+    "MANAKSIA",
+    "MANALIPETC",
+    "MANAPPURAM",
+    "MANGALAM",
+    "MANGLMCEM",
+    "MANINFRA",
+    "MANKIND",
+    "MANYAVAR",
+    "MAPMYINDIA",
+    "MARALOVER",
+    "MARATHON",
+    "MARICO",
+    "MARKSANS",
+    "MARUTI",
+    "MASFIN",
+    "MASTEK",
+    "MATRIMONY",
+    "MAWANASUG",
+    "MAXHEALTH",
+    "MAYURUNIQ",
+    "MAZDOCK",
+    "MBAPL",
+    "MCX",
+    "MEDANTA",
+    "MEDICAMEQ",
+    "MEDPLUS",
+    "MENONBE",
+    "METROBRAND",
+    "METROPOLIS",
+    "MFSL",
+    "MGL",
+    "MHRIL",
+    "MIDHANI",
+    "MINDACORP",
+    "MMFL",
+    "MMTC",
+    "MOIL",
+    "MOL",
+    "MOLDTECH",
+    "MOLDTKPAC",
+    "MONARCH",
+    "MONTECARLO",
+    "MOREPENLAB",
+    "MOTHERSON",
+    "MOTILALOFS",
+    "MPHASIS",
+    "MPSLTD",
+    "MRF",
+    "MRPL",
+    "MSTCLTD",
+    "MSUMI",
+    "MTARTECH",
+    "MTNL",
+    "MUKANDLTD",
+    "MUNJALAU",
+    "MUNJALSHOW",
+    "MUTHOOTCAP",
+    "MUTHOOTFIN",
+    "NACLIND",
+    "NAHARCAP",
+    "NAHARINDUS",
+    "NAHARSPING",
+    "NAM-INDIA",
+    "NATCOPHARM",
+    "NATIONALUM",
+    "NAUKRI",
+    "NAVA",
+    "NAVINFLUOR",
+    "NAVKARCORP",
+    "NAVNETEDUL",
+    "NAZARA",
+    "NBCC",
+    "NCC",
+    "NCLIND",
+    "NDTV",
+    "NECLIFE",
+    "NELCAST",
+    "NELCO",
+    "NEOGEN",
+    "NESCO",
+    "NESTLEIND",
+    "NEULANDLAB",
+    "NFL",
+    "NGLFINE",
+    "NH",
+    "NHPC",
+    "NIACL",
+    "NIITLTD",
+    "NILKAMAL",
+    "NITINSPIN",
+    "NLCINDIA",
+    "NMDC",
+    "NOCIL",
+    "NRAIL",
+    "NRBBEARING",
+    "NRL",
+    "NSIL",
+    "NSLNISP",
+    "NTPC",
+    "NUVOCO",
+    "NYKAA",
+    "OAL",
+    "OBCL",
+    "OBEROIRLTY",
+    "OFSS",
+    "OIL",
+    "OLECTRA",
+    "ONGC",
+    "ONMOBILE",
+    "ONWARDTEC",
+    "OPTIEMUS",
+    "ORIENTBELL",
+    "ORIENTCEM",
+    "ORIENTELEC",
+    "ORIENTHOT",
+    "ORIENTPPR",
+    "ORISSAMINE",
+    "OSWALGREEN",
+    "PAGEIND",
+    "PAISALO",
+    "PAKKA",
+    "PANACEABIO",
+    "PANAMAPET",
+    "PARADEEP",
+    "PARAGMILK",
+    "PAYTM",
+    "PCBL",
+    "PCJEWELLER",
+    "PDMJEPAPER",
+    "PDSL",
+    "PENIND",
+    "PENINLAND",
+    "PERSISTENT",
+    "PETRONET",
+    "PFC",
+    "PFIZER",
+    "PGEL",
+    "PGHH",
+    "PGHL",
+    "PHOENIXLTD",
+    "PIDILITIND",
+    "PIIND",
+    "PILANIINVS",
+    "PITTIENG",
+    "PIXTRANS",
+    "PNB",
+    "PNBGILTS",
+    "PNBHOUSING",
+    "PNC",
+    "PNCINFRA",
+    "POCL",
+    "PODDARMENT",
+    "POKARNA",
+    "POLICYBZR",
+    "POLYCAB",
+    "POLYMED",
+    "POLYPLEX",
+    "PONNIERODE",
+    "POONAWALLA",
+    "POWERGRID",
+    "POWERINDIA",
+    "POWERMECH",
+    "PPAP",
+    "PPL",
+    "PPLPHARMA",
+    "PRAJIND",
+    "PRECAM",
+    "PRECWIRE",
+    "PRESTIGE",
+    "PRICOLLTD",
+    "PRIMESECU",
+    "PRINCEPIPE",
+    "PRIVISCL",
+    "PRSMJOHNSN",
+    "PRUDENT",
+    "PSB",
+    "PSPPROJECT",
+    "PTC",
+    "PTL",
+    "PUNJABCHEM",
+    "PVRINOX",
+    "QUESS",
+    "QUICKHEAL",
+    "RACE",
+    "RADHIKAJWE",
+    "RADIANTCMS",
+    "RADICO",
+    "RAILTEL",
+    "RAIN",
+    "RAINBOW",
+    "RAJRATAN",
+    "RALLIS",
+    "RAMANEWS",
+    "RAMAPHO",
+    "RAMASTEEL",
+    "RAMCOCEM",
+    "RAMCOIND",
+    "RAMKY",
+    "RAMRAT",
+    "RANASUG",
+    "RANEHOLDIN",
+    "RATEGAIN",
+    "RATNAMANI",
+    "RBA",
+    "RBLBANK",
+    "RCF",
+    "RECLTD",
+    "REDINGTON",
+    "REFEX",
+    "RELAXO",
+    "RELIANCE",
+    "RELIGARE",
+    "RENUKA",
+    "REPCOHOME",
+    "REPL",
+    "REPRO",
+    "RESPONIND",
+    "RGL",
+    "RHIM",
+    "RICOAUTO",
+    "RIIL",
+    "RITES",
+    "RKFORGE",
+    "RML",
+    "ROHLTD",
+    "ROLEXRINGS",
+    "ROSSARI",
+    "ROSSELLIND",
+    "ROTO",
+    "ROUTE",
+    "RPGLIFE",
+    "RPSGVENT",
+    "RSWM",
+    "RSYSTEMS",
+    "RTNINDIA",
+    "RUBYMILLS",
+    "RUCHIRA",
+    "RUPA",
+    "RUSHIL",
+    "RUSTOMJEE",
+    "RVNL",
+    "SADHNANIQ",
+    "SAFARI",
+    "SAGCEM",
+    "SAHYADRI",
+    "SAIL",
+    "SAKAR",
+    "SAKHTISUG",
+    "SALASAR",
+    "SALONA",
+    "SALZERELEC",
+    "SANDESH",
+    "SANDHAR",
+    "SANGAMIND",
+    "SANGHVIMOV",
+    "SANSERA",
+    "SAPPHIRE",
+    "SARDAEN",
+    "SASKEN",
+    "SATIA",
+    "SATIN",
+    "SBCL",
+    "SBGLP",
+    "SBICARD",
+    "SBILIFE",
+    "SBIN",
+    "SCHAEFFLER",
+    "SCHAND",
+    "SCI",
+    "SDBL",
+    "SENCO",
+    "SEPC",
+    "SESHAPAPER",
+    "SFL",
+    "SHAILY",
+    "SHALBY",
+    "SHALPAINTS",
+    "SHANKARA",
+    "SHANTIGEAR",
+    "SHARDACROP",
+    "SHARDAMOTR",
+    "SHAREINDIA",
+    "SHILPAMED",
+    "SHIVALIK",
+    "SHK",
+    "SHOPERSTOP",
+    "SHREDIGCEM",
+    "SHREECEM",
+    "SHRIRAMFIN",
+    "SHRIRAMPPS",
+    "SHYAMMETL",
+    "SIEMENS",
+    "SIGACHI",
+    "SILINV",
+    "SILVERTUC",
+    "SINTERCOM",
+    "SIRCA",
+    "SIS",
+    "SIYSIL",
+    "SJS",
+    "SJVN",
+    "SKFINDIA",
+    "SKIPPER",
+    "SKMEGGPROD",
+    "SMCGLOBAL",
+    "SMSPHARMA",
+    "SNOWMAN",
+    "SOBHA",
+    "SOLARINDS",
+    "SOMANYCERA",
+    "SONACOMS",
+    "SONATSOFTW",
+    "SOTL",
+    "SOUTHBANK",
+    "SPAL",
+    "SPANDANA",
+    "SPCENET",
+    "SPECIALITY",
+    "SPENCERS",
+    "SPIC",
+    "SPLIL",
+    "SPLPETRO",
+    "SPORTKING",
+    "SREEL",
+    "SRF",
+    "SRHHYPOLTD",
+    "SSWL",
+    "STAR",
+    "STARCEMENT",
+    "STARHEALTH",
+    "STARPAPER",
+    "STCINDIA",
+    "STEELCAS",
+    "STEELCITY",
+    "STEELXIND",
+    "STERTOOLS",
+    "STLTECH",
+    "STOVEKRAFT",
+    "STYLAMIND",
+    "STYRENIX",
+    "SUBEXLTD",
+    "SUBROS",
+    "SUDARSCHEM",
+    "SUKHJITS",
+    "SULA",
+    "SUMICHEM",
+    "SUMMITSEC",
+    "SUNDARMFIN",
+    "SUNDRMFAST",
+    "SUNFLAG",
+    "SUNPHARMA",
+    "SUNTECK",
+    "SUNTV",
+    "SUPERHOUSE",
+    "SUPRAJIT",
+    "SUPREMEIND",
+    "SUPRIYA",
+    "SURYALAXMI",
+    "SURYAROSNI",
+    "SURYODAY",
+    "SUTLEJTEX",
+    "SWARAJENG",
+    "SWELECTES",
+    "SYMPHONY",
+    "SYNGENE",
+    "SYRMA",
+    "TAJGVK",
+    "TANLA",
+    "TARSONS",
+    "TASTYBITE",
+    "TATACHEM",
+    "TATACOMM",
+    "TATACONSUM",
+    "TATAELXSI",
+    "TATAPOWER",
+    "TATASTEEL",
+    "TATVA",
+    "TBZ",
+    "TCI",
+    "TCIEXP",
+    "TCPLPACK",
+    "TCS",
+    "TDPOWERSYS",
+    "TEAMLEASE",
+    "TECHM",
+    "TEGA",
+    "TEJASNET",
+    "TEXINFRA",
+    "TEXRAIL",
+    "TFCILTD",
+    "THANGAMAYL",
+    "THEMISMED",
+    "THERMAX",
+    "THYROCARE",
+    "TI",
+    "TIIL",
+    "TIINDIA",
+    "TIMETECHNO",
+    "TIMKEN",
+    "TIRUMALCHM",
+    "TITAGARH",
+    "TITAN",
+    "TMB",
+    "TNPETRO",
+    "TNPL",
+    "TORNTPHARM",
+    "TORNTPOWER",
+    "TRACXN",
+    "TRENT",
+    "TRIDENT",
+    "TRITURBINE",
+    "TRIVENI",
+    "TRU",
+    "TTKHLTCARE",
+    "TTKPRESTIG",
+    "TTL",
+    "TTML",
+    "TVSMOTOR",
+    "TVSSRICHAK",
+    "TVTODAY",
+    "UBL",
+    "UCOBANK",
+    "UFLEX",
+    "UGARSUGAR",
+    "UGROCAP",
+    "UJJIVANSFB",
+    "ULTRACEMCO",
+    "UNICHEMLAB",
+    "UNIDT",
+    "UNIENTER",
+    "UNIONBANK",
+    "UNIPARTS",
+    "UNITEDTEA",
+    "UNIVCABLES",
+    "UNIVPHOTO",
+    "UNOMINDA",
+    "UPL",
+    "USHAMART",
+    "UTIAMC",
+    "UTTAMSUGAR",
+    "VADILALIND",
+    "VAIBHAVGBL",
+    "VAISHALI",
+    "VAKRANGEE",
+    "VALIANTORG",
+    "VARDHACRLC",
+    "VARROC",
+    "VASCONEQ",
+    "VBL",
+    "VEDL",
+    "VENKEYS",
+    "VENUSPIPES",
+    "VESUVIUS",
+    "VGUARD",
+    "VHL",
+    "VIDHIING",
+    "VIJAYA",
+    "VIMTALABS",
+    "VINATIORGA",
+    "VINDHYATEL",
+    "VINYLINDIA",
+    "VIPIND",
+    "VISAKAIND",
+    "VISHNU",
+    "VISHWARAJ",
+    "VLSFINANCE",
+    "VMART",
+    "VOLTAMP",
+    "VOLTAS",
+    "VRLLOG",
+    "VSSL",
+    "VSTIND",
+    "VSTTILLERS",
+    "VTL",
+    "WABAG",
+    "WELCORP",
+    "WELENT",
+    "WENDT",
+    "WESTLIFE",
+    "WHEELS",
+    "WHIRLPOOL",
+    "WINDLAS",
+    "WIPRO",
+    "WONDERLA",
+    "WSTCSTPAPR",
+    "XCHANGING",
+    "XPROINDIA",
+    "YESBANK",
+    "YUKEN",
+    "ZEEL",
+    "ZEEMEDIA",
+    "ZENSARTECH",
+    "ZFCVINDIA",
+    "ZIMLAB",
+    "ZOTA",
+    "ZUARI",
+    "ZUARIIND",
+    "ZYDUSLIFE",
+    "ZYDUSWELL"
+  ],
+  "tradecore_version": "tradecore 0.1.0 (engine-core 0.1.0)",
+  "trades_digest": "76bc01459639be3abb414bc5bdde48fe7a2824d9692149c60eb519b600d12fb5"
+}

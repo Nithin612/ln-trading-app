@@ -109,3 +109,21 @@ averages, Sharpe, Sortino are order-independent and unchanged; trade lists
 (the parity/fixture contract) are unchanged. Equity/max-DD values in
 `strategy_runs` rows and docs recorded BEFORE this date are not comparable
 to new runs.
+
+**2026-07-06 walk-forward wall-clocks (Phase 2 slice 8b, dev machine,
+RAYON_NUM_THREADS=6):** one continuous `tradecore.run_universe` per profile
+over [2023-07-03, 2026-06-30], setup gates as python post-filter, quarterly
+folds 2024Q4→2026Q2:
+
+| Profile | Universe (ran/excluded) | Wall-clock |
+|---|---|---|
+| dc1 (NIFTY50) | 47/3 | 0.5 s |
+| dc2 (NIFTY50) | 47/3 | 7.4 s |
+| rrbo_basic (NIFTY50) | 47/3 | 0.6 s |
+| rrbo_trailing (NIFTY50) | 47/3 | 0.6 s |
+| multibagger (all_active) | 1118/1230 | 15.1 s |
+
+dc2's 7.4 s is the python `sr_zone_factor` recompute per candidate trade
+(prior-window DC1 check), not the engine. multibagger is load-dominated
+(~1.7 M rows). Full 5-profile regen ≈ 24 s; harness replay (5 goldens +
+coverage test) 23.3 s — cheap enough to sit inside `make check`.

@@ -1,0 +1,286 @@
+{
+  "aggregate": {
+    "avg_holding_days": 37.69,
+    "avg_pnl_pct": -0.181,
+    "avg_rr": 2.0,
+    "losing_trades": 182,
+    "max_drawdown_pct": 99.087,
+    "sharpe": -0.339,
+    "sortino": -0.458,
+    "total_pnl_pct": -52.198,
+    "total_trades": 289,
+    "win_rate_pct": 37.02,
+    "winning_trades": 107
+  },
+  "config_hash": "8e11bbe11db19d8ca9849b6cb9b8b2cd84c06cb7ee70e6cefb772da2326905cd",
+  "exclusions": [
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "ETERNAL"
+    },
+    {
+      "bars_before_eval": 265,
+      "reason": "<300 bars before eval_start",
+      "symbol": "JIOFIN"
+    },
+    {
+      "bars_before_eval": 0,
+      "reason": "<300 bars before eval_start",
+      "symbol": "TMPV"
+    }
+  ],
+  "folds": [
+    {
+      "fold": "2024Q4",
+      "metrics": {
+        "avg_holding_days": 35.48,
+        "avg_pnl_pct": 2.46,
+        "avg_rr": 2.0,
+        "losing_trades": 28,
+        "max_drawdown_pct": 23.614,
+        "sharpe": 4.59,
+        "sortino": 16.601,
+        "total_pnl_pct": 123.006,
+        "total_trades": 50,
+        "win_rate_pct": 44.0,
+        "winning_trades": 22
+      }
+    },
+    {
+      "fold": "2025Q1",
+      "metrics": {
+        "avg_holding_days": 30.41,
+        "avg_pnl_pct": 2.116,
+        "avg_rr": 2.0,
+        "losing_trades": 20,
+        "max_drawdown_pct": 38.583,
+        "sharpe": 3.959,
+        "sortino": 13.486,
+        "total_pnl_pct": 86.769,
+        "total_trades": 41,
+        "win_rate_pct": 51.22,
+        "winning_trades": 21
+      }
+    },
+    {
+      "fold": "2025Q2",
+      "metrics": {
+        "avg_holding_days": 56.93,
+        "avg_pnl_pct": 1.007,
+        "avg_rr": 2.0,
+        "losing_trades": 16,
+        "max_drawdown_pct": 25.834,
+        "sharpe": 1.989,
+        "sortino": 7.823,
+        "total_pnl_pct": 29.197,
+        "total_trades": 29,
+        "win_rate_pct": 44.83,
+        "winning_trades": 13
+      }
+    },
+    {
+      "fold": "2025Q3",
+      "metrics": {
+        "avg_holding_days": 47.9,
+        "avg_pnl_pct": -3.901,
+        "avg_rr": 2.0,
+        "losing_trades": 34,
+        "max_drawdown_pct": 84.877,
+        "sharpe": -6.479,
+        "sortino": -7.775,
+        "total_pnl_pct": -159.934,
+        "total_trades": 41,
+        "win_rate_pct": 17.07,
+        "winning_trades": 7
+      }
+    },
+    {
+      "fold": "2025Q4",
+      "metrics": {
+        "avg_holding_days": 46.62,
+        "avg_pnl_pct": -0.909,
+        "avg_rr": 2.0,
+        "losing_trades": 44,
+        "max_drawdown_pct": 60.443,
+        "sharpe": -2.09,
+        "sortino": -7.848,
+        "total_pnl_pct": -55.433,
+        "total_trades": 61,
+        "win_rate_pct": 27.87,
+        "winning_trades": 17
+      }
+    },
+    {
+      "fold": "2026Q1",
+      "metrics": {
+        "avg_holding_days": 24.74,
+        "avg_pnl_pct": -2.074,
+        "avg_rr": 2.0,
+        "losing_trades": 25,
+        "max_drawdown_pct": 85.816,
+        "sharpe": -2.244,
+        "sortino": -2.211,
+        "total_pnl_pct": -78.813,
+        "total_trades": 38,
+        "win_rate_pct": 34.21,
+        "winning_trades": 13
+      }
+    },
+    {
+      "fold": "2026Q2",
+      "metrics": {
+        "avg_holding_days": 16.31,
+        "avg_pnl_pct": 0.104,
+        "avg_rr": 2.0,
+        "losing_trades": 15,
+        "max_drawdown_pct": 47.228,
+        "sharpe": 0.143,
+        "sortino": 0.169,
+        "total_pnl_pct": 3.011,
+        "total_trades": 29,
+        "win_rate_pct": 48.28,
+        "winning_trades": 14
+      }
+    }
+  ],
+  "generated_at": "2026-07-06T10:18:59+00:00",
+  "pre_filter_trade_count": 427,
+  "profile": {
+    "key": "dc1",
+    "min_confidence": 70,
+    "name": "Double Confirmation 1",
+    "risk_template": {
+      "kind": "rr",
+      "ratio": "2"
+    },
+    "setup_conditions": [
+      {
+        "params": {},
+        "type": "dc1"
+      }
+    ],
+    "style": "swing",
+    "timeframe": "1d",
+    "universe_spec": {
+      "kind": "index",
+      "value": "NIFTY50"
+    },
+    "validity_spec": null,
+    "version": 1,
+    "weight_multipliers": {}
+  },
+  "row_counts": {
+    "ADANIENT": 738,
+    "ADANIPORTS": 738,
+    "APOLLOHOSP": 738,
+    "ASIANPAINT": 738,
+    "AXISBANK": 738,
+    "BAJAJ-AUTO": 738,
+    "BAJAJFINSV": 738,
+    "BAJFINANCE": 738,
+    "BEL": 738,
+    "BHARTIARTL": 738,
+    "CIPLA": 738,
+    "COALINDIA": 738,
+    "DRREDDY": 738,
+    "EICHERMOT": 738,
+    "GRASIM": 738,
+    "HCLTECH": 738,
+    "HDFCBANK": 738,
+    "HDFCLIFE": 738,
+    "HINDALCO": 738,
+    "HINDUNILVR": 738,
+    "ICICIBANK": 738,
+    "INDIGO": 738,
+    "INFY": 738,
+    "ITC": 738,
+    "JSWSTEEL": 738,
+    "KOTAKBANK": 738,
+    "LT": 738,
+    "M&M": 738,
+    "MARUTI": 738,
+    "MAXHEALTH": 738,
+    "NESTLEIND": 738,
+    "NTPC": 738,
+    "ONGC": 738,
+    "POWERGRID": 738,
+    "RELIANCE": 738,
+    "SBILIFE": 738,
+    "SBIN": 738,
+    "SHRIRAMFIN": 738,
+    "SUNPHARMA": 738,
+    "TATACONSUM": 738,
+    "TATASTEEL": 738,
+    "TCS": 738,
+    "TECHM": 738,
+    "TITAN": 738,
+    "TRENT": 738,
+    "ULTRACEMCO": 738,
+    "WIPRO": 738
+  },
+  "run": {
+    "capital": "500000",
+    "eval_end": "2026-06-30",
+    "eval_start": "2024-10-01",
+    "risk_pct": "2",
+    "since": "2023-07-03",
+    "tp_approximated": false,
+    "tp_rule": [
+      "rr",
+      "2"
+    ]
+  },
+  "schema": "walkforward-golden-v1",
+  "symbols": [
+    "ADANIENT",
+    "ADANIPORTS",
+    "APOLLOHOSP",
+    "ASIANPAINT",
+    "AXISBANK",
+    "BAJAJ-AUTO",
+    "BAJAJFINSV",
+    "BAJFINANCE",
+    "BEL",
+    "BHARTIARTL",
+    "CIPLA",
+    "COALINDIA",
+    "DRREDDY",
+    "EICHERMOT",
+    "GRASIM",
+    "HCLTECH",
+    "HDFCBANK",
+    "HDFCLIFE",
+    "HINDALCO",
+    "HINDUNILVR",
+    "ICICIBANK",
+    "INDIGO",
+    "INFY",
+    "ITC",
+    "JSWSTEEL",
+    "KOTAKBANK",
+    "LT",
+    "M&M",
+    "MARUTI",
+    "MAXHEALTH",
+    "NESTLEIND",
+    "NTPC",
+    "ONGC",
+    "POWERGRID",
+    "RELIANCE",
+    "SBILIFE",
+    "SBIN",
+    "SHRIRAMFIN",
+    "SUNPHARMA",
+    "TATACONSUM",
+    "TATASTEEL",
+    "TCS",
+    "TECHM",
+    "TITAN",
+    "TRENT",
+    "ULTRACEMCO",
+    "WIPRO"
+  ],
+  "tradecore_version": "tradecore 0.1.0 (engine-core 0.1.0)",
+  "trades_digest": "6525c6e66f52e61dbaefebe138665c6b761dade250d163b7e6e82accac469f4e"
+}

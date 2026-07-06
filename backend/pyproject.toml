@@ -61,4 +61,5 @@ asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
 markers = [
     "parity: cross-language Python-vs-Rust parity tests (real-DB golden corpus)",
+    "walkforward: walk-forward golden replay against the dev-DB corpus (§8 drift gate)",
 ]

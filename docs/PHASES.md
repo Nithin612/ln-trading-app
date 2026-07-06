@@ -36,40 +36,30 @@ DONE (each its own commit, all green):
   evaluators + 8 seeds `fa5f384` · 7 suggestions pipeline +
   `GET /api/v1/suggestions/{style}` `b3a8bcf` · 8a Rust FFI run_universe +
   multiplier/tp_rule parity axes `ff67b21` · 6 CA quarantine `cac656f` ·
-  8b-step-1 metrics ordering canon `57450f2`.
+  8b-step-1 metrics ordering canon `57450f2` · 8b walk-forward runner +
+  5 goldens + §8 harness (`make walkforward` in check; pins
+  since=2023-07-03 / eval 2024-10-01→2026-06-30, 7 quarterly folds —
+  eval_start moved from the sketched 2024-07-01: only 245 pre-context bars
+  there vs the 300-bar window canon). **Walk-forward evidence: rrbo_basic
+  & rrbo_trailing +41.3% / sharpe +1.97 / win 50% (58 trades) — positive;
+  dc1 −52.2%, dc2 −39.7%, multibagger −1491% → flagged needs-tuning.**
 
-NEXT — finish slice 8b (walk-forward runner + 1d goldens + §8 harness):
-1. `backend/app/backtest/walkforward.py`: per ACTIVE profile — resolve
-   universe (pinned symbol list), load candles from a PINNED `since` with
-   ≥300 bars pre-context before `eval_start`, ONE tradecore.run_universe
-   call (map profile risk_template → tp_rule: rr/flat_pct direct;
-   flat_pct_trailing→flat_pct; ema_trail→flat_pct(min_target) — documented
-   approximations), map integer trade indices→dates per stock, apply setup
-   gates as an exact python post-filter (trade dicts carry the factor
-   snapshot), drop fills < eval_start, bin trades into CALENDAR-QUARTER
-   folds, aggregate via app/backtest/metrics.aggregate_trades.
-2. `scripts/gen_walkforward_goldens.py`: dry-run default; --write refuses
-   any >5% metric move without --i-have-approval; golden JSON per active
-   profile under backend/tests/goldens/walkforward/: embedded config +
-   config_hash + tradecore version + since/eval_start/eval_end + pinned
-   symbols + row_counts + exclusions + per-fold & aggregate metrics +
-   sha256 trades_digest. Suggested pins: since=2023-07-03,
-   eval_start=2024-07-01, eval_end=2026-06-30 (8 quarters).
-3. Harness `tests/goldens/test_walkforward_goldens.py`
-   (pytest.mark.walkforward — register the mark; skip-cleanly-on-empty-DB
-   like the parity suite), `make walkforward` target wired into make
-   check. Failure prints the Δ-table with [§8 APPROVAL REQUIRED] rows.
-4. Then slice 9: /phase-gate (all suites + quant-verifier + bug-hunter on
-   the pipeline/tasks diffs + test-guardian; phase-02 report; flip this
-   row; PERFORMANCE gets backfill + walk-forward wall-clocks).
+NEXT — slice 9: /phase-gate (all suites + quant-verifier + bug-hunter on
+the pipeline/tasks diffs + test-guardian; phase-02 report incl. per-profile
+walk-forward verdicts above + the slice-7 gap that pipeline.py does not yet
+feed profile.weight_multipliers into scoring (all seeds carry {} — wire
+before any multiplier-carrying profile activates); flip the Phase-2 row;
+PERFORMANCE.md already has canon note + walk-forward wall-clocks).
 
-BLOCKED ON USER: track T (Kite subscription + first login via
-KiteConnectPage) → then scripts/backfill_intraday.py (5m/15m, throttled,
-QA manifest) → slice 8c (intraday parity fixtures via
-scripts/generate_engine_fixtures.py, relax the off-1d dispatch guard for
-pinned timeframes, intraday goldens). Phase gate may pass on 8b with 8c
-trailing (approved plan). Also pending: `git push` (user pushes manually;
-remote is credential-free by design).
+TRACK T (UNBLOCKED 2026-07-06 — user bought Kite Connect, creds in .env):
+user does first login via KiteConnectPage (runbook given in-session) →
+scripts/backfill_intraday.py (5m/15m, shared throttled client ~3 rps,
+60-day chunks, idempotent upserts, session-completeness QA manifest;
+stocks above gap threshold EXCLUDED not patched) → slice 8c (intraday
+parity fixtures via scripts/generate_engine_fixtures.py, relax the off-1d
+dispatch guard for pinned timeframes, intraday goldens). Phase gate may
+pass on 8b with 8c trailing (approved plan). Also pending: `git push`
+(user pushes manually; remote is credential-free by design).
 
 Phase-1 state (closed): F/G/H applied 2026-07-05, canon table in
 ARCHITECTURE.md; standing baseline 599 trades / +52.1% / sharpe +0.13 on
