@@ -100,3 +100,12 @@ budget "2y×50 < 5 s" still beaten ~29×. Star detections on the corpus drop
 1,778 → 394 (gap-conformant only, item G). F resizes volatile trades'
 quantities without dropping any trade on this corpus; quantities enter
 rupee P&L, not the pnl_pct metrics above.
+
+**2026-07-06 metrics-ordering canon (Phase 2 slice 8b):** the equity curve
+and max drawdown now compound trades sorted by (entry_date, stock) —
+previously dict-insertion order (stock-grouped), which made max-DD depend
+on universe ordering and physically meaningless across stocks. Win rate,
+averages, Sharpe, Sortino are order-independent and unchanged; trade lists
+(the parity/fixture contract) are unchanged. Equity/max-DD values in
+`strategy_runs` rows and docs recorded BEFORE this date are not comparable
+to new runs.

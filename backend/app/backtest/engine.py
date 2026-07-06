@@ -344,57 +344,17 @@ class BacktestEngine:
         return trades
 
     def run(self, candles_by_stock: dict[str, pd.DataFrame]) -> BacktestResult:
-        """Run on all stocks and aggregate results."""
+        """Run on all stocks and aggregate results.
+
+        Aggregation extracted to app.backtest.metrics.aggregate_trades
+        (slice 8b) with a FIXED trade-ordering canon (entry_date, stock)
+        for the equity curve/max-DD — the old dict-insertion ordering made
+        DD depend on universe order. Trade LISTS (the fixture contract)
+        are unchanged; equity/DD history is not comparable (PERFORMANCE.md).
+        """
+        from app.backtest.metrics import aggregate_trades
+
         all_trades: list[TradeRecord] = []
         for stock, candles in candles_by_stock.items():
             all_trades.extend(self.run_single_stock(stock, candles))
-
-        if not all_trades:
-            return BacktestResult()
-
-        winning = [t for t in all_trades if (t.pnl_pct or 0) > 0]
-        losing = [t for t in all_trades if (t.pnl_pct or 0) <= 0]
-        pnl_list = [t.pnl_pct or 0.0 for t in all_trades]
-
-        total_pnl = sum(pnl_list)
-        avg_pnl = total_pnl / len(all_trades)
-        win_rate = len(winning) / len(all_trades) * 100
-
-        # Average R:R from hit-target trades
-        rr_list = []
-        for t in all_trades:
-            if t.entry_price and t.stop_loss and t.take_profit:
-                risk = abs(t.entry_price - t.stop_loss)
-                reward = abs(t.entry_price - t.take_profit)
-                if risk > 0:
-                    rr_list.append(reward / risk)
-        avg_rr = sum(rr_list) / len(rr_list) if rr_list else 0.0
-
-        # Equity curve (cumulative PnL % starting at 100)
-        equity = [100.0]
-        for p in pnl_list:
-            equity.append(equity[-1] * (1 + p / 100))
-
-        # Holding days
-        holding_days = []
-        for t in all_trades:
-            if t.exit_date and t.entry_date:
-                days = (t.exit_date - t.entry_date).days
-                holding_days.append(days)
-        avg_holding = sum(holding_days) / len(holding_days) if holding_days else 0.0
-
-        return BacktestResult(
-            total_trades=len(all_trades),
-            winning_trades=len(winning),
-            losing_trades=len(losing),
-            total_pnl_pct=round(total_pnl, 3),
-            avg_pnl_pct=round(avg_pnl, 3),
-            win_rate_pct=round(win_rate, 2),
-            avg_rr=round(avg_rr, 2),
-            max_drawdown_pct=round(_compute_drawdown(equity), 3),
-            sharpe=round(_compute_sharpe(pnl_list), 3),
-            sortino=round(_compute_sortino(pnl_list), 3),
-            avg_holding_days=round(avg_holding, 2),
-            equity_curve=[round(v, 4) for v in equity],
-            trades=all_trades,
-        )
+        return aggregate_trades(all_trades)
