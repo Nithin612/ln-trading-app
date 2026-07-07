@@ -161,6 +161,16 @@ def map_tp_rule(risk_template: dict[str, Any]) -> tuple[tuple[str, str], bool]:
     raise WalkForwardError(f"unknown risk_template kind {kind!r}")
 
 
+def session_last_flags(session_dates: list[date]) -> list[bool]:
+    """Per-bar session_last flags for the 8c engine axis, data-driven:
+    bar i is flagged iff it is the last bar of its IST session (the next
+    bar belongs to a different date). Half-days (muhurat) come out right
+    because the data, not the clock, decides. The final bar is always
+    flagged — identical economics to the engines' end-of-data close-out."""
+    n = len(session_dates)
+    return [i == n - 1 or session_dates[i] != session_dates[i + 1] for i in range(n)]
+
+
 def quarter_key(d: date) -> str:
     return f"{d.year}Q{(d.month - 1) // 3 + 1}"
 

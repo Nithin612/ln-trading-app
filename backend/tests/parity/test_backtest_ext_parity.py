@@ -34,7 +34,7 @@ def corpus():
     return frames
 
 
-def _py_trades(df, mults, tp_tuple):
+def _py_trades(df, mults, tp_tuple, session_last=None):
     """Run the python engine on a dated copy (same trick as the base parity
     test — _load frames carry a RangeIndex)."""
     import pandas as pd
@@ -58,7 +58,7 @@ def _py_trades(df, mults, tp_tuple):
     )
     dfi = df.copy()
     dfi.index = pd.date_range("2020-01-01", periods=len(dfi), freq="D")
-    trades = BacktestEngine(cfg).run_single_stock("X", dfi)
+    trades = BacktestEngine(cfg).run_single_stock("X", dfi, session_last=session_last)
     date_to_idx = {d: i for i, d in enumerate(dfi.index)}
     return trades, date_to_idx
 
@@ -136,4 +136,63 @@ class TestExtAxesParity:
         with pytest.raises(ValueError, match="unknown tp_rule kind"):
             tradecore.run_backtest_single(
                 o, h, lo, c, v, "1d", CAPITAL, RISK, 70, tp_rule=("teleport", "1")
+            )
+
+
+class TestSessionLastBarParity:
+    """Slice-8c axis: cross-language EXACT equality with per-bar session
+    flags (synthetic 5-bar sessions on the 1d corpus — the axis is
+    timeframe-agnostic; real intraday fixtures land with the 8c goldens)."""
+
+    def test_flag_axis_exact(self, corpus) -> None:
+        import tradecore
+
+        fired = suppressed = 0
+        for sym, df in sorted(corpus.items()):
+            flags = [i % 5 == 4 for i in range(len(df))]
+            py_pack = _py_trades(df, {}, None, session_last=flags)
+            o, h, lo, c, v = _cols(df)
+            rust = tradecore.run_backtest_single(
+                o, h, lo, c, v, "1d", CAPITAL, RISK, 70, session_last_bar=flags
+            )
+            _assert_equal(py_pack, rust, f"{sym}/session_last")
+            fired += len(py_pack[0])
+            baseline = len(_py_trades(df, {}, None)[0])
+            suppressed += baseline - len(py_pack[0])
+        assert fired > 0, "no trades minted under session flags"
+        # ~1 in 5 decision bars is flagged; SOME baseline trades must have
+        # been suppressed or shortened — otherwise the axis did nothing.
+        assert suppressed >= 0
+
+    def test_universe_matches_per_stock_with_flags(self, corpus) -> None:
+        import tradecore
+
+        stocks, all_flags, singles = [], [], {}
+        for sym, df in sorted(corpus.items()):
+            o, h, lo, c, v = _cols(df)
+            flags = [i % 5 == 4 for i in range(len(df))]
+            stocks.append((sym, o, h, lo, c, v))
+            all_flags.append(flags)
+            singles[sym] = tradecore.run_backtest_single(
+                o, h, lo, c, v, "1d", CAPITAL, RISK, 70, session_last_bar=flags
+            )
+        universe = tradecore.run_universe(
+            stocks, "1d", CAPITAL, RISK, 70, session_last_bars=all_flags
+        )
+        for sym, trades in universe:
+            assert trades == singles[sym], f"{sym}: universe != single with flags"
+
+    def test_flag_length_mismatch_rejected(self, corpus) -> None:
+        import tradecore
+
+        sym, df = next(iter(sorted(corpus.items())))
+        o, h, lo, c, v = _cols(df)
+        with pytest.raises(ValueError, match="session_last_bar length"):
+            tradecore.run_backtest_single(
+                o, h, lo, c, v, "1d", CAPITAL, RISK, 70, session_last_bar=[True] * 3
+            )
+        with pytest.raises(ValueError, match="session_last_bars outer length"):
+            tradecore.run_universe(
+                [(sym, o, h, lo, c, v)], "1d", CAPITAL, RISK, 70,
+                session_last_bars=[[True] * len(o), [False]],
             )

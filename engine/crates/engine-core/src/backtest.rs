@@ -121,7 +121,19 @@ struct PlannedOrder {
 }
 
 /// Honest-fill walk from the fill candle to the end of data.
-fn simulate_trade(bars: &[Bar], fill_idx: usize, order: PlannedOrder) -> Option<Trade> {
+///
+/// `session_last` (Phase 2 slice 8c, default None = pre-extension
+/// behavior): when bar i is flagged as its session's last bar, an open
+/// trade force-exits at i's CLOSE — after that bar's SL-before-TP checks,
+/// so a stop on the closing bar still exits at the stop. Intraday trades
+/// never span sessions; flags are computed by the Python caller from IST
+/// session dates (data-driven — half-days handled naturally).
+fn simulate_trade(
+    bars: &[Bar],
+    fill_idx: usize,
+    order: PlannedOrder,
+    session_last: Option<&[bool]>,
+) -> Option<Trade> {
     let PlannedOrder {
         side,
         confidence_pct,
@@ -187,6 +199,9 @@ fn simulate_trade(bars: &[Bar], fill_idx: usize, order: PlannedOrder) -> Option<
         if hit_tp {
             return Some(mk(i, take_profit, false, true));
         }
+        if session_last.is_some_and(|s| s.get(i).copied().unwrap_or(false)) {
+            return Some(mk(i, c.close, false, false));
+        }
     }
 
     let last_idx = bars.len().checked_sub(1)?;
@@ -195,13 +210,27 @@ fn simulate_trade(bars: &[Bar], fill_idx: usize, order: PlannedOrder) -> Option<
 }
 
 /// Backtest one stock (Python run_single_stock at the adjudicated canon).
-pub fn run_single_stock(bars: &[Bar], timeframe: &str, params: &BacktestParams) -> Vec<Trade> {
+///
+/// `session_last` (slice 8c): None = pre-extension behavior, proven by the
+/// unchanged 1d oracle fixtures. With flags, a flagged DECISION bar mints
+/// nothing (its fill at i+1 would cross into the next session) and open
+/// trades close out at flagged bars (see simulate_trade). Length is
+/// validated at the FFI boundary; the core indexes defensively.
+pub fn run_single_stock(
+    bars: &[Bar],
+    timeframe: &str,
+    params: &BacktestParams,
+    session_last: Option<&[bool]>,
+) -> Vec<Trade> {
     let mut trades = Vec::new();
     if bars.len() < 60 {
         return trades;
     }
 
     for i in 50..bars.len() - 1 {
+        if session_last.is_some_and(|s| s.get(i).copied().unwrap_or(false)) {
+            continue; // fill would be next session's open — never mint
+        }
         let start = (i + 1).saturating_sub(WINDOW_CANON);
         let Some(window) = bars.get(start..=i) else {
             continue;
@@ -271,7 +300,7 @@ pub fn run_single_stock(bars: &[Bar], timeframe: &str, params: &BacktestParams) 
                 .map(|f| (f.name, f.weight, f.score))
                 .collect(),
         };
-        if let Some(trade) = simulate_trade(bars, i + 1, order) {
+        if let Some(trade) = simulate_trade(bars, i + 1, order, session_last) {
             trades.push(trade);
         }
     }
@@ -279,13 +308,22 @@ pub fn run_single_stock(bars: &[Bar], timeframe: &str, params: &BacktestParams) 
 }
 
 /// Rayon-parallel backtest across stocks; result order matches input order.
+/// `session_flags` is parallel to `stocks` (validated at the FFI boundary).
 pub fn run_universe(
     stocks: &[(String, Vec<Bar>)],
     timeframe: &str,
     params: &BacktestParams,
+    session_flags: Option<&[Vec<bool>]>,
 ) -> Vec<(String, Vec<Trade>)> {
     stocks
         .par_iter()
-        .map(|(sym, bars)| (sym.clone(), run_single_stock(bars, timeframe, params)))
+        .enumerate()
+        .map(|(idx, (sym, bars))| {
+            let flags = session_flags.and_then(|f| f.get(idx)).map(Vec::as_slice);
+            (
+                sym.clone(),
+                run_single_stock(bars, timeframe, params, flags),
+            )
+        })
         .collect()
 }

@@ -126,7 +126,7 @@ fn ext_axes_match_python_exactly() {
                 .collect(),
             tp_rule: parse_tp(&case.tp_rule),
         };
-        let got = run_single_stock(bars, "1d", &params);
+        let got = run_single_stock(bars, "1d", &params, None);
         assert_eq!(
             got.len(),
             case.trades.len(),

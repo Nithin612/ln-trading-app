@@ -252,8 +252,9 @@ fn trade_to_dict<'py>(
 }
 
 /// Adjudicated-canon backtest for one stock. Trades as list of dicts.
+/// session_last_bar (slice 8c): per-bar flags, len == bars; None = off.
 #[pyfunction]
-#[pyo3(signature = (open, high, low, close, volume, timeframe, capital, risk_pct, min_confidence, weight_multipliers=Vec::new(), tp_rule=None))]
+#[pyo3(signature = (open, high, low, close, volume, timeframe, capital, risk_pct, min_confidence, weight_multipliers=Vec::new(), tp_rule=None, session_last_bar=None))]
 #[allow(clippy::too_many_arguments)]
 fn run_backtest_single(
     py: Python<'_>,
@@ -268,8 +269,18 @@ fn run_backtest_single(
     min_confidence: i32,
     weight_multipliers: Vec<(String, f64)>,
     tp_rule: Option<(String, String)>,
+    session_last_bar: Option<Vec<bool>>,
 ) -> PyResult<Py<PyList>> {
     let bars = bars_from(&open, &high, &low, &close, &volume)?;
+    if let Some(flags) = &session_last_bar {
+        if flags.len() != bars.len() {
+            return Err(PyValueError::new_err(format!(
+                "session_last_bar length {} != bars length {}",
+                flags.len(),
+                bars.len()
+            )));
+        }
+    }
     let params = build_params(
         &capital,
         &risk_pct,
@@ -277,7 +288,14 @@ fn run_backtest_single(
         weight_multipliers,
         tp_rule,
     )?;
-    let trades = py.detach(|| engine_core::backtest::run_single_stock(&bars, &timeframe, &params));
+    let trades = py.detach(|| {
+        engine_core::backtest::run_single_stock(
+            &bars,
+            &timeframe,
+            &params,
+            session_last_bar.as_deref(),
+        )
+    });
     let out = PyList::empty(py);
     for t in &trades {
         out.append(trade_to_dict(py, t)?)?;
@@ -287,8 +305,9 @@ fn run_backtest_single(
 
 /// Rayon-parallel universe backtest → [(symbol, [trade dicts])].
 /// stocks: [(symbol, open, high, low, close, volume)]; money as strings.
+/// session_last_bars (slice 8c): parallel to stocks, inner len == bars.
 #[pyfunction]
-#[pyo3(signature = (stocks, timeframe, capital, risk_pct, min_confidence, weight_multipliers=Vec::new(), tp_rule=None))]
+#[pyo3(signature = (stocks, timeframe, capital, risk_pct, min_confidence, weight_multipliers=Vec::new(), tp_rule=None, session_last_bars=None))]
 #[allow(clippy::type_complexity, clippy::too_many_arguments)]
 fn run_universe(
     py: Python<'_>,
@@ -299,6 +318,7 @@ fn run_universe(
     min_confidence: i32,
     weight_multipliers: Vec<(String, f64)>,
     tp_rule: Option<(String, String)>,
+    session_last_bars: Option<Vec<Vec<bool>>>,
 ) -> PyResult<Py<PyList>> {
     let params = build_params(
         &capital,
@@ -312,7 +332,32 @@ fn run_universe(
     for (sym, open, high, low, close, volume) in &stocks {
         universe.push((sym.clone(), bars_from(open, high, low, close, volume)?));
     }
-    let results = py.detach(|| engine_core::backtest::run_universe(&universe, &timeframe, &params));
+    if let Some(flags) = &session_last_bars {
+        if flags.len() != universe.len() {
+            return Err(PyValueError::new_err(format!(
+                "session_last_bars outer length {} != stocks length {}",
+                flags.len(),
+                universe.len()
+            )));
+        }
+        for (i, ((sym, bars), f)) in universe.iter().zip(flags.iter()).enumerate() {
+            if f.len() != bars.len() {
+                return Err(PyValueError::new_err(format!(
+                    "session_last_bars[{i}] ({sym}) length {} != bars length {}",
+                    f.len(),
+                    bars.len()
+                )));
+            }
+        }
+    }
+    let results = py.detach(|| {
+        engine_core::backtest::run_universe(
+            &universe,
+            &timeframe,
+            &params,
+            session_last_bars.as_deref(),
+        )
+    });
     let out = PyList::empty(py);
     for (sym, trades) in &results {
         let trade_list = PyList::empty(py);

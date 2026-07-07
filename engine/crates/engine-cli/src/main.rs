@@ -89,7 +89,7 @@ fn run_backtest_bench(path: Option<&String>) -> ExitCode {
 
     // Warm run then timed run
     let t0 = Instant::now();
-    let results = engine_core::backtest::run_universe(&stocks, "1d", &params);
+    let results = engine_core::backtest::run_universe(&stocks, "1d", &params, None);
     let elapsed = t0.elapsed();
     let trades: usize = results.iter().map(|(_, t)| t.len()).sum();
     println!(

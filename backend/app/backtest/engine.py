@@ -182,7 +182,7 @@ class BacktestEngine:
     def __init__(self, config: BacktestConfig) -> None:
         self.config = config
 
-    def _simulate_trade(
+    def _simulate_trade(  # noqa: C901 — frozen canon + sanctioned slice-8c extension
         self,
         stock: str,
         signal_candle_idx: int,
@@ -193,10 +193,16 @@ class BacktestEngine:
         take_profit: float,
         qty: int,
         candles: pd.DataFrame,
+        session_last: list[bool] | None = None,
     ) -> TradeRecord | None:
         """Simulate a trade starting from candle N+1 after signal generation.
 
         Fills at open of N+1. Then walks forward checking SL/TP on each candle.
+
+        session_last (freeze-extension, Phase 2 slice 8c — default None is
+        byte-identical to the frozen engine): bar i flagged as its session's
+        last bar force-exits an open trade at i's CLOSE, after that bar's
+        SL-before-TP checks. Mirrored exactly in engine-core::backtest.
         """
         fill_idx = signal_candle_idx + 1
         if fill_idx >= len(candles):
@@ -254,6 +260,12 @@ class BacktestEngine:
                 return _exit(i, stop_loss, sl=True)
             if hit_tp:
                 return _exit(i, take_profit, sl=False)
+            if session_last is not None and session_last[i]:
+                record.exit_date = pd.Timestamp(candles.index[i])
+                record.exit_price = float(c["close"])
+                sign = 1 if buy else -1
+                record.pnl_pct = sign * (record.exit_price - entry_price) / entry_price * 100
+                return record
 
         # Signal expired without hitting TP or SL — mark as break-even at last close
         last = candles.iloc[-1]
@@ -266,16 +278,28 @@ class BacktestEngine:
             record.pnl_pct = (entry_price - last_close) / entry_price * 100
         return record
 
-    def run_single_stock(  # noqa: C901 — frozen canon + sanctioned slice-8a extension
-        self, stock: str, candles: pd.DataFrame
+    def run_single_stock(  # noqa: C901 — frozen canon + sanctioned 8a/8c extensions
+        self, stock: str, candles: pd.DataFrame, session_last: list[bool] | None = None
     ) -> list[TradeRecord]:
-        """Run backtest on one stock's full candle history."""
+        """Run backtest on one stock's full candle history.
+
+        session_last (freeze-extension, slice 8c — default None is
+        byte-identical to the frozen engine): a flagged DECISION bar mints
+        nothing (its fill at i+1 would cross into the next session); open
+        trades close out at flagged bars (see _simulate_trade).
+        """
         trades: list[TradeRecord] = []
         # Need at least 60 candles for warm-up
         if len(candles) < 60:
             return trades
+        if session_last is not None and len(session_last) != len(candles):
+            raise ValueError(
+                f"session_last length {len(session_last)} != candles {len(candles)}"
+            )
 
         for i in range(50, len(candles) - 1):
+            if session_last is not None and session_last[i]:
+                continue  # fill would be next session's open — never mint
             # Window canon (adjudicated 2026-07-04): factors see exactly the
             # last ≤300 completed candles — identical to live evaluation.
             window = candles.iloc[max(0, i + 1 - 300) : i + 1]
@@ -337,6 +361,7 @@ class BacktestEngine:
                 take_profit=float(take_profit),
                 qty=qty,
                 candles=candles,
+                session_last=session_last,
             )
             if trade is not None:
                 trades.append(trade)

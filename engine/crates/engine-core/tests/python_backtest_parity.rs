@@ -71,7 +71,7 @@ fn trade_lists_match_python_exactly() {
             })
             .collect();
 
-        let got = run_single_stock(&bars, "1d", &params);
+        let got = run_single_stock(&bars, "1d", &params, None);
         assert_eq!(
             got.len(),
             case.trades.len(),
