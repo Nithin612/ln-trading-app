@@ -180,3 +180,39 @@ bug-hunter BUGS-FOUND (6) → 1–4 fixed at gate, 5–6 backlogged ·
 quant-verifier ran twice, both cut off by account session limits — partial
 evidence recorded (digest stability 200k trials clean; freeze diff = the
 four sanctioned groups), full pass re-queued alongside the 8c review.
+
+## 8c addendum (completed 2026-07-07, same day as the gate)
+
+Delivered in four commits (`22fdaba` → `a3b1927`):
+
+1. **session_last_bar axis** — both engines, default-off freeze-extension
+   (1d oracles + all 1d goldens byte-stable); flagged decision bars mint
+   nothing; open trades force-exit at flagged close after SL-before-TP.
+   Rust +4 / python +8 / parity +3 tests.
+2. **Intraday parity oracle** — `python_backtest_intraday_reference.json`:
+   real backfilled bars (RELIANCE/TCS/HDFCBANK 15m; RELIANCE/SBIN 5m),
+   session flags, **102 frozen-python trades** replayed EXACTLY by cargo
+   and a dev-DB-free pytest leg. The off-1d dispatch guard is relaxed for
+   pinned timeframes only (`TIMEFRAME_TABLES` whitelist).
+3. **Intraday walk-forwards** (F&O 205/210 · eval 2024Q4→2026Q2 ·
+   ₹5L @ 2%):
+
+   | Profile | TF | Trades (pre-gate) | Win% | TotPnL% | Sharpe | MaxDD% | Verdict |
+   |---|---|---|---|---|---|---|---|
+   | pdh_pdl | 15m | 1,224 (8,684) | 40.9 | −0.3 | −1.06 | 14.8 | **FLAGGED** |
+   | orb_15m | 15m | 1,045 (8,684) | 43.1 | +10.4 | −0.60 | 7.6 | **FLAGGED** (positive-sum, negative risk-adjusted) |
+   | gainer_925 | 5m | 13,497 (244,440) | 41.8 | +116.3 (≈+0.009/trade) | −0.67 | 25.7 | **FLAGGED** |
+
+   None earns Phase-3 live activation as-specced — exactly the evidence
+   the phase exists to produce, now pinned in committed goldens.
+4. **Two correctness catches en route:** (a) intraday loads chunk at 15
+   symbols/query — a 400-symbol 5m fetch buffers >10M rows and OOM-killed
+   the 16GB machine twice; (b) cross-sectional gate context (9:25 ranking
+   pool) must span the PINNED ran-set, not the pre-exclusion universe —
+   the mismatch drifted gainer_925 gate outcomes +3.5% between generation
+   and replay, and **the §8 harness caught it on the very first replay** —
+   the drift gate defending its own author.
+
+Backfill (track T): 15.3M 5m/15m rows · 210 stocks · full 739-session
+depth · QA manifest 416/420 admitted (FORCEMOT gappy, NIFTYNXT50 is an
+index ticker). Plan risk #6 (Kite intraday depth) closed.

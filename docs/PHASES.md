@@ -24,34 +24,39 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 | 7 | Live-trading hardening | planned | — | Kite orders behind trading_mode + 30-day gate, kill switch, reconciliation, VPS runbook |
 
 **▶ CONTINUE HERE (next session, any account):** Phase 2 CLOSED
-2026-07-07 (report: `phases/phase-02-strategy-profiles.md`; slice commits
-`8fa1263`→`a6c3657`). Open threads, in order:
+2026-07-07, **8c COMPLETE same day** (commits `8fa1263`→`a3b1927`;
+report: `phases/phase-02-strategy-profiles.md`). 8c delivered: backfill
+(15.3M rows, manifest 416/420 admitted) · session_last_bar axis in both
+engines (default-off, fixture-proven) · 102-trade intraday parity oracle
+(cargo + DB-free pytest replay it EXACTLY) · intraday walk-forwards —
+**pdh_pdl −0.3%/sharpe −1.06 · orb_15m +10.4%/−0.60 · gainer_925 +116.3%
+(≈0/trade)/−0.67 — all three FLAGGED; none earns Phase-3 activation
+as-specced.** All 8 goldens replay green in `make walkforward`.
 
-1. **8c (trails the gate, approved):** finish the intraday backfill —
-   run 1 ingested ~1.2M 5m rows then died on the (now fixed) retry-net
-   bug; resume needs a live Kite token (`scripts/kite_login.py`, then
-   `scripts/backfill_intraday.py` — resume skips stored rows) → QA
-   manifest (`tests/goldens/intraday_qa_manifest.json`) → extend
-   `scripts/generate_engine_fixtures.py` for 5m/15m parity fixtures →
-   relax the off-1d dispatch guard for pinned timeframes → intraday
-   goldens for pdh_pdl/orb_15m/gainer_925.
-2. **quant-verifier full pass owed** (two runs died on account session
-   limits at the gate; partials recorded in the phase report) — run it
-   with the 8c review.
+Open threads, in order:
+1. **quant-verifier full pass owed on 8b+8c** (two gate runs died on
+   account session limits; partials in the report: digest stability 200k
+   clean, freeze diff = sanctioned groups only). Run before Phase-3 work
+   starts; scope: walkforward.py, session_last_bar axis, intraday
+   fixtures/goldens, kite_rest/backfill ingest.
+2. **Final full `make check`** on the 8c tree if not run this session
+   (suites were green per-slice; the walkforward target now replays 8
+   goldens, ~7 min).
 3. **Before any multiplier-carrying profile activates:** wire
-   profile.weight_multipliers into pipeline.py scoring (documented gap,
-   all seeds `{}`); latent LOW calendar items in the report backlog.
-4. **dc1/dc2/multibagger are FLAGGED needs-tuning** (negative
-   walk-forward) — tuning lands Phase 6; they stay active for suggestion
-   generation with verdicts on record.
+   profile.weight_multipliers into pipeline.py scoring (all seeds `{}`);
+   latent LOW calendar items in the report backlog.
+4. **Profile tuning** (dc1/dc2/multibagger negative; intraday trio
+   flagged) — Phase 6 workflow; verdicts pinned in goldens.
 5. `git push` remains manual (credential-free remote by design).
 
-Daily ops note: Kite token dies ~6:00 AM IST; login ritual is
-`cd backend && uv run python scripts/kite_login.py` (terminal-only, no
-servers needed). Chain recorder auto-activates while a token is live.
+Daily ops: Kite token dies ~6:00 AM IST; ritual =
+`cd backend && uv run python scripts/kite_login.py` (terminal-only).
+Chain recorder auto-activates while a token is live.
 
-Next phase: **Phase 3 — Realtime v2** (plan §Phase 3; Kite subscription
-now active; pre-work list in phase-01 report §Exit gate).
+Next phase: **Phase 3 — Realtime v2** (plan §Phase 3): live-worker +
+Rust LiveEngine, committed-vs-forming layers, record/replay harness,
+p99 < 10 ms tick→publish. The rust-path signal envelope + intraday
+goldens pre-work from phase-01 §Exit gate is now DONE (8c).
 
 Phase-1 state (closed): F/G/H applied 2026-07-05, canon table in
 ARCHITECTURE.md; standing baseline 599 trades / +52.1% / sharpe +0.13 on

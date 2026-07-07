@@ -127,3 +127,17 @@ dc2's 7.4 s is the python `sr_zone_factor` recompute per candidate trade
 (prior-window DC1 check), not the engine. multibagger is load-dominated
 (~1.7 M rows). Full 5-profile regen ≈ 24 s; harness replay (5 goldens +
 coverage test) 23.3 s — cheap enough to sit inside `make check`.
+
+**2026-07-07 intraday walk-forward wall-clocks (slice 8c-3, dev machine):**
+F&O universe (205 ran / 5 excluded), eval 2024Q4→2026Q2, one
+tradecore.run_universe per profile, 15-symbol load chunks (a 400-symbol
+5m fetch buffers >10M rows and OOMs the 16GB machine — do not raise):
+
+| Profile | TF | Bars loaded | Wall-clock |
+|---|---|---|---|
+| pdh_pdl | 15m | ~3.8M | 82 s |
+| orb_15m | 15m | ~3.8M | 75 s |
+| gainer_925 | 5m | ~10.7M | 244 s |
+
+Harness replay of all 8 goldens ≈ 7 min (inside make check via
+`make walkforward`). Loading dominates; the engine itself is seconds.
