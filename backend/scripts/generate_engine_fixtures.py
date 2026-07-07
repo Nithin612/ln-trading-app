@@ -270,6 +270,143 @@ def regen_backtest_ext(doc: dict) -> tuple[dict, list[str]]:
     )
 
 
+# ── backtest INTRADAY fixture: 5m/15m + session_last_bar axis (slice 8c) ─────
+# Bars are cut ONCE from the backfilled dev DB at the pinned windows below
+# (QA manifest 2026-07-07: all pinned symbols admitted, full 739-session
+# depth) and then live in the fixture verbatim like every other fixture —
+# regeneration only recomputes expectations. Flags are data-driven
+# (session_last_flags on IST session dates), stored alongside the bars.
+
+INTRADAY_PINS: list[tuple[str, str, str, str]] = [
+    # (symbol, timeframe, since, until) — inclusive IST dates
+    ("RELIANCE", "15m", "2026-05-15", "2026-06-30"),
+    ("TCS", "15m", "2026-05-15", "2026-06-30"),
+    ("HDFCBANK", "15m", "2026-05-15", "2026-06-30"),
+    ("RELIANCE", "5m", "2026-06-09", "2026-06-30"),
+    ("SBIN", "5m", "2026-06-09", "2026-06-30"),
+]
+
+
+def _bootstrap_intraday_cases() -> list[dict]:
+    """First cut only: pull pinned windows from the backfilled dev DB."""
+    import asyncio
+    from datetime import date, datetime, time, timedelta
+    from zoneinfo import ZoneInfo
+
+    from app.backtest.walkforward import session_last_flags
+    from app.db.session import AsyncSessionFactory
+    from app.db.session import engine as app_engine
+    from sqlalchemy import text as sa_text
+
+    ist = ZoneInfo("Asia/Kolkata")
+    table = {"5m": "ohlcv_5m", "15m": "ohlcv_15m"}
+
+    async def _load() -> list[dict]:
+        cases: list[dict] = []
+        async with AsyncSessionFactory() as db:
+            for symbol, tf, since, until in INTRADAY_PINS:
+                t0 = datetime.combine(date.fromisoformat(since), time.min, tzinfo=ist)
+                t1 = datetime.combine(
+                    date.fromisoformat(until) + timedelta(days=1), time.min, tzinfo=ist
+                )
+                rows = (
+                    await db.execute(
+                        sa_text(
+                            f"SELECT o.time, o.open, o.high, o.low, o.close, o.volume"  # noqa: S608
+                            f" FROM {table[tf]} o JOIN stocks s ON s.id = o.stock_id"
+                            " WHERE s.symbol = :sym AND o.time >= :t0 AND o.time < :t1"
+                            " AND o.is_complete IS TRUE ORDER BY o.time"
+                        ),
+                        {"sym": symbol, "t0": t0, "t1": t1},
+                    )
+                ).fetchall()
+                if len(rows) < 200:
+                    raise SystemExit(
+                        f"intraday bootstrap: {symbol}/{tf} has only {len(rows)} bars "
+                        f"in [{since}, {until}] — run scripts/backfill_intraday.py first"
+                    )
+                cases.append(
+                    {
+                        "symbol": symbol,
+                        "timeframe": tf,
+                        "since": since,
+                        "until": until,
+                        "bars": [
+                            {
+                                "open": float(r.open),
+                                "high": float(r.high),
+                                "low": float(r.low),
+                                "close": float(r.close),
+                                "volume": float(r.volume),
+                            }
+                            for r in rows
+                        ],
+                        "session_last": session_last_flags(
+                            [r.time.astimezone(ist).date() for r in rows]
+                        ),
+                        "trades": [],
+                    }
+                )
+        await app_engine.dispose()
+        return cases
+
+    return asyncio.run(_load())
+
+
+def regen_backtest_intraday(doc: dict) -> tuple[dict, list[str]]:
+    if not doc.get("cases"):
+        doc = {
+            "_meta": {"capital": "500000", "risk_pct": "2"},
+            "cases": _bootstrap_intraday_cases(),
+        }
+    diffs: list[str] = []
+    for case in doc["cases"]:
+        cfg = BacktestConfig(
+            timeframe=case["timeframe"],
+            universe="FIXTURE",
+            capital=Decimal(doc["_meta"]["capital"]),
+            risk_pct=Decimal(doc["_meta"]["risk_pct"]),
+            min_confidence=70,
+        )
+        bars = case["bars"]
+        idx = pd.date_range("2000-01-03", periods=len(bars), freq="min", tz="UTC")
+        df = _df(bars).set_index(idx)
+        pos = {ts: i for i, ts in enumerate(idx)}
+        trades = [
+            {
+                "fill_idx": pos[t.entry_date],
+                "exit_idx": pos[t.exit_date],
+                "direction": t.direction,
+                "confidence": t.confidence_pct,
+                "entry": t.entry_price,
+                "sl": t.stop_loss,
+                "tp": t.take_profit,
+                "qty": t.qty,
+                "exit_price": t.exit_price,
+                "pnl_pct": t.pnl_pct,
+                "hit_sl": t.hit_sl,
+                "hit_target": t.hit_target,
+            }
+            for t in BacktestEngine(cfg).run_single_stock(
+                case["symbol"], df, session_last=case["session_last"]
+            )
+        ]
+        if case["trades"] != trades:
+            diffs.append(
+                f"{case['symbol']}/{case['timeframe']}: "
+                f"{len(case['trades'])} -> {len(trades)} trades"
+            )
+        case["trades"] = trades
+    doc["_meta"]["canon"] = (
+        "slice 8c intraday axis: 5m/15m bars from the backfilled corpus "
+        "(QA manifest 2026-07-07) + session_last_bar flags, frozen python oracle"
+    )
+    total = sum(len(c["trades"]) for c in doc["cases"])
+    if total == 0:
+        diffs.append("WARNING: intraday fixture minted ZERO trades across all cases")
+    return doc, diffs
+
+
 def main() -> int:
     check_only = "--check" in sys.argv
     jobs = [
@@ -277,6 +414,7 @@ def main() -> int:
         ("python_confluence_reference.json", regen_confluence),
         ("python_backtest_reference.json", regen_backtest),
         ("python_backtest_ext_reference.json", regen_backtest_ext),
+        ("python_backtest_intraday_reference.json", regen_backtest_intraday),
     ]
     dirty = False
     for name, regen in jobs:
