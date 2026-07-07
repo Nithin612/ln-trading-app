@@ -8,12 +8,12 @@ the status lifecycle.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import UTC, datetime
 from typing import TYPE_CHECKING
 
 from app.celery_app import celery_app
+from app.tasks._runner import run_db_task
 
 if TYPE_CHECKING:
     from sqlalchemy.ext.asyncio import AsyncSession
@@ -24,7 +24,7 @@ log = logging.getLogger(__name__)
 @celery_app.task(name="app.tasks.expiry_tasks.sweep_expired_signals", bind=True, max_retries=0)  # type: ignore[untyped-decorator]
 def sweep_expired_signals(self: object) -> dict[str, int]:  # noqa: ARG001
     """Flip lapsed active signals to expired. Beat: every 5 min, weekdays."""
-    return asyncio.run(_run_sweep())
+    return run_db_task(_run_sweep)
 
 
 async def sweep_expired(db: AsyncSession, now: datetime) -> int:

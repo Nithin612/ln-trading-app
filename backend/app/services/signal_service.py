@@ -12,7 +12,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.analysis.confluence import ConfluenceResult
 from app.analysis.confluence import score_signal as _score_signal_python
 from app.analysis.indicators.ema import _ema
-from app.analysis.risk import compute_levels, compute_quantity, volatility_adjusted_qty
+from app.analysis.risk import compute_quantity, volatility_adjusted_qty
 from app.core.config import settings
 from app.models.market_data import OhlcvDaily
 from app.models.signal import Signal
@@ -21,6 +21,7 @@ from app.services import market_calendar
 from app.signals.classifier import classify_signal
 from app.signals.expiry import compute_validity_until
 from app.signals.headline import build_headline
+from app.signals.risk_guards import safe_levels
 
 log = logging.getLogger(__name__)
 
@@ -193,7 +194,7 @@ async def generate_signal_for_stock(
     if not ema20_series.dropna().empty:
         ema20_daily = Decimal(str(ema20_series.iloc[-1]))
 
-    levels = compute_levels(
+    levels = safe_levels(
         direction=result.direction,
         classification=classification,
         entry=entry,
@@ -381,7 +382,7 @@ async def run_live_signal_generation(
     ema20_series = _ema(candles["close"], 20)
     ema20_daily = Decimal(str(ema20_series.iloc[-1])) if not ema20_series.dropna().empty else None
 
-    levels = compute_levels(
+    levels = safe_levels(
         direction=score.direction,
         classification=classification,
         entry=entry,

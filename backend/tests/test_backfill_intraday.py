@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 import app.broker.kite_rest as kite_rest
 import pytest
+import requests
 from app.broker.kite_rest import ThrottledKite
 from app.models.market_data import Ohlcv5m
 from kiteconnect.exceptions import NetworkException
@@ -177,6 +178,37 @@ class TestThrottledKite:
                 tk.historical_data(1, datetime(2024, 1, 1), datetime(2024, 1, 2), "5minute")
             )
 
+    @pytest.mark.parametrize(
+        "transport_exc",
+        [
+            requests.exceptions.ReadTimeout("Read timed out"),
+            requests.exceptions.ConnectionError("reset by peer"),
+        ],
+    )
+    def test_requests_transport_errors_are_retried(
+        self, monkeypatch: pytest.MonkeyPatch, transport_exc: Exception
+    ) -> None:
+        """Regression (Phase-2 gate): kiteconnect re-raises RAW requests
+        exceptions, which subclass neither the builtins nor
+        NetworkException — the old retry net let a single ReadTimeout
+        abort a 45-minute backfill (observed in production minutes after
+        bug-hunter predicted it)."""
+        monkeypatch.setattr(kite_rest, "_BACKOFF_S", (0.01, 0.01, 0.01))
+        tk = ThrottledKite("tok", min_interval_s=0.0)
+        calls = {"n": 0}
+
+        def flaky(**_kw) -> list:  # noqa: ANN003
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise transport_exc
+            return []
+
+        tk._kc.historical_data = flaky  # type: ignore[method-assign]
+        out = asyncio.run(
+            tk.historical_data(1, datetime(2024, 1, 1), datetime(2024, 1, 2), "5minute")
+        )
+        assert calls["n"] == 2 and out == []
+
 
 class TestResumePointQuery:
     async def test_backfill_resumes_from_last_stored_bar(self, db) -> None:  # noqa: ANN001
@@ -186,7 +218,8 @@ class TestResumePointQuery:
         from backfill_intraday import _last_stored
 
         stock = await make_stock(db, symbol="RESUMECO")
-        assert await _last_stored(db, Ohlcv5m, stock.id) is None
+        until = date(2024, 7, 31)
+        assert await _last_stored(db, Ohlcv5m, stock.id, until) is None
         for day, hh_utc in ((1, 3), (2, 3), (2, 9)):
             await db.execute(
                 pg_insert(Ohlcv5m).values(
@@ -197,4 +230,33 @@ class TestResumePointQuery:
             )
         await db.commit()
         # 2024-07-02 09:45 UTC == 15:15 IST same day → resume day is the 2nd
-        assert await _last_stored(db, Ohlcv5m, stock.id) == date(2024, 7, 2)
+        assert await _last_stored(db, Ohlcv5m, stock.id, until) == date(2024, 7, 2)
+
+    async def test_consumer_minted_rows_cannot_poison_the_resume_point(
+        self, db  # noqa: ANN001
+    ) -> None:
+        """Regression (Phase-2 gate): the live tick consumer mints TODAY's
+        (possibly forming) intraday rows; an unbounded max(time) reported
+        today, made start > until, and silently skipped the entire
+        historical fetch — then the QA manifest blamed 'no data'."""
+        from backfill_intraday import _last_stored
+
+        stock = await make_stock(db, symbol="POISONCO")
+        until = date(2024, 7, 15)
+        rows = [
+            # real completed history inside the window
+            {"time": datetime(2024, 7, 10, 3, 45, tzinfo=UTC), "is_complete": True},
+            # consumer-minted FORMING bar inside the window — not a resume point
+            {"time": datetime(2024, 7, 12, 4, 0, tzinfo=UTC), "is_complete": False},
+            # consumer-minted completed bar AFTER until — not a resume point
+            {"time": datetime(2024, 7, 22, 3, 45, tzinfo=UTC), "is_complete": True},
+        ]
+        for r in rows:
+            await db.execute(
+                pg_insert(Ohlcv5m).values(
+                    stock_id=stock.id, open="1", high="1", low="1", close="1",
+                    volume=1, **r,
+                ).on_conflict_do_nothing(index_elements=["time", "stock_id"])
+            )
+        await db.commit()
+        assert await _last_stored(db, Ohlcv5m, stock.id, until) == date(2024, 7, 10)

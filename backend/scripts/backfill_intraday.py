@@ -41,8 +41,9 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import requests.exceptions as _rex  # noqa: E402
 from app.broker.kite_client import sync_instruments  # noqa: E402
-from app.broker.kite_rest import KiteException, ThrottledKite  # noqa: E402
+from app.broker.kite_rest import KiteException, ThrottledKite, TokenException  # noqa: E402
 from app.db.session import AsyncSessionFactory  # noqa: E402
 from app.models.broker import BrokerToken, KiteInstrument  # noqa: E402
 from app.models.market_calendar import NseHoliday  # noqa: E402
@@ -192,9 +193,22 @@ async def _trading_days(db: AsyncSession, start: date, end: date) -> set[date]:
     return out
 
 
-async def _last_stored(db: AsyncSession, model: Any, stock_id: int) -> date | None:
+async def _last_stored(db: AsyncSession, model: Any, stock_id: int, until: date) -> date | None:
+    """Resume point: last COMPLETED session at or before `until`.
+
+    Bounded and is_complete-filtered on purpose — the live tick consumer
+    mints TODAY's (possibly forming) intraday rows; an unbounded max(time)
+    would report today, make start > until, and silently skip the whole
+    historical fetch (bug-hunter finding, Phase-2 gate)."""
+    cutoff = datetime.combine(until + timedelta(days=1), time.min, tzinfo=IST).astimezone(UTC)
     mx = (
-        await db.execute(select(func.max(model.time)).where(model.stock_id == stock_id))
+        await db.execute(
+            select(func.max(model.time)).where(
+                model.stock_id == stock_id,
+                model.time < cutoff,
+                model.is_complete.is_(True),
+            )
+        )
     ).scalar_one_or_none()
     return mx.astimezone(IST).date() if mx else None
 
@@ -214,7 +228,7 @@ async def backfill_stock_tf(
     model = TF[tf]["model"]
     start = since
     if not full:
-        last = await _last_stored(db, model, stock_id)
+        last = await _last_stored(db, model, stock_id, until)
         if last is not None:
             start = max(since, last)  # refetch the last stored day — cheap hole guard
     inserted = requests = 0
@@ -334,7 +348,14 @@ async def _run_backfill(
                     db, kite, stock_id, tokens[symbol], tf,
                     args.since, args.until, args.full,
                 )
-            except KiteException as exc:
+            except TokenException as exc:
+                # Token death (~6:00 AM IST) is a lifecycle event, not an
+                # error loop — abort cleanly, don't hammer Kite unspaced.
+                print(f"\n✗ Kite token expired/invalid: {exc}", flush=True)
+                print("  Log in again (uv run python scripts/kite_login.py) and "
+                      "rerun — resume skips everything already stored.", flush=True)
+                return 4
+            except (KiteException, _rex.RequestException) as exc:
                 print(f"  ✗ {symbol}/{tf}: {type(exc).__name__}: {exc}", flush=True)
                 if "permission" in str(exc).lower() or "subscribe" in str(exc).lower():
                     print(

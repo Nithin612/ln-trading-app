@@ -24,7 +24,7 @@ from sqlalchemy import select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.analysis.risk import compute_levels, compute_quantity, volatility_adjusted_qty
+from app.analysis.risk import compute_quantity, volatility_adjusted_qty
 from app.analysis.structure.dow import swing_levels
 from app.backtest.tp_rules import tp_from_template as _tp_from_template
 from app.models.profile import StrategyProfile
@@ -37,6 +37,7 @@ from app.services.universe_service import resolve_universe
 from app.signals.classifier import classify_signal
 from app.signals.expiry import compute_validity_until
 from app.signals.headline import build_headline
+from app.signals.risk_guards import safe_levels
 
 log = logging.getLogger(__name__)
 
@@ -167,7 +168,7 @@ async def _process_stock(
     classification = classify_signal(profile.timeframe, result.factors, result.is_multibagger)
     entry = Decimal(str(window["close"].iloc[-1]))
     swing_low, swing_high = swing_levels(window)
-    levels = compute_levels(
+    levels = safe_levels(
         direction=result.direction,
         classification=classification,
         entry=entry,
@@ -175,7 +176,9 @@ async def _process_stock(
         swing_high=swing_high,
     )
     if levels is None:
-        return None  # natural SL beyond the class cap — rejected, never clamped
+        # Natural SL beyond the class cap OR degenerate/wrong-side pivot
+        # (SL == entry crashes compute_quantity) — rejected, never clamped.
+        return None
     stop_loss, _canon_tp = levels
     take_profit = _tp_from_template(profile.risk_template, result.direction, entry, stop_loss)
 
@@ -246,16 +249,17 @@ async def run_profile(
 
     created: list[Signal] = []
     for stock_id in stock_ids:
-        signal = await _process_stock(
-            db,
-            profile,
-            stock_id,
-            sym_map.get(stock_id, str(stock_id)),
-            flows,
-            as_of,
-            capital,
-            risk_pct,
-        )
+        symbol = sym_map.get(stock_id, str(stock_id))
+        try:
+            signal = await _process_stock(
+                db, profile, stock_id, symbol, flows, as_of, capital, risk_pct
+            )
+        except Exception:
+            # One pathological stock must never kill the remaining universe
+            # or the profiles after this one (a ValueError here used to take
+            # down the whole nightly run — Phase-2 gate finding).
+            log.exception("profile %s: %s failed — skipping stock", profile.key, symbol)
+            continue
         if signal is not None:
             created.append(signal)
 

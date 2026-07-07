@@ -18,8 +18,9 @@ import time as _time
 from datetime import datetime
 from typing import Any
 
+import requests.exceptions as _rex
 from kiteconnect import KiteConnect
-from kiteconnect.exceptions import KiteException, NetworkException
+from kiteconnect.exceptions import KiteException, NetworkException, TokenException
 
 from app.core.config import settings
 
@@ -29,6 +30,18 @@ log = logging.getLogger(__name__)
 _DEFAULT_MIN_INTERVAL_S = 0.34
 _RETRIES = 3
 _BACKOFF_S = (1.0, 3.0, 9.0)
+
+# What actually flies out of kiteconnect on transport failure: it re-raises
+# raw `requests` exceptions, which subclass OSError/RequestException — NOT
+# the builtins and NOT NetworkException (bug-hunter, Phase-2 gate; confirmed
+# in production when the first backfill run died on an uncaught ReadTimeout).
+_TRANSIENT = (
+    NetworkException,  # Kite's own 429/5xx wrapper
+    _rex.ConnectionError,
+    _rex.Timeout,  # covers ConnectTimeout + ReadTimeout
+    ConnectionError,
+    TimeoutError,
+)
 
 
 class ThrottledKite:
@@ -57,11 +70,8 @@ class ThrottledKite:
                 if wait > 0:
                     await asyncio.sleep(wait)
                 try:
-                    result = await asyncio.to_thread(fn, *args, **kwargs)
-                    self._last_call = _time.monotonic()
-                    return result
-                except (NetworkException, ConnectionError, TimeoutError) as exc:
-                    self._last_call = _time.monotonic()
+                    return await asyncio.to_thread(fn, *args, **kwargs)
+                except _TRANSIENT as exc:
                     if attempt >= _RETRIES:
                         raise
                     delay = _BACKOFF_S[attempt]
@@ -69,6 +79,11 @@ class ThrottledKite:
                         "kite REST retry %d/%d in %.0fs: %s", attempt + 1, _RETRIES, delay, exc
                     )
                     await asyncio.sleep(delay)
+                finally:
+                    # EVERY attempt consumed rate budget — non-transient
+                    # failures (TokenException, InputException…) must not
+                    # let the next caller fire unspaced.
+                    self._last_call = _time.monotonic()
         raise RuntimeError("unreachable")  # pragma: no cover
 
     async def historical_data(
@@ -94,4 +109,4 @@ class ThrottledKite:
         return list(data)
 
 
-__all__ = ["KiteException", "NetworkException", "ThrottledKite"]
+__all__ = ["KiteException", "NetworkException", "ThrottledKite", "TokenException"]

@@ -9,13 +9,13 @@ time is the scarce resource (UPGRADE_PLAN.md):
 """
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from app.celery_app import celery_app
 from app.core.config import settings
+from app.tasks._runner import run_db_task
 
 log = logging.getLogger(__name__)
 
@@ -38,7 +38,7 @@ def _within_market_hours(now_utc: datetime | None = None) -> bool:
 @celery_app.task(name="app.tasks.fo_tasks.fo_eod_ingestion", bind=True, max_retries=2)  # type: ignore[untyped-decorator]
 def fo_eod_ingestion(self: object) -> dict[str, object]:  # noqa: ARG001
     """Ingest today's F&O bhavcopy and India VIX. Runs 18:45 IST weekdays."""
-    return asyncio.run(_run_fo_eod())
+    return run_db_task(_run_fo_eod)
 
 
 async def _run_fo_eod() -> dict[str, object]:
@@ -62,7 +62,7 @@ async def _run_fo_eod() -> dict[str, object]:
 @celery_app.task(name="app.tasks.fo_tasks.record_option_chains", bind=True, max_retries=0)  # type: ignore[untyped-decorator]
 def record_option_chains(self: object) -> dict[str, object]:  # noqa: ARG001
     """One chain-snapshot pass. Beat fires every minute in the market window."""
-    return asyncio.run(_run_chain_snapshot())
+    return run_db_task(_run_chain_snapshot)
 
 
 async def _run_chain_snapshot() -> dict[str, object]:

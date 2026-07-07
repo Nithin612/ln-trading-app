@@ -11,12 +11,12 @@ zero, so partial data degrades gracefully.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from app.celery_app import celery_app
+from app.tasks._runner import run_db_task
 
 log = logging.getLogger(__name__)
 
@@ -26,7 +26,7 @@ _IST = ZoneInfo("Asia/Kolkata")
 @celery_app.task(name="app.tasks.market_data_tasks.ingest_fii_dii", bind=True, max_retries=2)  # type: ignore[untyped-decorator]
 def ingest_fii_dii(self: object) -> dict[str, object]:  # noqa: ARG001
     """Fetch + upsert today's FII/DII flows. Beat: 18:30 IST weekdays."""
-    return asyncio.run(_run_ingest())
+    return run_db_task(_run_ingest)
 
 
 async def _run_ingest() -> dict[str, object]:
@@ -53,7 +53,7 @@ def ingest_equities_eod(self: object) -> dict[str, object]:  # noqa: ARG001
     daily candles (the Phase-1 backfill script was the only writer), so
     nightly signal generation scored stale data.
     """
-    return asyncio.run(_run_equities_eod())
+    return run_db_task(_run_equities_eod)
 
 
 async def _run_equities_eod() -> dict[str, object]:

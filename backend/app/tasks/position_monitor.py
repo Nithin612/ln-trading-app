@@ -10,10 +10,10 @@ For each open paper position:
 
 from __future__ import annotations
 
-import asyncio
 import logging
 
 from app.celery_app import celery_app
+from app.tasks._runner import run_db_task
 
 log = logging.getLogger(__name__)
 
@@ -21,7 +21,7 @@ log = logging.getLogger(__name__)
 @celery_app.task(name="app.tasks.position_monitor.monitor_positions", bind=True, max_retries=0)  # type: ignore[untyped-decorator]
 def monitor_positions(self: object) -> dict[str, int]:  # noqa: ARG001
     """Scan all open paper positions and auto-close on SL/TP hit."""
-    return asyncio.run(_run_monitor())
+    return run_db_task(_run_monitor)
 
 
 async def _run_monitor() -> dict[str, int]:

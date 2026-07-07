@@ -8,12 +8,12 @@ delivers live candle-close events.
 
 from __future__ import annotations
 
-import asyncio
 import logging
 from datetime import UTC, datetime
 from zoneinfo import ZoneInfo
 
 from app.celery_app import celery_app
+from app.tasks._runner import run_db_task
 
 log = logging.getLogger(__name__)
 
@@ -23,7 +23,7 @@ _IST = ZoneInfo("Asia/Kolkata")
 @celery_app.task(name="app.tasks.profile_tasks.nightly_suggestions", bind=True, max_retries=2)  # type: ignore[untyped-decorator]
 def nightly_suggestions(self: object) -> dict[str, object]:  # noqa: ARG001
     """Run all active EOD profiles. Beat: 19:25 IST weekdays."""
-    return asyncio.run(_run_nightly())
+    return run_db_task(_run_nightly)
 
 
 async def _run_nightly() -> dict[str, object]:
