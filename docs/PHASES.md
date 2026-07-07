@@ -40,9 +40,9 @@ Open threads, in order:
    Phase-3 pre-work (report §8c addendum): wire intraday SetupContext
    in pipeline.py + _prev_day_hlc fail-closed before activating any
    intraday profile.
-2. **Final full `make check`** on the 8c tree if not run this session
-   (suites were green per-slice; the walkforward target now replays 8
-   goldens, ~7 min).
+2. **Final full `make check` GREEN 2026-07-07** on the corrected tree:
+   backend 638 · frontend 131 · engine 41 · parity + walkforward targets
+   green (exit 0). Nothing owed.
 3. **Before any multiplier-carrying profile activates:** wire
    profile.weight_multipliers into pipeline.py scoring (all seeds `{}`);
    latent LOW calendar items in the report backlog.
