@@ -231,6 +231,35 @@ class TestSetupPostFilter:
         cond = [{"type": "pdh_breakout", "params": {}}]
         assert len(apply_setup_filter("X", _base_df(), [_trade()], cond)) == 1
 
+    def test_925_screen_never_gates_pre_screen_decisions(self) -> None:
+        """Regression (quant-verifier HIGH, 2026-07-07): a session-FIRST
+        5m decision bar (starts 09:15, fill at 09:20) was gated by the
+        09:25 cross-section — data from 5 minutes AFTER the fill. The
+        screen must only exist for decision bars starting ≥ 09:20."""
+        from datetime import datetime as dt
+        from zoneinfo import ZoneInfo
+
+        ist = ZoneInfo("Asia/Kolkata")
+        session = date(2026, 7, 6)
+        cond = [{"type": "top_gainer_925", "params": {"top_n": 10}}]
+        cs = {session: {"X": 5.0}}  # X is a top gainer — gate would pass
+        n = 61
+        base = dt(2026, 7, 6, 9, 15, tzinfo=ist)
+        times = [base + pd.Timedelta(minutes=5 * i).to_pytimedelta() for i in range(n)]
+        dates = [session] * n
+
+        def kept_for(decision_start_min: int) -> int:
+            fill = decision_start_min // 5 + 1
+            return len(
+                apply_setup_filter(
+                    "X", _base_df(n), [_trade(fill_idx=fill)], cond,
+                    dates=dates, times=times, cross_section_by_session=cs,
+                )
+            )
+
+        assert kept_for(0) == 0   # decision bar 09:15 — screen unborn, fail closed
+        assert kept_for(5) == 1   # decision bar 09:20 closes 09:25 — screen live
+
 
 class TestMetricTolerance:
     def test_within_five_percent_relative(self) -> None:
@@ -296,6 +325,7 @@ def _profile_stub(**over: object) -> SimpleNamespace:
         "name": "Stub",
         "style": "swing",
         "timeframe": "1d",
+        "schedule": "eod",
         "universe_spec": {"kind": "symbols", "value": ["AAA"]},
         "setup_conditions": [],
         "weight_multipliers": {},

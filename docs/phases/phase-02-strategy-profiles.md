@@ -201,11 +201,12 @@ Delivered in four commits (`22fdaba` → `a3b1927`):
    |---|---|---|---|---|---|---|---|
    | pdh_pdl | 15m | 1,224 (8,684) | 40.9 | −0.3 | −1.06 | 14.8 | **FLAGGED** |
    | orb_15m | 15m | 1,045 (8,684) | 43.1 | +10.4 | −0.60 | 7.6 | **FLAGGED** (positive-sum, negative risk-adjusted) |
-   | gainer_925 | 5m | 13,497 (244,440) | 41.8 | +116.3 (≈+0.009/trade) | −0.67 | 25.7 | **FLAGGED** |
+   | gainer_925 | 5m | 12,935 (244,440) | 41.3 | +56.2 (≈+0.004/trade) | −0.86 | 32.1 | **FLAGGED** |
 
    None earns Phase-3 live activation as-specced — exactly the evidence
    the phase exists to produce, now pinned in committed goldens.
-4. **Two correctness catches en route:** (a) intraday loads chunk at 15
+4. **8c-4 (quant-verifier full pass, verdict → fixed):** 6/7 items exact; one HIGH — session-first 5m decision bars were gated by the not-yet-born 09:25 screen (look-ahead). Fixed (screen exists only for decision bars starting ≥ 09:20); gainer_925 regenerated: the look-ahead had been flattering it by ~2× on totPnL. MEDIUMs recorded as Phase-3 pre-work: wire prev_day/cross_section into pipeline.py SetupContext + make _prev_day_hlc fail closed on intraday windows BEFORE activating any intraday profile; goldens for time_0925 schedules carry `schedule_approximated: true`.
+5. **Two more correctness catches en route:** (a) intraday loads chunk at 15
    symbols/query — a 400-symbol 5m fetch buffers >10M rows and OOM-killed
    the 16GB machine twice; (b) cross-sectional gate context (9:25 ranking
    pool) must span the PINNED ran-set, not the pre-exclusion universe —

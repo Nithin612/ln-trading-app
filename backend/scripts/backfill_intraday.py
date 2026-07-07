@@ -392,6 +392,12 @@ async def main() -> int:
     ap.add_argument("--limit", type=int, default=0, help="first N symbols (smoke runs)")
     args = ap.parse_args()
     timeframes = list(TF) if args.timeframe == "both" else [args.timeframe]
+    yesterday = datetime.now(IST).date() - timedelta(days=1)
+    if args.until > yesterday:
+        # Intra-session Kite bars are FORMING; storing them is_complete
+        # would poison the no-look-ahead guarantee downstream.
+        print(f"--until clamped to {yesterday} (today's bars may still be forming)")
+        args.until = yesterday
 
     async with AsyncSessionFactory() as db:
         universe = await _universe(db)

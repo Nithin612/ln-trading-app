@@ -78,6 +78,13 @@ SUPPORTED_SETUPS_1D = {
 # and the 9:25 cross-section from the universe's own 5m/15m bars (8c-3).
 SUPPORTED_SETUPS_INTRADAY = SUPPORTED_SETUPS_1D | {"orb_breakout", "top_gainer_925"}
 
+# The 9:25 screen exists only once the 09:20-starting 5m bar has CLOSED.
+# A decision bar that starts before 09:20 closes before the screen is
+# born — consulting the cross-section for it is look-ahead (quant-verifier
+# HIGH, 2026-07-07): such trades see cross_section=None and the evaluator
+# fails closed, exactly like live would before 09:25.
+_SCREEN_925_READY = time(9, 20)
+
 # Metrics compared by the §8 golden harness (BacktestResult scalar fields;
 # equity_curve/trades excluded — the digest pins the trade list).
 METRIC_FIELDS: tuple[str, ...] = (
@@ -234,6 +241,7 @@ def apply_setup_filter(
     conditions: list[dict[str, Any]],
     *,
     dates: list[date] | None = None,
+    times: list[datetime] | None = None,
     prev_day_by_session: dict[date, dict[str, float]] | None = None,
     cross_section_by_session: dict[date, dict[str, float]] | None = None,
 ) -> list[dict[str, Any]]:
@@ -256,6 +264,13 @@ def apply_setup_filter(
         fill_idx = int(t["fill_idx"])
         window = df.iloc[max(0, fill_idx - WINDOW_BARS) : fill_idx]
         decision_session = dates[fill_idx - 1] if dates and fill_idx >= 1 else None
+        # No look-ahead: the screen may only gate decisions taken AT or
+        # AFTER it exists (decision bar starts ≥ 09:20 ⟺ closes ≥ 09:25).
+        screen_born = (
+            times is not None
+            and fill_idx >= 1
+            and times[fill_idx - 1].timetz().replace(tzinfo=None) >= _SCREEN_925_READY
+        )
         ctx = SetupContext(
             direction=str(t["direction"]),
             factors={str(k): (float(w), float(s)) for k, (w, s) in dict(t["factors"]).items()},
@@ -266,7 +281,9 @@ def apply_setup_filter(
             ),
             cross_section=(
                 cross_section_by_session.get(decision_session)
-                if cross_section_by_session is not None and decision_session is not None
+                if cross_section_by_session is not None
+                and decision_session is not None
+                and screen_born
                 else None
             ),
             symbol=symbol,
@@ -388,6 +405,11 @@ def build_golden(
             "risk_pct": str(spec.risk_pct),
             "tp_rule": list(report.tp_rule),
             "tp_approximated": report.tp_approximated,
+            # time_0925 profiles run ONCE daily live; the walk-forward mints
+            # per-bar and post-filters by the screen — structurally more
+            # candidates. Flagged so golden-vs-live is never read
+            # like-for-like (quant-verifier MEDIUM, 2026-07-07).
+            **({"schedule_approximated": True} if profile.schedule == "time_0925" else {}),
         },
         "symbols": report.symbols,
         "row_counts": report.row_counts,
@@ -714,6 +736,7 @@ def _collect_records(
             in_eval,
             conditions,
             dates=f.dates if intraday else None,
+            times=f.times if intraday else None,
             prev_day_by_session=prev_by_session,
             cross_section_by_session=cross_section,
         )

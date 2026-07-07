@@ -29,16 +29,17 @@ report: `phases/phase-02-strategy-profiles.md`). 8c delivered: backfill
 (15.3M rows, manifest 416/420 admitted) · session_last_bar axis in both
 engines (default-off, fixture-proven) · 102-trade intraday parity oracle
 (cargo + DB-free pytest replay it EXACTLY) · intraday walk-forwards —
-**pdh_pdl −0.3%/sharpe −1.06 · orb_15m +10.4%/−0.60 · gainer_925 +116.3%
-(≈0/trade)/−0.67 — all three FLAGGED; none earns Phase-3 activation
+**pdh_pdl −0.3%/sharpe −1.06 · orb_15m +10.4%/−0.60 · gainer_925 +56.2%/−0.86
+(look-ahead purged, 8c-4) — all three FLAGGED; none earns Phase-3 activation
 as-specced.** All 8 goldens replay green in `make walkforward`.
 
 Open threads, in order:
-1. **quant-verifier full pass owed on 8b+8c** (two gate runs died on
-   account session limits; partials in the report: digest stability 200k
-   clean, freeze diff = sanctioned groups only). Run before Phase-3 work
-   starts; scope: walkforward.py, session_last_bar axis, intraday
-   fixtures/goldens, kite_rest/backfill ingest.
+1. **quant-verifier full pass DONE (2026-07-07)** — 6/7 exact, one HIGH
+   look-ahead in the 9:25 gate FIXED same session (gainer golden
+   regenerated; totPnL halved to +56.2% — the honest number). MEDIUMs →
+   Phase-3 pre-work (report §8c addendum): wire intraday SetupContext
+   in pipeline.py + _prev_day_hlc fail-closed before activating any
+   intraday profile.
 2. **Final full `make check`** on the 8c tree if not run this session
    (suites were green per-slice; the walkforward target now replays 8
    goldens, ~7 min).
