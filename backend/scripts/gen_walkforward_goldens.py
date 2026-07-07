@@ -79,9 +79,16 @@ async def main() -> int:
     )
 
     async with AsyncSessionFactory() as db:
-        q = select(StrategyProfile).where(StrategyProfile.status == "active")
+        # Default: every ACTIVE profile. Explicitly-named keys may also be
+        # inactive (8c: intraday profiles get walk-forward evidence BEFORE
+        # Phase-3 activation) — superseded rows are never golden-eligible.
         if args.profile:
-            q = q.where(StrategyProfile.key.in_(args.profile))
+            q = select(StrategyProfile).where(
+                StrategyProfile.key.in_(args.profile),
+                StrategyProfile.status != "superseded",
+            )
+        else:
+            q = select(StrategyProfile).where(StrategyProfile.status == "active")
         profiles = sorted((await db.execute(q)).scalars().all(), key=lambda p: p.key)
         if not profiles:
             print("no ACTIVE profiles matched — nothing to do")

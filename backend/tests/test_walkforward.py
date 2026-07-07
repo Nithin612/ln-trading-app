@@ -136,15 +136,32 @@ class TestTradesDigest:
         open_trade = [_tr("AAA", "2024-10-01", exited=False)]
         assert trades_digest(open_trade) != trades_digest([_tr("AAA", "2024-10-01")])
 
+    def test_intraday_timestamps_distinguish_same_session_trades(self) -> None:
+        """8c: two trades of one stock in one session must not collide —
+        the digest carries bar time off-midnight; 1d (midnight) lines are
+        byte-identical to the pre-8c format."""
+        a = _tr("AAA", "2024-10-01 09:30")
+        b = _tr("AAA", "2024-10-01 14:15")
+        assert trades_digest([a]) != trades_digest([b])
+        assert trades_digest([a, b]) == trades_digest([b, a])  # order canon holds
+
 
 class TestValidateProfile:
-    def test_non_1d_timeframe_rejected_until_8c(self) -> None:
-        with pytest.raises(WalkForwardError, match="slice 8c"):
-            validate_profile("15m", [])
+    def test_unpinned_timeframe_rejected(self) -> None:
+        with pytest.raises(WalkForwardError, match="parity-pinned"):
+            validate_profile("1h", [])
+
+    def test_intraday_timeframes_accepted_since_8c(self) -> None:
+        validate_profile("15m", [{"type": "orb_breakout", "params": {}}])
+        validate_profile("5m", [{"type": "top_gainer_925", "params": {}}])
+
+    def test_session_setups_still_rejected_on_1d(self) -> None:
+        with pytest.raises(WalkForwardError, match="orb_breakout"):
+            validate_profile("1d", [{"type": "orb_breakout", "params": {}}])
 
     def test_context_dependent_setups_rejected(self) -> None:
         with pytest.raises(WalkForwardError, match="relative_strength"):
-            validate_profile("1d", [{"type": "relative_strength", "params": {}}])
+            validate_profile("15m", [{"type": "relative_strength", "params": {}}])
 
     def test_supported_shape_passes(self) -> None:
         validate_profile("1d", [{"type": "dc1", "params": {}}, {"type": "dc2", "params": {}}])
@@ -295,11 +312,12 @@ def _stub_tradecore(monkeypatch: pytest.MonkeyPatch, captured: dict) -> None:
     stub = ModuleType("tradecore")
 
     def run_universe(stocks, timeframe, capital, risk_pct, min_confidence,
-                     weight_multipliers=(), tp_rule=None):  # noqa: ANN001, ANN202
+                     weight_multipliers=(), tp_rule=None,
+                     session_last_bars=None):  # noqa: ANN001, ANN202
         captured.update(
             stocks=stocks, timeframe=timeframe, capital=capital, risk_pct=risk_pct,
             min_confidence=min_confidence, weight_multipliers=weight_multipliers,
-            tp_rule=tp_rule,
+            tp_rule=tp_rule, session_last_bars=session_last_bars,
         )
         return [(sym, []) for sym, *_ in stocks]
 
@@ -334,9 +352,36 @@ class TestFfiKwargSeam:
         assert captured["capital"] == "500000"
         assert captured["risk_pct"] == "2"
         assert captured["min_confidence"] == 75
+        assert captured["session_last_bars"] is None  # 1d NEVER sends flags
         sym, o, h, lo, c, v = captured["stocks"][0]
         assert sym == "AAA" and len(o) == len(h) == len(lo) == len(c) == len(v) == 315
         assert report.tp_approximated is True
+        assert report.row_counts == {"AAA": 315}
+
+    def test_intraday_profile_sends_timeframe_and_session_flags(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """8c seam: off-1d runs must reach the FFI with THEIR timeframe and
+        aligned per-stock session flags (hardcoding '1d' or dropping flags
+        must fail here)."""
+        captured: dict = {}
+        _stub_tradecore(monkeypatch, captured)
+        profile = _profile_stub(
+            timeframe="15m",
+            setup_conditions=[{"type": "orb_breakout", "params": {"or_minutes": 15}}],
+        )
+        report = asyncio.run(
+            run_walkforward(
+                _StubDb(_candle_rows("AAA", n_pre=305, n_post=10)),  # type: ignore[arg-type]
+                profile,  # type: ignore[arg-type]
+                _SPEC,
+                symbols=["AAA"],
+            )
+        )
+        assert captured["timeframe"] == "15m"
+        flags = captured["session_last_bars"]
+        assert flags is not None and len(flags) == 1 and len(flags[0]) == 315
+        assert flags[0][-1] is True  # final bar always session-last
         assert report.row_counts == {"AAA": 315}
 
     def test_exclusion_manifest_reasons_and_counts(

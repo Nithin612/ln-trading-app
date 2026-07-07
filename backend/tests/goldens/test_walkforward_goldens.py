@@ -73,17 +73,20 @@ async def _with_dev_db(fn: Any) -> Any:
 
 
 async def _active_profile(db: Any, key: str) -> StrategyProfile:
+    """The golden's live profile row: active OR defined-but-inactive (8c —
+    intraday profiles carry goldens before Phase-3 activation). Superseded
+    rows are never golden-backed."""
     profile = (
         await db.execute(
             select(StrategyProfile).where(
-                StrategyProfile.key == key, StrategyProfile.status == "active"
+                StrategyProfile.key == key, StrategyProfile.status != "superseded"
             )
         )
     ).scalar_one_or_none()
     if profile is None:
         pytest.fail(
-            f"golden exists for {key!r} but no ACTIVE profile row — a superseded/"
-            f"deactivated profile must have its golden removed or regenerated"
+            f"golden exists for {key!r} but no live profile row — a superseded/"
+            f"deleted profile must have its golden removed or regenerated"
         )
     return profile
 

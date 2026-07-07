@@ -57,10 +57,14 @@ _IST = ZoneInfo("Asia/Kolkata")
 # last ≤300 completed candles. In-eval trades must all have the FULL canon.
 WINDOW_BARS = 300
 
+# Parity-pinned timeframes → candle tables (whitelist; the ONLY table
+# names raw SQL may use). 5m/15m joined the pinned set with the 8c-2
+# intraday oracle fixture.
+TIMEFRAME_TABLES = {"1d": "ohlcv_1d", "5m": "ohlcv_5m", "15m": "ohlcv_15m"}
+
 # Setups evaluable from a 1d decision window + the trade's factor snapshot.
-# The others need context walk-forward can't reconstruct offline yet
-# (benchmark series, session bars, 9:25 cross-section) — reject, don't
-# silently produce a zero-trade golden.
+# relative_strength stays unsupported everywhere (needs a benchmark series
+# no profile uses) — reject, don't silently produce a zero-trade golden.
 SUPPORTED_SETUPS_1D = {
     "dc1",
     "dc2",
@@ -69,6 +73,10 @@ SUPPORTED_SETUPS_1D = {
     "pdl_breakdown",
     "opening_gap",
 }
+# Intraday windows additionally support session-shaped setups: the runner
+# reconstructs real-time windows (DatetimeIndex), previous-session OHLC,
+# and the 9:25 cross-section from the universe's own 5m/15m bars (8c-3).
+SUPPORTED_SETUPS_INTRADAY = SUPPORTED_SETUPS_1D | {"orb_breakout", "top_gainer_925"}
 
 # Metrics compared by the §8 golden harness (BacktestResult scalar fields;
 # equity_curve/trades excluded — the digest pins the trade list).
@@ -129,17 +137,18 @@ class WalkForwardReport:
 
 
 def validate_profile(timeframe: str, setup_conditions: list[dict[str, Any]]) -> None:
-    """Reject profile shapes the runner can't faithfully walk-forward yet."""
-    if timeframe != "1d":
+    """Reject profile shapes the runner can't faithfully walk-forward."""
+    if timeframe not in TIMEFRAME_TABLES:
         raise WalkForwardError(
-            f"walk-forward supports timeframe '1d' only until slice 8c "
-            f"(intraday parity fixtures land with the Kite backfill); got {timeframe!r}"
+            f"walk-forward supports parity-pinned timeframes "
+            f"{sorted(TIMEFRAME_TABLES)} only; got {timeframe!r}"
         )
-    unsupported = {str(c.get("type")) for c in setup_conditions} - SUPPORTED_SETUPS_1D
+    supported = SUPPORTED_SETUPS_1D if timeframe == "1d" else SUPPORTED_SETUPS_INTRADAY
+    unsupported = {str(c.get("type")) for c in setup_conditions} - supported
     if unsupported:
         raise WalkForwardError(
             f"setup types {sorted(unsupported)} need context the offline runner "
-            f"cannot reconstruct (supported: {sorted(SUPPORTED_SETUPS_1D)})"
+            f"cannot reconstruct on {timeframe} (supported: {sorted(supported)})"
         )
 
 
@@ -187,8 +196,14 @@ def quarter_folds(eval_start: date, eval_end: date) -> list[str]:
     return folds
 
 
-def trade_record_from(symbol: str, t: dict[str, Any], dates: list[date]) -> TradeRecord:
-    """Rust trade dict (integer indices) → python TradeRecord (IST dates).
+def trade_record_from(
+    symbol: str, t: dict[str, Any], when: list[date] | list[datetime]
+) -> TradeRecord:
+    """Rust trade dict (integer indices) → python TradeRecord.
+
+    `when` carries IST session DATES for 1d (unchanged — committed 1d
+    golden digests stay byte-stable) and full IST bar TIMESTAMPS for
+    intraday, where several trades of one stock can share a session.
 
     classification is not exported by the FFI trade dict and no metric
     consumes it — left empty rather than recomputed (recomputing would be a
@@ -199,12 +214,12 @@ def trade_record_from(symbol: str, t: dict[str, Any], dates: list[date]) -> Trad
         direction=str(t["direction"]),
         classification="",
         confidence_pct=int(t["confidence"]),
-        entry_date=pd.Timestamp(dates[int(t["fill_idx"])]),
+        entry_date=pd.Timestamp(when[int(t["fill_idx"])]),
         entry_price=float(t["entry"]),
         stop_loss=float(t["sl"]),
         take_profit=float(t["tp"]),
         qty=int(t["qty"]),
-        exit_date=pd.Timestamp(dates[int(t["exit_idx"])]),
+        exit_date=pd.Timestamp(when[int(t["exit_idx"])]),
         exit_price=float(t["exit_price"]),
         pnl_pct=float(t["pnl_pct"]),
         hit_target=bool(t["hit_target"]),
@@ -217,6 +232,10 @@ def apply_setup_filter(
     df: pd.DataFrame,
     raw_trades: list[dict[str, Any]],
     conditions: list[dict[str, Any]],
+    *,
+    dates: list[date] | None = None,
+    prev_day_by_session: dict[date, dict[str, float]] | None = None,
+    cross_section_by_session: dict[date, dict[str, float]] | None = None,
 ) -> list[dict[str, Any]]:
     """Exact live-pipeline setup gating, replayed per trade.
 
@@ -224,6 +243,11 @@ def apply_setup_filter(
     (last ≤300 candles ENDING at the decision candle) — df.iloc[fill-300:fill].
     ctx.factors comes from the trade's factor snapshot (Phase-1 parity:
     scores are EXACT vs python), so gates behave identically to live.
+
+    Intraday context (8c-3): `dates` maps bar index → IST session;
+    prev_day/cross_section are per-session lookups keyed on the DECISION
+    bar's session. Absent context makes those evaluators fail closed —
+    identical to the live pipeline's discipline.
     """
     if not conditions:
         return list(raw_trades)
@@ -231,9 +255,20 @@ def apply_setup_filter(
     for t in raw_trades:
         fill_idx = int(t["fill_idx"])
         window = df.iloc[max(0, fill_idx - WINDOW_BARS) : fill_idx]
+        decision_session = dates[fill_idx - 1] if dates and fill_idx >= 1 else None
         ctx = SetupContext(
             direction=str(t["direction"]),
             factors={str(k): (float(w), float(s)) for k, (w, s) in dict(t["factors"]).items()},
+            prev_day=(
+                prev_day_by_session.get(decision_session)
+                if prev_day_by_session is not None and decision_session is not None
+                else None
+            ),
+            cross_section=(
+                cross_section_by_session.get(decision_session)
+                if cross_section_by_session is not None and decision_session is not None
+                else None
+            ),
             symbol=symbol,
         )
         passed, _evidence = evaluate_conditions(conditions, window, ctx)
@@ -252,6 +287,15 @@ def bin_folds(
     return [(fold, aggregate_trades(members)) for fold, members in by_fold.items()]
 
 
+def _ts_key(ts: pd.Timestamp) -> str:
+    """Digest timestamp: date-only for 1d records (midnight — keeps the
+    committed 1d golden digests byte-stable), date+time for intraday bars
+    (several trades of one stock can share a session)."""
+    if ts.time() == time.min:
+        return f"{ts.date().isoformat()}"
+    return f"{ts.date().isoformat()}T{ts.time().isoformat()}"
+
+
 def trades_digest(trades: list[TradeRecord]) -> str:
     """sha256 over the canonical trade serialization, ordering canon
     (entry_date, stock). Money at the 1e-4 canon; pnl/exit at full float
@@ -259,9 +303,9 @@ def trades_digest(trades: list[TradeRecord]) -> str:
     tradecore, python never recomputes these numbers)."""
     lines = []
     for t in sorted(trades, key=lambda t: (t.entry_date, t.stock)):
-        exit_d = t.exit_date.date().isoformat() if t.exit_date is not None else "-"
+        exit_d = _ts_key(t.exit_date) if t.exit_date is not None else "-"
         lines.append(
-            f"{t.stock}|{t.entry_date.date().isoformat()}|{exit_d}|{t.direction}"
+            f"{t.stock}|{_ts_key(t.entry_date)}|{exit_d}|{t.direction}"
             f"|{t.qty}|{t.entry_price:.4f}|{t.stop_loss:.4f}|{t.take_profit:.4f}"
             f"|{t.exit_price!r}|{t.pnl_pct!r}|{t.confidence_pct}"
         )
@@ -416,7 +460,13 @@ def compare_against_existing(old: dict[str, Any], new: dict[str, Any]) -> tuple[
 
 @dataclass
 class _Frame:
-    """One symbol's loaded candles — parallel arrays + IST session dates."""
+    """One symbol's loaded candles — parallel arrays + IST session dates.
+
+    `times` (8c-3) carries full IST bar timestamps: the intraday record/
+    digest identity and the DatetimeIndex that session-shaped setups
+    (orb_breakout) require. 1d records keep using `dates` so committed 1d
+    golden digests stay byte-stable.
+    """
 
     open: list[float] = field(default_factory=list)
     high: list[float] = field(default_factory=list)
@@ -424,6 +474,7 @@ class _Frame:
     close: list[float] = field(default_factory=list)
     volume: list[float] = field(default_factory=list)
     dates: list[date] = field(default_factory=list)
+    times: list[datetime] = field(default_factory=list)
 
     def df(self) -> pd.DataFrame:
         return pd.DataFrame(
@@ -433,46 +484,101 @@ class _Frame:
                 "low": self.low,
                 "close": self.close,
                 "volume": self.volume,
-            }
+            },
+            index=pd.DatetimeIndex(self.times),
         )
 
+    def session_ohlc(self) -> dict[date, dict[str, float]]:
+        """Per-session OHLC (data-driven) for prev-day setup context."""
+        out: dict[date, dict[str, float]] = {}
+        for i, d in enumerate(self.dates):
+            s = out.get(d)
+            if s is None:
+                out[d] = {
+                    "open": self.open[i], "high": self.high[i],
+                    "low": self.low[i], "close": self.close[i],
+                }
+            else:
+                s["high"] = max(s["high"], self.high[i])
+                s["low"] = min(s["low"], self.low[i])
+                s["close"] = self.close[i]
+        return out
 
-_LOAD_CHUNK = 400  # symbols per query — caps asyncpg row buffering on all_active
+
+# Symbols per query — caps asyncpg row buffering. 1d rows are ~740/symbol;
+# intraday runs at full depth are ~55k rows/symbol (5m), so one 400-symbol
+# fetch would buffer >10M Row objects and OOM a 16GB machine (observed:
+# gainer_925 golden generation killed at the load step, twice).
+_LOAD_CHUNK = 400
+_LOAD_CHUNK_INTRADAY = 15
 
 
 async def _load_frames(
-    db: AsyncSession, symbols: list[str], since: date, eval_end: date
+    db: AsyncSession, symbols: list[str], since: date, eval_end: date, timeframe: str
 ) -> dict[str, _Frame]:
-    """Completed 1d candles per symbol in [since, eval_end], IST-bounded.
+    """Completed candles per symbol in [since, eval_end], IST-bounded.
 
-    Table name is a literal from the 1d-only whitelist (validate_profile
-    guarantees the timeframe); values are bind parameters.
+    Table name comes ONLY from the TIMEFRAME_TABLES whitelist
+    (validate_profile guarantees membership); values are bind parameters.
     """
+    table = TIMEFRAME_TABLES[timeframe]
+    chunk = _LOAD_CHUNK if timeframe == "1d" else _LOAD_CHUNK_INTRADAY
     t0 = datetime.combine(since, time.min, tzinfo=_IST)
     t1 = datetime.combine(eval_end + timedelta(days=1), time.min, tzinfo=_IST)
     frames: dict[str, _Frame] = {}
-    for i in range(0, len(symbols), _LOAD_CHUNK):
+    for i in range(0, len(symbols), chunk):
         rows = (
             await db.execute(
                 text(
-                    "SELECT s.symbol, o.time, o.open, o.high, o.low, o.close, o.volume"
-                    " FROM ohlcv_1d o JOIN stocks s ON s.id = o.stock_id"
+                    f"SELECT s.symbol, o.time, o.open, o.high, o.low, o.close, o.volume"  # noqa: S608
+                    f" FROM {table} o JOIN stocks s ON s.id = o.stock_id"
                     " WHERE s.symbol = ANY(:syms) AND o.time >= :t0 AND o.time < :t1"
                     " AND o.is_complete IS TRUE"
                     " ORDER BY s.symbol, o.time"
                 ),
-                {"syms": symbols[i : i + _LOAD_CHUNK], "t0": t0, "t1": t1},
+                {"syms": symbols[i : i + chunk], "t0": t0, "t1": t1},
             )
         ).fetchall()
         for r in rows:
             f = frames.setdefault(r.symbol, _Frame())
+            ist = r.time.astimezone(_IST)
             f.open.append(float(r.open))
             f.high.append(float(r.high))
             f.low.append(float(r.low))
             f.close.append(float(r.close))
             f.volume.append(float(r.volume))
-            f.dates.append(r.time.astimezone(_IST).date())
+            f.dates.append(ist.date())
+            f.times.append(ist)
     return frames
+
+
+def _cross_section_925(frames: dict[str, _Frame]) -> dict[date, dict[str, float]]:
+    """9:25 universe cross-section per session: % change of the last bar
+    CLOSED by 09:25 IST (on 5m bars: the one STARTING 09:20) vs the
+    previous session's close — reconstructed from the universe's own
+    intraday bars (plan §slice 5: 'from universe 5m bars in backtests').
+    Sessions with no prior close (first loaded day) are absent — the
+    evaluator fails closed, same as live."""
+    cutoff = time(9, 20)
+    out: dict[date, dict[str, float]] = {}
+    for sym, f in frames.items():
+        prev_session_close: float | None = None
+        i, n = 0, len(f.dates)
+        while i < n:
+            d = f.dates[i]
+            j = i
+            early_close: float | None = None
+            while j < n and f.dates[j] == d:
+                if f.times[j].timetz().replace(tzinfo=None) <= cutoff:
+                    early_close = f.close[j]
+                j += 1
+            if prev_session_close and early_close is not None:
+                out.setdefault(d, {})[sym] = (
+                    (early_close - prev_session_close) / prev_session_close * 100.0
+                )
+            prev_session_close = f.close[j - 1]
+            i = j
+    return out
 
 
 # ── The runner ───────────────────────────────────────────────────────────────
@@ -503,7 +609,7 @@ async def run_walkforward(
     if not symbols:
         raise WalkForwardError(f"profile {profile.key}: universe resolved empty")
 
-    frames = await _load_frames(db, symbols, spec.since, spec.eval_end)
+    frames = await _load_frames(db, symbols, spec.since, spec.eval_end, profile.timeframe)
 
     ran: list[str] = []
     exclusions: list[SymbolExclusion] = []
@@ -524,36 +630,40 @@ async def run_walkforward(
             f"profile {profile.key}: every symbol excluded — pins don't fit the data "
             f"(need ≥{WINDOW_BARS} bars before {spec.eval_start})"
         )
+    # Restrict every downstream computation to the RAN set. Critical for
+    # replay determinism: the golden pins `ran`, so a harness rerun loads
+    # ONLY those frames — cross-sectional context (9:25 ranking pool) must
+    # span the same set at generation time, or gate outcomes drift
+    # (observed: gainer_925 +3.5% trades on replay). Also frees excluded
+    # symbols' bars.
+    frames = {s: frames[s] for s in ran}
 
     tp_rule, tp_approximated = map_tp_rule(dict(profile.risk_template))
     stocks = [(s, frames[s].open, frames[s].high, frames[s].low, frames[s].close,
                frames[s].volume) for s in ran]
+    intraday = profile.timeframe != "1d"
+    # session_last flags ONLY off-1d: the 1d path stays byte-identical to
+    # the committed goldens (None ≡ pre-8c behavior, fixture-proven).
+    session_flags = (
+        [session_last_flags(frames[s].dates) for s in ran] if intraday else None
+    )
 
     import tradecore  # deferred: parity-gated wheel, same idiom as signal_service
 
     universe_trades: list[tuple[str, list[dict[str, Any]]]] = tradecore.run_universe(
         stocks,
-        "1d",
+        profile.timeframe,
         str(spec.capital),
         str(spec.risk_pct),
         profile.min_confidence,
         weight_multipliers=sorted(dict(profile.weight_multipliers).items()),
         tp_rule=tp_rule,
+        session_last_bars=session_flags,
     )
 
-    conditions = list(profile.setup_conditions)
-    records: list[TradeRecord] = []
-    pre_filter_count = 0
-    for sym, raw in universe_trades:
-        f = frames[sym]
-        in_eval = [t for t in raw if f.dates[int(t["fill_idx"])] >= spec.eval_start]
-        pre_filter_count += len(in_eval)
-        if not in_eval:
-            continue
-        kept = apply_setup_filter(sym, f.df(), in_eval, conditions)
-        records.extend(trade_record_from(sym, t, f.dates) for t in kept)
-
-    records.sort(key=lambda t: (t.entry_date, t.stock))
+    records, pre_filter_count = _collect_records(
+        universe_trades, frames, list(profile.setup_conditions), spec.eval_start, intraday
+    )
     return WalkForwardReport(
         profile_key=profile.key,
         config_hash=profile.config_hash,
@@ -568,3 +678,47 @@ async def run_walkforward(
         pre_filter_trade_count=pre_filter_count,
         trades_digest=trades_digest(records),
     )
+
+
+def _collect_records(
+    universe_trades: list[tuple[str, list[dict[str, Any]]]],
+    frames: dict[str, _Frame],
+    conditions: list[dict[str, Any]],
+    eval_start: date,
+    intraday: bool,
+) -> tuple[list[TradeRecord], int]:
+    """Eval-window filter → setup post-filter → ordered TradeRecords.
+
+    Returns (records, in-eval trade count BEFORE setup gating)."""
+    needs_cross_section = any(c.get("type") == "top_gainer_925" for c in conditions)
+    cross_section = _cross_section_925(frames) if (intraday and needs_cross_section) else None
+
+    records: list[TradeRecord] = []
+    pre_filter_count = 0
+    for sym, raw in universe_trades:
+        f = frames[sym]
+        in_eval = [t for t in raw if f.dates[int(t["fill_idx"])] >= eval_start]
+        pre_filter_count += len(in_eval)
+        if not in_eval:
+            continue
+        prev_by_session: dict[date, dict[str, float]] | None = None
+        if intraday:
+            ohlc = f.session_ohlc()
+            ordered = sorted(ohlc)
+            prev_by_session = {
+                d: ohlc[prev] for prev, d in zip(ordered, ordered[1:], strict=False)
+            }
+        kept = apply_setup_filter(
+            sym,
+            f.df(),
+            in_eval,
+            conditions,
+            dates=f.dates if intraday else None,
+            prev_day_by_session=prev_by_session,
+            cross_section_by_session=cross_section,
+        )
+        when: list[date] | list[datetime] = f.times if intraday else f.dates
+        records.extend(trade_record_from(sym, t, when) for t in kept)
+
+    records.sort(key=lambda t: (t.entry_date, t.stock))
+    return records, pre_filter_count
