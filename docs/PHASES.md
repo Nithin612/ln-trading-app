@@ -16,50 +16,42 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 |---|-------|--------|--------|-----------------|
 | 0 | Claude workbench · repo hygiene · triage · F&O recorders | **✅ done 2026-07-03** | [phase-00](phases/phase-00-workbench.md) | git + hooks/agents/rules/skills · 9 defects fixed (incl. dead live pipeline, 100× sizing) · F&O bhavcopy/VIX/chain recorders live |
 | 1 | Rust engine core + parity + benchmarks | **✅ done 2026-07-05** (gate: `make check` green + quant-verifier signoff) | [phase-01](phases/phase-01-rust-engine.md) | tradecore wheel · 4 oracle fixtures · cross-language parity EXACT (96 windows + 125 trades) · 5 adjudicated canon decisions · **2y×49 backtest 883.8s → 0.143s (~6,180×)** |
-| 2 | Strategy profiles — 4 style engines, offline | **🔶 in progress** (9 of 11 slices done, started 2026-07-05) | — | profiles table + seeds (DC1/DC2, PDH/PDL/ORB, RRBO, multibagger…), NSE holiday calendar, per-style suggestions API, walk-forward backtests |
+| 2 | Strategy profiles — 4 style engines, offline | **✅ done 2026-07-07** (gate: suites 616/131/35 green · smoke · reviews; 8c trails by approved plan) | [phase-02](phases/phase-02-strategy-profiles.md) | versioned profiles + 8 seeds · NSE calendar · FII/DII + EOD chain wired · suggestions API · **walk-forward evidence: rrbo +41.3%/+1.97 sharpe POSITIVE; dc1/dc2/multibagger FLAGGED** · §8 golden harness in make check · Kite login + throttled REST + intraday backfill |
 | 3 | Realtime v2 — tick-to-tick | planned | — | live-worker + Rust LiveEngine, committed vs forming layers, record/replay harness, p99 < 10 ms tick→publish. **Kite subscription required here.** Pre-shadow-week: rust-path signal envelope (patterns/indicators via FFI) + intraday parity goldens (then drop the off-1d python fallback) — see phase-01 §Exit gate |
 | 4 | F&O analytics | planned | — | chain builder, Rust IV/Greeks, IV-rank/PCR/max-pain from recorded history, option-selling suggestions (calibrated with user) |
 | 5 | UI overhaul | planned | — | new sidebar IA, slate theme default, 4 style pages, chain ladder, virtualized live tables @60fps |
 | 6 | Outcome tracking + strategy lab v2 | planned | — | per-style hit-rate/expectancy dashboards, factor attribution, Rayon weight tuning + promotion workflow |
 | 7 | Live-trading hardening | planned | — | Kite orders behind trading_mode + 30-day gate, kill switch, reconciliation, VPS runbook |
 
-**▶ CONTINUE HERE (next session, any account — say "continue Phase 2"):**
-Phase 2 is mid-flight; the approved slice plan is mirrored below (full
-detail: `~/.claude/plans/fizzy-mixing-salamander.md` on the dev machine).
-Baseline discipline unchanged: every slice ships tests + CHANGELOG, lint/
-mypy green, frozen files only via sanctioned extensions.
+**▶ CONTINUE HERE (next session, any account):** Phase 2 CLOSED
+2026-07-07 (report: `phases/phase-02-strategy-profiles.md`; slice commits
+`8fa1263`→`a6c3657`). Open threads, in order:
 
-DONE (each its own commit, all green):
-- 0 risk_pct=0.02 endpoint hazard `8fa1263` · 1 NSE market calendar
-  `f31c91e` · 2 expiry sweeper `0aa4566` · 3 FII/DII flows + EOD pipeline
-  ordering `e142e16` · 4 strategy_profiles schema `4fb1f5d` · 5 setup
-  evaluators + 8 seeds `fa5f384` · 7 suggestions pipeline +
-  `GET /api/v1/suggestions/{style}` `b3a8bcf` · 8a Rust FFI run_universe +
-  multiplier/tp_rule parity axes `ff67b21` · 6 CA quarantine `cac656f` ·
-  8b-step-1 metrics ordering canon `57450f2` · 8b walk-forward runner +
-  5 goldens + §8 harness (`make walkforward` in check; pins
-  since=2023-07-03 / eval 2024-10-01→2026-06-30, 7 quarterly folds —
-  eval_start moved from the sketched 2024-07-01: only 245 pre-context bars
-  there vs the 300-bar window canon). **Walk-forward evidence: rrbo_basic
-  & rrbo_trailing +41.3% / sharpe +1.97 / win 50% (58 trades) — positive;
-  dc1 −52.2%, dc2 −39.7%, multibagger −1491% → flagged needs-tuning.**
+1. **8c (trails the gate, approved):** finish the intraday backfill —
+   run 1 ingested ~1.2M 5m rows then died on the (now fixed) retry-net
+   bug; resume needs a live Kite token (`scripts/kite_login.py`, then
+   `scripts/backfill_intraday.py` — resume skips stored rows) → QA
+   manifest (`tests/goldens/intraday_qa_manifest.json`) → extend
+   `scripts/generate_engine_fixtures.py` for 5m/15m parity fixtures →
+   relax the off-1d dispatch guard for pinned timeframes → intraday
+   goldens for pdh_pdl/orb_15m/gainer_925.
+2. **quant-verifier full pass owed** (two runs died on account session
+   limits at the gate; partials recorded in the phase report) — run it
+   with the 8c review.
+3. **Before any multiplier-carrying profile activates:** wire
+   profile.weight_multipliers into pipeline.py scoring (documented gap,
+   all seeds `{}`); latent LOW calendar items in the report backlog.
+4. **dc1/dc2/multibagger are FLAGGED needs-tuning** (negative
+   walk-forward) — tuning lands Phase 6; they stay active for suggestion
+   generation with verdicts on record.
+5. `git push` remains manual (credential-free remote by design).
 
-NEXT — slice 9: /phase-gate (all suites + quant-verifier + bug-hunter on
-the pipeline/tasks diffs + test-guardian; phase-02 report incl. per-profile
-walk-forward verdicts above + the slice-7 gap that pipeline.py does not yet
-feed profile.weight_multipliers into scoring (all seeds carry {} — wire
-before any multiplier-carrying profile activates); flip the Phase-2 row;
-PERFORMANCE.md already has canon note + walk-forward wall-clocks).
+Daily ops note: Kite token dies ~6:00 AM IST; login ritual is
+`cd backend && uv run python scripts/kite_login.py` (terminal-only, no
+servers needed). Chain recorder auto-activates while a token is live.
 
-TRACK T (UNBLOCKED 2026-07-06 — user bought Kite Connect, creds in .env):
-user does first login via KiteConnectPage (runbook given in-session) →
-scripts/backfill_intraday.py (5m/15m, shared throttled client ~3 rps,
-60-day chunks, idempotent upserts, session-completeness QA manifest;
-stocks above gap threshold EXCLUDED not patched) → slice 8c (intraday
-parity fixtures via scripts/generate_engine_fixtures.py, relax the off-1d
-dispatch guard for pinned timeframes, intraday goldens). Phase gate may
-pass on 8b with 8c trailing (approved plan). Also pending: `git push`
-(user pushes manually; remote is credential-free by design).
+Next phase: **Phase 3 — Realtime v2** (plan §Phase 3; Kite subscription
+now active; pre-work list in phase-01 report §Exit gate).
 
 Phase-1 state (closed): F/G/H applied 2026-07-05, canon table in
 ARCHITECTURE.md; standing baseline 599 trades / +52.1% / sharpe +0.13 on
