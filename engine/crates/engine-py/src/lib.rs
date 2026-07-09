@@ -369,6 +369,124 @@ fn run_universe(
     Ok(out.into())
 }
 
+/// Live tick→candle book (Phase 3 slice 3.3). One instance per session;
+/// the host builds a fresh one at each daily restart with that day's
+/// SessionSpec (epoch seconds, close exclusive — NSE calendar stays
+/// host-side).
+///
+/// Money crosses this boundary as STRINGS in (Decimal-parseable, per
+/// rules/rust.md) and raw i64·1e-4 OUT (host converts exactly via
+/// `Decimal(raw) / 10**4` — never through f64).
+#[pyclass]
+struct LiveBook {
+    inner: engine_core::live::LiveBook,
+    tf_minutes: Vec<u32>,
+}
+
+fn live_events_to_list(
+    py: Python<'_>,
+    tf_minutes: &[u32],
+    events: &[(u32, engine_core::live::LiveEvent)],
+) -> PyResult<Py<PyList>> {
+    use engine_core::live::LiveEvent;
+    let out = PyList::empty(py);
+    for (sid, event) in events {
+        let (kind, tf_idx, c) = match event {
+            LiveEvent::Forming { tf_idx, candle } => ("forming", *tf_idx, candle),
+            LiveEvent::Committed { tf_idx, candle } => ("committed", *tf_idx, candle),
+        };
+        let d = PyDict::new(py);
+        d.set_item("stock_id", sid)?;
+        d.set_item("kind", kind)?;
+        d.set_item(
+            "tf_minutes",
+            tf_minutes
+                .get(tf_idx)
+                .copied()
+                .ok_or_else(|| PyValueError::new_err(format!("tf_idx {tf_idx} out of range")))?,
+        )?;
+        d.set_item("time", c.period_start)?;
+        d.set_item("open", c.open)?;
+        d.set_item("high", c.high)?;
+        d.set_item("low", c.low)?;
+        d.set_item("close", c.close)?;
+        d.set_item("volume", c.volume)?;
+        out.append(d)?;
+    }
+    Ok(out.into())
+}
+
+#[pymethods]
+impl LiveBook {
+    #[new]
+    fn new(session_open_ts: i64, session_close_ts: i64, tf_minutes: Vec<u32>) -> PyResult<Self> {
+        let inner = engine_core::live::LiveBook::new(
+            engine_core::live::SessionSpec {
+                open_ts: session_open_ts,
+                close_ts: session_close_ts,
+            },
+            &tf_minutes,
+        )
+        .map_err(|e| PyValueError::new_err(e.to_string()))?;
+        Ok(Self { inner, tf_minutes })
+    }
+
+    /// Pre-create per-instrument state for the subscription list.
+    fn ensure_instruments(&mut self, stock_ids: Vec<u32>) {
+        self.inner.ensure_instruments(&stock_ids);
+    }
+
+    /// ONE call per Kite batch: [(stock_id, ts_epoch_s, price_str,
+    /// day_volume|None, qty)] → list of event dicts. Bad price strings
+    /// fail loud (a silently skipped tick is a data hole).
+    fn on_ticks(
+        &mut self,
+        py: Python<'_>,
+        ticks: Vec<(u32, i64, String, Option<u64>, u64)>,
+    ) -> PyResult<Py<PyList>> {
+        let mut parsed: Vec<(u32, engine_core::live::Tick)> = Vec::with_capacity(ticks.len());
+        for (sid, ts, price, day_volume, qty) in &ticks {
+            let money = engine_core::risk::money_from_str(price)
+                .ok_or_else(|| PyValueError::new_err(format!("bad price {price:?}")))?;
+            parsed.push((
+                *sid,
+                engine_core::live::Tick {
+                    ts: *ts,
+                    price: money,
+                    day_volume: *day_volume,
+                    qty: *qty,
+                },
+            ));
+        }
+        let inner = &mut self.inner;
+        let events = py.detach(move || {
+            let mut out = Vec::with_capacity(parsed.len() * 2);
+            inner.on_ticks(&parsed, &mut out);
+            out
+        });
+        live_events_to_list(py, &self.tf_minutes, &events)
+    }
+
+    /// Host time pulse: commit every bucket ended by now_ts. The host
+    /// records these pulses in the replay stream alongside ticks (3.4).
+    fn on_time(&mut self, py: Python<'_>, now_ts: i64) -> PyResult<Py<PyList>> {
+        let inner = &mut self.inner;
+        let events = py.detach(move || {
+            let mut out = Vec::new();
+            inner.on_time(now_ts, &mut out);
+            out
+        });
+        live_events_to_list(py, &self.tf_minutes, &events)
+    }
+
+    /// (pre_open, post_close, late, bad_price) reject counters.
+    fn rejects(&self, stock_id: u32) -> Option<(u64, u64, u64, u64)> {
+        self.inner
+            .rejects(stock_id)
+            .map(|r| (r.pre_open, r.post_close, r.late, r.bad_price))
+    }
+}
+
 #[pymodule]
 fn tradecore(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(version, m)?)?;
@@ -382,5 +500,6 @@ fn tradecore(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(score_signal, m)?)?;
     m.add_function(wrap_pyfunction!(run_backtest_single, m)?)?;
     m.add_function(wrap_pyfunction!(run_universe, m)?)?;
+    m.add_class::<LiveBook>()?;
     Ok(())
 }

@@ -22,6 +22,8 @@ class Settings(BaseSettings):
 
     # ── Redis ───────────────────────────────────────────────────────────────
     redis_url: str = "redis://localhost:6379/0"
+    # live-worker tick/pulse JSONL recording (Phase 3; empty = off)
+    live_record_path: str | None = None
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
 

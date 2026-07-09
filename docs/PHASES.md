@@ -34,21 +34,26 @@ loudly) · opening_gap now measures the SESSION open on intraday windows.
 Four regression canaries proven to fail on the pre-fix tree.
 
 Open threads, in order:
-1. **Next: slice 3.3 — live-worker process** (KiteTicker thread → queue →
-   consumer thread → batched PyO3 into the 3.1 LiveEngine → sync redis
-   pipeline; token-expiry-as-restart; warmup + gap-fill; PyO3 LiveBook
-   binding). Kite subscription CONFIRMED available (user, 2026-07-09);
-   3.1 core + 3.2 rebuild are DONE — start 3.3 on user command only.
+1. **Slice 3.3 code DONE 2026-07-09** (live_worker.py + LiveBook FFI,
+   15 tests). **First market-hours soak next trading session**: run
+   `cd backend && uv run python -m app.broker.live_worker` after the
+   token ritual; do NOT run the in-app v1 consumer simultaneously (both
+   write the same tables) — start the API only after deciding which one
+   owns the session, or stop_consumer first. Watch stats + rejects.
 2. **Restart the backend before the next market open** (2026-07-10
    09:15 IST): the patched session-anchored 1h floor loads on restart; a
    still-running pre-patch process would re-mint :30-anchored 1h rows.
-3. **Profile tuning** (dc1/dc2/multibagger negative; intraday trio
+3. **Next build slice: 3.4 record/replay harness** — the worker's
+   `live_record_path` JSONL is the input format; replay = feed it back
+   through LiveBook and byte-compare event streams; `make replay` in CI;
+   latency histograms (p99 < 10 ms tick→publish).
+4. **Profile tuning** (dc1/dc2/multibagger negative; intraday trio
    flagged) — Phase 6 workflow; verdicts pinned in goldens. Wiring
    session context (3.0) was necessary, not sufficient, for activation.
-4. Latent LOW calendar items in the phase-02 report backlog (UTC-date
+5. Latent LOW calendar items in the phase-02 report backlog (UTC-date
    trading-day walks; `same_day` weekend validity — fix before any
    same_day/eod profile activates or ad-hoc IST-midnight generation).
-5. `git push` remains manual (credential-free remote by design).
+6. `git push` remains manual (credential-free remote by design).
 
 Daily ops: Kite token dies ~6:00 AM IST; ritual =
 `cd backend && uv run python scripts/kite_login.py` (terminal-only).
