@@ -34,12 +34,14 @@ loudly) · opening_gap now measures the SESSION open on intraday windows.
 Four regression canaries proven to fail on the pre-fix tree.
 
 Open threads, in order:
-1. **Next: slice 3.1 — Rust LiveEngine core** (session-aligned tick→candle
-   state machine, forming/committed layers, session guard; pins the
-   9:15-anchored 1h bucket canon that the 3.2 `ohlcv_1h` rebuild mirrors).
-   Pure engine-core — no Kite needed yet.
-2. **Kite Connect subscription needed from slice 3.3** (live-worker WS).
-   Purchase before starting 3.3; slices 3.1/3.2 build offline.
+1. **Next: slice 3.3 — live-worker process** (KiteTicker thread → queue →
+   consumer thread → batched PyO3 into the 3.1 LiveEngine → sync redis
+   pipeline; token-expiry-as-restart; warmup + gap-fill; PyO3 LiveBook
+   binding). Kite subscription CONFIRMED available (user, 2026-07-09);
+   3.1 core + 3.2 rebuild are DONE — start 3.3 on user command only.
+2. **Restart the backend before the next market open** (2026-07-10
+   09:15 IST): the patched session-anchored 1h floor loads on restart; a
+   still-running pre-patch process would re-mint :30-anchored 1h rows.
 3. **Profile tuning** (dc1/dc2/multibagger negative; intraday trio
    flagged) — Phase 6 workflow; verdicts pinned in goldens. Wiring
    session context (3.0) was necessary, not sufficient, for activation.

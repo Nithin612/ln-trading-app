@@ -39,9 +39,19 @@ def test_floor_to_period_15m():
     assert _floor_to_period(dt, 15) == datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
 
 
-def test_floor_to_period_1h():
+def test_floor_to_period_1h_session_anchored():
+    """Slice-3.2 regression: 1h buckets anchor at 09:15 IST (03:45 UTC),
+    not UTC hours — the old floor put a 10:20 IST tick into a 09:30 IST
+    candle; the canon bucket is 10:15 IST."""
+    dt = datetime(2024, 1, 15, 4, 50, 0, tzinfo=UTC)  # 10:20 IST
+    assert _floor_to_period(dt, 60) == datetime(2024, 1, 15, 4, 45, 0, tzinfo=UTC)
+    # exact anchor boundary stays put
     dt = datetime(2024, 1, 15, 13, 45, 0, tzinfo=UTC)
-    assert _floor_to_period(dt, 60) == datetime(2024, 1, 15, 13, 0, 0, tzinfo=UTC)
+    assert _floor_to_period(dt, 60) == datetime(2024, 1, 15, 13, 45, 0, tzinfo=UTC)
+    # sub-hour timeframes are arithmetically unchanged by the anchor
+    dt = datetime(2024, 1, 15, 10, 14, 59, tzinfo=UTC)
+    assert _floor_to_period(dt, 15) == datetime(2024, 1, 15, 10, 0, 0, tzinfo=UTC)
+    assert _floor_to_period(dt, 5) == datetime(2024, 1, 15, 10, 10, 0, tzinfo=UTC)
 
 
 def test_floor_to_period_boundary_exact():

@@ -172,10 +172,30 @@ class CandleAggregator:
         return self._state[timeframe].current if timeframe in self._state else None
 
 
+# 09:15 IST session open expressed as minutes past UTC midnight (03:45).
+# IST has no DST; the half-hour offset is why UTC-hour floors were wrong.
+_SESSION_ANCHOR_UTC_MIN = 3 * 60 + 45
+
+
 def _floor_to_period(dt: datetime, minutes: int) -> datetime:
-    """Floor a datetime to the nearest N-minute boundary."""
+    """Floor a UTC datetime to its session-anchored N-minute bucket.
+
+    Buckets anchor at 09:15 IST (slice-3.1 canon, ARCHITECTURE.md §Live
+    bucket canon). For 1m/5m/15m this is arithmetically identical to the
+    old UTC floor (03:45 is a multiple of each); for 1h it moves candles
+    from …09:30/10:30 IST to the canonical 09:15/10:15/…15:15 set —
+    matching Kite's own 60minute history and the rebuilt table (3.2).
+
+    Interim guard note: this aggregator still has no session guard (the
+    Rust LiveEngine replaces it in slice 3.3); pre-anchor ticks floor into
+    earlier anchored buckets, clamped at UTC midnight.
+    """
     total_minutes = dt.hour * 60 + dt.minute
-    floored_minutes = (total_minutes // minutes) * minutes
+    floored_minutes = (
+        _SESSION_ANCHOR_UTC_MIN
+        + ((total_minutes - _SESSION_ANCHOR_UTC_MIN) // minutes) * minutes
+    )
+    floored_minutes = max(floored_minutes, 0)
     return dt.replace(
         hour=floored_minutes // 60,
         minute=floored_minutes % 60,

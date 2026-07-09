@@ -26,7 +26,7 @@ any of it provable.
 |---|-------|--------|-------|
 | 3.0 | **Pre-work** (pinned by 8c quant-verifier): fail-closed `_prev_day_hlc` on intraday windows · prev-day + 9:25 cross-section wired into pipeline SetupContext via shared `session_context` · `weight_multipliers` through live scoring (closes the slice-7 gap) · opening-gap measured at session open | **✅ 2026-07-09** | goldens replay byte-stable (9/9, incl. intraday trio); 4 regression canaries proven to fail on pre-fix code |
 | 3.1 | Rust LiveEngine core: session-aligned tick→candle state machine (forming/committed), session guard, warmup/gap-fill as data params — pure, no I/O/clocks. Pins the 9:15-anchored 1h bucket canon | **core ✅ 2026-07-09** (engine-core/src/live.rs, 15 tests incl. LCG partition property; canon in ARCHITECTURE.md §Live bucket canon). PyO3 `LiveBook` binding lands with 3.3 host work | the 3.2 SQL rebuild mirrors the canon expression |
-| 3.2 | `ohlcv_1h` session-aligned rebuild (migration + regen from 5m/15m + §8 regression sign-off) | planned | v1 minted UTC-hour floors |
+| 3.2 | `ohlcv_1h` session-aligned rebuild | **✅ 2026-07-09** — migration `q3r4s5t6u7v8` (delete UTC-floored body, roll up from 11.5M complete 5m bars via shared `app/services/ohlcv_rollup.py`): **1,074,456 rows / 2,036 stocks, anchors exactly 09:15…15:15 IST, zero incomplete**. Interim v1 aggregator floor patched to the 03:45-UTC anchor (identical for 1m/5m/15m; 1h moves to canon) so live minting stays consistent until 3.3. §8 sign-off = walkforward+parity replay green in make check (no golden touches 1h) | downgrade leaves the table EMPTY (documented: pre-rebuild rows were garbage; 5m source re-derives) |
 | 3.3 | live-worker process: KiteTicker thread → `queue.Queue` → consumer thread → ONE PyO3 call per tick batch → sync redis pipeline (`SET ltp:{stock_id}` + PUBLISH + XADD). Token-expiry-as-restart choreography, warmup from DB (batched), gap-fill | planned | **needs Kite subscription** |
 | 3.4 | Record/replay harness: recorded tick sessions → byte-identical engine event streams; `make replay` in CI; latency histograms (tick→publish p99 < 10 ms) | planned | replay tests are the only ground truth — no working baseline exists |
 | 3.5 | Tick triggers + provisional layer: entry-zone touches, PDH/PDL/S&R crosses, SL/TP proximity, volume bursts, forming-candle provisional confidence, per-style leaderboards @ 2–4 Hz. Redis Streams for alerts (at-least-once); WS fanout by style/watchlist; drop-oldest backpressure for LTP, never for candle-close | planned | |
@@ -129,3 +129,11 @@ tuning decision.
 - 3.1 core: `cargo clippy --all-targets -D warnings` clean · engine-core
   lib tests 40 passed (15 new live:: tests incl. the 5,000-tick LCG
   partition property over all four timeframes).
+- 3.2: migration applied on dev 2026-07-09 (~50s); table verified
+  post-rebuild: 1,074,456 rows / 2,036 stocks / anchors only
+  09:15…15:15 IST / 0 incomplete. +6 tests (5 rollup with injected
+  as_of cutoff — canon buckets + stub OHLCV exact, forming hour
+  excluded, idempotent never-replace, delete-first replaces :30 rows,
+  artifact bars excluded — and the anchored-floor regression).
+  OPERATIONAL: restart the backend before the next session open — a
+  running pre-patch process would re-mint :30-anchored 1h rows.
