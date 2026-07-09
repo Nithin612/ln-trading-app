@@ -93,6 +93,7 @@ async def make_profile(
     risk_template: dict | None = None,
     status: str = "active",
     min_confidence: int = 70,
+    weight_multipliers: dict | None = None,
 ):
     """Insert a StrategyProfile version row (config hash computed live)."""
     from app.models.profile import StrategyProfile
@@ -106,7 +107,7 @@ async def make_profile(
         schedule=schedule,
         universe_spec=universe_spec or {"kind": "all_active"},
         setup_conditions=setup_conditions or [],
-        weight_multipliers={},
+        weight_multipliers=weight_multipliers or {},
         min_confidence=min_confidence,
         risk_template=risk_template or {"kind": "rr", "ratio": "2"},
     )
@@ -169,4 +170,50 @@ async def make_daily_candles(
                 is_complete=True,
             )
         )
+    await db.commit()
+
+
+async def make_intraday_candles(
+    db: AsyncSession,
+    stock_id: int,
+    timeframe: str,
+    sessions: list[list[tuple[float, float, float, float]]],
+    end_day=None,
+) -> None:
+    """Completed intraday candles for consecutive calendar days ending at
+    `end_day` (default: today IST — keeps the pipeline's calendar-bounded
+    cross-section fetch seeing them regardless of when the suite runs).
+
+    Each session is a list of (open, high, low, close) bars starting 09:15
+    IST at the timeframe's spacing. Weekend dates are fine: all downstream
+    session pairing is data-driven, never calendar-driven.
+    """
+    from datetime import UTC, datetime, time, timedelta
+    from decimal import Decimal as Dec
+    from zoneinfo import ZoneInfo
+
+    from app.models.market_data import Ohlcv5m, Ohlcv15m
+
+    ist = ZoneInfo("Asia/Kolkata")
+    model = {"5m": Ohlcv5m, "15m": Ohlcv15m}[timeframe]
+    spacing = timedelta(minutes=int(timeframe.removesuffix("m")))
+    if end_day is None:
+        end_day = datetime.now(tz=UTC).astimezone(ist).date()
+
+    for k, bars in enumerate(sessions):
+        day = end_day - timedelta(days=len(sessions) - 1 - k)
+        session_open = datetime.combine(day, time(9, 15), tzinfo=ist)
+        for i, (o, h, lo, c) in enumerate(bars):
+            db.add(
+                model(
+                    time=(session_open + i * spacing).astimezone(UTC),
+                    stock_id=stock_id,
+                    open=Dec(str(o)),
+                    high=Dec(str(h)),
+                    low=Dec(str(lo)),
+                    close=Dec(str(c)),
+                    volume=50_000,
+                    is_complete=True,
+                )
+            )
     await db.commit()

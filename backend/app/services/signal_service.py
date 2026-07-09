@@ -9,10 +9,11 @@ import pandas as pd
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.analysis.confluence import ConfluenceResult
+from app.analysis.confluence import ConfluenceResult, run_all_factors, score_from_factors
 from app.analysis.confluence import score_signal as _score_signal_python
 from app.analysis.indicators.ema import _ema
 from app.analysis.risk import compute_quantity, volatility_adjusted_qty
+from app.backtest.engine import apply_weight_multipliers
 from app.core.config import settings
 from app.models.market_data import OhlcvDaily
 from app.models.signal import Signal
@@ -30,6 +31,7 @@ def score_signal(
     candles: pd.DataFrame,
     timeframe: str = "1d",
     min_confidence: int = 70,
+    weight_multipliers: dict[str, float] | None = None,
     **flows: Decimal,
 ) -> "ConfluenceResult | None":
     """ENGINE_IMPL dispatch (Phase 1): frozen Python engine or tradecore.
@@ -37,6 +39,12 @@ def score_signal(
     Rust path is parity-gated (tests/parity) — factor scores, confidence
     integers, and decisions are exact-equal by test. The pinned domain is
     timeframe="1d" with zero flows; outside it the reference engine answers.
+
+    weight_multipliers (Phase-3 pre-work — closes the slice-7 gap): group
+    weight scaling from a strategy profile, applied via the exact
+    BacktestEngine sequence run_all_factors → apply_weight_multipliers →
+    score_from_factors, so live scoring and the walk-forward honor
+    multipliers identically. None/{} is byte-identical to the frozen path.
     """
     if settings.engine_impl == "rust":
         if any(flows.values()):
@@ -48,13 +56,26 @@ def score_signal(
             )
         if timeframe != "1d":
             # Only 1d is fixture-pinned; Rust intraday classification/pivots
-            # stay unpinned until the Phase-3 goldens land.
+            # stay unpinned until the Phase-3 goldens land. The python
+            # fallback handles multipliers, so the guard below applies only
+            # to the true tradecore path (bug-hunter LOW, 2026-07-09 —
+            # guarding first would have blacked out intraday multiplier
+            # profiles on a rust deployment for no reason).
             log.warning(
                 "engine_impl=rust is unpinned for timeframe=%s — answering "
                 "with the python reference engine",
                 timeframe,
             )
-            return _score_signal_python(candles, timeframe, min_confidence, **flows)
+            return _python_score(candles, timeframe, min_confidence, weight_multipliers, flows)
+        if weight_multipliers:
+            # tradecore.score_signal has no multiplier input (run_universe
+            # does) — silently unscaled weights could flip decisions, so
+            # refuse rather than answer wrong.
+            raise NotImplementedError(
+                "ENGINE_IMPL=rust cannot apply weight_multipliers in "
+                "tradecore.score_signal yet — extend the FFI before "
+                "activating a multiplier-carrying profile on the rust engine"
+            )
         import tradecore
 
         from app.analysis.types import FactorResult
@@ -83,6 +104,25 @@ def score_signal(
             triggering_indicators=[],
             is_multibagger=result["multibagger"],
         )
+    return _python_score(candles, timeframe, min_confidence, weight_multipliers, flows)
+
+
+def _python_score(
+    candles: pd.DataFrame,
+    timeframe: str,
+    min_confidence: int,
+    weight_multipliers: dict[str, float] | None,
+    flows: dict[str, Decimal],
+) -> "ConfluenceResult | None":
+    """Reference-engine scoring; with multipliers it is the exact
+    BacktestEngine sequence (engine.py run_single_stock), without them the
+    frozen path byte-for-byte."""
+    if weight_multipliers:
+        factors_py = run_all_factors(candles, timeframe, **flows)
+        factors_py = apply_weight_multipliers(
+            factors_py, {str(k): float(v) for k, v in weight_multipliers.items()}
+        )
+        return score_from_factors(factors_py, candles, min_confidence)
     return _score_signal_python(candles, timeframe, min_confidence, **flows)
 
 

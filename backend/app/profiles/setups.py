@@ -22,11 +22,24 @@ from __future__ import annotations
 
 from collections.abc import Callable
 from dataclasses import dataclass, field
+from datetime import date
 from typing import Any
+from zoneinfo import ZoneInfo
 
 import pandas as pd
 
 from app.schemas.profile import KNOWN_SETUP_TYPES
+
+_IST = ZoneInfo("Asia/Kolkata")
+
+
+def _ist_date(ts: pd.Timestamp) -> date:
+    """IST session date of a bar. Walk-forward indexes are already IST and
+    live indexes are UTC — for NSE session bars both give the same calendar
+    date, but converting explicitly removes the coincidence dependency
+    (quant-verifier note, 2026-07-09). Naive stamps pass through."""
+    d: date = ts.astimezone(_IST).date() if ts.tzinfo is not None else ts.date()
+    return d
 
 
 @dataclass
@@ -55,12 +68,27 @@ class SetupVerdict:
 Evaluator = Callable[[pd.DataFrame, dict[str, Any], SetupContext], SetupVerdict]
 
 
+def _is_intraday_window(window: pd.DataFrame) -> bool:
+    """Sub-session bar spacing ⇒ intraday window. Data-driven: the smallest
+    gap between consecutive bars decides (a real 5m/15m/1h window always
+    contains sub-hour gaps; daily windows never do). Non-datetime indexes
+    are treated as daily — the historical unit-fixture shape."""
+    if not isinstance(window.index, pd.DatetimeIndex) or len(window) < 2:
+        return False
+    return bool((window.index[1:] - window.index[:-1]).min() <= pd.Timedelta(hours=1))
+
+
 def _prev_day_hlc(window: pd.DataFrame, ctx: SetupContext) -> dict[str, float] | None:
-    """Previous session's OHLC: ctx.prev_day for intraday windows, else the
-    second-to-last row of a daily window."""
+    """Previous session's OHLC: ctx.prev_day when provided, else derived
+    from the second-to-last row of a DAILY window.
+
+    An intraday window without ctx.prev_day FAILS CLOSED (None): its
+    iloc[-2] is the previous BAR, not the previous day, and gating a
+    "PDH breakout" on a five-minute range would pass almost everything
+    (quant-verifier MEDIUM, 2026-07-07 — Phase-3 pre-work)."""
     if ctx.prev_day is not None:
         return ctx.prev_day
-    if len(window) < 2:
+    if len(window) < 2 or _is_intraday_window(window):
         return None
     prev = window.iloc[-2]
     return {
@@ -69,6 +97,17 @@ def _prev_day_hlc(window: pd.DataFrame, ctx: SetupContext) -> dict[str, float] |
         "low": float(prev["low"]),
         "close": float(prev["close"]),
     }
+
+
+def _session_open(window: pd.DataFrame) -> float:
+    """The decision session's opening price: on intraday windows the FIRST
+    bar of the last session (the last row's open is mid-session once the
+    session is underway); on daily windows the last row's open."""
+    if _is_intraday_window(window):
+        session_date = _ist_date(window.index[-1])
+        todays = window[[_ist_date(ts) == session_date for ts in window.index]]
+        return float(todays["open"].iloc[0])
+    return float(window["open"].iloc[-1])
 
 
 def eval_pdh_breakout(
@@ -102,12 +141,16 @@ def eval_pdl_breakdown(
 def eval_opening_gap(
     window: pd.DataFrame, params: dict[str, Any], ctx: SetupContext
 ) -> SetupVerdict:
-    """Opening gap in the signal's direction, ≥ min_gap_pct (default 2%)."""
+    """Opening gap in the signal's direction, ≥ min_gap_pct (default 2%).
+
+    The gap is measured at the SESSION open (intraday windows use the
+    decision session's first bar — the last row's open is mid-session and
+    was silently standing in for it before the Phase-3 pre-work fix)."""
     min_gap_pct = float(params.get("min_gap_pct", 2.0))
     prev = _prev_day_hlc(window, ctx)
     if prev is None or prev["close"] == 0:
         return SetupVerdict(False, {"reason": "no previous session available"})
-    open_ = float(window["open"].iloc[-1])
+    open_ = _session_open(window)
     gap_pct = (open_ - prev["close"]) / prev["close"] * 100.0
     if ctx.direction == "BUY":
         passed = gap_pct >= min_gap_pct
@@ -238,8 +281,8 @@ def eval_orb_breakout(
     if spacing > pd.Timedelta(hours=1):
         return SetupVerdict(False, {"reason": "requires intraday session bars"})
 
-    session_date = window.index[-1].date()
-    todays = window[[ts.date() == session_date for ts in window.index]]
+    session_date = _ist_date(window.index[-1])
+    todays = window[[_ist_date(ts) == session_date for ts in window.index]]
     if todays.empty:
         return SetupVerdict(False, {"reason": "no bars for current session"})
     session_open = todays.index[0]
@@ -268,8 +311,15 @@ def eval_top_gainer_925(
     if ctx.symbol not in ctx.cross_section:
         return SetupVerdict(False, {"reason": "symbol missing from cross-section"})
 
-    reverse = ctx.direction == "BUY"
-    ranked = sorted(ctx.cross_section.items(), key=lambda kv: kv[1], reverse=reverse)
+    # Deterministic tie-break by symbol: a stable sort on pct alone kept
+    # dict-insertion order, which differs between live (planner row order)
+    # and walk-forward (alphabetical) — exact-tie gate outcomes could
+    # drift between the two (bug-hunter LOW, 2026-07-09).
+    buy_side = ctx.direction == "BUY"
+    ranked = sorted(
+        ctx.cross_section.items(),
+        key=lambda kv: ((-kv[1] if buy_side else kv[1]), kv[0]),
+    )
     top = {sym for sym, _ in ranked[:top_n]}
     change = ctx.cross_section[ctx.symbol]
     correct_sign = change > 0 if ctx.direction == "BUY" else change < 0

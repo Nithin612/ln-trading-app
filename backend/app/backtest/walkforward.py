@@ -23,13 +23,15 @@ economics, no partial booking); ema_trail → flat_pct(min_target_pct).
 Rust has no trailing execution this phase — goldens carry `tp_approximated`
 so nobody mistakes those folds for trailing economics.
 
-Timeframe guard: 1d ONLY until slice 8c lands intraday parity fixtures
-(tradecore is parity-pinned on 1d; see docs/PHASES.md).
+Timeframe guard: the parity-pinned set (TIMEFRAME_TABLES) — 1d since 8b,
+5m/15m since the 8c intraday oracle.
 
-Known slice-7 gap (flagged for the phase gate): the live pipeline does not
-yet feed profile.weight_multipliers into score_signal — all seeded profiles
-carry {} so behavior is identical today, but a multiplier-carrying profile
-must not be activated until the pipeline is wired.
+Session-shaped context (prev-day OHLC, 9:25 cross-section) is computed by
+app/profiles/session_context.py — ONE implementation shared with the live
+pipeline, so gate outcomes cannot drift between backtest and live (the
+slice-7 multiplier gap was closed the same way in Phase-3 pre-work:
+pipeline scoring now feeds profile.weight_multipliers through the exact
+BacktestEngine sequence).
 """
 
 from __future__ import annotations
@@ -48,6 +50,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.backtest.engine import BacktestResult, TradeRecord
 from app.backtest.metrics import aggregate_trades
 from app.models.profile import StrategyProfile
+from app.profiles import session_context as sctx
 from app.profiles.setups import SetupContext, evaluate_conditions
 from app.services.universe_service import resolve_universe
 
@@ -82,8 +85,9 @@ SUPPORTED_SETUPS_INTRADAY = SUPPORTED_SETUPS_1D | {"orb_breakout", "top_gainer_9
 # A decision bar that starts before 09:20 closes before the screen is
 # born — consulting the cross-section for it is look-ahead (quant-verifier
 # HIGH, 2026-07-07): such trades see cross_section=None and the evaluator
-# fails closed, exactly like live would before 09:25.
-_SCREEN_925_READY = time(9, 20)
+# fails closed, exactly like live would before 09:25. The constant lives in
+# session_context so the live pipeline gates on the SAME boundary.
+_SCREEN_925_READY = sctx.SCREEN_925_READY
 
 # Metrics compared by the §8 golden harness (BacktestResult scalar fields;
 # equity_curve/trades excluded — the digest pins the trade list).
@@ -511,20 +515,9 @@ class _Frame:
         )
 
     def session_ohlc(self) -> dict[date, dict[str, float]]:
-        """Per-session OHLC (data-driven) for prev-day setup context."""
-        out: dict[date, dict[str, float]] = {}
-        for i, d in enumerate(self.dates):
-            s = out.get(d)
-            if s is None:
-                out[d] = {
-                    "open": self.open[i], "high": self.high[i],
-                    "low": self.low[i], "close": self.close[i],
-                }
-            else:
-                s["high"] = max(s["high"], self.high[i])
-                s["low"] = min(s["low"], self.low[i])
-                s["close"] = self.close[i]
-        return out
+        """Per-session OHLC (data-driven) for prev-day setup context —
+        delegates to the implementation shared with the live pipeline."""
+        return sctx.session_ohlc(self.dates, self.open, self.high, self.low, self.close)
 
 
 # Symbols per query — caps asyncpg row buffering. 1d rows are ~740/symbol;
@@ -580,26 +573,12 @@ def _cross_section_925(frames: dict[str, _Frame]) -> dict[date, dict[str, float]
     previous session's close — reconstructed from the universe's own
     intraday bars (plan §slice 5: 'from universe 5m bars in backtests').
     Sessions with no prior close (first loaded day) are absent — the
-    evaluator fails closed, same as live."""
-    cutoff = time(9, 20)
+    evaluator fails closed, same as live. Per-symbol math is the shared
+    session_context implementation the live pipeline also runs."""
     out: dict[date, dict[str, float]] = {}
     for sym, f in frames.items():
-        prev_session_close: float | None = None
-        i, n = 0, len(f.dates)
-        while i < n:
-            d = f.dates[i]
-            j = i
-            early_close: float | None = None
-            while j < n and f.dates[j] == d:
-                if f.times[j].timetz().replace(tzinfo=None) <= cutoff:
-                    early_close = f.close[j]
-                j += 1
-            if prev_session_close and early_close is not None:
-                out.setdefault(d, {})[sym] = (
-                    (early_close - prev_session_close) / prev_session_close * 100.0
-                )
-            prev_session_close = f.close[j - 1]
-            i = j
+        for d, pct in sctx.pct_change_at_925(f.dates, f.times, f.close).items():
+            out.setdefault(d, {})[sym] = pct
     return out
 
 
@@ -725,11 +704,7 @@ def _collect_records(
             continue
         prev_by_session: dict[date, dict[str, float]] | None = None
         if intraday:
-            ohlc = f.session_ohlc()
-            ordered = sorted(ohlc)
-            prev_by_session = {
-                d: ohlc[prev] for prev, d in zip(ordered, ordered[1:], strict=False)
-            }
+            prev_by_session = sctx.prev_session_map(f.session_ohlc())
         kept = apply_setup_filter(
             sym,
             f.df(),

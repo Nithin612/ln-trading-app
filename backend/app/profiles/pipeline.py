@@ -1,10 +1,13 @@
-"""Per-profile suggestion pipeline (Phase 2 slice 7).
+"""Per-profile suggestion pipeline (Phase 2 slice 7; Phase-3 pre-work).
 
 For each ACTIVE profile: resolve universe → load candles → score through
-the FROZEN python confluence engine (real FII/DII flows) → gate on the
-profile's setup conditions → risk-template TP override (SL stays
-classification canon; reject-don't-clamp preserved) → persist Signal rows
-tagged (profile_id, profile_key, setup_trigger, volatility_reduced).
+the confluence engine (real FII/DII flows, profile weight_multipliers via
+the exact BacktestEngine sequence) → gate on the profile's setup conditions
+with full session context (prev-day OHLC + 9:25 cross-section on intraday
+timeframes, built by the SAME session_context code the walk-forward runs) →
+risk-template TP override (SL stays classification canon;
+reject-don't-clamp preserved) → persist Signal rows tagged
+(profile_id, profile_key, setup_trigger, volatility_reduced).
 
 Idempotency/supersede policy (design-reviewed):
   - same (stock, profile_key) active + same direction  → skip
@@ -15,7 +18,7 @@ Idempotency/supersede policy (design-reviewed):
 from __future__ import annotations
 
 import logging
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -29,6 +32,7 @@ from app.analysis.structure.dow import swing_levels
 from app.backtest.tp_rules import tp_from_template as _tp_from_template
 from app.models.profile import StrategyProfile
 from app.models.signal import Signal
+from app.profiles import session_context as sctx
 from app.profiles.setups import SetupContext, evaluate_conditions
 from app.services import market_calendar
 from app.services.fii_dii_service import get_market_flow_5d, get_stock_block_deal_net_cr
@@ -52,6 +56,103 @@ _TIMEFRAME_TABLE: dict[str, str] = {
     "5m": "ohlcv_5m",
     "1m": "ohlcv_1m",
 }
+
+# Cross-section fetch bounds: symbols per query caps asyncpg row buffering
+# (walk-forward OOM lesson, 8c); the calendar lookback only bounds the
+# fetch — session pairing itself is data-driven, so any holiday cluster
+# shorter than this window is handled by construction.
+_XSEC_CHUNK = 50
+_XSEC_LOOKBACK_DAYS = 8
+
+
+def _intraday_setup_context(
+    window: pd.DataFrame,
+    cross_section_by_session: dict[date, dict[str, float]] | None,
+) -> tuple[dict[str, float] | None, dict[str, float] | None]:
+    """(prev_day, cross_section) for the window's DECISION bar (its last
+    row) — the live twin of walkforward.apply_setup_filter's context.
+
+    prev_day is the previous PRESENT session's OHLC aggregated from the
+    window's own bars (shared session_context math; None fails the
+    evaluators closed). The cross-section is consulted only when the
+    decision bar starts at/after 09:20 IST — before that the 9:25 screen
+    does not exist yet and reading it would be look-ahead (quant-verifier
+    HIGH, 2026-07-07).
+    """
+    index_ist = [ts.astimezone(_IST) for ts in window.index]
+    dates_ist = [ts.date() for ts in index_ist]
+    prev_day = sctx.prev_session_ohlc_for_window(
+        dates_ist,
+        [float(v) for v in window["open"]],
+        [float(v) for v in window["high"]],
+        [float(v) for v in window["low"]],
+        [float(v) for v in window["close"]],
+    )
+    cross_section: dict[str, float] | None = None
+    decision = index_ist[-1]
+    screen_born = decision.timetz().replace(tzinfo=None) >= sctx.SCREEN_925_READY
+    if cross_section_by_session is not None and screen_born:
+        cross_section = cross_section_by_session.get(decision.date())
+    return prev_day, cross_section
+
+
+async def _cross_section_925_live(
+    db: AsyncSession,
+    timeframe: str,
+    stock_ids: list[int],
+    sym_map: dict[int, str],
+) -> dict[date, dict[str, float]]:
+    """9:25 cross-section from the profile's OWN intraday bars — the same
+    per-symbol reconstruction the walk-forward uses (session_context), so
+    live gate outcomes replay exactly.
+
+    The ranking pool spans the resolved universe (8c-5b parity lesson: the
+    pool must match the processed set); symbols without a prior close or an
+    early bar are simply absent and the evaluator fails closed for them.
+    """
+    table = _TIMEFRAME_TABLE.get(timeframe)
+    if table is None:
+        raise ValueError(f"unknown timeframe {timeframe!r}")
+    symbols = [sym_map[sid] for sid in stock_ids if sid in sym_map]
+    if len(set(symbols)) != len(symbols):
+        # Bars series are keyed by symbol; a dual-exchange listing would
+        # interleave two stocks' bars into one series and corrupt its
+        # screen pct (bug-hunter latent LOW — unreachable while ingestion
+        # is NSE-only, loud if that ever changes).
+        dupes = sorted({s for s in symbols if symbols.count(s) > 1})
+        log.warning(
+            "cross-section: symbols listed under multiple stock ids %s — "
+            "their 9:25 screen values are unreliable",
+            dupes,
+        )
+    t0 = datetime.now(tz=UTC) - timedelta(days=_XSEC_LOOKBACK_DAYS)
+    series: dict[str, tuple[list[date], list[datetime], list[float]]] = {}
+    for i in range(0, len(stock_ids), _XSEC_CHUNK):
+        rows = (
+            await db.execute(
+                text(
+                    f"SELECT stock_id, time, close FROM {table}"  # noqa: S608
+                    " WHERE stock_id = ANY(:sids) AND time >= :t0"
+                    " AND is_complete IS TRUE"
+                    " ORDER BY stock_id, time"
+                ),
+                {"sids": stock_ids[i : i + _XSEC_CHUNK], "t0": t0},
+            )
+        ).fetchall()
+        for r in rows:
+            symbol = sym_map.get(r.stock_id)
+            if symbol is None:
+                continue
+            dates_, times_, closes_ = series.setdefault(symbol, ([], [], []))
+            ist = r.time.astimezone(_IST)
+            dates_.append(ist.date())
+            times_.append(ist)
+            closes_.append(float(r.close))
+    out: dict[date, dict[str, float]] = {}
+    for symbol, (dates_, times_, closes_) in series.items():
+        for d, pct in sctx.pct_change_at_925(dates_, times_, closes_).items():
+            out.setdefault(d, {})[symbol] = pct
+    return out
 
 
 async def _load_window(
@@ -136,6 +237,7 @@ async def _process_stock(
     as_of: date,
     capital: Decimal,
     risk_pct: Decimal,
+    cross_section_by_session: dict[date, dict[str, float]] | None = None,
 ) -> Signal | None:
     """One stock through the full profile pipeline. Returns the flushed
     Signal, or None (no signal / gated / rejected / deduped)."""
@@ -149,6 +251,9 @@ async def _process_stock(
         window,
         timeframe=profile.timeframe,
         min_confidence=profile.min_confidence,
+        weight_multipliers={
+            str(k): float(v) for k, v in (profile.weight_multipliers or {}).items()
+        },
         fii_net_5d=fii_net_5d,
         dii_net_5d=dii_net_5d,
         stock_block_deal_net_cr=block_net,
@@ -156,9 +261,15 @@ async def _process_stock(
     if result is None:
         return None
 
+    prev_day: dict[str, float] | None = None
+    cross_section: dict[str, float] | None = None
+    if profile.timeframe != "1d":
+        prev_day, cross_section = _intraday_setup_context(window, cross_section_by_session)
     ctx = SetupContext(
         direction=result.direction,
         factors={f.name: (float(f.weight), float(f.score)) for f in result.factors},
+        prev_day=prev_day,
+        cross_section=cross_section,
         symbol=symbol,
     )
     passed, evidence = evaluate_conditions(profile.setup_conditions, window, ctx)
@@ -247,12 +358,45 @@ async def run_profile(
     as_of = datetime.now(tz=UTC).astimezone(_IST).date()
     flows = await get_market_flow_5d(db, as_of)
 
+    if profile.timeframe == "1m" and any(
+        str(c.get("type")) in {"pdh_breakout", "pdl_breakdown", "opening_gap"}
+        for c in profile.setup_conditions
+    ):
+        # A 1m session is 375 bars > the 300-bar window cap, so prev-day
+        # context can never assemble — every condition fails closed. Safe
+        # direction, but it must be loud, not a silently dead profile
+        # (bug-hunter latent LOW, 2026-07-09).
+        log.warning(
+            "profile %s: prev-day setups cannot evaluate on 1m windows "
+            "(300-bar cap < one session) — all conditions will fail closed",
+            profile.key,
+        )
+
+    # 9:25 cross-section: one universe-wide build per run, only when an
+    # intraday profile actually gates on it. Per-stock consultation stays
+    # decision-bar-relative inside _process_stock.
+    cross_section_by_session: dict[date, dict[str, float]] | None = None
+    if profile.timeframe != "1d" and any(
+        str(c.get("type")) == "top_gainer_925" for c in profile.setup_conditions
+    ):
+        cross_section_by_session = await _cross_section_925_live(
+            db, profile.timeframe, list(stock_ids), sym_map
+        )
+
     created: list[Signal] = []
     for stock_id in stock_ids:
         symbol = sym_map.get(stock_id, str(stock_id))
         try:
             signal = await _process_stock(
-                db, profile, stock_id, symbol, flows, as_of, capital, risk_pct
+                db,
+                profile,
+                stock_id,
+                symbol,
+                flows,
+                as_of,
+                capital,
+                risk_pct,
+                cross_section_by_session=cross_section_by_session,
             )
         except Exception:
             # One pathological stock must never kill the remaining universe
