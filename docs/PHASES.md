@@ -17,47 +17,46 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 | 0 | Claude workbench · repo hygiene · triage · F&O recorders | **✅ done 2026-07-03** | [phase-00](phases/phase-00-workbench.md) | git + hooks/agents/rules/skills · 9 defects fixed (incl. dead live pipeline, 100× sizing) · F&O bhavcopy/VIX/chain recorders live |
 | 1 | Rust engine core + parity + benchmarks | **✅ done 2026-07-05** (gate: `make check` green + quant-verifier signoff) | [phase-01](phases/phase-01-rust-engine.md) | tradecore wheel · 4 oracle fixtures · cross-language parity EXACT (96 windows + 125 trades) · 5 adjudicated canon decisions · **2y×49 backtest 883.8s → 0.143s (~6,180×)** |
 | 2 | Strategy profiles — 4 style engines, offline | **✅ done 2026-07-07** (gate: suites 616/131/35 green · smoke · reviews; 8c trails by approved plan) | [phase-02](phases/phase-02-strategy-profiles.md) | versioned profiles + 8 seeds · NSE calendar · FII/DII + EOD chain wired · suggestions API · **walk-forward evidence: rrbo +41.3%/+1.97 sharpe POSITIVE; dc1/dc2/multibagger FLAGGED** · §8 golden harness in make check · Kite login + throttled REST + intraday backfill |
-| 3 | Realtime v2 — tick-to-tick | planned | — | live-worker + Rust LiveEngine, committed vs forming layers, record/replay harness, p99 < 10 ms tick→publish. **Kite subscription required here.** Pre-shadow-week: rust-path signal envelope (patterns/indicators via FFI) + intraday parity goldens (then drop the off-1d python fallback) — see phase-01 §Exit gate |
+| 3 | Realtime v2 — tick-to-tick | **▶ in progress** (started 2026-07-09) | [phase-03](phases/phase-03-realtime.md) | live-worker + Rust LiveEngine, committed vs forming layers, record/replay harness, p99 < 10 ms tick→publish. **Kite subscription required from slice 3.3.** Slice 3.0 (pre-work MEDIUMs) ✅ 2026-07-09 |
 | 4 | F&O analytics | planned | — | chain builder, Rust IV/Greeks, IV-rank/PCR/max-pain from recorded history, option-selling suggestions (calibrated with user) |
 | 5 | UI overhaul | planned | — | new sidebar IA, slate theme default, 4 style pages, chain ladder, virtualized live tables @60fps |
 | 6 | Outcome tracking + strategy lab v2 | planned | — | per-style hit-rate/expectancy dashboards, factor attribution, Rayon weight tuning + promotion workflow |
 | 7 | Live-trading hardening | planned | — | Kite orders behind trading_mode + 30-day gate, kill switch, reconciliation, VPS runbook |
 
-**▶ CONTINUE HERE (next session, any account):** Phase 2 CLOSED
-2026-07-07, **8c COMPLETE same day** (commits `8fa1263`→`a3b1927`;
-report: `phases/phase-02-strategy-profiles.md`). 8c delivered: backfill
-(15.3M rows, manifest 416/420 admitted) · session_last_bar axis in both
-engines (default-off, fixture-proven) · 102-trade intraday parity oracle
-(cargo + DB-free pytest replay it EXACTLY) · intraday walk-forwards —
-**pdh_pdl −0.3%/sharpe −1.06 · orb_15m +10.4%/−0.60 · gainer_925 +56.2%/−0.86
-(look-ahead purged, 8c-4) — all three FLAGGED; none earns Phase-3 activation
-as-specced.** All 8 goldens replay green in `make walkforward`.
+**▶ CONTINUE HERE (next session, any account):** Phase 3 IN PROGRESS
+(started 2026-07-09; ledger: `phases/phase-03-realtime.md`). **Slice 3.0
+(pre-work) DONE 2026-07-09**: _prev_day_hlc fail-closed on intraday
+windows · prev-day + 9:25 cross-section wired into pipeline SetupContext
+via the new shared `app/profiles/session_context.py` (walk-forward
+delegates to it — 9/9 goldens replay byte-stable) · weight_multipliers
+through live scoring (slice-7 gap closed; rust dispatch refuses them
+loudly) · opening_gap now measures the SESSION open on intraday windows.
+Four regression canaries proven to fail on the pre-fix tree.
 
 Open threads, in order:
-1. **quant-verifier full pass DONE (2026-07-07)** — 6/7 exact, one HIGH
-   look-ahead in the 9:25 gate FIXED same session (gainer golden
-   regenerated; totPnL halved to +56.2% — the honest number). MEDIUMs →
-   Phase-3 pre-work (report §8c addendum): wire intraday SetupContext
-   in pipeline.py + _prev_day_hlc fail-closed before activating any
-   intraday profile.
-2. **Final full `make check` GREEN 2026-07-07** on the corrected tree:
-   backend 638 · frontend 131 · engine 41 · parity + walkforward targets
-   green (exit 0). Nothing owed.
-3. **Before any multiplier-carrying profile activates:** wire
-   profile.weight_multipliers into pipeline.py scoring (all seeds `{}`);
-   latent LOW calendar items in the report backlog.
-4. **Profile tuning** (dc1/dc2/multibagger negative; intraday trio
-   flagged) — Phase 6 workflow; verdicts pinned in goldens.
+1. **Next: slice 3.1 — Rust LiveEngine core** (session-aligned tick→candle
+   state machine, forming/committed layers, session guard; pins the
+   9:15-anchored 1h bucket canon that the 3.2 `ohlcv_1h` rebuild mirrors).
+   Pure engine-core — no Kite needed yet.
+2. **Kite Connect subscription needed from slice 3.3** (live-worker WS).
+   Purchase before starting 3.3; slices 3.1/3.2 build offline.
+3. **Profile tuning** (dc1/dc2/multibagger negative; intraday trio
+   flagged) — Phase 6 workflow; verdicts pinned in goldens. Wiring
+   session context (3.0) was necessary, not sufficient, for activation.
+4. Latent LOW calendar items in the phase-02 report backlog (UTC-date
+   trading-day walks; `same_day` weekend validity — fix before any
+   same_day/eod profile activates or ad-hoc IST-midnight generation).
 5. `git push` remains manual (credential-free remote by design).
 
 Daily ops: Kite token dies ~6:00 AM IST; ritual =
 `cd backend && uv run python scripts/kite_login.py` (terminal-only).
 Chain recorder auto-activates while a token is live.
 
-Next phase: **Phase 3 — Realtime v2** (plan §Phase 3): live-worker +
-Rust LiveEngine, committed-vs-forming layers, record/replay harness,
-p99 < 10 ms tick→publish. The rust-path signal envelope + intraday
-goldens pre-work from phase-01 §Exit gate is now DONE (8c).
+Phase-2 state (closed 2026-07-07): report
+`phases/phase-02-strategy-profiles.md`; walk-forward verdicts — rrbo
+POSITIVE (+41.3%/+1.97); dc1/dc2/multibagger FLAGGED; intraday trio
+FLAGGED (gainer_925 +56.2% AFTER the 8c-4 look-ahead purge). All 8
+goldens replay in `make walkforward`.
 
 Phase-1 state (closed): F/G/H applied 2026-07-05, canon table in
 ARCHITECTURE.md; standing baseline 599 trades / +52.1% / sharpe +0.13 on

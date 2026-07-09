@@ -123,6 +123,28 @@ Celery worker + beat · Postgres · Redis. Tick path: ticker thread →
 `queue.Queue` → consumer thread → ONE PyO3 call per batch → sync redis
 pipeline. Backpressure: drop-oldest LTP, never a candle-closing tick.
 
+### Live bucket canon (pinned 2026-07-09, slice 3.1 — `engine-core/src/live.rs`)
+
+- Sessions enter the engine as PARAMETERS (`SessionSpec{open_ts, close_ts}`
+  epoch seconds, close exclusive) — the NSE calendar, clocks, and timezones
+  stay host-side; half-days/muhurat are just different parameters.
+- Timeframe-N bucket k spans `[open + k·N·60, min(open + (k+1)·N·60, close))`.
+  Standard session ⇒ 1h candles at 09:15…15:15 IST with a 15:15–15:30 stub;
+  1m/5m/15m identical to Kite/backfill bucket times. The slice-3.2
+  `ohlcv_1h` rebuild mirrors THIS expression.
+- Two output layers, distinct at the type level: `Forming` (provisional,
+  never persisted complete, never in backtests) vs `Committed` (at most
+  once per (tf, period) per engine lifetime — no repaint by construction).
+- Candles commit on the first tick of a later bucket OR on a host `on_time`
+  pulse (the session-last candle has no next tick — v1's structural flaw).
+  Replay streams must record time pulses alongside ticks.
+- Session guard in-engine: ticks before open / at-or-after close / with
+  non-positive price are rejected and COUNTED (RejectCounters), never
+  minted. Out-of-order ticks older than a timeframe's forming bucket are
+  dropped per-timeframe and counted `late` (v1 smeared them in place).
+- Volume = cumulative day-volume counter diff (reset ⇒ re-baseline, count
+  0); `qty` fallback only when the counter is absent.
+
 ## Engine workspace *(Phase 1 fills this in)*
 
 engine-core (pure, no I/O, no clocks) · engine-py (tradecore, GIL released
