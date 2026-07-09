@@ -11,6 +11,7 @@ pub mod backtest;
 pub mod confluence;
 pub mod factors;
 pub mod indicators;
+pub mod live;
 pub mod patterns;
 pub mod pivots;
 pub mod risk;
