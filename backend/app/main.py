@@ -16,30 +16,17 @@ log = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncGenerator[None, None]:
-    # Try to resume the tick consumer if an admin already authenticated today
-    try:
-        from sqlalchemy import text
-
-        from app.broker.tick_consumer import start_consumer
-        from app.db.session import AsyncSessionFactory
-
-        async with AsyncSessionFactory() as db:
-            result = await db.execute(
-                text(
-                    "SELECT u.id FROM users u"
-                    " JOIN broker_tokens bt ON bt.user_id = u.id"
-                    " WHERE bt.is_active = true AND bt.expires_at > now()"
-                    " AND u.role = 'admin' ORDER BY bt.created_at DESC LIMIT 1"
-                )
-            )
-            row = result.fetchone()
-            if row:
-                await start_consumer(user_id=row[0])
-    except Exception as exc:
-        log.debug("Tick consumer auto-start skipped: %s", exc)
-
+    # The v1 tick consumer must NEVER auto-start. It used to resume here
+    # whenever a valid token existed, which armed it on every uvicorn
+    # (re)start — on 2026-07-10 that wrote off-canon candles twice while
+    # the Phase-3 live worker owned the tables (see phase-03 ledger,
+    # §post-close forensics). The live worker (`python -m
+    # app.broker.live_worker`) is the candle owner; the v1 consumer runs
+    # only via the explicit admin endpoint POST /broker/kite/consumer/start
+    # — a deliberate act by whoever guarantees the worker is not running.
     yield
 
+    # Clean up a manually-started consumer on shutdown.
     from app.broker.tick_consumer import stop_consumer
     await stop_consumer()
     await engine.dispose()

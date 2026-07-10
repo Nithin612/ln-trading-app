@@ -50,24 +50,26 @@ Open threads, in order:
    supervisor loop (`while true; python -m app.broker.live_worker;
    sleep 5; done` at minimum) so a frozen Claude session can't cost
    hours of capture again.
-   **⚠ USER DECISION PENDING — today's intraday candles are corrupt**
-   (ledger §post-close forensics): the backend's "zombie" v1 consumer
-   wrote OFF-CANON candles 09:56–11:06 across 5m/15m/1h (~1,950 stocks
-   per bucket), and resume-point gap-fill couldn't heal the midday holes
-   (5m 11:30–12:05, 14:40–15:20 missing). Evidence snapshotted to
-   `forensic_ohlcv_{5m,15m,1h}_20260710`. Approve to run: DELETE today's
-   rows from ohlcv_5m/15m/1h (`time >= '2026-07-10 03:45:00+00'`), then
-   `python -m app.broker.live_worker --gap-fill` (~34 min full-day
-   refetch), then verify canon-only buckets. Also before the next soak:
-   kill the `app/main.py` lifespan v1-consumer auto-start (it armed the
-   zombie) — the v1 path is scheduled for deletion anyway.
-2. **Slice 3.5 CORE BUILT 2026-07-10 on branch `slice-3.5-tick-triggers`
-   (worktree .claude/worktrees/slice-35-tick-triggers) — NOT yet merged.**
-   Rust trigger engine + replayable "lv" level lines + live_levels.py
-   sources + alerts:live stream + /ws/live subscribe_alerts fanout;
-   Rust 55 tests, +23 backend tests; 3.4 golden digest untouched.
-   Before merge: quant-verifier + bug-hunter verdicts (launched
-   2026-07-10 post-close), full-suite green, then merge to main.
+   **Data incident RESOLVED same evening** (ledger §post-close
+   forensics): the v1 consumer wrote off-canon candles TWICE (zombie
+   09:56–11:06; drowning 13:01→close restart) and resume-point gap-fill
+   couldn't heal the midday holes. User-approved delete + full-day
+   rebuild from Kite REST executed and VERIFIED: 5m 75/75, 15m 25/25,
+   1h 7/7 canon buckets, zero off-canon, 1,880–2,031 stocks per bucket
+   (evidence kept in `forensic_ohlcv_{1m,5m,15m,1h}_20260710`).
+   **v1-consumer auto-start REMOVED from `app/main.py` lifespan**
+   (canary test proven to fail on the old code); the consumer now
+   starts ONLY via `POST /broker/kite/consumer/start` — never while the
+   worker runs. The quiet-box soak is UNBLOCKED.
+2. **Slice 3.5 CORE DONE + MERGED 2026-07-10** (`main` at `70df694`;
+   built on branch `slice-3.5-tick-triggers`). Rust trigger engine +
+   replayable "lv" level lines + live_levels.py sources + alerts:live
+   stream + /ws/live subscribe_alerts fanout; Rust 55 tests, +25
+   backend tests; 3.4 golden digest untouched. Reviews: quant-verifier
+   FAIL→fixed + bug-hunter BUGS-FOUND→fixed (dup S/R ids HIGH confirmed
+   by executed repros both sides; consumer-ack mark_sent; details in
+   the ledger §Reviews 3.5); suite 727 green post-fix; `make
+   engine-build` run in main (set_levels FFI live).
    **Still open within 3.5:** forming-candle provisional confidence +
    per-style leaderboards (needs the plan-§2 O(1) incremental factor
    design — decide throttled-batch-rescore vs incremental indicators),
