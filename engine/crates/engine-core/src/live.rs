@@ -39,6 +39,8 @@
 
 use std::collections::HashMap;
 
+use crate::triggers::{Firing, TriggerError, TriggerTag, WatchLevel, WatchSet};
+
 /// One trading session in epoch seconds: `open_ts` inclusive,
 /// `close_ts` exclusive.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -90,6 +92,17 @@ pub enum LiveEvent {
     Forming { tf_idx: usize, candle: LiveCandle },
     /// Committed layer: a candle closed. At most once per (tf, period).
     Committed { tf_idx: usize, candle: LiveCandle },
+    /// Trigger layer (slice 3.5): a host-configured watch fired on this
+    /// tick. `id` round-trips to the host's level registry untouched.
+    /// Emitted after the tick's candle events, only for accepted
+    /// in-session ticks — a recording with no `set_levels` calls replays
+    /// to a stream with no `Trigger` events (golden compatibility).
+    Trigger {
+        id: u64,
+        tag: TriggerTag,
+        price: i64,
+        ts: i64,
+    },
 }
 
 /// Observability for everything the session guard refuses — rejected
@@ -122,6 +135,11 @@ pub struct InstrumentLive {
     committed_until: Vec<i64>,
     last_day_volume: Option<u64>,
     rejects: RejectCounters,
+    /// Host-configured tick triggers (slice 3.5); empty by default.
+    watches: WatchSet,
+    /// Newest accepted tick ts — triggers only evaluate on ticks that do
+    /// not regress in time (an out-of-order price must not fire a cross).
+    newest_tick_ts: i64,
 }
 
 impl InstrumentLive {
@@ -142,7 +160,17 @@ impl InstrumentLive {
             committed_until: vec![i64::MIN; tf_minutes.len()],
             last_day_volume: None,
             rejects: RejectCounters::default(),
+            watches: WatchSet::default(),
+            newest_tick_ts: i64::MIN,
         })
+    }
+
+    /// Replace this instrument's watch list (slice 3.5). Armed-state is
+    /// preserved for unchanged (id, kind) pairs; validation is
+    /// all-or-nothing. The HOST records every accepted call in the replay
+    /// stream — levels are input, exactly like ticks.
+    pub fn set_levels(&mut self, levels: &[WatchLevel]) -> Result<(), TriggerError> {
+        self.watches.set_levels(levels, self.tf_minutes.len())
     }
 
     pub fn rejects(&self) -> RejectCounters {
@@ -246,6 +274,35 @@ impl InstrumentLive {
                 }
             }
         }
+
+        // Trigger layer (3.5): evaluated AFTER the candle pass so volume
+        // watches see this tick's forming state; only for ticks that do
+        // not regress in time (a late tick's stale price must not flip
+        // cross-state).
+        if tick.ts >= self.newest_tick_ts {
+            self.newest_tick_ts = tick.ts;
+            if !self.watches.is_empty() {
+                let forming = &self.forming;
+                self.watches.on_price(
+                    tick.price,
+                    |tf_idx| {
+                        forming
+                            .get(tf_idx)
+                            .copied()
+                            .flatten()
+                            .map(|c| (c.period_start, c.volume))
+                    },
+                    |f: Firing| {
+                        out.push(LiveEvent::Trigger {
+                            id: f.id,
+                            tag: f.tag,
+                            price: tick.price,
+                            ts: tick.ts,
+                        });
+                    },
+                );
+            }
+        }
     }
 
     /// Host-driven time pulse: commit every forming candle whose bucket
@@ -346,6 +403,12 @@ impl LiveBook {
         }
     }
 
+    /// Route a level replacement to one instrument (created if unseen —
+    /// levels can arrive before the first tick).
+    pub fn set_levels(&mut self, stock_id: u32, levels: &[WatchLevel]) -> Result<(), TriggerError> {
+        self.entry(stock_id).set_levels(levels)
+    }
+
     pub fn rejects(&self, stock_id: u32) -> Option<RejectCounters> {
         self.instruments.get(&stock_id).map(|i| i.rejects())
     }
@@ -389,7 +452,7 @@ mod tests {
             .iter()
             .filter_map(|e| match e {
                 LiveEvent::Committed { tf_idx, candle } => Some((*tf_idx, *candle)),
-                LiveEvent::Forming { .. } => None,
+                LiveEvent::Forming { .. } | LiveEvent::Trigger { .. } => None,
             })
             .collect()
     }
@@ -453,6 +516,7 @@ mod tests {
                     assert_eq!(candle.volume, 10);
                 }
                 LiveEvent::Committed { .. } => panic!("nothing to commit yet"),
+                LiveEvent::Trigger { .. } => panic!("no levels configured"),
             }
         }
     }
@@ -706,6 +770,157 @@ mod tests {
             );
             assert_eq!(inst.rejects(), RejectCounters::default());
         }
+    }
+
+    // ── Trigger layer (slice 3.5) ────────────────────────────────────────────
+
+    use crate::triggers::{LevelKind, TriggerTag, WatchLevel};
+
+    fn triggers(events: &[LiveEvent]) -> Vec<(u64, TriggerTag)> {
+        events
+            .iter()
+            .filter_map(|e| match e {
+                LiveEvent::Trigger { id, tag, .. } => Some((*id, *tag)),
+                _ => None,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn no_levels_means_no_trigger_events_stream_unchanged() {
+        // The golden-compat guarantee: an instrument with no watches emits
+        // exactly the pre-3.5 event stream.
+        let ticks = lcg_stream(500);
+        let mut plain = InstrumentLive::new(SESSION, &TFS).unwrap();
+        let mut with_state = InstrumentLive::new(SESSION, &TFS).unwrap();
+        with_state.set_levels(&[]).unwrap();
+        let (mut a, mut b) = (Vec::new(), Vec::new());
+        for t in &ticks {
+            plain.on_tick(t, &mut a);
+            with_state.on_tick(t, &mut b);
+        }
+        plain.on_time(CLOSE, &mut a);
+        with_state.on_time(CLOSE, &mut b);
+        assert_eq!(a, b);
+        assert!(triggers(&a).is_empty());
+    }
+
+    #[test]
+    fn trigger_events_follow_the_ticks_candle_events() {
+        let mut inst = InstrumentLive::new(SESSION, &TFS).unwrap();
+        inst.set_levels(&[WatchLevel {
+            id: 42,
+            kind: LevelKind::Zone {
+                low: 100_0000,
+                high: 101_0000,
+            },
+        }])
+        .unwrap();
+        let mut out = Vec::new();
+        inst.on_tick(&tick(OPEN + 3, 100_5000), &mut out);
+        // 4 forming events (one per tf) then the zone touch
+        assert_eq!(out.len(), TFS.len() + 1);
+        match out.last().unwrap() {
+            LiveEvent::Trigger { id, tag, price, ts } => {
+                assert_eq!(*id, 42);
+                assert_eq!(*tag, TriggerTag::ZoneEnter);
+                assert_eq!(*price, 100_5000);
+                assert_eq!(*ts, OPEN + 3);
+            }
+            other => panic!("expected trigger last, got {other:?}"),
+        }
+    }
+
+    #[test]
+    fn rejected_and_time_regressing_ticks_never_touch_trigger_state() {
+        let mut inst = InstrumentLive::new(SESSION, &[1]).unwrap();
+        inst.set_levels(&[WatchLevel {
+            id: 7,
+            kind: LevelKind::CrossUp {
+                price: 200_0000,
+                rearm_bp: 0,
+            },
+        }])
+        .unwrap();
+        let mut out = Vec::new();
+        // pre-open tick below the level must not seed cross-state
+        inst.on_tick(&tick(OPEN - 5, 150_0000), &mut out);
+        // first in-session observation above: no known transition, no fire
+        inst.on_tick(&tick(OPEN + 10, 201_0000), &mut out);
+        assert!(triggers(&out).is_empty());
+        // an out-of-order tick BELOW the level must not arm the cross...
+        out.clear();
+        inst.on_tick(&tick(OPEN + 4, 150_0000), &mut out);
+        // ...so a fresh tick above does not fire
+        inst.on_tick(&tick(OPEN + 11, 202_0000), &mut out);
+        assert!(
+            triggers(&out).is_empty(),
+            "time-regressing price must not flip cross-state"
+        );
+        // a genuine forward-in-time dip and cross fires
+        out.clear();
+        inst.on_tick(&tick(OPEN + 12, 199_0000), &mut out);
+        inst.on_tick(&tick(OPEN + 13, 200_5000), &mut out);
+        assert_eq!(triggers(&out), vec![(7, TriggerTag::CrossUp)]);
+    }
+
+    #[test]
+    fn volume_burst_sees_the_current_ticks_forming_volume() {
+        let mut inst = InstrumentLive::new(SESSION, &[1]).unwrap();
+        inst.set_levels(&[WatchLevel {
+            id: 9,
+            kind: LevelKind::VolumeBurst {
+                tf_idx: 0,
+                baseline: 100,
+                mult_bp: 20_000, // 2× ⇒ threshold 200
+            },
+        }])
+        .unwrap();
+        let mut out = Vec::new();
+        let t = |ts: i64, qty: u64| Tick {
+            ts,
+            price: 100_0000,
+            day_volume: None,
+            qty,
+        };
+        inst.on_tick(&t(OPEN + 1, 150), &mut out); // 150 < 200
+        assert!(triggers(&out).is_empty());
+        inst.on_tick(&t(OPEN + 2, 60), &mut out); // 210 ≥ 200 — this tick tips it
+        assert_eq!(triggers(&out), vec![(9, TriggerTag::VolumeBurst)]);
+        out.clear();
+        inst.on_tick(&t(OPEN + 61, 300), &mut out); // next bucket bursts on sight
+        assert_eq!(triggers(&out), vec![(9, TriggerTag::VolumeBurst)]);
+    }
+
+    #[test]
+    fn book_set_levels_routes_and_precedes_first_tick() {
+        let mut book = LiveBook::new(SESSION, &[1]).unwrap();
+        // levels arrive BEFORE the instrument's first tick (startup order)
+        book.set_levels(
+            5,
+            &[WatchLevel {
+                id: 1,
+                kind: LevelKind::Zone {
+                    low: 100_0000,
+                    high: 101_0000,
+                },
+            }],
+        )
+        .unwrap();
+        let mut out = Vec::new();
+        book.on_ticks(&[(5, tick(OPEN + 1, 100_5000))], &mut out);
+        let fired: Vec<(u32, u64)> = out
+            .iter()
+            .filter_map(|(sid, e)| match e {
+                LiveEvent::Trigger { id, .. } => Some((*sid, *id)),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(fired, vec![(5, 1)]);
+        // other instruments are untouched
+        out.clear();
+        book.on_ticks(&[(6, tick(OPEN + 2, 100_5000))], &mut out);
+        assert!(triggers(&out.iter().map(|(_, e)| *e).collect::<Vec<_>>()).is_empty());
     }
 
     #[test]

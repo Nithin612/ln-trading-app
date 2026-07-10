@@ -35,29 +35,46 @@ check chain, synthetic golden digest `da288d24…`), tick→publish
 LatencyHistogram. Kite subscription ACTIVE (user-confirmed 2026-07-09).
 
 Open threads, in order:
-1. **SOAK SESSION (first market-hours run) — the next milestone.**
-   Ritual, in order, on a trading day:
-   a. token: `cd backend && uv run python scripts/kite_login.py`
-   b. RESTART the backend API if it runs (loads the 3.2 session-anchored
-      1h floor) — and either don't start it, or accept that its v1
-      in-app consumer must NOT run while the worker does (both write the
-      same candle tables; pick ONE owner per session).
-   c. `LIVE_RECORD_PATH=/path/rec-$(date +%F).jsonl` in env/.env, then
-      `uv run python -m app.broker.live_worker` (add `--gap-fill` after
-      any outage). Watch startup log for instrument count.
-   d. After close (worker exits ~15:40 IST): read the shutdown log line
-      `live-worker stats: … latency: {p50/p99/max}` — **phase target
-      p99 < 10 ms**; then `uv run python -m app.broker.replay <rec>`
-      → pin the printed digest + `--emit` stream as the first REAL
-      session golden in tests/goldens/ (see test_replay.py pattern).
-   e. Soak pass criteria (exit gate preview): memory flat, zero dropped
-      subscriptions, rejects ≈ 0 outside pre/post-session, latency met.
-2. **Next build slice: 3.5 — tick triggers + provisional layer**
-   (entry-zone touches, PDH/PDL/S&R crosses, SL/TP proximity, volume
-   bursts, forming-candle provisional confidence, leaderboards @ 2–4 Hz;
-   Redis Streams alerts (at-least-once); WS fanout by style/watchlist;
-   LiveEngine indicator warmup from DB arrives here). Then 3.6 outcome
-   ticks, 3.7 shadow week + full-session soak (30-day paper clock).
+1. **FIRST SOAK RAN 2026-07-10 — PARTIAL; latency verdict OPEN** (full
+   honest record: phase-03 ledger §First soak session). Clean hour:
+   1.33M ticks / 125,606 candles / 0 skipped; then a self-inflicted
+   load-63 incident (pytest+builds on the soak box) starved the consumer
+   and Kite dropped the WS; a 4-hour session-limit freeze followed
+   (worker down 11:41–15:29). Crash-restart, drain-and-record, and the
+   GREATEST-volume merge all behaved as designed; two-header recording
+   replayed and pinned (digest in the ledger; replay committed-count ≡
+   live exactly). **Re-run a QUIET-BOX soak next trading day for the
+   p99 < 10 ms verdict** — same ritual as before, plus: NOTHING heavy on
+   the box market-open→close (no pytest/cargo/maturin), don't start the
+   backend API while the worker runs, and give the worker a real
+   supervisor loop (`while true; python -m app.broker.live_worker;
+   sleep 5; done` at minimum) so a frozen Claude session can't cost
+   hours of capture again.
+   **⚠ USER DECISION PENDING — today's intraday candles are corrupt**
+   (ledger §post-close forensics): the backend's "zombie" v1 consumer
+   wrote OFF-CANON candles 09:56–11:06 across 5m/15m/1h (~1,950 stocks
+   per bucket), and resume-point gap-fill couldn't heal the midday holes
+   (5m 11:30–12:05, 14:40–15:20 missing). Evidence snapshotted to
+   `forensic_ohlcv_{5m,15m,1h}_20260710`. Approve to run: DELETE today's
+   rows from ohlcv_5m/15m/1h (`time >= '2026-07-10 03:45:00+00'`), then
+   `python -m app.broker.live_worker --gap-fill` (~34 min full-day
+   refetch), then verify canon-only buckets. Also before the next soak:
+   kill the `app/main.py` lifespan v1-consumer auto-start (it armed the
+   zombie) — the v1 path is scheduled for deletion anyway.
+2. **Slice 3.5 CORE BUILT 2026-07-10 on branch `slice-3.5-tick-triggers`
+   (worktree .claude/worktrees/slice-35-tick-triggers) — NOT yet merged.**
+   Rust trigger engine + replayable "lv" level lines + live_levels.py
+   sources + alerts:live stream + /ws/live subscribe_alerts fanout;
+   Rust 55 tests, +23 backend tests; 3.4 golden digest untouched.
+   Before merge: quant-verifier + bug-hunter verdicts (launched
+   2026-07-10 post-close), full-suite green, then merge to main.
+   **Still open within 3.5:** forming-candle provisional confidence +
+   per-style leaderboards (needs the plan-§2 O(1) incremental factor
+   design — decide throttled-batch-rescore vs incremental indicators),
+   watchlist-scoped fanout (no watchlist model exists yet), alert UI in
+   the frontend (useLiveQuotes already tolerates unknown message types).
+   Then 3.6 outcome ticks, 3.7 shadow week + full-session soak (30-day
+   paper clock).
 3. **Session-ops knowledge (this machine):** single-process `make test`
    OOM-killed twice at the gainer golden under desktop load (Chrome+IDE,
    15GB) — run the gate as three fresh legs instead:

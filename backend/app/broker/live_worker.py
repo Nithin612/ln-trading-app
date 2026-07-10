@@ -47,6 +47,7 @@ from typing import Any, TextIO
 from zoneinfo import ZoneInfo
 
 from app.broker.candle_aggregator import TIMEFRAME_TABLE
+from app.broker.live_levels import LevelDict, LevelDirectory, LevelMeta, build_directory
 from app.broker.tick_consumer import (
     CANDLE_CHANNEL,
     LTP_CHANNEL,
@@ -181,9 +182,19 @@ class WorkerState:
     stats: dict[str, int] = field(
         default_factory=lambda: {
             "ticks": 0, "pulses": 0, "committed": 0, "skipped": 0, "stale": 0,
+            "levels": 0, "triggers": 0,
         }
     )
     latency: LatencyHistogram = field(default_factory=LatencyHistogram)
+    # Session day (ISO) stamped on every alert; set once at startup.
+    session_day: str = ""
+    # Host registry for alert enrichment: {stock_id: {level_id: meta}} —
+    # owned by the consumer thread (updated via "levels" queue items).
+    level_meta: dict[int, LevelMeta] = field(default_factory=dict)
+    # Consumer-thread ack callback(sid, levels) — fires ONLY after the
+    # engine accepted a set_levels; the refresher re-sends anything
+    # unacked (eviction- and rejection-proof). None in tests.
+    on_levels_applied: Any = None
     _stock_to_token: dict[int, int] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -204,16 +215,10 @@ class WorkerState:
             except Exception:
                 log.exception("redis publish failed; continuing (at-most-once layer)")
             return
-        batch: list[tuple[int, int, str, int | None, int]] = []
-        for tick in payload:
-            ffi = tick_to_ffi(tick, self.token_map)
-            if ffi is None:
-                self.stats["skipped"] += 1
-                continue
-            if ffi[1] < self.min_tick_ts:
-                self.stats["stale"] += 1
-                continue
-            batch.append(ffi)
+        if kind == "levels":
+            self._apply_levels(payload)
+            return
+        batch = self._ffi_batch(payload)
         if not batch:
             return
         self.stats["ticks"] += len(batch)
@@ -227,6 +232,7 @@ class WorkerState:
         for sid, ts, price, dv, qty in batch:
             self._record({"k": "t", "sid": sid, "ts": ts, "p": price, "dv": dv, "q": qty})
         self._enqueue_committed(events)
+        self._publish_alerts(events)
         try:
             self._publish_ltp(batch)
             self._publish_events(events)
@@ -285,7 +291,93 @@ class WorkerState:
                             self.stop_event.set()
                         break
 
+    def _ffi_batch(
+        self, ticks: list[dict[str, Any]]
+    ) -> list[tuple[int, int, str, int | None, int]]:
+        """Kite ticks → FFI tuples, dropping unusable (counted `skipped`)
+        and snapshot-echo stale ticks (counted `stale`)."""
+        batch: list[tuple[int, int, str, int | None, int]] = []
+        for tick in ticks:
+            ffi = tick_to_ffi(tick, self.token_map)
+            if ffi is None:
+                self.stats["skipped"] += 1
+                continue
+            if ffi[1] < self.min_tick_ts:
+                self.stats["stale"] += 1
+                continue
+            batch.append(ffi)
+        return batch
+
+    def _apply_levels(self, payload: list[tuple[int, list[LevelDict], LevelMeta]]) -> None:
+        """Engine accepts first, recording second — an "lv" line exists
+        only for a set_levels the engine actually applied (same discipline
+        as ticks; a replay set_levels failure is real divergence). One bad
+        stock never blocks the rest (ANY exception — a TypeError from a
+        malformed payload must not strand the chunk's other 99 stocks).
+        A rejected stock is never acked, so the refresher re-sends it
+        every cycle — repeat rejections stay loud in the log."""
+        for sid, levels, meta in payload:
+            try:
+                self.book.set_levels(sid, levels)
+            except Exception:
+                log.exception("set_levels rejected for stock_id=%s", sid)
+                continue
+            self.stats["levels"] += 1
+            self._record({"k": "lv", "sid": sid, "levels": levels})
+            if meta:
+                self.level_meta[sid] = meta
+            else:
+                self.level_meta.pop(sid, None)
+            if self.on_levels_applied is not None:
+                self.on_levels_applied(sid, levels)
+
+    def _publish_alerts(self, events: list[dict[str, Any]]) -> None:
+        """Trigger firings → the alerts Redis Stream (at-least-once class:
+        one retry of the whole batch, then an error-level breadcrumb —
+        never engine-blocking). ONE pipeline round trip per batch: an
+        open-auction burst of hundreds of firings must not serialize
+        hundreds of RTTs inside the latency-measured window."""
+        alerts = [e for e in events if e["kind"] == "trigger"]
+        if not alerts:
+            return
+        self.stats["triggers"] += len(alerts)
+        all_fields: list[dict[str, Any]] = []
+        for e in alerts:
+            meta = self.level_meta.get(e["stock_id"], {}).get(e["id"], {})
+            fields: dict[str, Any] = {
+                "sid": e["stock_id"],
+                "level_id": e["id"],
+                "tag": e["tag"],
+                "price": str(_money(e["price"])),
+                "ts": e["ts"],
+                "day": self.session_day,
+                "source": str(meta.get("source", "")),
+                "style": str(meta.get("style", "market")),
+            }
+            if meta.get("signal_id") is not None:
+                fields["signal_id"] = meta["signal_id"]
+            all_fields.append(fields)
+        for attempt in (0, 1):
+            try:
+                pipe = self.redis.pipeline(transaction=False)
+                for fields in all_fields:
+                    pipe.xadd(
+                        settings.live_alert_stream,
+                        fields,
+                        maxlen=settings.live_alert_maxlen,
+                        approximate=True,
+                    )
+                pipe.execute()
+                break
+            except Exception:
+                if attempt:
+                    log.error(
+                        "alert XADD failed — manual breadcrumb: %s",
+                        json.dumps(all_fields), exc_info=True,
+                    )
+
     def _publish_events(self, events: list[dict[str, Any]]) -> None:
+        events = [e for e in events if e["kind"] != "trigger"]
         if not events:
             return
         pipe = self.redis.pipeline(transaction=False)
@@ -481,8 +573,11 @@ async def startup_gap_fill(
     await db.commit()
 
 
-async def _bootstrap(gap_fill: bool) -> tuple[str, dict[int, int]] | None:
-    """Fetch the active token + instrument map (and optionally gap-fill)."""
+async def _bootstrap(
+    gap_fill: bool,
+) -> tuple[str, dict[int, int], LevelDirectory, list[Any]] | None:
+    """Fetch the active token + instrument map, build the trigger-level
+    directory (3.5), and optionally gap-fill."""
     from app.broker.kite_client import get_active_token
     from app.db.session import AsyncSessionFactory
 
@@ -493,7 +588,47 @@ async def _bootstrap(gap_fill: bool) -> tuple[str, dict[int, int]] | None:
         token_map = await _build_token_stock_map(db, token.access_token)
         if gap_fill and token_map:
             await startup_gap_fill(db, token.access_token, token_map)
-    return token.access_token, token_map
+        directory = await build_directory(
+            db, datetime.now(tz=UTC), sorted(token_map.values())
+        )
+        initial_levels = await directory.refresh(db)
+    return token.access_token, token_map, directory, initial_levels
+
+
+def run_refresher(
+    directory: LevelDirectory, in_q: queue.Queue[QueueItem], stop: threading.Event
+) -> None:
+    """Signal-level refresh thread: its own event loop + its own engine
+    (the writer-thread pattern — pooled connections never cross loops).
+    Changed level sets are enqueued as "levels" items so the consumer
+    applies + records them in stream order with ticks. The ACK lives with
+    the consumer (`WorkerState.on_levels_applied` → `mark_sent`): a full
+    queue, a drop-oldest eviction, or an engine rejection all leave the
+    stock unacked and it re-sends next cycle — never silently divergent."""
+    from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine
+
+    async def _changed(engine: Any) -> list[tuple[int, list[LevelDict], LevelMeta]]:
+        async with AsyncSession(engine) as db:
+            return await directory.refresh(db)
+
+    loop = asyncio.new_event_loop()
+    engine = create_async_engine(settings.database_url, pool_size=1, max_overflow=0)
+    try:
+        while not stop.wait(settings.live_level_refresh_s):
+            try:
+                changed = loop.run_until_complete(_changed(engine))
+            except Exception:
+                log.exception("level refresh failed; retrying next cycle")
+                continue
+            for sid, levels, meta in changed:
+                try:
+                    in_q.put_nowait(("levels", [(sid, levels, meta)], None))
+                except queue.Full:
+                    log.warning("queue full during level refresh; deferring")
+                    break
+    finally:
+        loop.run_until_complete(engine.dispose())
+        loop.close()
 
 
 
@@ -527,7 +662,7 @@ def main(argv: list[str] | None = None) -> int:
     if boot is None:
         log.critical("no active Kite token — run scripts/kite_login.py, then restart")
         return EXIT_NO_TOKEN
-    access_token, token_map = boot
+    access_token, token_map, directory, initial_levels = boot
 
     import redis as redis_sync
     import tradecore
@@ -580,7 +715,16 @@ def main(argv: list[str] | None = None) -> int:
         min_tick_ts=int(time_mod.time()) - 120,
         writer_alive=writer_thread.is_alive,
         stop_event=stop,
+        session_day=today.isoformat(),
+        on_levels_applied=directory.mark_sent,
     )
+
+    # Initial trigger levels precede the first tick in the queue (and so
+    # in the recording): the consumer applies them before any tick lands.
+    # The consumer acks each applied stock via on_levels_applied.
+    chunk_size = 100
+    for i in range(0, len(initial_levels), chunk_size):
+        in_q.put(("levels", initial_levels[i : i + chunk_size], None))
 
     def on_close(ws: Any, code: Any, reason: Any) -> None:
         nonlocal exit_code
@@ -596,6 +740,10 @@ def main(argv: list[str] | None = None) -> int:
         threading.Thread(target=run_consumer, args=(state, in_q, stop), name="consumer"),
         writer_thread,
         threading.Thread(target=run_pulser, args=(in_q, stop), name="pulser", daemon=True),
+        threading.Thread(
+            target=run_refresher, args=(directory, in_q, stop), name="refresher",
+            daemon=True,
+        ),
     ]
     for t in threads:
         t.start()

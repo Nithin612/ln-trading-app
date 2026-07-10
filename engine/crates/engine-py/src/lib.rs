@@ -391,29 +391,115 @@ fn live_events_to_list(
     use engine_core::live::LiveEvent;
     let out = PyList::empty(py);
     for (sid, event) in events {
-        let (kind, tf_idx, c) = match event {
-            LiveEvent::Forming { tf_idx, candle } => ("forming", *tf_idx, candle),
-            LiveEvent::Committed { tf_idx, candle } => ("committed", *tf_idx, candle),
-        };
         let d = PyDict::new(py);
         d.set_item("stock_id", sid)?;
-        d.set_item("kind", kind)?;
-        d.set_item(
-            "tf_minutes",
-            tf_minutes
-                .get(tf_idx)
-                .copied()
-                .ok_or_else(|| PyValueError::new_err(format!("tf_idx {tf_idx} out of range")))?,
-        )?;
-        d.set_item("time", c.period_start)?;
-        d.set_item("open", c.open)?;
-        d.set_item("high", c.high)?;
-        d.set_item("low", c.low)?;
-        d.set_item("close", c.close)?;
-        d.set_item("volume", c.volume)?;
+        match event {
+            LiveEvent::Forming { tf_idx, candle } | LiveEvent::Committed { tf_idx, candle } => {
+                let c = candle;
+                d.set_item(
+                    "kind",
+                    if matches!(event, LiveEvent::Forming { .. }) {
+                        "forming"
+                    } else {
+                        "committed"
+                    },
+                )?;
+                d.set_item(
+                    "tf_minutes",
+                    tf_minutes.get(*tf_idx).copied().ok_or_else(|| {
+                        PyValueError::new_err(format!("tf_idx {tf_idx} out of range"))
+                    })?,
+                )?;
+                d.set_item("time", c.period_start)?;
+                d.set_item("open", c.open)?;
+                d.set_item("high", c.high)?;
+                d.set_item("low", c.low)?;
+                d.set_item("close", c.close)?;
+                d.set_item("volume", c.volume)?;
+            }
+            LiveEvent::Trigger { id, tag, price, ts } => {
+                // Trigger layer (3.5): id/tag round-trip to the host's
+                // level registry; price stays raw i64·1e-4 like candles.
+                d.set_item("kind", "trigger")?;
+                d.set_item("id", id)?;
+                d.set_item("tag", tag.as_str())?;
+                d.set_item("price", price)?;
+                d.set_item("ts", ts)?;
+            }
+        }
         out.append(d)?;
     }
     Ok(out.into())
+}
+
+/// One host-supplied level dict → engine WatchLevel. Money crosses as
+/// Decimal-parseable STRINGS (never f64); `vburst` names its timeframe in
+/// MINUTES and is mapped to the book's tf index here, fail-loud.
+fn extract_level(
+    tf_minutes: &[u32],
+    d: &Bound<'_, PyDict>,
+) -> PyResult<engine_core::triggers::WatchLevel> {
+    use engine_core::triggers::{LevelKind, WatchLevel};
+
+    fn req<'py, T: for<'a> FromPyObject<'a, 'py>>(
+        d: &Bound<'py, PyDict>,
+        key: &str,
+    ) -> PyResult<T> {
+        let value = d
+            .get_item(key)?
+            .ok_or_else(|| PyValueError::new_err(format!("level missing {key:?}")))?;
+        value
+            .extract()
+            .map_err(|_| PyValueError::new_err(format!("level field {key:?} has a bad type")))
+    }
+    fn money(d: &Bound<'_, PyDict>, key: &str) -> PyResult<i64> {
+        let s: String = req(d, key)?;
+        engine_core::risk::money_from_str(&s)
+            .ok_or_else(|| PyValueError::new_err(format!("level field {key:?}: bad money {s:?}")))
+    }
+
+    let id: u64 = req(d, "id")?;
+    let kind: String = req(d, "kind")?;
+    let kind = match kind.as_str() {
+        "zone" => LevelKind::Zone {
+            low: money(d, "low")?,
+            high: money(d, "high")?,
+        },
+        "cross_up" => LevelKind::CrossUp {
+            price: money(d, "price")?,
+            rearm_bp: req(d, "rearm_bp")?,
+        },
+        "cross_down" => LevelKind::CrossDown {
+            price: money(d, "price")?,
+            rearm_bp: req(d, "rearm_bp")?,
+        },
+        "near" => LevelKind::Near {
+            price: money(d, "price")?,
+            within_bp: req(d, "within_bp")?,
+        },
+        "vburst" => {
+            let minutes: u32 = req(d, "tf_minutes")?;
+            let tf_idx = tf_minutes
+                .iter()
+                .position(|&m| m == minutes)
+                .ok_or_else(|| {
+                    PyValueError::new_err(format!(
+                        "level {id}: tf_minutes {minutes} not in book timeframes {tf_minutes:?}"
+                    ))
+                })?;
+            LevelKind::VolumeBurst {
+                tf_idx,
+                baseline: req(d, "baseline")?,
+                mult_bp: req(d, "mult_bp")?,
+            }
+        }
+        other => {
+            return Err(PyValueError::new_err(format!(
+                "level {id}: unknown kind {other:?} (zone|cross_up|cross_down|near|vburst)"
+            )))
+        }
+    };
+    Ok(WatchLevel { id, kind })
 }
 
 #[pymethods]
@@ -434,6 +520,22 @@ impl LiveBook {
     /// Pre-create per-instrument state for the subscription list.
     fn ensure_instruments(&mut self, stock_ids: Vec<u32>) {
         self.inner.ensure_instruments(&stock_ids);
+    }
+
+    /// Replace one instrument's tick-trigger watch list (slice 3.5).
+    /// Levels are dicts: {"id", "kind": zone|cross_up|cross_down|near|
+    /// vburst, ...} with money fields as Decimal-parseable strings.
+    /// Armed-state survives for unchanged (id, kind) pairs; validation is
+    /// all-or-nothing and fail-loud. The host records every accepted call
+    /// as an "lv" line in the replay stream.
+    fn set_levels(&mut self, stock_id: u32, levels: Vec<Bound<'_, PyDict>>) -> PyResult<()> {
+        let parsed = levels
+            .iter()
+            .map(|d| extract_level(&self.tf_minutes, d))
+            .collect::<PyResult<Vec<_>>>()?;
+        self.inner
+            .set_levels(stock_id, &parsed)
+            .map_err(|e| PyValueError::new_err(e.to_string()))
     }
 
     /// ONE call per Kite batch: [(stock_id, ts_epoch_s, price_str,

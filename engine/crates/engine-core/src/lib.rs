@@ -16,6 +16,7 @@ pub mod patterns;
 pub mod pivots;
 pub mod risk;
 pub mod structure;
+pub mod triggers;
 pub mod types;
 
 /// Crate version, re-exported for the Python module banner.

@@ -1,17 +1,27 @@
-"""WebSocket endpoint for live data push — Phase 7.
+"""WebSocket endpoint for live data push — Phase 7 (+ 3.5 alerts).
 
 Protocol (client → server):
   { "subscribe": ["RELIANCE", "TATAMOTORS"] }   subscribe to these symbols
   { "unsubscribe": ["RELIANCE"] }               stop updates for these symbols
+  { "subscribe_alerts": true }                  all tick-trigger alerts
+  { "subscribe_alerts": {"styles": ["intraday","swing"]} }   filtered
+  { "subscribe_alerts": false }                 stop alerts
 
 Protocol (server → client):
   { "type": "ltp",    "data": { "symbol": "RELIANCE", "ltp": 2850.5, "ts": "..." } }
   { "type": "candle", "data": { "symbol": "RELIANCE", "timeframe": "5m", ... } }
+  { "type": "alert",  "data": { "sid", "level_id", "tag", "price", "ts",
+                                "day", "source", "style", "signal_id"?,
+                                "id": stream-entry-id } }
   { "type": "signal", "data": { ... signal JSON ... } }
   { "type": "error",  "data": { "detail": "..." } }
 
 Each client connection maintains its own set of Redis subscriptions.
-Redis is the fan-out bus so slow clients can't block fast ones.
+Redis is the fan-out bus so slow clients can't block fast ones. Alerts
+come from the `alerts:live` Redis STREAM (producer: live_worker, slice
+3.5): each connection tails from "$" — new alerts only; reconnect
+reconciliation over REST is deliberate (plan §2: frontend reconciles
+committed state on reconnect).
 """
 
 from __future__ import annotations
@@ -111,6 +121,30 @@ async def ws_live(websocket: WebSocket) -> None:  # noqa: C901
                 symbol = _sid_to_symbol(stock_id, subscribed_sids)
                 await _send({"type": "candle", "data": {**data, "symbol": symbol}})
 
+    alert_task: asyncio.Task[None] | None = None
+    alert_styles: set[str] = set()
+
+    async def _alert_reader() -> None:
+        # Tail the alerts stream from "$" (new entries only). BLOCK keeps
+        # this cheap; a transient redis error backs off instead of dying.
+        last_id = "$"
+        while True:
+            try:
+                resp = await r.xread(
+                    {settings.live_alert_stream: last_id}, block=5000, count=100
+                )
+            except asyncio.CancelledError:
+                raise
+            except Exception:
+                await asyncio.sleep(1.0)
+                continue
+            for _stream, entries in resp or []:
+                for entry_id, fields in entries:
+                    last_id = entry_id
+                    if alert_styles and fields.get("style") not in alert_styles:
+                        continue
+                    await _send({"type": "alert", "data": {**fields, "id": entry_id}})
+
     # redis-py's PubSub.listen() is `while self.subscribed:` — starting the
     # reader on an UNsubscribed pubsub exits immediately and the stream is
     # dead forever. A keepalive channel guarantees `subscribed` stays true
@@ -143,10 +177,24 @@ async def ws_live(websocket: WebSocket) -> None:  # noqa: C901
                 if drop_channels:
                     await pubsub.unsubscribe(*drop_channels)
 
+            if "subscribe_alerts" in msg:
+                want = msg["subscribe_alerts"]
+                if want:
+                    alert_styles.clear()
+                    if isinstance(want, dict):
+                        alert_styles.update(str(s) for s in want.get("styles") or [])
+                    if alert_task is None or alert_task.done():
+                        alert_task = asyncio.create_task(_alert_reader())
+                elif alert_task is not None:
+                    alert_task.cancel()
+                    alert_task = None
+
     except WebSocketDisconnect:
         pass
     finally:
         reader_task.cancel()
+        if alert_task is not None:
+            alert_task.cancel()
         await pubsub.reset()
         await r.aclose()
 

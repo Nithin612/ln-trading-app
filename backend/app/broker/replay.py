@@ -12,6 +12,12 @@ Line shapes (compact keys, one JSON object per line):
   {"k":"h","day":…,"open":…,"close":…,"tfs":[…],"min_tick_ts":…}  header
   {"k":"t","sid":…,"ts":…,"p":"…","dv":…|null,"q":…}              tick
   {"k":"p","ts":…}                                                pulse
+  {"k":"lv","sid":…,"levels":[{…}, …]}                            levels (3.5)
+
+Levels are INPUT exactly like ticks: the worker records every accepted
+`set_levels` call in stream order, so replay reproduces trigger events
+deterministically. Recordings without "lv" lines (all pre-3.5 goldens)
+replay to a byte-identical event stream.
 
 Events are canonicalized as sorted-key compact JSON lines; the sha256 of
 that stream is the digest goldens pin. `python -m app.broker.replay
@@ -42,6 +48,7 @@ _REQUIRED_KEYS: dict[str, set[str]] = {
     "h": {"open", "close", "tfs"},
     "t": {"sid", "ts", "p", "dv", "q"},
     "p": {"ts"},
+    "lv": {"sid", "levels"},
 }
 
 
@@ -125,6 +132,11 @@ def replay_events(items: list[dict[str, Any]]) -> list[dict[str, Any]]:
             batch_events = book.on_ticks(
                 [(item["sid"], item["ts"], item["p"], item["dv"], item["q"])]
             )
+        elif kind == "lv":
+            # Levels were recorded only when the live engine ACCEPTED them,
+            # so a refusal here is real divergence — fail loud.
+            book.set_levels(item["sid"], list(item["levels"]))
+            continue
         else:
             batch_events = book.on_time(item["ts"])
         for e in batch_events:

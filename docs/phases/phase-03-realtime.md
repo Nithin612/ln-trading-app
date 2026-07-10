@@ -29,9 +29,93 @@ any of it provable.
 | 3.2 | `ohlcv_1h` session-aligned rebuild | **✅ 2026-07-09** — migration `q3r4s5t6u7v8` (delete UTC-floored body, roll up from 11.5M complete 5m bars via shared `app/services/ohlcv_rollup.py`): **1,074,456 rows / 2,036 stocks, anchors exactly 09:15…15:15 IST, zero incomplete**. Interim v1 aggregator floor patched to the 03:45-UTC anchor (identical for 1m/5m/15m; 1h moves to canon) so live minting stays consistent until 3.3. §8 sign-off = walkforward+parity replay green in make check (no golden touches 1h) | downgrade leaves the table EMPTY (documented: pre-rebuild rows were garbage; 5m source re-derives) |
 | 3.3 | live-worker process (`app/broker/live_worker.py`, run as `python -m app.broker.live_worker`): KiteTicker thread → bounded `queue.Queue` (drop-oldest tick batches; time pulses share the queue so ordering is replayable) → consumer THREAD → ONE `tradecore.LiveBook` call per batch → sync redis pipeline (`SET ltp:{stock_id}` + LTP/candle PUBLISH) → committed candles via BLOCKING writer queue → writer thread (own loop + own engine) → Postgres upsert → Celery trigger after commit. PyO3 `LiveBook` binding (money strings in / raw i64·1e-4 out). Token-expiry = process exit 3/4 for the supervisor; `--gap-fill` opt-in startup backfill; JSONL record hook = the 3.4 replay input. XADD alerts stream lands with 3.5; indicator warmup lands with 3.5 triggers | **✅ 2026-07-09** (code+tests; first live market soak pending next session — see exit gate) |
 | 3.4 | Record/replay harness | **✅ 2026-07-10** — recordings are self-describing (session header + tick/pulse lines in engine order; stale/skipped ticks never recorded); `app/broker/replay.py` feeds them through a fresh `LiveBook` → canonical event stream + sha256 digest; CLI `python -m app.broker.replay <rec> [--emit]` is the soak-day pinning ritual. Synthetic golden committed (61 events / 22 committed; pre-open rejection, volume baseline+reset, per-tf late-tick, pulse closes) + a worker-seam fidelity test proving replay ≡ writer-queue stream. `make replay` in the check chain. Tick→publish `LatencyHistogram` in the worker (fixed buckets, p50/p99/max at shutdown) — **p99 < 10 ms VALIDATION happens on soak day, not in CI** | real-session golden joins after the first soak |
-| 3.5 | Tick triggers + provisional layer: entry-zone touches, PDH/PDL/S&R crosses, SL/TP proximity, volume bursts, forming-candle provisional confidence, per-style leaderboards @ 2–4 Hz. Redis Streams for alerts (at-least-once); WS fanout by style/watchlist; drop-oldest backpressure for LTP, never for candle-close | planned | |
+| 3.5 | Tick triggers + provisional layer: entry-zone touches, PDH/PDL/S&R crosses, SL/TP proximity, volume bursts, forming-candle provisional confidence, per-style leaderboards @ 2–4 Hz. Redis Streams for alerts (at-least-once); WS fanout by style/watchlist; drop-oldest backpressure for LTP, never for candle-close | **core ✅ 2026-07-10** (branch `slice-3.5-tick-triggers`): Rust trigger engine (`triggers.rs` + `LiveEvent::Trigger`, armed/re-arm hysteresis, `set_levels` preserves state for unchanged ids) · levels as replayable INPUT (`{"k":"lv"}` recording lines; no-lv recordings byte-identical — 3.4 golden digest untouched) · level sources `live_levels.py` (PDH/PDL from 1d, §2.5-width entry zones + SL/TP proximity per active signal, frozen-detector S/R for signal stocks, 5m vburst baselines; 30s refresher thread) · `alerts:live` stream XADD + `/ws/live` `subscribe_alerts` fanout with style filter. Rust 55 tests · +23 backend tests. **Deferred:** provisional confidence + leaderboards (needs the O(1) incremental factor design — plan §2's "ring buffer per close / O(1) provisional"), watchlist fanout (no watchlist model exists), alert UI. Reviews pending (session-limit interrupt) — run quant-verifier + bug-hunter before merge | alerts never gate/mint/modify signals — provisional layer only |
 | 3.6 | Signal-outcome tick evaluation (entry-zone touch before expiry) recorded now — Phase 6 needs this data | planned | |
 | 3.7 | Shadow week (Rust decides, frozen Python double-checks on closes — zero diffs) → full-session soak (memory flat, zero dropped subscriptions, latency budget met) | planned | python engine deletion decision AFTER shadow week (user ruling) |
+
+## First soak session — 2026-07-10 (PARTIAL; latency verdict OPEN)
+
+The first market-hours run of the live worker. Honest record:
+
+- **Session 1 (10:39–11:40 IST):** started mid-session (token ritual done
+  08:09; worker launched 10:39 without `--gap-fill` — 2,049 instruments ×
+  3 tfs ≈ 34 min of throttled REST was judged worse than a post-close
+  heal). Clean for ~50 min: 1,331,556 ticks, 125,606 committed candles,
+  0 skipped, 218 stale (snapshot echo, expected), LTP keys + candle
+  pub/sub verified end-to-end, recording ~85 MB.
+- **Incident (~11:31):** a full pytest suite + review-agent builds were
+  started ON THE SAME BOX (session-runner error — the no-heavy-jobs rule
+  had only covered compiles). Load hit 63; the consumer starved; in_q
+  filled (~10k batches ≈ +300 MB RSS); at 11:38:40 Kite dropped the WS
+  (1006) and the worker exited 3 by design, draining and recording its
+  full backlog first (fail-safe paths all behaved as built).
+- **Gap (11:41–15:29):** the account session-limit froze the supervisor
+  (this Claude session) until 15:20 IST; worker restarted 15:29:47,
+  caught the session tail, self-exited clean after close. The recording
+  carries TWO session headers (crash-restart shape — exactly what replay
+  was designed for).
+- **Latency:** session-1 histogram is incident evidence, not engine
+  evidence (p50 20 ms under ambient build load; p99 ≈ 540 s = queue-stall
+  time). **The p99 < 10 ms verdict remains OPEN — needs a quiet-box
+  session (next trading day).**
+- **Lessons pinned:** (1) NOTHING heavy runs on this box during a soak —
+  no pytest, no cargo, no maturin, market open → close; (2) the worker
+  needs a real supervisor (systemd/loop script) — a frozen Claude session
+  must not cost 4 hours of capture; (3) the v1-consumer hazard resolved
+  itself today (the user's backend process died with the box load and its
+  zombie consumer with it) but the auto-start in `app/main.py` lifespan
+  remains a footgun while a worker runs — do not start the backend during
+  a soak session.
+- **Salvage value:** multi-session recording integrity, crash-restart +
+  drain-and-record paths, GREATEST-volume upsert merge, and stale-tick
+  guards all exercised by a REAL incident; morning + midday candle holes
+  healed post-close via gap-fill (5m/15m/1h; 1m stays holey — no profile
+  reads 1m).
+- **REAL-SESSION REPLAY PIN (2026-07-10, two-header recording,
+  ~90 MB, kept in gitignored `backend/data/recordings/` — too big for a
+  repo golden, so the pin is digest-only):** 1,348,022 lines →
+  5,481,858 events, **133,718 committed — EXACTLY the live total
+  (125,606 session 1 + 8,112 session 2)**. Digest
+  `sha256 3ead00b25d73251dac9214da0ff09823d9abc517794145c72e46bc87187cc469`
+  (`python -m app.broker.replay data/recordings/rec-2026-07-10.jsonl`).
+  Replay ≡ live proven on real data across a crash-restart boundary.
+- **Publish-path latency note (quiet-box tail sample, n=112):** p50
+  ≈ 20 ms per batch even without contention — the <10 ms p99 target
+  looks at risk from the per-tick `json.dumps` × ~2k-instrument redis
+  pipeline, not the engine. Run perf-auditor over `_publish_ltp`/
+  `_publish_events` before the next soak.
+- **POST-CLOSE FORENSICS — the "zombie" v1 consumer was NOT inert.**
+  Per-bucket stock counts show it minted **off-canon candles from 09:56
+  to ~11:06 IST** (5m anchors :56/:01/…, 15m :46/:01/:16/:31, 1h 09:46 &
+  10:46 — ~1,950 stocks each, `is_complete=true`) before dying with the
+  backend process. So today's intraday tables mix THREE writers: zombie
+  off-canon rows, live-worker canon rows (10:35–11:35 + 15:25 tail), and
+  resume-point gap-fill rows — with real holes (5m 11:30–12:05 and
+  14:40–15:20 missing for ~all stocks; canon 09:15–09:55 near-empty).
+  Root causes pinned: (1) `app/main.py` lifespan auto-starts the v1
+  consumer whenever a valid token exists — the 08:43 uvicorn reload
+  armed the zombie (off-canon morning anchors), **and the user's backend
+  log shows a SECOND incarnation: the backend was restarted ~13:01 IST
+  and its v1 consumer ran DROWNING until close — by 15:28 it was
+  inserting the 14:44-IST bucket (44 minutes behind real time) amid
+  "Tick queue full; dropped oldest batch" spam.** The afternoon canon
+  rows (13:00–14:35, counts tapering 2,035→874) were ITS live mints,
+  and the 14:40–15:20 hole is its lag death-spiral — those buckets
+  never got processed before close. (2) `gap_fill.detect_and_fill_gaps`
+  fills only `MAX(time)+1 → now` per (stock, tf) — it cannot see holes
+  BEFORE a stock's newest row, so tail commits at 15:25 masked
+  everything. **Evidence snapshotted** to `forensic_ohlcv_{1m,5m,15m,
+  1h}_20260710` (1m kept in-place too: no cheap rebuild path, no
+  reader — dirty-but-unused, flagged for cleanup with the v1 deletion).
+  **REMEDIATION EXECUTED (user-approved 2026-07-10 evening):** deleted
+  today's rows from ohlcv_5m/15m/1h (77,085 / 32,720 / 13,465) and
+  reran `--gap-fill` — resume point drops to yesterday → full-day
+  refetch from Kite REST; canon-only bucket verification follows the
+  run. Before the NEXT soak: remove/flag-gate the v1 consumer
+  auto-start (it armed BOTH incarnations; the v1 path is scheduled for
+  deletion anyway) and teach gap-fill true hole-detection or accept
+  delete-first heals. Subagent/process ops: run agents ONE at a time on
+  this box (parallel agents froze it — user directive, in memory).
 
 ## Slice 3.0 — pre-work (done 2026-07-09)
 
@@ -119,6 +203,41 @@ tuning decision.
   consulted at 10:15 (no look-ahead, just a misnamed datum).
 - test-guardian: queued for the 3.3 slice (canary-vs-stash proof below
   already demonstrates the new tests bite).
+
+## Reviews (slice 3.5)
+
+- **quant-verifier: FAIL → all findings fixed same session.** HIGH
+  (confirmed by executed FFI repro): rank-indexed S/R ids (`SR_BASE_ID+i`
+  per signal) duplicated on stocks with ≥2 active signals → all-or-
+  nothing validation rejected the stock's whole level list → its alert
+  layer silently dead for the session (and `mark_sent`-at-enqueue made
+  it permanent). Fixed: S/R computes once per (stock, timeframe); ids
+  are identity-derived (sha256 of timeframe:zone_type:price, range
+  disjoint-by-construction from signal ids). MEDIUMs: level payloads
+  could be lost silently (drop-oldest eviction / engine rejection after
+  producer-side mark_sent) → the ack moved to the CONSUMER
+  (`on_levels_applied` → `mark_sent` under a lock, fired only on engine
+  accept; unacked stocks re-send every cycle, loud); `_active_signals`
+  gained ORDER BY id (order-sensitive change detection churned
+  recordings). LOW/INFO: statics restricted to the subscription set;
+  vburst configs whose threshold truncates to 0 and cross re-arm bands
+  ≥100% refused at validation; CHANGELOG splice repaired. Clean bill on:
+  §2.5 zone-width mirror, frozen-code isolation, no look-ahead/repaint,
+  money discipline (incl. the Decimal-quantized float boundary for S/R
+  alert thresholds), PDH/PDL-from-1d soundness.
+- **bug-hunter: BUGS-FOUND — same HIGH independently confirmed (executed
+  repro both sides), same eviction MEDIUM (executed repro), plus:**
+  `_apply_levels` catch broadened to any per-stock exception (a
+  malformed payload must not strand the chunk's other stocks); S/R id
+  identity fix doubles as the armed-state/dedupe-identity fix for rank
+  reshuffles; alert XADDs pipelined (one round trip per batch — an
+  open-auction burst must not serialize hundreds of RTTs inside the
+  latency-measured window). Verified sound: refresher loop×pool
+  discipline, redis-py 7.4 cancellation safety for the WS XREAD reader,
+  last_id advancement across filtered entries, fresh-book-per-header
+  replay isolation, trigger placement after the candle pass, 48-bit id
+  collision bounds. +2 regression tests (two-signals-one-stock passes
+  the real FFI; unacked levels re-send until consumer ack).
 
 ## Reviews (slice 3.4)
 

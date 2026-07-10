@@ -24,6 +24,17 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     # live-worker tick/pulse JSONL recording (Phase 3; empty = off)
     live_record_path: str | None = None
+
+    # ── Live tick triggers (Phase 3, slice 3.5) ─────────────────────────────
+    # Alert thresholds only — they gate ALERTS, never signals; signal
+    # semantics stay in SIGNAL_ENGINE.md. Zone width mirrors §2.5 proximity.
+    live_level_refresh_s: int = 30       # signal-level refresh cadence
+    live_entry_zone_pct: float = 0.5     # entry-zone half-width, % of entry
+    live_sltp_within_bp: int = 25        # SL/TP proximity band (0.25%)
+    live_cross_rearm_bp: int = 10        # PDH/PDL/S&R cross re-arm band
+    live_vburst_mult: float = 3.0        # forming 5m vol ≥ mult × 20d avg
+    live_alert_stream: str = "alerts:live"   # Redis Stream (at-least-once)
+    live_alert_maxlen: int = 10_000      # stream MAXLEN ~ cap
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
 
