@@ -28,7 +28,7 @@ any of it provable.
 | 3.1 | Rust LiveEngine core: session-aligned tick→candle state machine (forming/committed), session guard, warmup/gap-fill as data params — pure, no I/O/clocks. Pins the 9:15-anchored 1h bucket canon | **core ✅ 2026-07-09** (engine-core/src/live.rs, 15 tests incl. LCG partition property; canon in ARCHITECTURE.md §Live bucket canon). PyO3 `LiveBook` binding lands with 3.3 host work | the 3.2 SQL rebuild mirrors the canon expression |
 | 3.2 | `ohlcv_1h` session-aligned rebuild | **✅ 2026-07-09** — migration `q3r4s5t6u7v8` (delete UTC-floored body, roll up from 11.5M complete 5m bars via shared `app/services/ohlcv_rollup.py`): **1,074,456 rows / 2,036 stocks, anchors exactly 09:15…15:15 IST, zero incomplete**. Interim v1 aggregator floor patched to the 03:45-UTC anchor (identical for 1m/5m/15m; 1h moves to canon) so live minting stays consistent until 3.3. §8 sign-off = walkforward+parity replay green in make check (no golden touches 1h) | downgrade leaves the table EMPTY (documented: pre-rebuild rows were garbage; 5m source re-derives) |
 | 3.3 | live-worker process (`app/broker/live_worker.py`, run as `python -m app.broker.live_worker`): KiteTicker thread → bounded `queue.Queue` (drop-oldest tick batches; time pulses share the queue so ordering is replayable) → consumer THREAD → ONE `tradecore.LiveBook` call per batch → sync redis pipeline (`SET ltp:{stock_id}` + LTP/candle PUBLISH) → committed candles via BLOCKING writer queue → writer thread (own loop + own engine) → Postgres upsert → Celery trigger after commit. PyO3 `LiveBook` binding (money strings in / raw i64·1e-4 out). Token-expiry = process exit 3/4 for the supervisor; `--gap-fill` opt-in startup backfill; JSONL record hook = the 3.4 replay input. XADD alerts stream lands with 3.5; indicator warmup lands with 3.5 triggers | **✅ 2026-07-09** (code+tests; first live market soak pending next session — see exit gate) |
-| 3.4 | Record/replay harness: recorded tick sessions → byte-identical engine event streams; `make replay` in CI; latency histograms (tick→publish p99 < 10 ms) | planned | replay tests are the only ground truth — no working baseline exists |
+| 3.4 | Record/replay harness | **✅ 2026-07-10** — recordings are self-describing (session header + tick/pulse lines in engine order; stale/skipped ticks never recorded); `app/broker/replay.py` feeds them through a fresh `LiveBook` → canonical event stream + sha256 digest; CLI `python -m app.broker.replay <rec> [--emit]` is the soak-day pinning ritual. Synthetic golden committed (61 events / 22 committed; pre-open rejection, volume baseline+reset, per-tf late-tick, pulse closes) + a worker-seam fidelity test proving replay ≡ writer-queue stream. `make replay` in the check chain. Tick→publish `LatencyHistogram` in the worker (fixed buckets, p50/p99/max at shutdown) — **p99 < 10 ms VALIDATION happens on soak day, not in CI** | real-session golden joins after the first soak |
 | 3.5 | Tick triggers + provisional layer: entry-zone touches, PDH/PDL/S&R crosses, SL/TP proximity, volume bursts, forming-candle provisional confidence, per-style leaderboards @ 2–4 Hz. Redis Streams for alerts (at-least-once); WS fanout by style/watchlist; drop-oldest backpressure for LTP, never for candle-close | planned | |
 | 3.6 | Signal-outcome tick evaluation (entry-zone touch before expiry) recorded now — Phase 6 needs this data | planned | |
 | 3.7 | Shadow week (Rust decides, frozen Python double-checks on closes — zero diffs) → full-session soak (memory flat, zero dropped subscriptions, latency budget met) | planned | python engine deletion decision AFTER shadow week (user ruling) |
@@ -120,6 +120,29 @@ tuning decision.
 - test-guardian: queued for the 3.3 slice (canary-vs-stash proof below
   already demonstrates the new tests bite).
 
+## Reviews (slice 3.4)
+
+- **bug-hunter: BUGS-FOUND — 1 HIGH, 2 MEDIUM, 2 LOW; all addressed, +5
+  regression tests.** HIGH: the recorder was load-bearing (a disk-full
+  write aborted batches BEFORE the engine — candles/LTP starved for the
+  day) → recording is fail-open and happens only AFTER the engine
+  accepts a batch, which also removes the bad-price batch asymmetry
+  (LOW #5). MEDIUM: default buffering + torn crash tails could poison a
+  whole multi-session file → line-buffered recorder, newline-prefixed
+  header, and a single tolerated artifact shape in load_recording (torn
+  line immediately before a header). MEDIUM: "make replay is DB-free"
+  was FALSE (the tests/ conftest connects and truncates) → claim
+  corrected; replay runs in the standard harness, serialized like every
+  pytest run. LOW: per-kind shape validation with file:line ReplayError.
+- Sound per the review: batch-boundary erasure (engine on_ticks ≡
+  per-tick loop), fresh-book-per-header ≡ live restart semantics, stale
+  filter runs before recording, digest canonicalization (ints only),
+  golden internally consistent (digest re-derived independently;
+  epochs = 09:15/15:30 IST).
+- Gate-run bycatch: the Phase-0 chain-selection fixtures hardcoded
+  expiry 2026-07-09, which expired overnight — first suite run after
+  the rollover flipped "nearest expiry". Fixed wall-clock-relative.
+
 ## Reviews (slice 3.3)
 
 - **bug-hunter: BUGS-FOUND — 1 CRITICAL, 1 HIGH, 5 MEDIUM, 3 LOW; the
@@ -165,6 +188,10 @@ tuning decision.
 - 3.1 core: `cargo clippy --all-targets -D warnings` clean · engine-core
   lib tests 40 passed (15 new live:: tests incl. the 5,000-tick LCG
   partition property over all four timeframes).
+- 3.4: `make replay` 7 passed (golden byte-identical + determinism +
+  validation refusals); worker-seam fidelity test (replay ≡ writer queue
+  with stale/unknown ticks in the live input); latency histogram unit
+  tests. Digest pinned: `da288d24…`.
 - 3.3: binding + worker seams: +5 FFI-contract tests (money round-trip
   exact, fail-loud prices, reject counters, close-flush canon) · +10
   worker tests (LTP key/channel contracts against a real LiveBook,

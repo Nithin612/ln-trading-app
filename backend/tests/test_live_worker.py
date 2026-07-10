@@ -17,6 +17,7 @@ from zoneinfo import ZoneInfo
 import tradecore
 from app.broker.live_worker import (
     TF_MINUTES,
+    LatencyHistogram,
     WorkerState,
     enqueue_ticks,
     persist_committed,
@@ -329,3 +330,94 @@ class TestBugHunterRegressions:
             )
         ).scalar()
         assert n == 1
+
+
+class TestLatencyHistogram:
+    def test_buckets_and_quantiles(self) -> None:
+        h = LatencyHistogram()
+        for ms in (0.4, 0.8, 1.5, 3.0, 8.0, 60.0):
+            h.observe(ms)
+        assert h.n == 6
+        assert h.summary()["p50_ms"] == 2.0  # 3rd of 6 falls in the <=2ms bucket
+        assert h.summary()["p99_ms"] == 100.0
+        assert h.summary()["max_ms"] == 60.0
+        empty = LatencyHistogram()
+        assert empty.summary() == {"n": 0, "p50_ms": 0.0, "p99_ms": 0.0, "max_ms": 0.0}
+
+    def test_process_item_observes_stamped_batches(self, tmp_path) -> None:
+        state, _, _ = _state(tmp_path)
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)], time_mod.monotonic()))
+        state.process_item(("ticks", [_tick(9, 17, "101.60", 1100)]))  # unstamped: not observed
+        assert state.latency.n == 1
+        assert state.latency.summary()["max_ms"] >= 0.0
+
+
+class TestRecordReplayFidelity:
+    def test_recording_reproduces_the_writer_queue_stream(self, tmp_path) -> None:
+        """The 3.4 contract at the worker seam: replaying the recorded
+        tick+pulse stream through a fresh LiveBook yields EXACTLY the
+        committed events the live consumer sent to the writer — including
+        when the live run skipped unknown-instrument and stale ticks
+        (they are not recorded, so replay never sees them)."""
+        from app.broker.replay import replay_file
+
+        state, _, writer_q = _state(tmp_path)
+        state.min_tick_ts = OPEN_TS  # arm the stale filter
+        header = {
+            "k": "h", "day": DAY.isoformat(), "open": OPEN_TS,
+            "close": CLOSE_TS, "tfs": TF_MINUTES, "min_tick_ts": OPEN_TS,
+        }
+        rec = tmp_path / "worker_rec.jsonl"
+        with open(rec, "w", encoding="utf-8") as fh:
+            fh.write(json.dumps(header, separators=(",", ":")) + "\n")
+        state.recorder = open(rec, "a", encoding="utf-8")
+
+        stale = _tick(9, 16, "50.00", 10)
+        stale["exchange_timestamp"] = datetime(2020, 1, 1, 12, 0)  # pre-min_tick_ts
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1000), stale]))
+        state.process_item(("ticks", [{"instrument_token": 999, "last_price": 1}]))
+        state.process_item(("ticks", [_tick(9, 21, "102.00", 1400)]))
+        state.process_item(("pulse", CLOSE_TS, None))
+        state.recorder.close()
+        state.recorder = None
+
+        live_committed = []
+        while not writer_q.empty():
+            live_committed.append(writer_q.get_nowait())
+
+        events, _digest = replay_file(rec)
+        replayed_committed = [
+            {k: v for k, v in e.items() if k not in ("day", "kind")}
+            for e in events
+            if e["kind"] == "committed"
+        ]
+        live_stripped = [
+            {k: v for k, v in e.items() if k != "kind"} for e in live_committed
+        ]
+        assert replayed_committed == live_stripped
+        assert state.stats["stale"] == 1 and state.stats["skipped"] == 1
+
+
+class TestRecorderFailOpen:
+    def test_recorder_failure_never_costs_a_candle(self, tmp_path) -> None:
+        """bug-hunter HIGH (2026-07-10): a recorder write failure aborted
+        the batch BEFORE the engine — disk-full would have starved candles
+        and LTP for the rest of the session. Recording must fail open."""
+
+        class _FullDisk:
+            def write(self, _line: str) -> None:
+                raise OSError("no space left on device")
+
+            def close(self) -> None:
+                pass
+
+        state, spy, writer_q = _state()
+        state.recorder = _FullDisk()
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)]))
+        state.process_item(("ticks", [_tick(9, 21, "102.00", 1400)]))
+
+        assert state.recorder is None  # disabled, not fatal
+        assert state.stats["ticks"] == 2
+        committed = writer_q.get_nowait()
+        assert Decimal(committed["close"]) / 10**4 == Decimal("101.55")
+        assert spy.set_calls  # LTP kept flowing

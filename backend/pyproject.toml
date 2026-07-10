@@ -62,4 +62,5 @@ testpaths = ["tests"]
 markers = [
     "parity: cross-language Python-vs-Rust parity tests (real-DB golden corpus)",
     "walkforward: walk-forward golden replay against the dev-DB corpus (§8 drift gate)",
+    "replay: live-engine record/replay goldens (byte-identical event streams; make replay)",
 ]

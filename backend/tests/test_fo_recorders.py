@@ -5,7 +5,7 @@ upsert, NFO instrument mapping (strike), chain instrument selection,
 quote→row mapping, snapshot insertion, and market-hours gating.
 """
 
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from typing import Any
 
@@ -161,10 +161,19 @@ class TestInstrumentMapping:
 
 # ── Chain selection + snapshot recording ─────────────────────────────────────
 
+# Chain selection filters on expiry >= TODAY, so these fixtures must be
+# wall-clock-relative — the original hardcoded 2026-07-09 expired overnight
+# on 2026-07-10 and flipped "nearest expiry" to the far one (flake found by
+# the slice-3.4 gate run; testing.md: freeze or inject time).
+NEAR_EXPIRY = date.today() + timedelta(days=20)
+FAR_EXPIRY = date.today() + timedelta(days=69)
+FUT_EXPIRY = date.today() + timedelta(days=41)
+
+
 async def _seed_nfo_chain(db: AsyncSession) -> None:
     """NIFTY options at two expiries plus one future."""
     token = 1000
-    for expiry in ("2026-07-09", "2026-08-27"):
+    for expiry in (NEAR_EXPIRY.isoformat(), FAR_EXPIRY.isoformat()):
         for strike in range(24000, 25201, 100):
             for opt in ("CE", "PE"):
                 token += 1
@@ -178,7 +187,7 @@ async def _seed_nfo_chain(db: AsyncSession) -> None:
     db.add(KiteInstrument(
         instrument_token=9999, exchange_token=9999,
         tradingsymbol="NIFTY26JULFUT", exchange="NFO", instrument_type="FUT",
-        name="NIFTY", segment="NFO-FUT", expiry="2026-07-30", lot_size=75,
+        name="NIFTY", segment="NFO-FUT", expiry=FUT_EXPIRY.isoformat(), lot_size=75,
     ))
     await db.commit()
 
@@ -193,9 +202,9 @@ class TestChainSelection:
         futs = [c for c in chain if c.option_type == "FU"]
 
         assert len(futs) == 1
-        assert futs[0].expiry_date == date(2026, 7, 30)
+        assert futs[0].expiry_date == FUT_EXPIRY
         # Only the nearest expiry survives
-        assert {o.expiry_date for o in options} == {date(2026, 7, 9)}
+        assert {o.expiry_date for o in options} == {NEAR_EXPIRY}
         # 2N+1 = 7 distinct strikes nearest 24580, both CE and PE
         strikes = sorted({o.strike for o in options})
         assert len(strikes) == 7

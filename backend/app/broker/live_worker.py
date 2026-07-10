@@ -69,6 +69,9 @@ SESSION_OPEN = time(9, 15)
 SESSION_CLOSE = time(15, 30)
 
 _QUEUE_MAX = 10_000
+
+# Consumer-queue items: (kind, payload, monotonic-enqueue-stamp-or-None).
+QueueItem = tuple[str, Any, float | None]
 _PULSE_INTERVAL_S = 1.0
 
 # Exit codes for the supervisor: 0 clean stop · 3 WS died mid-session ·
@@ -116,6 +119,47 @@ def _money(raw: int) -> Decimal:
     return Decimal(raw) / Decimal(10_000)
 
 
+class LatencyHistogram:
+    """Fixed-bucket ms histogram — no per-observation allocation, exact
+    counts; percentiles are bucket upper bounds (conservative)."""
+
+    BOUNDS_MS = (1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0)
+
+    def __init__(self) -> None:
+        self.counts = [0] * (len(self.BOUNDS_MS) + 1)
+        self.n = 0
+        self.max_ms = 0.0
+
+    def observe(self, ms: float) -> None:
+        self.n += 1
+        self.max_ms = max(self.max_ms, ms)
+        for i, bound in enumerate(self.BOUNDS_MS):
+            if ms <= bound:
+                self.counts[i] += 1
+                return
+        self.counts[-1] += 1
+
+    def quantile_bound(self, q: float) -> float:
+        """Smallest bucket bound covering quantile q (inf bucket → max)."""
+        if self.n == 0:
+            return 0.0
+        target = q * self.n
+        seen = 0
+        for i, bound in enumerate(self.BOUNDS_MS):
+            seen += self.counts[i]
+            if seen >= target:
+                return bound
+        return self.max_ms
+
+    def summary(self) -> dict[str, float | int]:
+        return {
+            "n": self.n,
+            "p50_ms": self.quantile_bound(0.50),
+            "p99_ms": self.quantile_bound(0.99),
+            "max_ms": round(self.max_ms, 3),
+        }
+
+
 @dataclass
 class WorkerState:
     """Everything the consumer thread needs — built once at startup,
@@ -139,6 +183,7 @@ class WorkerState:
             "ticks": 0, "pulses": 0, "committed": 0, "skipped": 0, "stale": 0,
         }
     )
+    latency: LatencyHistogram = field(default_factory=LatencyHistogram)
     _stock_to_token: dict[int, int] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -146,12 +191,13 @@ class WorkerState:
         if self.writer_alive is None:
             self.writer_alive = lambda: True
 
-    def process_item(self, item: tuple[str, Any]) -> None:
-        kind, payload = item
+    def process_item(self, item: tuple[str, Any] | QueueItem) -> None:
+        kind, payload = item[0], item[1]
+        stamp = item[2] if len(item) > 2 else None
         if kind == "pulse":
-            self._record({"k": "p", "ts": payload})
             self.stats["pulses"] += 1
             events = self.book.on_time(payload)
+            self._record({"k": "p", "ts": payload})
             self._enqueue_committed(events)
             try:
                 self._publish_events(events)
@@ -168,22 +214,28 @@ class WorkerState:
                 self.stats["stale"] += 1
                 continue
             batch.append(ffi)
-            self._record(
-                {"k": "t", "sid": ffi[0], "ts": ffi[1], "p": ffi[2], "dv": ffi[3], "q": ffi[4]}
-            )
         if not batch:
             return
         self.stats["ticks"] += len(batch)
-        # Engine FIRST (matches the recorded stream — replay fidelity),
-        # durable writer queue SECOND, lossy redis LAST (a redis blip must
-        # never starve the engine or drop a committed candle).
+        # Engine FIRST, durable writer queue SECOND, lossy redis LAST (a
+        # redis blip must never starve the engine or drop a committed
+        # candle). Recording happens AFTER the engine accepts the batch —
+        # a raising batch is neither consumed nor recorded (symmetric with
+        # replay), and a recorder failure can never abort processing
+        # (bug-hunter HIGH, 2026-07-10).
         events = self.book.on_ticks(batch)
+        for sid, ts, price, dv, qty in batch:
+            self._record({"k": "t", "sid": sid, "ts": ts, "p": price, "dv": dv, "q": qty})
         self._enqueue_committed(events)
         try:
             self._publish_ltp(batch)
             self._publish_events(events)
         except Exception:
             log.exception("redis publish failed; continuing (at-most-once layer)")
+        if stamp is not None:
+            # tick→publish latency (WS callback enqueue → redis pipeline
+            # done) — the p99 < 10 ms phase target, measured per batch.
+            self.latency.observe((time_mod.monotonic() - stamp) * 1000.0)
 
     def _publish_ltp(self, batch: list[tuple[int, int, str, int | None, int]]) -> None:
         """Latest-price key + fan-out, one pipeline round trip per batch.
@@ -259,8 +311,15 @@ class WorkerState:
         pipe.execute()
 
     def _record(self, line: dict[str, Any]) -> None:
-        if self.recorder is not None:
+        """Fail-open: recording is observability, never load-bearing — a
+        full disk must not cost a single candle (bug-hunter HIGH)."""
+        if self.recorder is None:
+            return
+        try:
             self.recorder.write(json.dumps(line, separators=(",", ":")) + "\n")
+        except OSError:
+            log.exception("recorder write failed — disabling recording for this run")
+            self.recorder = None
 
 
 async def persist_committed(db: Any, event: dict[str, Any]) -> None:
@@ -342,7 +401,7 @@ def run_writer(writer_q: queue.Queue[dict[str, Any] | None]) -> None:
 
 
 def run_consumer(
-    state: WorkerState, in_q: queue.Queue[tuple[str, Any]], stop: threading.Event
+    state: WorkerState, in_q: queue.Queue[QueueItem], stop: threading.Event
 ) -> None:
     try:
         while not (stop.is_set() and in_q.empty()):
@@ -357,7 +416,7 @@ def run_consumer(
                 log.exception("consumer: batch failed; continuing")
         # Final flush: on_time only commits ENDED buckets — safe any time.
         try:
-            state.process_item(("pulse", int(time_mod.time())))
+            state.process_item(("pulse", int(time_mod.time()), None))
         except Exception:
             log.exception("consumer: final flush failed")
     finally:
@@ -372,21 +431,22 @@ def run_consumer(
         state.writer_q.put(None)
 
 
-def run_pulser(in_q: queue.Queue[tuple[str, Any]], stop: threading.Event) -> None:
+def run_pulser(in_q: queue.Queue[QueueItem], stop: threading.Event) -> None:
     while not stop.wait(_PULSE_INTERVAL_S):
         try:
-            in_q.put_nowait(("pulse", int(time_mod.time())))
+            in_q.put_nowait(("pulse", int(time_mod.time()), None))
         except queue.Full:
             pass  # the next pulse is a second away
 
 
-def enqueue_ticks(in_q: queue.Queue[tuple[str, Any]], ticks: list[dict[str, Any]]) -> None:
+def enqueue_ticks(in_q: queue.Queue[QueueItem], ticks: list[dict[str, Any]]) -> None:
     """Drop-oldest for tick batches (stale LTP beats a crashed callback);
     committed candles are protected downstream, not here."""
     dropped = 0
+    stamp = time_mod.monotonic()
     while True:
         try:
-            in_q.put_nowait(("ticks", ticks))
+            in_q.put_nowait(("ticks", ticks, stamp))
             break
         except queue.Full:
             # Drain one and retry — looped, because the pulser can refill
@@ -440,7 +500,7 @@ async def _bootstrap(gap_fill: bool) -> tuple[str, dict[int, int]] | None:
 def _make_ticker(
     access_token: str,
     token_map: dict[int, int],
-    in_q: queue.Queue[tuple[str, Any]],
+    in_q: queue.Queue[QueueItem],
     on_close: Any,
 ) -> Any:
     from kiteconnect import KiteTicker
@@ -480,9 +540,30 @@ def main(argv: list[str] | None = None) -> int:
     recorder: TextIO | None = None
     record_path = settings.live_record_path
     if record_path:
-        recorder = open(record_path, "a", encoding="utf-8")  # noqa: SIM115
+        # Line-buffered: a hard crash loses at most the in-flight line.
+        recorder = open(record_path, "a", buffering=1, encoding="utf-8")  # noqa: SIM115
+        # Header makes the recording self-describing — replay (3.4) builds
+        # an identical LiveBook from it. Appending to yesterday's file adds
+        # a new header line; replay treats each header as a session start.
+        # Leading newline isolates any torn tail a crashed run left behind
+        # (replay skips blank lines; a fragment stays on its own line).
+        recorder.write("\n")
+        recorder.write(
+            json.dumps(
+                {
+                    "k": "h",
+                    "day": today.isoformat(),
+                    "open": open_ts,
+                    "close": close_ts,
+                    "tfs": TF_MINUTES,
+                    "min_tick_ts": int(time_mod.time()) - 120,
+                },
+                separators=(",", ":"),
+            )
+            + "\n"
+        )
 
-    in_q: queue.Queue[tuple[str, Any]] = queue.Queue(maxsize=_QUEUE_MAX)
+    in_q: queue.Queue[QueueItem] = queue.Queue(maxsize=_QUEUE_MAX)
     writer_q: queue.Queue[dict[str, Any] | None] = queue.Queue(maxsize=_QUEUE_MAX)
     stop = threading.Event()
     exit_code = 0
@@ -529,7 +610,7 @@ def main(argv: list[str] | None = None) -> int:
         log.debug("ticker close raised; ignoring")
     threads[0].join(timeout=60)  # consumer: drains, flushes, sends sentinel
     threads[1].join(timeout=60)  # writer: exits on the sentinel
-    log.info("live-worker stats: %s", state.stats)
+    log.info("live-worker stats: %s latency: %s", state.stats, state.latency.summary())
     return exit_code
 
 
