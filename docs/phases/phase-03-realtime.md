@@ -107,11 +107,13 @@ The first market-hours run of the live worker. Honest record:
   everything. **Evidence snapshotted** to `forensic_ohlcv_{1m,5m,15m,
   1h}_20260710` (1m kept in-place too: no cheap rebuild path, no
   reader — dirty-but-unused, flagged for cleanup with the v1 deletion).
-  **REMEDIATION EXECUTED (user-approved 2026-07-10 evening):** deleted
-  today's rows from ohlcv_5m/15m/1h (77,085 / 32,720 / 13,465) and
-  reran `--gap-fill` — resume point drops to yesterday → full-day
-  refetch from Kite REST; canon-only bucket verification follows the
-  run. Before the NEXT soak: remove/flag-gate the v1 consumer
+  **REMEDIATION EXECUTED + VERIFIED (user-approved 2026-07-10 evening):**
+  deleted today's rows from ohlcv_5m/15m/1h (77,085 / 32,720 / 13,465)
+  and reran `--gap-fill` (resume point drops to yesterday → full-day
+  refetch from Kite REST, ~40 min). Post-rebuild verification: **5m
+  75/75 buckets, 15m 25/25, 1h 7/7 — zero off-canon anchors, zero
+  missing, 1,880–2,031 stocks per bucket.** Today's intraday tables are
+  canonical again. Before the NEXT soak: remove/flag-gate the v1 consumer
   auto-start (it armed BOTH incarnations; the v1 path is scheduled for
   deletion anyway) and teach gap-fill true hole-detection or accept
   delete-first heals. Subagent/process ops: run agents ONE at a time on
