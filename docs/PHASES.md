@@ -23,43 +23,57 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 | 6 | Outcome tracking + strategy lab v2 | planned | — | per-style hit-rate/expectancy dashboards, factor attribution, Rayon weight tuning + promotion workflow |
 | 7 | Live-trading hardening | planned | — | Kite orders behind trading_mode + 30-day gate, kill switch, reconciliation, VPS runbook |
 
-**▶ CONTINUE HERE (next session, any account):** Phase 3 IN PROGRESS
-(started 2026-07-09; ledger: `phases/phase-03-realtime.md`). **Slice 3.0
-(pre-work) DONE 2026-07-09**: _prev_day_hlc fail-closed on intraday
-windows · prev-day + 9:25 cross-section wired into pipeline SetupContext
-via the new shared `app/profiles/session_context.py` (walk-forward
-delegates to it — 9/9 goldens replay byte-stable) · weight_multipliers
-through live scoring (slice-7 gap closed; rust dispatch refuses them
-loudly) · opening_gap now measures the SESSION open on intraday windows.
-Four regression canaries proven to fail on the pre-fix tree.
+**▶ CONTINUE HERE (next session, any account):** Phase 3 IN PROGRESS —
+**slices 3.0–3.4 ALL DONE** (3.0/3.1/3.2/3.3 on 2026-07-09, 3.4 on
+2026-07-10; commits `99385f8` → `4adb68d`; full ledger + review records:
+`phases/phase-03-realtime.md`). The offline build-out is COMPLETE:
+LiveEngine core (bucket canon in ARCHITECTURE.md §Live bucket canon),
+session-aligned ohlcv_1h (1,074,456 rows), live-worker
+(`python -m app.broker.live_worker`, exit 3=WS died / 4=no token),
+tradecore.LiveBook FFI, record/replay harness (`make replay` in the
+check chain, synthetic golden digest `da288d24…`), tick→publish
+LatencyHistogram. Kite subscription ACTIVE (user-confirmed 2026-07-09).
 
 Open threads, in order:
-1. **Slice 3.3 code DONE 2026-07-09** (live_worker.py + LiveBook FFI,
-   15 tests). **First market-hours soak next trading session**: run
-   `cd backend && uv run python -m app.broker.live_worker` after the
-   token ritual; do NOT run the in-app v1 consumer simultaneously (both
-   write the same tables) — start the API only after deciding which one
-   owns the session, or stop_consumer first. Watch stats + rejects.
-2. **Restart the backend before the next market open** (2026-07-10
-   09:15 IST): the patched session-anchored 1h floor loads on restart; a
-   still-running pre-patch process would re-mint :30-anchored 1h rows.
-3. **Slice 3.4 DONE 2026-07-10** (replay.py + golden + make replay in
-   the check chain + tick→publish LatencyHistogram). Soak-day ritual:
-   set `LIVE_RECORD_PATH`, run the worker, then
-   `uv run python -m app.broker.replay <recording>` and pin the real
-   session as a second golden; read the latency summary from the
-   shutdown log — p99 < 10 ms is the phase target.
-4. **Next build slice: 3.5 — tick triggers + provisional layer**
+1. **SOAK SESSION (first market-hours run) — the next milestone.**
+   Ritual, in order, on a trading day:
+   a. token: `cd backend && uv run python scripts/kite_login.py`
+   b. RESTART the backend API if it runs (loads the 3.2 session-anchored
+      1h floor) — and either don't start it, or accept that its v1
+      in-app consumer must NOT run while the worker does (both write the
+      same candle tables; pick ONE owner per session).
+   c. `LIVE_RECORD_PATH=/path/rec-$(date +%F).jsonl` in env/.env, then
+      `uv run python -m app.broker.live_worker` (add `--gap-fill` after
+      any outage). Watch startup log for instrument count.
+   d. After close (worker exits ~15:40 IST): read the shutdown log line
+      `live-worker stats: … latency: {p50/p99/max}` — **phase target
+      p99 < 10 ms**; then `uv run python -m app.broker.replay <rec>`
+      → pin the printed digest + `--emit` stream as the first REAL
+      session golden in tests/goldens/ (see test_replay.py pattern).
+   e. Soak pass criteria (exit gate preview): memory flat, zero dropped
+      subscriptions, rejects ≈ 0 outside pre/post-session, latency met.
+2. **Next build slice: 3.5 — tick triggers + provisional layer**
    (entry-zone touches, PDH/PDL/S&R crosses, SL/TP proximity, volume
    bursts, forming-candle provisional confidence, leaderboards @ 2–4 Hz;
-   Redis Streams alerts; WS fanout by style/watchlist).
-5. **Profile tuning** (dc1/dc2/multibagger negative; intraday trio
+   Redis Streams alerts (at-least-once); WS fanout by style/watchlist;
+   LiveEngine indicator warmup from DB arrives here). Then 3.6 outcome
+   ticks, 3.7 shadow week + full-session soak (30-day paper clock).
+3. **Session-ops knowledge (this machine):** single-process `make test`
+   OOM-killed twice at the gainer golden under desktop load (Chrome+IDE,
+   15GB) — run the gate as three fresh legs instead:
+   `pytest -m "not parity and not walkforward"` · `-m parity` ·
+   `-m walkforward` (sequential, never concurrent — shared test DB).
+   Background shells: poll every ~5 min (log growth + `[b]racket`-trick
+   process check); pgrep/pkill -f patterns must NEVER appear in their
+   own command line (two self-match incidents on 2026-07-09/10).
+4. **Profile tuning** (dc1/dc2/multibagger negative; intraday trio
    flagged) — Phase 6 workflow; verdicts pinned in goldens. Wiring
    session context (3.0) was necessary, not sufficient, for activation.
-6. Latent LOW calendar items in the phase-02 report backlog (UTC-date
-   trading-day walks; `same_day` weekend validity — fix before any
-   same_day/eod profile activates or ad-hoc IST-midnight generation).
-7. `git push` remains manual (credential-free remote by design).
+5. Latent LOW calendar items in the phase-02 report backlog (UTC-date
+   trading-day walks; `same_day` weekend validity); Muhurat/special-hours
+   sessions unsupported by the worker's standard 09:15–15:30 SessionSpec
+   (documented, accepted until the calendar carries session hours).
+6. `git push` remains manual (credential-free remote by design).
 
 Daily ops: Kite token dies ~6:00 AM IST; ritual =
 `cd backend && uv run python scripts/kite_login.py` (terminal-only).
