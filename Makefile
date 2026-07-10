@@ -105,6 +105,18 @@ status:  ## Quick health check of all services
 backend:  ## Run FastAPI dev server (hot-reload)
 	@cd backend && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
+.PHONY: live-worker
+live-worker:  ## Run the live worker under a restart supervisor (soak ritual)
+	@cd backend && while true; do \
+		uv run python -m app.broker.live_worker $(WORKER_ARGS); code=$$?; \
+		if [ $$code -eq 0 ]; then echo "live-worker: clean exit (session over)"; break; fi; \
+		if [ $$code -eq 4 ]; then \
+			echo "live-worker: NO TOKEN — run 'uv run python scripts/kite_login.py' (retrying in 60s)"; sleep 60; \
+		else \
+			echo "live-worker: exit $$code — restarting in 5s"; sleep 5; \
+		fi; \
+	done
+
 .PHONY: frontend
 frontend:  ## Run Vite dev server
 	@cd frontend && pnpm dev
