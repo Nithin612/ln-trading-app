@@ -206,6 +206,48 @@ tuning decision.
 - test-guardian: queued for the 3.3 slice (canary-vs-stash proof below
   already demonstrates the new tests bite).
 
+## Publish-path perf audit (2026-07-10 post-close; fixes NOT yet applied)
+
+perf-auditor measured the tick→publish window at 5214d8d (micro-benches
+on the dev box; full model + numbers in the audit run, distilled here).
+A full 2,000-tick batch costs ≈ 127 ms, of which **~112 ms is the Redis
+publish leg** — and most of that is spent on nobody:
+
+- 80 ms: building (`json.dumps` ×8,000 forming events) and publishing to
+  `candle:*` channels with **zero subscribers** (ws.py subscribes per
+  watched symbol only);
+- 26.5 ms: the LTP leg (2,000 SET + 2,000 PUBLISH; the pure-Python
+  redis parser costs ~2× a raw socket — hiredis is NOT installed);
+- 5.9 ms: line-buffered recorder (flush syscall per line);
+- engine + FFI ≈ 4–6 ms; the Rust core itself is noise (1 ms).
+
+Measurement caveats found: the histogram stamp includes GIL queue-dwell
+(5–10 ms with one pure-Python peer thread — the kiteconnect parser is
+exactly that); buckets jump 10→20 ms so "p50 20" means (10, 20]; pulse
+items are unstamped and their minute-boundary commit cost lands on the
+NEXT batch. And the documented p99 < 10 ms budget was written for
+200–500 instruments — the soak ran 2,049 (4–10× the stated scale).
+
+**Proposed fix plan (awaiting user approval; est. p99 ≤ 5–8 ms at
+observed batch sizes after 1–3):**
+1. Subscription-gate channel publishes (refresh watched set via
+   `PUBSUB CHANNELS`, 0.27 ms/pulse) — saves ~85 ms/full batch; only
+   observable change: a client subscribing mid-second may miss ≤1 s of
+   updates (REST reconciles — already the documented reconnect model).
+2. Install hiredis (~2× on every remaining pipeline; zero behavior
+   change).
+3. Recorder block-buffering + one flush per item (crash-loss window one
+   line → one batch, ≤1 s; replay's torn-tail tolerance covers it).
+4. Measurement honesty: dwell/processing split stamps, 7.5+15 ms
+   buckets, log effective batch size; optional setswitchinterval.
+Explicitly REJECTED: coalescing forming events inside Rust — Kite's
+conflation makes it a ~0 win AND batch-scoped coalescing would break
+replay byte-exactness (batch boundaries aren't recorded; replay feeds
+one tick per call). At true 2,049-tick full batches the un-gateable LTP
+SET floor (~11 ms even with hiredis) still brushes the budget → restate
+the budget at soak scale or add unchanged-price SET dedupe (decide
+after the next soak's numbers).
+
 ## Reviews (slice 3.5)
 
 - **quant-verifier: FAIL → all findings fixed same session.** HIGH

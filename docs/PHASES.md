@@ -46,10 +46,16 @@ Open threads, in order:
    live exactly). **Re-run a QUIET-BOX soak next trading day for the
    p99 < 10 ms verdict** — same ritual as before, plus: NOTHING heavy on
    the box market-open→close (no pytest/cargo/maturin), don't start the
-   backend API while the worker runs, and give the worker a real
-   supervisor loop (`while true; python -m app.broker.live_worker;
-   sleep 5; done` at minimum) so a frozen Claude session can't cost
-   hours of capture again.
+   backend API while the worker runs, and run the worker via
+   **`make live-worker`** (supervisor target, built + smoked
+   2026-07-10: exit 0 breaks — never restart-loops after close; exit 4
+   waits 60s with the login-ritual prompt; anything else restarts after
+   5s; `WORKER_ARGS=--gap-fill` passes through, LIVE_RECORD_PATH via
+   env). The smoke also live-validated the 3.5 level pipeline:
+   2,049/2,049 stocks' trigger levels applied through the real DB → FFI
+   with zero rejections. Perf note: run the publish-path fixes (audit
+   report in the ledger) BEFORE the soak if approved — the p99 target
+   likely fails without them.
    **Data incident RESOLVED same evening** (ledger §post-close
    forensics): the v1 consumer wrote off-canon candles TWICE (zombie
    09:56–11:06; drowning 13:01→close restart) and resume-point gap-fill
