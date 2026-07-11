@@ -29,7 +29,7 @@ any of it provable.
 | 3.2 | `ohlcv_1h` session-aligned rebuild | **✅ 2026-07-09** — migration `q3r4s5t6u7v8` (delete UTC-floored body, roll up from 11.5M complete 5m bars via shared `app/services/ohlcv_rollup.py`): **1,074,456 rows / 2,036 stocks, anchors exactly 09:15…15:15 IST, zero incomplete**. Interim v1 aggregator floor patched to the 03:45-UTC anchor (identical for 1m/5m/15m; 1h moves to canon) so live minting stays consistent until 3.3. §8 sign-off = walkforward+parity replay green in make check (no golden touches 1h) | downgrade leaves the table EMPTY (documented: pre-rebuild rows were garbage; 5m source re-derives) |
 | 3.3 | live-worker process (`app/broker/live_worker.py`, run as `python -m app.broker.live_worker`): KiteTicker thread → bounded `queue.Queue` (drop-oldest tick batches; time pulses share the queue so ordering is replayable) → consumer THREAD → ONE `tradecore.LiveBook` call per batch → sync redis pipeline (`SET ltp:{stock_id}` + LTP/candle PUBLISH) → committed candles via BLOCKING writer queue → writer thread (own loop + own engine) → Postgres upsert → Celery trigger after commit. PyO3 `LiveBook` binding (money strings in / raw i64·1e-4 out). Token-expiry = process exit 3/4 for the supervisor; `--gap-fill` opt-in startup backfill; JSONL record hook = the 3.4 replay input. XADD alerts stream lands with 3.5; indicator warmup lands with 3.5 triggers | **✅ 2026-07-09** (code+tests; first live market soak pending next session — see exit gate) |
 | 3.4 | Record/replay harness | **✅ 2026-07-10** — recordings are self-describing (session header + tick/pulse lines in engine order; stale/skipped ticks never recorded); `app/broker/replay.py` feeds them through a fresh `LiveBook` → canonical event stream + sha256 digest; CLI `python -m app.broker.replay <rec> [--emit]` is the soak-day pinning ritual. Synthetic golden committed (61 events / 22 committed; pre-open rejection, volume baseline+reset, per-tf late-tick, pulse closes) + a worker-seam fidelity test proving replay ≡ writer-queue stream. `make replay` in the check chain. Tick→publish `LatencyHistogram` in the worker (fixed buckets, p50/p99/max at shutdown) — **p99 < 10 ms VALIDATION happens on soak day, not in CI** | real-session golden joins after the first soak |
-| 3.5 | Tick triggers + provisional layer: entry-zone touches, PDH/PDL/S&R crosses, SL/TP proximity, volume bursts, forming-candle provisional confidence, per-style leaderboards @ 2–4 Hz. Redis Streams for alerts (at-least-once); WS fanout by style/watchlist; drop-oldest backpressure for LTP, never for candle-close | **core ✅ 2026-07-10** (branch `slice-3.5-tick-triggers`): Rust trigger engine (`triggers.rs` + `LiveEvent::Trigger`, armed/re-arm hysteresis, `set_levels` preserves state for unchanged ids) · levels as replayable INPUT (`{"k":"lv"}` recording lines; no-lv recordings byte-identical — 3.4 golden digest untouched) · level sources `live_levels.py` (PDH/PDL from 1d, §2.5-width entry zones + SL/TP proximity per active signal, frozen-detector S/R for signal stocks, 5m vburst baselines; 30s refresher thread) · `alerts:live` stream XADD + `/ws/live` `subscribe_alerts` fanout with style filter. Rust 55 tests · +23 backend tests. **Deferred:** provisional confidence + leaderboards (needs the O(1) incremental factor design — plan §2's "ring buffer per close / O(1) provisional"), watchlist fanout (no watchlist model exists), alert UI. Reviews pending (session-limit interrupt) — run quant-verifier + bug-hunter before merge | alerts never gate/mint/modify signals — provisional layer only |
+| 3.5 | Tick triggers + provisional layer: entry-zone touches, PDH/PDL/S&R crosses, SL/TP proximity, volume bursts, forming-candle provisional confidence, per-style leaderboards @ 2–4 Hz. Redis Streams for alerts (at-least-once); WS fanout by style/watchlist; drop-oldest backpressure for LTP, never for candle-close | **core ✅ 2026-07-10** (branch `slice-3.5-tick-triggers`): Rust trigger engine (`triggers.rs` + `LiveEvent::Trigger`, armed/re-arm hysteresis, `set_levels` preserves state for unchanged ids) · levels as replayable INPUT (`{"k":"lv"}` recording lines; no-lv recordings byte-identical — 3.4 golden digest untouched) · level sources `live_levels.py` (PDH/PDL from 1d, §2.5-width entry zones + SL/TP proximity per active signal, frozen-detector S/R for signal stocks, 5m vburst baselines; 30s refresher thread) · `alerts:live` stream XADD + `/ws/live` `subscribe_alerts` fanout with style filter. Rust 55 tests · +23 backend tests. **Deferred:** provisional confidence + leaderboards (design PINNED 2026-07-11 — throttled batch rescore of the hot set, see §Decisions; implementation after the Monday soak), watchlist fanout (no watchlist model exists), alert UI (in progress 2026-07-11, frontend-only). Reviews DONE 2026-07-10 (quant-verifier FAIL→fixed, bug-hunter BUGS-FOUND→fixed — §Reviews 3.5) | alerts never gate/mint/modify signals — provisional layer only |
 | 3.6 | Signal-outcome tick evaluation (entry-zone touch before expiry) recorded now — Phase 6 needs this data | planned | |
 | 3.7 | Shadow week (Rust decides, frozen Python double-checks on closes — zero diffs) → full-session soak (memory flat, zero dropped subscriptions, latency budget met) | planned | python engine deletion decision AFTER shadow week (user ruling) |
 
@@ -180,6 +180,37 @@ tuning decision.
   last-30-min VWAP ≠ last-bar close, and the walk-forward derives from
   bars — matching it exactly is what keeps live and backtest gates
   identical.
+- (3.5-deferred, **pinned 2026-07-11, user-approved**) **Provisional
+  confidence + per-style leaderboards = throttled batch rescore of a
+  bounded hot set; the plan-§2 O(1) incremental-indicator sketch is
+  REJECTED for now** (revisit only if hot-set scale proves insufficient
+  on Phase-6 data, not on assumption). Why rescore: (1) parity by
+  construction — the SAME frozen scorer sequence (`run_all_factors →
+  apply_weight_multipliers → score_from_factors`) on the same
+  300-completed-bar window canon with the forming bar appended, so the
+  provisional score CONVERGES EXACTLY to the committed score at candle
+  close; no third implementation of the edge (an incremental twin needs
+  its own Wilder/EMA parity program, and a drifting confidence preview
+  is a wrong number about money). (2) Factor coverage — S/R clustering,
+  pivots, divergence, and the 9:25 cross-section are structurally
+  windowed; "pure" incremental ends up hybrid anyway; batch reuses
+  `session_context.py` unchanged. (3) Hot-path isolation — runs on a
+  refresher-style thread (the 30 s levels pattern: own thread, own
+  loop, own session), reading forming candles via ONE new FFI snapshot
+  getter (`LiveBook.forming_snapshot`, GIL released); ZERO new work on
+  the consumer thread; the p99 budget stays untouched. (4)
+  Reversibility — the WS/UI surface is compute-agnostic; incremental
+  can replace the internals later without a surface change. Pinned
+  semantics: provisional scores are a DERIVED OBSERVABILITY VIEW —
+  never engine events, never in recordings/replay, never in backtests
+  or P&L (constraint #3), provisional-labelled end-to-end; hot set per
+  style = active-signal stocks + near-trigger stocks + watchlist
+  stocks (once the model exists); cadence = refresher-clock throttle
+  (1–5 s target), full-universe cadence decided by `/perf-bench`
+  numbers; confidence integer canon unchanged
+  (`trunc(|normalized|×100)`). Implementation starts only AFTER the
+  Monday soak (it touches the worker process); the slice starts from
+  this paragraph.
 
 ## Reviews (slice 3.0)
 
