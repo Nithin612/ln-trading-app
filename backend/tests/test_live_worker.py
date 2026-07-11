@@ -38,12 +38,14 @@ TOKEN_MAP = {777: 42}  # instrument_token → stock_id
 class _SyncRedisSpy:
     """Records the sync pipeline the hot path builds. `pubsub` is the set
     of channels the spy reports as having live subscribers (the 3.5 perf
-    fix gates publishes on it)."""
+    fix gates publishes on it); `pattern_count` is what PUBSUB NUMPAT
+    reports (any pattern subscriber flips the gate to publish-everything)."""
 
     def __init__(self) -> None:
         self.set_calls: list[tuple[str, str, int | None]] = []
         self.publish_calls: list[tuple[str, str]] = []
         self.pubsub: list[str] = []
+        self.pattern_count = 0
 
     def pipeline(self, transaction: bool = True) -> "_SyncRedisSpy":
         return self
@@ -58,17 +60,24 @@ class _SyncRedisSpy:
         prefix = pattern.rstrip("*")
         return [c for c in self.pubsub if c.startswith(prefix)]
 
+    def pubsub_numpat(self) -> int:
+        return self.pattern_count
+
     def execute(self) -> None:
         pass
 
 
 def _watch_all(state) -> None:
-    """Mark stock 42 / token 777's channels as live-subscribed."""
+    """Mark stock 42 / token 777's channels as live-subscribed — via the
+    spy's pubsub registry, because process_item re-reads it on its own
+    wall-clock (the first item always refreshes)."""
     from app.broker.candle_aggregator import TIMEFRAME_TABLE
 
-    state.watched_channels = {"ltp:777"} | {
+    channels = {"ltp:777"} | {
         f"candle:{table}:42" for table in TIMEFRAME_TABLE.values()
     }
+    state.redis.pubsub = sorted(channels)
+    state.watched_channels = set(channels)
 
 
 def _state(tmp_path=None) -> tuple[WorkerState, _SyncRedisSpy, "queue.Queue"]:
@@ -183,15 +192,50 @@ class TestConsumerSeam:
         assert spy.set_calls == [("ltp:42", "101.55", 600)]
         assert spy.publish_calls == []
 
-    def test_pulse_refreshes_watched_channels_from_pubsub(self, tmp_path) -> None:
+    def test_watched_refresh_rides_any_item_on_wall_clock(self, tmp_path) -> None:
+        """bug-hunter LOW (b) 2026-07-11 regression: the refresh used to
+        ride the pulse branch, and pulses are droppable under queue-full
+        backpressure — a tick-only stream must pick up new subscribers by
+        itself. Canary: on the old code the tick items below never
+        refresh, so watched_channels stays empty and nothing publishes."""
         state, spy, _ = _state(tmp_path)
         spy.pubsub = ["ltp:777", "candle:ohlcv_1m:42", "alerts:unrelated"]
-        state.process_item(("pulse", OPEN_TS + 60))
-        assert state.watched_channels == {"ltp:777", "candle:ohlcv_1m:42"}
-        # a subscribed channel now receives; unsubscribed ones still don't
+        # first item of ANY kind refreshes (alerts:unrelated filtered out)
         state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)]))
+        assert state.watched_channels == {"ltp:777", "candle:ohlcv_1m:42"}
         channels = {c for c, _ in spy.publish_calls}
         assert channels == {"ltp:777", "candle:ohlcv_1m:42"}
+        # inside the 1 s window: the set is NOT re-read
+        spy.pubsub = []
+        state.process_item(("ticks", [_tick(9, 16, "101.60", 1100)]))
+        assert state.watched_channels == {"ltp:777", "candle:ohlcv_1m:42"}
+        # window elapsed (injected — no sleeping): next tick item re-reads
+        state._last_refresh -= 1.0
+        state.process_item(("ticks", [_tick(9, 17, "101.65", 1200)]))
+        assert state.watched_channels == set()
+
+    def test_pattern_subscriber_flips_to_publish_everything(self, tmp_path) -> None:
+        """bug-hunter LOW (a) 2026-07-11 regression: PUBSUB CHANNELS
+        cannot see PSUBSCRIBE — with a pattern subscriber present the
+        worker must publish everything (watched=None sentinel), not
+        silently starve it. On the old code watched_channels stays a set
+        and every publish below is gated off."""
+        from app.broker.candle_aggregator import TIMEFRAME_TABLE
+
+        state, spy, _ = _state(tmp_path)
+        spy.pattern_count = 1  # someone ran PSUBSCRIBE ltp:* somewhere
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)]))
+        assert state.watched_channels is None
+        channels = {c for c, _ in spy.publish_calls}
+        # LTP fan-out + all four candle timeframes — nothing gated off
+        assert channels == {"ltp:777"} | {
+            f"candle:{table}:42" for table in TIMEFRAME_TABLE.values()
+        }
+        # pattern subscriber gone → next refresh restores exact gating
+        spy.pattern_count = 0
+        state._last_refresh -= 1.0
+        state.process_item(("ticks", [_tick(9, 16, "101.60", 1100)]))
+        assert state.watched_channels == set()
 
     def test_latency_split_observes_dwell_and_processing(self, tmp_path) -> None:
         state, _, _ = _state(tmp_path)

@@ -251,6 +251,22 @@ droppable under queue-full backpressure (pulser put_nowait + drop-
 oldest eviction) — under sustained saturation a new subscriber's ≤1 s
 pickup window stretches; fix = wall-clock refresh inside process_item
 (`if started - self._last_refresh >= 1.0`) instead of the pulse branch.
+**Both CLOSED 2026-07-11 same session, recipes verbatim** — +2
+regression tests, each stash-canary-proven to FAIL on the pre-fix code;
+(b) also closed a startup gap (watched set began empty, so the first
+second of forming events published to nobody until the first pulse —
+now the first item of any kind refreshes). Targeted live suite 50
+green. bug-hunter re-review of the closing diff: **CLEAN, zero
+findings** — executed repros: numpat/second-channel-read raises keep
+the previous watched value WHOLE (local build, assign only after both
+reads) with the engine unstarved and the LTP key still SET; redis=None
+and method-less spies early-return; a None-unaware-gate wrong
+implementation is caught by the pattern test; −inf first-item refresh
++ 1 s cadence verified; the only redis-hang exposure (no
+socket_timeout) is pre-existing and unchanged in class. The deferred
+FULL three-leg gate had run green on 293a7d0 immediately before (731
+backend / 131 frontend / 16 parity / 9 walkforward / 11 replay;
+`make check` exit 0).
 Everything else verified sound: flush-vs-crash semantics, latency
 arithmetic (latency = dwell + processing exactly), pulse-branch
 ordering, ungated LTP SET/alerts, hiredis types, Rust scratch identity,

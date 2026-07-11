@@ -31,24 +31,22 @@ CHANGELOG Unreleased has per-slice detail). Kite subscription ACTIVE.
 Worktree used for 3.5 was merged and REMOVED — everything is linear on
 main; push to origin is manual (user).
 
-**⚠ FIRST ACTION NEXT SESSION (any account): the LAST commit (perf
-fixes, 2026-07-11) shipped with 56 targeted live-suite tests green +
-cargo gates + bug-hunter LOW-only review, but the FULL three-leg gate
-was NOT run before the session budget died. Run, sequentially:**
-`pytest -m "not parity and not walkforward"` · `-m parity` ·
-`-m walkforward` (from backend/, never concurrent) + `make lint` +
-frontend checks — i.e. the make-check equivalent — before building
-anything new. Rust + wheel already rebuilt (release, set_levels FFI
-live in backend/.venv).
+**✅ 2026-07-11 (Saturday session): the deferred FULL three-leg gate
+ran GREEN on the perf-fix commit exactly as shipped** — 731 backend /
+131 frontend / 16 parity / 9 walkforward / 11 replay, plus
+ruff·mypy·eslint·tsc and cargo fmt·clippy·test; `make check` exit 0.
+**Both LOW hardening fixes from the perf-fix review then landed same
+session** (ledger recipes verbatim): (a) `PUBSUB NUMPAT`
+publish-everything sentinel — a pattern subscriber can no longer be
+silently starved by CHANNELS-based gating; (b) watched-set refresh is
+wall-clock inside `process_item` instead of riding droppable pulses
+(also closes the startup gap: first-second forming events used to
+publish to nobody until the first pulse). +2 regression tests,
+stash-proven to FAIL pre-fix; targeted live suite 50 green;
+bug-hunter re-review CLEAN (executed repros).
+**NEXT ACTION: the Monday 2026-07-13 quiet-box soak (thread 1).**
 
 Open threads, in order:
-0. **Two LOW hardening fixes from the perf-fix review** (deferred with
-   exact recipes in the ledger §Publish-path perf audit — "bug-hunter
-   verdict" block): (a) PSUBSCRIBE-blind gating → `pubsub_numpat()`
-   publish-everything sentinel; (b) wall-clock watched-set refresh
-   decoupled from droppable pulses. Both small; neither blocks the
-   soak (no pattern subscriber exists; backpressure case is degraded-
-   mode only).
 1. **FIRST SOAK RAN 2026-07-10 — PARTIAL; latency verdict OPEN** (full
    honest record: phase-03 ledger §First soak session). Clean hour:
    1.33M ticks / 125,606 candles / 0 skipped; then a self-inflicted
@@ -67,9 +65,14 @@ Open threads, in order:
    5s; `WORKER_ARGS=--gap-fill` passes through, LIVE_RECORD_PATH via
    env). The smoke also live-validated the 3.5 level pipeline:
    2,049/2,049 stocks' trigger levels applied through the real DB → FFI
-   with zero rejections. Perf note: run the publish-path fixes (audit
-   report in the ledger) BEFORE the soak if approved — the p99 target
-   likely fails without them.
+   with zero rejections. Perf state: publish-path fixes AND both LOW
+   hardening items are applied and full-gate-validated — the soak now
+   measures the fixed path; pin the NEW-format shutdown stats line
+   (dwell/processing split + avg batch size) in the ledger, and recall
+   the audit caveat: at true 2,049-tick full batches the un-gateable
+   LTP SET floor (~11 ms) still brushes the budget — restate the
+   budget at soak scale or add unchanged-price SET dedupe, decided on
+   the soak's numbers.
    **Data incident RESOLVED same evening** (ledger §post-close
    forensics): the v1 consumer wrote off-canon candles TWICE (zombie
    09:56–11:06; drowning 13:01→close restart) and resume-point gap-fill

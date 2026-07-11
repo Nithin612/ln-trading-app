@@ -75,6 +75,10 @@ _QUEUE_MAX = 10_000
 # Consumer-queue items: (kind, payload, monotonic-enqueue-stamp-or-None).
 QueueItem = tuple[str, Any, float | None]
 _PULSE_INTERVAL_S = 1.0
+# Watched-set refresh cadence — wall-clock inside process_item, NOT tied
+# to pulses: pulses are droppable under queue-full backpressure, so a
+# refresh riding them starves exactly when the box is saturated.
+_WATCHED_REFRESH_S = 1.0
 
 # Exit codes for the supervisor: 0 clean stop · 3 WS died mid-session ·
 # 4 no usable token (wait for the login ritual).
@@ -195,10 +199,12 @@ class WorkerState:
     latency: LatencyHistogram = field(default_factory=LatencyHistogram)
     dwell: LatencyHistogram = field(default_factory=LatencyHistogram)
     processing: LatencyHistogram = field(default_factory=LatencyHistogram)
-    # Channels with live subscribers, refreshed once per pulse — payloads
-    # are neither built nor published for anything else (the audit's
-    # dominant cost: ~85 ms/full batch spent on zero-subscriber channels).
-    watched_channels: set[str] = field(default_factory=set)
+    # Channels with live subscribers, refreshed ~1/s wall-clock in
+    # process_item — payloads are neither built nor published for anything
+    # else (the audit's dominant cost: ~85 ms/full batch spent on
+    # zero-subscriber channels). None = publish-EVERYTHING sentinel: a
+    # pattern subscriber exists, which PUBSUB CHANNELS cannot see.
+    watched_channels: set[str] | None = field(default_factory=set)
     # Session day (ISO) stamped on every alert; set once at startup.
     session_day: str = ""
     # Host registry for alert enrichment: {stock_id: {level_id: meta}} —
@@ -209,6 +215,7 @@ class WorkerState:
     # unacked (eviction- and rejection-proof). None in tests.
     on_levels_applied: Any = None
     _stock_to_token: dict[int, int] = field(init=False, default_factory=dict)
+    _last_refresh: float = field(init=False, default=float("-inf"))
 
     def __post_init__(self) -> None:
         self._stock_to_token = {v: k for k, v in self.token_map.items()}
@@ -221,9 +228,15 @@ class WorkerState:
         started = time_mod.monotonic()
         if stamp is not None:
             self.dwell.observe((started - stamp) * 1000.0)
+        # Refresh rides ANY item on a wall-clock, not the pulse branch:
+        # pulses are droppable under queue-full backpressure, which would
+        # stretch a new subscriber's ≤1 s pickup window unboundedly
+        # (bug-hunter LOW (b), 2026-07-11).
+        if started - self._last_refresh >= _WATCHED_REFRESH_S:
+            self._refresh_watched()
+            self._last_refresh = started
         if kind == "pulse":
             self.stats["pulses"] += 1
-            self._refresh_watched()
             events = self.book.on_time(payload)
             self._record({"k": "p", "ts": payload})
             self._enqueue_committed(events)
@@ -267,19 +280,27 @@ class WorkerState:
             self.processing.observe((now - started) * 1000.0)
 
     def _refresh_watched(self) -> None:
-        """Once per pulse (~1/s, ~0.3 ms): which channels have live
-        subscribers. Fail-open — on error keep the LAST set (a redis blip
-        must not flap the fan-out); a client absent from the set for the
-        subscribe second reconciles over REST (the documented model)."""
+        """~1/s wall-clock (from process_item, ~0.3 ms): which channels
+        have live subscribers. PUBSUB CHANNELS cannot see PSUBSCRIBE, so
+        any pattern subscriber (pubsub_numpat > 0) flips the gate wide
+        open — watched=None, publish everything — instead of silently
+        starving it (bug-hunter LOW (a), 2026-07-11). Fail-open — on error
+        keep the LAST value (a redis blip must not flap the fan-out); a
+        client absent from the set for the subscribe second reconciles
+        over REST (the documented model)."""
         pubsub_channels = getattr(self.redis, "pubsub_channels", None)
         if pubsub_channels is None:  # test spies without the method
             return
+        pubsub_numpat = getattr(self.redis, "pubsub_numpat", None)
         try:
+            if pubsub_numpat is not None and pubsub_numpat() > 0:
+                self.watched_channels = None
+                return
             channels = set(pubsub_channels("ltp:*"))
             channels.update(pubsub_channels("candle:*"))
             self.watched_channels = channels
         except Exception:
-            log.exception("pubsub_channels refresh failed; keeping previous set")
+            log.exception("pubsub refresh failed; keeping previous value")
 
     def _flush_recorder(self) -> None:
         """Block-buffered recording flushes once per queue item instead of
@@ -309,7 +330,7 @@ class WorkerState:
             if token is None:
                 continue
             channel = LTP_CHANNEL.format(instrument_token=token)
-            if channel not in watched:
+            if watched is not None and channel not in watched:
                 continue
             pipe.publish(
                 channel,
@@ -448,7 +469,7 @@ class WorkerState:
             label = TF_LABEL[e["tf_minutes"]]
             table = TIMEFRAME_TABLE[label]
             channel = CANDLE_CHANNEL.format(table=table, stock_id=e["stock_id"])
-            if channel not in watched:
+            if watched is not None and channel not in watched:
                 continue
             pending += 1
             pipe.publish(

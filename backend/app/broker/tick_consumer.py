@@ -38,9 +38,11 @@ log = logging.getLogger(__name__)
 # Redis channel prefixes
 # ltp:{instrument_token}    → {"instrument_token": .., "stock_id": .., "ltp": .., "ts": ..}
 # candle:{table}:{stock_id} → full candle JSON + is_complete flag
-# CONTRACT: subscribe with exact SUBSCRIBE only, never PSUBSCRIBE — the
-# live worker gates publishes on PUBSUB CHANNELS, which cannot see
-# pattern subscribers (they'd silently receive nothing).
+# CONTRACT: subscribe with exact SUBSCRIBE — the live worker gates
+# publishes on PUBSUB CHANNELS, which cannot see patterns. A PSUBSCRIBE
+# still works (the worker detects it via PUBSUB NUMPAT and falls back to
+# publish-everything until the pattern subscriber disconnects) but that
+# defeats the fan-out gating for everyone — don't.
 LTP_CHANNEL = "ltp:{instrument_token}"
 CANDLE_CHANNEL = "candle:{table}:{stock_id}"
 
