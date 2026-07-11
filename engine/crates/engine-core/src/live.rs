@@ -349,16 +349,18 @@ pub struct LiveBook {
     /// Validated blank-state engine, cloned per instrument — no fallible
     /// construction (and so no panic path) inside the hot loop.
     template: InstrumentLive,
-    tf_count: usize,
     instruments: HashMap<u32, InstrumentLive>,
+    /// Reusable per-tick event buffer — the hot path must not allocate
+    /// per tick (rules/rust.md; perf-audit finding 9, 2026-07-10).
+    scratch: Vec<LiveEvent>,
 }
 
 impl LiveBook {
     pub fn new(session: SessionSpec, tf_minutes: &[u32]) -> Result<Self, LiveError> {
         Ok(Self {
             template: InstrumentLive::new(session, tf_minutes)?,
-            tf_count: tf_minutes.len(),
             instruments: HashMap::new(),
+            scratch: Vec::with_capacity(tf_minutes.len() * 2 + 8),
         })
     }
 
@@ -377,9 +379,11 @@ impl LiveBook {
     }
 
     pub fn on_tick(&mut self, stock_id: u32, tick: &Tick, out: &mut Vec<(u32, LiveEvent)>) {
-        let mut buf: Vec<LiveEvent> = Vec::with_capacity(self.tf_count * 2);
+        let mut buf = std::mem::take(&mut self.scratch);
+        buf.clear();
         self.entry(stock_id).on_tick(tick, &mut buf);
-        out.extend(buf.into_iter().map(|e| (stock_id, e)));
+        out.extend(buf.iter().map(|e| (stock_id, *e)));
+        self.scratch = buf; // hand the (possibly grown) buffer back
     }
 
     /// Batched tick entry point — one FFI call per Kite batch.

@@ -228,7 +228,35 @@ items are unstamped and their minute-boundary commit cost lands on the
 NEXT batch. And the documented p99 < 10 ms budget was written for
 200–500 instruments — the soak ran 2,049 (4–10× the stated scale).
 
-**Proposed fix plan (awaiting user approval; est. p99 ≤ 5–8 ms at
+**FIXES APPLIED 2026-07-11 (user-approved "go"; committed same day):**
+items 1–4 below all landed — subscriber-gated publishes (watched set
+refreshed per pulse via PUBSUB CHANNELS; LTP KEY always SET), hiredis
+installed (parser confirmed active), recorder block-buffered with one
+flush per queue item (SIGKILL repro proved the file stays line-aligned
+— no torn tail), dwell/processing histogram split + 7.5/15 ms buckets +
+avg-batch in the shutdown line, sys.setswitchinterval(0.002) in main,
+and the Rust per-tick scratch-buffer polish (LiveBook.on_tick no longer
+allocates). +3 behavioral tests (SET-without-publish default, pulse
+refresh, latency split); 56 targeted live-suite tests green.
+**bug-hunter verdict: BUGS-FOUND, LOW only — two deferred hardening
+items for the NEXT session (neither affects any live path today):**
+(a) LOW CONFIRMED latent: PUBSUB CHANNELS cannot see PSUBSCRIBE — a
+future pattern subscriber would silently receive nothing. Contract
+comment added at the channel constants (exact SUBSCRIBE only); the
+robust fix is a `pubsub_numpat()` check in `_refresh_watched` that sets
+a publish-everything sentinel (watched=None) when pattern subscribers
+exist, with `if watched is not None and channel not in watched` at both
+gates. (b) LOW PLAUSIBLE: the refresh rides pulses, and pulses are
+droppable under queue-full backpressure (pulser put_nowait + drop-
+oldest eviction) — under sustained saturation a new subscriber's ≤1 s
+pickup window stretches; fix = wall-clock refresh inside process_item
+(`if started - self._last_refresh >= 1.0`) instead of the pulse branch.
+Everything else verified sound: flush-vs-crash semantics, latency
+arithmetic (latency = dwell + processing exactly), pulse-branch
+ordering, ungated LTP SET/alerts, hiredis types, Rust scratch identity,
+switchinterval scope.
+
+**Original audit fix plan (for reference; est. p99 ≤ 5–8 ms at
 observed batch sizes after 1–3):**
 1. Subscription-gate channel publishes (refresh watched set via
    `PUBSUB CHANNELS`, 0.27 ms/pulse) — saves ~85 ms/full batch; only

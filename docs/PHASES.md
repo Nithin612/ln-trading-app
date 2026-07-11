@@ -24,17 +24,31 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 | 7 | Live-trading hardening | planned | — | Kite orders behind trading_mode + 30-day gate, kill switch, reconciliation, VPS runbook |
 
 **▶ CONTINUE HERE (next session, any account):** Phase 3 IN PROGRESS —
-**slices 3.0–3.4 ALL DONE** (3.0/3.1/3.2/3.3 on 2026-07-09, 3.4 on
-2026-07-10; commits `99385f8` → `4adb68d`; full ledger + review records:
-`phases/phase-03-realtime.md`). The offline build-out is COMPLETE:
-LiveEngine core (bucket canon in ARCHITECTURE.md §Live bucket canon),
-session-aligned ohlcv_1h (1,074,456 rows), live-worker
-(`python -m app.broker.live_worker`, exit 3=WS died / 4=no token),
-tradecore.LiveBook FFI, record/replay harness (`make replay` in the
-check chain, synthetic golden digest `da288d24…`), tick→publish
-LatencyHistogram. Kite subscription ACTIVE (user-confirmed 2026-07-09).
+**slices 3.0–3.5-core ALL DONE and on `main`** (3.0–3.3 on 2026-07-09,
+3.4 on 2026-07-10, 3.5 core + first-soak ops + publish-path perf fixes
+2026-07-10/11; ledger + all review records: `phases/phase-03-realtime.md`;
+CHANGELOG Unreleased has per-slice detail). Kite subscription ACTIVE.
+Worktree used for 3.5 was merged and REMOVED — everything is linear on
+main; push to origin is manual (user).
+
+**⚠ FIRST ACTION NEXT SESSION (any account): the LAST commit (perf
+fixes, 2026-07-11) shipped with 56 targeted live-suite tests green +
+cargo gates + bug-hunter LOW-only review, but the FULL three-leg gate
+was NOT run before the session budget died. Run, sequentially:**
+`pytest -m "not parity and not walkforward"` · `-m parity` ·
+`-m walkforward` (from backend/, never concurrent) + `make lint` +
+frontend checks — i.e. the make-check equivalent — before building
+anything new. Rust + wheel already rebuilt (release, set_levels FFI
+live in backend/.venv).
 
 Open threads, in order:
+0. **Two LOW hardening fixes from the perf-fix review** (deferred with
+   exact recipes in the ledger §Publish-path perf audit — "bug-hunter
+   verdict" block): (a) PSUBSCRIBE-blind gating → `pubsub_numpat()`
+   publish-everything sentinel; (b) wall-clock watched-set refresh
+   decoupled from droppable pulses. Both small; neither blocks the
+   soak (no pattern subscriber exists; backpressure case is degraded-
+   mode only).
 1. **FIRST SOAK RAN 2026-07-10 — PARTIAL; latency verdict OPEN** (full
    honest record: phase-03 ledger §First soak session). Clean hour:
    1.33M ticks / 125,606 candles / 0 skipped; then a self-inflicted

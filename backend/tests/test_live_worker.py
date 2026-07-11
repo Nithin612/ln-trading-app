@@ -36,11 +36,14 @@ TOKEN_MAP = {777: 42}  # instrument_token → stock_id
 
 
 class _SyncRedisSpy:
-    """Records the sync pipeline the hot path builds."""
+    """Records the sync pipeline the hot path builds. `pubsub` is the set
+    of channels the spy reports as having live subscribers (the 3.5 perf
+    fix gates publishes on it)."""
 
     def __init__(self) -> None:
         self.set_calls: list[tuple[str, str, int | None]] = []
         self.publish_calls: list[tuple[str, str]] = []
+        self.pubsub: list[str] = []
 
     def pipeline(self, transaction: bool = True) -> "_SyncRedisSpy":
         return self
@@ -51,8 +54,21 @@ class _SyncRedisSpy:
     def publish(self, channel: str, payload: str) -> None:
         self.publish_calls.append((channel, payload))
 
+    def pubsub_channels(self, pattern: str = "*") -> list[str]:
+        prefix = pattern.rstrip("*")
+        return [c for c in self.pubsub if c.startswith(prefix)]
+
     def execute(self) -> None:
         pass
+
+
+def _watch_all(state) -> None:
+    """Mark stock 42 / token 777's channels as live-subscribed."""
+    from app.broker.candle_aggregator import TIMEFRAME_TABLE
+
+    state.watched_channels = {"ltp:777"} | {
+        f"candle:{table}:42" for table in TIMEFRAME_TABLE.values()
+    }
 
 
 def _state(tmp_path=None) -> tuple[WorkerState, _SyncRedisSpy, "queue.Queue"]:
@@ -104,6 +120,7 @@ class TestTickToFfi:
 class TestConsumerSeam:
     def test_ltp_contract_and_forming_publish(self, tmp_path) -> None:
         state, spy, writer_q = _state(tmp_path)
+        _watch_all(state)  # publishes are subscriber-gated since the 3.5 perf fix
         state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)]))
 
         assert spy.set_calls == [("ltp:42", "101.55", 600)]
@@ -156,6 +173,34 @@ class TestConsumerSeam:
         state.process_item(("ticks", [{"instrument_token": 999, "last_price": 1}]))
         assert state.stats["skipped"] == 1
         assert spy.set_calls == []
+
+    def test_publishes_gated_off_without_subscribers(self, tmp_path) -> None:
+        """Perf-audit fix 1 (2026-07-10): payloads for channels nobody
+        subscribed are neither built nor published — but the LTP KEY is
+        ALWAYS SET (paper_broker contract)."""
+        state, spy, _ = _state(tmp_path)
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)]))
+        assert spy.set_calls == [("ltp:42", "101.55", 600)]
+        assert spy.publish_calls == []
+
+    def test_pulse_refreshes_watched_channels_from_pubsub(self, tmp_path) -> None:
+        state, spy, _ = _state(tmp_path)
+        spy.pubsub = ["ltp:777", "candle:ohlcv_1m:42", "alerts:unrelated"]
+        state.process_item(("pulse", OPEN_TS + 60))
+        assert state.watched_channels == {"ltp:777", "candle:ohlcv_1m:42"}
+        # a subscribed channel now receives; unsubscribed ones still don't
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)]))
+        channels = {c for c, _ in spy.publish_calls}
+        assert channels == {"ltp:777", "candle:ohlcv_1m:42"}
+
+    def test_latency_split_observes_dwell_and_processing(self, tmp_path) -> None:
+        state, _, _ = _state(tmp_path)
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)], time_mod.monotonic()))
+        assert state.latency.n == 1
+        assert state.dwell.n == 1
+        assert state.processing.n == 1
+        # end-to-end >= processing component by construction
+        assert state.latency.max_ms >= state.processing.max_ms
 
 
 class TestEnqueueBackpressure:

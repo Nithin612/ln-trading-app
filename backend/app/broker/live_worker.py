@@ -38,6 +38,7 @@ import asyncio
 import json
 import logging
 import queue
+import sys
 import threading
 import time as time_mod
 from dataclasses import dataclass, field
@@ -124,7 +125,10 @@ class LatencyHistogram:
     """Fixed-bucket ms histogram — no per-observation allocation, exact
     counts; percentiles are bucket upper bounds (conservative)."""
 
-    BOUNDS_MS = (1.0, 2.0, 5.0, 10.0, 20.0, 50.0, 100.0)
+    # 7.5 and 15 exist so progress against the 10 ms budget is visible —
+    # with a 10→20 jump, a true 11 ms median reports as "20" (perf audit
+    # finding 8, 2026-07-10).
+    BOUNDS_MS = (1.0, 2.0, 5.0, 7.5, 10.0, 15.0, 20.0, 50.0, 100.0)
 
     def __init__(self) -> None:
         self.counts = [0] * (len(self.BOUNDS_MS) + 1)
@@ -185,7 +189,16 @@ class WorkerState:
             "levels": 0, "triggers": 0,
         }
     )
+    # End-to-end (enqueue→published) — THE phase metric — plus its two
+    # components: queue dwell (GIL contention with the WS-parser thread)
+    # and pure processing. Fix targets differ per component (audit 7).
     latency: LatencyHistogram = field(default_factory=LatencyHistogram)
+    dwell: LatencyHistogram = field(default_factory=LatencyHistogram)
+    processing: LatencyHistogram = field(default_factory=LatencyHistogram)
+    # Channels with live subscribers, refreshed once per pulse — payloads
+    # are neither built nor published for anything else (the audit's
+    # dominant cost: ~85 ms/full batch spent on zero-subscriber channels).
+    watched_channels: set[str] = field(default_factory=set)
     # Session day (ISO) stamped on every alert; set once at startup.
     session_day: str = ""
     # Host registry for alert enrichment: {stock_id: {level_id: meta}} —
@@ -205,8 +218,12 @@ class WorkerState:
     def process_item(self, item: tuple[str, Any] | QueueItem) -> None:
         kind, payload = item[0], item[1]
         stamp = item[2] if len(item) > 2 else None
+        started = time_mod.monotonic()
+        if stamp is not None:
+            self.dwell.observe((started - stamp) * 1000.0)
         if kind == "pulse":
             self.stats["pulses"] += 1
+            self._refresh_watched()
             events = self.book.on_time(payload)
             self._record({"k": "p", "ts": payload})
             self._enqueue_committed(events)
@@ -214,9 +231,11 @@ class WorkerState:
                 self._publish_events(events)
             except Exception:
                 log.exception("redis publish failed; continuing (at-most-once layer)")
+            self._flush_recorder()
             return
         if kind == "levels":
             self._apply_levels(payload)
+            self._flush_recorder()
             return
         batch = self._ffi_batch(payload)
         if not batch:
@@ -238,31 +257,71 @@ class WorkerState:
             self._publish_events(events)
         except Exception:
             log.exception("redis publish failed; continuing (at-most-once layer)")
+        self._flush_recorder()
         if stamp is not None:
             # tick→publish latency (WS callback enqueue → redis pipeline
-            # done) — the p99 < 10 ms phase target, measured per batch.
-            self.latency.observe((time_mod.monotonic() - stamp) * 1000.0)
+            # done) — the p99 < 10 ms phase target, measured per batch —
+            # and its processing component (same window minus queue dwell).
+            now = time_mod.monotonic()
+            self.latency.observe((now - stamp) * 1000.0)
+            self.processing.observe((now - started) * 1000.0)
+
+    def _refresh_watched(self) -> None:
+        """Once per pulse (~1/s, ~0.3 ms): which channels have live
+        subscribers. Fail-open — on error keep the LAST set (a redis blip
+        must not flap the fan-out); a client absent from the set for the
+        subscribe second reconciles over REST (the documented model)."""
+        pubsub_channels = getattr(self.redis, "pubsub_channels", None)
+        if pubsub_channels is None:  # test spies without the method
+            return
+        try:
+            channels = set(pubsub_channels("ltp:*"))
+            channels.update(pubsub_channels("candle:*"))
+            self.watched_channels = channels
+        except Exception:
+            log.exception("pubsub_channels refresh failed; keeping previous set")
+
+    def _flush_recorder(self) -> None:
+        """Block-buffered recording flushes once per queue item instead of
+        per line (a per-line flush syscall cost ~4 ms/full batch — audit
+        finding 4). Crash-loss window: one line → one item (≤1 s); replay's
+        torn-tail tolerance already covers it. Fail-open like _record."""
+        if self.recorder is None:
+            return
+        try:
+            self.recorder.flush()
+        except OSError:
+            log.exception("recorder flush failed — disabling recording for this run")
+            self.recorder = None
 
     def _publish_ltp(self, batch: list[tuple[int, int, str, int | None, int]]) -> None:
         """Latest-price key + fan-out, one pipeline round trip per batch.
-        The KEY is what paper_broker fills from — it must always be SET."""
+        The KEY is what paper_broker fills from — it must ALWAYS be SET.
+        The channel PUBLISH (payload build included) is gated on live
+        subscribers — most of the cost was spent on channels nobody had
+        subscribed (audit findings 1+3)."""
         sid_to_token = self._stock_to_token
+        watched = self.watched_channels
         pipe = self.redis.pipeline(transaction=False)
         for stock_id, ts, price, _dv, _q in batch:
             pipe.set(LTP_KEY.format(stock_id=stock_id), price, ex=LTP_KEY_TTL_SECONDS)
             token = sid_to_token.get(stock_id)
-            if token is not None:
-                pipe.publish(
-                    LTP_CHANNEL.format(instrument_token=token),
-                    json.dumps(
-                        {
-                            "instrument_token": token,
-                            "stock_id": stock_id,
-                            "ltp": float(price),
-                            "ts": datetime.fromtimestamp(ts, tz=UTC).isoformat(),
-                        }
-                    ),
-                )
+            if token is None:
+                continue
+            channel = LTP_CHANNEL.format(instrument_token=token)
+            if channel not in watched:
+                continue
+            pipe.publish(
+                channel,
+                json.dumps(
+                    {
+                        "instrument_token": token,
+                        "stock_id": stock_id,
+                        "ltp": float(price),
+                        "ts": datetime.fromtimestamp(ts, tz=UTC).isoformat(),
+                    }
+                ),
+            )
         pipe.execute()
 
     def _enqueue_committed(self, events: list[dict[str, Any]]) -> None:
@@ -377,15 +436,23 @@ class WorkerState:
                     )
 
     def _publish_events(self, events: list[dict[str, Any]]) -> None:
-        events = [e for e in events if e["kind"] != "trigger"]
-        if not events:
-            return
+        """Candle fan-out, gated on live subscribers per channel — the
+        audit's dominant cost was ~8,000 payloads/batch built and
+        published where no one listened (finding 1)."""
+        watched = self.watched_channels
+        pending = 0
         pipe = self.redis.pipeline(transaction=False)
         for e in events:
+            if e["kind"] == "trigger":
+                continue
             label = TF_LABEL[e["tf_minutes"]]
             table = TIMEFRAME_TABLE[label]
+            channel = CANDLE_CHANNEL.format(table=table, stock_id=e["stock_id"])
+            if channel not in watched:
+                continue
+            pending += 1
             pipe.publish(
-                CANDLE_CHANNEL.format(table=table, stock_id=e["stock_id"]),
+                channel,
                 json.dumps(
                     {
                         "stock_id": e["stock_id"],
@@ -400,7 +467,8 @@ class WorkerState:
                     }
                 ),
             )
-        pipe.execute()
+        if pending:
+            pipe.execute()
 
     def _record(self, line: dict[str, Any]) -> None:
         """Fail-open: recording is observability, never load-bearing — a
@@ -658,6 +726,12 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 
+    # The kiteconnect frame parser is a pure-Python peer thread; at the
+    # default 5 ms switch interval it holds the GIL for the consumer's
+    # whole dwell window (measured p50 5.2 ms → 1.2 ms at 1–2 ms; audit
+    # finding 7). Worker-process-global, deliberate.
+    sys.setswitchinterval(0.002)
+
     boot = asyncio.run(_bootstrap(args.gap_fill))
     if boot is None:
         log.critical("no active Kite token — run scripts/kite_login.py, then restart")
@@ -675,8 +749,11 @@ def main(argv: list[str] | None = None) -> int:
     recorder: TextIO | None = None
     record_path = settings.live_record_path
     if record_path:
-        # Line-buffered: a hard crash loses at most the in-flight line.
-        recorder = open(record_path, "a", buffering=1, encoding="utf-8")  # noqa: SIM115
+        # Block-buffered, flushed once per queue item by the consumer — a
+        # hard crash loses at most one item's lines (≤1 s; replay's
+        # torn-tail tolerance covers the fragment). Per-line flushing cost
+        # ~4 ms/full batch in the latency window (audit finding 4).
+        recorder = open(record_path, "a", encoding="utf-8")  # noqa: SIM115
         # Header makes the recording self-describing — replay (3.4) builds
         # an identical LiveBook from it. Appending to yesterday's file adds
         # a new header line; replay treats each header as a session start.
@@ -758,7 +835,12 @@ def main(argv: list[str] | None = None) -> int:
         log.debug("ticker close raised; ignoring")
     threads[0].join(timeout=60)  # consumer: drains, flushes, sends sentinel
     threads[1].join(timeout=60)  # writer: exits on the sentinel
-    log.info("live-worker stats: %s latency: %s", state.stats, state.latency.summary())
+    avg_batch = state.stats["ticks"] / state.latency.n if state.latency.n else 0.0
+    log.info(
+        "live-worker stats: %s latency: %s dwell: %s processing: %s avg_batch=%.1f",
+        state.stats, state.latency.summary(), state.dwell.summary(),
+        state.processing.summary(), avg_batch,
+    )
     return exit_code
 
 
