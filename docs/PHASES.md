@@ -48,12 +48,16 @@ bug-hunter re-review CLEAN (executed repros).
 PINNED (ledger §Decisions — throttled batch rescore of a bounded hot
 set on a refresher thread; O(1)-incremental rejected; implementation
 AFTER the soak) and the **3.5 alert UI is DONE** (topbar AlertBell +
-useAlertStream; +14 tests, frontend 145; smoked against the real
-stack; ledger §Alert UI). Smoke bycatch recorded in the ledger: the
-Tailwind v4 upgrade broke the `[--color-x]` idiom repo-wide (619
-sites compute to nothing — thread 3), a dashboard duplicate-key
-warning, create-admin's default email couldn't log in (fixed), dev
-vite proxy never forwarded WS upgrades (fixed).
+useAlertStream; smoked against the real stack; ledger §Alert UI).
+**Late session, budget-extended: the Tailwind v4 token migration is
+DONE (thread 3, `10a9d2b` — all 898 broken sites; 5-theme verified;
+ui-reviewer PASS-WITH-NOTES with the polish backlog recorded) and the
+WATCHLIST slice is DONE (`cb2092d` — model→migration→API→WS
+fanout→UI; bug-hunter MEDIUM fixed with executed repro; end-to-end
+browser-verified server-side alert filtering; ledger §Watchlists).**
+Frontend 161 / backend 744-ish tests green at session end; the only
+3.5 remainder is the provisional-confidence implementation (post-soak,
+design pinned).
 **NEXT ACTION: the Monday 2026-07-13 quiet-box soak (thread 1).**
 
 Open threads, in order:
@@ -103,13 +107,14 @@ Open threads, in order:
    by executed repros both sides; consumer-ack mark_sent; details in
    the ledger §Reviews 3.5); suite 727 green post-fix; `make
    engine-build` run in main (set_levels FFI live).
-   **Still open within 3.5:** forming-candle provisional confidence +
-   per-style leaderboards — design DECIDED 2026-07-11 (ledger
-   §Decisions: throttled batch rescore of a bounded hot set;
-   implementation after the soak) — and watchlist-scoped fanout (no
-   watchlist model exists yet). Alert UI DONE 2026-07-11 (ledger §Alert
-   UI). Then 3.6 outcome ticks, 3.7 shadow week + full-session soak
-   (30-day paper clock).
+   **Still open within 3.5:** ONLY forming-candle provisional
+   confidence + per-style leaderboards — design DECIDED 2026-07-11
+   (ledger §Decisions: throttled batch rescore of a bounded hot set;
+   implementation after the soak). Alert UI DONE 2026-07-11 (§Alert
+   UI); watchlists + watchlist-scoped fanout DONE 2026-07-11
+   (§Watchlists — bug-hunter MEDIUM fixed with executed repro). Then
+   3.6 outcome ticks, 3.7 shadow week + full-session soak (30-day
+   paper clock).
 3. **Tailwind v4 token-class migration — ✅ DONE 2026-07-11 (same
    session it was discovered):** all 898 broken `[--color-x]` sites
    (46 files) converted to the v4 `(--color-x)` form; verified in

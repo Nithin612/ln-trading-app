@@ -250,6 +250,20 @@ rows. Final verified pass: ONE in-panel alert row (in-list stock),
 out-of-list alert filtered server-side, "Momo" shown in the scope
 trigger, zero console errors.
 
+bug-hunter: **BUGS-FOUND → all fixed same session, +2 regression
+tests.** MEDIUM (CONFIRMED, executed repro): a watchlist id ≥ 2^63
+(JSON ints are unbounded) reached asyncpg as a DataError and tore down
+the WHOLE WS socket instead of the fail-closed error frame — ids are
+now type-strict (bool/float rejected) and int64-bounded at parse, and
+_watchlist_sids failures degrade to an error frame (a DB hiccup at
+subscribe must never kill the LTP/candle stream). LOWs: REST id params
++ StockRef bounded (422, was 500); create/rename IntegrityError
+backstop (race past the pre-check → 409, was 500). Verified sound:
+the closure/reassignment scope swap has no await between styles+sids
+mutations (reader can never see a mixed state); session lifecycle
+leak-free on disconnect; migration head/types/indexes; producer↔reader
+sid contract; frontend payloads in-range by construction.
+
 ## Tailwind v4 token migration (DONE 2026-07-11, same session)
 
 All 898 `[--color-x]` class sites (46 files) converted to the v4
