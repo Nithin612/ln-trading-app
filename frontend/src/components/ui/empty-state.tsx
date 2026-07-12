@@ -28,12 +28,12 @@ export function EmptyState({ icon, title, description, action, className }: Empt
         className,
       )}
     >
-      <div className="text-[--color-text-muted] mb-4 opacity-50">
+      <div className="text-(--color-text-muted) mb-4 opacity-50">
         {icon ?? <DefaultIcon />}
       </div>
-      <p className="text-sm font-medium text-[--color-text] mb-1">{title}</p>
+      <p className="text-sm font-medium text-(--color-text) mb-1">{title}</p>
       {description && (
-        <p className="text-xs text-[--color-text-muted] max-w-xs">{description}</p>
+        <p className="text-xs text-(--color-text-muted) max-w-xs">{description}</p>
       )}
       {action && <div className="mt-4">{action}</div>}
     </div>

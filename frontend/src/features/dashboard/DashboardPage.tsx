@@ -73,7 +73,7 @@ interface StatCardProps {
 
 function StatCard({ label, value, icon, color, sub }: StatCardProps) {
   return (
-    <div className="bg-[--color-surface-2] border border-[--color-border] rounded-lg p-4 flex items-start gap-3">
+    <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg p-4 flex items-start gap-3">
       <div
         className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
         style={{ background: color ? `${color}20` : 'var(--color-surface-3)' }}
@@ -81,9 +81,9 @@ function StatCard({ label, value, icon, color, sub }: StatCardProps) {
         <span style={{ color: color ?? 'var(--color-text-muted)' }}>{icon}</span>
       </div>
       <div className="min-w-0">
-        <p className="text-xs text-[--color-text-muted] uppercase tracking-wide mb-1">{label}</p>
-        <div className="text-xl font-bold font-mono text-[--color-text]">{value}</div>
-        {sub && <p className="text-xs text-[--color-text-muted] mt-0.5">{sub}</p>}
+        <p className="text-xs text-(--color-text-muted) uppercase tracking-wide mb-1">{label}</p>
+        <div className="text-xl font-bold font-mono text-(--color-text)">{value}</div>
+        {sub && <p className="text-xs text-(--color-text-muted) mt-0.5">{sub}</p>}
       </div>
     </div>
   )
@@ -241,10 +241,10 @@ export function DashboardPage() {
         }}
       >
         {/* ── Signals table ── */}
-        <div className="bg-[--color-surface-2] border border-[--color-border] rounded-lg">
+        <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg">
           {/* Filter bar */}
-          <div className="px-4 py-3 border-b border-[--color-border] flex flex-wrap gap-3 items-center">
-            <span className="text-xs font-semibold text-[--color-text-muted] uppercase tracking-wide mr-auto">
+          <div className="px-4 py-3 border-b border-(--color-border) flex flex-wrap gap-3 items-center">
+            <span className="text-xs font-semibold text-(--color-text-muted) uppercase tracking-wide mr-auto">
               Signals
             </span>
 
@@ -269,7 +269,7 @@ export function DashboardPage() {
             />
 
             {/* Direction toggle */}
-            <div className="flex rounded overflow-hidden border border-[--color-border]">
+            <div className="flex rounded overflow-hidden border border-(--color-border)">
               {DIRECTIONS.map((d) => (
                 <button
                   key={d}
@@ -331,10 +331,13 @@ export function DashboardPage() {
             <div className="overflow-x-auto">
               <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr className="border-b border-[--color-border] bg-[--color-surface-2] sticky top-0">
-                    {['Symbol', 'Sparkline', 'LTP', 'Dir', 'Class', 'Conf', 'Entry', 'SL', 'TP', 'Qty', 'Valid until', '', ''].map((h) => (
+                  <tr className="border-b border-(--color-border) bg-(--color-surface-2) sticky top-0">
+                    {/* static header list — index keys are stable here; the
+                        two trailing action columns share the "" label, so
+                        label keys duplicated (React duplicate-key warning) */}
+                    {['Symbol', 'Sparkline', 'LTP', 'Dir', 'Class', 'Conf', 'Entry', 'SL', 'TP', 'Qty', 'Valid until', '', ''].map((h, i) => (
                       <th
-                        key={h}
+                        key={i}
                         className="px-3 py-2 text-[10px] uppercase tracking-wide font-medium whitespace-nowrap"
                         style={{ color: 'var(--color-text-muted)', textAlign: h === 'Symbol' ? 'left' : 'right' }}
                       >
@@ -353,13 +356,13 @@ export function DashboardPage() {
                       <tr
                         key={sig.id}
                         onClick={() => setSelectedSignal(sig)}
-                        className="border-b border-[--color-border] cursor-pointer transition-colors hover:bg-[--color-surface-hover]"
+                        className="border-b border-(--color-border) cursor-pointer transition-colors hover:bg-(--color-surface-hover)"
                       >
                         <td className="px-3 py-2">
                           <Link
                             to={`/stocks/${sig.stock_id}`}
                             onClick={(e) => e.stopPropagation()}
-                            className="font-mono font-bold text-[--color-accent] hover:text-[--color-accent-hover] text-sm"
+                            className="font-mono font-bold text-(--color-accent) hover:text-(--color-accent-hover) text-sm"
                             style={{ textDecoration: 'none' }}
                           >
                             {sig.symbol}
@@ -382,17 +385,17 @@ export function DashboardPage() {
                           }
                         </td>
                         <td className="px-3 py-2 text-right"><DirectionBadge dir={sig.direction} /></td>
-                        <td className="px-3 py-2 text-right text-[--color-text-muted]">{sig.classification}</td>
+                        <td className="px-3 py-2 text-right text-(--color-text-muted)">{sig.classification}</td>
                         <td className="px-3 py-2 text-right"><ConfidenceBadge pct={sig.confidence_pct} /></td>
-                        <td className="px-3 py-2 text-right font-mono text-[--color-text]">₹{pctFmt(sig.entry_price)}</td>
+                        <td className="px-3 py-2 text-right font-mono text-(--color-text)">₹{pctFmt(sig.entry_price)}</td>
                         <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bear)' }}>₹{pctFmt(sig.stop_loss)}</td>
                         <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bull)' }}>₹{pctFmt(sig.take_profit)}</td>
                         <td className="px-3 py-2 text-right font-mono">{sig.suggested_qty.toLocaleString('en-IN')}</td>
-                        <td className="px-3 py-2 text-right text-[--color-text-muted] whitespace-nowrap">{validUntil}</td>
+                        <td className="px-3 py-2 text-right text-(--color-text-muted) whitespace-nowrap">{validUntil}</td>
                         <td className="px-3 py-2 text-right">
                           <button
                             onClick={(e) => { e.stopPropagation(); copySignal(sig) }}
-                            className="p-1 rounded text-[--color-text-muted] hover:text-[--color-text] hover:bg-[--color-surface-3] transition-colors"
+                            className="p-1 rounded text-(--color-text-muted) hover:text-(--color-text) hover:bg-(--color-surface-3) transition-colors"
                             title="Copy signal"
                           >
                             <Copy size={12} />
@@ -426,23 +429,23 @@ export function DashboardPage() {
         {/* ── Right column: FII/DII chart + filings ── */}
         <div className="flex flex-col gap-3">
           {/* FII/DII mini chart */}
-          <div className="bg-[--color-surface-2] border border-[--color-border] rounded-lg p-4">
+          <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg p-4">
             <div className="flex items-center justify-between mb-3">
-              <p className="text-xs font-semibold text-[--color-text-muted] uppercase tracking-wide">
+              <p className="text-xs font-semibold text-(--color-text-muted) uppercase tracking-wide">
                 FII / DII Net (Cash)
               </p>
-              <span className="text-xs text-[--color-text-muted]">
+              <span className="text-xs text-(--color-text-muted)">
                 {latestFii?.trade_date ?? '—'}
               </span>
             </div>
 
             <div className="flex gap-4 mb-3">
               <div>
-                <p className="text-[10px] text-[--color-text-muted] uppercase tracking-wide mb-0.5">FII</p>
+                <p className="text-[10px] text-(--color-text-muted) uppercase tracking-wide mb-0.5">FII</p>
                 <div className="text-sm font-semibold">{crFormat(latestFii?.net_value_cr)}</div>
               </div>
               <div>
-                <p className="text-[10px] text-[--color-text-muted] uppercase tracking-wide mb-0.5">DII</p>
+                <p className="text-[10px] text-(--color-text-muted) uppercase tracking-wide mb-0.5">DII</p>
                 <div className="text-sm font-semibold">{crFormat(latestDii?.net_value_cr)}</div>
               </div>
             </div>
@@ -468,7 +471,7 @@ export function DashboardPage() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-20 flex items-center justify-center text-xs text-[--color-text-muted]">No flow data</div>
+              <div className="h-20 flex items-center justify-center text-xs text-(--color-text-muted)">No flow data</div>
             )}
           </div>
 

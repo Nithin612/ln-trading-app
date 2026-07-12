@@ -56,7 +56,7 @@ function CreateUserModal({ token, onClose }: { token: string; onClose: () => voi
   return (
     <div className="fixed inset-0 z-50 bg-black/60 flex items-center justify-center">
       <div className="card w-full max-w-[400px]">
-        <h2 className="text-base font-semibold text-[--color-text] mb-5">New User</h2>
+        <h2 className="text-base font-semibold text-(--color-text) mb-5">New User</h2>
         <form onSubmit={(e) => { e.preventDefault(); const err = validate(); if (err) { setError(err); return } mutation.mutate() }}>
           <div className="space-y-3 mb-5">
             <div>
@@ -116,11 +116,11 @@ function InlineUserEdit({ user, token, onDone }: InlineUserEditProps) {
         <Input
           value={edit.full_name}
           onChange={(e) => setEdit((s) => ({ ...s, full_name: e.target.value }))}
-          className="h-7 text-xs bg-[--color-surface-3] border-[--color-border] text-[--color-text] focus-visible:ring-[--color-accent] w-32"
+          className="h-7 text-xs bg-(--color-surface-3) border-(--color-border) text-(--color-text) focus-visible:ring-(--color-accent) w-32"
           onKeyDown={(e) => { if (e.key === 'Enter') mut.mutate(); if (e.key === 'Escape') onDone() }}
         />
       </td>
-      <td className="px-3 py-2 text-xs text-[--color-text-muted]">{user.email}</td>
+      <td className="px-3 py-2 text-xs text-(--color-text-muted)">{user.email}</td>
       <td className="px-3 py-2">
         <SimpleSelect
           size="sm"
@@ -146,8 +146,8 @@ function InlineUserEdit({ user, token, onDone }: InlineUserEditProps) {
       </td>
       <td className="px-3 py-2">
         <div className="flex items-center gap-1">
-          <button onClick={() => mut.mutate()} disabled={mut.isPending} className="p-1.5 rounded text-[--color-bull] hover:bg-[--color-surface-3]"><Check size={13} /></button>
-          <button onClick={onDone} className="p-1.5 rounded text-[--color-text-muted] hover:bg-[--color-surface-3]"><X size={13} /></button>
+          <button onClick={() => mut.mutate()} disabled={mut.isPending} className="p-1.5 rounded text-(--color-bull) hover:bg-(--color-surface-3)"><Check size={13} /></button>
+          <button onClick={onDone} className="p-1.5 rounded text-(--color-text-muted) hover:bg-(--color-surface-3)"><X size={13} /></button>
         </div>
       </td>
     </>
@@ -190,7 +190,7 @@ export function UsersPage() {
 
   const filterBtnCls = (active: boolean) =>
     `px-2.5 py-1 text-xs font-medium transition-colors ${
-      active ? 'bg-[--color-accent] text-white' : 'bg-[--color-surface-3] text-[--color-text-muted] hover:text-[--color-text]'
+      active ? 'bg-(--color-accent) text-white' : 'bg-(--color-surface-3) text-(--color-text-muted) hover:text-(--color-text)'
     }`
 
   return (
@@ -208,16 +208,16 @@ export function UsersPage() {
       {/* Filters */}
       <div className="flex gap-3 flex-wrap items-center mb-4">
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-[--color-text-muted]">Role:</span>
-          <div className="flex rounded overflow-hidden border border-[--color-border]">
+          <span className="text-xs text-(--color-text-muted)">Role:</span>
+          <div className="flex rounded overflow-hidden border border-(--color-border)">
             {(['ALL', 'admin', 'user'] as RoleFilter[]).map((r) => (
               <button key={r} onClick={() => setRoleFilter(r)} className={filterBtnCls(roleFilter === r)}>{r}</button>
             ))}
           </div>
         </div>
         <div className="flex items-center gap-1.5">
-          <span className="text-xs text-[--color-text-muted]">Status:</span>
-          <div className="flex rounded overflow-hidden border border-[--color-border]">
+          <span className="text-xs text-(--color-text-muted)">Status:</span>
+          <div className="flex rounded overflow-hidden border border-(--color-border)">
             {(['ALL', 'active', 'inactive'] as StatusFilter[]).map((s) => (
               <button key={s} onClick={() => setStatusFilter(s)} className={filterBtnCls(statusFilter === s)}>{s}</button>
             ))}
@@ -226,7 +226,7 @@ export function UsersPage() {
         {(roleFilter !== 'ALL' || statusFilter !== 'ALL') && (
           <button
             onClick={() => { setRoleFilter('ALL'); setStatusFilter('ALL') }}
-            className="text-xs text-[--color-text-muted] hover:text-[--color-text] transition-colors"
+            className="text-xs text-(--color-text-muted) hover:text-(--color-text) transition-colors"
           >
             Clear filters
           </button>
@@ -235,7 +235,7 @@ export function UsersPage() {
 
       {isLoading && <SkeletonTable rows={5} cols={6} />}
       {error && (
-        <p className="text-sm text-[--color-error]">
+        <p className="text-sm text-(--color-error)">
           {error instanceof ApiError ? error.message : 'Failed to load users.'}
         </p>
       )}
@@ -244,32 +244,32 @@ export function UsersPage() {
         filteredUsers.length === 0 ? (
           <EmptyState title="No users" description="No users match your current filters." />
         ) : (
-          <div className="rounded-lg border border-[--color-border] overflow-hidden">
+          <div className="rounded-lg border border-(--color-border) overflow-hidden">
             <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
               <thead>
-                <tr className="border-b border-[--color-border] bg-[--color-surface-2] sticky top-0">
+                <tr className="border-b border-(--color-border) bg-(--color-surface-2) sticky top-0">
                   {['Name', 'Email', 'Role', 'Mode', 'Status', 'Actions'].map((h) => (
-                    <th key={h} className="px-3 py-2.5 text-left text-[10px] uppercase tracking-wide font-medium text-[--color-text-muted]">{h}</th>
+                    <th key={h} className="px-3 py-2.5 text-left text-[10px] uppercase tracking-wide font-medium text-(--color-text-muted)">{h}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
                 {filteredUsers.map((u) => (
-                  <tr key={u.id} className="border-b border-[--color-border] hover:bg-[--color-surface-hover] transition-colors">
+                  <tr key={u.id} className="border-b border-(--color-border) hover:bg-(--color-surface-hover) transition-colors">
                     {editingId === u.id ? (
                       <InlineUserEdit user={u} token={accessToken!} onDone={() => setEditingId(null)} />
                     ) : (
                       <>
-                        <td className="px-3 py-2.5 font-medium text-[--color-text]">{u.full_name}</td>
-                        <td className="px-3 py-2.5 text-[--color-text-muted] text-xs">{u.email}</td>
+                        <td className="px-3 py-2.5 font-medium text-(--color-text)">{u.full_name}</td>
+                        <td className="px-3 py-2.5 text-(--color-text-muted) text-xs">{u.email}</td>
                         <td className="px-3 py-2.5">
                           <Badge
-                            className={`text-xs font-mono ${u.role === 'admin' ? 'bg-purple-900/40 text-purple-300 border-purple-700 border' : 'bg-[--color-surface-3] text-[--color-text-muted] border-[--color-border] border'}`}
+                            className={`text-xs font-mono ${u.role === 'admin' ? 'bg-purple-900/40 text-purple-300 border-purple-700 border' : 'bg-(--color-surface-3) text-(--color-text-muted) border-(--color-border) border'}`}
                           >
                             {u.role}
                           </Badge>
                         </td>
-                        <td className="px-3 py-2.5 text-[--color-text-muted] text-xs">{u.trading_mode}</td>
+                        <td className="px-3 py-2.5 text-(--color-text-muted) text-xs">{u.trading_mode}</td>
                         <td className="px-3 py-2.5">
                           <span
                             className="text-xs font-medium"
@@ -282,7 +282,7 @@ export function UsersPage() {
                           <div className="flex items-center gap-1">
                             <button
                               onClick={() => setEditingId(u.id)}
-                              className="p-1.5 rounded text-[--color-text-muted] hover:text-[--color-accent] hover:bg-[--color-surface-3] transition-colors"
+                              className="p-1.5 rounded text-(--color-text-muted) hover:text-(--color-accent) hover:bg-(--color-surface-3) transition-colors"
                               title="Edit user"
                             >
                               <Edit2 size={13} />
@@ -290,7 +290,7 @@ export function UsersPage() {
                             <button
                               onClick={() => deactivateMut.mutate(u.id)}
                               disabled={deactivateMut.isPending}
-                              className="p-1.5 rounded text-[--color-text-muted] hover:bg-[--color-surface-3] transition-colors"
+                              className="p-1.5 rounded text-(--color-text-muted) hover:bg-(--color-surface-3) transition-colors"
                               title={u.is_active ? 'Deactivate' : 'Activate'}
                               style={{ color: u.is_active ? 'var(--color-bear)' : 'var(--color-bull)' }}
                             >

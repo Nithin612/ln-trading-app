@@ -31,7 +31,7 @@ export function EquityCurveChart({ data, label, height = 160 }: EquityCurveChart
     <div className="flex flex-col gap-1">
       {label && (
         <div className="flex items-center justify-between text-xs">
-          <span className="text-[--color-text-muted]">Equity curve — {label}</span>
+          <span className="text-(--color-text-muted)">Equity curve — {label}</span>
           <span
             className="font-mono font-bold"
             style={{ color: positive ? 'var(--color-bull)' : 'var(--color-bear)' }}

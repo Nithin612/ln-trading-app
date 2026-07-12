@@ -30,13 +30,13 @@ export function DailyPnlCard() {
 
   return (
     <div
-      className="bg-[--color-surface-2] border rounded-lg p-4"
+      className="bg-(--color-surface-2) border rounded-lg p-4"
       style={{ borderColor: data.circuit_breaker_triggered ? 'var(--color-bear)' : 'var(--color-border)' }}
     >
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <TrendingUp size={14} style={{ color: 'var(--color-text-muted)' }} />
-          <span className="text-xs font-semibold uppercase tracking-wide text-[--color-text-muted]">
+          <span className="text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">
             Today's P&amp;L
           </span>
         </div>
@@ -60,11 +60,11 @@ export function DailyPnlCard() {
 
       {/* Loss limit bar */}
       <div className="mb-2">
-        <div className="flex justify-between text-[10px] text-[--color-text-muted] mb-1">
+        <div className="flex justify-between text-[10px] text-(--color-text-muted) mb-1">
           <span>Loss used</span>
           <span>{usedPct.toFixed(0)}% of ₹{limit.toLocaleString('en-IN', { maximumFractionDigits: 0 })}</span>
         </div>
-        <div className="h-1.5 bg-[--color-surface-3] rounded-full overflow-hidden">
+        <div className="h-1.5 bg-(--color-surface-3) rounded-full overflow-hidden">
           <div
             className="h-full rounded-full transition-all"
             style={{
@@ -75,7 +75,7 @@ export function DailyPnlCard() {
         </div>
       </div>
 
-      <div className="flex justify-between text-[10px] text-[--color-text-muted]">
+      <div className="flex justify-between text-[10px] text-(--color-text-muted)">
         <span>{data.open_count} open · {data.closed_count} closed</span>
         <span>{data.trades_taken_today}/{data.max_trades_per_day} trades</span>
       </div>

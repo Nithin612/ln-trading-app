@@ -78,7 +78,7 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
     <div
       className={cn(
         'flex items-start gap-3 rounded-lg p-3.5 text-sm shadow-lg',
-        'bg-[--color-surface-2] border border-[--color-border]',
+        'bg-(--color-surface-2) border border-(--color-border)',
         'animate-in slide-in-from-right-5 fade-in duration-200',
       )}
       style={{ borderLeft: `3px solid ${s.border}` }}
@@ -89,10 +89,10 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
       >
         {s.icon}
       </span>
-      <span className="flex-1 text-[--color-text]">{toast.message}</span>
+      <span className="flex-1 text-(--color-text)">{toast.message}</span>
       <button
         onClick={onClose}
-        className="flex-shrink-0 text-[--color-text-muted] hover:text-[--color-text] transition-colors mt-0.5"
+        className="flex-shrink-0 text-(--color-text-muted) hover:text-(--color-text) transition-colors mt-0.5"
         aria-label="Dismiss"
       >
         <X size={13} />

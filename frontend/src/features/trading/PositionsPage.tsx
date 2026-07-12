@@ -79,13 +79,13 @@ export function PositionsPage() {
         </div>
       </div>
 
-      <div className="bg-[--color-surface-2] border border-[--color-border] rounded-lg">
-        <div className="px-4 py-3 border-b border-[--color-border] flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wide text-[--color-text-muted]">
+      <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg">
+        <div className="px-4 py-3 border-b border-(--color-border) flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">
             Open Positions
           </span>
           {data && (
-            <span className="text-xs text-[--color-text-muted]">{data.total} position{data.total !== 1 ? 's' : ''}</span>
+            <span className="text-xs text-(--color-text-muted)">{data.total} position{data.total !== 1 ? 's' : ''}</span>
           )}
         </div>
 
@@ -102,7 +102,7 @@ export function PositionsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
               <thead>
-                <tr className="border-b border-[--color-border]">
+                <tr className="border-b border-(--color-border)">
                   {['Symbol', 'Side', 'Qty', 'Entry', 'SL', 'TP', 'Trail', 'Unreal. P&L', 'Opened', ''].map((h) => (
                     <th
                       key={h}
@@ -116,11 +116,11 @@ export function PositionsPage() {
               </thead>
               <tbody>
                 {positions.map((pos) => (
-                  <tr key={pos.id} className="border-b border-[--color-border] hover:bg-[--color-surface-hover]">
+                  <tr key={pos.id} className="border-b border-(--color-border) hover:bg-(--color-surface-hover)">
                     <td className="px-3 py-2">
                       <Link
                         to={`/stocks/${pos.stock_id}`}
-                        className="font-mono font-bold text-[--color-accent] hover:text-[--color-accent-hover]"
+                        className="font-mono font-bold text-(--color-accent) hover:text-(--color-accent-hover)"
                         style={{ textDecoration: 'none' }}
                       >
                         {pos.symbol}
@@ -141,7 +141,7 @@ export function PositionsPage() {
                     <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bull)' }}>{priceFmt(pos.current_tp)}</td>
                     <td className="px-3 py-2 text-right"><TrailBadge state={pos.trail_state} /></td>
                     <td className="px-3 py-2 text-right">{pnlFmt(pos.unrealized_pnl)}</td>
-                    <td className="px-3 py-2 text-right text-[--color-text-muted] whitespace-nowrap">
+                    <td className="px-3 py-2 text-right text-(--color-text-muted) whitespace-nowrap">
                       {new Date(pos.opened_at).toLocaleString('en-IN', {
                         timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short',
                         hour: '2-digit', minute: '2-digit',
@@ -151,14 +151,14 @@ export function PositionsPage() {
                       <div className="flex items-center gap-1 justify-end">
                         <button
                           onClick={() => setSlTarget(pos)}
-                          className="p-1 rounded text-[--color-text-muted] hover:text-[--color-text] hover:bg-[--color-surface-3] transition-colors"
+                          className="p-1 rounded text-(--color-text-muted) hover:text-(--color-text) hover:bg-(--color-surface-3) transition-colors"
                           title="Update SL"
                         >
                           <Edit2 size={12} />
                         </button>
                         <button
                           onClick={() => setCloseTarget(pos)}
-                          className="p-1 rounded hover:bg-[--color-surface-3] transition-colors"
+                          className="p-1 rounded hover:bg-(--color-surface-3) transition-colors"
                           style={{ color: 'var(--color-bear)' }}
                           title="Close position"
                         >

@@ -41,6 +41,21 @@ describe('Popover', () => {
     expect(screen.queryByTestId('panel-content')).not.toBeInTheDocument()
   })
 
+  it('announces expanded state on the trigger', () => {
+    render(
+      <Popover trigger={<button>Open</button>}>
+        <div data-testid="panel-content">Panel</div>
+      </Popover>
+    )
+
+    const trigger = screen.getByRole('button', { name: 'Open' })
+    expect(trigger).toHaveAttribute('aria-expanded', 'false')
+    expect(trigger).toHaveAttribute('aria-haspopup', 'dialog')
+
+    fireEvent.click(trigger)
+    expect(trigger).toHaveAttribute('aria-expanded', 'true')
+  })
+
   it('closes on Escape', () => {
     render(
       <Popover trigger={<button>Open</button>}>

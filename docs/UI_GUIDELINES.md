@@ -41,7 +41,7 @@ These are non-negotiable. If a PR violates any of them, reject it.
 
 ## §2 — Design tokens
 
-All tokens live in `frontend/src/styles/tokens.css`. Tailwind classes consume them via `[--token-name]` bracket syntax.
+All tokens live in `frontend/src/styles/tokens.css`. Tailwind classes consume them via `(--token-name)` bracket syntax.
 
 ### §2.1 Colour — dark theme
 
@@ -274,7 +274,7 @@ Trading apps live in tables. Every detail matters.
       <TableRow key={r.id}>
         <TableCell>{r.symbol}</TableCell>
         <TableCell numeric>{formatCurrency(r.ltp)}</TableCell>
-        <TableCell numeric className={r.change >= 0 ? "text-[--color-profit]" : "text-[--color-loss]"}>
+        <TableCell numeric className={r.change >= 0 ? "text-(--color-profit)" : "text-(--color-loss)"}>
           {formatChange(r.change)}
         </TableCell>
       </TableRow>
@@ -287,7 +287,7 @@ Trading apps live in tables. Every detail matters.
 
 ```tsx
 // Inside table.tsx
-<thead className="sticky top-0 z-10 bg-[--color-surface-2] border-b border-[--color-border]">
+<thead className="sticky top-0 z-10 bg-(--color-surface-2) border-b border-(--color-border)">
 ```
 
 The bg must be **opaque** — never `/80` or `/50` opacity. Rows must scroll *behind* it cleanly.
@@ -300,7 +300,7 @@ const TableHead = ({ className, numeric, ...props }) => (
     className={cn(
       "h-10 px-2 align-middle whitespace-nowrap",
       "text-xs font-semibold uppercase tracking-wider",
-      "text-[--color-text-secondary]",
+      "text-(--color-text-secondary)",
       numeric && "text-right",
       className
     )}
@@ -315,8 +315,8 @@ const TableHead = ({ className, numeric, ...props }) => (
 const TableRow = ({ className, ...props }) => (
   <tr
     className={cn(
-      "border-b border-[--color-border]",
-      "hover:bg-[--color-surface-3]",
+      "border-b border-(--color-border)",
+      "hover:bg-(--color-surface-3)",
       "transition-colors duration-150 ease-out",
       className
     )}
@@ -356,7 +356,7 @@ Don't introduce a third "spacious" mode. Two is plenty.
 ### §4.7 Sortable columns
 
 When a column is sortable:
-- Header cursor: `cursor-pointer hover:text-[--color-text]`
+- Header cursor: `cursor-pointer hover:text-(--color-text)`
 - Inline arrow icon (lucide `ChevronUp` / `ChevronDown` 12px) appears for the active sort column only
 - Inactive sortable columns show no icon but reveal a dim `ChevronsUpDown` on header hover
 
@@ -378,12 +378,12 @@ If a table renders more than 200 rows of live-updating data, use `@tanstack/reac
 Always via tokens. The only acceptable usage:
 
 ```tsx
-className={value >= 0 ? "text-[--color-profit]" : "text-[--color-loss]"}
+className={value >= 0 ? "text-(--color-profit)" : "text-(--color-loss)"}
 ```
 
 For backgrounds (e.g., tick flash, status pill fill):
 ```tsx
-className={value >= 0 ? "bg-[--color-profit-bg]" : "bg-[--color-loss-bg]"}
+className={value >= 0 ? "bg-(--color-profit-bg)" : "bg-(--color-loss-bg)"}
 ```
 
 Banned everywhere in `frontend/src/features/`:
@@ -408,7 +408,7 @@ Every direction/state cell pairs colour with a glyph or icon. Examples:
 <span className={cls}><ArrowUpRight className="inline w-3 h-3" /> +2.34%</span>
 
 // ❌ bad
-<span className="text-[--color-profit]">+2.34%</span>
+<span className="text-(--color-profit)">+2.34%</span>
 ```
 
 `formatChange()` gives you the glyph automatically.
@@ -464,8 +464,8 @@ Used as: `<Badge className="badge-n50">N50</Badge>`. Never hardcode the colour t
 `<PriceCell>` component diffs the previous value via `useRef` and toggles a class for 250ms:
 
 ```tsx
-// up tick:   bg-[--color-profit-bg]/40, removes after 250ms
-// down tick: bg-[--color-loss-bg]/40,   removes after 250ms
+// up tick:   bg-(--color-profit-bg)/40, removes after 250ms
+// down tick: bg-(--color-loss-bg)/40,   removes after 250ms
 // no change: nothing
 ```
 
@@ -532,14 +532,14 @@ Exceptions are allowed only inside `@/components/ui/*` (the primitive layer).
 `outline` and `ghost` variants must declare their text colour explicitly. The base `<Button>` defaults are not enough:
 
 ```tsx
-outline: "border border-[--color-border] bg-transparent text-[--color-text-secondary] hover:bg-[--color-surface-2] hover:text-[--color-text]"
-ghost:   "bg-transparent text-[--color-text-secondary] hover:bg-[--color-surface-2] hover:text-[--color-text]"
+outline: "border border-(--color-border) bg-transparent text-(--color-text-secondary) hover:bg-(--color-surface-2) hover:text-(--color-text)"
+ghost:   "bg-transparent text-(--color-text-secondary) hover:bg-(--color-surface-2) hover:text-(--color-text)"
 ```
 
 ### §8.4 Forms
 
 - Labels via `<Label>` component, never raw `<label>` in features
-- Validation errors via `<FormMessage>` styled with `text-[--color-loss]`
+- Validation errors via `<FormMessage>` styled with `text-(--color-loss)`
 - Field gap: `gap-2` within a field group, `gap-4` between field groups
 - Submit button row: right-aligned, `gap-2`, primary action rightmost
 
@@ -557,17 +557,17 @@ export default function FeaturePage() {
     <div className="h-full flex flex-col gap-4">
       {/* Header — title + actions */}
       <div className="flex-shrink-0 flex items-center justify-between">
-        <h1 className="text-2xl font-semibold text-[--color-text]">Page Title</h1>
+        <h1 className="text-2xl font-semibold text-(--color-text)">Page Title</h1>
         <div className="flex items-center gap-2">{/* actions */}</div>
       </div>
 
       {/* Optional filter strip */}
-      <div className="flex-shrink-0 rounded-lg border border-l-2 border-[--color-border] border-l-[--color-accent]/40 bg-[--color-surface-2] p-3">
+      <div className="flex-shrink-0 rounded-lg border border-l-2 border-(--color-border) border-l-(--color-accent)/40 bg-(--color-surface-2) p-3">
         {/* filters */}
       </div>
 
       {/* Main content — fills remaining height, scrolls independently */}
-      <div className="flex-1 min-h-0 rounded-lg border border-[--color-border] bg-[--color-surface] overflow-hidden">
+      <div className="flex-1 min-h-0 rounded-lg border border-(--color-border) bg-(--color-surface) overflow-hidden">
         <div className="h-full overflow-auto">
           {/* table / chart / content */}
         </div>
@@ -586,12 +586,12 @@ Key rules:
 ### §9.2 Card pattern
 
 ```tsx
-<div className="rounded-lg border border-[--color-border] bg-[--color-surface] p-4">
+<div className="rounded-lg border border-(--color-border) bg-(--color-surface) p-4">
   {/* content */}
 </div>
 ```
 
-Nested cards: use `bg-[--color-surface-2]`. Never opacity-tinted surface backgrounds.
+Nested cards: use `bg-(--color-surface-2)`. Never opacity-tinted surface backgrounds.
 
 ### §9.3 Two-column dashboard pattern
 
@@ -618,9 +618,9 @@ Every interactive element renders a visible ring on `:focus-visible`:
 ```css
 focus-visible:outline-none
 focus-visible:ring-2
-focus-visible:ring-[--color-accent]
+focus-visible:ring-(--color-accent)
 focus-visible:ring-offset-2
-focus-visible:ring-offset-[--color-bg]
+focus-visible:ring-offset-(--color-bg)
 ```
 
 Set this in the base `<Button>`, `<Input>`, `<Select>`, etc. so it propagates.
@@ -700,8 +700,8 @@ Read once, internalize. Each pattern below has appeared in real code somewhere.
 <div className="bg-green-500/20 text-green-300">PROFIT</div>
 
 // ✅ right
-<span className="text-[--color-profit]">▲ +2.34%</span>
-<span className="text-[--color-loss]">▼ -1.12%</span>
+<span className="text-(--color-profit)">▲ +2.34%</span>
+<span className="text-(--color-loss)">▼ -1.12%</span>
 <StatusPill kind="filled">PROFIT</StatusPill>
 ```
 
@@ -715,7 +715,7 @@ Read once, internalize. Each pattern below has appeared in real code somewhere.
 
 // ✅ right — colour + glyph
 <td className={cn("tabular-nums text-right",
-                  change > 0 ? "text-[--color-profit]" : "text-[--color-loss]")}>
+                  change > 0 ? "text-(--color-profit)" : "text-(--color-loss)")}>
   {formatChange(change)}
 </td>
 ```
@@ -748,10 +748,10 @@ Read once, internalize. Each pattern below has appeared in real code somewhere.
 
 ```tsx
 // ❌ wrong — solid card with /50 opacity reads grey, fails contrast
-<div className="bg-[--color-surface]/50 border">...</div>
+<div className="bg-(--color-surface)/50 border">...</div>
 
 // ✅ right — use a dedicated surface token
-<div className="bg-[--color-surface-2] border border-[--color-border]">...</div>
+<div className="bg-(--color-surface-2) border border-(--color-border)">...</div>
 ```
 
 ### §12.7 Page layout drift
@@ -836,8 +836,11 @@ grep -rE "\.toFixed\(2\)\s*\+\s*['\"]%|₹\s*\{[a-zA-Z_]+(\.[a-zA-Z_]+)?\}" fron
 # Loading text strings
 grep -rE "<(div|p|span)[^>]*>Loading\.{0,3}<" frontend/src/features/
 
-# Opacity on solid surface tokens
-grep -rE "bg-\[--color-surface[^]]*\]/[0-9]" frontend/src/features/
+# Opacity on solid surface tokens (paren = live v4 form; bracket = dead
+# pre-v4 form — any bracket hit is a regression to syntax that renders
+# as NOTHING, see the 2026-07-11 migration in the phase-3 ledger)
+grep -rE "bg-[\[(]--color-(surface|bg|sidebar|topbar|row-alt)[^)\]]*[\])]/[0-9]" frontend/src/features/
+grep -rE -- "-\[--color-" frontend/src/
 
 # Hardcoded z-index
 grep -rE "z-\[[0-9]+\]" frontend/src/features/
@@ -1045,17 +1048,17 @@ const PRESETS = [
 
 <div className="space-y-4">
   {/* Live preview pane */}
-  <div className="rounded-lg border border-[--color-border] bg-[--color-surface-2] p-4"
+  <div className="rounded-lg border border-(--color-border) bg-(--color-surface-2) p-4"
        style={{ fontSize: `${size}px` }}>
     Preview: RELIANCE INFY TCS — ₹2,345.50 +1.2% BUY signal
   </div>
 
   {/* Slider */}
   <div className="flex items-center gap-4">
-    <span className="text-xs text-[--color-text-muted]" style={{ fontSize: 11 }}>A</span>
+    <span className="text-xs text-(--color-text-muted)" style={{ fontSize: 11 }}>A</span>
     <Slider min={12} max={22} step={1} value={[size]} onValueChange={([v]) => setSize(v)} className="flex-1" />
-    <span className="text-base text-[--color-text]" style={{ fontSize: 22 }}>A</span>
-    <span className="w-12 text-right tabular-nums text-sm text-[--color-text-secondary]">
+    <span className="text-base text-(--color-text)" style={{ fontSize: 22 }}>A</span>
+    <span className="w-12 text-right tabular-nums text-sm text-(--color-text-secondary)">
       {size}px
     </span>
   </div>
@@ -1200,8 +1203,8 @@ For **every** Select, DropdownMenu, Popover, Combobox, ContextMenu, HoverCard:
       className={cn(
         "z-50",
         "min-w-[220px]",
-        "bg-[--color-surface]",                         // SOLID — no /50 /80
-        "border border-[--color-border-strong]",        // strong border, not subtle
+        "bg-(--color-surface)",                         // SOLID — no /50 /80
+        "border border-(--color-border-strong)",        // strong border, not subtle
         "rounded-lg",
         "shadow-2xl shadow-black/50",
         "p-1",
@@ -1216,7 +1219,7 @@ For **every** Select, DropdownMenu, Popover, Combobox, ContextMenu, HoverCard:
 
 Hard rules:
 1. **Always wrap Content in Portal.** Even if it seems to work without — it breaks the moment any ancestor gets `transform`, `filter`, `overflow:hidden`, or `position:fixed`.
-2. **Background must be solid token.** Never `bg-card/50`, `bg-[--color-surface]/80`. Use `bg-[--color-surface]` flat.
+2. **Background must be solid token.** Never `bg-card/50`, `bg-(--color-surface)/80`. Use `bg-(--color-surface)` flat.
 3. **Border must use `--color-border-strong`** for floating panels. Subtle border on a floating panel looks "stuck to the page."
 4. **Add shadow** — `shadow-2xl shadow-black/50` in dark themes — to lift the panel visually.
 5. **`z-50` minimum.** Modals are `z-40`, dropdowns are `z-50` (sit above modal triggers but below modal scrim — adjust if you discover stacking conflicts).
@@ -1250,14 +1253,14 @@ The profile dropdown was the most visible failure. Reference implementation:
     <DropdownMenu.Content
       sideOffset={8}
       align="end"
-      className="z-50 w-72 bg-[--color-surface] border border-[--color-border-strong] rounded-xl shadow-2xl shadow-black/50 p-2"
+      className="z-50 w-72 bg-(--color-surface) border border-(--color-border-strong) rounded-xl shadow-2xl shadow-black/50 p-2"
     >
       {/* user identity header */}
-      <div className="px-3 py-3 border-b border-[--color-border] flex items-center gap-3">
+      <div className="px-3 py-3 border-b border-(--color-border) flex items-center gap-3">
         <Avatar size="md">{initial}</Avatar>
         <div className="flex-1 min-w-0">
-          <div className="font-semibold text-[--color-text] truncate">{user.name}</div>
-          <div className="text-xs text-[--color-text-secondary] truncate">{user.email}</div>
+          <div className="font-semibold text-(--color-text) truncate">{user.name}</div>
+          <div className="text-xs text-(--color-text-secondary) truncate">{user.email}</div>
           <div className="flex gap-1 mt-1">
             <Badge variant="info">Admin</Badge>
             <Badge variant="warning">Paper Trading</Badge>
@@ -1266,14 +1269,14 @@ The profile dropdown was the most visible failure. Reference implementation:
       </div>
 
       {/* menu items */}
-      <DropdownMenu.Item className="px-3 py-2 rounded-md text-sm text-[--color-text-secondary] hover:bg-[--color-surface-2] hover:text-[--color-text] cursor-pointer flex items-center gap-2">
+      <DropdownMenu.Item className="px-3 py-2 rounded-md text-sm text-(--color-text-secondary) hover:bg-(--color-surface-2) hover:text-(--color-text) cursor-pointer flex items-center gap-2">
         <UserIcon className="w-4 h-4" /> My Profile
       </DropdownMenu.Item>
       <DropdownMenu.Item className="...">
         <SettingsIcon className="w-4 h-4" /> Appearance Settings
       </DropdownMenu.Item>
-      <DropdownMenu.Separator className="my-1 h-px bg-[--color-border]" />
-      <DropdownMenu.Item className="px-3 py-2 rounded-md text-sm text-[--color-loss] hover:bg-[--color-loss-bg]/40 cursor-pointer flex items-center gap-2">
+      <DropdownMenu.Separator className="my-1 h-px bg-(--color-border)" />
+      <DropdownMenu.Item className="px-3 py-2 rounded-md text-sm text-(--color-loss) hover:bg-(--color-loss-bg)/40 cursor-pointer flex items-center gap-2">
         <LogOutIcon className="w-4 h-4" /> Sign out
       </DropdownMenu.Item>
     </DropdownMenu.Content>
@@ -1317,7 +1320,7 @@ export function PasswordInput({ value, onChange, ...props }) {
         type="button"
         onClick={() => setShown(s => !s)}
         aria-label={shown ? "Hide password" : "Show password"}
-        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-[--color-text-muted] hover:text-[--color-text] hover:bg-[--color-surface-2] transition-colors duration-150"
+        className="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded-md text-(--color-text-muted) hover:text-(--color-text) hover:bg-(--color-surface-2) transition-colors duration-150"
       >
         {shown ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
       </button>
@@ -1374,7 +1377,7 @@ Pick **one** per theme. Lightweight, CSS/SVG only — no large image downloads.
         const open = high + ((i * 11) % (low - high - 20)) + 10;
         const close = isGreen ? low - 30 : high + 30;
         return (
-          <g key={i} className={isGreen ? 'text-[--color-profit]' : 'text-[--color-loss]'}>
+          <g key={i} className={isGreen ? 'text-(--color-profit)' : 'text-(--color-loss)'}>
             <line x1={x} y1={high} x2={x} y2={low} />
             <rect x={x - 8} y={Math.min(open, close)} width={16} height={Math.abs(close - open)} />
           </g>
@@ -1437,23 +1440,23 @@ This is what makes the difference between "intern table" and "MAANG financial da
 
 | Column type | Style |
 |---|---|
-| Row index (`#`) | `text-[--color-text-muted] text-xs tabular-nums w-12` |
-| Symbol | `font-num font-semibold text-[--color-accent] tracking-wide` |
-| Company name | `font-medium text-[--color-text]` |
-| Industry / Sector | `text-[--color-text-secondary] text-sm` |
+| Row index (`#`) | `text-(--color-text-muted) text-xs tabular-nums w-12` |
+| Symbol | `font-num font-semibold text-(--color-accent) tracking-wide` |
+| Company name | `font-medium text-(--color-text)` |
+| Industry / Sector | `text-(--color-text-secondary) text-sm` |
 | Numeric (LTP, MktCap, Volume, Qty) | `font-num tabular-nums text-right` |
 | Change % / P&L | `font-num tabular-nums text-right` + `--color-profit`/`--color-loss` + glyph |
 | Status / Segment / Series badges | Status pill classes (see §19.3) |
-| ISIN / metadata | `font-num text-xs text-[--color-text-muted]` |
+| ISIN / metadata | `font-num text-xs text-(--color-text-muted)` |
 | Actions | Ghost icon-buttons with per-action hover color (§19.4) |
 
 ### §19.2 Row design
 
 Apply at TableRow base:
-- Border bottom: `border-b border-[--color-border]`
+- Border bottom: `border-b border-(--color-border)`
 - Last row no border: covered by existing `[&_tr:last-child]:border-0` selector
-- Hover: `hover:bg-[--color-surface-2]` (do NOT use `bg-[--color-surface]/50` — opacity bug)
-- Active row (e.g., focused for keyboard nav): `data-[selected]:bg-[--color-accent-bg]`
+- Hover: `hover:bg-(--color-surface-2)` (do NOT use `bg-(--color-surface)/50` — opacity bug)
+- Active row (e.g., focused for keyboard nav): `data-[selected]:bg-(--color-accent-bg)`
 - Transition: `transition-colors duration-150`
 
 ### §19.3 Status pill component
@@ -1461,15 +1464,15 @@ Apply at TableRow base:
 ```tsx
 // src/components/ui/StatusPill.tsx
 const variants = {
-  active:   "bg-[--color-info-bg]    text-[--color-info]    border-[--color-info]/30",
-  closed:   "bg-[--color-surface-3]  text-[--color-text-secondary] border-[--color-border]",
-  profit:   "bg-[--color-profit-bg]  text-[--color-profit]  border-[--color-profit]/30",
-  loss:     "bg-[--color-loss-bg]    text-[--color-loss]    border-[--color-loss]/30",
-  open:     "bg-[--color-warning-bg] text-[--color-warning] border-[--color-warning]/30",
-  pending:  "bg-[--color-warning-bg] text-[--color-warning] border-[--color-warning]/30",
-  filled:   "bg-[--color-profit-bg]  text-[--color-profit]  border-[--color-profit]/30",
-  rejected: "bg-[--color-loss-bg]    text-[--color-loss]    border-[--color-loss]/30",
-  expired:  "bg-[--color-surface-3]  text-[--color-text-muted] border-[--color-border]",
+  active:   "bg-(--color-info-bg)    text-(--color-info)    border-(--color-info)/30",
+  closed:   "bg-(--color-surface-3)  text-(--color-text-secondary) border-(--color-border)",
+  profit:   "bg-(--color-profit-bg)  text-(--color-profit)  border-(--color-profit)/30",
+  loss:     "bg-(--color-loss-bg)    text-(--color-loss)    border-(--color-loss)/30",
+  open:     "bg-(--color-warning-bg) text-(--color-warning) border-(--color-warning)/30",
+  pending:  "bg-(--color-warning-bg) text-(--color-warning) border-(--color-warning)/30",
+  filled:   "bg-(--color-profit-bg)  text-(--color-profit)  border-(--color-profit)/30",
+  rejected: "bg-(--color-loss-bg)    text-(--color-loss)    border-(--color-loss)/30",
+  expired:  "bg-(--color-surface-3)  text-(--color-text-muted) border-(--color-border)",
 };
 
 export function StatusPill({ status, children, className }) {
@@ -1497,13 +1500,13 @@ Three actions, three colors. Always icon-buttons in ghost variant.
 
 ```tsx
 <div className="flex items-center justify-end gap-0.5">
-  <Button variant="ghost" size="xs" className="hover:text-[--color-info]" aria-label="View">
+  <Button variant="ghost" size="xs" className="hover:text-(--color-info)" aria-label="View">
     <Eye className="w-4 h-4" />
   </Button>
-  <Button variant="ghost" size="xs" className="hover:text-[--color-accent]" aria-label="Edit">
+  <Button variant="ghost" size="xs" className="hover:text-(--color-accent)" aria-label="Edit">
     <Pencil className="w-4 h-4" />
   </Button>
-  <Button variant="ghost" size="xs" className="hover:text-[--color-loss]" aria-label="Delete">
+  <Button variant="ghost" size="xs" className="hover:text-(--color-loss)" aria-label="Delete">
     <Trash2 className="w-4 h-4" />
   </Button>
 </div>
@@ -1518,36 +1521,36 @@ Stop using uniform card styling for KPI cards. Each KPI card type gets a left-ac
 ```tsx
 // src/components/ui/KpiCard.tsx
 const accents = {
-  primary:  "border-l-[--color-accent]",
-  success:  "border-l-[--color-profit]",
-  info:     "border-l-[--color-info]",
-  warning:  "border-l-[--color-warning]",
-  danger:   "border-l-[--color-loss]",
+  primary:  "border-l-(--color-accent)",
+  success:  "border-l-(--color-profit)",
+  info:     "border-l-(--color-info)",
+  warning:  "border-l-(--color-warning)",
+  danger:   "border-l-(--color-loss)",
 };
 
 export function KpiCard({ label, value, sublabel, icon, accent = "primary" }) {
   return (
     <div className={cn(
-      "rounded-lg border border-[--color-border]",
+      "rounded-lg border border-(--color-border)",
       "border-l-4", accents[accent],
-      "bg-[--color-surface]",
+      "bg-(--color-surface)",
       "p-4 flex items-start justify-between"
     )}>
       <div className="space-y-1">
-        <div className="text-xs font-semibold uppercase tracking-wider text-[--color-text-secondary]">
+        <div className="text-xs font-semibold uppercase tracking-wider text-(--color-text-secondary)">
           {label}
         </div>
-        <div className="text-2xl font-num font-semibold tabular-nums text-[--color-text]">
+        <div className="text-2xl font-num font-semibold tabular-nums text-(--color-text)">
           {value}
         </div>
         {sublabel && (
-          <div className="text-xs text-[--color-text-muted]">{sublabel}</div>
+          <div className="text-xs text-(--color-text-muted)">{sublabel}</div>
         )}
       </div>
       {icon && (
         <div className={cn(
           "w-10 h-10 rounded-lg flex items-center justify-center",
-          "bg-[--color-surface-2] text-[--color-accent]"
+          "bg-(--color-surface-2) text-(--color-accent)"
         )}>
           {icon}
         </div>

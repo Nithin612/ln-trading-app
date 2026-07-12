@@ -22,35 +22,35 @@ import { Plus, Search, X, Pencil, Trash2, BookOpen } from 'lucide-react'
 const PAGE_SIZE = 20
 
 const EMOTION_COLORS: Record<string, string> = {
-  confident: 'text-[--color-profit]',
-  neutral:   'text-[--color-text-muted]',
+  confident: 'text-(--color-profit)',
+  neutral:   'text-(--color-text-muted)',
   fear:      'text-orange-400',
   greed:     'text-purple-400',
   anxious:   'text-yellow-400',
-  satisfied: 'text-[--color-profit]',
+  satisfied: 'text-(--color-profit)',
   excited:   'text-blue-400',
-  frustrated:'text-[--color-loss]',
+  frustrated:'text-(--color-loss)',
   regret:    'text-orange-400',
 }
 
 function EmotionChip({ emotion }: { emotion: string | null }) {
-  if (!emotion) return <span className="text-[--color-text-muted]">—</span>
+  if (!emotion) return <span className="text-(--color-text-muted)">—</span>
   return (
-    <span className={cn('capitalize text-xs', EMOTION_COLORS[emotion] ?? 'text-[--color-text-muted]')}>
+    <span className={cn('capitalize text-xs', EMOTION_COLORS[emotion] ?? 'text-(--color-text-muted)')}>
       {emotion}
     </span>
   )
 }
 
 function PnlBadge({ pnl }: { pnl: string | null }) {
-  if (!pnl) return <span className="text-[--color-text-muted]">—</span>
+  if (!pnl) return <span className="text-(--color-text-muted)">—</span>
   const n = Number(pnl)
   const label = `${n >= 0 ? '+' : ''}₹${Math.abs(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
   return (
     <span
       className={cn(
         'text-xs font-mono font-semibold',
-        n >= 0 ? 'text-[--color-bull]' : 'text-[--color-bear]',
+        n >= 0 ? 'text-(--color-bull)' : 'text-(--color-bear)',
       )}
     >
       {label}
@@ -68,15 +68,15 @@ function EntryRow({
   onDelete: (id: string) => void
 }) {
   return (
-    <tr className="border-b border-[--color-border] hover:bg-[--color-surface-3] transition-colors group">
-      <td className="px-4 py-3 text-sm text-[--color-text-muted] whitespace-nowrap">
+    <tr className="border-b border-(--color-border) hover:bg-(--color-surface-3) transition-colors group">
+      <td className="px-4 py-3 text-sm text-(--color-text-muted) whitespace-nowrap">
         {entry.trade_date}
       </td>
       <td className="px-4 py-3">
         {entry.symbol ? (
-          <span className="text-sm font-medium text-[--color-text]">{entry.symbol}</span>
+          <span className="text-sm font-medium text-(--color-text)">{entry.symbol}</span>
         ) : (
-          <span className="text-xs text-[--color-text-muted]">—</span>
+          <span className="text-xs text-(--color-text-muted)">—</span>
         )}
       </td>
       <td className="px-4 py-3">
@@ -85,14 +85,14 @@ function EntryRow({
             className={cn(
               'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium border',
               entry.side === 'LONG'
-                ? 'text-[--color-bull] border-[--color-bull] bg-transparent'
-                : 'text-[--color-bear] border-[--color-bear] bg-transparent',
+                ? 'text-(--color-bull) border-(--color-bull) bg-transparent'
+                : 'text-(--color-bear) border-(--color-bear) bg-transparent',
             )}
           >
             {entry.side}
           </span>
         ) : (
-          <span className="text-xs text-[--color-text-muted]">—</span>
+          <span className="text-xs text-(--color-text-muted)">—</span>
         )}
       </td>
       <td className="px-4 py-3">
@@ -105,15 +105,15 @@ function EntryRow({
         <EmotionChip emotion={entry.emotion_after} />
       </td>
       <td className="px-4 py-3 max-w-[240px]">
-        <p className="text-xs text-[--color-text-muted] truncate">{entry.notes ?? '—'}</p>
+        <p className="text-xs text-(--color-text-muted) truncate">{entry.notes ?? '—'}</p>
       </td>
       <td className="px-4 py-3">
         <span
           className={cn(
             'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
             entry.entry_type === 'auto'
-              ? 'bg-[--color-surface-3] text-[--color-text-muted]'
-              : 'bg-[--color-accent] text-white',
+              ? 'bg-(--color-surface-3) text-(--color-text-muted)'
+              : 'bg-(--color-accent) text-white',
           )}
         >
           {entry.entry_type}
@@ -123,14 +123,14 @@ function EntryRow({
         <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
             onClick={() => onEdit(entry)}
-            className="p-1 rounded text-[--color-text-muted] hover:text-[--color-accent] hover:bg-[--color-surface-3]"
+            className="p-1 rounded text-(--color-text-muted) hover:text-(--color-accent) hover:bg-(--color-surface-3)"
             title="Edit"
           >
             <Pencil size={13} />
           </button>
           <button
             onClick={() => onDelete(entry.id)}
-            className="p-1 rounded text-[--color-text-muted] hover:text-[--color-loss] hover:bg-[--color-surface-3]"
+            className="p-1 rounded text-(--color-text-muted) hover:text-(--color-loss) hover:bg-(--color-surface-3)"
             title="Delete"
           >
             <Trash2 size={13} />
@@ -223,7 +223,7 @@ export function JournalPage() {
         {/* Toolbar */}
         <div className="flex items-center gap-3 flex-wrap">
           <div className="relative flex-1 min-w-[180px] max-w-sm">
-            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[--color-text-muted]" />
+            <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-(--color-text-muted)" />
             <Input
               placeholder="Search notes & lessons…"
               value={search}
@@ -269,7 +269,7 @@ export function JournalPage() {
           {hasFilters && (
             <button
               onClick={clearFilters}
-              className="flex items-center gap-1 text-xs text-[--color-text-muted] hover:text-[--color-text]"
+              className="flex items-center gap-1 text-xs text-(--color-text-muted) hover:text-(--color-text)"
             >
               <X size={12} /> Clear
             </button>
@@ -284,18 +284,18 @@ export function JournalPage() {
 
         {/* Table */}
         <div
-          className="rounded-lg border border-[--color-border] overflow-hidden"
+          className="rounded-lg border border-(--color-border) overflow-hidden"
           style={{ background: 'var(--color-surface-2)' }}
         >
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-[--color-border]">
+                <tr className="border-b border-(--color-border)">
                   {['Date', 'Symbol', 'Side', 'P&L', 'Before', 'After', 'Notes', 'Type', ''].map(
                     (h) => (
                       <th
                         key={h}
-                        className="px-4 py-3 text-left text-xs font-medium text-[--color-text-muted] whitespace-nowrap"
+                        className="px-4 py-3 text-left text-xs font-medium text-(--color-text-muted) whitespace-nowrap"
                       >
                         {h}
                       </th>
@@ -306,7 +306,7 @@ export function JournalPage() {
               <tbody>
                 {isLoading ? (
                   Array.from({ length: 5 }).map((_, i) => (
-                    <tr key={i} className="border-b border-[--color-border]">
+                    <tr key={i} className="border-b border-(--color-border)">
                       {Array.from({ length: 9 }).map((__, j) => (
                         <td key={j} className="px-4 py-3">
                           <Skeleton className="h-4 w-full" />

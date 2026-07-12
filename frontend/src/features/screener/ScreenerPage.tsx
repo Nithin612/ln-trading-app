@@ -119,10 +119,10 @@ export function ScreenerPage() {
       {/* Header */}
       <div className="flex-shrink-0 flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold text-[--color-text]">Screener</h1>
-          <p className="text-sm text-[--color-text-muted]">Filter stocks by any combination of fields</p>
+          <h1 className="text-xl font-semibold text-(--color-text)">Screener</h1>
+          <p className="text-sm text-(--color-text-muted)">Filter stocks by any combination of fields</p>
         </div>
-        <Link to="/stocks" className="text-sm text-[--color-text-muted] hover:text-[--color-text]">← All Stocks</Link>
+        <Link to="/stocks" className="text-sm text-(--color-text-muted) hover:text-(--color-text)">← All Stocks</Link>
       </div>
 
       {/* Main two-column grid */}
@@ -130,7 +130,7 @@ export function ScreenerPage() {
         {/* ── Left: Saved screens + starters ── */}
         <aside className="h-full overflow-y-auto space-y-4">
           <div className="card p-4 space-y-3">
-            <div className="flex items-center gap-2 text-sm font-medium text-[--color-text-muted]">
+            <div className="flex items-center gap-2 text-sm font-medium text-(--color-text-muted)">
               <BookOpen size={14} /> Saved Screens
             </div>
             {savedScreens && savedScreens.length > 0 ? (
@@ -140,17 +140,17 @@ export function ScreenerPage() {
                     <Button
                       type="button"
                       variant="ghost"
-                      className="text-sm text-[--color-text] hover:text-[--color-accent] truncate flex-1 justify-start h-auto py-1 px-2"
+                      className="text-sm text-(--color-text) hover:text-(--color-accent) truncate flex-1 justify-start h-auto py-1 px-2"
                       onClick={() => store.loadSavedScreen(s)}
                     >
                       <div className="flex flex-col items-start gap-0.5 w-full">
                         <div className="flex items-center gap-1.5">
                           {s.name}
                           {store.activeSavedScreen?.id === s.id && (
-                            <span className="text-[10px] text-[--color-accent]">● active</span>
+                            <span className="text-[10px] text-(--color-accent)">● active</span>
                           )}
                         </div>
-                        <p className="text-[10px] text-[--color-text-muted]">
+                        <p className="text-[10px] text-(--color-text-muted)">
                           {new Date(s.updated_at).toLocaleDateString('en-IN')}
                         </p>
                       </div>
@@ -159,7 +159,7 @@ export function ScreenerPage() {
                       type="button"
                       variant="ghost"
                       size="icon-xs"
-                      className="opacity-0 group-hover:opacity-100 text-[--color-text-muted] hover:text-[--color-error] transition-all"
+                      className="opacity-0 group-hover:opacity-100 text-(--color-text-muted) hover:text-(--color-error) transition-all"
                       onClick={() => deleteMutation.mutate(s.id)}
                     >
                       <Trash2 size={12} />
@@ -168,18 +168,18 @@ export function ScreenerPage() {
                 ))}
               </div>
             ) : (
-              <p className="text-xs text-[--color-text-muted]">No saved screens yet.</p>
+              <p className="text-xs text-(--color-text-muted)">No saved screens yet.</p>
             )}
           </div>
 
           <div className="card p-4 space-y-2">
-            <p className="text-xs font-semibold text-[--color-text-secondary] uppercase tracking-wider">Quick start</p>
+            <p className="text-xs font-semibold text-(--color-text-secondary) uppercase tracking-wider">Quick start</p>
             {STARTER_SCREENS.map((s) => (
               <Button
                 key={s.name}
                 type="button"
                 variant="ghost"
-                className="w-full justify-start text-sm text-[--color-text-muted] hover:text-[--color-text]"
+                className="w-full justify-start text-sm text-(--color-text-muted) hover:text-(--color-text)"
                 onClick={() => applyStarter(s)}
               >
                 {s.name}
@@ -191,13 +191,13 @@ export function ScreenerPage() {
         {/* ── Right: Filter builder + results ── */}
         <div className="h-full flex flex-col gap-4 overflow-hidden">
           {/* Filter builder — left accent border per §9.1 */}
-          <div className="flex-shrink-0 rounded-lg border border-l-2 border-[--color-border] border-l-[--color-accent]/40 bg-[--color-surface-2] p-4 space-y-3">
+          <div className="flex-shrink-0 rounded-lg border border-l-2 border-(--color-border) border-l-(--color-accent)/40 bg-(--color-surface-2) p-4 space-y-3">
             <div className="flex items-center gap-3 flex-wrap">
               <div className="flex items-center gap-2">
-                <Filter size={14} className="text-[--color-text-muted]" />
-                <span className="text-sm text-[--color-text-secondary]">Match</span>
+                <Filter size={14} className="text-(--color-text-muted)" />
+                <span className="text-sm text-(--color-text-secondary)">Match</span>
               </div>
-              <div className="flex rounded-md overflow-hidden border border-[--color-border]">
+              <div className="flex rounded-md overflow-hidden border border-(--color-border)">
                 {(['AND', 'OR'] as const).map((l) => (
                   <Button
                     key={l}
@@ -206,8 +206,8 @@ export function ScreenerPage() {
                     size="xs"
                     className={`rounded-none border-0 ${
                       store.logic === l
-                        ? 'bg-[--color-accent] text-white'
-                        : 'bg-[--color-surface-3] hover:bg-[--color-surface-2]'
+                        ? 'bg-(--color-accent) text-white'
+                        : 'bg-(--color-surface-3) hover:bg-(--color-surface-2)'
                     }`}
                     onClick={() => store.setLogic(l)}
                   >
@@ -215,9 +215,9 @@ export function ScreenerPage() {
                   </Button>
                 ))}
               </div>
-              <span className="text-sm text-[--color-text-secondary]">of these filters</span>
+              <span className="text-sm text-(--color-text-secondary)">of these filters</span>
               {activeFilterCount > 0 && (
-                <Badge className="bg-[--color-accent]/20 text-[--color-accent] border-[--color-accent]/30 border text-xs">
+                <Badge className="bg-(--color-accent)/20 text-(--color-accent) border-(--color-accent)/30 border text-xs">
                   Filters ({activeFilterCount})
                 </Badge>
               )}
@@ -239,18 +239,18 @@ export function ScreenerPage() {
               variant="ghost"
               size="xs"
               onClick={store.addFilter}
-              className="text-[--color-text-muted] hover:text-[--color-accent]"
+              className="text-(--color-text-muted) hover:text-(--color-accent)"
             >
               <Plus size={13} /> Add filter
             </Button>
 
-            <Separator className="bg-[--color-border]" />
+            <Separator className="bg-(--color-border)" />
 
             <div className="flex items-center gap-2 flex-wrap">
               <Button
                 onClick={() => runMutation.mutate()}
                 disabled={isRunning}
-                className="bg-[--color-accent] hover:bg-[--color-accent-hover] text-white"
+                className="bg-(--color-accent) hover:bg-(--color-accent-hover) text-white"
               >
                 <Play size={13} className="mr-1.5" />
                 {isRunning ? 'Running…' : 'Run Screen'}
@@ -277,7 +277,7 @@ export function ScreenerPage() {
                 <Button
                   variant="ghost"
                   onClick={() => { store.resetFilters(); }}
-                  className="text-[--color-text-muted] hover:text-[--color-text]"
+                  className="text-(--color-text-muted) hover:text-(--color-text)"
                 >
                   {activeFilterCount > 0 ? `Clear all (${activeFilterCount})` : 'Reset'}
                 </Button>
@@ -286,7 +286,7 @@ export function ScreenerPage() {
           </div>
 
           {/* Results zone */}
-          <div className="flex-1 min-h-0 rounded-lg border border-[--color-border] overflow-hidden">
+          <div className="flex-1 min-h-0 rounded-lg border border-(--color-border) overflow-hidden">
             {!isRunning && !result && (
               <div className="h-full flex items-center justify-center">
                 <EmptyState
@@ -304,8 +304,8 @@ export function ScreenerPage() {
 
             {!isRunning && result && (
               <div className="h-full flex flex-col overflow-hidden">
-                <div className="flex-shrink-0 px-3 py-2 border-b border-[--color-border] bg-[--color-surface-2]">
-                  <p className="text-sm text-[--color-text-muted]">
+                <div className="flex-shrink-0 px-3 py-2 border-b border-(--color-border) bg-(--color-surface-2)">
+                  <p className="text-sm text-(--color-text-muted)">
                     {result.total.toLocaleString()} stocks matched
                     {result.total > result.limit && ` — showing first ${result.limit}`}
                   </p>
@@ -313,7 +313,7 @@ export function ScreenerPage() {
                 <div className="overflow-auto flex-1">
                   <Table>
                     <TableHeader>
-                      <TableRow className="hover:bg-transparent bg-[--color-surface-3]">
+                      <TableRow className="hover:bg-transparent bg-(--color-surface-3)">
                         <TableHead className="w-28">Symbol</TableHead>
                         <TableHead>Company</TableHead>
                         <TableHead className="w-36">Sector</TableHead>
@@ -333,12 +333,12 @@ export function ScreenerPage() {
                       {result.items.map((stock) => (
                         <TableRow key={stock.id}>
                           <TableCell>
-                            <Link to={`/stocks/${stock.id}`} className="font-mono font-semibold text-[--color-accent] hover:text-[--color-accent-hover]">
+                            <Link to={`/stocks/${stock.id}`} className="font-mono font-semibold text-(--color-accent) hover:text-(--color-accent-hover)">
                               {stock.symbol}
                             </Link>
                           </TableCell>
-                          <TableCell className="text-sm text-[--color-text]">{stock.company_name}</TableCell>
-                          <TableCell className="text-sm text-[--color-text-muted]">{stock.sector ?? '—'}</TableCell>
+                          <TableCell className="text-sm text-(--color-text)">{stock.company_name}</TableCell>
+                          <TableCell className="text-sm text-(--color-text-muted)">{stock.sector ?? '—'}</TableCell>
                           <TableCell>
                             <div className="flex gap-1 flex-wrap">
                               {stock.is_nifty50   && <Badge className="text-[10px] px-1 py-0 badge-n50">N50</Badge>}
@@ -347,7 +347,7 @@ export function ScreenerPage() {
                               {stock.is_fno       && <Badge className="text-[10px] px-1 py-0 badge-fno">F&amp;O</Badge>}
                             </div>
                           </TableCell>
-                          <TableCell numeric className="text-sm text-[--color-text-muted]">
+                          <TableCell numeric className="text-sm text-(--color-text-muted)">
                             {stock.lot_size > 1 ? stock.lot_size.toLocaleString() : '—'}
                           </TableCell>
                           <TableCell numeric>
@@ -368,28 +368,28 @@ export function ScreenerPage() {
 
       {/* Save dialog */}
       <Dialog open={saveDialogOpen} onOpenChange={setSaveDialogOpen}>
-        <DialogContent className="bg-[--color-surface-2] border-[--color-border] text-[--color-text]">
+        <DialogContent className="bg-(--color-surface-2) border-(--color-border) text-(--color-text)">
           <DialogHeader>
-            <DialogTitle className="text-[--color-text]">Save Screen</DialogTitle>
+            <DialogTitle className="text-(--color-text)">Save Screen</DialogTitle>
           </DialogHeader>
           <div className="space-y-3 mt-2">
             <Input
               placeholder="Screen name…"
               value={saveName}
               onChange={(e) => { setSaveName(e.target.value); setSaveError('') }}
-              className="bg-[--color-surface-3] border-[--color-border] text-[--color-text] focus-visible:ring-[--color-accent]"
+              className="bg-(--color-surface-3) border-(--color-border) text-(--color-text) focus-visible:ring-(--color-accent)"
               autoFocus
               onKeyDown={(e) => { if (e.key === 'Enter' && saveName.trim()) saveMutation.mutate() }}
             />
-            {saveError && <p className="text-sm text-[--color-error]">{saveError}</p>}
+            {saveError && <p className="text-sm text-(--color-error)">{saveError}</p>}
             <div className="flex gap-2 justify-end">
-              <Button variant="ghost" onClick={() => { setSaveDialogOpen(false); setSaveName(''); setSaveError('') }} className="text-[--color-text-muted]">
+              <Button variant="ghost" onClick={() => { setSaveDialogOpen(false); setSaveName(''); setSaveError('') }} className="text-(--color-text-muted)">
                 Cancel
               </Button>
               <Button
                 onClick={() => saveMutation.mutate()}
                 disabled={!saveName.trim() || saveMutation.isPending}
-                className="bg-[--color-accent] hover:bg-[--color-accent-hover] text-white"
+                className="bg-(--color-accent) hover:bg-(--color-accent-hover) text-white"
               >
                 {saveMutation.isPending ? 'Saving…' : 'Save'}
               </Button>

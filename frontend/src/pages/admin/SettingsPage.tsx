@@ -45,8 +45,8 @@ function SettingSection({ title, description, children }: {
   return (
     <div className="card space-y-4">
       <div>
-        <h3 className="text-sm font-semibold text-[--color-text]">{title}</h3>
-        <p className="text-xs text-[--color-text-muted] mt-0.5">{description}</p>
+        <h3 className="text-sm font-semibold text-(--color-text)">{title}</h3>
+        <p className="text-xs text-(--color-text-muted) mt-0.5">{description}</p>
       </div>
       <div>{children}</div>
     </div>
@@ -150,7 +150,7 @@ export function SettingsPage() {
         <div className="space-y-4">
           {/* Live preview */}
           <div
-            className="rounded-lg border border-[--color-border] bg-[--color-surface-2] p-4 text-[--color-text-muted] transition-none"
+            className="rounded-lg border border-(--color-border) bg-(--color-surface-2) p-4 text-(--color-text-muted) transition-none"
             style={{ fontSize: `${fontSizePx}px` }}
           >
             Preview: RELIANCE INFY TCS — ₹2,345.50 +1.2% BUY signal
@@ -158,7 +158,7 @@ export function SettingsPage() {
 
           {/* Slider row */}
           <div className="flex items-center gap-3">
-            <span className="text-[--color-text-muted] select-none" style={{ fontSize: 11 }}>A</span>
+            <span className="text-(--color-text-muted) select-none" style={{ fontSize: 11 }}>A</span>
             <div className="flex-1">
               <Slider
                 value={fontSizePx}
@@ -168,8 +168,8 @@ export function SettingsPage() {
                 step={1}
               />
             </div>
-            <span className="text-base text-[--color-text] select-none" style={{ fontSize: 22 }}>A</span>
-            <span className="w-10 text-right text-sm tabular-nums text-[--color-text-secondary]">
+            <span className="text-base text-(--color-text) select-none" style={{ fontSize: 22 }}>A</span>
+            <span className="w-10 text-right text-sm tabular-nums text-(--color-text-secondary)">
               {fontSizePx}px
             </span>
           </div>
@@ -203,7 +203,7 @@ export function SettingsPage() {
         <div className="grid grid-cols-2 gap-4">
           {/* UI font */}
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[--color-text-secondary]">UI Font</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-(--color-text-secondary)">UI Font</p>
             {UI_FONTS.map((f) => (
               <FontRadio key={f.value} active={uiFont === f.value} onClick={() => setUiFont(f.value)}>
                 <div>
@@ -216,7 +216,7 @@ export function SettingsPage() {
 
           {/* Numeric font */}
           <div className="space-y-2">
-            <p className="text-xs font-semibold uppercase tracking-wider text-[--color-text-secondary]">Numeric Font</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-(--color-text-secondary)">Numeric Font</p>
             {NUM_FONTS.map((f) => (
               <FontRadio key={f.value} active={numFont === f.value} onClick={() => setNumFont(f.value)}>
                 <div>
@@ -229,18 +229,18 @@ export function SettingsPage() {
         </div>
 
         {/* Font preview */}
-        <div className="mt-4 rounded-lg border border-[--color-border] bg-[--color-surface-2] p-4 space-y-1">
-          <p className="text-xs text-[--color-text-muted] mb-2">Preview</p>
-          <p style={{ fontFamily: `var(--font-ui)` }} className="text-sm text-[--color-text]">
+        <div className="mt-4 rounded-lg border border-(--color-border) bg-(--color-surface-2) p-4 space-y-1">
+          <p className="text-xs text-(--color-text-muted) mb-2">Preview</p>
+          <p style={{ fontFamily: `var(--font-ui)` }} className="text-sm text-(--color-text)">
             UI font ({uiFontFamily}): Buy RELIANCE @ ₹2,345.50 BUY signal
           </p>
-          <p style={{ fontFamily: `var(--font-num)` }} className="text-sm text-[--color-text-secondary] tabular-nums">
+          <p style={{ fontFamily: `var(--font-num)` }} className="text-sm text-(--color-text-secondary) tabular-nums">
             Numbers ({numFontFamily}): ₹2,345.50 · +1.20% · Qty 100 · P&L +₹1,234.56
           </p>
         </div>
       </SettingSection>
 
-      <p className="text-xs text-[--color-text-muted] text-center">
+      <p className="text-xs text-(--color-text-muted) text-center">
         Settings are stored in your browser and applied immediately. They persist across page reloads.
       </p>
     </div>

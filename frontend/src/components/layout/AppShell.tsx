@@ -156,12 +156,12 @@ export function AppShell() {
   return (
     <>
       <ThemeApplicator />
-      <div className="flex h-screen overflow-hidden bg-[--color-surface]">
+      <div className="flex h-screen overflow-hidden bg-(--color-surface)">
 
         {/* ── Sidebar ── */}
         <aside
           className={cn(
-            'relative z-20 flex flex-col flex-shrink-0 bg-[--color-sidebar] border-r border-[--color-border]',
+            'relative z-20 flex flex-col flex-shrink-0 bg-(--color-sidebar) border-r border-(--color-border)',
             'transition-all duration-300 ease-in-out overflow-hidden',
           )}
           style={{ width: collapsed ? 'var(--sidebar-collapsed-width)' : 'var(--sidebar-width)' }}
@@ -169,7 +169,7 @@ export function AppShell() {
           {/* Logo */}
           <div
             className={cn(
-              'flex items-center flex-shrink-0 border-b border-[--color-border] px-4',
+              'flex items-center flex-shrink-0 border-b border-(--color-border) px-4',
               collapsed ? 'justify-center' : 'gap-3',
             )}
             style={{ height: 'var(--topbar-height)' }}
@@ -201,7 +201,7 @@ export function AppShell() {
 
             {isAdmin && (
               <>
-                <div className="my-2 mx-2 border-t border-[--color-border]" />
+                <div className="my-2 mx-2 border-t border-(--color-border)" />
                 {ADMIN_NAV_ITEMS.map((item) => {
                   const hasBanner = item.to === '/broker/kite' && banner
                   return (
@@ -224,12 +224,12 @@ export function AppShell() {
           </nav>
 
           {/* Collapse toggle */}
-          <div className="flex-shrink-0 border-t border-[--color-border] p-2">
+          <div className="flex-shrink-0 border-t border-(--color-border) p-2">
             <button
               onClick={toggle}
               className={cn(
-                'w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-xs text-[--color-text-muted]',
-                'hover:bg-[--color-surface-3] hover:text-[--color-text] transition-colors',
+                'w-full flex items-center gap-2 px-2.5 py-2 rounded-md text-xs text-(--color-text-muted)',
+                'hover:bg-(--color-surface-3) hover:text-(--color-text) transition-colors',
                 collapsed && 'justify-center',
               )}
               title={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
@@ -247,10 +247,10 @@ export function AppShell() {
 
           {/* ── Top bar ── */}
           <header
-            className="relative z-30 flex-shrink-0 flex items-center justify-between px-5 bg-[--color-topbar]"
+            className="relative z-30 flex-shrink-0 flex items-center justify-between px-5 bg-(--color-topbar)"
             style={{ height: 'var(--topbar-height)', borderBottom: '1px solid var(--color-border)', boxShadow: '0 2px 8px rgba(0,0,0,0.18)' }}
           >
-            <h1 className="text-sm font-semibold text-[--color-text]">{pageTitle}</h1>
+            <h1 className="text-sm font-semibold text-(--color-text)">{pageTitle}</h1>
 
             <div className="flex items-center gap-2">
               {/* Market status chip + clock */}
@@ -259,33 +259,31 @@ export function AppShell() {
                   className={cn(
                     'text-xs font-semibold px-2 py-0.5 rounded-full border',
                     marketStatus === 'OPEN'
-                      ? 'bg-[--color-profit-bg] text-[--color-profit] border-[--color-profit]/20'
+                      ? 'bg-(--color-profit-bg) text-(--color-profit) border-(--color-profit)/20'
                       : marketStatus === 'PRE-MARKET'
-                        ? 'bg-[--color-warning-bg] text-[--color-warning] border-[--color-warning]/20'
-                        : 'bg-[--color-surface-3] text-[--color-text-muted] border-[--color-border]',
+                        ? 'bg-(--color-warning-bg) text-(--color-warning) border-(--color-warning)/20'
+                        : 'bg-(--color-surface-3) text-(--color-text-muted) border-(--color-border)',
                   )}
                 >
                   {marketStatus}
                 </span>
-                <span className="text-xs font-mono text-[--color-text-muted]">{timeIST} IST</span>
+                <span className="text-xs font-mono text-(--color-text-muted)">{timeIST} IST</span>
                 {nextEvent && (
-                  <span className="text-xs text-[--color-text-muted] hidden xl:block">• {nextEvent}</span>
+                  <span className="text-xs text-(--color-text-muted) hidden xl:block">• {nextEvent}</span>
                 )}
               </div>
 
-              {/* v4 (--var) syntax — the sibling dividers' [--var] form is
-                  known-broken and awaits the migration slice */}
               <div className="w-px h-4 bg-(--color-border)" />
 
               {/* Live tick-trigger alerts (Phase 3.5) */}
               <AlertBell />
 
-              <div className="w-px h-4 bg-[--color-border]" />
+              <div className="w-px h-4 bg-(--color-border)" />
 
               {/* Theme toggle */}
               <button
                 onClick={toggleTheme}
-                className="p-1.5 rounded-md text-[--color-text-muted] hover:text-[--color-text] hover:bg-[--color-surface-3] transition-colors"
+                className="p-1.5 rounded-md text-(--color-text-muted) hover:text-(--color-text) hover:bg-(--color-surface-3) transition-colors"
                 title={theme === 'daybreak' ? 'Switch to dark mode' : 'Switch to light mode'}
                 aria-label="Toggle theme"
                 data-testid="theme-toggle"
@@ -293,7 +291,7 @@ export function AppShell() {
                 {theme === 'daybreak' ? <Moon size={15} /> : <Sun size={15} />}
               </button>
 
-              <div className="w-px h-4 bg-[--color-border]" />
+              <div className="w-px h-4 bg-(--color-border)" />
 
               {/* Profile dropdown */}
               {user && (
@@ -314,7 +312,7 @@ export function AppShell() {
               <div className="flex items-center gap-2">
                 <Circle
                   size={6}
-                  className={banner === 'not-connected' ? 'text-[--color-bear] fill-[--color-bear]' : 'text-yellow-500 fill-yellow-500'}
+                  className={banner === 'not-connected' ? 'text-(--color-bear) fill-(--color-bear)' : 'text-yellow-500 fill-yellow-500'}
                 />
                 <span style={{ color: banner === 'not-connected' ? 'var(--color-bear)' : '#f59e0b' }}>
                   {banner === 'not-connected'
@@ -357,16 +355,16 @@ function SidebarLink({ item, collapsed, active, warn }: SidebarLinkProps) {
       className={cn(
         'flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors relative overflow-hidden',
         active
-          ? 'text-[--color-accent]'
+          ? 'text-(--color-accent)'
           : warn
-            ? 'text-[--color-bear] hover:bg-[--color-surface-3]'
-            : 'text-[--color-text-muted] hover:bg-[--color-surface-3] hover:text-[--color-text]',
+            ? 'text-(--color-bear) hover:bg-(--color-surface-3)'
+            : 'text-(--color-text-muted) hover:bg-(--color-surface-3) hover:text-(--color-text)',
         collapsed && 'justify-center',
       )}
       style={active ? { backgroundColor: 'color-mix(in srgb, var(--color-accent) 12%, transparent)' } : {}}
     >
       {active && (
-        <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-[--color-accent] rounded-r-sm" />
+        <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-(--color-accent) rounded-r-sm" />
       )}
       <span className="flex-shrink-0 relative">
         {item.icon}

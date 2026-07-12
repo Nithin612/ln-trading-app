@@ -54,14 +54,14 @@ export function TagPicker({ stockId }: Props) {
         {stockCats.map((cat) => (
           <span
             key={cat.id}
-            className="inline-flex items-center gap-1 rounded-full border border-[--color-border] bg-[--color-surface-3] text-[--color-text-muted] text-xs px-2 py-0.5"
+            className="inline-flex items-center gap-1 rounded-full border border-(--color-border) bg-(--color-surface-3) text-(--color-text-muted) text-xs px-2 py-0.5"
           >
             {cat.name}
             {isAdmin && (
               <button
                 type="button"
                 onClick={() => untagMut.mutate(cat.id)}
-                className="hover:text-[--color-error] transition-colors"
+                className="hover:text-(--color-error) transition-colors"
                 title="Remove tag"
               >
                 <X size={10} />
@@ -74,7 +74,7 @@ export function TagPicker({ stockId }: Props) {
           <button
             type="button"
             onClick={() => setAdding(true)}
-            className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-[--color-border] text-[--color-text-muted] hover:text-[--color-text] text-xs px-2 py-0.5 transition-colors"
+            className="inline-flex items-center gap-0.5 rounded-full border border-dashed border-(--color-border) text-(--color-text-muted) hover:text-(--color-text) text-xs px-2 py-0.5 transition-colors"
           >
             <Plus size={10} /> Add tag
           </button>
@@ -83,7 +83,7 @@ export function TagPicker({ stockId }: Props) {
         {isAdmin && adding && (
           <div className="flex items-center gap-1">
             {available.length === 0 ? (
-              <span className="text-xs text-[--color-text-muted]">
+              <span className="text-xs text-(--color-text-muted)">
                 All categories tagged
               </span>
             ) : (
@@ -99,7 +99,7 @@ export function TagPicker({ stockId }: Props) {
             <button
               type="button"
               onClick={() => setAdding(false)}
-              className="text-xs text-[--color-text-muted] hover:text-[--color-text]"
+              className="text-xs text-(--color-text-muted) hover:text-(--color-text)"
             >
               Cancel
             </button>
@@ -108,10 +108,10 @@ export function TagPicker({ stockId }: Props) {
       </div>
 
       {stockCats.length === 0 && !isAdmin && (
-        <span className="text-xs text-[--color-text-muted]">No categories</span>
+        <span className="text-xs text-(--color-text-muted)">No categories</span>
       )}
       {stockCats.length === 0 && isAdmin && !adding && (
-        <span className="text-xs text-[--color-text-muted]">None — add above</span>
+        <span className="text-xs text-(--color-text-muted)">None — add above</span>
       )}
     </div>
   )

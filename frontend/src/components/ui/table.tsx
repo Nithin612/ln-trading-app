@@ -24,8 +24,8 @@ function TableHeader({ className, ...props }: React.ComponentProps<"thead">) {
     <thead
       data-slot="table-header"
       className={cn(
-        "sticky top-0 z-10 bg-[--color-surface-2]",
-        "[&_tr]:border-b [&_tr]:border-[--color-border]",
+        "sticky top-0 z-10 bg-(--color-surface-2)",
+        "[&_tr]:border-b [&_tr]:border-(--color-border)",
         className
       )}
       {...props}
@@ -48,7 +48,7 @@ function TableFooter({ className, ...props }: React.ComponentProps<"tfoot">) {
     <tfoot
       data-slot="table-footer"
       className={cn(
-        "border-t bg-[--color-surface-2] font-medium [&>tr]:last:border-b-0",
+        "border-t bg-(--color-surface-2) font-medium [&>tr]:last:border-b-0",
         className
       )}
       {...props}
@@ -61,8 +61,8 @@ function TableRow({ className, ...props }: React.ComponentProps<"tr">) {
     <tr
       data-slot="table-row"
       className={cn(
-        "border-b border-[--color-border]",
-        "hover:bg-[--color-surface-hover] has-aria-expanded:bg-[--color-surface-hover] data-[state=selected]:bg-muted",
+        "border-b border-(--color-border)",
+        "hover:bg-(--color-surface-hover) has-aria-expanded:bg-(--color-surface-hover) data-[state=selected]:bg-muted",
         "transition-colors duration-150 ease-out",
         className
       )}
@@ -82,7 +82,7 @@ function TableHead({ className, numeric, ...props }: TableHeadProps) {
       className={cn(
         "h-10 px-2 align-middle whitespace-nowrap",
         "text-xs font-semibold uppercase tracking-wider",
-        "text-[--color-text-secondary]",
+        "text-(--color-text-secondary)",
         numeric ? "text-right" : "text-left",
         "[&:has([role=checkbox])]:pr-0",
         className

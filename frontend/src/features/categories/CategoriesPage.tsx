@@ -45,7 +45,7 @@ function InlineEdit({ cat, onDone }: InlineEditProps) {
       <Input
         value={name}
         onChange={(e) => setName(e.target.value)}
-        className="h-7 text-sm bg-[--color-surface-3] border-[--color-border] text-[--color-text] focus-visible:ring-[--color-accent] w-32"
+        className="h-7 text-sm bg-(--color-surface-3) border-(--color-border) text-(--color-text) focus-visible:ring-(--color-accent) w-32"
         autoFocus
         onKeyDown={(e) => { if (e.key === 'Enter') mut.mutate(); if (e.key === 'Escape') onDone() }}
       />
@@ -53,11 +53,11 @@ function InlineEdit({ cat, onDone }: InlineEditProps) {
         value={description}
         onChange={(e) => setDescription(e.target.value)}
         placeholder="Description"
-        className="h-7 text-sm bg-[--color-surface-3] border-[--color-border] text-[--color-text] focus-visible:ring-[--color-accent] w-48"
+        className="h-7 text-sm bg-(--color-surface-3) border-(--color-border) text-(--color-text) focus-visible:ring-(--color-accent) w-48"
         onKeyDown={(e) => { if (e.key === 'Enter') mut.mutate(); if (e.key === 'Escape') onDone() }}
       />
-      <Button onClick={() => mut.mutate()} disabled={mut.isPending} variant="ghost" size="icon-xs" className="text-[--color-profit]"><Check size={14} /></Button>
-      <Button onClick={onDone} variant="ghost" size="icon-xs" className="text-[--color-text-muted] hover:text-[--color-text]"><X size={14} /></Button>
+      <Button onClick={() => mut.mutate()} disabled={mut.isPending} variant="ghost" size="icon-xs" className="text-(--color-profit)"><Check size={14} /></Button>
+      <Button onClick={onDone} variant="ghost" size="icon-xs" className="text-(--color-text-muted) hover:text-(--color-text)"><X size={14} /></Button>
     </div>
   )
 }
@@ -90,17 +90,17 @@ function CategoryDrawer({ cat, open, onClose }: CategoryDrawerProps) {
     <Drawer open={open} onClose={onClose} title={cat.name} width={440}>
       <div className="p-4 space-y-3">
         {cat.description && (
-          <p className="text-xs text-[--color-text-muted]">{cat.description}</p>
+          <p className="text-xs text-(--color-text-muted)">{cat.description}</p>
         )}
 
         {/* Search within drawer */}
         <div className="relative">
-          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[--color-text-muted]" />
+          <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-(--color-text-muted)" />
           <input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="Search stocks in this category…"
-            className="w-full pl-8 pr-3 py-2 text-sm bg-[--color-surface-3] border border-[--color-border] rounded-md text-[--color-text] placeholder:text-[--color-text-muted] focus:outline-none focus:border-[--color-accent]"
+            className="w-full pl-8 pr-3 py-2 text-sm bg-(--color-surface-3) border border-(--color-border) rounded-md text-(--color-text) placeholder:text-(--color-text-muted) focus:outline-none focus:border-(--color-accent)"
           />
         </div>
 
@@ -117,24 +117,24 @@ function CategoryDrawer({ cat, open, onClose }: CategoryDrawerProps) {
               return (
                 <div
                   key={stock.id}
-                  className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-[--color-surface-3] transition-colors"
+                  className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-(--color-surface-3) transition-colors"
                 >
                   <div className="flex-1 min-w-0">
                     <Link
                       to={`/stocks/${stock.id}`}
                       onClick={onClose}
-                      className="font-mono font-semibold text-sm text-[--color-accent] hover:text-[--color-accent-hover]"
+                      className="font-mono font-semibold text-sm text-(--color-accent) hover:text-(--color-accent-hover)"
                     >
                       {stock.symbol}
                     </Link>
-                    <p className="text-xs text-[--color-text-muted] truncate">{stock.company_name}</p>
+                    <p className="text-xs text-(--color-text-muted) truncate">{stock.company_name}</p>
                   </div>
                   {ltp ? (
                     <span className="font-mono text-sm font-semibold" style={{ color: 'var(--color-bull)' }}>
                       ₹{ltp.ltp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   ) : (
-                    <span className="text-xs text-[--color-text-muted]">—</span>
+                    <span className="text-xs text-(--color-text-muted)">—</span>
                   )}
                 </div>
               )
@@ -206,7 +206,7 @@ export function CategoriesPage() {
 
       {isAdmin && (
         <form onSubmit={handleCreate} className="card mb-6 space-y-3">
-          <h2 className="text-sm font-semibold text-[--color-text]">New Category</h2>
+          <h2 className="text-sm font-semibold text-(--color-text)">New Category</h2>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
               <Label htmlFor="cat-name">Name</Label>
@@ -217,7 +217,7 @@ export function CategoriesPage() {
               <Input id="cat-desc" placeholder="Short description" value={description} onChange={(e) => setDescription(e.target.value)} />
             </div>
           </div>
-          {formError && <p className="text-xs text-[--color-error]">{formError}</p>}
+          {formError && <p className="text-xs text-(--color-error)">{formError}</p>}
           <Button type="submit" disabled={!name.trim() || createMut.isPending} className="btn btn-primary text-sm">
             {createMut.isPending ? 'Creating…' : 'Create'}
           </Button>
@@ -234,7 +234,7 @@ export function CategoriesPage() {
           description={isAdmin ? 'Create your first category above.' : 'No categories have been created.'}
         />
       ) : (
-        <div className="card divide-y divide-[--color-border]">
+        <div className="card divide-y divide-(--color-border)">
           {categories.map((cat) => (
             <div key={cat.id} className="flex items-center justify-between py-3 gap-3">
               {editingId === cat.id ? (
@@ -247,17 +247,17 @@ export function CategoriesPage() {
                   onClick={() => setDrawerCat(cat)}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium text-[--color-text] group-hover:text-[--color-accent] transition-colors">
+                    <span className="text-sm font-medium text-(--color-text) group-hover:text-(--color-accent) transition-colors">
                       {cat.name}
                     </span>
-                    <Badge className="bg-[--color-surface-3] text-[--color-text-muted] border-[--color-border] border text-xs">
+                    <Badge className="bg-(--color-surface-3) text-(--color-text-muted) border-(--color-border) border text-xs">
                       {cat.stock_count} stock{cat.stock_count !== 1 ? 's' : ''}
                     </Badge>
                   </div>
                   {cat.description && (
-                    <p className="text-xs text-[--color-text-muted] mt-0.5">{cat.description}</p>
+                    <p className="text-xs text-(--color-text-muted) mt-0.5">{cat.description}</p>
                   )}
-                  <p className="text-xs text-[--color-text-muted] font-mono mt-0.5 opacity-60">slug: {cat.slug}</p>
+                  <p className="text-xs text-(--color-text-muted) font-mono mt-0.5 opacity-60">slug: {cat.slug}</p>
                 </Button>
               )}
 
@@ -267,7 +267,7 @@ export function CategoriesPage() {
                     onClick={() => setEditingId(cat.id)}
                     variant="ghost"
                     size="icon-xs"
-                    className="text-[--color-text-muted] hover:text-[--color-accent]"
+                    className="text-(--color-text-muted) hover:text-(--color-accent)"
                     title="Edit"
                   >
                     <Edit2 size={13} />
@@ -277,7 +277,7 @@ export function CategoriesPage() {
                     disabled={deleteMut.isPending}
                     variant="ghost"
                     size="icon-xs"
-                    className="text-[--color-text-muted] hover:text-[--color-error]"
+                    className="text-(--color-text-muted) hover:text-(--color-error)"
                     title="Delete category"
                   >
                     <Trash2 size={13} />

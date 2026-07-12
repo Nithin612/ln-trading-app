@@ -33,7 +33,7 @@ export function Tooltip({ content, children, side = 'top', className }: TooltipP
         <div
           className={cn(
             'absolute z-50 px-2 py-1 text-xs rounded pointer-events-none whitespace-nowrap',
-            'bg-[--color-surface-3] text-[--color-text] border border-[--color-border] shadow-lg',
+            'bg-(--color-surface-3) text-(--color-text) border border-(--color-border) shadow-lg',
             sideClass,
             className,
           )}

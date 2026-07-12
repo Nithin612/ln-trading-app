@@ -140,7 +140,7 @@ export function JournalEntryModal({ entry, open, onClose }: Props) {
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) onClose() }}>
       <DialogContent className="max-w-lg w-full" showCloseButton>
-        <h2 className="text-base font-semibold text-[--color-text] mb-4">
+        <h2 className="text-base font-semibold text-(--color-text) mb-4">
           {isEdit ? 'Edit Journal Entry' : 'New Journal Entry'}
         </h2>
 
@@ -263,9 +263,9 @@ export function JournalEntryModal({ entry, open, onClose }: Props) {
               rows={3}
               placeholder="What happened? Why did you take this trade?"
               className={cn(
-                'w-full resize-y rounded-md border border-[--color-border] px-3 py-2 text-sm',
-                'bg-[--color-surface] text-[--color-text] placeholder:text-[--color-text-muted]',
-                'focus:outline-none focus:ring-1 focus:ring-[--color-accent]',
+                'w-full resize-y rounded-md border border-(--color-border) px-3 py-2 text-sm',
+                'bg-(--color-surface) text-(--color-text) placeholder:text-(--color-text-muted)',
+                'focus:outline-none focus:ring-1 focus:ring-(--color-accent)',
               )}
               value={form.notes ?? ''}
               onChange={(e) => set('notes', e.target.value || null)}
@@ -280,9 +280,9 @@ export function JournalEntryModal({ entry, open, onClose }: Props) {
               rows={2}
               placeholder="What would you do differently next time?"
               className={cn(
-                'w-full resize-y rounded-md border border-[--color-border] px-3 py-2 text-sm',
-                'bg-[--color-surface] text-[--color-text] placeholder:text-[--color-text-muted]',
-                'focus:outline-none focus:ring-1 focus:ring-[--color-accent]',
+                'w-full resize-y rounded-md border border-(--color-border) px-3 py-2 text-sm',
+                'bg-(--color-surface) text-(--color-text) placeholder:text-(--color-text-muted)',
+                'focus:outline-none focus:ring-1 focus:ring-(--color-accent)',
               )}
               value={form.lesson ?? ''}
               onChange={(e) => set('lesson', e.target.value || null)}
@@ -308,13 +308,13 @@ export function JournalEntryModal({ entry, open, onClose }: Props) {
                 {tags.map((t) => (
                   <span
                     key={t}
-                    className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs border border-[--color-border] text-[--color-text-muted]"
+                    className="flex items-center gap-1 rounded-full px-2 py-0.5 text-xs border border-(--color-border) text-(--color-text-muted)"
                   >
                     {t}
                     <button
                       type="button"
                       onClick={() => removeTag(t)}
-                      className="hover:text-[--color-bear] leading-none"
+                      className="hover:text-(--color-bear) leading-none"
                     >
                       ×
                     </button>
@@ -337,14 +337,14 @@ export function JournalEntryModal({ entry, open, onClose }: Props) {
                         <img
                           src={path}
                           alt="trade screenshot"
-                          className="w-24 h-16 object-cover rounded border border-[--color-border]"
+                          className="w-24 h-16 object-cover rounded border border-(--color-border)"
                         />
                         <button
                           type="button"
                           onClick={() => deleteScreenshotMut.mutate(filename)}
                           className={cn(
                             'absolute top-0.5 right-0.5 w-4 h-4 rounded-full text-[8px] font-bold',
-                            'bg-[--color-bear] text-white opacity-0 group-hover:opacity-100 transition-opacity',
+                            'bg-(--color-bear) text-white opacity-0 group-hover:opacity-100 transition-opacity',
                             'flex items-center justify-center',
                           )}
                         >
@@ -372,7 +372,7 @@ export function JournalEntryModal({ entry, open, onClose }: Props) {
                 >
                   {uploading ? 'Uploading…' : '+ Add Screenshot'}
                 </Button>
-                <p className="text-xs text-[--color-text-muted] mt-1">
+                <p className="text-xs text-(--color-text-muted) mt-1">
                   Max 5 MB — JPEG, PNG, WebP, GIF
                 </p>
               </div>
@@ -381,7 +381,7 @@ export function JournalEntryModal({ entry, open, onClose }: Props) {
         </div>
 
         {/* Footer */}
-        <div className="flex justify-end gap-2 pt-4 border-t border-[--color-border] mt-4">
+        <div className="flex justify-end gap-2 pt-4 border-t border-(--color-border) mt-4">
           <Button variant="ghost" onClick={onClose} disabled={busy}>
             Cancel
           </Button>

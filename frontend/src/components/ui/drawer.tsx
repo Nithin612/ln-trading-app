@@ -38,7 +38,7 @@ export function Drawer({ open, onClose, title, children, width = 480, className 
       <div
         className={cn(
           'fixed top-0 right-0 h-full z-50 flex flex-col',
-          'bg-[--color-surface-2] border-l border-[--color-border] shadow-2xl',
+          'bg-(--color-surface-2) border-l border-(--color-border) shadow-2xl',
           'animate-in slide-in-from-right duration-300',
           className,
         )}
@@ -47,15 +47,15 @@ export function Drawer({ open, onClose, title, children, width = 480, className 
         aria-modal="true"
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-5 py-4 border-b border-[--color-border] flex-shrink-0">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-(--color-border) flex-shrink-0">
           {title && (
-            <h2 className="text-sm font-semibold text-[--color-text] uppercase tracking-wide">
+            <h2 className="text-sm font-semibold text-(--color-text) uppercase tracking-wide">
               {title}
             </h2>
           )}
           <button
             onClick={onClose}
-            className="ml-auto text-[--color-text-muted] hover:text-[--color-text] transition-colors p-1 rounded hover:bg-[--color-surface-3]"
+            className="ml-auto text-(--color-text-muted) hover:text-(--color-text) transition-colors p-1 rounded hover:bg-(--color-surface-3)"
             aria-label="Close drawer"
           >
             <X size={16} />

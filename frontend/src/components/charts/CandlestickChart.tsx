@@ -103,10 +103,10 @@ export function CandlestickChart({ bars, height = 340 }: Props) {
   if (bars.length === 0) {
     return (
       <div
-        className="flex items-center justify-center rounded-lg border border-[--color-border]"
+        className="flex items-center justify-center rounded-lg border border-(--color-border)"
         style={{ height, background: CHART_COLORS.bg }}
       >
-        <span className="text-sm text-[--color-text-muted]">
+        <span className="text-sm text-(--color-text-muted)">
           No price data available — run bhavcopy ingestion first
         </span>
       </div>

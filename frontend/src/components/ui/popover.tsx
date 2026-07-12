@@ -68,6 +68,8 @@ export function Popover({ trigger, children, align = 'end', className }: Popover
     <div ref={containerRef} className="relative inline-block">
       <el.type
         {...el.props}
+        aria-expanded={open}
+        aria-haspopup="dialog"
         onClick={(e: React.MouseEvent<HTMLButtonElement>) => {
           setOpen((v) => !v)
           el.props.onClick?.(e)
@@ -76,10 +78,10 @@ export function Popover({ trigger, children, align = 'end', className }: Popover
       {open && createPortal(
         <div
           ref={panelRef}
-          // Solid surface + strong border INLINE (UI_GUIDELINES §floating
-          // panels): the Tailwind v4 upgrade dropped the `bg-[--var]`
-          // shorthand (v4 is `bg-(--var)`), which left this panel — and
-          // every class-styled token surface — computing to transparent.
+          // Solid surface + strong border INLINE (UI_GUIDELINES §17.2):
+          // inline var() cannot be dropped by a Tailwind syntax change —
+          // the 2026-07-11 v4 [--var]→(--var) incident left this panel
+          // transparent; the panel bg stays purge-proof on purpose.
           style={{
             ...panelStyle,
             backgroundColor: 'var(--color-surface)',

@@ -23,8 +23,8 @@ import { useLiveQuotes } from '@/hooks/useLiveQuotes'
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="flex justify-between py-2">
-      <span className="text-sm text-[--color-text-muted]">{label}</span>
-      <span className="text-sm text-[--color-text] font-medium">{value ?? '—'}</span>
+      <span className="text-sm text-(--color-text-muted)">{label}</span>
+      <span className="text-sm text-(--color-text) font-medium">{value ?? '—'}</span>
     </div>
   )
 }
@@ -158,7 +158,7 @@ export function StockDetailPage() {
     <div className="max-w-5xl space-y-4">
       <Link
         to="/stocks"
-        className="inline-flex items-center gap-1.5 text-sm text-[--color-text-muted] hover:text-[--color-text]"
+        className="inline-flex items-center gap-1.5 text-sm text-(--color-text-muted) hover:text-(--color-text)"
       >
         <ArrowLeft size={14} /> Back to Stocks
       </Link>
@@ -168,7 +168,7 @@ export function StockDetailPage() {
         <div className="flex items-center gap-3">
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-2xl font-bold font-mono text-[--color-accent]">{stock.symbol}</h1>
+              <h1 className="text-2xl font-bold font-mono text-(--color-accent)">{stock.symbol}</h1>
               {ltp && (
                 <span className="text-lg font-semibold font-mono" style={{ color: 'var(--color-bull)' }}>
                   ₹{ltp.ltp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
@@ -180,7 +180,7 @@ export function StockDetailPage() {
                 </span>
               )}
             </div>
-            <p className="text-[--color-text-muted] text-sm mt-0.5">{stock.company_name}</p>
+            <p className="text-(--color-text-muted) text-sm mt-0.5">{stock.company_name}</p>
           </div>
         </div>
         <div className="flex gap-1.5 flex-wrap justify-end">
@@ -211,7 +211,7 @@ export function StockDetailPage() {
         <TabsContent value="chart" className="pt-4 space-y-3">
           {/* Timeframe + EMA toggles */}
           <div className="flex items-center gap-3 flex-wrap">
-            <div className="flex rounded overflow-hidden border border-[--color-border]">
+            <div className="flex rounded overflow-hidden border border-(--color-border)">
               {(['1D', '5D', '1M', '3M', '6M', '1Y'] as Timeframe[]).map((tf) => (
                 <button
                   key={tf}
@@ -227,7 +227,7 @@ export function StockDetailPage() {
               ))}
             </div>
 
-            <div className="flex items-center gap-2 text-xs text-[--color-text-muted]">
+            <div className="flex items-center gap-2 text-xs text-(--color-text-muted)">
               {[
                 { label: 'EMA 20', show: showEma20, set: setShowEma20, color: '#f59e0b' },
                 { label: 'EMA 50', show: showEma50, set: setShowEma50, color: '#8b5cf6' },
@@ -262,7 +262,7 @@ export function StockDetailPage() {
 
               {/* Volume panel */}
               <div className="mt-1">
-                <p className="text-xs text-[--color-text-muted] uppercase tracking-wide mb-1">Volume</p>
+                <p className="text-xs text-(--color-text-muted) uppercase tracking-wide mb-1">Volume</p>
                 <ResponsiveContainer width="100%" height={60}>
                   <ComposedChart data={volumeData} margin={{ top: 0, bottom: 0, left: 0, right: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--color-chart-grid)" vertical={false} />
@@ -281,7 +281,7 @@ export function StockDetailPage() {
               {/* RSI panel */}
               {rsiData.length > 0 && (
                 <div className="mt-1">
-                  <p className="text-xs text-[--color-text-muted] uppercase tracking-wide mb-1">RSI (14)</p>
+                  <p className="text-xs text-(--color-text-muted) uppercase tracking-wide mb-1">RSI (14)</p>
                   <ResponsiveContainer width="100%" height={70}>
                     <ComposedChart data={rsiData} margin={{ top: 4, bottom: 0, left: 0, right: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke="var(--color-chart-grid)" vertical={false} />
@@ -305,7 +305,7 @@ export function StockDetailPage() {
         {/* Details tab */}
         <TabsContent value="details" className="pt-4">
           <div className="card">
-            <div className="divide-y divide-[--color-border]">
+            <div className="divide-y divide-(--color-border)">
               <DetailRow label="Exchange" value={stock.exchange} />
               <DetailRow label="ISIN" value={stock.isin} />
               <DetailRow label="Sector" value={stock.sector} />
@@ -318,9 +318,9 @@ export function StockDetailPage() {
               <DetailRow label="Tick Size" value={`₹${stock.tick_size}`} />
               <DetailRow label="Listed On" value={stock.listed_on} />
             </div>
-            <Separator className="bg-[--color-border] mt-4 mb-4" />
+            <Separator className="bg-(--color-border) mt-4 mb-4" />
             <div>
-              <p className="text-xs text-[--color-text-muted] mb-2 uppercase tracking-wide">Categories</p>
+              <p className="text-xs text-(--color-text-muted) mb-2 uppercase tracking-wide">Categories</p>
               <TagPicker stockId={stock.id} />
             </div>
           </div>
@@ -331,18 +331,18 @@ export function StockDetailPage() {
           {!signalsData?.signals.length ? (
             <EmptyState title="No active signals" description="No confluence signals for this stock right now." />
           ) : (
-            <div className="rounded-lg border border-[--color-border] overflow-hidden">
+            <div className="rounded-lg border border-(--color-border) overflow-hidden">
               <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr className="border-b border-[--color-border] bg-[--color-surface-2]">
+                  <tr className="border-b border-(--color-border) bg-(--color-surface-2)">
                     {['Dir', 'Class', 'Conf', 'Entry', 'SL', 'TP', 'Qty', 'Valid until'].map((h) => (
-                      <th key={h} className="px-3 py-2 text-[10px] uppercase tracking-wide font-medium text-[--color-text-muted] text-left">{h}</th>
+                      <th key={h} className="px-3 py-2 text-[10px] uppercase tracking-wide font-medium text-(--color-text-muted) text-left">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {signalsData.signals.map((sig) => (
-                    <tr key={sig.id} className="border-b border-[--color-border] hover:bg-[--color-surface-hover]">
+                    <tr key={sig.id} className="border-b border-(--color-border) hover:bg-(--color-surface-hover)">
                       <td className="px-3 py-2">
                         <span
                           className="px-2 py-0.5 rounded-full text-xs font-bold"
@@ -354,7 +354,7 @@ export function StockDetailPage() {
                           {sig.direction}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-[--color-text-muted]">{sig.classification}</td>
+                      <td className="px-3 py-2 text-(--color-text-muted)">{sig.classification}</td>
                       <td className="px-3 py-2 font-mono font-bold" style={{ color: sig.confidence_pct >= 80 ? 'var(--color-bull)' : 'var(--color-neutral)' }}>
                         {sig.confidence_pct}%
                       </td>
@@ -362,7 +362,7 @@ export function StockDetailPage() {
                       <td className="px-3 py-2 font-mono" style={{ color: 'var(--color-bear)' }}>₹{parseFloat(sig.stop_loss).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                       <td className="px-3 py-2 font-mono" style={{ color: 'var(--color-bull)' }}>₹{parseFloat(sig.take_profit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
                       <td className="px-3 py-2 font-mono">{sig.suggested_qty.toLocaleString()}</td>
-                      <td className="px-3 py-2 text-[--color-text-muted] whitespace-nowrap">
+                      <td className="px-3 py-2 text-(--color-text-muted) whitespace-nowrap">
                         {new Date(sig.validity_until).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                       </td>
                     </tr>
@@ -380,23 +380,23 @@ export function StockDetailPage() {
           ) : (
             <div className="space-y-2">
               {filingsData.filings.map((f) => (
-                <div key={f.id} className="bg-[--color-surface-2] border border-[--color-border] rounded-lg px-4 py-3 flex gap-3 items-start hover:bg-[--color-surface-hover] transition-colors">
+                <div key={f.id} className="bg-(--color-surface-2) border border-(--color-border) rounded-lg px-4 py-3 flex gap-3 items-start hover:bg-(--color-surface-hover) transition-colors">
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1 flex-wrap">
-                      <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-[--color-surface-3] text-[--color-text-muted]">{f.filing_type}</span>
+                      <span className="text-xs font-mono px-1.5 py-0.5 rounded bg-(--color-surface-3) text-(--color-text-muted)">{f.filing_type}</span>
                       {f.is_high_impact && (
                         <span className="text-[10px] px-1.5 py-0.5 rounded border font-semibold"
                           style={{ color: 'var(--color-error)', borderColor: 'rgba(218,54,51,0.4)', background: 'rgba(218,54,51,0.1)' }}>
                           HIGH IMPACT
                         </span>
                       )}
-                      <span className="text-xs text-[--color-text-muted]">{f.filing_date}</span>
+                      <span className="text-xs text-(--color-text-muted)">{f.filing_date}</span>
                     </div>
-                    <p className="text-sm text-[--color-text] truncate" title={f.headline}>{f.headline}</p>
+                    <p className="text-sm text-(--color-text) truncate" title={f.headline}>{f.headline}</p>
                   </div>
                   {f.source_url && (
                     <a href={f.source_url} target="_blank" rel="noopener noreferrer"
-                      className="text-xs text-[--color-accent] hover:underline flex-shrink-0">
+                      className="text-xs text-(--color-accent) hover:underline flex-shrink-0">
                       PDF →
                     </a>
                   )}
@@ -411,25 +411,25 @@ export function StockDetailPage() {
           {!dealsData?.items.length ? (
             <EmptyState title="No bulk/block deals" description="No deals recorded for this stock." />
           ) : (
-            <div className="rounded-lg border border-[--color-border] overflow-hidden">
+            <div className="rounded-lg border border-(--color-border) overflow-hidden">
               <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr className="border-b border-[--color-border] bg-[--color-surface-2]">
+                  <tr className="border-b border-(--color-border) bg-(--color-surface-2)">
                     {['Date', 'Type', 'Client', 'Txn', 'Qty', 'Price', 'Value (Cr)'].map((h) => (
-                      <th key={h} className="px-3 py-2 text-[10px] uppercase tracking-wide font-medium text-[--color-text-muted] text-left">{h}</th>
+                      <th key={h} className="px-3 py-2 text-[10px] uppercase tracking-wide font-medium text-(--color-text-muted) text-left">{h}</th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {dealsData.items.map((deal) => (
-                    <tr key={deal.id} className="border-b border-[--color-border] hover:bg-[--color-surface-hover]">
-                      <td className="px-3 py-2 text-[--color-text-muted]">{deal.trade_date}</td>
+                    <tr key={deal.id} className="border-b border-(--color-border) hover:bg-(--color-surface-hover)">
+                      <td className="px-3 py-2 text-(--color-text-muted)">{deal.trade_date}</td>
                       <td className="px-3 py-2">
-                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-[--color-surface-3] text-[--color-text-muted]">
+                        <span className="px-1.5 py-0.5 rounded text-[10px] font-semibold uppercase bg-(--color-surface-3) text-(--color-text-muted)">
                           {deal.deal_type}
                         </span>
                       </td>
-                      <td className="px-3 py-2 text-[--color-text] max-w-[160px] truncate">{deal.client_name ?? '—'}</td>
+                      <td className="px-3 py-2 text-(--color-text) max-w-[160px] truncate">{deal.client_name ?? '—'}</td>
                       <td className="px-3 py-2">
                         <span style={{ color: deal.transaction === 'BUY' ? 'var(--color-bull)' : 'var(--color-bear)', fontWeight: 600 }}>
                           {deal.transaction}

@@ -60,13 +60,13 @@ export function TradeHistoryPage() {
         )}
       </div>
 
-      <div className="bg-[--color-surface-2] border border-[--color-border] rounded-lg">
-        <div className="px-4 py-3 border-b border-[--color-border] flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wide text-[--color-text-muted]">
+      <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg">
+        <div className="px-4 py-3 border-b border-(--color-border) flex items-center justify-between">
+          <span className="text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">
             Trade History
           </span>
           {data && (
-            <span className="text-xs text-[--color-text-muted]">{data.total} trades</span>
+            <span className="text-xs text-(--color-text-muted)">{data.total} trades</span>
           )}
         </div>
 
@@ -83,7 +83,7 @@ export function TradeHistoryPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
               <thead>
-                <tr className="border-b border-[--color-border]">
+                <tr className="border-b border-(--color-border)">
                   {['Symbol', 'Side', 'Qty', 'Entry', 'Exit', 'Realized P&L', 'Opened', 'Closed'].map((h) => (
                     <th
                       key={h}
@@ -97,11 +97,11 @@ export function TradeHistoryPage() {
               </thead>
               <tbody>
                 {positions.map((pos) => (
-                  <tr key={pos.id} className="border-b border-[--color-border] hover:bg-[--color-surface-hover]">
+                  <tr key={pos.id} className="border-b border-(--color-border) hover:bg-(--color-surface-hover)">
                     <td className="px-3 py-2">
                       <Link
                         to={`/stocks/${pos.stock_id}`}
-                        className="font-mono font-bold text-[--color-accent] hover:text-[--color-accent-hover]"
+                        className="font-mono font-bold text-(--color-accent) hover:text-(--color-accent-hover)"
                         style={{ textDecoration: 'none' }}
                       >
                         {pos.symbol}
@@ -118,14 +118,14 @@ export function TradeHistoryPage() {
                     </td>
                     <td className="px-3 py-2 text-right font-mono">{pos.quantity.toLocaleString('en-IN')}</td>
                     <td className="px-3 py-2 text-right font-mono">{priceFmt(pos.avg_entry_price)}</td>
-                    <td className="px-3 py-2 text-right font-mono text-[--color-text-muted]">—</td>
+                    <td className="px-3 py-2 text-right font-mono text-(--color-text-muted)">—</td>
                     <td className="px-3 py-2 text-right">{pnlCell(pos.realized_pnl)}</td>
-                    <td className="px-3 py-2 text-right text-[--color-text-muted] whitespace-nowrap">
+                    <td className="px-3 py-2 text-right text-(--color-text-muted) whitespace-nowrap">
                       {new Date(pos.opened_at).toLocaleDateString('en-IN', {
                         timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: '2-digit',
                       })}
                     </td>
-                    <td className="px-3 py-2 text-right text-[--color-text-muted] whitespace-nowrap">
+                    <td className="px-3 py-2 text-right text-(--color-text-muted) whitespace-nowrap">
                       {pos.closed_at
                         ? new Date(pos.closed_at).toLocaleString('en-IN', {
                           timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short',
@@ -141,7 +141,7 @@ export function TradeHistoryPage() {
         )}
 
         {totalPages > 1 && (
-          <div className="px-4 py-3 border-t border-[--color-border]">
+          <div className="px-4 py-3 border-t border-(--color-border)">
             <Pagination
               page={page + 1}
               pages={totalPages}
@@ -158,9 +158,9 @@ export function TradeHistoryPage() {
 
 function SummaryCard({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div className="bg-[--color-surface-2] border border-[--color-border] rounded-lg p-4">
-      <p className="text-xs text-[--color-text-muted] uppercase tracking-wide mb-1">{label}</p>
-      <div className="text-xl font-bold font-mono text-[--color-text]">{value}</div>
+    <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg p-4">
+      <p className="text-xs text-(--color-text-muted) uppercase tracking-wide mb-1">{label}</p>
+      <div className="text-xl font-bold font-mono text-(--color-text)">{value}</div>
     </div>
   )
 }

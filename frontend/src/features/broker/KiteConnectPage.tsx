@@ -40,14 +40,14 @@ interface HealthCardProps {
 
 function HealthCard({ icon, label, value, sub }: HealthCardProps) {
   return (
-    <div className="bg-[--color-surface-2] border border-[--color-border] rounded-lg p-4 flex items-start gap-3">
-      <div className="w-8 h-8 rounded-md bg-[--color-surface-3] flex items-center justify-center flex-shrink-0 text-[--color-text-muted]">
+    <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg p-4 flex items-start gap-3">
+      <div className="w-8 h-8 rounded-md bg-(--color-surface-3) flex items-center justify-center flex-shrink-0 text-(--color-text-muted)">
         {icon}
       </div>
       <div>
-        <p className="text-xs text-[--color-text-muted] uppercase tracking-wide">{label}</p>
-        <div className="text-base font-semibold font-mono text-[--color-text] mt-0.5">{value}</div>
-        {sub && <p className="text-xs text-[--color-text-muted] mt-0.5">{sub}</p>}
+        <p className="text-xs text-(--color-text-muted) uppercase tracking-wide">{label}</p>
+        <div className="text-base font-semibold font-mono text-(--color-text) mt-0.5">{value}</div>
+        {sub && <p className="text-xs text-(--color-text-muted) mt-0.5">{sub}</p>}
       </div>
     </div>
   )
@@ -120,24 +120,24 @@ export default function KiteConnectPage() {
       <PageHeader title="Zerodha Kite Connect" subtitle="Live market data via Kite WebSocket" />
 
       {/* ── Connection status ── */}
-      <div className="bg-[--color-surface-2] border border-[--color-border] rounded-lg p-4 space-y-4">
+      <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg p-4 space-y-4">
         <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-[--color-text-muted]">Broker connection</span>
+          <span className="text-sm font-medium text-(--color-text-muted)">Broker connection</span>
           {isLoading ? (
             <Badge variant="secondary">Loading…</Badge>
           ) : status?.connected ? (
-            <Badge className="bg-[--color-profit-bg] text-[--color-profit] border border-[--color-profit]/30">Connected</Badge>
+            <Badge className="bg-(--color-profit-bg) text-(--color-profit) border border-(--color-profit)/30">Connected</Badge>
           ) : (
-            <Badge className="bg-[--color-loss-bg] text-[--color-loss] border border-[--color-loss]/30">Not connected</Badge>
+            <Badge className="bg-(--color-loss-bg) text-(--color-loss) border border-(--color-loss)/30">Not connected</Badge>
           )}
         </div>
 
         {status?.connected && status.expires_at && (
           <div className="flex items-center gap-3">
-            <span className="text-sm text-[--color-text-muted]">Token expires</span>
+            <span className="text-sm text-(--color-text-muted)">Token expires</span>
             <div className="flex items-center gap-2">
-              <span className="font-mono text-sm text-[--color-text] tabular-nums">{countdown}</span>
-              <span className="text-xs text-[--color-text-muted]">
+              <span className="font-mono text-sm text-(--color-text) tabular-nums">{countdown}</span>
+              <span className="text-xs text-(--color-text-muted)">
                 ({new Date(status.expires_at).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })} IST)
               </span>
             </div>
@@ -145,18 +145,18 @@ export default function KiteConnectPage() {
         )}
 
         <div className="flex items-center gap-3">
-          <span className="text-sm font-medium text-[--color-text-muted]">Tick consumer</span>
+          <span className="text-sm font-medium text-(--color-text-muted)">Tick consumer</span>
           {status?.consumer_running ? (
-            <Badge className="bg-[--color-profit-bg] text-[--color-profit] border border-[--color-profit]/30">Running</Badge>
+            <Badge className="bg-(--color-profit-bg) text-(--color-profit) border border-(--color-profit)/30">Running</Badge>
           ) : (
-            <Badge className="bg-[--color-surface-3] text-[--color-text-muted] border border-[--color-border]">Stopped</Badge>
+            <Badge className="bg-(--color-surface-3) text-(--color-text-muted) border border-(--color-border)">Stopped</Badge>
           )}
         </div>
       </div>
 
       {/* ── Consumer health (placeholders) ── */}
       <div>
-        <p className="text-xs font-semibold text-[--color-text-muted] uppercase tracking-wide mb-3">Consumer Health</p>
+        <p className="text-xs font-semibold text-(--color-text-muted) uppercase tracking-wide mb-3">Consumer Health</p>
         <div className="grid grid-cols-3 gap-3">
           <HealthCard
             icon={<Clock size={16} />}
@@ -185,7 +185,7 @@ export default function KiteConnectPage() {
           <Button
             onClick={() => loginMutation.mutate()}
             disabled={loginMutation.isPending}
-            className="bg-[--color-accent] hover:bg-[--color-accent-hover] text-white"
+            className="bg-(--color-accent) hover:bg-(--color-accent-hover) text-white"
           >
             <Zap size={14} className="mr-1.5" />
             {loginMutation.isPending ? 'Redirecting…' : 'Connect to Zerodha'}
@@ -198,7 +198,7 @@ export default function KiteConnectPage() {
               variant="outline"
               onClick={() => loginMutation.mutate()}
               disabled={loginMutation.isPending}
-              className="border-[--color-border] text-[--color-text-muted] hover:bg-[--color-surface-3]"
+              className="border-(--color-border) text-(--color-text-muted) hover:bg-(--color-surface-3)"
             >
               <RefreshCw size={14} className="mr-1.5" />
               Re-authenticate
@@ -208,7 +208,7 @@ export default function KiteConnectPage() {
               variant="outline"
               onClick={() => syncMutation.mutate()}
               disabled={syncMutation.isPending}
-              className="border-[--color-border] text-[--color-text-muted] hover:bg-[--color-surface-3]"
+              className="border-(--color-border) text-(--color-text-muted) hover:bg-(--color-surface-3)"
             >
               {syncMutation.isPending ? 'Syncing…' : 'Sync Instruments'}
             </Button>
@@ -218,7 +218,7 @@ export default function KiteConnectPage() {
                 variant="outline"
                 onClick={() => consumerStartMutation.mutate()}
                 disabled={consumerStartMutation.isPending}
-                className="border-[--color-border] text-[--color-text-muted] hover:bg-[--color-surface-3]"
+                className="border-(--color-border) text-(--color-text-muted) hover:bg-(--color-surface-3)"
               >
                 Start Tick Consumer
               </Button>
@@ -227,7 +227,7 @@ export default function KiteConnectPage() {
                 variant="outline"
                 onClick={() => consumerStopMutation.mutate()}
                 disabled={consumerStopMutation.isPending}
-                className="border-[--color-border] text-[--color-text-muted] hover:bg-[--color-surface-3]"
+                className="border-(--color-border) text-(--color-text-muted) hover:bg-(--color-surface-3)"
               >
                 Stop Tick Consumer
               </Button>
@@ -237,12 +237,12 @@ export default function KiteConnectPage() {
       </div>
 
       {/* ── Setup checklist ── */}
-      <div className="bg-[--color-surface-2] border border-[--color-border] rounded-lg p-4 space-y-2">
-        <p className="text-sm font-medium text-[--color-text]">Setup checklist</p>
-        <ol className="text-xs text-[--color-text-muted] space-y-1.5 list-decimal list-inside">
+      <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg p-4 space-y-2">
+        <p className="text-sm font-medium text-(--color-text)">Setup checklist</p>
+        <ol className="text-xs text-(--color-text-muted) space-y-1.5 list-decimal list-inside">
           <li>
             Update Zerodha Kite developer app redirect URL to:{' '}
-            <code className="font-mono text-[--color-accent]">http://localhost:8000/api/v1/broker/kite/callback</code>
+            <code className="font-mono text-(--color-accent)">http://localhost:8000/api/v1/broker/kite/callback</code>
           </li>
           <li>Click "Connect to Zerodha" above and log in with your Zerodha credentials</li>
           <li>Click "Sync Instruments" to download symbol → token mapping (needed for tick subscription)</li>

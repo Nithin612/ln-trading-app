@@ -25,8 +25,8 @@ const EMOTION_COLORS: Record<string, string> = {
 }
 
 function pnlClass(val: string | null) {
-  if (!val) return 'text-[--color-text-muted]'
-  return Number(val) >= 0 ? 'text-[--color-bull]' : 'text-[--color-bear]'
+  if (!val) return 'text-(--color-text-muted)'
+  return Number(val) >= 0 ? 'text-(--color-bull)' : 'text-(--color-bear)'
 }
 
 function formatPnl(val: string | null) {
@@ -43,7 +43,7 @@ interface EmotionBarProps {
 function EmotionBar({ data, label }: EmotionBarProps) {
   if (data.length === 0) {
     return (
-      <div className="flex items-center justify-center h-24 text-xs text-[--color-text-muted]">
+      <div className="flex items-center justify-center h-24 text-xs text-(--color-text-muted)">
         No data yet
       </div>
     )
@@ -51,7 +51,7 @@ function EmotionBar({ data, label }: EmotionBarProps) {
 
   return (
     <div>
-      <p className="text-xs font-medium text-[--color-text-muted] uppercase tracking-wider mb-2">
+      <p className="text-xs font-medium text-(--color-text-muted) uppercase tracking-wider mb-2">
         {label}
       </p>
       <ResponsiveContainer width="100%" height={120}>
@@ -69,9 +69,9 @@ function EmotionBar({ data, label }: EmotionBarProps) {
               if (!active || !payload?.length) return null
               const d = payload[0].payload as EmotionCount
               return (
-                <div className="bg-[--color-surface-2] border border-[--color-border] rounded-md px-3 py-2 text-xs shadow-lg">
-                  <p className="font-semibold capitalize text-[--color-text]">{d.emotion}</p>
-                  <p className="text-[--color-text-muted]">{d.count} trade{d.count !== 1 ? 's' : ''}</p>
+                <div className="bg-(--color-surface-2) border border-(--color-border) rounded-md px-3 py-2 text-xs shadow-lg">
+                  <p className="font-semibold capitalize text-(--color-text)">{d.emotion}</p>
+                  <p className="text-(--color-text-muted)">{d.count} trade{d.count !== 1 ? 's' : ''}</p>
                   <p className={cn('mt-0.5', pnlClass(d.avg_pnl))}>
                     Avg P&L: {formatPnl(d.avg_pnl)}
                   </p>
@@ -93,7 +93,7 @@ function EmotionBar({ data, label }: EmotionBarProps) {
       <div className="mt-1 space-y-0.5">
         {data.map((e) => (
           <div key={e.emotion} className="flex items-center justify-between text-xs">
-            <span className="capitalize text-[--color-text-muted]">{e.emotion}</span>
+            <span className="capitalize text-(--color-text-muted)">{e.emotion}</span>
             <span className={pnlClass(e.avg_pnl)}>{formatPnl(e.avg_pnl)}</span>
           </div>
         ))}
@@ -122,17 +122,17 @@ export function EmotionAnalyticsPanel() {
 
   return (
     <div
-      className="rounded-lg border border-[--color-border] p-4"
+      className="rounded-lg border border-(--color-border) p-4"
       style={{ background: 'var(--color-surface-2)' }}
     >
       <div className="flex items-center justify-between mb-4">
-        <h3 className="text-sm font-semibold text-[--color-text]">Emotion Analytics</h3>
-        <span className="text-xs text-[--color-text-muted]">{data.total_entries} entries</span>
+        <h3 className="text-sm font-semibold text-(--color-text)">Emotion Analytics</h3>
+        <span className="text-xs text-(--color-text-muted)">{data.total_entries} entries</span>
       </div>
 
       <div className="space-y-5">
         <EmotionBar data={data.before} label="Before trade" />
-        <div className="border-t border-[--color-border]" />
+        <div className="border-t border-(--color-border)" />
         <EmotionBar data={data.after} label="After trade" />
       </div>
     </div>

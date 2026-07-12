@@ -23,10 +23,10 @@ function Checkbox({
       onCheckedChange={onCheckedChange}
       disabled={disabled}
       className={cn(
-        "size-4 shrink-0 rounded-sm border border-[--color-border]",
-        "bg-[--color-surface-3]",
-        "data-[checked]:bg-[--color-accent] data-[checked]:border-[--color-accent]",
-        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[--color-accent] focus-visible:ring-offset-2 focus-visible:ring-offset-[--color-bg]",
+        "size-4 shrink-0 rounded-sm border border-(--color-border)",
+        "bg-(--color-surface-3)",
+        "data-[checked]:bg-(--color-accent) data-[checked]:border-(--color-accent)",
+        "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-accent) focus-visible:ring-offset-2 focus-visible:ring-offset-(--color-bg)",
         "disabled:pointer-events-none disabled:opacity-50",
         "transition-colors duration-150",
         className

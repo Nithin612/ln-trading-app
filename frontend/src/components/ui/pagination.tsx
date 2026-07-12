@@ -31,7 +31,7 @@ export function Pagination({
   const pageButtons = buildPageButtons(page, pages)
 
   return (
-    <div className={cn('flex items-center justify-between gap-4 text-sm text-[--color-text-muted] flex-wrap', className)}>
+    <div className={cn('flex items-center justify-between gap-4 text-sm text-(--color-text-muted) flex-wrap', className)}>
       <div className="flex items-center gap-3">
         {onPageSizeChange && (
           <div className="flex items-center gap-1.5">
@@ -58,7 +58,7 @@ export function Pagination({
 
           {pageButtons.map((btn, i) =>
             btn === '...' ? (
-              <span key={`ellipsis-${i}`} className="px-1 text-xs text-[--color-text-muted]">…</span>
+              <span key={`ellipsis-${i}`} className="px-1 text-xs text-(--color-text-muted)">…</span>
             ) : (
               <PageBtn
                 key={btn}
@@ -99,10 +99,10 @@ function PageBtn({
       aria-label={ariaLabel}
       className={cn(
         'min-w-[28px] h-7 px-1.5 rounded text-xs font-medium transition-colors',
-        'border border-[--color-border]',
+        'border border-(--color-border)',
         active
-          ? 'bg-[--color-accent] text-white border-[--color-accent]'
-          : 'bg-transparent text-[--color-text-muted] hover:bg-[--color-surface-3] hover:text-[--color-text]',
+          ? 'bg-(--color-accent) text-white border-(--color-accent)'
+          : 'bg-transparent text-(--color-text-muted) hover:bg-(--color-surface-3) hover:text-(--color-text)',
         (disabled) && 'opacity-40 cursor-not-allowed pointer-events-none',
       )}
     >

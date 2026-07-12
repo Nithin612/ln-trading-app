@@ -16,15 +16,15 @@ export function Slider({ value, onChange, min = 0, max = 100, step = 1, label, c
   return (
     <div className={cn('flex flex-col gap-1', className)}>
       {label && (
-        <div className="flex justify-between text-xs text-[--color-text-muted]">
+        <div className="flex justify-between text-xs text-(--color-text-muted)">
           <span>{label}</span>
-          <span className="font-mono text-[--color-text]">{value}%</span>
+          <span className="font-mono text-(--color-text)">{value}%</span>
         </div>
       )}
       <div className="relative h-5 flex items-center">
-        <div className="w-full h-1.5 rounded-full bg-[--color-surface-3] overflow-hidden">
+        <div className="w-full h-1.5 rounded-full bg-(--color-surface-3) overflow-hidden">
           <div
-            className="h-full rounded-full bg-[--color-accent] transition-all"
+            className="h-full rounded-full bg-(--color-accent) transition-all"
             style={{ width: `${pct}%` }}
           />
         </div>
@@ -40,7 +40,7 @@ export function Slider({ value, onChange, min = 0, max = 100, step = 1, label, c
         />
         {/* Thumb */}
         <div
-          className="absolute w-4 h-4 rounded-full bg-[--color-accent] border-2 border-[--color-surface-2] shadow pointer-events-none"
+          className="absolute w-4 h-4 rounded-full bg-(--color-accent) border-2 border-(--color-surface-2) shadow pointer-events-none"
           style={{ left: `calc(${pct}% - 8px)` }}
         />
       </div>

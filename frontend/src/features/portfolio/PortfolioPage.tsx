@@ -53,11 +53,11 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
 const ASSET_TYPE_COLORS: Record<string, string> = {
   gold:        'text-yellow-400',
   fd:          'text-blue-400',
-  ppf:         'text-[--color-profit]',
+  ppf:         'text-(--color-profit)',
   nps:         'text-purple-400',
   bonds:       'text-cyan-400',
   real_estate: 'text-orange-400',
-  other:       'text-[--color-text-muted]',
+  other:       'text-(--color-text-muted)',
 }
 
 // ── Net Worth Dashboard ────────────────────────────────────────────────────────
@@ -69,7 +69,7 @@ function NetWorthCard({ data }: { data: NetWorthOut }) {
     {
       label: 'Equity',
       value: data.equity.current_value,
-      color: 'bg-[--color-accent]',
+      color: 'bg-(--color-accent)',
       icon: <TrendingUp size={16} />,
       sub: `${data.equity.position_count} position${data.equity.position_count === 1 ? '' : 's'}`,
     },
@@ -95,12 +95,12 @@ function NetWorthCard({ data }: { data: NetWorthOut }) {
     <div className="space-y-4">
       {/* Total */}
       <div
-        className="rounded-xl p-6 text-center border border-[--color-border]"
+        className="rounded-xl p-6 text-center border border-(--color-border)"
         style={{ background: 'linear-gradient(135deg, var(--color-surface-2) 0%, var(--color-surface-3) 100%)' }}
       >
-        <p className="text-xs text-[--color-text-muted] uppercase tracking-widest mb-1">Total Net Worth</p>
-        <p className="text-4xl font-bold font-mono text-[--color-text]">{fmt(data.total_net_worth)}</p>
-        <p className="text-xs text-[--color-text-muted] mt-1">
+        <p className="text-xs text-(--color-text-muted) uppercase tracking-widest mb-1">Total Net Worth</p>
+        <p className="text-4xl font-bold font-mono text-(--color-text)">{fmt(data.total_net_worth)}</p>
+        <p className="text-xs text-(--color-text-muted) mt-1">
           as of {new Date(data.as_of).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', dateStyle: 'medium', timeStyle: 'short' })} IST
         </p>
       </div>
@@ -128,36 +128,36 @@ function NetWorthCard({ data }: { data: NetWorthOut }) {
         {segments.map((s) => (
           <div
             key={s.label}
-            className="rounded-lg p-4 border border-[--color-border] bg-[--color-surface-2] space-y-1"
+            className="rounded-lg p-4 border border-(--color-border) bg-(--color-surface-2) space-y-1"
           >
-            <div className="flex items-center gap-2 text-[--color-text-muted] text-xs">
+            <div className="flex items-center gap-2 text-(--color-text-muted) text-xs">
               {s.icon}
               <span>{s.label}</span>
             </div>
-            <p className="font-mono font-semibold text-[--color-text]">{fmt(s.value)}</p>
-            <p className="text-xs text-[--color-text-muted]">{total > 0 ? pct(s.value, data.total_net_worth) : '—'}</p>
-            <p className="text-xs text-[--color-text-muted]">{s.sub}</p>
+            <p className="font-mono font-semibold text-(--color-text)">{fmt(s.value)}</p>
+            <p className="text-xs text-(--color-text-muted)">{total > 0 ? pct(s.value, data.total_net_worth) : '—'}</p>
+            <p className="text-xs text-(--color-text-muted)">{s.sub}</p>
           </div>
         ))}
       </div>
 
       {/* Manual breakdown */}
       {data.manual_assets.breakdown.length > 0 && (
-        <div className="rounded-lg border border-[--color-border] bg-[--color-surface-2] p-4">
-          <p className="text-xs text-[--color-text-muted] uppercase tracking-widest mb-3">Other Assets Breakdown</p>
+        <div className="rounded-lg border border-(--color-border) bg-(--color-surface-2) p-4">
+          <p className="text-xs text-(--color-text-muted) uppercase tracking-widest mb-3">Other Assets Breakdown</p>
           <div className="space-y-2">
             {data.manual_assets.breakdown.map((b) => (
               <div key={b.asset_type} className="flex items-center gap-3">
                 <span className={cn('text-xs font-medium w-24 truncate', ASSET_TYPE_COLORS[b.asset_type])}>
                   {b.label}
                 </span>
-                <div className="flex-1 h-1.5 rounded-full bg-[--color-surface-3] overflow-hidden">
+                <div className="flex-1 h-1.5 rounded-full bg-(--color-surface-3) overflow-hidden">
                   <div
-                    className="h-full rounded-full bg-[--color-accent]"
+                    className="h-full rounded-full bg-(--color-accent)"
                     style={{ width: pct(b.total_value, data.manual_assets.current_value) }}
                   />
                 </div>
-                <span className="text-xs font-mono text-[--color-text-muted] w-28 text-right">
+                <span className="text-xs font-mono text-(--color-text-muted) w-28 text-right">
                   {fmt(b.total_value)}
                 </span>
               </div>
@@ -198,8 +198,8 @@ function CasUploadZone({ onUploaded }: { onUploaded: () => void }) {
       className={cn(
         'border-2 border-dashed rounded-xl p-10 text-center transition-colors cursor-pointer',
         dragging
-          ? 'border-[--color-accent] bg-[color-mix(in_srgb,var(--color-accent)_8%,transparent)]'
-          : 'border-[--color-border] hover:border-[--color-accent] hover:bg-[--color-surface-2]',
+          ? 'border-(--color-accent) bg-[color-mix(in_srgb,var(--color-accent)_8%,transparent)]'
+          : 'border-(--color-border) hover:border-(--color-accent) hover:bg-(--color-surface-2)',
       )}
       onDragOver={(e) => { e.preventDefault(); setDragging(true) }}
       onDragLeave={() => setDragging(false)}
@@ -222,13 +222,13 @@ function CasUploadZone({ onUploaded }: { onUploaded: () => void }) {
           e.target.value = ''
         }}
       />
-      <UploadCloud size={36} className="mx-auto text-[--color-text-muted] mb-3" />
+      <UploadCloud size={36} className="mx-auto text-(--color-text-muted) mb-3" />
       {uploadMut.isPending ? (
-        <p className="text-sm text-[--color-text-muted]">Uploading and parsing…</p>
+        <p className="text-sm text-(--color-text-muted)">Uploading and parsing…</p>
       ) : (
         <>
-          <p className="text-sm font-medium text-[--color-text]">Drop your CAMS CAS PDF here</p>
-          <p className="text-xs text-[--color-text-muted] mt-1">or click to browse · PDF only · max 20 MB</p>
+          <p className="text-sm font-medium text-(--color-text)">Drop your CAMS CAS PDF here</p>
+          <p className="text-xs text-(--color-text-muted) mt-1">or click to browse · PDF only · max 20 MB</p>
         </>
       )}
     </div>
@@ -259,22 +259,22 @@ function BatchRow({ batch, onDelete }: { batch: MfImportBatchOut; onDelete: () =
   })
 
   return (
-    <div className="border border-[--color-border] rounded-lg overflow-hidden">
-      <div className="flex items-center gap-3 px-4 py-3 bg-[--color-surface-2]">
+    <div className="border border-(--color-border) rounded-lg overflow-hidden">
+      <div className="flex items-center gap-3 px-4 py-3 bg-(--color-surface-2)">
         <button
           onClick={() => setExpanded((v) => !v)}
-          className="flex items-center gap-2 flex-1 text-left text-sm text-[--color-text] hover:text-[--color-accent] transition-colors min-w-0"
+          className="flex items-center gap-2 flex-1 text-left text-sm text-(--color-text) hover:text-(--color-accent) transition-colors min-w-0"
         >
           {expanded ? <ChevronDown size={14} /> : <ChevronRight size={14} />}
           <span className="font-medium truncate">{batch.source_filename}</span>
         </button>
-        <span className="text-xs text-[--color-text-muted] whitespace-nowrap">
+        <span className="text-xs text-(--color-text-muted) whitespace-nowrap">
           {batch.total_holdings} scheme{batch.total_holdings === 1 ? '' : 's'}
         </span>
-        <span className="text-xs font-mono font-semibold text-[--color-text] whitespace-nowrap">
+        <span className="text-xs font-mono font-semibold text-(--color-text) whitespace-nowrap">
           {fmt(batch.total_value)}
         </span>
-        <span className="text-xs text-[--color-text-muted] whitespace-nowrap">
+        <span className="text-xs text-(--color-text-muted) whitespace-nowrap">
           {new Date(batch.created_at).toLocaleDateString('en-IN')}
         </span>
         <Button
@@ -282,7 +282,7 @@ function BatchRow({ batch, onDelete }: { batch: MfImportBatchOut; onDelete: () =
           variant="ghost"
           onClick={() => deleteMut.mutate()}
           disabled={deleteMut.isPending}
-          className="text-[--color-bear] hover:text-[--color-bear] flex-shrink-0"
+          className="text-(--color-bear) hover:text-(--color-bear) flex-shrink-0"
           title="Delete import"
         >
           <Trash2 size={13} />
@@ -290,7 +290,7 @@ function BatchRow({ batch, onDelete }: { batch: MfImportBatchOut; onDelete: () =
       </div>
 
       {expanded && (
-        <div className="border-t border-[--color-border]">
+        <div className="border-t border-(--color-border)">
           {!detailQ.data ? (
             <div className="p-4 space-y-2">
               {[1, 2, 3].map((i) => <Skeleton key={i} className="h-8" />)}
@@ -307,7 +307,7 @@ function BatchRow({ batch, onDelete }: { batch: MfImportBatchOut; onDelete: () =
 function HoldingsTable({ holdings }: { holdings: MfHoldingOut[] }) {
   if (holdings.length === 0) {
     return (
-      <div className="p-6 text-center text-sm text-[--color-text-muted]">
+      <div className="p-6 text-center text-sm text-(--color-text-muted)">
         No holdings were parsed from this import.
       </div>
     )
@@ -316,7 +316,7 @@ function HoldingsTable({ holdings }: { holdings: MfHoldingOut[] }) {
     <div className="overflow-x-auto">
       <table className="w-full text-xs">
         <thead>
-          <tr className="border-b border-[--color-border] text-[--color-text-muted]">
+          <tr className="border-b border-(--color-border) text-(--color-text-muted)">
             <th className="text-left px-4 py-2 font-medium">Scheme</th>
             <th className="text-left px-4 py-2 font-medium">AMC</th>
             <th className="text-left px-4 py-2 font-medium">Folio</th>
@@ -327,13 +327,13 @@ function HoldingsTable({ holdings }: { holdings: MfHoldingOut[] }) {
         </thead>
         <tbody>
           {holdings.map((h) => (
-            <tr key={h.id} className="border-b border-[--color-border] last:border-0 hover:bg-[--color-surface-2]">
-              <td className="px-4 py-2 max-w-xs truncate text-[--color-text]" title={h.scheme_name}>{h.scheme_name}</td>
-              <td className="px-4 py-2 text-[--color-text-muted] max-w-[120px] truncate" title={h.amc_name}>{h.amc_name}</td>
-              <td className="px-4 py-2 text-[--color-text-muted] font-mono">{h.folio_number}</td>
-              <td className="px-4 py-2 text-right font-mono text-[--color-text]">{parseFloat(h.units).toFixed(4)}</td>
-              <td className="px-4 py-2 text-right font-mono text-[--color-text]">{fmt(h.nav, 2)}</td>
-              <td className="px-4 py-2 text-right font-mono font-semibold text-[--color-text]">{fmt(h.current_value)}</td>
+            <tr key={h.id} className="border-b border-(--color-border) last:border-0 hover:bg-(--color-surface-2)">
+              <td className="px-4 py-2 max-w-xs truncate text-(--color-text)" title={h.scheme_name}>{h.scheme_name}</td>
+              <td className="px-4 py-2 text-(--color-text-muted) max-w-[120px] truncate" title={h.amc_name}>{h.amc_name}</td>
+              <td className="px-4 py-2 text-(--color-text-muted) font-mono">{h.folio_number}</td>
+              <td className="px-4 py-2 text-right font-mono text-(--color-text)">{parseFloat(h.units).toFixed(4)}</td>
+              <td className="px-4 py-2 text-right font-mono text-(--color-text)">{fmt(h.nav, 2)}</td>
+              <td className="px-4 py-2 text-right font-mono font-semibold text-(--color-text)">{fmt(h.current_value)}</td>
             </tr>
           ))}
         </tbody>
@@ -354,7 +354,7 @@ function MutualFundsTab() {
       }} />
 
       <div className="space-y-2">
-        <h3 className="text-sm font-medium text-[--color-text]">Import History</h3>
+        <h3 className="text-sm font-medium text-(--color-text)">Import History</h3>
         {batchesQ.isLoading ? (
           <div className="space-y-2">{[1, 2].map((i) => <Skeleton key={i} className="h-12" />)}</div>
         ) : !batchesQ.data?.length ? (
@@ -476,13 +476,13 @@ function AssetFormModal({
   return (
     <Dialog open onOpenChange={(v) => { if (!v) onClose() }}>
       <div className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
-        <h2 className="text-base font-semibold text-[--color-text]">
+        <h2 className="text-base font-semibold text-(--color-text)">
           {editing ? 'Edit Asset' : 'Add Asset'}
         </h2>
         <form onSubmit={handleSubmit} className="space-y-3">
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs text-[--color-text-muted]">Asset Type</label>
+              <label className="text-xs text-(--color-text-muted)">Asset Type</label>
               <SimpleSelect
                 value={form.asset_type}
                 onChange={(v) => set('asset_type', v)}
@@ -490,7 +490,7 @@ function AssetFormModal({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-[--color-text-muted]">Name *</label>
+              <label className="text-xs text-(--color-text-muted)">Name *</label>
               <Input
                 value={form.name}
                 onChange={(e) => set('name', e.target.value)}
@@ -501,7 +501,7 @@ function AssetFormModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs text-[--color-text-muted]">Current Value (₹) *</label>
+              <label className="text-xs text-(--color-text-muted)">Current Value (₹) *</label>
               <Input
                 type="number"
                 value={form.current_value}
@@ -512,7 +512,7 @@ function AssetFormModal({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-[--color-text-muted]">Institution</label>
+              <label className="text-xs text-(--color-text-muted)">Institution</label>
               <Input
                 value={form.institution}
                 onChange={(e) => set('institution', e.target.value)}
@@ -523,7 +523,7 @@ function AssetFormModal({
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs text-[--color-text-muted]">Purchase Value (₹)</label>
+              <label className="text-xs text-(--color-text-muted)">Purchase Value (₹)</label>
               <Input
                 type="number"
                 value={form.purchase_value}
@@ -534,7 +534,7 @@ function AssetFormModal({
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs text-[--color-text-muted]">Purchase Date</label>
+              <label className="text-xs text-(--color-text-muted)">Purchase Date</label>
               <Input
                 type="date"
                 value={form.purchase_date}
@@ -545,7 +545,7 @@ function AssetFormModal({
 
           {showMaturity && (
             <div className="space-y-1">
-              <label className="text-xs text-[--color-text-muted]">Maturity Date</label>
+              <label className="text-xs text-(--color-text-muted)">Maturity Date</label>
               <Input
                 type="date"
                 value={form.maturity_date}
@@ -557,7 +557,7 @@ function AssetFormModal({
           {showUnits && (
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <label className="text-xs text-[--color-text-muted]">
+                <label className="text-xs text-(--color-text-muted)">
                   {form.asset_type === 'gold' ? 'Quantity (grams)' : 'Units'}
                 </label>
                 <Input
@@ -570,7 +570,7 @@ function AssetFormModal({
                 />
               </div>
               <div className="space-y-1">
-                <label className="text-xs text-[--color-text-muted]">
+                <label className="text-xs text-(--color-text-muted)">
                   {form.asset_type === 'gold' ? 'Price per gram (₹)' : 'Price per unit (₹)'}
                 </label>
                 <Input
@@ -586,7 +586,7 @@ function AssetFormModal({
           )}
 
           <div className="space-y-1">
-            <label className="text-xs text-[--color-text-muted]">Notes</label>
+            <label className="text-xs text-(--color-text-muted)">Notes</label>
             <Input
               value={form.notes}
               onChange={(e) => set('notes', e.target.value)}
@@ -635,34 +635,34 @@ function AssetRow({
     : null
 
   return (
-    <tr className="border-b border-[--color-border] last:border-0 hover:bg-[--color-surface-2] group">
+    <tr className="border-b border-(--color-border) last:border-0 hover:bg-(--color-surface-2) group">
       <td className="px-4 py-3">
         <span className={cn('text-xs font-medium', ASSET_TYPE_COLORS[asset.asset_type])}>
           {ASSET_TYPE_LABELS[asset.asset_type] ?? asset.asset_type}
         </span>
       </td>
       <td className="px-4 py-3">
-        <p className="text-sm text-[--color-text]">{asset.name}</p>
+        <p className="text-sm text-(--color-text)">{asset.name}</p>
         {asset.institution && (
-          <p className="text-xs text-[--color-text-muted]">{asset.institution}</p>
+          <p className="text-xs text-(--color-text-muted)">{asset.institution}</p>
         )}
       </td>
-      <td className="px-4 py-3 text-right font-mono text-sm text-[--color-text]">
+      <td className="px-4 py-3 text-right font-mono text-sm text-(--color-text)">
         {fmt(asset.current_value)}
       </td>
       <td className="px-4 py-3 text-right">
         {gainLoss !== null ? (
-          <span className={cn('text-xs font-mono', gainLoss >= 0 ? 'text-[--color-bull]' : 'text-[--color-bear]')}>
+          <span className={cn('text-xs font-mono', gainLoss >= 0 ? 'text-(--color-bull)' : 'text-(--color-bear)')}>
             {gainLoss >= 0 ? '+' : ''}{fmt(gainLoss)}
           </span>
         ) : (
-          <span className="text-xs text-[--color-text-muted]">—</span>
+          <span className="text-xs text-(--color-text-muted)">—</span>
         )}
       </td>
-      <td className="px-4 py-3 text-[--color-text-muted] text-xs">
+      <td className="px-4 py-3 text-(--color-text-muted) text-xs">
         {asset.purchase_date ?? '—'}
       </td>
-      <td className="px-4 py-3 text-[--color-text-muted] text-xs">
+      <td className="px-4 py-3 text-(--color-text-muted) text-xs">
         {asset.maturity_date ?? '—'}
       </td>
       <td className="px-4 py-3">
@@ -675,7 +675,7 @@ function AssetRow({
             variant="ghost"
             onClick={() => deleteMut.mutate()}
             disabled={deleteMut.isPending}
-            className="text-[--color-bear] hover:text-[--color-bear]"
+            className="text-(--color-bear) hover:text-(--color-bear)"
             title="Delete"
           >
             <Trash2 size={13} />
@@ -718,8 +718,8 @@ function ManualAssetsTab() {
         />
         <div className="flex-1" />
         {assetsQ.data && assetsQ.data.length > 0 && (
-          <span className="text-sm text-[--color-text-muted]">
-            Total: <span className="font-mono font-semibold text-[--color-text]">{fmt(totalValue)}</span>
+          <span className="text-sm text-(--color-text-muted)">
+            Total: <span className="font-mono font-semibold text-(--color-text)">{fmt(totalValue)}</span>
           </span>
         )}
         <Button size="sm" onClick={() => { setEditing(null); setModalOpen(true) }}>
@@ -741,10 +741,10 @@ function ManualAssetsTab() {
           }
         />
       ) : (
-        <div className="border border-[--color-border] rounded-lg overflow-hidden">
+        <div className="border border-(--color-border) rounded-lg overflow-hidden">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-[--color-border] text-[--color-text-muted] bg-[--color-surface-2]">
+              <tr className="border-b border-(--color-border) text-(--color-text-muted) bg-(--color-surface-2)">
                 <th className="text-left px-4 py-2 text-xs font-medium">Type</th>
                 <th className="text-left px-4 py-2 text-xs font-medium">Name / Institution</th>
                 <th className="text-right px-4 py-2 text-xs font-medium">Current Value</th>

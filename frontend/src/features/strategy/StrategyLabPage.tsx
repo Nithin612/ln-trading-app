@@ -102,8 +102,8 @@ function MultiplierSlider({
     <div className="flex flex-col gap-1">
       <div className="flex items-center justify-between">
         <div>
-          <span className="text-xs text-[--color-text] font-medium">{label}</span>
-          <span className="ml-2 text-[10px] text-[--color-text-muted]">{hint}</span>
+          <span className="text-xs text-(--color-text) font-medium">{label}</span>
+          <span className="ml-2 text-[10px] text-(--color-text-muted)">{hint}</span>
         </div>
         <span
           className="text-xs font-mono font-bold px-1.5 py-0.5 rounded"
@@ -116,7 +116,7 @@ function MultiplierSlider({
         </span>
       </div>
       <div className="relative h-5 flex items-center">
-        <div className="w-full h-1.5 rounded-full bg-[--color-surface-3] overflow-hidden">
+        <div className="w-full h-1.5 rounded-full bg-(--color-surface-3) overflow-hidden">
           <div
             className="h-full rounded-full transition-all"
             style={{ width: `${pct}%`, background: color }}
@@ -132,7 +132,7 @@ function MultiplierSlider({
           className="absolute inset-0 w-full opacity-0 cursor-pointer h-full"
         />
         <div
-          className="absolute w-3.5 h-3.5 rounded-full border-2 border-[--color-surface-2] shadow pointer-events-none"
+          className="absolute w-3.5 h-3.5 rounded-full border-2 border-(--color-surface-2) shadow pointer-events-none"
           style={{ left: `calc(${pct}% - 7px)`, background: color }}
         />
       </div>
@@ -169,12 +169,12 @@ function RunRow({
   return (
     <>
       <tr
-        className="border-b border-[--color-border] hover:bg-[--color-surface-hover] cursor-pointer"
+        className="border-b border-(--color-border) hover:bg-(--color-surface-hover) cursor-pointer"
         onClick={onExpand}
       >
         <td className="px-3 py-2 text-xs">
-          <div className="font-semibold text-[--color-text]">{run.name}</div>
-          <div className="text-[10px] text-[--color-text-muted]">
+          <div className="font-semibold text-(--color-text)">{run.name}</div>
+          <div className="text-[10px] text-(--color-text-muted)">
             {run.universe} · {run.timeframe} · {run.period_start.split('T')[0]} → {run.period_end.split('T')[0]}
           </div>
         </td>
@@ -200,7 +200,7 @@ function RunRow({
           <div className="flex items-center justify-end gap-1">
             <button
               onClick={(e) => { e.stopPropagation(); onDelete() }}
-              className="p-1 rounded hover:bg-[--color-surface-3] text-[--color-bear]"
+              className="p-1 rounded hover:bg-(--color-surface-3) text-(--color-bear)"
               title="Delete run"
             >
               <Trash2 size={12} />
@@ -210,7 +210,7 @@ function RunRow({
         </td>
       </tr>
       {expanded && (
-        <tr className="border-b border-[--color-border] bg-[--color-surface-2]">
+        <tr className="border-b border-(--color-border) bg-(--color-surface-2)">
           <td colSpan={8} className="px-4 py-3">
             <div className="flex flex-col gap-3">
               {run.equity_curve && run.equity_curve.length > 1 && (
@@ -218,21 +218,21 @@ function RunRow({
               )}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                 <div>
-                  <span className="text-[--color-text-muted]">Total P&L</span>
+                  <span className="text-(--color-text-muted)">Total P&L</span>
                   <div className="font-mono font-bold" style={{ color: parseFloat(run.total_pnl_pct ?? '0') >= 0 ? 'var(--color-bull)' : 'var(--color-bear)' }}>
                     {numFmt(run.total_pnl_pct)}%
                   </div>
                 </div>
                 <div>
-                  <span className="text-[--color-text-muted]">Avg P&L / trade</span>
+                  <span className="text-(--color-text-muted)">Avg P&L / trade</span>
                   <div className="font-mono">{numFmt(run.avg_pnl_pct)}%</div>
                 </div>
                 <div>
-                  <span className="text-[--color-text-muted]">Avg Holding</span>
+                  <span className="text-(--color-text-muted)">Avg Holding</span>
                   <div className="font-mono">{numFmt(run.avg_holding_days)} days</div>
                 </div>
                 <div>
-                  <span className="text-[--color-text-muted]">W / L</span>
+                  <span className="text-(--color-text-muted)">W / L</span>
                   <div className="font-mono">
                     <span style={{ color: 'var(--color-bull)' }}>{run.winning_trades}</span>
                     {' / '}
@@ -245,7 +245,7 @@ function RunRow({
                   {Object.entries(run.factor_weights).map(([k, v]) => (
                     <span
                       key={k}
-                      className="text-[10px] px-2 py-0.5 rounded-full border border-[--color-border] font-mono"
+                      className="text-[10px] px-2 py-0.5 rounded-full border border-(--color-border) font-mono"
                       style={{ color: 'var(--color-text-muted)' }}
                     >
                       {k} ×{(v as number).toFixed(2)}
@@ -268,7 +268,7 @@ function PresetTable({ entries }: { entries: PresetScanEntry[] }) {
     <div className="overflow-x-auto">
       <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
         <thead>
-          <tr className="border-b border-[--color-border]">
+          <tr className="border-b border-(--color-border)">
             {['Preset', 'Trades', 'Win %', 'Sharpe', 'Sortino', 'Max DD%', 'Avg RR', ''].map((h) => (
               <th
                 key={h}
@@ -285,10 +285,10 @@ function PresetTable({ entries }: { entries: PresetScanEntry[] }) {
             <>
               <tr
                 key={e.preset_name}
-                className="border-b border-[--color-border] hover:bg-[--color-surface-hover] cursor-pointer"
+                className="border-b border-(--color-border) hover:bg-(--color-surface-hover) cursor-pointer"
                 onClick={() => setExpandedIdx(expandedIdx === i ? null : i)}
               >
-                <td className="px-3 py-2 font-semibold text-[--color-text] capitalize">
+                <td className="px-3 py-2 font-semibold text-(--color-text) capitalize">
                   {e.preset_name.replace(/_/g, ' ')}
                 </td>
                 <td className="px-3 py-2 text-right font-mono">{e.total_trades}</td>
@@ -314,7 +314,7 @@ function PresetTable({ entries }: { entries: PresetScanEntry[] }) {
                 </td>
               </tr>
               {expandedIdx === i && (
-                <tr key={`${e.preset_name}-exp`} className="border-b border-[--color-border] bg-[--color-surface-2]">
+                <tr key={`${e.preset_name}-exp`} className="border-b border-(--color-border) bg-(--color-surface-2)">
                   <td colSpan={8} className="px-4 py-3">
                     {e.equity_curve.length > 1 && (
                       <EquityCurveChart data={e.equity_curve} label={e.preset_name} />
@@ -412,10 +412,10 @@ export function StrategyLabPage() {
   return (
     <div className="flex flex-col gap-5">
       {/* ── Config panel ── */}
-      <div className="bg-[--color-surface-2] border border-[--color-border] rounded-lg">
-        <div className="px-4 py-3 border-b border-[--color-border] flex items-center gap-2">
+      <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg">
+        <div className="px-4 py-3 border-b border-(--color-border) flex items-center gap-2">
           <FlaskConical size={15} style={{ color: 'var(--color-accent)' }} />
-          <span className="text-xs font-semibold uppercase tracking-wide text-[--color-text-muted]">
+          <span className="text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">
             Backtest Configuration
           </span>
         </div>
@@ -423,7 +423,7 @@ export function StrategyLabPage() {
           {/* Row 1: name + universe + timeframe */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="flex flex-col gap-1">
-              <Label className="text-xs text-[--color-text-muted]">Run name</Label>
+              <Label className="text-xs text-(--color-text-muted)">Run name</Label>
               <Input
                 value={config.name}
                 onChange={(e) => setConfig((c) => ({ ...c, name: e.target.value }))}
@@ -432,15 +432,15 @@ export function StrategyLabPage() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs text-[--color-text-muted]">Universe</Label>
+              <Label className="text-xs text-(--color-text-muted)">Universe</Label>
               <Select
                 value={config.universe}
                 onValueChange={(v) => { if (v) setConfig((c) => ({ ...c, universe: v })) }}
               >
-                <SelectTrigger className="w-full bg-[--color-surface-3] border-[--color-border] text-[--color-text] text-xs">
+                <SelectTrigger className="w-full bg-(--color-surface-3) border-(--color-border) text-(--color-text) text-xs">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-[--color-surface-3] border-[--color-border] text-[--color-text]">
+                <SelectContent className="bg-(--color-surface-3) border-(--color-border) text-(--color-text)">
                   {UNIVERSE_OPTIONS.map((o) => (
                     <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                   ))}
@@ -448,15 +448,15 @@ export function StrategyLabPage() {
               </Select>
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs text-[--color-text-muted]">Timeframe</Label>
+              <Label className="text-xs text-(--color-text-muted)">Timeframe</Label>
               <Select
                 value={config.timeframe}
                 onValueChange={(v) => { if (v) setConfig((c) => ({ ...c, timeframe: v as Config['timeframe'] })) }}
               >
-                <SelectTrigger className="w-full bg-[--color-surface-3] border-[--color-border] text-[--color-text] text-xs">
+                <SelectTrigger className="w-full bg-(--color-surface-3) border-(--color-border) text-(--color-text) text-xs">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="bg-[--color-surface-3] border-[--color-border] text-[--color-text]">
+                <SelectContent className="bg-(--color-surface-3) border-(--color-border) text-(--color-text)">
                   {TIMEFRAME_OPTIONS.map((o) => (
                     <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
                   ))}
@@ -479,7 +479,7 @@ export function StrategyLabPage() {
                   <button
                     key={qr.label}
                     onClick={() => applyQuickRange(qr.days)}
-                    className="text-[10px] px-2 py-1 rounded border border-[--color-border] text-[--color-text-muted] hover:bg-[--color-surface-3] hover:text-[--color-text] transition-colors"
+                    className="text-[10px] px-2 py-1 rounded border border-(--color-border) text-(--color-text-muted) hover:bg-(--color-surface-3) hover:text-(--color-text) transition-colors"
                   >
                     {qr.label}
                   </button>
@@ -491,7 +491,7 @@ export function StrategyLabPage() {
           {/* Row 3: capital + risk + confidence */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
             <div className="flex flex-col gap-1">
-              <Label className="text-xs text-[--color-text-muted]">Capital (₹)</Label>
+              <Label className="text-xs text-(--color-text-muted)">Capital (₹)</Label>
               <Input
                 type="number"
                 value={config.capital}
@@ -500,7 +500,7 @@ export function StrategyLabPage() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs text-[--color-text-muted]">Risk per trade (%)</Label>
+              <Label className="text-xs text-(--color-text-muted)">Risk per trade (%)</Label>
               <Input
                 type="number"
                 value={config.riskPct}
@@ -512,7 +512,7 @@ export function StrategyLabPage() {
               />
             </div>
             <div className="flex flex-col gap-1">
-              <Label className="text-xs text-[--color-text-muted]">Min confidence (%)</Label>
+              <Label className="text-xs text-(--color-text-muted)">Min confidence (%)</Label>
               <Input
                 type="number"
                 value={config.minConfidence}
@@ -526,7 +526,7 @@ export function StrategyLabPage() {
 
           {/* Row 4: factor weight sliders */}
           <div>
-            <div className="text-xs font-semibold text-[--color-text-muted] uppercase tracking-wide mb-2">
+            <div className="text-xs font-semibold text-(--color-text-muted) uppercase tracking-wide mb-2">
               Factor weight multipliers
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
@@ -545,7 +545,7 @@ export function StrategyLabPage() {
           </div>
 
           {/* Actions */}
-          <div className="flex items-center gap-2 pt-1 border-t border-[--color-border]">
+          <div className="flex items-center gap-2 pt-1 border-t border-(--color-border)">
             <Button
               onClick={handleRunBacktest}
               disabled={isBusy || !config.name.trim()}
@@ -575,8 +575,8 @@ export function StrategyLabPage() {
       </div>
 
       {/* ── Tabs: Saved runs / Preset scan ── */}
-      <div className="bg-[--color-surface-2] border border-[--color-border] rounded-lg">
-        <div className="flex border-b border-[--color-border]">
+      <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg">
+        <div className="flex border-b border-(--color-border)">
           {(['saved', 'scan'] as const).map((t) => (
             <button
               key={t}
@@ -605,7 +605,7 @@ export function StrategyLabPage() {
               <div className="overflow-x-auto">
                 <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
                   <thead>
-                    <tr className="border-b border-[--color-border]">
+                    <tr className="border-b border-(--color-border)">
                       {['Run', 'Trades', 'Win %', 'Sharpe', 'Sortino', 'Max DD%', 'Avg RR', ''].map((h) => (
                         <th
                           key={h}

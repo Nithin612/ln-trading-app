@@ -51,18 +51,18 @@ export function ProfileDropdown({ user, isAdmin, onLogout }: ProfileDropdownProp
       <button
         ref={triggerRef}
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-[--color-surface-3] transition-colors"
+        className="flex items-center gap-2 px-2 py-1.5 rounded-md hover:bg-(--color-surface-3) transition-colors"
         aria-label="User menu"
         aria-expanded={open}
         data-testid="profile-trigger"
       >
         <UserAvatar name={user.full_name} size="sm" />
-        <span className="hidden md:block text-xs font-medium text-[--color-text] max-w-[120px] truncate">
+        <span className="hidden md:block text-xs font-medium text-(--color-text) max-w-[120px] truncate">
           {user.full_name.split(' ')[0]}
         </span>
         <ChevronDown
           size={13}
-          className="text-[--color-text-muted] transition-transform hidden md:block"
+          className="text-(--color-text-muted) transition-transform hidden md:block"
           style={{ transform: open ? 'rotate(180deg)' : 'rotate(0deg)' }}
         />
       </button>
@@ -77,15 +77,15 @@ export function ProfileDropdown({ user, isAdmin, onLogout }: ProfileDropdownProp
             zIndex: 50,
             width: '17rem',
           }}
-          className="rounded-xl border border-[--color-border-strong] bg-[--color-surface] shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
+          className="rounded-xl border border-(--color-border-strong) bg-(--color-surface) shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-150"
         >
           {/* Identity header */}
-          <div className="px-4 py-3 border-b border-[--color-border] bg-[--color-surface-2]">
+          <div className="px-4 py-3 border-b border-(--color-border) bg-(--color-surface-2)">
             <div className="flex items-center gap-3">
               <UserAvatar name={user.full_name} size="lg" />
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-semibold text-[--color-text] truncate">{user.full_name}</p>
-                <p className="text-xs text-[--color-text-muted] truncate">{user.email}</p>
+                <p className="text-sm font-semibold text-(--color-text) truncate">{user.full_name}</p>
+                <p className="text-xs text-(--color-text-muted) truncate">{user.email}</p>
               </div>
             </div>
             <div className="flex items-center gap-2 mt-2.5">
@@ -122,10 +122,10 @@ export function ProfileDropdown({ user, isAdmin, onLogout }: ProfileDropdownProp
             )}
           </div>
 
-          <div className="border-t border-[--color-border] py-1">
+          <div className="border-t border-(--color-border) py-1">
             <button
               onClick={() => { setOpen(false); onLogout() }}
-              className="w-full flex items-center gap-3 px-4 py-2 text-sm text-[--color-loss] hover:bg-[--color-surface-2] transition-colors"
+              className="w-full flex items-center gap-3 px-4 py-2 text-sm text-(--color-loss) hover:bg-(--color-surface-2) transition-colors"
             >
               <LogOut size={14} />
               Sign out
@@ -148,7 +148,7 @@ function MenuItem({ to, icon, label, onClick }: {
     <Link
       to={to}
       onClick={onClick}
-      className="flex items-center gap-3 px-4 py-2 text-sm text-[--color-text-muted] hover:text-[--color-text] hover:bg-[--color-surface-2] transition-colors"
+      className="flex items-center gap-3 px-4 py-2 text-sm text-(--color-text-muted) hover:text-(--color-text) hover:bg-(--color-surface-2) transition-colors"
     >
       {icon}
       {label}

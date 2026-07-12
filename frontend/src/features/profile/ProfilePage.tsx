@@ -12,20 +12,20 @@ import { Skeleton } from '@/components/ui/skeleton'
 
 function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
   return (
-    <div className="flex items-center gap-3 py-3 border-b border-[--color-border] last:border-0">
-      <span className="text-[--color-text-muted] flex-shrink-0">{icon}</span>
-      <span className="text-sm text-[--color-text-muted] w-44 flex-shrink-0">{label}</span>
-      <span className="text-sm font-medium text-[--color-text]">{value}</span>
+    <div className="flex items-center gap-3 py-3 border-b border-(--color-border) last:border-0">
+      <span className="text-(--color-text-muted) flex-shrink-0">{icon}</span>
+      <span className="text-sm text-(--color-text-muted) w-44 flex-shrink-0">{label}</span>
+      <span className="text-sm font-medium text-(--color-text)">{value}</span>
     </div>
   )
 }
 
 function StatCard({ label, value, sub }: { label: string; value: React.ReactNode; sub?: string }) {
   return (
-    <div className="bg-[--color-surface-3] border border-[--color-border] rounded-lg p-4 text-center">
-      <div className="text-lg font-bold font-mono text-[--color-accent]">{value}</div>
-      <div className="text-xs text-[--color-text-muted] mt-1">{label}</div>
-      {sub && <div className="text-xs text-[--color-text-muted] mt-0.5 opacity-60">{sub}</div>}
+    <div className="bg-(--color-surface-3) border border-(--color-border) rounded-lg p-4 text-center">
+      <div className="text-lg font-bold font-mono text-(--color-accent)">{value}</div>
+      <div className="text-xs text-(--color-text-muted) mt-1">{label}</div>
+      {sub && <div className="text-xs text-(--color-text-muted) mt-0.5 opacity-60">{sub}</div>}
     </div>
   )
 }
@@ -68,7 +68,7 @@ export function ProfilePage() {
         <UserAvatar name={user.full_name} size="lg" className="w-16 h-16 !text-xl" />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-3 flex-wrap">
-            <h2 className="text-xl font-bold text-[--color-text]">{user.full_name}</h2>
+            <h2 className="text-xl font-bold text-(--color-text)">{user.full_name}</h2>
             {isAdmin && (
               <Badge className="bg-purple-900/40 text-purple-300 border border-purple-700 text-xs flex items-center gap-1">
                 <Shield size={10} />
@@ -76,7 +76,7 @@ export function ProfilePage() {
               </Badge>
             )}
           </div>
-          <p className="text-sm text-[--color-text-muted] mt-0.5">{user.email}</p>
+          <p className="text-sm text-(--color-text-muted) mt-0.5">{user.email}</p>
           <div className="flex items-center gap-3 mt-2 flex-wrap">
             <span
               className="text-xs font-semibold px-2.5 py-1 rounded-full border"
@@ -121,7 +121,7 @@ export function ProfilePage() {
 
       {/* Detail rows */}
       <div className="card py-0 px-0 overflow-hidden">
-        <p className="text-xs font-semibold text-[--color-text-muted] uppercase tracking-wide px-5 pt-4 pb-2">
+        <p className="text-xs font-semibold text-(--color-text-muted) uppercase tracking-wide px-5 pt-4 pb-2">
           Account Details
         </p>
         <div className="px-5 pb-2">
@@ -141,9 +141,9 @@ export function ProfilePage() {
           <InfoRow icon={<Calendar size={15} />} label="Member since" value={joinedDate} />
         </div>
 
-        <div className="border-t border-[--color-border] mx-5" />
+        <div className="border-t border-(--color-border) mx-5" />
 
-        <p className="text-xs font-semibold text-[--color-text-muted] uppercase tracking-wide px-5 pt-4 pb-2">
+        <p className="text-xs font-semibold text-(--color-text-muted) uppercase tracking-wide px-5 pt-4 pb-2">
           Risk Parameters
         </p>
         <div className="px-5 pb-4">
@@ -154,7 +154,7 @@ export function ProfilePage() {
         </div>
       </div>
 
-      <p className="text-xs text-[--color-text-muted] text-center">
+      <p className="text-xs text-(--color-text-muted) text-center">
         To update your profile or risk parameters, contact your admin.
       </p>
     </div>

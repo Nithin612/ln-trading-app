@@ -79,10 +79,10 @@ function exportCsv(items: Stock[]) {
 }
 
 function SortIcon({ field, active, dir }: { field: SortField; active: SortField; dir: 'asc' | 'desc' }) {
-  if (field !== active) return <ChevronsUpDown size={12} className="text-[--color-text-muted] ml-1 inline" />
+  if (field !== active) return <ChevronsUpDown size={12} className="text-(--color-text-muted) ml-1 inline" />
   return dir === 'asc'
-    ? <ChevronUp size={12} className="text-[--color-accent] ml-1 inline" />
-    : <ChevronDown size={12} className="text-[--color-accent] ml-1 inline" />
+    ? <ChevronUp size={12} className="text-(--color-accent) ml-1 inline" />
+    : <ChevronDown size={12} className="text-(--color-accent) ml-1 inline" />
 }
 
 function FilterChip({ label, active, onClick }: { label: string; active: boolean; onClick: () => void }) {
@@ -94,8 +94,8 @@ function FilterChip({ label, active, onClick }: { label: string; active: boolean
       className={cn(
         'rounded-full whitespace-nowrap',
         active
-          ? 'bg-[--color-accent] text-white border-[--color-accent] hover:bg-[--color-accent-hover]'
-          : 'hover:border-[--color-accent]',
+          ? 'bg-(--color-accent) text-white border-(--color-accent) hover:bg-(--color-accent-hover)'
+          : 'hover:border-(--color-accent)',
       )}
     >
       {label}
@@ -212,8 +212,8 @@ export function StocksPage() {
       {/* Header */}
       <div className="flex items-center justify-between flex-shrink-0">
         <div>
-          <h1 className="text-xl font-semibold text-[--color-text]">Stocks</h1>
-          <p className="text-sm text-[--color-text-muted]">
+          <h1 className="text-xl font-semibold text-(--color-text)">Stocks</h1>
+          <p className="text-sm text-(--color-text-muted)">
             {total > 0 ? `${total.toLocaleString()} stocks` : isLoading ? 'Loading…' : '0 stocks'}
           </p>
         </div>
@@ -221,22 +221,22 @@ export function StocksPage() {
       </div>
 
       {/* Filter panel */}
-      <div className="rounded-lg border border-l-2 border-[--color-border] border-l-[--color-accent]/40 bg-[--color-surface-2] p-3 space-y-2.5 flex-shrink-0">
+      <div className="rounded-lg border border-l-2 border-(--color-border) border-l-(--color-accent)/40 bg-(--color-surface-2) p-3 space-y-2.5 flex-shrink-0">
         {/* Row 1: search + toolbar */}
         <div className="flex gap-2 items-center flex-wrap">
           <div className="relative flex-1 min-w-48 max-w-72">
-            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-[--color-text-muted]" />
+            <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-(--color-text-muted)" />
             <Input
               placeholder="Search symbol or company…"
               value={search}
               onChange={e => handleSearch(e.target.value)}
-              className="pl-8 h-8 text-sm bg-[--color-surface-3] border-[--color-border] text-[--color-text] placeholder:text-[--color-text-muted] focus-visible:ring-[--color-accent]"
+              className="pl-8 h-8 text-sm bg-(--color-surface-3) border-(--color-border) text-(--color-text) placeholder:text-(--color-text-muted) focus-visible:ring-(--color-accent)"
             />
           </div>
 
           <div className="ml-auto flex gap-2 items-center">
             {/* Density toggle */}
-            <div className="flex rounded-md border border-[--color-border] overflow-hidden">
+            <div className="flex rounded-md border border-(--color-border) overflow-hidden">
               {(['compact', 'comfortable'] as const).map(d => (
                 <Button
                   key={d}
@@ -246,8 +246,8 @@ export function StocksPage() {
                   className={cn(
                     'rounded-none border-0 capitalize',
                     density === d
-                      ? 'bg-[--color-accent] text-white'
-                      : 'hover:bg-[--color-surface-3]',
+                      ? 'bg-(--color-accent) text-white'
+                      : 'hover:bg-(--color-surface-3)',
                   )}
                 >
                   {d}
@@ -275,9 +275,9 @@ export function StocksPage() {
               }
             >
               <div className="p-3 space-y-2 min-w-[160px]">
-                <p className="text-xs font-semibold text-[--color-text-muted] uppercase tracking-wide mb-2">Visible columns</p>
+                <p className="text-xs font-semibold text-(--color-text-muted) uppercase tracking-wide mb-2">Visible columns</p>
                 {COLUMNS.filter(c => c.key !== 'symbol' && c.key !== 'actions' && c.key !== 'num').map(col => (
-                  <label key={col.key} className="flex items-center gap-2 cursor-pointer text-sm text-[--color-text]">
+                  <label key={col.key} className="flex items-center gap-2 cursor-pointer text-sm text-(--color-text)">
                     <Checkbox
                       checked={visibleCols.has(col.key)}
                       onCheckedChange={() => toggleCol(col.key)}
@@ -292,9 +292,9 @@ export function StocksPage() {
 
         {/* Row 2: filter chips */}
         <div className="flex gap-2 items-center flex-wrap">
-          <span className="text-xs font-medium text-[--color-text-muted] select-none flex-shrink-0">
+          <span className="text-xs font-medium text-(--color-text-muted) select-none flex-shrink-0">
             Filters{activeFilterCount > 0 && (
-              <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-[--color-accent] text-white text-[10px] font-bold">{activeFilterCount}</span>
+              <span className="ml-1.5 inline-flex items-center justify-center w-4 h-4 rounded-full bg-(--color-accent-bg) text-(--color-accent) text-[10px] font-bold">{activeFilterCount}</span>
             )}
           </span>
 
@@ -304,11 +304,11 @@ export function StocksPage() {
           >
             <SelectTrigger
               size="sm"
-              className="bg-[--color-surface-3] border-[--color-border] text-[--color-text] focus:ring-[--color-accent]"
+              className="bg-(--color-surface-3) border-(--color-border) text-(--color-text) focus:ring-(--color-accent)"
             >
               <span className="flex flex-1 text-left text-sm">{sectorFilter || 'All sectors'}</span>
             </SelectTrigger>
-            <SelectContent className="bg-[--color-surface-3] border-[--color-border] text-[--color-text]">
+            <SelectContent className="bg-(--color-surface-3) border-(--color-border) text-(--color-text)">
               <SelectItem value="">All sectors</SelectItem>
               {allData === undefined && (
                 <SelectItem value="__loading__" disabled>Loading sectors…</SelectItem>
@@ -320,7 +320,7 @@ export function StocksPage() {
             </SelectContent>
           </Select>
 
-          <div className="w-px h-5 bg-[--color-border]" />
+          <div className="w-px h-5 bg-(--color-border)" />
 
           <FilterChip label="Nifty 50"   active={!!filterNifty50}    onClick={() => toggleFilter(filterNifty50,    setFilterNifty50)}    />
           <FilterChip label="BankNifty"  active={!!filterBankNifty}  onClick={() => toggleFilter(filterBankNifty,  setFilterBankNifty)}  />
@@ -332,15 +332,15 @@ export function StocksPage() {
               onClick={clearFilters}
               variant="ghost"
               size="xs"
-              className="text-[--color-text-muted] hover:text-[--color-error]"
+              className="text-(--color-text-muted) hover:text-(--color-error)"
             >
               × Clear all
             </Button>
           )}
 
           {connected && (
-            <span className="ml-auto flex items-center gap-1.5 text-xs text-[--color-profit]">
-              <span className="w-1.5 h-1.5 rounded-full bg-[--color-profit] animate-pulse" />
+            <span className="ml-auto flex items-center gap-1.5 text-xs text-(--color-profit)">
+              <span className="w-1.5 h-1.5 rounded-full bg-(--color-profit) animate-pulse" />
               Live
             </span>
           )}
@@ -348,23 +348,23 @@ export function StocksPage() {
       </div>
 
       {/* Table — flex-1 min-h-0 so it fills remaining height without overflowing */}
-      <div className="flex-1 min-h-0 rounded-lg border border-[--color-border] overflow-hidden flex flex-col">
+      <div className="flex-1 min-h-0 rounded-lg border border-(--color-border) overflow-hidden flex flex-col">
         <div className="overflow-auto flex-1">
         <Table>
           <TableHeader className="sticky top-0 z-10">
-            <TableRow className="border-[--color-border] hover:bg-transparent bg-[--color-surface-3]">
+            <TableRow className="border-(--color-border) hover:bg-transparent bg-(--color-surface-3)">
               {showCol('num') && (
-                <TableHead className="text-[--color-text-muted] w-10 text-right text-xs pr-3">#</TableHead>
+                <TableHead className="text-(--color-text-muted) w-10 text-right text-xs pr-3">#</TableHead>
               )}
               <TableHead
-                className={cn('text-[--color-text-muted] cursor-pointer select-none w-28', sortBy === 'symbol' && 'bg-[--color-accent]/10')}
+                className={cn('text-(--color-text-muted) cursor-pointer select-none w-28', sortBy === 'symbol' && 'bg-(--color-accent)/10')}
                 onClick={() => handleSort('symbol')}
               >
                 <span className="flex items-center">Symbol <SortIcon field="symbol" active={sortBy} dir={sortDir} /></span>
               </TableHead>
               {showCol('company_name') && (
                 <TableHead
-                  className={cn('text-[--color-text-muted] cursor-pointer select-none', sortBy === 'company_name' && 'bg-[--color-accent]/10')}
+                  className={cn('text-(--color-text-muted) cursor-pointer select-none', sortBy === 'company_name' && 'bg-(--color-accent)/10')}
                   onClick={() => handleSort('company_name')}
                 >
                   <span className="flex items-center">Company <SortIcon field="company_name" active={sortBy} dir={sortDir} /></span>
@@ -372,7 +372,7 @@ export function StocksPage() {
               )}
               {showCol('sector') && (
                 <TableHead
-                  className={cn('text-[--color-text-muted] cursor-pointer select-none w-36', sortBy === 'sector' && 'bg-[--color-accent]/10')}
+                  className={cn('text-(--color-text-muted) cursor-pointer select-none w-36', sortBy === 'sector' && 'bg-(--color-accent)/10')}
                   onClick={() => handleSort('sector')}
                 >
                   <span className="flex items-center">Sector <SortIcon field="sector" active={sortBy} dir={sortDir} /></span>
@@ -380,31 +380,31 @@ export function StocksPage() {
               )}
               {showCol('market_cap_cr') && (
                 <TableHead
-                  className={cn('text-[--color-text-muted] cursor-pointer select-none w-28 text-right', sortBy === 'market_cap_cr' && 'bg-[--color-accent]/10')}
+                  className={cn('text-(--color-text-muted) cursor-pointer select-none w-28 text-right', sortBy === 'market_cap_cr' && 'bg-(--color-accent)/10')}
                   onClick={() => handleSort('market_cap_cr')}
                 >
                   <span className="flex items-center justify-end">Mkt Cap <SortIcon field="market_cap_cr" active={sortBy} dir={sortDir} /></span>
                 </TableHead>
               )}
               {showCol('ltp') && (
-                <TableHead className="text-[--color-text-muted] w-24 text-right">LTP</TableHead>
+                <TableHead className="text-(--color-text-muted) w-24 text-right">LTP</TableHead>
               )}
               {showCol('indices') && (
-                <TableHead className="text-[--color-text-muted] w-28">Indices</TableHead>
+                <TableHead className="text-(--color-text-muted) w-28">Indices</TableHead>
               )}
               {showCol('lot_size') && (
                 <TableHead
-                  className={cn('text-[--color-text-muted] cursor-pointer select-none w-16 text-right', sortBy === 'lot_size' && 'bg-[--color-accent]/10')}
+                  className={cn('text-(--color-text-muted) cursor-pointer select-none w-16 text-right', sortBy === 'lot_size' && 'bg-(--color-accent)/10')}
                   onClick={() => handleSort('lot_size')}
                 >
                   <span className="flex items-center justify-end">Lot <SortIcon field="lot_size" active={sortBy} dir={sortDir} /></span>
                 </TableHead>
               )}
               {showCol('isin') && (
-                <TableHead className="text-[--color-text-muted] w-32">ISIN</TableHead>
+                <TableHead className="text-(--color-text-muted) w-32">ISIN</TableHead>
               )}
               {showCol('sparkline') && (
-                <TableHead className="text-[--color-text-muted] w-20 text-right">7d</TableHead>
+                <TableHead className="text-(--color-text-muted) w-20 text-right">7d</TableHead>
               )}
               {showCol('actions') && (
                 <TableHead className="w-8" />
@@ -421,7 +421,7 @@ export function StocksPage() {
             )}
             {isError && (
               <TableRow>
-                <TableCell colSpan={COLUMNS.length} className="text-center py-8 text-[--color-error]">
+                <TableCell colSpan={COLUMNS.length} className="text-center py-8 text-(--color-error)">
                   Failed to load stocks.
                 </TableCell>
               </TableRow>
@@ -439,12 +439,12 @@ export function StocksPage() {
                 <TableRow
                   key={stock.id}
                   className={cn(
-                    'hover:bg-[--color-surface-hover] transition-colors group/row',
-                    idx % 2 === 1 ? 'bg-[--color-row-alt]' : 'bg-[--color-surface-2]',
+                    'hover:bg-(--color-surface-hover) transition-colors group/row',
+                    idx % 2 === 1 ? 'bg-(--color-row-alt)' : 'bg-(--color-surface-2)',
                   )}
                 >
                   {showCol('num') && (
-                    <TableCell className={cn('text-right text-xs text-[--color-text-muted] font-mono tabular-nums select-none w-10 pr-3', rowPy)}>
+                    <TableCell className={cn('text-right text-xs text-(--color-text-muted) font-mono tabular-nums select-none w-10 pr-3', rowPy)}>
                       {offset + idx + 1}
                     </TableCell>
                   )}
@@ -452,7 +452,7 @@ export function StocksPage() {
                     <div className="flex items-center gap-1.5 group/sym">
                       <Link
                         to={`/stocks/${stock.id}`}
-                        className="font-mono font-semibold text-[--color-accent] hover:text-[--color-accent-hover] transition-colors"
+                        className="font-mono font-semibold text-(--color-accent) hover:text-(--color-accent-hover) transition-colors"
                       >
                         {stock.symbol}
                       </Link>
@@ -468,21 +468,21 @@ export function StocksPage() {
                     </div>
                   </TableCell>
                   {showCol('company_name') && (
-                    <TableCell className={cn('text-[--color-text] text-sm', rowPy)}>{stock.company_name}</TableCell>
+                    <TableCell className={cn('text-(--color-text) text-sm', rowPy)}>{stock.company_name}</TableCell>
                   )}
                   {showCol('sector') && (
-                    <TableCell className={cn('text-[--color-text-muted] text-sm w-36', rowPy)}>{stock.sector ?? '—'}</TableCell>
+                    <TableCell className={cn('text-(--color-text-muted) text-sm w-36', rowPy)}>{stock.sector ?? '—'}</TableCell>
                   )}
                   {showCol('market_cap_cr') && (
-                    <TableCell className={cn('text-right font-mono text-sm text-[--color-text] w-28', rowPy)}>
+                    <TableCell className={cn('text-right font-mono text-sm text-(--color-text) w-28', rowPy)}>
                       {fmtCap(stock.market_cap_cr)}
                     </TableCell>
                   )}
                   {showCol('ltp') && (
                     <TableCell className={cn('text-right font-mono text-sm w-24', rowPy)}>
                       {ltp !== undefined
-                        ? <span className="text-[--color-text]">₹{ltp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        : <span className="text-[--color-text-muted]">—</span>
+                        ? <span className="text-(--color-text)">₹{ltp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        : <span className="text-(--color-text-muted)">—</span>
                       }
                     </TableCell>
                   )}
@@ -497,12 +497,12 @@ export function StocksPage() {
                     </TableCell>
                   )}
                   {showCol('lot_size') && (
-                    <TableCell className={cn('text-right font-mono text-sm text-[--color-text-muted] w-16', rowPy)}>
+                    <TableCell className={cn('text-right font-mono text-sm text-(--color-text-muted) w-16', rowPy)}>
                       {stock.lot_size > 1 ? stock.lot_size.toLocaleString() : '—'}
                     </TableCell>
                   )}
                   {showCol('isin') && (
-                    <TableCell className={cn('font-mono text-xs text-[--color-text-muted] w-32', rowPy)}>{stock.isin ?? '—'}</TableCell>
+                    <TableCell className={cn('font-mono text-xs text-(--color-text-muted) w-32', rowPy)}>{stock.isin ?? '—'}</TableCell>
                   )}
                   {showCol('sparkline') && (
                     <TableCell className={cn('text-right w-20', rowPy)}>
@@ -515,7 +515,7 @@ export function StocksPage() {
                     <TableCell className={cn('w-8', rowPy)}>
                       <Link
                         to={`/stocks/${stock.id}`}
-                        className="p-1 rounded text-[--color-text-muted] hover:text-[--color-accent] transition-colors inline-flex opacity-0 group-hover/row:opacity-100"
+                        className="p-1 rounded text-(--color-text-muted) hover:text-(--color-accent) transition-colors inline-flex opacity-0 group-hover/row:opacity-100"
                         title="View chart"
                       >
                         <BarChart2 size={14} />

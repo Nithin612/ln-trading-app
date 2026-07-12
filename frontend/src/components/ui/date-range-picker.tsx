@@ -15,11 +15,11 @@ interface DateRangePickerProps {
 
 export function DateRangePicker({ value, onChange, label, className, maxDate }: DateRangePickerProps) {
   const inputStyle =
-    'bg-[--color-surface-3] border border-[--color-border] rounded-md px-2.5 py-1.5 text-xs text-[--color-text] focus:outline-none focus:border-[--color-accent] transition-colors'
+    'bg-(--color-surface-3) border border-(--color-border) rounded-md px-2.5 py-1.5 text-xs text-(--color-text) focus:outline-none focus:border-(--color-accent) transition-colors'
 
   return (
     <div className={cn('flex flex-col gap-1', className)}>
-      {label && <span className="text-xs text-[--color-text-muted]">{label}</span>}
+      {label && <span className="text-xs text-(--color-text-muted)">{label}</span>}
       <div className="flex items-center gap-2">
         <input
           type="date"
@@ -28,7 +28,7 @@ export function DateRangePicker({ value, onChange, label, className, maxDate }: 
           onChange={(e) => onChange({ ...value, from: e.target.value })}
           className={inputStyle}
         />
-        <span className="text-xs text-[--color-text-muted]">–</span>
+        <span className="text-xs text-(--color-text-muted)">–</span>
         <input
           type="date"
           value={value.to}

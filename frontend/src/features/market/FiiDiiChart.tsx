@@ -37,8 +37,8 @@ export function FiiDiiChart({ rows, investorType }: Props) {
 
   if (points.length === 0) {
     return (
-      <div className="flex items-center justify-center h-48 rounded-lg border border-[--color-border] bg-[--color-chart-bg]">
-        <span className="text-sm text-[--color-text-muted]">No {investorType} data</span>
+      <div className="flex items-center justify-center h-48 rounded-lg border border-(--color-border) bg-(--color-chart-bg)">
+        <span className="text-sm text-(--color-text-muted)">No {investorType} data</span>
       </div>
     )
   }

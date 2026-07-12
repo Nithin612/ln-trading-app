@@ -37,21 +37,21 @@ export function UpdateSlDialog({ position, onClose, onUpdated }: Props) {
       onClick={onClose}
     >
       <div
-        className="bg-[--color-surface-2] border border-[--color-border] rounded-lg p-6 w-full max-w-sm shadow-2xl"
+        className="bg-(--color-surface-2) border border-(--color-border) rounded-lg p-6 w-full max-w-sm shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
-        <h2 className="text-base font-semibold text-[--color-text] mb-1">Update Stop-Loss</h2>
-        <p className="text-xs text-[--color-text-muted] mb-4">
+        <h2 className="text-base font-semibold text-(--color-text) mb-1">Update Stop-Loss</h2>
+        <p className="text-xs text-(--color-text-muted) mb-4">
           {position.symbol} {position.side} · {hint}
         </p>
 
-        <label className="block text-xs text-[--color-text-muted] mb-1">New Stop-Loss Price</label>
+        <label className="block text-xs text-(--color-text-muted) mb-1">New Stop-Loss Price</label>
         <input
           type="number"
           step="0.01"
           value={newSl}
           onChange={(e) => setNewSl(e.target.value)}
-          className="w-full bg-[--color-surface-3] border border-[--color-border] rounded px-3 py-2 text-sm text-[--color-text] font-mono focus:outline-none focus:border-[--color-accent] mb-4"
+          className="w-full bg-(--color-surface-3) border border-(--color-border) rounded px-3 py-2 text-sm text-(--color-text) font-mono focus:outline-none focus:border-(--color-accent) mb-4"
         />
 
         <div className="flex gap-2 justify-end">

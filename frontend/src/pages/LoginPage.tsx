@@ -55,7 +55,7 @@ export function LoginPage() {
 
       {/* Card */}
       <div className="relative z-10 w-full max-w-[400px] mx-4">
-        <div className="rounded-2xl border border-[--color-border-strong] p-8 shadow-2xl"
+        <div className="rounded-2xl border border-(--color-border-strong) p-8 shadow-2xl"
           style={{ backgroundColor: 'var(--color-surface-2)' }}
         >
           {/* Brand */}

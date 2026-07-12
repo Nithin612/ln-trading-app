@@ -28,8 +28,8 @@ export function PriceCell({ value, format, className }: PriceCellProps) {
     <span
       className={cn(
         "tabular-nums transition-colors duration-150",
-        flash === "up" && "bg-[--color-profit-bg] text-[--color-profit]",
-        flash === "down" && "bg-[--color-loss-bg] text-[--color-loss]",
+        flash === "up" && "bg-(--color-profit-bg) text-(--color-profit)",
+        flash === "down" && "bg-(--color-loss-bg) text-(--color-loss)",
         className
       )}
     >

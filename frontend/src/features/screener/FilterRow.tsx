@@ -87,10 +87,10 @@ export function FilterRow({ filter, onChange, onRemove }: Props) {
           value={String(filter.value)}
           onValueChange={v => { if (v) onChange({ value: v === 'true' }) }}
         >
-          <SelectTrigger className="w-28 bg-[--color-surface-3] border-[--color-border] text-[--color-text] focus:ring-[--color-accent]">
+          <SelectTrigger className="w-28 bg-(--color-surface-3) border-(--color-border) text-(--color-text) focus:ring-(--color-accent)">
             <SelectValue />
           </SelectTrigger>
-          <SelectContent className="bg-[--color-surface-3] border-[--color-border] text-[--color-text]">
+          <SelectContent className="bg-(--color-surface-3) border-(--color-border) text-(--color-text)">
             <SelectItem value="true">Yes</SelectItem>
             <SelectItem value="false">No</SelectItem>
           </SelectContent>
@@ -103,14 +103,14 @@ export function FilterRow({ filter, onChange, onRemove }: Props) {
       return (
         <div className="flex items-center gap-1">
           <Input
-            className="w-24 bg-[--color-surface-3] border-[--color-border] text-[--color-text] focus-visible:ring-[--color-accent]"
+            className="w-24 bg-(--color-surface-3) border-(--color-border) text-(--color-text) focus-visible:ring-(--color-accent)"
             placeholder="from"
             value={vals[0] ?? ''}
             onChange={e => onChange({ value: [e.target.value, vals[1] ?? ''] })}
           />
-          <span className="text-[--color-text-muted] text-xs">–</span>
+          <span className="text-(--color-text-muted) text-xs">–</span>
           <Input
-            className="w-24 bg-[--color-surface-3] border-[--color-border] text-[--color-text] focus-visible:ring-[--color-accent]"
+            className="w-24 bg-(--color-surface-3) border-(--color-border) text-(--color-text) focus-visible:ring-(--color-accent)"
             placeholder="to"
             value={vals[1] ?? ''}
             onChange={e => onChange({ value: [vals[0] ?? '', e.target.value] })}
@@ -123,7 +123,7 @@ export function FilterRow({ filter, onChange, onRemove }: Props) {
       return (
         <Input
           type="date"
-          className="w-40 bg-[--color-surface-3] border-[--color-border] text-[--color-text] focus-visible:ring-[--color-accent]"
+          className="w-40 bg-(--color-surface-3) border-(--color-border) text-(--color-text) focus-visible:ring-(--color-accent)"
           value={String(filter.value ?? '')}
           onChange={e => onChange({ value: e.target.value })}
         />
@@ -132,7 +132,7 @@ export function FilterRow({ filter, onChange, onRemove }: Props) {
 
     return (
       <Input
-        className="w-40 bg-[--color-surface-3] border-[--color-border] text-[--color-text] placeholder:text-[--color-text-muted] focus-visible:ring-[--color-accent]"
+        className="w-40 bg-(--color-surface-3) border-(--color-border) text-(--color-text) placeholder:text-(--color-text-muted) focus-visible:ring-(--color-accent)"
         placeholder={filter.op === 'in' ? 'A,B,C' : 'value'}
         value={String(filter.value ?? '')}
         onChange={e => {
@@ -148,10 +148,10 @@ export function FilterRow({ filter, onChange, onRemove }: Props) {
     <div className="flex items-center gap-2 flex-wrap">
       {/* Field selector */}
       <Select value={filter.field} onValueChange={handleFieldChange}>
-        <SelectTrigger className="w-40 bg-[--color-surface-3] border-[--color-border] text-[--color-text] focus:ring-[--color-accent]">
+        <SelectTrigger className="w-40 bg-(--color-surface-3) border-(--color-border) text-(--color-text) focus:ring-(--color-accent)">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent className="bg-[--color-surface-3] border-[--color-border] text-[--color-text]">
+        <SelectContent className="bg-(--color-surface-3) border-(--color-border) text-(--color-text)">
           {FIELDS.map(f => (
             <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>
           ))}
@@ -160,10 +160,10 @@ export function FilterRow({ filter, onChange, onRemove }: Props) {
 
       {/* Operator selector */}
       <Select value={filter.op} onValueChange={handleOpChange}>
-        <SelectTrigger className="w-28 bg-[--color-surface-3] border-[--color-border] text-[--color-text] focus:ring-[--color-accent]">
+        <SelectTrigger className="w-28 bg-(--color-surface-3) border-(--color-border) text-(--color-text) focus:ring-(--color-accent)">
           <SelectValue />
         </SelectTrigger>
-        <SelectContent className="bg-[--color-surface-3] border-[--color-border] text-[--color-text]">
+        <SelectContent className="bg-(--color-surface-3) border-(--color-border) text-(--color-text)">
           {ops.map(o => (
             <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
           ))}
@@ -177,7 +177,7 @@ export function FilterRow({ filter, onChange, onRemove }: Props) {
       <button
         type="button"
         onClick={onRemove}
-        className="p-1.5 text-[--color-text-muted] hover:text-[--color-error] transition-colors rounded"
+        className="p-1.5 text-(--color-text-muted) hover:text-(--color-error) transition-colors rounded"
         aria-label="Remove filter"
       >
         <Trash2 size={14} />

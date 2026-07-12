@@ -114,7 +114,7 @@ export function FiiDiiPage() {
       {/* Controls */}
       <div className="flex gap-3 flex-wrap items-center">
         {/* Days */}
-        <div className="flex rounded overflow-hidden border border-[--color-border]">
+        <div className="flex rounded overflow-hidden border border-(--color-border)">
           {[7, 15, 30, 60].map((d) => (
             <button
               key={d}
@@ -131,7 +131,7 @@ export function FiiDiiPage() {
         </div>
 
         {/* Segment filter */}
-        <div className="flex rounded overflow-hidden border border-[--color-border]">
+        <div className="flex rounded overflow-hidden border border-(--color-border)">
           {([['ALL', 'All'], ['cash', 'Cash'], ['futures', 'Futures'], ['options', 'Options']] as [Segment, string][]).map(([val, label]) => (
             <button
               key={val}
@@ -148,7 +148,7 @@ export function FiiDiiPage() {
         </div>
 
         {/* Investor type */}
-        <div className="flex rounded overflow-hidden border border-[--color-border]">
+        <div className="flex rounded overflow-hidden border border-(--color-border)">
           {(['ALL', 'FII', 'DII'] as InvestorType[]).map((v) => (
             <button
               key={v}
@@ -167,7 +167,7 @@ export function FiiDiiPage() {
         {tableRows.length > 0 && (
           <button
             onClick={() => exportCsv(tableRows)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-[--color-border] text-xs text-[--color-text-muted] hover:bg-[--color-surface-3] transition-colors ml-auto"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md border border-(--color-border) text-xs text-(--color-text-muted) hover:bg-(--color-surface-3) transition-colors ml-auto"
           >
             <Download size={12} /> Export CSV
           </button>
@@ -195,55 +195,55 @@ export function FiiDiiPage() {
           {/* Summary cards */}
           <div className="grid grid-cols-2 gap-4">
             <div className="card">
-              <p className="text-xs text-[--color-text-muted] uppercase tracking-wide mb-2">FII Latest (Cash)</p>
+              <p className="text-xs text-(--color-text-muted) uppercase tracking-wide mb-2">FII Latest (Cash)</p>
               {latestFii ? (
                 <>
-                  <p className="text-xs text-[--color-text-muted] mb-2">{latestFii.trade_date}</p>
+                  <p className="text-xs text-(--color-text-muted) mb-2">{latestFii.trade_date}</p>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-[--color-text-muted]">Buy</span>
+                      <span className="text-(--color-text-muted)">Buy</span>
                       <span className="font-mono">₹{parseFloat(latestFii.buy_value_cr).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-[--color-text-muted]">Sell</span>
+                      <span className="text-(--color-text-muted)">Sell</span>
                       <span className="font-mono">₹{parseFloat(latestFii.sell_value_cr).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr</span>
                     </div>
-                    <div className="flex justify-between font-semibold border-t border-[--color-border] pt-1 mt-1">
-                      <span className="text-[--color-text-muted]">Net</span>
+                    <div className="flex justify-between font-semibold border-t border-(--color-border) pt-1 mt-1">
+                      <span className="text-(--color-text-muted)">Net</span>
                       {crFormat(latestFii.net_value_cr)}
                     </div>
                   </div>
                 </>
-              ) : <p className="text-sm text-[--color-text-muted]">No data</p>}
+              ) : <p className="text-sm text-(--color-text-muted)">No data</p>}
             </div>
 
             <div className="card">
-              <p className="text-xs text-[--color-text-muted] uppercase tracking-wide mb-2">DII Latest (Cash)</p>
+              <p className="text-xs text-(--color-text-muted) uppercase tracking-wide mb-2">DII Latest (Cash)</p>
               {latestDii ? (
                 <>
-                  <p className="text-xs text-[--color-text-muted] mb-2">{latestDii.trade_date}</p>
+                  <p className="text-xs text-(--color-text-muted) mb-2">{latestDii.trade_date}</p>
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-[--color-text-muted]">Buy</span>
+                      <span className="text-(--color-text-muted)">Buy</span>
                       <span className="font-mono">₹{parseFloat(latestDii.buy_value_cr).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-[--color-text-muted]">Sell</span>
+                      <span className="text-(--color-text-muted)">Sell</span>
                       <span className="font-mono">₹{parseFloat(latestDii.sell_value_cr).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr</span>
                     </div>
-                    <div className="flex justify-between font-semibold border-t border-[--color-border] pt-1 mt-1">
-                      <span className="text-[--color-text-muted]">Net</span>
+                    <div className="flex justify-between font-semibold border-t border-(--color-border) pt-1 mt-1">
+                      <span className="text-(--color-text-muted)">Net</span>
                       {crFormat(latestDii.net_value_cr)}
                     </div>
                   </div>
                 </>
-              ) : <p className="text-sm text-[--color-text-muted]">No data</p>}
+              ) : <p className="text-sm text-(--color-text-muted)">No data</p>}
             </div>
           </div>
 
           {/* Combined FII + DII net chart */}
           <div className="card">
-            <p className="text-xs text-[--color-text-muted] uppercase tracking-wide mb-3">
+            <p className="text-xs text-(--color-text-muted) uppercase tracking-wide mb-3">
               FII + DII Net — {segment === 'ALL' ? 'Cash' : segment} — Last {days} days
             </p>
             {combinedChartData.length > 0 ? (
@@ -271,23 +271,23 @@ export function FiiDiiPage() {
                 </BarChart>
               </ResponsiveContainer>
             ) : (
-              <div className="h-40 flex items-center justify-center text-xs text-[--color-text-muted]">No chart data for this selection</div>
+              <div className="h-40 flex items-center justify-center text-xs text-(--color-text-muted)">No chart data for this selection</div>
             )}
           </div>
 
           {/* All rows table */}
           <div className="card overflow-hidden p-0">
-            <div className="px-4 py-3 border-b border-[--color-border]">
-              <p className="text-xs font-semibold text-[--color-text-muted] uppercase tracking-wide">
+            <div className="px-4 py-3 border-b border-(--color-border)">
+              <p className="text-xs font-semibold text-(--color-text-muted) uppercase tracking-wide">
                 All Rows {filteredRows.length !== allRows.length ? `(${filteredRows.length} filtered)` : `(${allRows.length})`}
               </p>
             </div>
             <div className="overflow-x-auto">
               <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
                 <thead>
-                  <tr className="border-b border-[--color-border] bg-[--color-surface-2] sticky top-0">
+                  <tr className="border-b border-(--color-border) bg-(--color-surface-2) sticky top-0">
                     {['Date', 'Type', 'Segment', 'Buy (Cr)', 'Sell (Cr)', 'Net (Cr)', 'Cum. Net (Cr)'].map((h) => (
-                      <th key={h} className="px-3 py-2 text-[10px] uppercase tracking-wide font-medium text-[--color-text-muted]"
+                      <th key={h} className="px-3 py-2 text-[10px] uppercase tracking-wide font-medium text-(--color-text-muted)"
                         style={{ textAlign: ['Date', 'Type', 'Segment'].includes(h) ? 'left' : 'right' }}>
                         {h}
                       </th>
@@ -299,10 +299,10 @@ export function FiiDiiPage() {
                     <tr><td colSpan={7}><EmptyState title="No rows" description="Adjust filters to see data." /></td></tr>
                   ) : (
                     tableRows.map((r, i) => (
-                      <tr key={i} className="border-b border-[--color-border]/40 hover:bg-[--color-surface-hover] transition-colors">
-                        <td className="px-3 py-2 text-[--color-text-muted]">{r.trade_date}</td>
+                      <tr key={i} className="border-b border-(--color-border)/40 hover:bg-(--color-surface-hover) transition-colors">
+                        <td className="px-3 py-2 text-(--color-text-muted)">{r.trade_date}</td>
                         <td className="px-3 py-2 font-mono font-semibold" style={{ color: r.investor_type === 'FII' ? 'var(--color-bull)' : '#60a5fa' }}>{r.investor_type}</td>
-                        <td className="px-3 py-2 text-[--color-text-muted]">{r.segment}</td>
+                        <td className="px-3 py-2 text-(--color-text-muted)">{r.segment}</td>
                         <td className="px-3 py-2 text-right font-mono">{parseFloat(r.buy_value_cr).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
                         <td className="px-3 py-2 text-right font-mono">{parseFloat(r.sell_value_cr).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
                         <td className="px-3 py-2 text-right">{crFormat(r.net_value_cr)}</td>

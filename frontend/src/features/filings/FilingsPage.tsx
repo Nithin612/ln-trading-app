@@ -84,12 +84,12 @@ export function FilingsPage() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="text-xl font-semibold text-[--color-text]">Corporate Filings</h1>
-        <p className="text-sm text-[--color-text-muted]">Earnings, board meetings, dividends, splits and more</p>
+        <h1 className="text-xl font-semibold text-(--color-text)">Corporate Filings</h1>
+        <p className="text-sm text-(--color-text-muted)">Earnings, board meetings, dividends, splits and more</p>
       </div>
 
       {/* Filters */}
-      <div className="bg-[--color-surface-2] border border-[--color-border] rounded-lg p-4 flex flex-wrap gap-4 items-end">
+      <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg p-4 flex flex-wrap gap-4 items-end">
         <DateRangePicker
           label="Date range"
           value={dateRange}
@@ -98,7 +98,7 @@ export function FilingsPage() {
         />
 
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-[--color-text-muted]">Filing type</span>
+          <span className="text-xs text-(--color-text-muted)">Filing type</span>
           <SimpleSelect
             value={filingType}
             placeholder="All types"
@@ -111,9 +111,9 @@ export function FilingsPage() {
         </div>
 
         <div className="flex flex-col gap-1">
-          <span className="text-xs text-[--color-text-muted]">Symbol</span>
+          <span className="text-xs text-(--color-text-muted)">Symbol</span>
           <div className="relative">
-            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-[--color-text-muted] pointer-events-none" />
+            <Search size={13} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-(--color-text-muted) pointer-events-none" />
             <Input
               value={symbolSearch}
               onChange={(e) => handleSymbolSearch(e.target.value)}
@@ -125,7 +125,7 @@ export function FilingsPage() {
       </div>
 
       {/* Table */}
-      <div className="bg-[--color-surface-2] border border-[--color-border] rounded-lg overflow-hidden">
+      <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg overflow-hidden">
         {isLoading ? (
           <SkeletonTable rows={8} cols={5} />
         ) : filings.length === 0 ? (
@@ -137,31 +137,31 @@ export function FilingsPage() {
           <div className="overflow-x-auto">
             <table className="w-full text-sm" style={{ borderCollapse: 'collapse' }}>
               <thead>
-                <tr className="border-b border-[--color-border] bg-[--color-surface-2] sticky top-0">
-                  <th className="px-4 py-3 text-[10px] uppercase tracking-wide font-medium text-[--color-text-muted] text-left w-28">Date</th>
-                  <th className="px-4 py-3 text-[10px] uppercase tracking-wide font-medium text-[--color-text-muted] text-left w-24">Symbol</th>
-                  <th className="px-4 py-3 text-[10px] uppercase tracking-wide font-medium text-[--color-text-muted] text-left w-32">Type</th>
-                  <th className="px-4 py-3 text-[10px] uppercase tracking-wide font-medium text-[--color-text-muted] text-left">Headline</th>
-                  <th className="px-4 py-3 text-[10px] uppercase tracking-wide font-medium text-[--color-text-muted] text-left w-14">Source</th>
+                <tr className="border-b border-(--color-border) bg-(--color-surface-2) sticky top-0">
+                  <th className="px-4 py-3 text-[10px] uppercase tracking-wide font-medium text-(--color-text-muted) text-left w-28">Date</th>
+                  <th className="px-4 py-3 text-[10px] uppercase tracking-wide font-medium text-(--color-text-muted) text-left w-24">Symbol</th>
+                  <th className="px-4 py-3 text-[10px] uppercase tracking-wide font-medium text-(--color-text-muted) text-left w-32">Type</th>
+                  <th className="px-4 py-3 text-[10px] uppercase tracking-wide font-medium text-(--color-text-muted) text-left">Headline</th>
+                  <th className="px-4 py-3 text-[10px] uppercase tracking-wide font-medium text-(--color-text-muted) text-left w-14">Source</th>
                   <th className="w-10" />
                 </tr>
               </thead>
               <tbody>
                 {filings.map((f) => (
-                  <tr key={f.id} className="border-b border-[--color-border]/50 hover:bg-[--color-surface-hover] transition-colors">
-                    <td className="px-4 py-3 text-xs text-[--color-text-muted] whitespace-nowrap">
+                  <tr key={f.id} className="border-b border-(--color-border)/50 hover:bg-(--color-surface-hover) transition-colors">
+                    <td className="px-4 py-3 text-xs text-(--color-text-muted) whitespace-nowrap">
                       {new Date(f.filing_time).toLocaleString('en-IN', {
                         timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short',
                         hour: '2-digit', minute: '2-digit',
                       })} IST
                     </td>
                     <td className="px-4 py-3">
-                      <span className="font-mono font-bold text-sm text-[--color-accent]">{f.symbol}</span>
+                      <span className="font-mono font-bold text-sm text-(--color-accent)">{f.symbol}</span>
                     </td>
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm">{TYPE_ICONS[f.filing_type] ?? '📄'}</span>
-                        <span className="text-xs px-1.5 py-0.5 rounded bg-[--color-surface-3] text-[--color-text-muted]">
+                        <span className="text-xs px-1.5 py-0.5 rounded bg-(--color-surface-3) text-(--color-text-muted)">
                           {TYPE_LABELS[f.filing_type] ?? f.filing_type}
                         </span>
                         {f.is_high_impact && (
@@ -173,13 +173,13 @@ export function FilingsPage() {
                       </div>
                     </td>
                     <td className="px-4 py-3 max-w-0">
-                      <p className="text-sm text-[--color-text] truncate" title={f.headline}>{f.headline}</p>
+                      <p className="text-sm text-(--color-text) truncate" title={f.headline}>{f.headline}</p>
                     </td>
-                    <td className="px-4 py-3 text-xs text-[--color-text-muted]">{f.source}</td>
+                    <td className="px-4 py-3 text-xs text-(--color-text-muted)">{f.source}</td>
                     <td className="px-4 py-3">
                       {f.source_url && (
                         <a href={f.source_url} target="_blank" rel="noopener noreferrer"
-                          className="text-[--color-accent] hover:text-[--color-accent-hover] transition-colors">
+                          className="text-(--color-accent) hover:text-(--color-accent-hover) transition-colors">
                           <ExternalLink size={14} />
                         </a>
                       )}

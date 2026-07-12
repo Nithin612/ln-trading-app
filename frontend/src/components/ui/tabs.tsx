@@ -39,7 +39,7 @@ export function TabsList({ children, className }: TabsListProps) {
   return (
     <div
       className={cn(
-        'flex gap-0 border-b border-[--color-border]',
+        'flex gap-0 border-b border-(--color-border)',
         className,
       )}
       role="tablist"
@@ -70,8 +70,8 @@ export function TabsTrigger({ value, children, className, disabled }: TabsTrigge
         'px-4 py-2.5 text-sm font-medium transition-colors relative',
         'border-b-2 -mb-px whitespace-nowrap',
         isActive
-          ? 'border-[--color-accent] text-[--color-accent]'
-          : 'border-transparent text-[--color-text-muted] hover:text-[--color-text]',
+          ? 'border-(--color-accent) text-(--color-accent)'
+          : 'border-transparent text-(--color-text-muted) hover:text-(--color-text)',
         disabled && 'opacity-40 cursor-not-allowed',
         className,
       )}
