@@ -16,6 +16,7 @@ from app.api.v1 import (
     suggestions,
     trading,
     users,
+    watchlists,
     ws,
 )
 
@@ -35,4 +36,5 @@ api_router.include_router(trading.router)
 api_router.include_router(strategy.router)
 api_router.include_router(journal.router)
 api_router.include_router(portfolio.router)
+api_router.include_router(watchlists.router)
 api_router.include_router(ws.router)

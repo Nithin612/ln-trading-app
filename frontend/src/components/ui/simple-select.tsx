@@ -47,7 +47,17 @@ export function SimpleSelect({
       disabled={disabled}
     >
       <SelectTrigger size={size} className={cn('min-w-[110px]', className)}>
-        <SelectValue placeholder={placeholder} />
+        {/* base-ui's Value renders the raw VALUE by default — invisible
+            while every caller had value≡label (sectors, segments), wrong
+            once watchlists select by id ("4" instead of "Momo"), and the
+            EMPTY sentinel leaked as "__empty__" when no ''-option exists.
+            Resolve the label explicitly; fall back to the placeholder. */}
+        <SelectValue placeholder={placeholder}>
+          {selectValue === undefined
+            ? undefined
+            : (options.find((o) => (o.value === '' ? EMPTY : o.value) === selectValue)
+                ?.label ?? (selectValue === EMPTY ? placeholder : selectValue))}
+        </SelectValue>
       </SelectTrigger>
       <SelectContent>
         {options.map((opt) => (

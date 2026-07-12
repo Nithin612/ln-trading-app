@@ -12,6 +12,8 @@ const stream = {
   authFailed: false,
   styles: [] as string[],
   setStyles: vi.fn(),
+  watchlist: null as number | null,
+  setWatchlist: vi.fn(),
 }
 
 vi.mock('@/hooks/useAlertStream', () => ({
@@ -26,7 +28,12 @@ vi.mock('@/lib/api/stocks', () => ({
   stocksApi: { get: vi.fn() },
 }))
 
+vi.mock('@/lib/api/watchlists', () => ({
+  watchlistsApi: { list: vi.fn() },
+}))
+
 import { stocksApi } from '@/lib/api/stocks'
+import { watchlistsApi } from '@/lib/api/watchlists'
 
 const ALERT: LiveAlert = {
   id: '1752212345678-0',
@@ -57,7 +64,11 @@ describe('AlertBell', () => {
     stream.authFailed = false
     stream.styles = []
     stream.setStyles = vi.fn()
+    stream.watchlist = null
+    stream.setWatchlist = vi.fn()
     vi.mocked(stocksApi.get).mockReset()
+    vi.mocked(watchlistsApi.list).mockReset()
+    vi.mocked(watchlistsApi.list).mockResolvedValue([])
   })
 
   it('shows the empty state when no alerts have arrived', () => {
@@ -130,6 +141,65 @@ describe('AlertBell', () => {
     fireEvent.click(screen.getByTestId('alert-bell'))
     fireEvent.click(screen.getByRole('button', { name: 'swing', pressed: true }))
     expect(stream.setStyles).toHaveBeenCalledWith(['intraday'])
+  })
+
+  it('watchlist selector renders the scope options from the API', async () => {
+    vi.mocked(watchlistsApi.list).mockResolvedValue([
+      {
+        id: 3,
+        name: 'Momo',
+        created_at: '2026-07-11T00:00:00Z',
+        updated_at: '2026-07-11T00:00:00Z',
+        items: [],
+      },
+    ])
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="select-trigger"]')).not.toBeNull(),
+    )
+    fireEvent.click(document.querySelector('[data-slot="select-trigger"]')!)
+    await waitFor(() => {
+      const options = screen.getAllByRole('option')
+      expect(options.some((el) => el.textContent?.includes('All stocks'))).toBe(true)
+      expect(options.some((el) => el.textContent?.includes('Momo'))).toBe(true)
+    })
+  })
+
+  it('interacting with the portaled select listbox does not close the panel', async () => {
+    // Regression (2026-07-11 smoke): the Select listbox portals to
+    // document.body OUTSIDE the popover's panelRef, so choosing a scope
+    // option used to fire the outside-mousedown handler, close the
+    // panel, and swallow the selection.
+    vi.mocked(watchlistsApi.list).mockResolvedValue([
+      {
+        id: 3,
+        name: 'Momo',
+        created_at: '2026-07-11T00:00:00Z',
+        updated_at: '2026-07-11T00:00:00Z',
+        items: [],
+      },
+    ])
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    await waitFor(() =>
+      expect(document.querySelector('[data-slot="select-trigger"]')).not.toBeNull(),
+    )
+    fireEvent.click(document.querySelector('[data-slot="select-trigger"]')!)
+    const option = await waitFor(() => {
+      const opts = screen.getAllByRole('option')
+      expect(opts.length).toBeGreaterThan(0)
+      return opts[0]
+    })
+    fireEvent.mouseDown(option)
+    // panel content survives the portaled-layer interaction
+    expect(screen.getByText('Live alerts')).toBeInTheDocument()
+  })
+
+  it('hides the watchlist selector when the user has none', () => {
+    setup() // beforeEach default: watchlistsApi.list resolves []
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    expect(document.querySelector('[data-slot="select-trigger"]')).toBeNull()
   })
 
   it('shows the reconnecting notice while disconnected', () => {

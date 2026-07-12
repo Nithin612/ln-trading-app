@@ -156,6 +156,36 @@ describe('useAlertStream', () => {
     expect(result.current.connected).toBe(true)
   })
 
+  it('watchlist scope sends and combines with styles, surviving reconnect', () => {
+    const { result } = renderHook(() => useAlertStream())
+    const first = lastSocket()
+    act(() => first.serverOpen())
+
+    act(() => result.current.setWatchlist(3))
+    expect(first.sent.at(-1)).toBe(
+      JSON.stringify({ subscribe_alerts: { watchlist: 3 } }),
+    )
+
+    act(() => result.current.setStyles(['swing']))
+    expect(first.sent.at(-1)).toBe(
+      JSON.stringify({ subscribe_alerts: { styles: ['swing'], watchlist: 3 } }),
+    )
+
+    // reconnect re-applies BOTH scopes
+    act(() => first.serverClose(1006))
+    act(() => vi.advanceTimersByTime(3000))
+    const second = lastSocket()
+    act(() => second.serverOpen())
+    expect(second.sent).toEqual([
+      JSON.stringify({ subscribe_alerts: { styles: ['swing'], watchlist: 3 } }),
+    ])
+
+    // clearing both falls back to subscribe-everything
+    act(() => result.current.setWatchlist(null))
+    act(() => result.current.setStyles([]))
+    expect(second.sent.at(-1)).toBe(JSON.stringify({ subscribe_alerts: true }))
+  })
+
   it('close code 4401 sets authFailed and never reconnect-loops', () => {
     const { result } = renderHook(() => useAlertStream())
     const ws = lastSocket()

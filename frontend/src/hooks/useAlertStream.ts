@@ -56,6 +56,8 @@ interface UseAlertStreamResult {
   authFailed: boolean; // server closed 4401 — reconnect needs a fresh login
   styles: string[]; // active server-side filter; [] = all styles
   setStyles: (styles: string[]) => void;
+  watchlist: number | null; // server-side watchlist scope; null = all stocks
+  setWatchlist: (id: number | null) => void;
 }
 
 // wss under https, ws under http; JWT goes as ?token= (validated server-side
@@ -73,14 +75,31 @@ const RECONNECT_DELAY_MS = 3000;
 const FLUSH_INTERVAL_MS = 200;
 const MAX_ALERTS = 100;
 
+// Server contract: `true` = everything; a dict REPLACES the filter set.
+// The watchlist's stock set snapshots server-side at subscribe time —
+// re-sending (e.g. after editing the watchlist) refreshes it.
+function subscribeMsg(styles: string[], watchlist: number | null): string {
+  if (styles.length === 0 && watchlist === null) {
+    return JSON.stringify({ subscribe_alerts: true });
+  }
+  return JSON.stringify({
+    subscribe_alerts: {
+      ...(styles.length ? { styles } : {}),
+      ...(watchlist !== null ? { watchlist } : {}),
+    },
+  });
+}
+
 export function useAlertStream(): UseAlertStreamResult {
   const [alerts, setAlerts] = useState<LiveAlert[]>([]);
   const [connected, setConnected] = useState(false);
   const [authFailed, setAuthFailed] = useState(false);
   const [styles, setStylesState] = useState<string[]>([]);
+  const [watchlist, setWatchlistState] = useState<number | null>(null);
 
   const wsRef = useRef<WebSocket | null>(null);
   const stylesRef = useRef<string[]>(styles);
+  const watchlistRef = useRef<number | null>(watchlist);
   const bufferRef = useRef<LiveAlert[]>([]);
   const flushTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -98,11 +117,6 @@ export function useAlertStream(): UseAlertStreamResult {
       setAlerts((prev) => [...fresh.reverse(), ...prev].slice(0, MAX_ALERTS));
     };
 
-    const subscribeMsg = () => {
-      const s = stylesRef.current;
-      return JSON.stringify({ subscribe_alerts: s.length ? { styles: s } : true });
-    };
-
     function connect() {
       // Read the token at (re)connect time so a refreshed token is picked up.
       const token = useAuthStore.getState().accessToken;
@@ -112,7 +126,7 @@ export function useAlertStream(): UseAlertStreamResult {
       ws.onopen = () => {
         setConnected(true);
         setAuthFailed(false);
-        ws.send(subscribeMsg());
+        ws.send(subscribeMsg(stylesRef.current, watchlistRef.current));
       };
 
       ws.onmessage = (ev) => {
@@ -154,15 +168,30 @@ export function useAlertStream(): UseAlertStreamResult {
     };
   }, []);
 
-  const setStyles = useCallback((next: string[]) => {
-    stylesRef.current = next;
-    setStylesState(next);
-    // The server REPLACES its filter set on every subscribe_alerts message.
+  const resend = useCallback(() => {
     const ws = wsRef.current;
     if (ws?.readyState === WebSocket.OPEN) {
-      ws.send(JSON.stringify({ subscribe_alerts: next.length ? { styles: next } : true }));
+      ws.send(subscribeMsg(stylesRef.current, watchlistRef.current));
     }
   }, []);
 
-  return { alerts, connected, authFailed, styles, setStyles };
+  const setStyles = useCallback(
+    (next: string[]) => {
+      stylesRef.current = next;
+      setStylesState(next);
+      resend();
+    },
+    [resend],
+  );
+
+  const setWatchlist = useCallback(
+    (id: number | null) => {
+      watchlistRef.current = id;
+      setWatchlistState(id);
+      resend();
+    },
+    [resend],
+  );
+
+  return { alerts, connected, authFailed, styles, setStyles, watchlist, setWatchlist };
 }

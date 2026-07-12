@@ -6,14 +6,16 @@
  */
 
 import { memo, useMemo, useState } from 'react'
-import { useQueries } from '@tanstack/react-query'
+import { useQueries, useQuery } from '@tanstack/react-query'
 import { Bell } from 'lucide-react'
 
 import { useAlertStream, type LiveAlert } from '@/hooks/useAlertStream'
 import { useAuth } from '@/hooks/useAuth'
 import { stocksApi } from '@/lib/api/stocks'
+import { watchlistsApi } from '@/lib/api/watchlists'
 import { Popover } from '@/components/ui/popover'
 import { EmptyState } from '@/components/ui/empty-state'
+import { SimpleSelect } from '@/components/ui/simple-select'
 import { formatCurrency } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
@@ -25,8 +27,17 @@ import {
 } from './alertPresentation'
 
 export function AlertBell() {
-  const { alerts, connected, authFailed, styles, setStyles } = useAlertStream()
+  const { alerts, connected, authFailed, styles, setStyles, watchlist, setWatchlist } =
+    useAlertStream()
   const { accessToken } = useAuth()
+
+  // Watchlist scope options — cached; the bell mounts once in AppShell.
+  const { data: watchlists } = useQuery({
+    queryKey: ['watchlists'],
+    queryFn: () => watchlistsApi.list(accessToken ?? ''),
+    enabled: accessToken !== null,
+    staleTime: 60_000,
+  })
 
   // Unseen = alerts newer than the newest one when the bell was last
   // clicked. Index math, not length math — the list is capped, so counts
@@ -125,6 +136,21 @@ export function AlertBell() {
             )
           })}
         </div>
+
+        {watchlists !== undefined && watchlists.length > 0 && (
+          <div className="px-3 py-2 border-b border-(--color-border)">
+            <SimpleSelect
+              size="sm"
+              className="w-full"
+              value={watchlist === null ? 'all' : String(watchlist)}
+              options={[
+                { value: 'all', label: 'All stocks' },
+                ...watchlists.map((w) => ({ value: String(w.id), label: w.name })),
+              ]}
+              onChange={(v) => setWatchlist(v === 'all' ? null : Number(v))}
+            />
+          </div>
+        )}
 
         {authFailed && (
           <div className="px-3 py-2 text-xs text-(--color-warning) border-b border-(--color-border)">

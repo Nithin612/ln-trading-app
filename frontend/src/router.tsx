@@ -7,6 +7,7 @@ import { SettingsPage } from '@/pages/admin/SettingsPage'
 import { StocksPage } from '@/features/stocks/StocksPage'
 import { StockDetailPage } from '@/pages/stocks/StockDetailPage'
 import { ScreenerPage } from '@/features/screener/ScreenerPage'
+import { WatchlistsPage } from '@/features/watchlists/WatchlistsPage'
 import { CategoriesPage } from '@/features/categories/CategoriesPage'
 import { FiiDiiPage } from '@/features/market/FiiDiiPage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
@@ -40,6 +41,7 @@ export const router = createBrowserRouter([
       { path: 'stocks',                element: <StocksPage /> },
       { path: 'stocks/:id',            element: <StockDetailPage /> },
       { path: 'screener',              element: <ScreenerPage /> },
+      { path: 'watchlists',            element: <WatchlistsPage /> },
       { path: 'categories',            element: <CategoriesPage /> },
       { path: 'market/fii-dii',        element: <FiiDiiPage /> },
       { path: 'filings',               element: <FilingsPage /> },

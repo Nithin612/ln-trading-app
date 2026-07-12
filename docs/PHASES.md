@@ -110,18 +110,19 @@ Open threads, in order:
    watchlist model exists yet). Alert UI DONE 2026-07-11 (ledger §Alert
    UI). Then 3.6 outcome ticks, 3.7 shadow week + full-session soak
    (30-day paper clock).
-3. **Tailwind v4 token-class migration (discovered 2026-07-11, alert-UI
-   smoke):** the v4 upgrade silently dropped the `[--color-x]`
-   arbitrary-value idiom — all 619 occurrences across frontend/src
-   compute to NOTHING (probed in a real browser: sidebar/topbar/panel
-   backgrounds rgba(0,0,0,0); the app looks right only via body
-   background, inherited colors, and inline styles). Fix = mechanical
-   rename to the v4 `(--color-x)` syntax + a visual pass across all 5
-   themes (ui-reviewer + screenshots). Frontend-only — cannot affect
-   the soak; runnable any time. The new alert files already use the v4
-   syntax; the shared Popover panel now inlines a solid surface.
-   Related bycatch: dashboard duplicate-React-key warning
-   (DashboardPage.tsx:275/337 suspects).
+3. **Tailwind v4 token-class migration — ✅ DONE 2026-07-11 (same
+   session it was discovered):** all 898 broken `[--color-x]` sites
+   (46 files) converted to the v4 `(--color-x)` form; verified in
+   headless Chrome across all five themes (opaque theme-distinct
+   surfaces — previously rgba(0,0,0,0) everywhere; `/20` opacity
+   modifiers compile per theme; zero console errors; daybreak renders
+   as a true light theme for the first time). Riders: dashboard
+   dup-key warning fixed (two "" action columns in the static header
+   array → positional keys), StocksPage filter badge → accent-bg/accent
+   AA pair, Popover aria-expanded/haspopup. Still deferred to a future
+   UI pass (ledger §Alert UI): raw-button topbar chrome + 44px targets,
+   Popover focus management, daybreak warning-token contrast, aria-live
+   status rows.
 4. **Session-ops knowledge (this machine):** single-process `make test`
    OOM-killed twice at the gainer golden under desktop load (Chrome+IDE,
    15GB) — run the gate as three fresh legs instead:

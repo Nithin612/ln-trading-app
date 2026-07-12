@@ -5,6 +5,10 @@ Protocol (client → server):
   { "unsubscribe": ["RELIANCE"] }               stop updates for these symbols
   { "subscribe_alerts": true }                  all tick-trigger alerts
   { "subscribe_alerts": {"styles": ["intraday","swing"]} }   filtered
+  { "subscribe_alerts": {"watchlist": 3} }      only that watchlist's stocks
+                                                (styles combinable; stock set
+                                                snapshots at subscribe — re-send
+                                                to refresh after edits)
   { "subscribe_alerts": false }                 stop alerts
 
 Protocol (server → client):
@@ -123,6 +127,10 @@ async def ws_live(websocket: WebSocket) -> None:  # noqa: C901
 
     alert_task: asyncio.Task[None] | None = None
     alert_styles: set[str] = set()
+    # None = unscoped; a SET (possibly empty) = only these stock_ids.
+    # An empty watchlist legitimately scopes to NOTHING — never conflate
+    # empty with unscoped.
+    alert_sids: set[int] | None = None
 
     async def _alert_reader() -> None:
         # Tail the alerts stream from "$" (new entries only). BLOCK keeps
@@ -143,6 +151,13 @@ async def ws_live(websocket: WebSocket) -> None:  # noqa: C901
                     last_id = entry_id
                     if alert_styles and fields.get("style") not in alert_styles:
                         continue
+                    if alert_sids is not None:
+                        try:
+                            sid = int(fields.get("sid", ""))
+                        except ValueError:
+                            continue
+                        if sid not in alert_sids:
+                            continue
                     await _send({"type": "alert", "data": {**fields, "id": entry_id}})
 
     # redis-py's PubSub.listen() is `while self.subscribed:` — starting the
@@ -180,14 +195,54 @@ async def ws_live(websocket: WebSocket) -> None:  # noqa: C901
             if "subscribe_alerts" in msg:
                 want = msg["subscribe_alerts"]
                 if want:
+                    # Validate the watchlist scope BEFORE mutating current
+                    # state — a bad id must not half-apply (fail closed;
+                    # ownership enforced in the service: foreign ≡ absent).
+                    new_sids: set[int] | None = None
+                    if isinstance(want, dict) and want.get("watchlist") is not None:
+                        wl_raw = want["watchlist"]
+                        # Accept only a REAL in-range integer: bool is an int
+                        # subclass, int() coerces floats, and JSON ints are
+                        # unbounded — anything ≥ 2^63 explodes in the driver
+                        # instead of 404ing (bug-hunter MEDIUM, 2026-07-11).
+                        if (
+                            isinstance(wl_raw, bool)
+                            or not isinstance(wl_raw, int)
+                            or not (0 < wl_raw < 2**63)
+                        ):
+                            await _send({
+                                "type": "error",
+                                "data": {"detail": "watchlist must be a positive integer id"},
+                            })
+                            continue
+                        try:
+                            new_sids = await _watchlist_sids(wl_raw, user_id)
+                        except Exception:
+                            # A DB hiccup at subscribe time must degrade to an
+                            # error frame — never tear down the whole
+                            # LTP/candle/alert socket.
+                            log.exception("watchlist scope lookup failed (id=%s)", wl_raw)
+                            await _send({
+                                "type": "error",
+                                "data": {"detail": "watchlist lookup failed"},
+                            })
+                            continue
+                        if new_sids is None:
+                            await _send({
+                                "type": "error",
+                                "data": {"detail": f"watchlist {wl_raw} not found"},
+                            })
+                            continue
                     alert_styles.clear()
                     if isinstance(want, dict):
                         alert_styles.update(str(s) for s in want.get("styles") or [])
+                    alert_sids = new_sids
                     if alert_task is None or alert_task.done():
                         alert_task = asyncio.create_task(_alert_reader())
                 elif alert_task is not None:
                     alert_task.cancel()
                     alert_task = None
+                    alert_sids = None
 
     except WebSocketDisconnect:
         pass
@@ -246,6 +301,18 @@ async def _subscribe_symbols(
                 new_channels.append(CANDLE_CHANNEL.format(table=table, stock_id=sid))
 
     return new_channels
+
+
+async def _watchlist_sids(watchlist_id: int, user_id: int) -> set[int] | None:
+    """stock_ids of the user's watchlist (None = not theirs / absent —
+    the service treats foreign as absent, so existence never leaks).
+    SNAPSHOT at subscribe time: re-send subscribe_alerts to refresh after
+    editing the watchlist — same reconcile-on-demand model as reconnect."""
+    from app.db.session import AsyncSessionFactory
+    from app.services.watchlist_service import watchlist_stock_ids
+
+    async with AsyncSessionFactory() as db:
+        return await watchlist_stock_ids(db, watchlist_id, user_id)
 
 
 def _unsubscribe_symbols(

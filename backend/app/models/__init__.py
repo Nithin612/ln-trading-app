@@ -18,10 +18,13 @@ from app.models.stock import Index, IndexConstituent, SavedScreen, Stock
 from app.models.strategy import StrategyRun
 from app.models.trading import Order, Position
 from app.models.user import User, UserSession
+from app.models.watchlist import Watchlist, WatchlistItem
 
 __all__ = [
     "User",
     "UserSession",
+    "Watchlist",
+    "WatchlistItem",
     "Stock",
     "Index",
     "IndexConstituent",

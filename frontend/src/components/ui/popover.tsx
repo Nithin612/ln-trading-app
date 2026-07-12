@@ -41,6 +41,11 @@ export function Popover({ trigger, children, align = 'end', className }: Popover
         panelRef.current?.contains(e.target as Node) ||
         containerRef.current?.contains(e.target as Node)
       ) return
+      // Nested floating layers (Select listboxes, tooltips) portal to
+      // document.body OUTSIDE panelRef — clicking an option must not
+      // close the popover and swallow the selection.
+      const el = e.target instanceof Element ? e.target : null
+      if (el?.closest('[role="listbox"], [role="option"], [data-slot^="select"]')) return
       setOpen(false)
     }
     function keyHandler(e: KeyboardEvent) {

@@ -4,6 +4,7 @@ import {
   LayoutDashboard,
   TrendingUp,
   SlidersHorizontal,
+  ListChecks,
   Tags,
   Building2,
   Zap,
@@ -43,6 +44,7 @@ const NAV_ITEMS: NavItem[] = [
   { to: '/dashboard',         icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
   { to: '/stocks',            icon: <TrendingUp size={18} />,      label: 'Stocks' },
   { to: '/screener',          icon: <SlidersHorizontal size={18} />,label: 'Screener' },
+  { to: '/watchlists',        icon: <ListChecks size={18} />,      label: 'Watchlists' },
   { to: '/categories',        icon: <Tags size={18} />,            label: 'Categories' },
   { to: '/market/fii-dii',    icon: <Building2 size={18} />,       label: 'FII / DII' },
   { to: '/filings',           icon: <FileText size={18} />,        label: 'Filings' },
@@ -384,6 +386,7 @@ function getPageTitle(pathname: string): string {
   if (pathname === '/stocks')         return 'Stocks'
   if (pathname.startsWith('/stocks/'))return 'Stock Detail'
   if (pathname === '/screener')       return 'Screener'
+  if (pathname === '/watchlists')     return 'Watchlists'
   if (pathname === '/categories')     return 'Categories'
   if (pathname === '/market/fii-dii') return 'FII / DII Flows'
   if (pathname === '/filings')             return 'Filings'

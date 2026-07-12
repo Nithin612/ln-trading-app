@@ -218,6 +218,77 @@ Smoke bycatch (recorded, each its own follow-up):
    upgrades — `/ws/live` could not connect in dev at all; `ws: true`
    fixed (prod is same-origin, unaffected).
 
+## Watchlists (3.5 deferred item — DONE 2026-07-11, same session)
+
+Full vertical slice, zero worker contact: `watchlists` +
+`watchlist_items` (migration `r4s5t6u7v8w9`, reversibility PROVEN
+up→down→up on dev), ownership-scoped service + CRUD API,
+`subscribe_alerts {"watchlist": id}` on /ws/live (validated before any
+state mutates — fail closed with an error frame; stock set snapshots at
+subscribe; empty watchlist ≠ unscoped, pinned by tests), /watchlists
+manager page + AlertBell scope selector (both filters re-applied on
+reconnect). +13 backend / +10 frontend tests. Unblocks the
+provisional-confidence hot set ("watchlist stocks" clause in
+§Decisions). Harness bycatch FIXED: the app's pooled engine ×
+per-TestClient loops broke any DB-touching WS path on the second test
+("Task attached to a different loop") — test_ws_alerts.py disposes the
+app engine per test; prod unaffected (one loop per process).
+
+Browser smoke (real stack, strict in-panel assertions after a first
+FALSE-POSITIVE pass that matched page text outside the panel) caught
+three real defects, all fixed with regression tests: (1) selecting an
+option in a Select nested inside the Popover closed the panel and
+swallowed the selection (nested floating layers portal outside the
+panel ref — outside-mousedown now ignores select layers; canary-proven
+test); (2) SimpleSelect's trigger rendered the raw VALUE (latent —
+every prior caller had value≡label; watchlists select by id) and
+leaked `__empty__` when no ''-option exists — label resolved
+explicitly with placeholder fallback; (3) the fuzzy q-search ranks
+alphabetically, so exact tickers never surfaced in a top-8 list —
+client-side re-rank (exact → symbol-prefix → name-prefix) over 50
+rows. Final verified pass: ONE in-panel alert row (in-list stock),
+out-of-list alert filtered server-side, "Momo" shown in the scope
+trigger, zero console errors.
+
+## Tailwind v4 token migration (DONE 2026-07-11, same session)
+
+All 898 `[--color-x]` class sites (46 files) converted to the v4
+`(--color-x)` form via one regex pass; the two code comments that
+reference the old syntax deliberately left. Empirical verification
+(headless Chrome, the smoke harness): all five themes now compute
+opaque, theme-distinct sidebar/topbar/surface colors (previously
+rgba(0,0,0,0) across the board); opacity modifiers on var colors
+compile per theme (`border-(--color-profit)/20` → `oklab(… / 0.2)`);
+daybreak finally renders as a real light theme; carbon's amber accent
+system correct; zero console errors. Riders folded in: DashboardPage
+header dup-key fixed (two "" action columns → positional keys; warning
+verified gone in-browser); StocksPage filter badge → accent-bg/accent
+AA pair; Popover trigger aria-expanded + aria-haspopup. 147 tests
+green; eslint + tsc clean. Note for future styling: tokens.css
+registers `--color-*` inside `@theme`, so Tailwind also generates named
+utilities (`bg-surface-3` etc.) — a possible future idiom; `(--var)`
+was chosen as the minimal-risk mechanical change.
+
+ui-reviewer on the migration: **PASS-WITH-NOTES** — regex-replay proved
+the conversion byte-mechanical; tailwind-merge v3.6.0 treats paren ≡
+bracket in every conflict group; all four riders verified (badge pair
+computed 5.1–7.0:1 AA across themes). Taken same commit: StatusPill
+active/pending solid `-bg` fills (alpha deviation became LIVE with the
+migration), UI_GUIDELINES syntax examples + §13.1 audit greps updated
+(bracket hits now flagged as regressions), stale comments reworded,
+Popover aria-expanded test added. **UI polish backlog (pre-existing,
+recorded for a future pass):** (1) default Button white-on-accent fails
+AA in midnight/carbon/ocean (theme `--color-primary-foreground` or
+accent-bg pair); (2) DashboardPage StatCard `${color}20` hex-alpha
+appended to var() strings = invalid CSS, chips render transparent; (3)
+signals table lacks PriceCell flash + memoized rows on the live tick
+path, LTP unconditionally bull-green; (4) `toLocaleString`/`toFixed`
+sweep across Dashboard/Stocks/Portfolio/Journal/Screener/pagination/
+sparkline → lib/format.ts; (5) Kite banner hardcoded rgba/yellow-500;
+(6) UsersPage role-badge hardcoded purple triplet → `.badge-*` class;
+(7) Badge/SelectItem "Loading…" text vs Skeleton; (8) user-avatar.tsx
+hardcoded gradient + string-concat className.
+
 ## Decisions made this phase
 
 - (3.0) Prev-day context derives from the profile's OWN intraday bars
