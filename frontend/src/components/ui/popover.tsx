@@ -43,8 +43,15 @@ export function Popover({ trigger, children, align = 'end', className }: Popover
       ) return
       setOpen(false)
     }
+    function keyHandler(e: KeyboardEvent) {
+      if (e.key === 'Escape') setOpen(false)
+    }
     document.addEventListener('mousedown', handler)
-    return () => document.removeEventListener('mousedown', handler)
+    document.addEventListener('keydown', keyHandler)
+    return () => {
+      document.removeEventListener('mousedown', handler)
+      document.removeEventListener('keydown', keyHandler)
+    }
   }, [open])
 
   const panelStyle: React.CSSProperties = {
@@ -69,10 +76,18 @@ export function Popover({ trigger, children, align = 'end', className }: Popover
       {open && createPortal(
         <div
           ref={panelRef}
-          style={panelStyle}
+          // Solid surface + strong border INLINE (UI_GUIDELINES §floating
+          // panels): the Tailwind v4 upgrade dropped the `bg-[--var]`
+          // shorthand (v4 is `bg-(--var)`), which left this panel — and
+          // every class-styled token surface — computing to transparent.
+          style={{
+            ...panelStyle,
+            backgroundColor: 'var(--color-surface)',
+            borderColor: 'var(--color-border-strong)',
+          }}
           className={cn(
             'z-50 min-w-[160px]',
-            'bg-[--color-surface-3] border border-[--color-border] rounded-lg shadow-xl',
+            'border rounded-lg shadow-xl',
             'animate-in fade-in zoom-in-95 duration-150',
             className,
           )}

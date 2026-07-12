@@ -29,7 +29,7 @@ any of it provable.
 | 3.2 | `ohlcv_1h` session-aligned rebuild | **✅ 2026-07-09** — migration `q3r4s5t6u7v8` (delete UTC-floored body, roll up from 11.5M complete 5m bars via shared `app/services/ohlcv_rollup.py`): **1,074,456 rows / 2,036 stocks, anchors exactly 09:15…15:15 IST, zero incomplete**. Interim v1 aggregator floor patched to the 03:45-UTC anchor (identical for 1m/5m/15m; 1h moves to canon) so live minting stays consistent until 3.3. §8 sign-off = walkforward+parity replay green in make check (no golden touches 1h) | downgrade leaves the table EMPTY (documented: pre-rebuild rows were garbage; 5m source re-derives) |
 | 3.3 | live-worker process (`app/broker/live_worker.py`, run as `python -m app.broker.live_worker`): KiteTicker thread → bounded `queue.Queue` (drop-oldest tick batches; time pulses share the queue so ordering is replayable) → consumer THREAD → ONE `tradecore.LiveBook` call per batch → sync redis pipeline (`SET ltp:{stock_id}` + LTP/candle PUBLISH) → committed candles via BLOCKING writer queue → writer thread (own loop + own engine) → Postgres upsert → Celery trigger after commit. PyO3 `LiveBook` binding (money strings in / raw i64·1e-4 out). Token-expiry = process exit 3/4 for the supervisor; `--gap-fill` opt-in startup backfill; JSONL record hook = the 3.4 replay input. XADD alerts stream lands with 3.5; indicator warmup lands with 3.5 triggers | **✅ 2026-07-09** (code+tests; first live market soak pending next session — see exit gate) |
 | 3.4 | Record/replay harness | **✅ 2026-07-10** — recordings are self-describing (session header + tick/pulse lines in engine order; stale/skipped ticks never recorded); `app/broker/replay.py` feeds them through a fresh `LiveBook` → canonical event stream + sha256 digest; CLI `python -m app.broker.replay <rec> [--emit]` is the soak-day pinning ritual. Synthetic golden committed (61 events / 22 committed; pre-open rejection, volume baseline+reset, per-tf late-tick, pulse closes) + a worker-seam fidelity test proving replay ≡ writer-queue stream. `make replay` in the check chain. Tick→publish `LatencyHistogram` in the worker (fixed buckets, p50/p99/max at shutdown) — **p99 < 10 ms VALIDATION happens on soak day, not in CI** | real-session golden joins after the first soak |
-| 3.5 | Tick triggers + provisional layer: entry-zone touches, PDH/PDL/S&R crosses, SL/TP proximity, volume bursts, forming-candle provisional confidence, per-style leaderboards @ 2–4 Hz. Redis Streams for alerts (at-least-once); WS fanout by style/watchlist; drop-oldest backpressure for LTP, never for candle-close | **core ✅ 2026-07-10** (branch `slice-3.5-tick-triggers`): Rust trigger engine (`triggers.rs` + `LiveEvent::Trigger`, armed/re-arm hysteresis, `set_levels` preserves state for unchanged ids) · levels as replayable INPUT (`{"k":"lv"}` recording lines; no-lv recordings byte-identical — 3.4 golden digest untouched) · level sources `live_levels.py` (PDH/PDL from 1d, §2.5-width entry zones + SL/TP proximity per active signal, frozen-detector S/R for signal stocks, 5m vburst baselines; 30s refresher thread) · `alerts:live` stream XADD + `/ws/live` `subscribe_alerts` fanout with style filter. Rust 55 tests · +23 backend tests. **Deferred:** provisional confidence + leaderboards (design PINNED 2026-07-11 — throttled batch rescore of the hot set, see §Decisions; implementation after the Monday soak), watchlist fanout (no watchlist model exists), alert UI (in progress 2026-07-11, frontend-only). Reviews DONE 2026-07-10 (quant-verifier FAIL→fixed, bug-hunter BUGS-FOUND→fixed — §Reviews 3.5) | alerts never gate/mint/modify signals — provisional layer only |
+| 3.5 | Tick triggers + provisional layer: entry-zone touches, PDH/PDL/S&R crosses, SL/TP proximity, volume bursts, forming-candle provisional confidence, per-style leaderboards @ 2–4 Hz. Redis Streams for alerts (at-least-once); WS fanout by style/watchlist; drop-oldest backpressure for LTP, never for candle-close | **core ✅ 2026-07-10** (branch `slice-3.5-tick-triggers`): Rust trigger engine (`triggers.rs` + `LiveEvent::Trigger`, armed/re-arm hysteresis, `set_levels` preserves state for unchanged ids) · levels as replayable INPUT (`{"k":"lv"}` recording lines; no-lv recordings byte-identical — 3.4 golden digest untouched) · level sources `live_levels.py` (PDH/PDL from 1d, §2.5-width entry zones + SL/TP proximity per active signal, frozen-detector S/R for signal stocks, 5m vburst baselines; 30s refresher thread) · `alerts:live` stream XADD + `/ws/live` `subscribe_alerts` fanout with style filter. Rust 55 tests · +23 backend tests. **Deferred:** provisional confidence + leaderboards (design PINNED 2026-07-11 — throttled batch rescore of the hot set, see §Decisions; implementation after the Monday soak), watchlist fanout (no watchlist model exists). Alert UI DONE 2026-07-11 (§Alert UI). Reviews DONE 2026-07-10 (quant-verifier FAIL→fixed, bug-hunter BUGS-FOUND→fixed — §Reviews 3.5) | alerts never gate/mint/modify signals — provisional layer only |
 | 3.6 | Signal-outcome tick evaluation (entry-zone touch before expiry) recorded now — Phase 6 needs this data | planned | |
 | 3.7 | Shadow week (Rust decides, frozen Python double-checks on closes — zero diffs) → full-session soak (memory flat, zero dropped subscriptions, latency budget met) | planned | python engine deletion decision AFTER shadow week (user ruling) |
 
@@ -172,6 +172,51 @@ Still open before any intraday profile activates (unchanged from the
 walk-forward verdicts): pdh_pdl / orb_15m / gainer_925 are all FLAGGED —
 wiring context is necessary, not sufficient. Activation stays a Phase-6
 tuning decision.
+
+## Alert UI (3.5 deferred item — DONE 2026-07-11)
+
+Frontend-only; zero contact with the worker/soak path. `AlertBell` in
+the topbar + `useAlertStream` (subscribe_alerts protocol: burst-buffered
+200 ms flush, 100-cap, 3 s reconnect re-applying the style filter, 4401
+= sign-in-again, never a loop) + presentation vocabulary mirroring
+`TriggerTag::as_str` and the live_levels meta. +14 tests (frontend 145
+total); eslint/tsc clean. Manual smoke against the REAL stack (backend
++ tp_redis, headless Chrome): XADD → badge → panel row with sid→symbol
+resolved over REST → style chips → Escape-close; panel verified SOLID
+by getComputedStyle probe. Note for replays of the smoke: screenshots
+taken <150 ms after open capture the zoom-in entry animation mid-flight
+(panel appears displaced) — wait ~400 ms before judging anchoring.
+
+ui-reviewer: **PASS-WITH-NOTES, no HIGH.** Taken same session: badge
+switched to the §19.3 accent-bg/accent pill pair (white-on-accent
+failed AA in 3 of 5 themes — the one MEDIUM), parseAlert refuses
+non-numeric price strings (a ₹NaN row misleads — +test), focus-visible
+rings on bell + chips, 10px type floor, the new topbar divider written
+in the working v4 syntax, +2 tests (unknown-tag degradation renders
+raw strings; 99+ badge cap). Frontend suite 147 green. Deferred to the
+migration slice (all pre-existing idiom/token-level): raw-button topbar
+chrome + 44px targets, Popover aria-expanded/focus management, daybreak
+warning-token contrast, aria-live on the status rows.
+
+Smoke bycatch (recorded, each its own follow-up):
+1. **Tailwind v4 broke the `[--color-x]` class idiom repo-wide** — all
+   619 occurrences compute to NOTHING (probed: sidebar/topbar/panel
+   backgrounds rgba(0,0,0,0); the app survives on body background,
+   inherited text color, and inline styles). v4 syntax is
+   `(--color-x)`; the new alert files use it; the shared Popover panel
+   moved to an inline solid `var(--color-surface)` + border-strong
+   (+ Escape-close, which ui.md always required). Dedicated migration
+   slice recommended: mechanical rename + visual pass across all 5
+   themes; frontend-only — safe any time, even before the soak.
+2. Dashboard fires a duplicate-React-key console warning with zero
+   alerts involved (suspects: DashboardPage.tsx:275 `key={d}`, :337
+   `key={h}`).
+3. `make create-admin`'s default email admin@trading.local is REJECTED
+   by the login EmailStr validator (.local TLD) — the documented
+   bootstrap admin could never log in. Default now admin@trading.com.
+4. The vite dev proxy (string shorthand) never forwarded WebSocket
+   upgrades — `/ws/live` could not connect in dev at all; `ws: true`
+   fixed (prod is same-origin, unaffected).
 
 ## Decisions made this phase
 

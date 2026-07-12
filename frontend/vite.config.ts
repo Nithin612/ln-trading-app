@@ -13,7 +13,9 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/api': 'http://localhost:8000',
+      // ws: true — /api/v1/ws/live must upgrade through the dev proxy
+      // (the string shorthand does not forward WebSocket upgrades)
+      '/api': { target: 'http://localhost:8000', ws: true },
     },
   },
   test: {

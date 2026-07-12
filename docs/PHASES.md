@@ -44,6 +44,16 @@ wall-clock inside `process_item` instead of riding droppable pulses
 publish to nobody until the first pulse). +2 regression tests,
 stash-proven to FAIL pre-fix; targeted live suite 50 green;
 bug-hunter re-review CLEAN (executed repros).
+**Same evening (user-approved):** the provisional-confidence design is
+PINNED (ledger §Decisions — throttled batch rescore of a bounded hot
+set on a refresher thread; O(1)-incremental rejected; implementation
+AFTER the soak) and the **3.5 alert UI is DONE** (topbar AlertBell +
+useAlertStream; +14 tests, frontend 145; smoked against the real
+stack; ledger §Alert UI). Smoke bycatch recorded in the ledger: the
+Tailwind v4 upgrade broke the `[--color-x]` idiom repo-wide (619
+sites compute to nothing — thread 3), a dashboard duplicate-key
+warning, create-admin's default email couldn't log in (fixed), dev
+vite proxy never forwarded WS upgrades (fixed).
 **NEXT ACTION: the Monday 2026-07-13 quiet-box soak (thread 1).**
 
 Open threads, in order:
@@ -94,13 +104,25 @@ Open threads, in order:
    the ledger §Reviews 3.5); suite 727 green post-fix; `make
    engine-build` run in main (set_levels FFI live).
    **Still open within 3.5:** forming-candle provisional confidence +
-   per-style leaderboards (needs the plan-§2 O(1) incremental factor
-   design — decide throttled-batch-rescore vs incremental indicators),
-   watchlist-scoped fanout (no watchlist model exists yet), alert UI in
-   the frontend (useLiveQuotes already tolerates unknown message types).
-   Then 3.6 outcome ticks, 3.7 shadow week + full-session soak (30-day
-   paper clock).
-3. **Session-ops knowledge (this machine):** single-process `make test`
+   per-style leaderboards — design DECIDED 2026-07-11 (ledger
+   §Decisions: throttled batch rescore of a bounded hot set;
+   implementation after the soak) — and watchlist-scoped fanout (no
+   watchlist model exists yet). Alert UI DONE 2026-07-11 (ledger §Alert
+   UI). Then 3.6 outcome ticks, 3.7 shadow week + full-session soak
+   (30-day paper clock).
+3. **Tailwind v4 token-class migration (discovered 2026-07-11, alert-UI
+   smoke):** the v4 upgrade silently dropped the `[--color-x]`
+   arbitrary-value idiom — all 619 occurrences across frontend/src
+   compute to NOTHING (probed in a real browser: sidebar/topbar/panel
+   backgrounds rgba(0,0,0,0); the app looks right only via body
+   background, inherited colors, and inline styles). Fix = mechanical
+   rename to the v4 `(--color-x)` syntax + a visual pass across all 5
+   themes (ui-reviewer + screenshots). Frontend-only — cannot affect
+   the soak; runnable any time. The new alert files already use the v4
+   syntax; the shared Popover panel now inlines a solid surface.
+   Related bycatch: dashboard duplicate-React-key warning
+   (DashboardPage.tsx:275/337 suspects).
+4. **Session-ops knowledge (this machine):** single-process `make test`
    OOM-killed twice at the gainer golden under desktop load (Chrome+IDE,
    15GB) — run the gate as three fresh legs instead:
    `pytest -m "not parity and not walkforward"` · `-m parity` ·
@@ -108,14 +130,14 @@ Open threads, in order:
    Background shells: poll every ~5 min (log growth + `[b]racket`-trick
    process check); pgrep/pkill -f patterns must NEVER appear in their
    own command line (two self-match incidents on 2026-07-09/10).
-4. **Profile tuning** (dc1/dc2/multibagger negative; intraday trio
+5. **Profile tuning** (dc1/dc2/multibagger negative; intraday trio
    flagged) — Phase 6 workflow; verdicts pinned in goldens. Wiring
    session context (3.0) was necessary, not sufficient, for activation.
-5. Latent LOW calendar items in the phase-02 report backlog (UTC-date
+6. Latent LOW calendar items in the phase-02 report backlog (UTC-date
    trading-day walks; `same_day` weekend validity); Muhurat/special-hours
    sessions unsupported by the worker's standard 09:15–15:30 SessionSpec
    (documented, accepted until the calendar carries session hours).
-6. `git push` remains manual (credential-free remote by design).
+7. `git push` remains manual (credential-free remote by design).
 
 Daily ops: Kite token dies ~6:00 AM IST; ritual =
 `cd backend && uv run python scripts/kite_login.py` (terminal-only).

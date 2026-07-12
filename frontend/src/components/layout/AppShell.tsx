@@ -26,6 +26,7 @@ import { useKiteStatus } from '@/hooks/useKiteStatus'
 import { useThemeStore } from '@/store/themeStore'
 import { useUiPrefsStore } from '@/store/uiPrefsStore'
 import { ProfileDropdown } from '@/components/ui/profile-dropdown'
+import { AlertBell } from '@/features/alerts/AlertBell'
 import { cn } from '@/lib/utils'
 
 const SIDEBAR_KEY = 'sidebar-collapsed'
@@ -271,6 +272,13 @@ export function AppShell() {
                   <span className="text-xs text-[--color-text-muted] hidden xl:block">• {nextEvent}</span>
                 )}
               </div>
+
+              {/* v4 (--var) syntax — the sibling dividers' [--var] form is
+                  known-broken and awaits the migration slice */}
+              <div className="w-px h-4 bg-(--color-border)" />
+
+              {/* Live tick-trigger alerts (Phase 3.5) */}
+              <AlertBell />
 
               <div className="w-px h-4 bg-[--color-border]" />
 

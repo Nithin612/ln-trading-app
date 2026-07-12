@@ -41,6 +41,20 @@ describe('Popover', () => {
     expect(screen.queryByTestId('panel-content')).not.toBeInTheDocument()
   })
 
+  it('closes on Escape', () => {
+    render(
+      <Popover trigger={<button>Open</button>}>
+        <div data-testid="panel-content">Panel</div>
+      </Popover>
+    )
+
+    fireEvent.click(screen.getByRole('button', { name: 'Open' }))
+    expect(screen.getByTestId('panel-content')).toBeInTheDocument()
+
+    fireEvent.keyDown(document, { key: 'Escape' })
+    expect(screen.queryByTestId('panel-content')).not.toBeInTheDocument()
+  })
+
   it('toggles open/closed on trigger click', () => {
     render(
       <Popover trigger={<button>Open</button>}>

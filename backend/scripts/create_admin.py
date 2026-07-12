@@ -20,7 +20,9 @@ from app.models.user import User
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 
-_DEFAULT_EMAIL = "admin@trading.local"
+# Must be a real-TLD address: the login endpoint's EmailStr validation
+# rejects .local, so a .local default creates an admin that cannot log in.
+_DEFAULT_EMAIL = "admin@trading.com"
 _DEFAULT_PASSWORD = "Admin123!"
 _DEFAULT_NAME = "Platform Admin"
 
