@@ -218,6 +218,107 @@ Smoke bycatch (recorded, each its own follow-up):
    upgrades — `/ws/live` could not connect in dev at all; `ws: true`
    fixed (prod is same-origin, unaffected).
 
+## Second soak — 2026-07-13 (quiet box; 4 runs; latency measured, stability NOT proven)
+
+Honest record. Four runs, six recording headers (incl. a 15 s
+pre-flight); the 315 MB recording (`backend/recordings/
+soak-2026-07-13.jsonl`) appended across ALL runs and is intact; the
+console log survives only for run #4 (restarts reused `tee` without
+`-a` — truncation; runbook fixed: worker needs self-logging).
+
+**Run #4 (14:59–15:40) — CLEAN, the measurement:** ticks 755,623 ·
+committed 81,815 · triggers 3,218 · avg_batch 114.1 · **latency p50
+7.5 ms · p99 in (20,50] ms · max 85.3 ms · dwell p50 1 ms / p99 2 ms ·
+processing p99 (20,50] ms**. DB coverage 14:59–15:29 healthy
+(1,750–1,990 stocks/min). Dwell is FIXED (perf-fix validated); the
+tail is pure processing, concentrated at minute boundaries (commit
+bursts) — exactly the audit's predicted shape. **p99 < 10 ms as
+written: NOT MET at 2,055 instruments** (the target was authored for
+200–500). Decision pending (user): restate the budget at scale vs
+apply the scoped optimizations (unchanged-price SET dedupe,
+commit-burst batching) and re-soak.
+
+**Incidents (chronological):**
+1. 09:22 — relative LIVE_RECORD_PATH + make's cd-backend crashed the
+   recorder open (missed 9:15–9:25); fixed 7092e4f (mkdir parents).
+   Residue: later restarts used the relative path from history — the
+   recording landed in backend/recordings/ (auto-created), while the
+   tee log sat in ./recordings/. Works, but confusing — runbook now
+   prescribes "$PWD/…".
+2. 10:29 — redis OOM at 512 MB: the WRITER enqueues a Celery
+   signal-trigger per committed candle but NO consumer runs during a
+   soak → db1 "celery" list grew to 495 MB of TTL-less messages →
+   volatile-lru had nothing to evict → ALL publishes refused. Fixed
+   live: UNLINK celery (tasks are no-ops today — intraday profiles
+   INACTIVE) + runtime maxmemory 3 GB. By close the list had refilled
+   to 344 MB / 308,061 tasks (no re-OOM). DESIGN FIX OWED: the
+   consumerless enqueue is unbounded TTL-less growth by construction.
+3. 11:26 — KiteTicker died (1006, peer dropped TCP). The shutdown then
+   WEDGED: latency stats show a ~16.4 min max (queue had been backing
+   up since ~11:11 — consumer throughput collapsed, cause not
+   identified; run #2's console log is lost), the writer thread died in
+   the exit path ("cannot schedule new futures after shutdown" — the
+   run_in_executor(writer_q.get) pattern races loop teardown), and the
+   drain then ground 5 s per committed candle in the CRITICAL
+   writer-dead drop loop for 36 minutes (~430 candles of the 11:11
+   bucket dropped one at a time) until manually killed at 12:02. TWO
+   exit-path bugs: executor-shutdown race; unbounded slow drain after
+   stop_event.
+4. Run #3 (12:02–14:58) degraded PROGRESSIVELY: 1m coverage full until
+   ~12:55, then partial commits shrinking through 13:00–14:00 (minutes
+   with 33/64/2 stocks), near-zero 14:00–14:57, tick-queue drop-oldest
+   spam by 14:58. Cause UNKNOWN (console log lost; no in-run
+   telemetry). INSTRUMENTATION GAP: stats print only at shutdown — the
+   worker needs a periodic in-run stats line (queue depths, writer
+   lag, batch p50) to make degradation diagnosable.
+5. Post-close: `python -m app.broker.replay` on the full-day recording
+   was OOM-KILLED (exit 137) — replay buffers the whole event stream;
+   fine on goldens, breaks at 315 MB/full-day scale. Needs streaming
+   digest. Digest pin for 2026-07-13 pending that fix.
+
+**Data damage:** 153/375 session minutes have ZERO 1m rows (gaps
+9:15–9:25, 9:22–10:41 minus partials, 11:11–12:02 zombie window +
+dropped 11:11 bucket, 13:00–14:59 progressive) plus dozens of partial
+minutes; 5m/15m/1h correspondingly affected. Rebuild from Kite REST
+required (the 2026-07-10 delete+gap-fill procedure).
+
+**Fix slate — items 1–3 + ops DONE 2026-07-13 night (commit 766050e,
++9 regression tests, live suite 65 green, bug-hunter reviewed):**
+(1) ✅ consumerless-celery OOM — per-candle Celery dispatch gated behind
+`LIVE_SIGNAL_DISPATCH_ENABLED` (default OFF: `send_task` enqueues and
+succeeds with no worker, growing a TTL-less list to OOM); compose
+maxmemory 512mb→2gb. (2) ✅ writer exit-path race (`RuntimeError` from
+the teardown executor-shutdown caught as end-of-stream) + `_enqueue_
+committed` checks liveness BEFORE the put (immediate breadcrumb, no
+5 s/candle) + `run_consumer` bounded post-stop drain
+(`_SHUTDOWN_DRAIN_S=45s`, so a WS-death backlog isn't replayed and the
+supervisor restarts promptly). (3) ✅ `run_monitor` heartbeat thread
+(queue depths + counters + latency every 30 s) + **`make soak`** target
+(absolute `$(CURDIR)` record path, append-tee self-log, clears the
+stale broker list — kills the 07-13 ops fumbles); ritual pinned in
+`docs/RUNBOOK-soak.md`. **Still open:** (4) streaming replay digest
+(replay still OOMs on a full-day recording — exit 137); (5) RE-SOAK for
+both the latency ruling and a clean stability pass; (6) run-#3
+root-cause once the heartbeat gives in-run telemetry.
+
+**Candle rebuild (2026-07-13 night):** two passes. Pass 1 (unthrottled,
+via the existing `startup_gap_fill`) exposed that `fetch_historical`
+BYPASSES `ThrottledKite` — ~6000 unthrottled requests drew intermittent
+Kite `InputException: invalid token` and left morning-only (2029 stocks,
+09:15–13:15) with the afternoon dropped. Pass 2 (throttled via
+`ThrottledKite`, full session, ON CONFLICT) topped up the afternoon for
+~92% of stocks; ~8% still failed with intermittent invalid-token even
+throttled (specific instruments — likely stale `kite_instruments`
+tokens; not chased). Forensic copies kept in `forensic_ohlcv_*_20260713`;
+1m intentionally left empty (matches the 07-10 rebuild scope; low-value
+live-only table). **Residual data gaps on 07-13 remain** — acceptable
+(1d/EOD unaffected); a fully-clean 07-13 needs a targeted retry of the
+failed stocks with a fresh token if a future walk-forward pins them.
+LATENT BUG FILED: `fetch_historical` must route through `ThrottledKite`
+like every other Kite REST path (trading-domain rule) — the unthrottled
+call is the root of the rebuild pain and a lurking rate-limit hazard for
+`startup_gap_fill --gap-fill` at scale.
+
 ## Watchlists (3.5 deferred item — DONE 2026-07-11, same session)
 
 Full vertical slice, zero worker contact: `watchlists` +

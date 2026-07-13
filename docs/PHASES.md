@@ -58,7 +58,24 @@ browser-verified server-side alert filtering; ledger §Watchlists).**
 Frontend 161 / backend 744-ish tests green at session end; the only
 3.5 remainder is the provisional-confidence implementation (post-soak,
 design pinned).
-**NEXT ACTION: the Monday 2026-07-13 quiet-box soak (thread 1).**
+**SOAK #2 RAN 2026-07-13 — measured but not proven; HARDENING FIXES
+SHIPPED SAME NIGHT** (full record: ledger §Second soak). Run #4 clean
+40 min → p50 7.5 ms · p99 (20,50] · dwell FIXED; **p99<10 ms NOT met at
+2,055 instruments — user ruling pending** (restate at scale vs optimize
++ re-soak). The day's four stability failures are FIXED (commit
+766050e, +9 tests, bug-hunter reviewed): Celery-OOM gate, writer
+exit-race, 36-min drain wedge, and a heartbeat + `make soak` target.
+07-13 candles partially rebuilt from Kite (morning solid, afternoon
+~92%, 1m empty — residual gaps accepted; 1d/EOD unaffected).
+
+**▶ NEXT ACTION — RE-SOAK. The ritual is now `docs/RUNBOOK-soak.md`
+(one command: `make soak`).** After it: (a) rule on the latency target
+at scale; (b) if clean, that's the stability pass; (c) then the
+still-open items — streaming replay digest (replay OOMs on a full-day
+recording), route `fetch_historical` through `ThrottledKite` (latent
+bug found during the rebuild), and run-#3 root-cause via the new
+heartbeat. Only after a clean soak: provisional-confidence impl (design
+pinned), then 3.6 outcome ticks, 3.7 shadow week.
 
 Open threads, in order:
 1. **FIRST SOAK RAN 2026-07-10 — PARTIAL; latency verdict OPEN** (full
