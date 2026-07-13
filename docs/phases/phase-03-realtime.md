@@ -282,8 +282,22 @@ dropped 11:11 bucket, 13:00–14:59 progressive) plus dozens of partial
 minutes; 5m/15m/1h correspondingly affected. Rebuild from Kite REST
 required (the 2026-07-10 delete+gap-fill procedure).
 
-**Fix slate — items 1–3 + ops DONE 2026-07-13 night (commit 766050e,
-+9 regression tests, live suite 65 green, bug-hunter reviewed):**
+**bug-hunter on the slate (766050e): one real find, fixed @8c84d29.**
+The `run_consumer` finally-block's `writer_q.put(None)` sentinel was
+UNBOUNDED — a dead writer + full queue blocks it forever, wedging the
+non-daemon consumer so the process never exits and the supervisor never
+restarts (the exact class this slate targets; the 45s drain marginally
+raised reachability). Now bounded (`_SENTINEL_PUT_TIMEOUT_S`, skip-on-
+Full; main()'s writer join covers a dead writer). +1 regression test.
+Everything else verified SOUND: bounded-drain loop (all four exit paths
+reach flush+sentinel once), `_enqueue_committed` reorder (no busy-spin,
+no new data loss), writer `RuntimeError` catch (scoped, can't mask
+persist bugs), dispatch gate (covers both v1+v2 callers, no test
+depends on firing), monitor (GIL-atomic, daemon), Makefile/compose.
+
+**Fix slate — items 1–3 + ops DONE 2026-07-13 night (commit 766050e
++ 8c84d29, +10 regression tests, live suite 66 green, bug-hunter
+reviewed clean after the one fix):**
 (1) ✅ consumerless-celery OOM — per-candle Celery dispatch gated behind
 `LIVE_SIGNAL_DISPATCH_ENABLED` (default OFF: `send_task` enqueues and
 succeeds with no worker, growing a TTL-less list to OOM); compose
