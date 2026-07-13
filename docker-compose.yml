@@ -36,7 +36,12 @@ services:
     # volatile-lru: only keys WITH a TTL are evictable. Celery broker/queue keys
     # carry no TTL, so they can never be silently dropped under memory pressure;
     # cache keys (ltp:*, etc.) must always be SET with an expiry.
-    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "512mb", "--maxmemory-policy", "volatile-lru"]
+    # maxmemory 2gb (was 512mb): a full-session live-worker soak fans out a lot
+    # of unevictable broker traffic; 512mb OOM'd mid-soak on 2026-07-13 and
+    # refused ALL writes. The live worker no longer dispatches per-candle Celery
+    # tasks by default (LIVE_SIGNAL_DISPATCH_ENABLED), which was the growth
+    # driver; 2gb is headroom for the alerts stream + cache besides.
+    command: ["redis-server", "--appendonly", "yes", "--maxmemory", "2gb", "--maxmemory-policy", "volatile-lru"]
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 5s

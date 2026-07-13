@@ -72,6 +72,12 @@ SESSION_OPEN = time(9, 15)
 SESSION_CLOSE = time(15, 30)
 
 _QUEUE_MAX = 10_000
+# After `stop`, the consumer drains at most this long before flushing and
+# exiting — caps a WS-death backlog replay so the supervisor can restart
+# (clean EOD has an empty queue and exits immediately).
+_SHUTDOWN_DRAIN_S = 45.0
+# In-run heartbeat cadence (queue depths + counters + latency).
+_MONITOR_INTERVAL_S = 30.0
 
 # Consumer-queue items: (kind, payload, monotonic-enqueue-stamp-or-None).
 QueueItem = tuple[str, Any, float | None]
@@ -365,27 +371,34 @@ class WorkerState:
         """Committed candles go to the writer with a liveness-checked
         blocking put: never dropped while the writer lives; if the writer
         is DEAD, losing them is already a fact — fail loud and stop so the
-        supervisor restarts instead of wedging the tick loop forever."""
+        supervisor restarts instead of wedging the tick loop forever.
+
+        Liveness is checked BEFORE waiting: once the writer is dead there
+        is nothing to wait for, so we breadcrumb immediately instead of
+        blocking `timeout` seconds per candle. The 2026-07-13 wedge drained
+        a 16-min backlog at 5 s/candle for 36 min because the old order
+        (put-then-check) paid the full timeout on every candle."""
         for e in events:
             if e["kind"] != "committed":
                 continue
             self.stats["committed"] += 1
             while True:
+                if not self.writer_alive():
+                    self.stats["dropped_committed"] = (
+                        self.stats.get("dropped_committed", 0) + 1
+                    )
+                    log.critical(
+                        "writer thread dead; dropping committed candle %s — "
+                        "stopping for supervisor restart", e,
+                    )
+                    if self.stop_event is not None:
+                        self.stop_event.set()
+                    break
                 try:
-                    self.writer_q.put(e, timeout=5.0)
+                    self.writer_q.put(e, timeout=1.0)
                     break
                 except queue.Full:
-                    if not self.writer_alive():
-                        self.stats["dropped_committed"] = (
-                            self.stats.get("dropped_committed", 0) + 1
-                        )
-                        log.critical(
-                            "writer thread dead; dropping committed candle %s — "
-                            "stopping for supervisor restart", e,
-                        )
-                        if self.stop_event is not None:
-                            self.stop_event.set()
-                        break
+                    continue  # writer alive but slow — retry (liveness re-checked)
 
     def _ffi_batch(
         self, ticks: list[dict[str, Any]]
@@ -587,7 +600,14 @@ def run_writer(writer_q: queue.Queue[dict[str, Any] | None]) -> None:
         try:
             loop = asyncio.get_running_loop()
             while True:
-                event = await loop.run_in_executor(None, writer_q.get)
+                try:
+                    event = await loop.run_in_executor(None, writer_q.get)
+                except RuntimeError:
+                    # Interpreter teardown shuts down the loop's default
+                    # executor while we're still looping ("cannot schedule
+                    # new futures after shutdown") — treat as end-of-stream,
+                    # not a crash (the 2026-07-13 writer traceback).
+                    return
                 if event is None:
                     return
                 await _persist_with_retry(engine, event)
@@ -597,14 +617,30 @@ def run_writer(writer_q: queue.Queue[dict[str, Any] | None]) -> None:
     asyncio.new_event_loop().run_until_complete(main())
 
 
-def run_consumer(
+def run_consumer(  # noqa: C901 — the bounded-drain shutdown branch is worth the +1
     state: WorkerState, in_q: queue.Queue[QueueItem], stop: threading.Event
 ) -> None:
     try:
-        while not (stop.is_set() and in_q.empty()):
+        drain_deadline: float | None = None
+        while True:
+            if stop.is_set():
+                # Bound the post-stop drain: a clean end-of-day has an
+                # empty queue and exits at once; a WS-death restart with a
+                # multi-minute tick backlog must NOT replay it all through
+                # the DB (those candles are stale and the restart gap-fills
+                # them) — cap it so the consumer EXITS and the supervisor
+                # can restart promptly (the 2026-07-13 wedge full-drained a
+                # 16-min backlog). Deadline is generous enough that a clean
+                # shutdown's small tail always completes.
+                if drain_deadline is None:
+                    drain_deadline = time_mod.monotonic() + _SHUTDOWN_DRAIN_S
+                if in_q.empty() or time_mod.monotonic() >= drain_deadline:
+                    break
             try:
                 item = in_q.get(timeout=0.5)
             except queue.Empty:
+                if stop.is_set():
+                    break
                 continue
             try:
                 state.process_item(item)
@@ -634,6 +670,28 @@ def run_pulser(in_q: queue.Queue[QueueItem], stop: threading.Event) -> None:
             in_q.put_nowait(("pulse", int(time_mod.time()), None))
         except queue.Full:
             pass  # the next pulse is a second away
+
+
+def run_monitor(
+    state: WorkerState,
+    in_q: queue.Queue[QueueItem],
+    writer_q: queue.Queue[Any],
+    stop: threading.Event,
+    interval_s: float = _MONITOR_INTERVAL_S,
+) -> None:
+    """Heartbeat: log queue depths + counters + rolling latency every
+    interval. Stats used to print only at shutdown, so the 2026-07-13
+    progressive degradation was invisible until post-mortem — a growing
+    in_q or writer_q here names a stall AS it happens. Depth near
+    _QUEUE_MAX ⇒ the consumer or writer is falling behind."""
+    while not stop.wait(interval_s):
+        lat = state.latency.summary()
+        log.info(
+            "live-worker heartbeat: in_q=%d/%d writer_q=%d/%d stats=%s "
+            "lat_p50=%.1f lat_p99=%.1f n=%d",
+            in_q.qsize(), _QUEUE_MAX, writer_q.qsize(), _QUEUE_MAX,
+            state.stats, lat["p50_ms"], lat["p99_ms"], lat["n"],
+        )
 
 
 def enqueue_ticks(in_q: queue.Queue[QueueItem], ticks: list[dict[str, Any]]) -> None:
@@ -856,6 +914,10 @@ def main(argv: list[str] | None = None) -> int:
         threading.Thread(target=run_pulser, args=(in_q, stop), name="pulser", daemon=True),
         threading.Thread(
             target=run_refresher, args=(directory, in_q, stop), name="refresher",
+            daemon=True,
+        ),
+        threading.Thread(
+            target=run_monitor, args=(state, in_q, writer_q, stop), name="monitor",
             daemon=True,
         ),
     ]

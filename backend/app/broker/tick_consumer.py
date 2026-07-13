@@ -336,7 +336,16 @@ def _fire_signal_triggers(triggers: list[tuple[int, str]]) -> None:
 
 
 def _maybe_trigger_signal(stock_id: int, timeframe: str) -> None:
-    """Fire a Celery task to regenerate signals on candle close (best-effort)."""
+    """Fire a Celery task to regenerate signals on candle close (best-effort).
+
+    Gated OFF by default: `send_task` ENQUEUES to the Redis broker and
+    returns success even with no worker running, so a soak silently grows
+    a TTL-less task list until Redis OOMs and refuses every write (the
+    2026-07-13 incident). Enable only with a live worker + active intraday
+    profiles (`LIVE_SIGNAL_DISPATCH_ENABLED=true`).
+    """
+    if not settings.live_signal_dispatch_enabled:
+        return
     try:
         from app.celery_app import celery_app
         celery_app.send_task(

@@ -117,6 +117,17 @@ live-worker:  ## Run the live worker under a restart supervisor (soak ritual)
 		fi; \
 	done
 
+.PHONY: soak
+soak:  ## Quiet-box soak: abs record path + self-log + clears stale broker queue (the market-open ritual)
+	@mkdir -p recordings
+	@echo "$(YELLOW)Pre-flight: backend API should be DOWN and the box quiet (no pytest/cargo).$(NC)"
+	@echo "Clearing stale Celery broker list (no consumer runs during a soak)…"
+	@docker exec tp_redis redis-cli -n 1 DEL celery >/dev/null 2>&1 || true
+	@ts=$$(date +%Y-%m-%d); \
+		rec="$(CURDIR)/recordings/soak-$$ts.jsonl"; logf="$(CURDIR)/recordings/soak-$$ts.log"; \
+		echo "$(BLUE)recording → $$rec$(NC)"; echo "$(BLUE)log       → $$logf$(NC)"; \
+		LIVE_RECORD_PATH="$$rec" $(MAKE) --no-print-directory live-worker 2>&1 | tee -a "$$logf"
+
 .PHONY: frontend
 frontend:  ## Run Vite dev server
 	@cd frontend && pnpm dev

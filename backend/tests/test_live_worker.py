@@ -14,6 +14,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
+import app.broker.live_worker as lw
 import tradecore
 from app.broker.live_worker import (
     TF_MINUTES,
@@ -22,6 +23,7 @@ from app.broker.live_worker import (
     enqueue_ticks,
     open_recorder,
     persist_committed,
+    run_consumer,
     run_writer,
     session_bounds_ist,
     startup_gap_fill,
@@ -536,3 +538,97 @@ class TestRecorderFailOpen:
         committed = writer_q.get_nowait()
         assert Decimal(committed["close"]) / 10**4 == Decimal("101.55")
         assert spy.set_calls  # LTP kept flowing
+
+
+class TestSoakHardening:
+    """2026-07-13 soak incidents — regression tests for the fixes."""
+
+    def test_enqueue_committed_dead_writer_fails_fast(self) -> None:
+        """The 36-min wedge: with the writer dead, each committed candle
+        used to wait the full put timeout (5 s) before breadcrumbing. Now
+        liveness is checked FIRST — breadcrumb is immediate, and the
+        stop_event is set so the supervisor restarts."""
+        state, _, writer_q = _state()
+        state.writer_alive = lambda: False
+        state.stop_event = threading.Event()
+        t0 = time_mod.monotonic()
+        state._enqueue_committed([{"kind": "committed", "tf_minutes": 1}])
+        assert time_mod.monotonic() - t0 < 0.5  # did NOT block on a put timeout
+        assert state.stats["dropped_committed"] == 1
+        assert state.stop_event.is_set()
+        assert writer_q.empty()
+
+    def test_enqueue_committed_alive_writer_enqueues(self) -> None:
+        state, _, writer_q = _state()
+        state.writer_alive = lambda: True
+        e = {"kind": "committed", "tf_minutes": 1}
+        state._enqueue_committed([e])
+        assert writer_q.get_nowait() is e
+
+    def test_consumer_bounded_drain_does_not_replay_backlog(self, monkeypatch) -> None:
+        """WS-death restart: a multi-minute tick backlog must NOT be
+        replayed through the DB at shutdown (stale; the restart gap-fills).
+        With the drain deadline elapsed, the consumer exits at once leaving
+        the backlog — and still sends the writer sentinel."""
+        monkeypatch.setattr(lw, "_SHUTDOWN_DRAIN_S", 0.0)
+        state, _, writer_q = _state()
+        in_q: queue.Queue = queue.Queue()
+        for _ in range(5):
+            in_q.put(("ticks", [_tick(9, 16, "101.55", 1000)], None))
+        stop = threading.Event()
+        stop.set()
+        run_consumer(state, in_q, stop)
+        assert in_q.qsize() == 5  # backlog left unprocessed (capped)
+        assert writer_q.get_nowait() is None  # sentinel still sent
+
+    def test_consumer_drains_small_backlog_then_exits(self) -> None:
+        """Clean shutdown (empty/near-empty queue) drains fully and exits —
+        the 45 s deadline never bites."""
+        state, _, writer_q = _state()
+        in_q: queue.Queue = queue.Queue()
+        in_q.put(("ticks", [_tick(9, 16, "101.55", 1000)], None))
+        stop = threading.Event()
+        stop.set()
+        run_consumer(state, in_q, stop)
+        assert in_q.empty()
+        drained = []
+        while not writer_q.empty():
+            drained.append(writer_q.get_nowait())
+        assert drained[-1] is None  # sentinel last
+
+
+class TestSignalDispatchGate:
+    """2026-07-13 redis OOM: send_task enqueues to the broker and succeeds
+    even with no worker, so the TTL-less list grew until Redis refused all
+    writes. Dispatch is now gated OFF by default."""
+
+    def _stub_celery(self, monkeypatch):
+        import sys
+        import types
+
+        calls: list = []
+        fake_app = types.SimpleNamespace(
+            send_task=lambda *a, **k: calls.append((a, k))
+        )
+        monkeypatch.setitem(
+            sys.modules, "app.celery_app",
+            types.SimpleNamespace(celery_app=fake_app),
+        )
+        return calls
+
+    def test_dispatch_off_by_default(self, monkeypatch) -> None:
+        import app.broker.tick_consumer as tc
+
+        calls = self._stub_celery(monkeypatch)
+        monkeypatch.setattr(tc.settings, "live_signal_dispatch_enabled", False)
+        tc._maybe_trigger_signal(1, "5m")
+        assert calls == []  # nothing enqueued to the broker
+
+    def test_dispatch_on_sends_task(self, monkeypatch) -> None:
+        import app.broker.tick_consumer as tc
+
+        calls = self._stub_celery(monkeypatch)
+        monkeypatch.setattr(tc.settings, "live_signal_dispatch_enabled", True)
+        tc._maybe_trigger_signal(42, "1m")
+        assert len(calls) == 1
+        assert calls[0][1]["kwargs"] == {"stock_id": 42, "timeframe": "1m"}

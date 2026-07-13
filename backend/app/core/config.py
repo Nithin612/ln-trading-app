@@ -24,6 +24,13 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
     # live-worker tick/pulse JSONL recording (Phase 3; empty = off)
     live_record_path: str | None = None
+    # Per-candle Celery signal-regeneration dispatch. OFF by default: with
+    # no Celery worker consuming (e.g. a soak) send_task still ENQUEUES to
+    # the Redis broker and succeeds, so the TTL-less "celery" list grows
+    # unboundedly until Redis hits maxmemory and refuses ALL writes (the
+    # 2026-07-13 soak OOM). Turn ON only alongside a running worker AND
+    # active intraday profiles worth regenerating intraday.
+    live_signal_dispatch_enabled: bool = False
 
     # ── Live tick triggers (Phase 3, slice 3.5) ─────────────────────────────
     # Alert thresholds only — they gate ALERTS, never signals; signal
