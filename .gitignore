@@ -106,3 +106,7 @@ CLAUDE.local.md
 *.tmp
 .tmp/
 .claude/scheduled_tasks.lock
+
+# Live-worker soak recordings + logs (large; keep local — never commit)
+recordings/
+backend/recordings/
