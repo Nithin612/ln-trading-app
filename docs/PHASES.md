@@ -65,8 +65,9 @@ SHIPPED SAME NIGHT** (full record: ledger §Second soak). Run #4 clean
 + re-soak). The day's four stability failures are FIXED (commit
 766050e, +9 tests, bug-hunter reviewed): Celery-OOM gate, writer
 exit-race, 36-min drain wedge, and a heartbeat + `make soak` target.
-07-13 candles partially rebuilt from Kite (morning solid, afternoon
-~92%, 1m empty — residual gaps accepted; 1d/EOD unaffected).
+07-13 candles rebuilt from Kite — 5m/15m/1h full (75/25/7 buckets,
+~2040 stocks, matches the clean 07-10 rebuild); only 1m left empty
+(low-value); 1d/EOD never affected.
 
 **▶ NEXT ACTION — RE-SOAK. The ritual is now `docs/RUNBOOK-soak.md`
 (one command: `make soak`).** After it: (a) rule on the latency target

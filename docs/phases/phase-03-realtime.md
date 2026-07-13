@@ -320,14 +320,17 @@ via the existing `startup_gap_fill`) exposed that `fetch_historical`
 BYPASSES `ThrottledKite` — ~6000 unthrottled requests drew intermittent
 Kite `InputException: invalid token` and left morning-only (2029 stocks,
 09:15–13:15) with the afternoon dropped. Pass 2 (throttled via
-`ThrottledKite`, full session, ON CONFLICT) topped up the afternoon for
-~92% of stocks; ~8% still failed with intermittent invalid-token even
-throttled (specific instruments — likely stale `kite_instruments`
-tokens; not chased). Forensic copies kept in `forensic_ohlcv_*_20260713`;
-1m intentionally left empty (matches the 07-10 rebuild scope; low-value
-live-only table). **Residual data gaps on 07-13 remain** — acceptable
-(1d/EOD unaffected); a fully-clean 07-13 needs a targeted retry of the
-failed stocks with a fresh token if a future walk-forward pins them.
+`ThrottledKite`, full session, ON CONFLICT) SUCCEEDED — final verify
+matches the clean 07-10 rebuild exactly: **5m 75/75 buckets (146,815
+rows, to 15:25), 15m 25/25 (50,470), 1h 7/7 (14,237)**; afternoon
+distinct-stock coverage 2040 (vs 2041 in the damaged forensic copy —
+~99.95%). 42/6165 calls failed (front-loaded intermittent invalid-token,
+none late; likely stale `kite_instruments` tokens on a handful of
+symbols — not chased, immaterial at that coverage). Forensic copies
+kept in `forensic_ohlcv_*_20260713`; **1m left empty** (matches the
+07-10 rebuild scope; low-value live-only table — the only real residual
+gap). 07-13 5m/15m/1h are now trustworthy for walk-forwards; 1d/EOD
+were never affected.
 LATENT BUG FILED: `fetch_historical` must route through `ThrottledKite`
 like every other Kite REST path (trading-domain rule) — the unthrottled
 call is the root of the rebuild pain and a lurking rate-limit hazard for
