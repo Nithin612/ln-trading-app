@@ -44,6 +44,7 @@ import time as time_mod
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
+from pathlib import Path
 from typing import Any, TextIO
 from zoneinfo import ZoneInfo
 
@@ -123,6 +124,21 @@ def tick_to_ffi(
 def _money(raw: int) -> Decimal:
     """Exact i64·1e-4 → Decimal (never through float)."""
     return Decimal(raw) / Decimal(10_000)
+
+
+def open_recorder(record_path: str) -> TextIO:
+    """Open the tick-recording file, creating missing parent directories.
+
+    Recording is opt-in, load-bearing session evidence — if it truly can't
+    open, fail LOUD at startup (never silently run unrecorded). But never
+    over a missing folder: the worker runs with cwd=backend/ (`make
+    live-worker` cd's there), where a relative LIVE_RECORD_PATH pointed at
+    a directory that didn't exist and crash-looped the supervisor every
+    5 s (soak-eve incident, 2026-07-12).
+    """
+    p = Path(record_path)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    return p.open("a", encoding="utf-8")
 
 
 class LatencyHistogram:
@@ -774,7 +790,7 @@ def main(argv: list[str] | None = None) -> int:
         # hard crash loses at most one item's lines (≤1 s; replay's
         # torn-tail tolerance covers the fragment). Per-line flushing cost
         # ~4 ms/full batch in the latency window (audit finding 4).
-        recorder = open(record_path, "a", encoding="utf-8")  # noqa: SIM115
+        recorder = open_recorder(record_path)
         # Header makes the recording self-describing — replay (3.4) builds
         # an identical LiveBook from it. Appending to yesterday's file adds
         # a new header line; replay treats each header as a session start.

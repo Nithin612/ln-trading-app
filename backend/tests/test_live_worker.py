@@ -20,6 +20,7 @@ from app.broker.live_worker import (
     LatencyHistogram,
     WorkerState,
     enqueue_ticks,
+    open_recorder,
     persist_committed,
     run_writer,
     session_bounds_ist,
@@ -102,6 +103,31 @@ def _tick(ts_ist_h: int, ts_ist_m: int, price: str, day_vol: int) -> dict:
         "volume_traded": day_vol,
         "exchange_timestamp": aware.astimezone().replace(tzinfo=None),
     }
+
+
+class TestOpenRecorder:
+    def test_creates_missing_parent_directories(self, tmp_path) -> None:
+        """2026-07-12 regression (soak-eve): `make live-worker` runs with
+        cwd=backend/, so a relative LIVE_RECORD_PATH resolved to a
+        directory that didn't exist — the bare open() crashed at startup
+        and the supervisor restart-looped every 5 s."""
+        target = tmp_path / "recordings" / "nested" / "soak.jsonl"
+        f = open_recorder(str(target))
+        try:
+            f.write("x\n")
+        finally:
+            f.close()
+        assert target.read_text(encoding="utf-8") == "x\n"
+
+    def test_appends_to_existing_file(self, tmp_path) -> None:
+        target = tmp_path / "soak.jsonl"
+        target.write_text("old\n", encoding="utf-8")
+        f = open_recorder(str(target))
+        try:
+            f.write("new\n")
+        finally:
+            f.close()
+        assert target.read_text(encoding="utf-8") == "old\nnew\n"
 
 
 class TestSessionBounds:

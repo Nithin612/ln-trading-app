@@ -70,7 +70,7 @@ The realtime layer runs as a **dedicated process**, never inside the API:
 
 ```bash
 make live-worker                          # supervisor loop (the soak ritual)
-LIVE_RECORD_PATH=./rec.jsonl make live-worker      # + record ticks for replay
+LIVE_RECORD_PATH="$PWD/recordings/rec.jsonl" make live-worker   # + record for replay
 WORKER_ARGS=--gap-fill make live-worker            # REST-backfill gaps first
 ```
 
