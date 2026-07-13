@@ -596,6 +596,36 @@ class TestSoakHardening:
             drained.append(writer_q.get_nowait())
         assert drained[-1] is None  # sentinel last
 
+    def test_shutdown_does_not_hang_when_writer_dead_and_queue_full(
+        self, monkeypatch
+    ) -> None:
+        """bug-hunter 2026-07-13: the finally-block sentinel put had no
+        timeout — a dead writer + full writer_q blocked it forever, and the
+        non-daemon consumer then wedged the whole process (supervisor could
+        never restart). The put is now bounded; a jammed queue skips the
+        sentinel instead of hanging. Canary: on the old unbounded put this
+        test never returns."""
+        monkeypatch.setattr(lw, "_SENTINEL_PUT_TIMEOUT_S", 0.2)
+        book = tradecore.LiveBook(OPEN_TS, CLOSE_TS, TF_MINUTES)
+        book.ensure_instruments([42])
+        full_writer_q: queue.Queue = queue.Queue(maxsize=1)
+        full_writer_q.put({"kind": "committed"})  # now full, no reader
+        state = WorkerState(
+            book=book, token_map=TOKEN_MAP, redis=_SyncRedisSpy(),
+            writer_q=full_writer_q, writer_alive=lambda: False,
+        )
+        in_q: queue.Queue = queue.Queue()
+        stop = threading.Event()
+        stop.set()
+        done = threading.Event()
+
+        def _run() -> None:
+            run_consumer(state, in_q, stop)
+            done.set()
+
+        threading.Thread(target=_run, name="t", daemon=True).start()
+        assert done.wait(timeout=5.0), "run_consumer hung on the sentinel put"
+
 
 class TestSignalDispatchGate:
     """2026-07-13 redis OOM: send_task enqueues to the broker and succeeds

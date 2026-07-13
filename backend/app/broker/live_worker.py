@@ -78,6 +78,8 @@ _QUEUE_MAX = 10_000
 _SHUTDOWN_DRAIN_S = 45.0
 # In-run heartbeat cadence (queue depths + counters + latency).
 _MONITOR_INTERVAL_S = 30.0
+# Bound on the shutdown sentinel put (see run_consumer's finally).
+_SENTINEL_PUT_TIMEOUT_S = 5.0
 
 # Consumer-queue items: (kind, payload, monotonic-enqueue-stamp-or-None).
 QueueItem = tuple[str, Any, float | None]
@@ -661,7 +663,18 @@ def run_consumer(  # noqa: C901 — the bounded-drain shutdown branch is worth t
                 state.recorder.close()
             except Exception:
                 log.exception("consumer: recorder close failed")
-        state.writer_q.put(None)
+        # BOUNDED sentinel put: the None only tells a LIVE writer to exit.
+        # If the writer already ended AND writer_q is full, an unbounded put
+        # blocks forever — and the consumer is non-daemon, so the process
+        # never exits and the supervisor never restarts (the exact wedge
+        # this slate kills; bug-hunter 2026-07-13). main()'s writer join
+        # already handles a dead writer, so a skipped sentinel costs nothing.
+        try:
+            state.writer_q.put(None, timeout=_SENTINEL_PUT_TIMEOUT_S)
+        except queue.Full:
+            log.warning(
+                "writer_q full at shutdown (writer dead/stalled); skipping sentinel"
+            )
 
 
 def run_pulser(in_q: queue.Queue[QueueItem], stop: threading.Event) -> None:
