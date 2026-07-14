@@ -16,6 +16,10 @@ short). This tool replaces exactly that window with official data:
 
 1m is deliberately NOT repaired (07-13 precedent: low-value live-only
 table). Idempotent; safe to re-run. Touches nothing outside the window.
+Every 15m/1h bucket overlapping [09:15, --until-ist) is recomputed.
+Same-day runs are refused before 15:40 IST — official candles are not
+final and the enclosing buckets are still forming (is_complete=true on
+a forming bucket would poison walk-forwards).
 
 Usage:
   uv run python scripts/repair_morning_window.py --day 2026-07-14              # real run
@@ -34,7 +38,8 @@ from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.broker.kite_rest import KiteException, ThrottledKite, TokenException  # noqa: E402
+import requests.exceptions as _rex  # noqa: E402
+from app.broker.kite_rest import KiteException, ThrottledKite  # noqa: E402
 from app.db.session import AsyncSessionFactory  # noqa: E402
 from app.models.broker import BrokerToken, KiteInstrument  # noqa: E402
 from app.models.market_data import Ohlcv5m  # noqa: E402
@@ -45,8 +50,9 @@ from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
 IST = ZoneInfo("Asia/Kolkata")
 SESSION_OPEN = time(9, 15)
+SAME_DAY_SAFE_FROM = time(15, 40)  # official candles final + all buckets closed
 COMMIT_EVERY = 100  # stocks per transaction
-ABORT_IF_FIRST_N_ALL_FAIL = 20  # dead-token tripwire; isolated failures are tolerated
+ABORT_AFTER_CONSECUTIVE_FAILURES = 20  # dead-token tripwire; isolated failures are tolerated
 
 # Aggregate a window of 5m bars into one enclosing bucket (15m or 1h).
 # Table names are hardcoded literals (not caller input); values are binds.
@@ -134,7 +140,7 @@ async def _refetch_5m(
     dry_run: bool,
 ) -> tuple[int, int] | None:
     """Fetch+upsert the 5m window per stock. (upserted, failed), None = dead token."""
-    upserted = failed = consecutive_head_failures = 0
+    upserted = failed = consecutive_failures = 0
     for i, (stock_id, instrument_token, symbol) in enumerate(universe, 1):
         try:
             candles = await kite.historical_data(
@@ -143,16 +149,21 @@ async def _refetch_5m(
                 hi.replace(tzinfo=None),
                 "5minute",
             )
-        except (KiteException, TokenException) as exc:
+        except (KiteException, _rex.RequestException) as exc:
+            # transport errors surface RAW from kiteconnect after ThrottledKite's
+            # retries — they must not crash a 2,000-stock run (backfill lesson)
             failed += 1
-            if i <= ABORT_IF_FIRST_N_ALL_FAIL:
-                consecutive_head_failures += 1
-                if consecutive_head_failures == ABORT_IF_FIRST_N_ALL_FAIL:
-                    print(f"first {i} calls ALL failed — token dead? aborting", flush=True)
-                    return None
+            consecutive_failures += 1
+            if consecutive_failures >= ABORT_AFTER_CONSECUTIVE_FAILURES:
+                print(
+                    f"{consecutive_failures} consecutive failures at {i}/{len(universe)}"
+                    " — token dead? aborting",
+                    flush=True,
+                )
+                return None
             print(f"  FAIL {symbol}: {exc}", flush=True)
             continue
-        consecutive_head_failures = 0
+        consecutive_failures = 0
         rows = _rows(stock_id, candles, lo, hi)
         if dry_run:
             print(f"  {symbol}: {rows}", flush=True)
@@ -177,6 +188,32 @@ async def _refetch_5m(
     return upserted, failed
 
 
+async def _recompute_buckets(db: AsyncSession, lo: datetime, hi: datetime) -> None:
+    """Recompute EVERY 15m/1h bucket overlapping [lo, hi) from 5m aggregates.
+
+    Buckets anchor at the 09:15 session open, so lo (always 09:15) is
+    aligned for both tables. Hardcoding one bucket per table was a
+    bug-hunter find: a wider --until-ist repaired 5m rows whose enclosing
+    15m/1h buckets then silently kept their wrong live-minted values.
+    """
+    t_lo, t_hi = lo.astimezone(UTC), hi.astimezone(UTC)
+    for table, minutes in (("ohlcv_15m", 15), ("ohlcv_1h", 60)):
+        step = timedelta(minutes=minutes)
+        bucket = t_lo
+        while bucket < t_hi:
+            res = cast(
+                CursorResult[Any],
+                await db.execute(
+                    text(RECOMPUTE_SQL.format(table=table)),
+                    {"t0": bucket, "t1": bucket + step},
+                ),
+            )
+            await db.commit()
+            label = bucket.astimezone(IST).strftime("%H:%M")
+            print(f"{table} {label} bucket recomputed: {res.rowcount} rows", flush=True)
+            bucket += step
+
+
 async def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--day", type=date.fromisoformat, required=True)
@@ -189,6 +226,13 @@ async def main() -> int:
     hi = datetime.combine(args.day, time(h, m), tzinfo=IST)
     if hi <= lo:
         raise SystemExit("--until-ist must be after 09:15")
+    now_ist = datetime.now(tz=IST)
+    if args.day == now_ist.date() and now_ist.time() < SAME_DAY_SAFE_FROM and not args.dry_run:
+        raise SystemExit(
+            "same-day repair before 15:40 IST refused — official candles are not"
+            " final and the enclosing 15m/1h buckets are still forming"
+            " (is_complete=true on a forming bucket poisons walk-forwards)"
+        )
 
     async with AsyncSessionFactory() as db:
         token = await _active_token(db)
@@ -209,18 +253,7 @@ async def main() -> int:
         if args.dry_run:
             return 0
 
-        # Recompute the enclosing 15m and 1h buckets from 5m aggregates.
-        t0 = lo.astimezone(UTC)
-        for table, minutes in (("ohlcv_15m", 15), ("ohlcv_1h", 60)):
-            res = cast(
-                CursorResult[Any],
-                await db.execute(
-                    text(RECOMPUTE_SQL.format(table=table)),
-                    {"t0": t0, "t1": t0 + timedelta(minutes=minutes)},
-                ),
-            )
-            await db.commit()
-            print(f"{table} 09:15 bucket recomputed: {res.rowcount} rows", flush=True)
+        await _recompute_buckets(db, lo, hi)
     return 0
 
 

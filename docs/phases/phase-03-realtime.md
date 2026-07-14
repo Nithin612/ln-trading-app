@@ -404,6 +404,37 @@ pattern as the 07-13 rebuild — immaterial). Spot check: RELIANCE 15m
 (9 minutes 09:15–09:23 remain empty; low-value live-only table).
 07-14 intraday 5m/15m/1h is walk-forward-trustworthy end-to-end.
 
+**bug-hunter on the executed repair (2591e59): tier-A NONE — the
+production data is verified right** (it independently re-derived all
+2,030 15m + 2,041 1h rows from their 5m children on the live DB: 0
+mismatches, 0 orphan buckets, 0 forming rows in the window; the 1,884 +
+146 = 2,030 arithmetic reconciles — the 146 are stocks with no 09:15
+bar, incl. the 14 failed fetches whose live rows remain
+self-consistent; separable only by a plain re-run). Five tier-B/latent
+findings, ALL FIXED same session (+2 tests, suite 8 green): (1) HIGH —
+recompute hardcoded ONE 15m/1h bucket regardless of `--until-ist`; a
+wider window would have left repaired 5m under stale wrong buckets →
+`_recompute_buckets` now loops every touched bucket (+ regression test
+that fails on the old code). (2) MEDIUM — no mid-session guard;
+same-day runs before 15:40 IST would stamp `is_complete=true` on
+forming buckets → refused at startup. (3) MEDIUM — the forming-bar test
+canary was VACUOUS (PK-collided with a complete bar and was silently
+DO-NOTHING-dropped; bug-hunter proved by mutation that removing `AND
+is_complete` still passed) → forming bar now the only row in its slot,
+fixture existence asserted, mutation now fails. (4) LOW — tripwire only
+armed for the first 20 calls; a mid-run token death ground through
+every remaining doomed request → consecutive-anywhere with
+reset-on-success (+test). (5) LOW — raw `requests` transport exceptions
+(re-raised by ThrottledKite after retries) crashed the run →
+`_rex.RequestException` in the net (the backfill_intraday lesson).
+Also confirmed sound: IST/UTC canon incl. kiteconnect naive-datetime
+handling, half-open window edges, RECOMPUTE_SQL determinism + injection
+surface (table names unreachable from input), per-stock atomic upserts
+with rerun-heals semantics, universe join identical to the live
+worker's subscription set, and the aggregate-semantics decision itself
+(live 5m volumes telescope exactly into 1h — verified against
+candle_aggregator's single `_volume_delta` per tick).
+
 **Still open after today:** (4) streaming replay digest — unchanged
 (today's 587 MB recording would OOM the buffering replay; digest pins
 for 07-13 AND 07-14 both pending that fix). (6) run-#3 RCA — no

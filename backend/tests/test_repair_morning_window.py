@@ -17,13 +17,17 @@ from zoneinfo import ZoneInfo
 
 from app.broker.kite_rest import ThrottledKite, TokenException
 from app.models.market_data import Ohlcv1h, Ohlcv5m, Ohlcv15m
-from sqlalchemy import select, text
+from sqlalchemy import func, select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 
 from tests.helpers import make_stock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from repair_morning_window import RECOMPUTE_SQL, _refetch_5m, _rows  # noqa: E402
+from repair_morning_window import (  # noqa: E402
+    _recompute_buckets,
+    _refetch_5m,
+    _rows,
+)
 
 IST = ZoneInfo("Asia/Kolkata")
 DAY = date(2024, 7, 1)
@@ -160,13 +164,24 @@ class TestRefetchReplacesWrongRows:
         assert result == (1, 1)
 
     async def test_dead_token_tripwire_aborts(self, db) -> None:  # noqa: ANN001
-        """If the FIRST 20 calls all fail the token is dead — abort (None),
+        """20 CONSECUTIVE failures mean the token is dead — abort (None),
         don't grind through 2,000 doomed requests."""
         kite = _StubKite(raise_for=set(range(1, 21)))
         universe = [(10_000 + t, t, f"S{t}") for t in range(1, 26)]
         result = await _refetch_5m(db, cast(ThrottledKite, kite), universe, LO, HI, dry_run=False)
         assert result is None
         assert kite.calls == 20  # stopped at the tripwire, not the full universe
+
+    async def test_tripwire_fires_on_mid_run_token_death(self, db) -> None:  # noqa: ANN001
+        """Regression (bug-hunter on 2591e59): the tripwire only armed for
+        the FIRST 20 calls, so a token dying at stock 21+ ground through
+        every remaining doomed request. Consecutive failures anywhere must
+        abort."""
+        kite = _StubKite(raise_for=set(range(1, 100)))  # token 500 succeeds, 1..99 fail
+        universe = [(10_500, 500, "OKCO")] + [(10_000 + t, t, f"S{t}") for t in range(1, 100)]
+        result = await _refetch_5m(db, cast(ThrottledKite, kite), universe, LO, HI, dry_run=False)
+        assert result is None
+        assert kite.calls == 21  # 1 success + 20 consecutive failures, then abort
 
 
 class TestRecompute:
@@ -199,13 +214,23 @@ class TestRecompute:
                 # the repaired window (03:45–04:00 UTC == 09:15–09:30 IST)
                 (3, 45, "100", "105", "99", "101", 10, True),
                 (3, 50, "101", "110", "100", "108", 20, True),
-                (3, 55, "108", "109", "95", "96", 5, True),
+                # a FORMING bar — the ONLY row at 03:55, so it really lands in
+                # the table (a duplicate-PK forming row would be silently
+                # dropped by DO NOTHING and test nothing — bug-hunter find);
+                # its absurd values MUST NOT leak into the aggregates
+                (3, 55, "1", "99999", "0.1", "1", 999, False),
                 # a live bar in the next 15m bucket but inside the hour
                 (4, 0, "96", "97", "90", "92", 7, True),
-                # a FORMING bar inside the window — must be ignored
-                (3, 55, "1", "99999", "0.1", "1", 999, False),
             ],
         )
+        forming_in_table = (
+            await db.execute(
+                select(func.count())
+                .select_from(Ohlcv5m)
+                .where(Ohlcv5m.stock_id == stock.id, Ohlcv5m.is_complete.is_(False))
+            )
+        ).scalar_one()
+        assert forming_in_table == 1  # the canary exists — the filter is really exercised
         # pre-existing WRONG 15m row (live-minted from snapshot ticks)
         await db.execute(
             pg_insert(Ohlcv15m)
@@ -223,24 +248,21 @@ class TestRecompute:
         )
         await db.commit()
 
-        for table, minutes in (("ohlcv_15m", 15), ("ohlcv_1h", 60)):
-            await db.execute(
-                text(RECOMPUTE_SQL.format(table=table)),
-                {"t0": T0_UTC, "t1": T0_UTC + timedelta(minutes=minutes)},
-            )
-        await db.commit()
+        await _recompute_buckets(db, LO, HI)
 
         m15 = (
             await db.execute(
                 select(Ohlcv15m).where(Ohlcv15m.stock_id == stock.id, Ohlcv15m.time == T0_UTC)
             )
         ).scalar_one()
+        # only the two COMPLETE bars aggregate: the forming 03:55 bar's
+        # high=99999/low=0.1/volume=999 must be invisible here
         assert (str(m15.open), str(m15.high), str(m15.low), str(m15.close), m15.volume) == (
             "100.0000",
             "110.0000",
-            "95.0000",
-            "96.0000",
-            35,
+            "99.0000",
+            "108.0000",
+            30,
         )
         assert m15.is_complete is True
 
@@ -250,15 +272,16 @@ class TestRecompute:
             )
         ).scalar_one()
         # hour bucket also swallows the 04:00 bar: close/low move, volume sums
+        # (again complete bars only: 10 + 20 + 7)
         assert (str(h1.open), str(h1.high), str(h1.low), str(h1.close), h1.volume) == (
             "100.0000",
             "110.0000",
             "90.0000",
             "92.0000",
-            42,
+            37,
         )
 
-        # the recompute is scoped: no 15m row minted outside the t0 bucket
+        # the recompute is scoped: no 15m row minted outside the window
         next_bucket = datetime(2024, 7, 1, 4, 0, tzinfo=UTC)
         other = (
             await db.execute(
@@ -266,3 +289,58 @@ class TestRecompute:
             )
         ).scalar_one_or_none()
         assert other is None
+
+    async def test_wider_window_recomputes_every_touched_bucket(self, db) -> None:  # noqa: ANN001
+        """Regression (bug-hunter on 2591e59): the recompute hardcoded ONE
+        bucket per table, so `--until-ist 09:45` repaired 5m rows whose
+        09:30 15m bucket silently kept its wrong live-minted values."""
+        stock = await make_stock(db, symbol="WIDECO")
+        await self._seed_5m(
+            db,
+            stock.id,
+            [
+                (3, 45, "10", "11", "9", "10.5", 1, True),  # 09:15 bucket
+                (4, 0, "20", "22", "19", "21", 2, True),  # 09:30 bucket
+                (4, 5, "21", "25", "20", "24", 3, True),
+            ],
+        )
+        # WRONG live-minted 15m row in the SECOND bucket of the window
+        second_bucket = datetime(2024, 7, 1, 4, 0, tzinfo=UTC)
+        await db.execute(
+            pg_insert(Ohlcv15m)
+            .values(
+                time=second_bucket,
+                stock_id=stock.id,
+                open="999",
+                high="999",
+                low="999",
+                close="999",
+                volume=1,
+                is_complete=True,
+            )
+            .on_conflict_do_nothing(index_elements=["time", "stock_id"])
+        )
+        await db.commit()
+
+        await _recompute_buckets(db, LO, datetime(2024, 7, 1, 9, 45, tzinfo=IST))
+
+        fixed = (
+            await db.execute(
+                select(Ohlcv15m).where(
+                    Ohlcv15m.stock_id == stock.id, Ohlcv15m.time == second_bucket
+                )
+            )
+        ).scalar_one()
+        assert (
+            str(fixed.open),
+            str(fixed.high),
+            str(fixed.low),
+            str(fixed.close),
+            fixed.volume,
+        ) == (
+            "20.0000",
+            "25.0000",
+            "19.0000",
+            "24.0000",
+            5,
+        )
