@@ -410,7 +410,11 @@ production data is verified right** (it independently re-derived all
 mismatches, 0 orphan buckets, 0 forming rows in the window; the 1,884 +
 146 = 2,030 arithmetic reconciles — the 146 are stocks with no 09:15
 bar, incl. the 14 failed fetches whose live rows remain
-self-consistent; separable only by a plain re-run). Five tier-B/latent
+self-consistent; separable only by a plain re-run — **separated same
+night: a token-warm re-run failed the SAME 14 with `invalid token`, so
+they are deterministic STALE `kite_instruments` tokens, not intermittent
+API flake** — the fix is the planned instrument re-sync deliverable, not
+retries; immaterial illiquid microcaps until then). Five tier-B/latent
 findings, ALL FIXED same session (+2 tests, suite 8 green): (1) HIGH —
 recompute hardcoded ONE 15m/1h bucket regardless of `--until-ist`; a
 wider window would have left repaired 5m under stale wrong buckets →
@@ -443,6 +447,75 @@ watch-if-it-recurs (it is now observable in-run). (5) re-soak — DONE
 (this section); its latency half is the p99 ruling above. Phase-gate:
 the "full-session soak clean" criterion is **MET on stability**; the
 latency budget line awaits the user ruling.
+
+## Optimization slate — 2026-07-14 night (the (b) ruling, executed same evening)
+
+**User ruling (same day as soak #3): option (b) — optimize + re-soak —
+AND restate the budget** (ledger §Decisions; PERFORMANCE.md +
+PHASES.md updated: p99 ≤ 50 ms hard at full universe, (10,20] bucket =
+the optimization target the re-soak measures).
+
+The two scoped fixes from the 07-10 audit's "decide after the next
+soak" list, both in `app/broker/live_worker.py`:
+
+1. **Unchanged-price SET dedupe** (the audit's un-gateable ~11 ms/full-
+   batch floor): `_publish_ltp` keeps `_ltp_cache` {stock_id: (price,
+   monotonic)} and skips the `ltp:{stock_id}` SET when the price equals
+   the last successfully-SET value and that SET is younger than
+   `_LTP_RESET_S` (60 s = TTL/10 — the key's worst-case age never
+   approaches the 600 s TTL, so the paper-broker contract survives).
+   SET fires on first sight, every price change, and the keep-alive
+   window; intra-batch duplicates dedupe too (pending-dict), while A→B→A
+   inside one batch correctly re-SETs (pipeline order = last write
+   wins). The cache learns a SET **only after pipe.execute() returns**
+   — a redis blip must not leave the cache claiming a SET that never
+   landed (key could expire mid-outage; the next batch heals). The
+   channel PUBLISH leg is untouched: still subscriber-gated, still
+   per-tick cadence.
+2. **Commit-burst batching** (the p99 tail = commit-boundary
+   processing): `_enqueue_committed` now puts ONE list per input batch
+   instead of one queue put per candle — a :30 close used to pay
+   thousands of lock/notify cycles inline in the tick loop.
+   `run_writer` unwraps and persists per-candle with per-candle retry
+   (one poisoned candle can't take down burst-mates); liveness-checked
+   blocking put semantics unchanged (dead-writer fail-loud now counts
+   the whole burst). Heartbeat note: `writer_q` depth now counts
+   BURSTS, not candles.
+
+Tests: suite grew 30 → 38 (six new dedupe tests incl. the
+failed-execute cache-rollback heal and publish-cadence-not-deduped;
+burst shape pinned in the committed-candle/writer/drain tests; the
+writer-sentinel and recording-reproduces-writer-stream contracts
+re-pinned on the list shape). ruff + mypy strict clean.
+Measurement: NOT possible off-market — the re-soak (next trading day,
+`make soak` per RUNBOOK-soak.md) is the measurement.
+
+**bug-hunter on the slate (same night): BUGS-FOUND, no tier-A — both
+findings fixed before commit.** (1) MEDIUM: a redis data loss the
+worker CANNOT observe (fast restart / eviction with a surviving
+connection) left an unchanged-price key absent up to the full dedupe
+window while paper_broker silently fell back to DAILY CLOSE (executed
+repro: key None after a simulated flush + unchanged ticks); fixed
+three ways — observed execute() failures now `_ltp_cache.clear()`
+(assume nothing about which keys survived; the old rollback only
+healed the failing batch's own stocks), `_LTP_RESET_S` tightened
+60→10 s to bound the unobservable window (~90% of the dedupe win
+kept), and the overclaiming comment corrected (+1 regression test:
+price returning to a pre-blip value after a blip must re-SET — the
+stale surviving cache entry used to dedupe it). (2) LOW test-honesty:
+the redis spy recorded ops at BUFFER time with a no-op execute(), so
+the new queued/execute seam was unpinnable — a mutant gating execute
+on `pending` instead of `queued` (dropping every LTP publish on
+deduped batches) passed all 65 tests; the spy is now execute-faithful
+(ops land only when execute() runs; failing subclasses drop the
+buffer). Everything else verified sound with executed repros: A→B→A
+orderings, intra-batch pending precedence, cache-update-after-execute
+adjacency, one-now-per-call staleness direction (conservative),
+bounded cache memory, silent-stock TTL semantics unchanged, sentinel
+ordering, same-list retry on queue.Full (no duplication), per-candle
+retry isolation within a burst, no other writer_q readers, replay
+untouched (recordings carry ticks/pulses, not writer items). Suite 66
+green after fixes (live worker 38 + levels + triggers + replay).
 
 ## Watchlists (3.5 deferred item — DONE 2026-07-11, same session)
 
@@ -531,6 +604,19 @@ hardcoded gradient + string-concat className.
 
 ## Decisions made this phase
 
+- (soak #3 ruling, **user 2026-07-14**) **Latency budget RESTATED and the
+  optimization slate chosen — option (b) + restatement together.** The
+  written p99 < 10 ms was authored for 200–500 instruments; three
+  independent full-scale measurements (07-13 run #4, 07-14 segments A+B)
+  pin steady-state p50 7.5 ms / p99 (20,50] / max <100 ms at 2,055
+  instruments with dwell fixed (p99 2 ms) — the tail is commit-boundary
+  processing, not queueing. New budget: **p99 ≤ 50 ms tick→publish at
+  full universe (hard gate)**; the shipped optimizations (unchanged-price
+  SET dedupe + commit-burst batching, this section below) target the
+  (10,20] bucket — if the re-soak lands it, the gate tightens to 20 ms.
+  PERFORMANCE.md budget table + PHASES row updated; UPGRADE_PLAN's 10 ms
+  mentions (§Phase-3 deliverables) stand as historical intent,
+  superseded by this entry.
 - (3.0) Prev-day context derives from the profile's OWN intraday bars
   (session-aggregated), not the 1d table: NSE's official daily close is a
   last-30-min VWAP ≠ last-bar close, and the walk-forward derives from

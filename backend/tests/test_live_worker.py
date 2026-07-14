@@ -39,25 +39,31 @@ TOKEN_MAP = {777: 42}  # instrument_token → stock_id
 
 
 class _SyncRedisSpy:
-    """Records the sync pipeline the hot path builds. `pubsub` is the set
-    of channels the spy reports as having live subscribers (the 3.5 perf
-    fix gates publishes on it); `pattern_count` is what PUBSUB NUMPAT
-    reports (any pattern subscriber flips the gate to publish-everything)."""
+    """Records the sync pipeline the hot path builds — EXECUTE-FAITHFULLY:
+    ops are buffered on set/publish and land in set_calls/publish_calls
+    only when execute() runs (bug-hunter 2026-07-14: a buffer-time spy
+    could not catch a regression in the queued/execute seam — a pipeline
+    built but never executed looked identical to one that ran). `pubsub`
+    is the set of channels the spy reports as having live subscribers
+    (the 3.5 perf fix gates publishes on it); `pattern_count` is what
+    PUBSUB NUMPAT reports (any pattern subscriber flips the gate to
+    publish-everything)."""
 
     def __init__(self) -> None:
         self.set_calls: list[tuple[str, str, int | None]] = []
         self.publish_calls: list[tuple[str, str]] = []
         self.pubsub: list[str] = []
         self.pattern_count = 0
+        self._buffered: list[tuple] = []
 
     def pipeline(self, transaction: bool = True) -> "_SyncRedisSpy":
         return self
 
     def set(self, key: str, value: str, ex: int | None = None) -> None:
-        self.set_calls.append((key, value, ex))
+        self._buffered.append(("set", key, value, ex))
 
     def publish(self, channel: str, payload: str) -> None:
-        self.publish_calls.append((channel, payload))
+        self._buffered.append(("pub", channel, payload))
 
     def pubsub_channels(self, pattern: str = "*") -> list[str]:
         prefix = pattern.rstrip("*")
@@ -67,7 +73,17 @@ class _SyncRedisSpy:
         return self.pattern_count
 
     def execute(self) -> None:
-        pass
+        for op in self._buffered:
+            if op[0] == "set":
+                self.set_calls.append(op[1:])
+            else:
+                self.publish_calls.append(op[1:])
+        self._buffered.clear()
+
+    def fail_execute(self) -> None:
+        """For failing subclasses: ops never landed — drop the buffer."""
+        self._buffered.clear()
+        raise ConnectionError("redis down")
 
 
 def _watch_all(state) -> None:
@@ -76,9 +92,7 @@ def _watch_all(state) -> None:
     wall-clock (the first item always refreshes)."""
     from app.broker.candle_aggregator import TIMEFRAME_TABLE
 
-    channels = {"ltp:777"} | {
-        f"candle:{table}:42" for table in TIMEFRAME_TABLE.values()
-    }
+    channels = {"ltp:777"} | {f"candle:{table}:42" for table in TIMEFRAME_TABLE.values()}
     state.redis.pubsub = sorted(channels)
     state.watched_channels = set(channels)
 
@@ -89,9 +103,13 @@ def _state(tmp_path=None) -> tuple[WorkerState, _SyncRedisSpy, "queue.Queue"]:
     spy = _SyncRedisSpy()
     writer_q: queue.Queue = queue.Queue()
     recorder = open(tmp_path / "rec.jsonl", "a", encoding="utf-8") if tmp_path else None
-    return WorkerState(
-        book=book, token_map=TOKEN_MAP, redis=spy, writer_q=writer_q, recorder=recorder
-    ), spy, writer_q
+    return (
+        WorkerState(
+            book=book, token_map=TOKEN_MAP, redis=spy, writer_q=writer_q, recorder=recorder
+        ),
+        spy,
+        writer_q,
+    )
 
 
 def _tick(ts_ist_h: int, ts_ist_m: int, price: str, day_vol: int) -> dict:
@@ -135,9 +153,7 @@ class TestOpenRecorder:
 class TestSessionBounds:
     def test_standard_session_epochs(self) -> None:
         open_ts, close_ts = session_bounds_ist(DAY)
-        assert datetime.fromtimestamp(open_ts, tz=UTC).astimezone(IST).strftime(
-            "%H:%M"
-        ) == "09:15"
+        assert datetime.fromtimestamp(open_ts, tz=UTC).astimezone(IST).strftime("%H:%M") == "09:15"
         assert close_ts - open_ts == 6 * 3600 + 15 * 60
 
 
@@ -163,15 +179,11 @@ class TestConsumerSeam:
         assert spy.set_calls == [("ltp:42", "101.55", 600)]
         channels = [c for c, _ in spy.publish_calls]
         assert "ltp:777" in channels
-        forming = [
-            json.loads(p) for c, p in spy.publish_calls if c.startswith("candle:")
-        ]
+        forming = [json.loads(p) for c, p in spy.publish_calls if c.startswith("candle:")]
         assert len(forming) == 4 and all(not f["is_complete"] for f in forming)
         assert writer_q.empty()
         state.recorder.flush()
-        lines = [
-            json.loads(line) for line in open(tmp_path / "rec.jsonl", encoding="utf-8")
-        ]
+        lines = [json.loads(line) for line in open(tmp_path / "rec.jsonl", encoding="utf-8")]
         assert lines[0]["k"] == "t" and lines[0]["p"] == "101.55"
 
     def test_committed_candle_reaches_writer_queue_exactly(self, tmp_path) -> None:
@@ -179,15 +191,20 @@ class TestConsumerSeam:
         state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)]))
         state.process_item(("ticks", [_tick(9, 21, "102.00", 1400)]))  # next 1m+5m bucket
 
-        committed = []
+        # commit-burst batching (soak #3 ruling): the second batch commits
+        # 1m+5m together as ONE writer_q item, not one put per candle
+        bursts = []
         while not writer_q.empty():
-            committed.append(writer_q.get_nowait())
+            bursts.append(writer_q.get_nowait())
+        assert len(bursts) == 1
+        committed = [e for burst in bursts for e in burst]
         assert {e["tf_minutes"] for e in committed} == {1, 5}
         one_m = next(e for e in committed if e["tf_minutes"] == 1)
         assert Decimal(one_m["close"]) / 10**4 == Decimal("101.55")
-        assert datetime.fromtimestamp(one_m["time"], tz=UTC).astimezone(IST).strftime(
-            "%H:%M"
-        ) == "09:16"
+        assert (
+            datetime.fromtimestamp(one_m["time"], tz=UTC).astimezone(IST).strftime("%H:%M")
+            == "09:16"
+        )
 
     def test_pulse_commits_ended_buckets_and_is_recorded(self, tmp_path) -> None:
         state, spy, writer_q = _state(tmp_path)
@@ -196,13 +213,11 @@ class TestConsumerSeam:
 
         committed = []
         while not writer_q.empty():
-            committed.append(writer_q.get_nowait())
+            committed.extend(writer_q.get_nowait())
         # session-last candle closes on every timeframe without a next tick
         assert sorted(e["tf_minutes"] for e in committed) == [1, 5, 15, 60]
         state.recorder.flush()
-        kinds = [
-            json.loads(line)["k"] for line in open(tmp_path / "rec.jsonl", encoding="utf-8")
-        ]
+        kinds = [json.loads(line)["k"] for line in open(tmp_path / "rec.jsonl", encoding="utf-8")]
         assert kinds == ["t", "p"]
 
     def test_bad_batch_counts_skipped(self, tmp_path) -> None:
@@ -275,6 +290,122 @@ class TestConsumerSeam:
         assert state.latency.max_ms >= state.processing.max_ms
 
 
+class TestLtpSetDedupe:
+    """Unchanged-price SET dedupe (soak #3 ruling, 2026-07-14): the
+    audit's un-gateable ~11 ms/full-batch SET floor. The paper-broker
+    contract survives: SET on first sight, on every CHANGE, and at least
+    every _LTP_RESET_S even unchanged (TTL 600 s never approaches expiry);
+    the cache learns a SET only after execute() succeeds."""
+
+    def test_unchanged_price_skips_set_within_window(self, tmp_path) -> None:
+        state, spy, _ = _state(tmp_path)
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)]))
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1200)]))
+        assert spy.set_calls == [("ltp:42", "101.55", 600)]  # one SET, not two
+
+    def test_price_change_always_sets(self, tmp_path) -> None:
+        state, spy, _ = _state(tmp_path)
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)]))
+        state.process_item(("ticks", [_tick(9, 16, "101.60", 1200)]))
+        assert [v for _, v, _ in spy.set_calls] == ["101.55", "101.60"]
+
+    def test_unchanged_price_resets_after_window(self, tmp_path) -> None:
+        state, spy, _ = _state(tmp_path)
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)]))
+        # age the cache entry past the refresh window (injected, no sleep)
+        price, stamp = state._ltp_cache[42]
+        state._ltp_cache[42] = (price, stamp - (lw._LTP_RESET_S + 1))
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1200)]))
+        assert len(spy.set_calls) == 2  # TTL keep-alive SET despite equal price
+
+    def test_intra_batch_duplicates_set_once_but_changes_keep_order(self, tmp_path) -> None:
+        state, spy, _ = _state(tmp_path)
+        state.process_item(
+            (
+                "ticks",
+                [
+                    _tick(9, 16, "101.55", 1000),
+                    _tick(9, 16, "101.55", 1100),  # duplicate within the batch
+                    _tick(9, 16, "101.60", 1200),
+                    _tick(9, 16, "101.55", 1300),  # change BACK — must re-SET
+                ],
+            )
+        )
+        assert [v for _, v, _ in spy.set_calls] == ["101.55", "101.60", "101.55"]
+        # last write wins in pipeline order — the key ends at the final price
+
+    def test_failed_execute_does_not_poison_the_dedupe_cache(self, tmp_path) -> None:
+        """A redis blip during execute() must not leave the cache claiming
+        a SET that never landed — the key could have expired mid-outage
+        and dedupe would then skip the heal for up to _LTP_RESET_S."""
+
+        class _FlakyRedis(_SyncRedisSpy):
+            def __init__(self) -> None:
+                super().__init__()
+                self.fail_next = True
+
+            def execute(self) -> None:
+                if self.fail_next:
+                    self.fail_next = False
+                    self.fail_execute()
+                    return
+                super().execute()
+
+        book = tradecore.LiveBook(OPEN_TS, CLOSE_TS, TF_MINUTES)
+        book.ensure_instruments([42])
+        spy = _FlakyRedis()
+        state = WorkerState(book=book, token_map=TOKEN_MAP, redis=spy, writer_q=queue.Queue())
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)]))
+        assert 42 not in state._ltp_cache  # failed execute learned nothing
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1200)]))
+        # the second, successful batch re-SETs the same price (the heal)
+        assert [v for _, v, _ in spy.set_calls] == ["101.55"]  # only the landed one
+        assert state._ltp_cache[42][0] == "101.55"
+
+    def test_observed_failure_clears_the_whole_dedupe_cache(self, tmp_path) -> None:
+        """bug-hunter tier-B (2026-07-14): an observed execute() failure
+        says nothing about WHICH keys survived on the server — old code
+        kept pre-blip cache entries, so a price returning to a pre-blip
+        value within the window would dedupe against a key that may no
+        longer exist. The whole cache must clear on any observed failure."""
+
+        class _OneBlip(_SyncRedisSpy):
+            def __init__(self) -> None:
+                super().__init__()
+                self.blip_on_call = 2
+                self.calls = 0
+
+            def execute(self) -> None:
+                self.calls += 1
+                if self.calls == self.blip_on_call:
+                    self.fail_execute()
+                    return
+                super().execute()
+
+        book = tradecore.LiveBook(OPEN_TS, CLOSE_TS, TF_MINUTES)
+        book.ensure_instruments([42])
+        spy = _OneBlip()
+        state = WorkerState(book=book, token_map=TOKEN_MAP, redis=spy, writer_q=queue.Queue())
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)]))  # lands
+        state.process_item(("ticks", [_tick(9, 16, "101.60", 1100)]))  # blip
+        assert state._ltp_cache == {}  # ALL entries dropped, not just 101.60's
+        # price returns to the PRE-blip value within the window: the stale
+        # surviving entry would have deduped this — it must SET
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1200)]))
+        assert [v for _, v, _ in spy.set_calls] == ["101.55", "101.55"]
+
+    def test_publish_cadence_is_not_deduped(self, tmp_path) -> None:
+        """Only the SET is deduped — watched subscribers keep their
+        per-tick pushes (the UI contract is unchanged)."""
+        state, spy, _ = _state(tmp_path)
+        _watch_all(state)
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)]))
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1200)]))
+        ltp_pushes = [c for c, _ in spy.publish_calls if c == "ltp:777"]
+        assert len(ltp_pushes) == 2  # per-tick cadence preserved
+        assert len([s for s in spy.set_calls]) == 1  # while the SET deduped
+
+
 class TestEnqueueBackpressure:
     def test_drop_oldest_when_full(self) -> None:
         q: queue.Queue = queue.Queue(maxsize=2)
@@ -286,9 +417,7 @@ class TestEnqueueBackpressure:
 
 
 class TestPersistCommitted:
-    async def test_upserts_decimal_exact_and_marks_complete(
-        self, db: AsyncSession
-    ) -> None:
+    async def test_upserts_decimal_exact_and_marks_complete(self, db: AsyncSession) -> None:
         from tests.helpers import make_stock
 
         stock = await make_stock(db, symbol="LIVEW1")
@@ -307,14 +436,18 @@ class TestPersistCommitted:
         await db.commit()
         row = (
             await db.execute(
-                text("SELECT time, open, high, low, close, volume, is_complete"
-                     " FROM ohlcv_1h WHERE stock_id = :sid"),
+                text(
+                    "SELECT time, open, high, low, close, volume, is_complete"
+                    " FROM ohlcv_1h WHERE stock_id = :sid"
+                ),
                 {"sid": stock.id},
             )
         ).one()
         assert (row.open, row.high, row.low, row.close) == (
-            Decimal("101.5500"), Decimal("102.0000"),
-            Decimal("101.0000"), Decimal("101.8250"),
+            Decimal("101.5500"),
+            Decimal("102.0000"),
+            Decimal("101.0000"),
+            Decimal("101.8250"),
         )
         assert row.volume == 12345 and row.is_complete is True
         assert row.time == datetime.fromtimestamp(OPEN_TS, tz=UTC)
@@ -324,9 +457,15 @@ class TestPersistCommitted:
 
         stock = await make_stock(db, symbol="LIVEW2")
         event = {
-            "stock_id": stock.id, "kind": "committed", "tf_minutes": 60,
-            "time": OPEN_TS, "open": 1000000, "high": 1010000,
-            "low": 990000, "close": 1005000, "volume": 100,
+            "stock_id": stock.id,
+            "kind": "committed",
+            "tf_minutes": 60,
+            "time": OPEN_TS,
+            "open": 1000000,
+            "high": 1010000,
+            "low": 990000,
+            "close": 1005000,
+            "volume": 100,
         }
         await persist_committed(db, event)
         await persist_committed(db, {**event, "high": 1020000, "volume": 150})
@@ -346,9 +485,7 @@ class TestPersistCommitted:
 class TestBugHunterRegressions:
     """Contracts pinned after the 2026-07-09 bug-hunter pass on 3.3."""
 
-    def test_writer_exits_only_on_sentinel_never_strands_candles(
-        self, monkeypatch
-    ) -> None:
+    def test_writer_exits_only_on_sentinel_never_strands_candles(self, monkeypatch) -> None:
         """CRITICAL: the old writer exited on (stop AND empty) and raced the
         consumer's final flush — a candle enqueued after its exit was
         stranded forever. The sentinel contract: the writer drains
@@ -367,10 +504,18 @@ class TestBugHunterRegressions:
         writer = threading.Thread(target=run_writer, args=(q,))
         writer.start()
         time_mod.sleep(0.5)  # old code: already exited by now (queue empty)
-        event = {"stock_id": 1, "kind": "committed", "tf_minutes": 1,
-                 "time": OPEN_TS, "open": 1, "high": 1, "low": 1, "close": 1,
-                 "volume": 1}
-        q.put(event)
+        event = {
+            "stock_id": 1,
+            "kind": "committed",
+            "tf_minutes": 1,
+            "time": OPEN_TS,
+            "open": 1,
+            "high": 1,
+            "low": 1,
+            "close": 1,
+            "volume": 1,
+        }
+        q.put([event])  # writer items are bursts (lists) since soak #3
         q.put(None)
         writer.join(timeout=10)
         assert not writer.is_alive()
@@ -384,18 +529,16 @@ class TestBugHunterRegressions:
 
         class _DownRedis(_SyncRedisSpy):
             def execute(self) -> None:
-                raise ConnectionError("redis down")
+                self.fail_execute()
 
         book = tradecore.LiveBook(OPEN_TS, CLOSE_TS, TF_MINUTES)
         book.ensure_instruments([42])
         writer_q: queue.Queue = queue.Queue()
-        state = WorkerState(
-            book=book, token_map=TOKEN_MAP, redis=_DownRedis(), writer_q=writer_q
-        )
+        state = WorkerState(book=book, token_map=TOKEN_MAP, redis=_DownRedis(), writer_q=writer_q)
         state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)]))
         state.process_item(("ticks", [_tick(9, 17, "102.00", 1400)]))
         assert state.stats["ticks"] == 2
-        committed = writer_q.get_nowait()
+        committed = writer_q.get_nowait()[0]
         assert committed["tf_minutes"] == 1
         assert Decimal(committed["close"]) / 10**4 == Decimal("101.55")
 
@@ -407,15 +550,16 @@ class TestBugHunterRegressions:
         book = tradecore.LiveBook(OPEN_TS, CLOSE_TS, TF_MINUTES)
         book.ensure_instruments([42])
         state = WorkerState(
-            book=book, token_map=TOKEN_MAP, redis=_SyncRedisSpy(),
-            writer_q=queue.Queue(), min_tick_ts=OPEN_TS + 3600,
+            book=book,
+            token_map=TOKEN_MAP,
+            redis=_SyncRedisSpy(),
+            writer_q=queue.Queue(),
+            min_tick_ts=OPEN_TS + 3600,
         )
         state.process_item(("ticks", [_tick(9, 30, "101.00", 100)]))  # pre-cutoff
         assert state.stats == {**state.stats, "stale": 1, "ticks": 0}
 
-    async def test_startup_gap_fill_commits_the_work(
-        self, db: AsyncSession, monkeypatch
-    ) -> None:
+    async def test_startup_gap_fill_commits_the_work(self, db: AsyncSession, monkeypatch) -> None:
         """HIGH: gap_fill never commits and the bootstrap session's close
         rolled everything back — rows were fetched, logged, and silently
         discarded. startup_gap_fill must leave them COMMITTED."""
@@ -481,8 +625,12 @@ class TestRecordReplayFidelity:
         state, _, writer_q = _state(tmp_path)
         state.min_tick_ts = OPEN_TS  # arm the stale filter
         header = {
-            "k": "h", "day": DAY.isoformat(), "open": OPEN_TS,
-            "close": CLOSE_TS, "tfs": TF_MINUTES, "min_tick_ts": OPEN_TS,
+            "k": "h",
+            "day": DAY.isoformat(),
+            "open": OPEN_TS,
+            "close": CLOSE_TS,
+            "tfs": TF_MINUTES,
+            "min_tick_ts": OPEN_TS,
         }
         rec = tmp_path / "worker_rec.jsonl"
         with open(rec, "w", encoding="utf-8") as fh:
@@ -500,7 +648,7 @@ class TestRecordReplayFidelity:
 
         live_committed = []
         while not writer_q.empty():
-            live_committed.append(writer_q.get_nowait())
+            live_committed.extend(writer_q.get_nowait())
 
         events, _digest = replay_file(rec)
         replayed_committed = [
@@ -508,9 +656,7 @@ class TestRecordReplayFidelity:
             for e in events
             if e["kind"] == "committed"
         ]
-        live_stripped = [
-            {k: v for k, v in e.items() if k != "kind"} for e in live_committed
-        ]
+        live_stripped = [{k: v for k, v in e.items() if k != "kind"} for e in live_committed]
         assert replayed_committed == live_stripped
         assert state.stats["stale"] == 1 and state.stats["skipped"] == 1
 
@@ -535,7 +681,7 @@ class TestRecorderFailOpen:
 
         assert state.recorder is None  # disabled, not fatal
         assert state.stats["ticks"] == 2
-        committed = writer_q.get_nowait()
+        committed = writer_q.get_nowait()[0]
         assert Decimal(committed["close"]) / 10**4 == Decimal("101.55")
         assert spy.set_calls  # LTP kept flowing
 
@@ -562,8 +708,11 @@ class TestSoakHardening:
         state, _, writer_q = _state()
         state.writer_alive = lambda: True
         e = {"kind": "committed", "tf_minutes": 1}
-        state._enqueue_committed([e])
-        assert writer_q.get_nowait() is e
+        f = {"kind": "forming", "tf_minutes": 1}
+        state._enqueue_committed([f, e])
+        burst = writer_q.get_nowait()
+        assert burst == [e] and burst[0] is e  # forming filtered, one burst
+        assert writer_q.empty()
 
     def test_consumer_bounded_drain_does_not_replay_backlog(self, monkeypatch) -> None:
         """WS-death restart: a multi-minute tick backlog must NOT be
@@ -596,9 +745,7 @@ class TestSoakHardening:
             drained.append(writer_q.get_nowait())
         assert drained[-1] is None  # sentinel last
 
-    def test_shutdown_does_not_hang_when_writer_dead_and_queue_full(
-        self, monkeypatch
-    ) -> None:
+    def test_shutdown_does_not_hang_when_writer_dead_and_queue_full(self, monkeypatch) -> None:
         """bug-hunter 2026-07-13: the finally-block sentinel put had no
         timeout — a dead writer + full writer_q blocked it forever, and the
         non-daemon consumer then wedged the whole process (supervisor could
@@ -611,8 +758,11 @@ class TestSoakHardening:
         full_writer_q: queue.Queue = queue.Queue(maxsize=1)
         full_writer_q.put({"kind": "committed"})  # now full, no reader
         state = WorkerState(
-            book=book, token_map=TOKEN_MAP, redis=_SyncRedisSpy(),
-            writer_q=full_writer_q, writer_alive=lambda: False,
+            book=book,
+            token_map=TOKEN_MAP,
+            redis=_SyncRedisSpy(),
+            writer_q=full_writer_q,
+            writer_alive=lambda: False,
         )
         in_q: queue.Queue = queue.Queue()
         stop = threading.Event()
@@ -637,11 +787,10 @@ class TestSignalDispatchGate:
         import types
 
         calls: list = []
-        fake_app = types.SimpleNamespace(
-            send_task=lambda *a, **k: calls.append((a, k))
-        )
+        fake_app = types.SimpleNamespace(send_task=lambda *a, **k: calls.append((a, k)))
         monkeypatch.setitem(
-            sys.modules, "app.celery_app",
+            sys.modules,
+            "app.celery_app",
             types.SimpleNamespace(celery_app=fake_app),
         )
         return calls

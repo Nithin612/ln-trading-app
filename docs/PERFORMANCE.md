@@ -8,7 +8,7 @@ sections, never overwrite old ones (history shows drift).
 
 | Path | Budget | Since |
 |---|---|---|
-| tick → Redis publish (200–500 instruments) | p99 < 10 ms | Phase 3 |
+| tick → Redis publish (full universe, ~2,055 instruments) | p99 ≤ 50 ms (hard); post-optimization target = the (10,20] bucket, gate tightens if the re-soak lands it | Phase 3 · restated 2026-07-14 by user ruling (was p99 < 10 ms, authored for 200–500 instruments; three independent full-scale soak measurements pinned steady-state p50 7.5 / p99 (20,50] — ledger §Third soak) |
 | candle close → committed signal persisted | < 100 ms | Phase 3 |
 | 2y × 50-stock daily backtest (Rust) | < 5 s | Phase 1 |
 | Weight-grid combo (Rust, RAYON≤6) | measured Phase 1, then regression-gated | Phase 1 |

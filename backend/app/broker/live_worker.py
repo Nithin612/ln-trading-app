@@ -88,6 +88,16 @@ _PULSE_INTERVAL_S = 1.0
 # to pulses: pulses are droppable under queue-full backpressure, so a
 # refresh riding them starves exactly when the box is saturated.
 _WATCHED_REFRESH_S = 1.0
+# Unchanged-price SET dedupe (soak #3 ruling, 2026-07-14): skip the
+# ltp:{stock_id} SET when the price equals the last successfully-SET
+# value and that SET is younger than this. 10 s keeps ~90% of the win
+# on slow-moving stocks while bounding the ONE exposure dedupe adds:
+# after a redis data loss the worker cannot observe (fast restart or
+# eviction with a surviving connection), an unchanged-price key stays
+# absent up to this long and paper_broker falls back to daily close
+# (bug-hunter tier-B, 2026-07-14). Observed failures clear the cache —
+# see _publish_ltp. TTL headroom is never a factor (600 s ≫ 10 s).
+_LTP_RESET_S = 10.0
 
 # Exit codes for the supervisor: 0 clean stop · 3 WS died mid-session ·
 # 4 no usable token (wait for the login ritual).
@@ -202,7 +212,9 @@ class WorkerState:
     book: Any  # tradecore.LiveBook
     token_map: dict[int, int]
     redis: Any  # sync redis-py client (or a test spy)
-    writer_q: queue.Queue[dict[str, Any] | None]
+    # One LIST of committed candles per put (commit-burst batching) —
+    # None is the writer-exit sentinel.
+    writer_q: queue.Queue[list[dict[str, Any]] | None]
     recorder: TextIO | None = None
     # Snapshot-echo guard (mid-session restart): Kite's subscribe snapshot
     # replays each instrument's LAST tick, whose timestamp can predate the
@@ -213,8 +225,13 @@ class WorkerState:
     stop_event: Any = None  # threading.Event for fail-loud escalation
     stats: dict[str, int] = field(
         default_factory=lambda: {
-            "ticks": 0, "pulses": 0, "committed": 0, "skipped": 0, "stale": 0,
-            "levels": 0, "triggers": 0,
+            "ticks": 0,
+            "pulses": 0,
+            "committed": 0,
+            "skipped": 0,
+            "stale": 0,
+            "levels": 0,
+            "triggers": 0,
         }
     )
     # End-to-end (enqueue→published) — THE phase metric — plus its two
@@ -240,6 +257,12 @@ class WorkerState:
     on_levels_applied: Any = None
     _stock_to_token: dict[int, int] = field(init=False, default_factory=dict)
     _last_refresh: float = field(init=False, default=float("-inf"))
+    # Last successfully-SET LTP per stock: {stock_id: (price, monotonic)}.
+    # Updated ONLY after pipe.execute() returns — a redis blip must not
+    # leave the cache claiming a SET that never landed (the key could
+    # expire mid-outage and dedupe would then skip the heal for up to
+    # _LTP_RESET_S).
+    _ltp_cache: dict[int, tuple[str, float]] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
         self._stock_to_token = {v: k for k, v in self.token_map.items()}
@@ -341,15 +364,34 @@ class WorkerState:
 
     def _publish_ltp(self, batch: list[tuple[int, int, str, int | None, int]]) -> None:
         """Latest-price key + fan-out, one pipeline round trip per batch.
-        The KEY is what paper_broker fills from — it must ALWAYS be SET.
-        The channel PUBLISH (payload build included) is gated on live
-        subscribers — most of the cost was spent on channels nobody had
-        subscribed (audit findings 1+3)."""
+        The KEY is what paper_broker fills from — it is SET on first
+        sight, on every price CHANGE, and at least every _LTP_RESET_S
+        even unchanged (TTL never gets close to expiry); an unchanged
+        price inside that window skips the SET — the audit's un-gateable
+        ~11 ms/full-batch floor was mostly conflated re-sends of the same
+        price (soak #3 ruling). Any OBSERVED redis failure clears the
+        whole dedupe cache — assume nothing about key state, re-SET every
+        stock as it next ticks. A data loss the worker cannot observe
+        (fast restart / eviction with a surviving connection) leaves an
+        unchanged-price key absent for up to _LTP_RESET_S, during which
+        paper_broker falls back to daily close (bug-hunter tier-B,
+        2026-07-14 — the window is bounded at 10 s for exactly this
+        reason). The channel PUBLISH (payload build included) stays gated
+        on live subscribers and is NOT deduped — subscribers keep their
+        per-tick cadence."""
         sid_to_token = self._stock_to_token
         watched = self.watched_channels
+        cache = self._ltp_cache
+        now = time_mod.monotonic()
         pipe = self.redis.pipeline(transaction=False)
+        queued = False
+        pending: dict[int, tuple[str, float]] = {}
         for stock_id, ts, price, _dv, _q in batch:
-            pipe.set(LTP_KEY.format(stock_id=stock_id), price, ex=LTP_KEY_TTL_SECONDS)
+            last = pending.get(stock_id) or cache.get(stock_id)
+            if last is None or last[0] != price or now - last[1] >= _LTP_RESET_S:
+                pipe.set(LTP_KEY.format(stock_id=stock_id), price, ex=LTP_KEY_TTL_SECONDS)
+                pending[stock_id] = (price, now)
+                queued = True
             token = sid_to_token.get(stock_id)
             if token is None:
                 continue
@@ -367,40 +409,62 @@ class WorkerState:
                     }
                 ),
             )
-        pipe.execute()
+            queued = True
+        if not queued:
+            return
+        try:
+            pipe.execute()
+        except Exception:
+            # An observed failure says nothing about which keys survived —
+            # drop ALL dedupe state so every stock re-SETs as it next
+            # ticks, not just the ones in this failing batch.
+            self._ltp_cache.clear()
+            raise
+        cache.update(pending)
 
     def _enqueue_committed(self, events: list[dict[str, Any]]) -> None:
-        """Committed candles go to the writer with a liveness-checked
-        blocking put: never dropped while the writer lives; if the writer
-        is DEAD, losing them is already a fact — fail loud and stop so the
-        supervisor restarts instead of wedging the tick loop forever.
+        """Committed candles go to the writer as ONE list per input batch
+        with a liveness-checked blocking put: never dropped while the
+        writer lives; if the writer is DEAD, losing them is already a
+        fact — fail loud and stop so the supervisor restarts instead of
+        wedging the tick loop forever.
+
+        One put per BURST, not per candle (soak #3 ruling, 2026-07-14):
+        the measured p99 tail is commit-boundary processing, and a :15/:30
+        close used to pay thousands of queue lock/notify cycles inline in
+        the tick loop. Queue depth now counts BURSTS, not candles (the
+        heartbeat's writer_q reads accordingly).
 
         Liveness is checked BEFORE waiting: once the writer is dead there
         is nothing to wait for, so we breadcrumb immediately instead of
-        blocking `timeout` seconds per candle. The 2026-07-13 wedge drained
+        blocking `timeout` seconds per put. The 2026-07-13 wedge drained
         a 16-min backlog at 5 s/candle for 36 min because the old order
         (put-then-check) paid the full timeout on every candle."""
-        for e in events:
-            if e["kind"] != "committed":
-                continue
-            self.stats["committed"] += 1
-            while True:
-                if not self.writer_alive():
-                    self.stats["dropped_committed"] = (
-                        self.stats.get("dropped_committed", 0) + 1
-                    )
-                    log.critical(
-                        "writer thread dead; dropping committed candle %s — "
-                        "stopping for supervisor restart", e,
-                    )
-                    if self.stop_event is not None:
-                        self.stop_event.set()
-                    break
-                try:
-                    self.writer_q.put(e, timeout=1.0)
-                    break
-                except queue.Full:
-                    continue  # writer alive but slow — retry (liveness re-checked)
+        committed = [e for e in events if e["kind"] == "committed"]
+        if not committed:
+            return
+        self.stats["committed"] += len(committed)
+        while True:
+            if not self.writer_alive():
+                self.stats["dropped_committed"] = self.stats.get("dropped_committed", 0) + len(
+                    committed
+                )
+                log.critical(
+                    "writer thread dead; dropping %d committed candle(s) "
+                    "[%s .. %s] — stopping for supervisor restart (a restart"
+                    " gap-fill or scripts/repair_morning_window.py heals)",
+                    len(committed),
+                    committed[0],
+                    committed[-1],
+                )
+                if self.stop_event is not None:
+                    self.stop_event.set()
+                return
+            try:
+                self.writer_q.put(committed, timeout=1.0)
+                return
+            except queue.Full:
+                continue  # writer alive but slow — retry (liveness re-checked)
 
     def _ffi_batch(
         self, ticks: list[dict[str, Any]]
@@ -484,7 +548,8 @@ class WorkerState:
                 if attempt:
                     log.error(
                         "alert XADD failed — manual breadcrumb: %s",
-                        json.dumps(all_fields), exc_info=True,
+                        json.dumps(all_fields),
+                        exc_info=True,
                     )
 
     def _publish_events(self, events: list[dict[str, Any]]) -> None:
@@ -567,9 +632,14 @@ async def persist_committed(db: Any, event: dict[str, Any]) -> None:
     )
 
 
-def run_writer(writer_q: queue.Queue[dict[str, Any] | None]) -> None:
+def run_writer(writer_q: queue.Queue[list[dict[str, Any]] | None]) -> None:
     """Writer thread: ONE long-lived event loop + ONE engine created
     in-thread (pooled connections never cross loops — the Celery lesson).
+
+    Items are LISTS of committed candles (one per consumer burst — the
+    commit-burst batching from the soak #3 ruling); persistence stays
+    per-candle with per-candle retry, so one poisoned candle can never
+    take down its burst-mates.
 
     Exits ONLY on the consumer's None sentinel — the consumer is the sole
     producer and owns the "no more events" signal, so a shutdown can never
@@ -591,7 +661,8 @@ def run_writer(writer_q: queue.Queue[dict[str, Any] | None]) -> None:
                 if attempt == 2:
                     log.error(
                         "writer: DROPPED committed candle after retries — "
-                        "manual backfill breadcrumb: %s", json.dumps(event),
+                        "manual backfill breadcrumb: %s",
+                        json.dumps(event),
                         exc_info=True,
                     )
                 else:
@@ -603,16 +674,17 @@ def run_writer(writer_q: queue.Queue[dict[str, Any] | None]) -> None:
             loop = asyncio.get_running_loop()
             while True:
                 try:
-                    event = await loop.run_in_executor(None, writer_q.get)
+                    burst = await loop.run_in_executor(None, writer_q.get)
                 except RuntimeError:
                     # Interpreter teardown shuts down the loop's default
                     # executor while we're still looping ("cannot schedule
                     # new futures after shutdown") — treat as end-of-stream,
                     # not a crash (the 2026-07-13 writer traceback).
                     return
-                if event is None:
+                if burst is None:
                     return
-                await _persist_with_retry(engine, event)
+                for event in burst:
+                    await _persist_with_retry(engine, event)
         finally:
             await engine.dispose()
 
@@ -672,9 +744,7 @@ def run_consumer(  # noqa: C901 — the bounded-drain shutdown branch is worth t
         try:
             state.writer_q.put(None, timeout=_SENTINEL_PUT_TIMEOUT_S)
         except queue.Full:
-            log.warning(
-                "writer_q full at shutdown (writer dead/stalled); skipping sentinel"
-            )
+            log.warning("writer_q full at shutdown (writer dead/stalled); skipping sentinel")
 
 
 def run_pulser(in_q: queue.Queue[QueueItem], stop: threading.Event) -> None:
@@ -702,8 +772,14 @@ def run_monitor(
         log.info(
             "live-worker heartbeat: in_q=%d/%d writer_q=%d/%d stats=%s "
             "lat_p50=%.1f lat_p99=%.1f n=%d",
-            in_q.qsize(), _QUEUE_MAX, writer_q.qsize(), _QUEUE_MAX,
-            state.stats, lat["p50_ms"], lat["p99_ms"], lat["n"],
+            in_q.qsize(),
+            _QUEUE_MAX,
+            writer_q.qsize(),
+            _QUEUE_MAX,
+            state.stats,
+            lat["p50_ms"],
+            lat["p99_ms"],
+            lat["n"],
         )
 
 
@@ -729,9 +805,7 @@ def enqueue_ticks(in_q: queue.Queue[QueueItem], ticks: list[dict[str, Any]]) -> 
         log.warning("live-worker queue full; dropped %d oldest item(s)", dropped)
 
 
-async def startup_gap_fill(
-    db: Any, access_token: str, token_map: dict[int, int]
-) -> None:
+async def startup_gap_fill(db: Any, access_token: str, token_map: dict[int, int]) -> None:
     """REST-backfill gaps for the subscription list, then COMMIT — the
     session-close rollback silently discarded every fetched row before
     (bug-hunter HIGH, 2026-07-09: gap_fill never commits and this is its
@@ -741,7 +815,10 @@ async def startup_gap_fill(
     for instrument_token, stock_id in token_map.items():
         try:
             await detect_and_fill_gaps(
-                db, access_token, instrument_token, stock_id,
+                db,
+                access_token,
+                instrument_token,
+                stock_id,
                 timeframes=["5m", "15m", "1h"],
             )
         except Exception:
@@ -764,9 +841,7 @@ async def _bootstrap(
         token_map = await _build_token_stock_map(db, token.access_token)
         if gap_fill and token_map:
             await startup_gap_fill(db, token.access_token, token_map)
-        directory = await build_directory(
-            db, datetime.now(tz=UTC), sorted(token_map.values())
-        )
+        directory = await build_directory(db, datetime.now(tz=UTC), sorted(token_map.values()))
         initial_levels = await directory.refresh(db)
     return token.access_token, token_map, directory, initial_levels
 
@@ -807,7 +882,6 @@ def run_refresher(
         loop.close()
 
 
-
 def _make_ticker(
     access_token: str,
     token_map: dict[int, int],
@@ -817,12 +891,15 @@ def _make_ticker(
     from kiteconnect import KiteTicker
 
     ticker = KiteTicker(
-        api_key=settings.kite_api_key, access_token=access_token,
-        reconnect=True, reconnect_max_tries=50,
+        api_key=settings.kite_api_key,
+        access_token=access_token,
+        reconnect=True,
+        reconnect_max_tries=50,
     )
     ticker.on_ticks = lambda ws, ticks: enqueue_ticks(in_q, ticks)
     ticker.on_connect = lambda ws, resp: (
-        ws.subscribe(list(token_map)), ws.set_mode(ws.MODE_FULL, list(token_map))
+        ws.subscribe(list(token_map)),
+        ws.set_mode(ws.MODE_FULL, list(token_map)),
     )
     ticker.on_close = on_close
     return ticker
@@ -884,7 +961,7 @@ def main(argv: list[str] | None = None) -> int:
         )
 
     in_q: queue.Queue[QueueItem] = queue.Queue(maxsize=_QUEUE_MAX)
-    writer_q: queue.Queue[dict[str, Any] | None] = queue.Queue(maxsize=_QUEUE_MAX)
+    writer_q: queue.Queue[list[dict[str, Any]] | None] = queue.Queue(maxsize=_QUEUE_MAX)
     stop = threading.Event()
     exit_code = 0
 
@@ -926,11 +1003,15 @@ def main(argv: list[str] | None = None) -> int:
         writer_thread,
         threading.Thread(target=run_pulser, args=(in_q, stop), name="pulser", daemon=True),
         threading.Thread(
-            target=run_refresher, args=(directory, in_q, stop), name="refresher",
+            target=run_refresher,
+            args=(directory, in_q, stop),
+            name="refresher",
             daemon=True,
         ),
         threading.Thread(
-            target=run_monitor, args=(state, in_q, writer_q, stop), name="monitor",
+            target=run_monitor,
+            args=(state, in_q, writer_q, stop),
+            name="monitor",
             daemon=True,
         ),
     ]
@@ -950,8 +1031,11 @@ def main(argv: list[str] | None = None) -> int:
     avg_batch = state.stats["ticks"] / state.latency.n if state.latency.n else 0.0
     log.info(
         "live-worker stats: %s latency: %s dwell: %s processing: %s avg_batch=%.1f",
-        state.stats, state.latency.summary(), state.dwell.summary(),
-        state.processing.summary(), avg_batch,
+        state.stats,
+        state.latency.summary(),
+        state.dwell.summary(),
+        state.processing.summary(),
+        avg_batch,
     )
     return exit_code
 
