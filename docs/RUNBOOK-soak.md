@@ -13,9 +13,13 @@ cd ~/code/agent/Claude/trading-platform
 make status                                   # postgres(5433)+redis up? if not: make up
 cd backend && uv run python scripts/kite_login.py && cd ..   # paste redirect URL back
 
-# start before 09:15 and LEAVE IT RUNNING:
+# start BEFORE 09:15 and LEAVE IT RUNNING:
 make soak
 ```
+
+Starting late costs data, not stability: the 07-14 soak started at
+09:26 and the first ~12 minutes of candles had to be repaired from
+Kite REST afterwards (ledger §Third soak).
 
 Then: **leave the box awake and idle until 15:30 IST** (no pytest, no
 cargo/maturin builds, do NOT start `make backend`). At ~15:40 the worker
@@ -72,7 +76,12 @@ live-worker stats: {...} latency: {p50_ms, p99_ms, max_ms} dwell: {...} processi
 - `dwell` = queue wait (GIL); `processing` = pure compute. If p99 is huge
   (seconds), the WS died and a backlog wedged — that run's latency is void.
 
-## Known-good state going in (as of 2026-07-13 night)
+## Known-good state going in (as of 2026-07-14, post soak #3)
+
+Soak #3 (2026-07-14) was a full-session STABILITY PASS under this
+ritual, including a live validation of the WS-death→restart path (8 s
+outage, no data dip) and the Celery-OOM gate (list stayed at 0). The
+notes below from 07-13 remain accurate.
 
 - Redis OOM fix shipped: per-candle Celery dispatch is OFF by default, so
   the broker list no longer grows during a soak. `make soak` clears any

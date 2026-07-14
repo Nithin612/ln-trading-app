@@ -68,15 +68,29 @@ exit-race, 36-min drain wedge, and a heartbeat + `make soak` target.
 07-13 candles rebuilt from Kite — 5m/15m/1h full (75/25/7 buckets,
 ~2040 stocks, matches the clean 07-10 rebuild); only 1m left empty
 (low-value); 1d/EOD never affected.
+**SOAK #3 RAN 2026-07-14 (`make soak`, first outing) — STABILITY PASS**
+(full record: ledger §Third soak). 9.05M ticks / 828k candles / 0
+skipped across 6h13m; 745 heartbeats, queues ~0 throughout; a 14:18
+Kite WS drop exercised the whole 766050e fix slate live (exit-3 →
+8 s restart, no DB coverage dip, second recording header); Celery list
+0 all day; recording lossless (tick+pulse counts == worker counters
+exactly). Latency CONFIRMED steady-state across both segments: **p50
+7.5 ms · p99 (20,50] · max <100 ms · dwell p99 2 ms — p99<10 ms still
+NOT met at 2,055 instruments; the ruling is now purely a user
+decision** (restate at scale vs optimize + re-soak — no more data
+needed). Only data damage: the pre-09:15 start was missed (worker up
+09:26:42) → first ~12 min thin/absent; scoped morning repair via
+throttled official-5m refetch + 15m/1h recompute (ledger §Third soak).
 
-**▶ NEXT ACTION — RE-SOAK. The ritual is now `docs/RUNBOOK-soak.md`
-(one command: `make soak`).** After it: (a) rule on the latency target
-at scale; (b) if clean, that's the stability pass; (c) then the
-still-open items — streaming replay digest (replay OOMs on a full-day
-recording), route `fetch_historical` through `ThrottledKite` (latent
-bug found during the rebuild), and run-#3 root-cause via the new
-heartbeat. Only after a clean soak: provisional-confidence impl (design
-pinned), then 3.6 outcome ticks, 3.7 shadow week.
+**▶ NEXT ACTION — (a) USER RULING on the latency budget at 2,055
+instruments** (restate vs optimize+re-soak: unchanged-price SET dedupe,
+commit-burst batching are the scoped candidates); **(b) streaming
+replay digest** (replay OOMs on full-day recordings; 07-13 + 07-14
+digest pins both pending); (c) route `fetch_historical` through
+`ThrottledKite` (latent bug from the 07-13 rebuild); (d) run-#3 RCA
+downgraded to watch-if-recurs (heartbeat makes it observable). Stability
+gate for the phase is MET — after the ruling: provisional-confidence
+impl (design pinned), then 3.6 outcome ticks, 3.7 shadow week.
 
 Open threads, in order:
 1. **FIRST SOAK RAN 2026-07-10 — PARTIAL; latency verdict OPEN** (full

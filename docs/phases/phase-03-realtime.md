@@ -336,6 +336,75 @@ like every other Kite REST path (trading-domain rule) — the unthrottled
 call is the root of the rebuild pain and a lurking rate-limit hazard for
 `startup_gap_fill --gap-fill` at scale.
 
+## Third soak — 2026-07-14 (the re-soak: STABILITY PASS; latency confirmed; restart path validated live)
+
+**The run:** first outing of `make soak`, started 09:26:42 — 11.7 min
+after open (runbook says pre-09:15; the only cost was data, see below).
+Two segments: A 09:26:42→14:18:06 (Kite dropped the WS, 1006), B
+14:18:14→15:40:04 (clean `session over`, exit 0 at 15:40:04). Day
+totals: **9,045,595 ticks · 828,180 committed candles · 14,097 triggers
+· 0 skipped · 0 drop-oldest**. Log `recordings/soak-2026-07-14.log`,
+recording `recordings/soak-2026-07-14.jsonl` (587 MB, kept local).
+
+**Stability: PASS.**
+- 745 heartbeats at 30 s cadence, exactly ONE gap all day (the restart
+  minute itself). Queues 0/0 on 737/745 beats; 8 transient writer_q
+  bursts (max 2,015/10,000, all at :15/:30 commit boundaries, each
+  drained before the next beat); in_q never above 2. No degradation
+  across 6h13m — run-#3's silent decay did not recur, and with the
+  heartbeat it could no longer be silent.
+- **The 14:18 WS death exercised the whole 766050e slate in
+  production**: CRITICAL logged, full stats printed, exit 3 within
+  600 ms (07-13 equivalent: 36-min drain wedge + zombie), supervisor
+  restart after 5 s, warmup + resubscribe of 2,055 in 8 s, stale-guard
+  rejected 266 pre-watermark snapshot ticks, second recording header
+  appended, and **no per-minute DB coverage dip in the restart window**
+  (14:17/14:18/14:19 = 1,673/1,666/1,671 stocks/min vs 1,669 session
+  median).
+- Celery-OOM gate HELD: broker list length 0 all day (07-13: 495 MB →
+  OOM); redis 2.2 MB used / 3 GB max.
+- Recording LOSSLESS: 9,072,094 lines = 9,045,595 ticks (matches the
+  worker counters A+B exactly) + 22,386 pulses (exact match) + 2
+  headers + 4,109 level lines (+2 append-guard blanks).
+
+**Latency: the 07-13 number is now confirmed steady-state, not a
+sick-run artifact.** Three independent measurements agree (07-13 run
+#4; today A n=67,931; today B n=17,294): **p50 7.5 ms · p99 in
+(20,50] ms · max 98.2 ms (A) / 97.3 ms (B) · dwell p50 1 ms / p99 2 ms
+· avg_batch 105–110**. First beat of the day printed the 100 ms bucket
+(open burst, n=114), 09:30 printed 20 ms; the other 743 all sat in the
+50 ms bucket. Dwell stays noise (perf-fix holds) — the tail is pure
+processing at commit boundaries, exactly the 07-10 audit's shape.
+**p99 < 10 ms as written: NOT MET at 2,055 instruments.** No more data
+is needed — this is now purely the pending ruling (owner: user):
+(a) restate the budget at scale, or (b) apply the scoped publish-path
+optimizations (unchanged-price SET dedupe, commit-burst batching) and
+re-soak.
+
+**Data (the only damage = pre-start window, operator timing):** live
+coverage healthy 09:27→15:30 (median 1,669 stocks/min; close minutes up
+to 1,995; totals 1h 7/7 · 15m 25/25 · 5m 74/75 · 1m 366/375 buckets).
+From the 09:26:42 start (stale-guard watermark 09:24:44): 1m
+09:15–09:23 ZERO rows, 09:24/09:25 partial (18/121 stocks); 5m 09:15
+missing, 09:20 partial (18), 09:25 short ~1.75 min; 15m + 1h 09:15
+buckets present (2,026/2,041 stocks) but opens minted from 09:24:44+
+snapshots and volume short ~9.5 min. **Scoped repair IN FLIGHT** (this
+session): refetch official 5m 09:15–09:30 for the full active-EQ
+universe via `ThrottledKite` (ON CONFLICT DO UPDATE — the partial rows
+must be replaced, so `backfill_intraday.py`'s DO-NOTHING semantics
+can't be reused), then recompute the 15m/1h 09:15 buckets as 5m
+aggregates. 1m left as-is per the 07-13 precedent (low-value live-only
+table). Verification numbers land in this section when done.
+
+**Still open after today:** (4) streaming replay digest — unchanged
+(today's 587 MB recording would OOM the buffering replay; digest pins
+for 07-13 AND 07-14 both pending that fix). (6) run-#3 RCA — no
+recurrence in 6h13m under the heartbeat; downgraded to
+watch-if-it-recurs (it is now observable in-run). (5) re-soak — DONE
+(this section); its latency half is the p99 ruling above. Phase-gate:
+the "full-session soak clean" criterion is **MET on stability**; the
+latency budget line awaits the user ruling.
+
 ## Watchlists (3.5 deferred item — DONE 2026-07-11, same session)
 
 Full vertical slice, zero worker contact: `watchlists` +
