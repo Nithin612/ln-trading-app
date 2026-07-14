@@ -388,13 +388,21 @@ From the 09:26:42 start (stale-guard watermark 09:24:44): 1m
 09:15–09:23 ZERO rows, 09:24/09:25 partial (18/121 stocks); 5m 09:15
 missing, 09:20 partial (18), 09:25 short ~1.75 min; 15m + 1h 09:15
 buckets present (2,026/2,041 stocks) but opens minted from 09:24:44+
-snapshots and volume short ~9.5 min. **Scoped repair IN FLIGHT** (this
-session): refetch official 5m 09:15–09:30 for the full active-EQ
-universe via `ThrottledKite` (ON CONFLICT DO UPDATE — the partial rows
-must be replaced, so `backfill_intraday.py`'s DO-NOTHING semantics
-can't be reused), then recompute the 15m/1h 09:15 buckets as 5m
-aggregates. 1m left as-is per the 07-13 precedent (low-value live-only
-table). Verification numbers land in this section when done.
+snapshots and volume short ~9.5 min. **Scoped repair DONE same session**
+via NEW committed tool `backend/scripts/repair_morning_window.py`
+(+6 tests): official 5m refetched for [09:15, 09:30) across the full
+active-EQ universe through `ThrottledKite` with ON CONFLICT DO UPDATE —
+partial rows must be REPLACED, so `backfill_intraday.py`'s DO-NOTHING
+semantics couldn't be reused — then the 15m/1h 09:15 buckets recomputed
+as straight 5m aggregates. Results: **5,758 5m bars upserted (09:15
+bucket now 1,884 stocks, 09:20 1,934, 09:25 refreshed to official
+2,022); 15m 09:15 recomputed 2,030 rows; 1h 09:15 recomputed 2,041**;
+14/2,055 stocks failed (intermittent `invalid token`, same front-loaded
+pattern as the 07-13 rebuild — immaterial). Spot check: RELIANCE 15m
+09:15 == its 5m aggregate exactly (O/H/L/C/V 1290.0000/1298.8000/
+1290.0000/1297.3000/693,232). 1m left as-is per the 07-13 precedent
+(9 minutes 09:15–09:23 remain empty; low-value live-only table).
+07-14 intraday 5m/15m/1h is walk-forward-trustworthy end-to-end.
 
 **Still open after today:** (4) streaming replay digest — unchanged
 (today's 587 MB recording would OOM the buffering replay; digest pins

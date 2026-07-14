@@ -79,8 +79,10 @@ exactly). Latency CONFIRMED steady-state across both segments: **p50
 NOT met at 2,055 instruments; the ruling is now purely a user
 decision** (restate at scale vs optimize + re-soak — no more data
 needed). Only data damage: the pre-09:15 start was missed (worker up
-09:26:42) → first ~12 min thin/absent; scoped morning repair via
-throttled official-5m refetch + 15m/1h recompute (ledger §Third soak).
+09:26:42) → first ~12 min thin/absent; REPAIRED same session via the
+new committed `backend/scripts/repair_morning_window.py` (+6 tests) —
+official-5m refetch + 15m/1h recompute; 07-14 5m/15m/1h now
+walk-forward-trustworthy (ledger §Third soak).
 
 **▶ NEXT ACTION — (a) USER RULING on the latency budget at 2,055
 instruments** (restate vs optimize+re-soak: unchanged-price SET dedupe,
