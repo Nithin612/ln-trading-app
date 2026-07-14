@@ -84,15 +84,24 @@ new committed `backend/scripts/repair_morning_window.py` (+6 tests) —
 official-5m refetch + 15m/1h recompute; 07-14 5m/15m/1h now
 walk-forward-trustworthy (ledger §Third soak).
 
-**▶ NEXT ACTION — (a) USER RULING on the latency budget at 2,055
-instruments** (restate vs optimize+re-soak: unchanged-price SET dedupe,
-commit-burst batching are the scoped candidates); **(b) streaming
-replay digest** (replay OOMs on full-day recordings; 07-13 + 07-14
-digest pins both pending); (c) route `fetch_historical` through
-`ThrottledKite` (latent bug from the 07-13 rebuild); (d) run-#3 RCA
-downgraded to watch-if-recurs (heartbeat makes it observable). Stability
-gate for the phase is MET — after the ruling: provisional-confidence
-impl (design pinned), then 3.6 outcome ticks, 3.7 shadow week.
+**RULING MADE 2026-07-14 evening (user): option (b) + restatement —
+EXECUTED same night** (commit 8eac05a; ledger §Decisions + §Optimization
+slate): budget now **p99 ≤ 50 ms @ full universe** (PERFORMANCE.md), and
+both scoped optimizations shipped with bug-hunter review clean-after-
+fixes (SET dedupe w/ 10 s keep-alive + observed-failure cache clear;
+commit-burst batching; live suite 66 green). Same night: morning-repair
+re-run proved the 14 failures are deterministic STALE kite_instruments
+tokens (re-sync deliverable), not API flake.
+
+**▶ NEXT ACTION — RE-SOAK on the optimized worker (next trading day):**
+fresh `kite_login` ~08:00–09:10 IST, then `make soak` BEFORE 09:15
+(RUNBOOK-soak.md). Success = clean stability + latency in the (10,20]
+bucket or better → tighten the budget to 20 ms; (20,50] = still within
+budget, optimization verdict honest-recorded. Then: streaming replay
+digest (07-13 + 07-14 digest pins both pending), `fetch_historical` →
+`ThrottledKite`, kite_instruments re-sync (the 14 stale tokens),
+provisional-confidence impl (design pinned), 3.6 outcome ticks, 3.7
+shadow week.
 
 Open threads, in order:
 1. **FIRST SOAK RAN 2026-07-10 — PARTIAL; latency verdict OPEN** (full
