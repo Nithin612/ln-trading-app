@@ -517,6 +517,112 @@ retry isolation within a burst, no other writer_q readers, replay
 untouched (recordings carry ticks/pulses, not writer items). Suite 66
 green after fixes (live worker 38 + levels + triggers + replay).
 
+## Fourth soak — 2026-07-15 + 2026-07-16 (re-soak on the optimized worker: STABILITY PASS ×2; budget MET; NO tightening)
+
+Two full sessions on the 8eac05a worker (SET dedupe + commit-burst
+batching), run back-to-back for a two-day baseline. Analyzed
+2026-07-16 night from `recordings/soak-2026-07-{15,16}.{log,jsonl}`.
+
+**The runs.**
+- **07-15:** started 09:18:20 — 3.3 min late again (runbook says
+  pre-09:15; cost = data, see below). Segments: A 09:18:22→15:15:50
+  (Kite 1006 unclean close), B 15:15:58→15:40:03 (clean `session
+  over`, exit 0). Day totals: **9,352,428 ticks · 847,995 committed ·
+  15,493 triggers · 0 skipped**. 2,055 instruments.
+- **07-16:** started 09:12:31 — **first soak to make the pre-09:15
+  window**; 2,056 instruments (universe grew by one). Pre-open held
+  correctly: 4 zero-tick heartbeats; `stale` jumped to 2,042 during
+  09:12–09:15 (session guard rejecting ~1 pre-open snapshot tick per
+  instrument) and NEVER grew after — the counter is benign and now
+  understood. Segments: A 09:12:31→14:42:41 (1006), B
+  14:42:48→14:42:51 (**double drop** — reconnected, took the 2,461-tick
+  snapshot burst, dropped again in 3 s), C 14:42:58→15:40:03 (clean
+  exit 0). Day totals: **9,539,362 ticks · 848,693 committed · 14,654
+  triggers · 0 skipped**.
+
+**Stability: PASS both days.**
+- Heartbeats 762 (07-15) / 774 (07-16) at 30 s; queues effectively
+  empty all day both days — in_q never above 1, writer_q peaked at 2
+  bursts (07-16; 0 on 07-15), every nonzero beat drained by the next.
+  No degradation across either session.
+- **Three more Kite 1006 drops, all recovered unattended**: 8 s
+  (07-15 15:15), 17 s across the 07-16 double drop — the first
+  back-to-back drop we've seen; the supervisor's 5 s loop + warmup +
+  resubscribe handled the immediate re-death without operator action.
+  Running tally: 4 drops in 3 soak days, all between 14:18 and 15:16 —
+  an afternoon Kite-side lifecycle event, now demonstrably routine.
+- Recordings LOSSLESS both days: 07-15 = 9,352,428 t + 22,887 p
+  (both exactly match worker counters A+B) + 2 headers + 4,110 lv
+  (2×2,055); 07-16 = 9,539,362 t + 23,232 p (exact, A+B+C) + 3
+  headers + 6,168 lv (3×2,056). 606 MB / 619 MB, kept local.
+- Celery-OOM gate held: broker list 0 and redis at 2.23 MB when
+  verified post-run 07-16 night (dispatch gate default-OFF; no
+  consumer ran; `make soak` cleared the list at each start).
+
+**Latency — the optimization verdict (honest): budget MET, target
+bucket NOT reached, gate stays 50 ms.** Every segment on both days
+finished with total p99 in **(20,50]** — same bucket as
+pre-optimization, so the **(10,20] tightening criterion is NOT met**
+and the budget line stays **p99 ≤ 50 ms** as restated. What the slate
+DID move, against soak #3 (A n=67,931 / B n=17,294 vs 07-15 A
+n=84,367 / 07-16 A n=77,878): **processing p50 7.5 → 5.0 ms on both
+days' main segments**, and on 07-15 A the **processing p99 landed in
+(10,20]** (07-16 A stayed (20,50]); max latency 98.2 → 89.1 (07-15) /
+91.5 (07-16 A). p50 7.5 ms, dwell p50 1 / p99 2 ms, avg_batch 106–116
+all unchanged. One 135.4 ms outlier (07-16 C, n=11,137) right after
+the double restart — the snapshot burst (segment-B avg_batch 307.6 =
+~3× normal) is the obvious suspect; cumulative p99 never left (20,50].
+Reading finer than this is histogram-limited: the bucket ladder jumps
+20 → 50, and 07-15's cumulative p99 oscillated 20↔50 across 15 beats,
+i.e. true p99 sits just above 20 ms. OPTIONAL follow-up if we ever
+revisit: one added 30 ms bucket would make the next comparison
+readable.
+
+**Data.**
+- Coverage complete both days: 5m 75/75 · 15m 25/25 · 1h 7/7 canon
+  buckets, ~1,950–2,036 stocks per 5m bucket.
+- **07-15 open bucket was thin** (worker up 09:18:22): 5m 09:15 had
+  2,030 stocks but only ~40.6 M shares vs 217.1 M in 07-16's 09:15 —
+  ~2/3 of the highest-volume bucket of the day missing, opens minted
+  from 09:18:22 ticks. **Scoped repair EXECUTED same night** via the
+  committed `repair_morning_window.py --day 2026-07-15 --until-ist
+  09:20` (exactly the one damaged 5m bucket). Results: **1,872 5m
+  bars upserted — 5m 09:15 now 2,032 stocks / 185.9 M volume (was
+  40.6 M, 4.6×; in line with 07-16's 217 M open bucket); 15m 09:15
+  recomputed 2,039 rows; 1h 09:15 recomputed 2,041 rows.** Spot
+  check: RELIANCE 15m 09:15 == its 5m aggregate EXACTLY
+  (1294.1000/1310.4000/1294.1000/1305.3000/1,122,637). **16/2,056
+  stocks failed, all `invalid token` — the deterministic stale
+  kite_instruments set has grown 14 → 16** (illiquid microcaps,
+  immaterial; their live-minted rows remain self-consistent; the
+  planned instrument re-sync is the fix). 07-15 5m/15m/1h is
+  walk-forward-trustworthy end-to-end.
+- **07-16 5m 14:40 bucket volume-undercounted** (15.3 M vs neighbors
+  31.6/43.3 M): both restarts landed inside it, and the
+  GREATEST-volume merge keeps the larger partial, not the sum. Same
+  class as soak #3's 14:18 restart — ACCEPTED per that precedent
+  (coverage intact, prices merged correctly, volume short ~17 s +
+  merge semantics). If restart-bucket repair ever matters, the fix is
+  generalizing repair_morning_window's window start (it hardcodes
+  09:15) — noted, not planned.
+- One thin live-only **1m** bucket on 07-15: 15:15 = 1,051 stocks vs
+  ~1,870 neighbors. Timing artifact, now understood: the drop hit at
+  15:15:50, so segment A's forming 1m candles died uncommitted and
+  the bucket was repopulated only by the reconnect snapshot's 2 s of
+  runway. Soak #3 saw NO dip because its drop landed 6 s into the
+  minute (46 s of post-restart runway); 07-16's 14:42 double drop
+  also barely dipped (1m 14:42 = 1,687) for the same snapshot reason.
+  Left as-is per the 1m live-only precedent; 5m/15m/1h unaffected
+  (5m 15:15 = 2,013 stocks, healthy).
+
+**Phase-gate reading:** the End-Phase-3 "full-session soak clean"
+criterion is now MET on BOTH halves — stability (three consecutive
+soak days) and latency (budget p99 ≤ 50 ms measured MET on two days of
+the optimized worker). No open ruling. Remaining Phase-3 work is the
+queued thread list (replay digests — now FOUR recordings pending the
+streaming digest — ThrottledKite for fetch_historical,
+kite_instruments re-sync, provisional confidence, 3.6, 3.7).
+
 ## Watchlists (3.5 deferred item — DONE 2026-07-11, same session)
 
 Full vertical slice, zero worker contact: `watchlists` +

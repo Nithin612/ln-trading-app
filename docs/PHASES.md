@@ -93,15 +93,32 @@ commit-burst batching; live suite 66 green). Same night: morning-repair
 re-run proved the 14 failures are deterministic STALE kite_instruments
 tokens (re-sync deliverable), not API flake.
 
-**▶ NEXT ACTION — RE-SOAK on the optimized worker (next trading day):**
-fresh `kite_login` ~08:00–09:10 IST, then `make soak` BEFORE 09:15
-(RUNBOOK-soak.md). Success = clean stability + latency in the (10,20]
-bucket or better → tighten the budget to 20 ms; (20,50] = still within
-budget, optimization verdict honest-recorded. Then: streaming replay
-digest (07-13 + 07-14 digest pins both pending), `fetch_historical` →
-`ThrottledKite`, kite_instruments re-sync (the 14 stale tokens),
-provisional-confidence impl (design pinned), 3.6 outcome ticks, 3.7
-shadow week.
+**RE-SOAK RAN TWICE — 2026-07-15 + 2026-07-16 (optimized worker
+8eac05a): STABILITY PASS ×2; BUDGET MET; NO TIGHTENING** (full record:
+ledger §Fourth soak). 9.35 M + 9.54 M ticks, 848 k committed candles
+each day, 0 skipped, queues never past 2/10,000; three more Kite 1006
+drops (incl. the first back-to-back double drop, 07-16 14:42) all
+recovered unattended in 8–17 s; both recordings lossless. Latency
+verdict (honest): every segment's total p99 still in **(20,50]** →
+the (10,20] tightening criterion NOT met, budget line stays **p99 ≤
+50 ms** — but the slate did move the interior (processing p50
+7.5→5.0 ms both days; processing p99 into (10,20] on 07-15's main
+segment; max 98→89 ms). **The End-Phase-3 "full-session soak clean"
+criterion is now MET on both stability and latency — no open ruling.**
+Data: 07-15 started 3.3 min late → thin 09:15 open bucket, REPAIRED
+same night (`repair_morning_window.py --day 2026-07-15 --until-ist
+09:20`); 07-16 started 09:12:31 (first pre-09:15 soak) — only blemish
+is the volume-undercounted 5m 14:40 bucket from the double restart
+(GREATEST-merge keeps the larger partial; accepted per the 07-14
+precedent).
+
+**▶ NEXT ACTION — the queued Phase-3 thread list, in order:**
+streaming replay digest (digest pins now pending for FOUR recordings:
+07-13/14/15/16), `fetch_historical` → `ThrottledKite`,
+kite_instruments re-sync (the deterministic stale tokens — grown
+14 → 16 as of the 07-15 repair run),
+provisional-confidence impl (design pinned, ledger §Decisions), 3.6
+outcome ticks, 3.7 shadow week (30-day paper clock).
 
 Open threads, in order:
 1. **FIRST SOAK RAN 2026-07-10 — PARTIAL; latency verdict OPEN** (full
