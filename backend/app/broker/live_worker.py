@@ -809,21 +809,50 @@ async def startup_gap_fill(db: Any, access_token: str, token_map: dict[int, int]
     """REST-backfill gaps for the subscription list, then COMMIT — the
     session-close rollback silently discarded every fetched row before
     (bug-hunter HIGH, 2026-07-09: gap_fill never commits and this is its
-    only caller)."""
-    from app.broker.gap_fill import detect_and_fill_gaps
+    only caller).
 
+    ONE ThrottledKite is shared across the whole loop — the throttle gate
+    only spaces calls on the same instance (2026-07-17 fix: the old
+    per-call unthrottled client fired ~6,165 raw requests at full
+    universe × 3 TFs and drew intermittent `invalid token`, the 07-13
+    rebuild failure). Budget note: full-universe gap-fill now paces at
+    ~3 req/s ≈ 35 min — it exists for small post-outage gaps, not as a
+    bulk rebuild (that's scripts/backfill_intraday.py).
+
+    Commit/rollback is PER INSTRUMENT: one mid-loop DB error used to
+    poison the single long transaction, every later statement failed
+    InFailedSQLTransaction, and the final COMMIT was silently converted
+    to ROLLBACK server-side — the worker started up believing gap-fill
+    ran while every fetched row was discarded (bug-hunter HIGH,
+    2026-07-17). A dead session token (TokenException) aborts the whole
+    fill: each remaining paced call is doomed, and the worker will fail
+    loudly at ticker connect anyway. Residual (accepted): a Kite hard
+    outage still grinds transient retries per stock — the worker can't
+    tick without Kite either, and the operator sees the tracebacks."""
+    from app.broker.gap_fill import detect_and_fill_gaps
+    from app.broker.kite_rest import ThrottledKite, TokenException
+
+    kite = ThrottledKite(access_token)
     for instrument_token, stock_id in token_map.items():
         try:
             await detect_and_fill_gaps(
                 db,
-                access_token,
+                kite,
                 instrument_token,
                 stock_id,
                 timeframes=["5m", "15m", "1h"],
             )
+            await db.commit()
+        except TokenException:
+            await db.rollback()
+            log.critical(
+                "gap-fill: session token dead at stock_id=%s — aborting the fill "
+                "(worker will fail at ticker connect; re-run kite_login)", stock_id,
+            )
+            break
         except Exception:
+            await db.rollback()
             log.exception("gap-fill failed for stock_id=%s", stock_id)
-    await db.commit()
 
 
 async def _bootstrap(

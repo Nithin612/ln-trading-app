@@ -691,6 +691,75 @@ Replay ≡ live on every recording with surviving counters — the
 LiveEngine's determinism contract holds at full-day, full-universe,
 multi-restart scale.
 
+## ThrottledKite routing for gap-fill — 2026-07-17 (latent-bug thread closed; 3 more latents found in the seam and fixed)
+
+**The filed bug (07-13 rebuild root cause):** `kite_client.
+fetch_historical` built a raw unthrottled KiteConnect per call;
+`startup_gap_fill` loops ~2,055 instruments × 3 TFs through
+`detect_and_fill_gaps` → ~6,165 unthrottled REST calls, drawing
+intermittent `invalid token` (trading-domain.md mandates ALL Kite REST
+through the shared throttled client). Fix: `detect_and_fill_gaps(db,
+kite: ThrottledKite, …)` fetches through the caller's client;
+`fetch_historical` DELETED (kite_client docstring now points
+rate-limited REST at kite_rest; `build_kite` remains for one-shot /
+explicitly-batched low-rate calls — instruments CSV, session exchange,
+the per-minute chain snapshot); `startup_gap_fill` builds ONE
+ThrottledKite for the whole loop. Budget stated honestly in the
+docstring: full-universe gap-fill paces at ~3 req/s ≈ 35 min — it
+exists for small post-outage gaps; bulk rebuilds are
+`backfill_intraday.py`.
+
+**bug-hunter (same session): the diff itself CLEAN (signature parity
+byte-identical incl. `continuous=False`; no import cycles; asyncio.Lock
+single-loop by construction; no other raw historical_data sites; both
+canaries stash-proven) — but THREE pre-existing latents CONFIRMED with
+executed repros in the exact functions touched, all fixed same
+session:**
+1. **HIGH — UTC-as-IST fetch window:** kiteconnect strftimes WALL time
+   (no tz conversion) and Kite reads it as IST; gap_fill passed
+   UTC-aware datetimes → every requested window was shifted 5.5 h into
+   the past. A mid-session outage fill (the designed recovery
+   scenario) requested a pre-open window → Kite returned nothing →
+   "success", outage candles never filled; overnight fills re-upserted
+   yesterday's candles and logged rows=N success. The repair/backfill
+   scripts already used naive IST (the repo convention). Fixed at the
+   gap_fill call site: `astimezone(IST).replace(tzinfo=None)` +
+   regression asserting the stub receives naive IST wall time.
+2. **HIGH — poisoned-transaction silent data loss:** the per-instrument
+   `except` had no rollback and the whole loop ran in ONE transaction;
+   one mid-loop DB error → every later statement failed
+   InFailedSQLTransaction (caught + logged ×~1,700) → the final COMMIT
+   was **silently converted to ROLLBACK server-side** (executed repro:
+   COMMIT issued, no exception, nothing persisted) — the worker started
+   believing gap-fill ran while every fetched row was discarded (the
+   2026-07-09 data-loss class resurrected, with the throttle stretching
+   the open transaction to ~35 min). Fixed: commit PER INSTRUMENT,
+   rollback on failure. Regression test poisons stock B's session for
+   real (broken SQL) and asserts stock A's rows AND stock C's rows
+   survive — on the old code the same test shows `[]`: total silent
+   loss.
+3. **MEDIUM — dead-session-token grind:** `TokenException` is
+   non-transient (raises straight through ThrottledKite's retry) but
+   gap_fill's per-TF catch-all swallowed it → a dead token ground all
+   ~6,165 paced calls ≈ 35 min of futile pre-ticker startup delay.
+   Fixed: TokenException (session-level, distinct from the
+   stale-instrument `InputException: invalid token` class, which stays
+   isolated per-TF) now escapes gap_fill; `startup_gap_fill` logs
+   CRITICAL and aborts the fill (worker fails loudly at ticker connect;
+   ritual = re-run kite_login). Accepted residual (documented in the
+   docstring): a Kite hard outage still grinds transient retries — the
+   worker can't tick without Kite either.
+
+**Tests:** test_gap_fill.py rebuilt around the seam (real test
+Postgres + duck-typed _StubKite per the repair-script pattern; exact
+Decimal value assertions; per-TF failure isolation with
+KiteException; dead-token abort; no-data skip; the v1 tautology test
+removed) + 3 new startup_gap_fill behavior tests in test_live_worker
+(shared-instance identity canary; poisoned-instrument survival;
+dead-token abort). **All six key canaries stash-proven to FAIL on the
+old code.** Affected suites 49 green; ruff + mypy strict clean; full
+backend non-parity leg green (see gate evidence).
+
 ## Watchlists (3.5 deferred item — DONE 2026-07-11, same session)
 
 Full vertical slice, zero worker contact: `watchlists` +

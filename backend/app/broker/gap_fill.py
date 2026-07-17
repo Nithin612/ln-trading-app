@@ -3,8 +3,13 @@
 When the tick consumer reconnects after a disconnect it needs to backfill
 the candles that were missed during the outage.  This module:
   1. Detects how far back we need to fill (last DB row → now)
-  2. Fetches from Kite REST historical_data
+  2. Fetches from Kite REST historical_data via the SHARED ThrottledKite
   3. Upserts the candles into the appropriate ohlcv_* tables
+
+Callers own ONE ThrottledKite per run and pass it in — the throttle gate
+only spaces calls that share the instance (trading-domain.md: Kite
+historical is ~3 req/s; the 2026-07-13 rebuild proved the unthrottled
+path draws intermittent `invalid token` at full-universe scale).
 """
 
 from __future__ import annotations
@@ -13,16 +18,19 @@ import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from typing import Any
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.broker.candle_aggregator import TIMEFRAME_TABLE
-from app.broker.kite_client import fetch_historical
+from app.broker.kite_rest import ThrottledKite, TokenException
 from app.models.market_data import Ohlcv1h, Ohlcv1m, Ohlcv5m, Ohlcv15m
 
 log = logging.getLogger(__name__)
+
+_IST = ZoneInfo("Asia/Kolkata")
 
 # Kite interval strings for each timeframe
 _TF_TO_KITE_INTERVAL: dict[str, str] = {
@@ -42,12 +50,13 @@ _TF_TO_MODEL: dict[str, Any] = {
 
 async def detect_and_fill_gaps(  # noqa: C901
     db: AsyncSession,
-    access_token: str,
+    kite: ThrottledKite,
     instrument_token: int,
     stock_id: int,
     timeframes: list[str] | None = None,
 ) -> dict[str, int]:
-    """Detect gaps for each timeframe and fill them from Kite REST.
+    """Detect gaps for each timeframe and fill them from Kite REST
+    through the caller's shared ThrottledKite.
 
     Returns dict of {timeframe: rows_inserted}.
     """
@@ -90,13 +99,24 @@ async def detect_and_fill_gaps(  # noqa: C901
         )
 
         try:
-            candles = await fetch_historical(
-                access_token=access_token,
+            # kiteconnect strftimes WALL time (no tz conversion) and Kite
+            # reads it as IST — pass naive IST like the repair/backfill
+            # scripts, or the window shifts 5.5 h into the past and the
+            # actual outage candles are never requested (bug-hunter HIGH,
+            # 2026-07-17: UTC-aware datetimes made mid-session gap-fill
+            # a silent no-op).
+            candles = await kite.historical_data(
                 instrument_token=instrument_token,
+                from_dt=gap_start.astimezone(_IST).replace(tzinfo=None),
+                to_dt=now.astimezone(_IST).replace(tzinfo=None),
                 interval=kite_interval,
-                from_dt=gap_start,
-                to_dt=now,
             )
+        except TokenException:
+            # Session token is dead (distinct from a stale per-instrument
+            # token, which Kite reports as InputException): every further
+            # call this run is doomed — abort instead of grinding the
+            # remaining ~6k paced calls (bug-hunter MEDIUM, 2026-07-17).
+            raise
         except Exception:
             log.exception("Kite historical_data failed for stock_id=%d tf=%s", stock_id, tf)
             results[tf] = 0

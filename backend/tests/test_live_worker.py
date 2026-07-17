@@ -592,6 +592,103 @@ class TestBugHunterRegressions:
         ).scalar()
         assert n == 1
 
+    async def test_startup_gap_fill_shares_one_throttled_client(
+        self, db: AsyncSession, monkeypatch
+    ) -> None:
+        """Regression (2026-07-17, ThrottledKite routing): the throttle
+        gate only spaces calls that share an instance — per-stock/per-call
+        clients defeat it entirely (the 07-13 unthrottled-rebuild class:
+        ~6,165 raw requests, intermittent `invalid token`). Every stock's
+        fill must receive the SAME ThrottledKite; the old code passed the
+        raw token string."""
+        from app.broker.kite_rest import ThrottledKite
+
+        seen: list[object] = []
+
+        async def fake_fill(dbs, kite, instrument_token, stock_id, timeframes):
+            seen.append(kite)
+            return {}
+
+        import app.broker.gap_fill as gf
+
+        monkeypatch.setattr(gf, "detect_and_fill_gaps", fake_fill)
+        await startup_gap_fill(db, "token", {1: 10, 2: 20, 3: 30})
+
+        assert len(seen) == 3
+        assert isinstance(seen[0], ThrottledKite)  # canary: was a str
+        assert seen[0] is seen[1] is seen[2]
+
+    async def test_startup_gap_fill_survives_a_poisoned_instrument(
+        self, db: AsyncSession, monkeypatch
+    ) -> None:
+        """Regression (bug-hunter HIGH, 2026-07-17): the loop ran in ONE
+        transaction with no rollback in the except — a mid-loop DB error
+        poisoned the session, every later statement failed
+        InFailedSQLTransaction, and the final COMMIT was silently
+        converted to ROLLBACK server-side: the worker started believing
+        gap-fill ran while EVERY fetched row was discarded. Now commit is
+        per instrument and failures roll back: work before the poison
+        survives, work after it proceeds."""
+        from tests.helpers import make_stock
+
+        # plain ints: rollback expires ORM instances, and touching .id
+        # afterwards would lazy-refresh outside the greenlet
+        ok_id, bad_id, after_id = [
+            (await make_stock(db, symbol=f"GAPPOIS{i}")).id for i in range(3)
+        ]
+
+        async def fake_fill(dbs, kite, instrument_token, stock_id, timeframes):
+            if stock_id == bad_id:
+                # real poisoning: a failing statement inside the session
+                await dbs.execute(text("SELECT definitely broken syntax"))
+            await dbs.execute(
+                text(
+                    "INSERT INTO ohlcv_5m (time, stock_id, open, high, low,"
+                    " close, volume, is_complete) VALUES"
+                    " (:t, :sid, 1, 1, 1, 1, 1, true)"
+                ),
+                {"t": datetime.fromtimestamp(OPEN_TS, tz=UTC), "sid": stock_id},
+            )
+            return {"5m": 1}
+
+        import app.broker.gap_fill as gf
+
+        monkeypatch.setattr(gf, "detect_and_fill_gaps", fake_fill)
+        await startup_gap_fill(db, "token", {1: ok_id, 2: bad_id, 3: after_id})
+
+        await db.rollback()  # committed work must survive a rollback
+        rows = (
+            await db.execute(
+                text(
+                    "SELECT stock_id FROM ohlcv_5m WHERE stock_id IN"
+                    " (:a, :b, :c) ORDER BY stock_id"
+                ),
+                {"a": ok_id, "b": bad_id, "c": after_id},
+            )
+        ).scalars().all()
+        assert rows == [ok_id, after_id]  # before AND after the poison; poisoned one absent
+
+    async def test_startup_gap_fill_aborts_on_dead_session_token(
+        self, db: AsyncSession, monkeypatch
+    ) -> None:
+        """A dead SESSION token fails every remaining paced call — the
+        loop must stop at the first TokenException instead of grinding
+        the rest of the universe (bug-hunter MEDIUM, 2026-07-17)."""
+        from app.broker.kite_rest import TokenException
+
+        attempted: list[int] = []
+
+        async def fake_fill(dbs, kite, instrument_token, stock_id, timeframes):
+            attempted.append(stock_id)
+            raise TokenException("Incorrect `api_key` or `access_token`.")
+
+        import app.broker.gap_fill as gf
+
+        monkeypatch.setattr(gf, "detect_and_fill_gaps", fake_fill)
+        await startup_gap_fill(db, "token", {1: 10, 2: 20, 3: 30})
+
+        assert attempted == [10]  # 20 and 30 never attempted
+
 
 class TestLatencyHistogram:
     def test_buckets_and_quantiles(self) -> None:

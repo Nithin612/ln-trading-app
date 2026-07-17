@@ -4,8 +4,15 @@ Responsibilities:
 - Build the Kite login URL (step 1 of OAuth)
 - Exchange request_token for access_token (step 2)
 - Persist/revoke BrokerToken rows in the DB
-- Expose a ready-to-use KiteConnect instance for REST calls (historical data, orders)
 - Download and upsert the instruments CSV into kite_instruments
+
+Rate-limited REST (historical data) does NOT live here: it goes through
+`app.broker.kite_rest.ThrottledKite` — the shared throttled client
+(trading-domain.md). The unthrottled `fetch_historical` that used to
+live in this module was the 2026-07-13 rebuild's failure root and was
+removed 2026-07-17. `build_kite` remains for one-shot or
+explicitly-batched low-rate calls (instruments CSV, session exchange,
+the per-minute F&O chain snapshot in app/tasks/fo_tasks.py).
 """
 
 from __future__ import annotations
@@ -15,7 +22,7 @@ import io
 import logging
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
-from typing import Any, cast
+from typing import Any
 
 from kiteconnect import KiteConnect
 from sqlalchemy import select, update
@@ -189,30 +196,3 @@ async def sync_instruments(db: AsyncSession, access_token: str) -> int:
         await db.execute(stmt)
     log.info("Kite instruments synced: %d rows", len(records))
     return len(records)
-
-
-async def fetch_historical(
-    access_token: str,
-    instrument_token: int,
-    interval: str,
-    from_dt: datetime,
-    to_dt: datetime,
-) -> list[dict[str, Any]]:
-    """Fetch OHLCV candles from Kite REST for gap-fill.
-
-    interval: "minute" | "5minute" | "15minute" | "60minute" | "day"
-    Returns list of dicts with keys: date, open, high, low, close, volume.
-    """
-    kc = build_kite(access_token)
-    # Run in a thread because kiteconnect is sync
-    import asyncio
-    data = await asyncio.to_thread(
-        lambda: kc.historical_data(
-            instrument_token=instrument_token,
-            from_date=from_dt,
-            to_date=to_dt,
-            interval=interval,
-            continuous=False,
-        ),
-    )
-    return cast("list[dict[str, Any]]", data)

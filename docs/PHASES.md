@@ -125,8 +125,19 @@ exactly matching worker counters; 07-13 partial-reconciled by design —
 runs 1–3 console logs were lost that day). Determinism contract holds
 at full-day, full-universe, multi-restart scale.
 
+**✅ THROTTLEDKITE ROUTING — DONE 2026-07-17 (ledger §ThrottledKite
+routing):** `fetch_historical` deleted; gap-fill fetches through ONE
+shared `ThrottledKite` (full-universe fill now paces ~3 req/s ≈ 35 min,
+documented as post-outage repair, not bulk rebuild). bug-hunter found
+the diff clean AND three pre-existing latents in the same seam — all
+fixed + stash-proven same session: UTC-as-IST fetch window (mid-session
+gap-fill was a silent no-op — requested windows shifted 5.5 h into the
+past), poisoned-transaction silent COMMIT-as-ROLLBACK data loss (now
+commit-per-instrument + rollback), dead-session-token grind (now aborts
+CRITICAL at first TokenException; stale-instrument InputExceptions stay
+isolated). Suites 49 green + full non-parity leg.
+
 **▶ NEXT ACTION — the queued Phase-3 thread list, in order:**
-`fetch_historical` → `ThrottledKite` (latent bug),
 kite_instruments re-sync (the deterministic stale tokens — grown
 14 → 16 as of the 07-15 repair run),
 provisional-confidence impl (design pinned, ledger §Decisions), 3.6
