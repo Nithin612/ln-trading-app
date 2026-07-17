@@ -112,9 +112,21 @@ is the volume-undercounted 5m 14:40 bucket from the double restart
 (GREATEST-merge keeps the larger partial; accepted per the 07-14
 precedent).
 
+**✅ STREAMING REPLAY DIGEST — DONE 2026-07-17 (ledger §Streaming
+replay digest):** `app/broker/replay.py` is streaming end-to-end
+(iter_recording/iter_events/replay_stream + atomic emit; old API =
+thin wrappers, golden digest byte-identical); ~38 MB flat RSS, ~3 min
+per full-day recording (was exit-137 on a 15 GB box). Replay suite
+11 → 19; bug-hunter no tier-A (MEDIUM emit-clobber fixed +
+regressions). **ALL FOUR soak recordings pinned; replay ≡ live EXACT
+on every recording with surviving counters** (07-14: 828,180/14,097 ·
+07-15: 847,995/15,493 · 07-16: 848,693/14,654 committed/triggers all
+exactly matching worker counters; 07-13 partial-reconciled by design —
+runs 1–3 console logs were lost that day). Determinism contract holds
+at full-day, full-universe, multi-restart scale.
+
 **▶ NEXT ACTION — the queued Phase-3 thread list, in order:**
-streaming replay digest (digest pins now pending for FOUR recordings:
-07-13/14/15/16), `fetch_historical` → `ThrottledKite`,
+`fetch_historical` → `ThrottledKite` (latent bug),
 kite_instruments re-sync (the deterministic stale tokens — grown
 14 → 16 as of the 07-15 repair run),
 provisional-confidence impl (design pinned, ledger §Decisions), 3.6

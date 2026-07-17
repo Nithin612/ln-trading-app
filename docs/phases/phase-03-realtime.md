@@ -623,6 +623,74 @@ queued thread list (replay digests — now FOUR recordings pending the
 streaming digest — ThrottledKite for fetch_historical,
 kite_instruments re-sync, provisional confidence, 3.6, 3.7).
 
+## Streaming replay digest — 2026-07-17 (thread closed; all four soak recordings pinned)
+
+**The fix (open thread #4/#5 since 07-13):** `python -m
+app.broker.replay` buffered the whole recording as dicts, the whole
+event stream as a list, and the canonical lines as a third list —
+exit-137 OOM on any full-day recording, which is why every soak digest
+since 07-13 was "pending". `app/broker/replay.py` is now streaming
+end-to-end: `iter_recording` (single-pass validated parse; the
+torn-tail-before-header tolerance needs exactly ONE line of lookahead,
+so each non-blank line is processed when its successor arrives),
+`iter_events` (generator over the unchanged FFI call pattern — one
+single-tuple `on_ticks` per recorded tick line, `set_levels` per lv,
+`on_time` per pulse, fresh LiveBook per header), and
+`replay_stream(path, emit)` → ReplaySummary(lines, events, committed,
+triggers, digest) doing parse → FFI → sha256-update → optional
+incremental emit in constant memory, with the emit file written
+ATOMICALLY (`.tmp` + rename on success, unlink on failure). The old
+public API (`load_recording` / `replay_events` / `replay_file` /
+`canonical_lines` / `events_digest`) survives as thin list wrappers
+over the same generators — one parsing implementation, and the pinned
+golden digest is byte-identical through both paths. CLI output now
+also counts triggers (reconciles against worker counters).
+Measured: **~38 MB peak RSS flat across all four recordings** (the
+old path OOMed a 15 GB box); ~3 min per full-day file.
+
+**Tests 11 → 19** (`make replay`): streaming-vs-buffered digest
+equality on the pin, emit-vs-golden byte equality, single-pass parse
+canary (yields the header of a file whose tail is garbage — the
+buffered loader could never), `iter_events` laziness canary (first
+event before the feed is exhausted — the exit-137 mutant class),
+torn-tail through the streaming path, headerless/empty refusals,
+emit-clobber regression (below). ruff + mypy strict clean; targeted
+live suite (replay + live_worker + live_triggers) 64+ green.
+
+**bug-hunter (same session): BUGS-FOUND, no tier-A — digest/pin
+invariant proven by executing OLD vs NEW implementations** (identical
+sha256 on the pinned golden and on a non-ASCII payload; 20-case
+old-vs-new parse differential 19/20 byte-identical incl. torn+blank
+pairing, CRLF, first-line-torn). Findings: (1) MEDIUM emit hazard —
+the first cut opened `--emit` with truncate BEFORE replaying, so a
+failed run clobbered the target (e.g. a pinned golden → 0 bytes) or
+left a partial stream that looks complete; FIXED with atomic
+`.tmp`+rename (+2 regression tests: target untouched on unreadable
+path AND on mid-replay ReplayError, no stray .tmp). (2) LOW accepted:
+error-precedence drift on doubly-broken files (headerless+garbage now
+fails on the header check first — fail-faster, message-only, no
+consumer matches on it). (3) LOW documented: zero-event `--emit` now
+writes an empty file, not the old spurious `b"\n"` (consistent with
+the empty-stream digest; no zero-event golden exists). (4) test-
+honesty gap (a secretly-buffering replay_stream passed the suite) —
+closed with the `iter_events` laziness canary.
+
+**The pins (streaming digest ritual, run 2026-07-17 00:30–01:00 IST,
+quiet box).** Lines = validated items (headers + lv in, torn/blanks
+out); committed/triggers reconciled against the worker's logged
+counters summed across segments:
+
+| Recording | lines | events | committed | triggers | reconciliation | sha256 |
+|---|---|---|---|---|---|---|
+| soak-2026-07-13.jsonl (315 MB, 6 headers, backend/recordings/) | 4,850,967 | 19,764,553 | 493,235 | 13,265 | PARTIAL — only run #4's console counters survive that day (81,815 committed / 3,218 triggers of these totals); the recording is intact and replays cleanly end-to-end, pinned as deterministic engine input | `88da0c167af30dc89b4e7c099fd6d3c53721670a151643ac407e48dda929a67c` |
+| soak-2026-07-14.jsonl (587 MB, 2 headers) | 9,072,092 | 36,981,894 | 828,180 | 14,097 | **EXACT** — committed 656,733+171,447, triggers 9,995+4,102; lines = 9,045,595 t + 22,386 p + 2 h + 4,109 lv | `5bfdcd35a3b539391eaf931506ce703d3e6d80760b18d0a7f501b54a2a237bf8` |
+| soak-2026-07-15.jsonl (606 MB, 2 headers) | 9,379,427 | 38,221,468 | 847,995 | 15,493 | **EXACT** — committed 809,716+38,279, triggers 13,808+1,685; lines = 9,352,428 t + 22,887 p + 2 h + 4,110 lv | `3fba10ff0ce9f745edd599386f127335a0726d8c4a0dca77ae0ae4c2aee63c7f` |
+| soak-2026-07-16.jsonl (619 MB, 3 headers) | 9,568,765 | 38,981,553 | 848,693 | 14,654 | **EXACT** — committed 729,442+270+118,981, triggers 11,407+0+3,247; lines = 9,539,362 t + 23,232 p + 3 h + 6,168 lv | `cff17a555295d63d74c1a4f343537b24ff70e09be26cf95eebc047823c1ec1d5` |
+
+Replay ≡ live on every recording with surviving counters — the
+LiveEngine's determinism contract holds at full-day, full-universe,
+multi-restart scale.
+
 ## Watchlists (3.5 deferred item — DONE 2026-07-11, same session)
 
 Full vertical slice, zero worker contact: `watchlists` +

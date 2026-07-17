@@ -9,15 +9,20 @@ layer has (no working v1 baseline exists). A real-session golden joins
 this file after the first soak day.
 """
 
+from collections.abc import Iterator
 from pathlib import Path
+from typing import Any
 
 import pytest
 from app.broker.replay import (
     ReplayError,
     canonical_lines,
     events_digest,
+    iter_events,
+    iter_recording,
     load_recording,
     replay_file,
+    replay_stream,
 )
 
 GOLDENS = Path(__file__).parent / "goldens"
@@ -77,6 +82,112 @@ class TestRecordingValidation:
     def test_digest_is_order_sensitive(self) -> None:
         a = [{"kind": "forming", "x": 1}, {"kind": "forming", "x": 2}]
         assert events_digest(a) != events_digest(list(reversed(a)))
+
+
+@pytest.mark.replay
+class TestStreamingReplay:
+    """The 2026-07-17 streaming refactor: full-day recordings (600 MB,
+    ~9.5 M lines) OOMed exit-137 because the harness materialized every
+    item AND every event. The streaming path must be byte-identical to
+    the buffered one — same digest, same emit file, same counts — while
+    parsing single-pass."""
+
+    def test_streaming_digest_matches_buffered_and_pin(self) -> None:
+        s = replay_stream(RECORDING)
+        events, digest = replay_file(RECORDING)
+        assert s.digest == digest == PINNED_DIGEST
+        assert s.events == len(events)
+        assert s.committed == sum(1 for e in events if e["kind"] == "committed")
+        assert s.triggers == sum(1 for e in events if e["kind"] == "trigger")
+        assert s.lines == len(load_recording(RECORDING))
+
+    def test_streaming_emit_matches_the_pinned_stream(self, tmp_path: Path) -> None:
+        out = tmp_path / "emit.jsonl"
+        replay_stream(RECORDING, emit=out)
+        assert out.read_text(encoding="utf-8") == EXPECTED_EVENTS.read_text(encoding="utf-8")
+
+    def test_iter_recording_is_single_pass(self, tmp_path: Path) -> None:
+        """Canary for the OOM fix: the parser must yield items BEFORE
+        reading the rest of the file. The old buffered loader parsed the
+        whole file up front, so it could never hand back the header of a
+        file whose later lines are garbage — the streaming one must."""
+        p = tmp_path / "r.jsonl"
+        p.write_text(
+            '{"k":"h","open":1,"close":2,"tfs":[1]}\n'
+            "garbage-later-in-file\n"
+            '{"k":"p","ts":1}\n',
+            encoding="utf-8",
+        )
+        it = iter_recording(p)
+        assert next(it)["k"] == "h"  # yielded before the garbage is reached
+        with pytest.raises(ReplayError, match="not JSON"):
+            next(it)
+
+    def test_streaming_tolerates_torn_tail_like_buffered(self, tmp_path: Path) -> None:
+        rec = RECORDING.read_text(encoding="utf-8")
+        header = rec.splitlines()[0]
+        torn = '{"k":"t","sid":11,"ts":17835'
+        run2 = header + "\n" + rec[len(header) + 1 :]
+        p = tmp_path / "crashed.jsonl"
+        p.write_text(rec + torn + "\n" + run2, encoding="utf-8")
+        s = replay_stream(p)
+        events, digest = replay_file(p)
+        assert s.digest == digest
+        assert s.events == len(events)
+
+    def test_streaming_headerless_refused(self, tmp_path: Path) -> None:
+        p = tmp_path / "r.jsonl"
+        p.write_text('{"k":"t","sid":1,"ts":1,"p":"1","dv":null,"q":0}\n', encoding="utf-8")
+        with pytest.raises(ReplayError, match="header"):
+            replay_stream(p)
+
+    def test_streaming_empty_refused(self, tmp_path: Path) -> None:
+        p = tmp_path / "r.jsonl"
+        p.write_text("", encoding="utf-8")
+        with pytest.raises(ReplayError, match="empty"):
+            replay_stream(p)
+
+    def test_failed_replay_never_clobbers_the_emit_target(self, tmp_path: Path) -> None:
+        """bug-hunter MEDIUM (2026-07-17): the first streaming cut opened
+        the emit target with truncate BEFORE replaying, so a failed run
+        (typo'd path, torn recording) destroyed whatever --emit pointed
+        at — e.g. a pinned golden — and left partial streams that look
+        complete. Emit must be atomic: target untouched on failure, no
+        stray partial file."""
+        target = tmp_path / "pinned.jsonl"
+        target.write_text("PRECIOUS PINNED CONTENT\n", encoding="utf-8")
+        # (a) unreadable recording path
+        with pytest.raises(FileNotFoundError):
+            replay_stream(tmp_path / "nope.jsonl", emit=target)
+        assert target.read_text(encoding="utf-8") == "PRECIOUS PINNED CONTENT\n"
+        # (b) recording that fails mid-replay (garbage tail, no rescuing header)
+        bad = tmp_path / "bad.jsonl"
+        bad.write_text(
+            RECORDING.read_text(encoding="utf-8") + "torn-with-no-restart\n",
+            encoding="utf-8",
+        )
+        with pytest.raises(ReplayError, match="not JSON"):
+            replay_stream(bad, emit=target)
+        assert target.read_text(encoding="utf-8") == "PRECIOUS PINNED CONTENT\n"
+        assert not (tmp_path / "pinned.jsonl.tmp").exists()
+
+    def test_iter_events_is_lazy(self) -> None:
+        """Canary for the OOM fix at the event level: a buffering
+        iter_events (or a replay_stream that secretly list()s it) would
+        consume the whole feed before yielding — the exit-137 class. The
+        first event must arrive before the input is exhausted."""
+        items = load_recording(RECORDING)
+        consumed = 0
+
+        def feed() -> Iterator[dict[str, Any]]:
+            nonlocal consumed
+            for item in items:
+                consumed += 1
+                yield item
+
+        first = next(iter_events(feed()))
+        assert first["kind"] in {"forming", "committed", "trigger"}
+        assert consumed < len(items)
 
 
 @pytest.mark.replay
