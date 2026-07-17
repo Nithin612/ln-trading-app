@@ -17,15 +17,16 @@ the per-minute F&O chain snapshot in app/tasks/fo_tasks.py).
 
 from __future__ import annotations
 
+import asyncio
 import csv
 import io
 import logging
 from datetime import UTC, datetime, timedelta
-from decimal import Decimal
-from typing import Any
+from decimal import Decimal, InvalidOperation
+from typing import Any, cast
 
 from kiteconnect import KiteConnect
-from sqlalchemy import select, update
+from sqlalchemy import CursorResult, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -148,34 +149,84 @@ def map_instrument_rows(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
                     "synced_at": datetime.now(UTC),
                 }
             )
-        except (KeyError, ValueError):
+        except (KeyError, ValueError, TypeError, InvalidOperation):
+            # Decimal("garbage") raises InvalidOperation, int(None) raises
+            # TypeError — neither is a ValueError (bug-hunter LOW,
+            # 2026-07-17: one malformed strike used to crash the sync).
             continue  # skip malformed rows
     return records
 
 
-async def sync_instruments(db: AsyncSession, access_token: str) -> int:
-    """Download instruments CSV from Kite and upsert into kite_instruments.
+# Partial-dump tripwire for the stale sweep: a truncated instruments CSV
+# must never mass-delete good rows. The tradable universe never halves
+# day-over-day (largest real cliff: monthly NFO expiry ≈ 28% of the
+# dump); anything below this fraction is a bad download.
+_SWEEP_MIN_FRACTION = 0.5
+# Hard-sweep horizon: a row absent from EVERY dump for this many days
+# cannot be explained by any truncated download. Hard-deleting those
+# BEFORE the fraction guard computes its denominator keeps the guard
+# from self-wedging once stale ≥ live (bug-hunter MEDIUM, 2026-07-17:
+# after a long sync lapse or a mass token rotation, the single-tier
+# guard would skip the sweep forever — blocking the only mechanism that
+# could shrink its own denominator).
+_HARD_SWEEP_DAYS = 7
 
-    Returns the number of rows upserted.
+
+async def _delete_older_than(db: AsyncSession, cutoff: datetime) -> int:
+    result = cast(
+        "CursorResult[Any]",
+        await db.execute(delete(KiteInstrument).where(KiteInstrument.synced_at < cutoff)),
+    )
+    return result.rowcount
+
+
+async def sync_instruments(db: AsyncSession, access_token: str) -> int:
+    """Download instruments CSV from Kite, upsert into kite_instruments,
+    then SWEEP rows absent from the dump.
+
+    The dump is Kite's complete tradable universe for the kept segments
+    (NSE/BSE/NFO): a row missing from it is DEAD — delisted equity, moved
+    exchange, or expired derivative. Upsert-only sync let those carcasses
+    accumulate (synced_at frozen at the last dump containing them) and
+    keep JOINing into the worker's subscription universe, where every
+    REST call against them fails `invalid token` (the 07-14/15 repair
+    failures: 16 stocks; 1,584 stale rows by 2026-07-17).
+
+    Two-tier sweep: rows absent ≥ _HARD_SWEEP_DAYS are deleted
+    unconditionally, THEN the fraction guard decides whether this run's
+    younger absences may be swept (skip + WARN on a suspected partial
+    dump — young stale rows survive until a full dump arrives).
+
+    Returns the number of rows upserted (sweep counts are logged).
     """
     kc = build_kite(access_token)
 
-    # kiteconnect returns raw CSV bytes from instruments()
-    raw: bytes | str = kc.instruments()
-    if isinstance(raw, (list, dict)):
-        # Newer SDK versions return parsed list
-        rows = raw
-    else:
+    def _download_and_parse() -> list[Any]:
+        # kiteconnect returns raw CSV bytes from instruments(); newer SDK
+        # versions return a parsed list.
+        raw: bytes | str = kc.instruments()
+        if isinstance(raw, (list, dict)):
+            return list(raw)
         reader = csv.DictReader(io.StringIO(raw if isinstance(raw, str) else raw.decode()))
-        rows = list(reader)
+        return list(reader)
 
+    # Multi-MB blocking download + parse + 60k-row mapping loop: off the
+    # event loop — the tick consumer can share this loop (bug-hunter
+    # MEDIUM, 2026-07-17: an admin-triggered mid-session sync used to
+    # stall tick processing for seconds).
+    rows = await asyncio.to_thread(_download_and_parse)
     if not rows:
         log.warning("Kite instruments response was empty")
         return 0
 
-    records = map_instrument_rows(rows)
+    records = await asyncio.to_thread(map_instrument_rows, rows)
     if not records:
         return 0
+
+    # Watermark derived from the data itself: "no fresh row below the
+    # watermark" holds by construction even across a backward clock step
+    # during mapping (rows AT the watermark survive the strict <).
+    watermark = min(r["synced_at"] for r in records)
 
     # Chunked upsert: with NFO included this is ~80k rows — a single VALUES
     # clause would exceed asyncpg's bind-parameter limit.
@@ -194,5 +245,23 @@ async def sync_instruments(db: AsyncSession, access_token: str) -> int:
             },
         )
         await db.execute(stmt)
-    log.info("Kite instruments synced: %d rows", len(records))
+
+    hard = await _delete_older_than(db, watermark - timedelta(days=_HARD_SWEEP_DAYS))
+
+    total = (
+        await db.execute(select(func.count()).select_from(KiteInstrument))
+    ).scalar_one()
+    if len(records) < _SWEEP_MIN_FRACTION * total:
+        log.warning(
+            "instrument sweep SKIPPED: dump has %d rows vs %d in table — "
+            "partial dump suspected, young stale rows kept for this run",
+            len(records), total,
+        )
+        deleted = 0
+    else:
+        deleted = await _delete_older_than(db, watermark)
+    log.info(
+        "Kite instruments synced: %d rows upserted, %d stale swept (%d hard)",
+        len(records), deleted + hard, hard,
+    )
     return len(records)

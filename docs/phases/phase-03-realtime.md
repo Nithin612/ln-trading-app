@@ -760,6 +760,102 @@ dead-token abort). **All six key canaries stash-proven to FAIL on the
 old code.** Affected suites 49 green; ruff + mypy strict clean; full
 backend non-parity leg green (see gate evidence).
 
+## kite_instruments re-sync — 2026-07-17 (thread closed; stale sweep shipped + EXECUTED; universe made honest)
+
+**Diagnosis (the real mechanism behind the "16 stale tokens"):**
+`sync_instruments` upserted on `instrument_token` and NEVER deleted
+rows absent from Kite's dump — but the dump is the complete tradable
+universe for the kept segments, so a missing row means the instrument
+is DEAD (delisted equity, moved exchange, expired derivative). Ten
+days of daily `kite_login` syncs had accumulated **1,584 carcasses**
+(627 CE + 624 PE = expired option contracts; 333 EQ), each keeping its
+last-seen `synced_at`. The 16 repair-failing stocks were exactly this:
+their NSE EQ rows left the dump between 07-06 and 07-15 (**12 are now
+BSE-only listings; 4 — AURIGROW, GANGAFORGE, GRADIENTE, PANACHE — left
+the dump entirely**), but the stale rows kept satisfying the worker's
+symbol join, so every soak subscribed them and every repair fetched
+them with dead tokens. NOT retryable, NOT refreshable — the correct
+outcome is that they leave the universe.
+
+**The fix:** `sync_instruments` now captures a watermark BEFORE
+mapping (every mapped record is stamped later), upserts as before,
+then **sweeps rows with `synced_at < watermark`** — guarded by
+`_SWEEP_MIN_FRACTION = 0.5`: a dump smaller than half the post-upsert
+table is treated as truncated, the sweep is SKIPPED with a WARNING,
+and stale rows survive until a full dump arrives (the universe never
+halves day-over-day; mass-deletion by a bad download is the one new
+failure mode and it is fenced). Return value unchanged (upserted
+count); sweep count logged. No FK references kite_instruments
+(verified via pg_constraint) — deletion is structurally safe.
+
+**Tests (new `tests/test_instrument_sync.py`, real DB + stubbed
+`build_kite`):** token-rotation sweep (old token row deleted when the
+symbol reappears under a new token), partial-dump tripwire (2-row dump
+vs 10-row table → nothing deleted, WARNING logged), **both sides of
+the worker seam via the real `_build_token_stock_map`** (a symbol
+leaving the dump leaves the token map), surviving-row refresh (fields
+updated, not swept), hard-sweep wedge recovery, exact-50% boundary
+(strict <), swept-count log honesty. Sweep canaries stash-proven to
+FAIL on the upsert-only code; the wedge canary mutation-proven (hard
+tier disabled → test fails).
+
+**bug-hunter (same session): no tier-A; the sweep core proven sound by
+executed repros** (watermark ordering incl. == ties surviving strict <;
+single-transaction atomicity — rollback undoes upsert AND sweep
+together; MVCC — a concurrent reader mid-sweep sees the old complete
+universe, never half-deleted; asyncpg DELETE rowcount exact; caller
+commit parity across kite_login/API-DI/backfill; first-sync and
+expiry-cliff arithmetic — largest real cliff = monthly NFO 28% of the
+dump, well inside the 50% guard; INDICES rows collide with nothing;
+watermark-after-mapping and inverted-guard mutants both caught by the
+suite). Findings, all addressed same session: (1) MEDIUM — the
+fraction guard counted stale rows in its own denominator → permanent
+self-wedge once stale ≥ live (3+ month lapse or a mass token
+rotation), with the sweep — the only mechanism that could shrink the
+denominator — blocked forever; FIXED with the two-tier sweep
+(`_HARD_SWEEP_DAYS = 7`: absences a week deep cannot be a truncated
+download and are deleted BEFORE the guard computes; wedge-recovery
+test mutation-proven). (2) MEDIUM — the multi-MB blocking download +
+CSV parse + 60k-row mapping ran ON the event loop; an admin-triggered
+mid-session sync would stall the tick consumer sharing that loop;
+FIXED via `asyncio.to_thread` for download/parse/mapping. (3) LOW —
+watermark now derived from the mapped data itself (min stamp), immune
+to backward clock steps during mapping. (4) LOW — `map_instrument_rows`
+now also skips `TypeError`/`InvalidOperation` malformed rows (a garbage
+`strike` used to crash the whole sync). Accepted latents (documented):
+concurrent same-morning syncs are unserialized (near-identical dumps,
+self-heals next sync; advisory-lock noted as optional hardening); a
+still-listed row that persistently fails parsing would be swept after
+7 days (mass malformation trips the 50% guard first).
+
+**Live execution (2026-07-17 ~12:00 IST, no worker running):**
+forensic snapshot first (`forensic_kite_instruments_stale_20260717`,
+1,584 rows — repo precedent), then the real `sync_instruments` via the
+active token: **60,751 upserted · 1,582 swept** (two previously-stale
+rows legitimately reappeared in the intraday dump). Verified: table ==
+dump exactly (60,751, ZERO rows older than today); all 16 doomed NSE
+rows GONE (the 12 BSE listings remain, correctly un-joined — the
+stocks master says NSE); worker join **2,056 → 2,037**; future repairs
+and soaks no longer touch dead instruments by construction.
+
+**Coverage finding surfaced by the audit (pre-existing, now
+quantified):** the join covers 2,037 of 2,348 active stocks. Of the
+311 uncovered: **296 are trade-to-trade / surveillance-series
+listings** whose Kite tradingsymbol carries a series suffix
+(`QUICKHEAL-BE` etc.) that the equality join has NEVER matched — they
+were never live-covered in any soak; ~15 are genuinely absent from
+the dump (long-suspended/delisted, incl. 4 of the 16). Also noted:
+index rows ride the dump as `instrument_type='EQ'` with
+`segment='INDICES'` (e.g. BSE INFRA) — verified ZERO collide with the
+worker join today; harmless, filter tightening optional. **Decision
+PINNED FOR USER (§Decisions): what to do with the 296 T2T stocks** —
+(a) leave them out (they are surveillance-flagged, delivery-only;
+defensible for intraday/swing), (b) teach the join series-suffix
+mapping to cover them, and/or (c) deactivate the truly-dead master
+rows so the screener stops scoring ghosts. Changing the tradable
+universe is a trading-domain decision, not an ops fix — not taken
+autonomously.
+
 ## Watchlists (3.5 deferred item — DONE 2026-07-11, same session)
 
 Full vertical slice, zero worker contact: `watchlists` +
@@ -847,6 +943,16 @@ hardcoded gradient + string-concat className.
 
 ## Decisions made this phase
 
+- (**PENDING — user**, raised 2026-07-17 by the instrument-sweep audit)
+  **The 296 trade-to-trade stocks.** 296 of 2,348 active master stocks
+  are T2T/surveillance-series listings (`SYMBOL-BE`/`-BZ` on Kite) that
+  the equality join has never covered — no live ticks, no candles, no
+  signals, in ANY soak to date. Options: (a) accept exclusion
+  (surveillance-flagged, delivery-only — defensible for the intraday +
+  swing styles), (b) series-suffix mapping in the join to cover them,
+  (c) deactivate the ~15 genuinely-dead master rows regardless (incl.
+  AURIGROW/GANGAFORGE/GRADIENTE/PANACHE from the 16). Universe changes
+  are trading-domain: user's call.
 - (soak #3 ruling, **user 2026-07-14**) **Latency budget RESTATED and the
   optimization slate chosen — option (b) + restatement together.** The
   written p99 < 10 ms was authored for 200–500 instruments; three

@@ -137,11 +137,24 @@ commit-per-instrument + rollback), dead-session-token grind (now aborts
 CRITICAL at first TokenException; stale-instrument InputExceptions stay
 isolated). Suites 49 green + full non-parity leg.
 
+**✅ KITE_INSTRUMENTS RE-SYNC — DONE 2026-07-17 (ledger
+§kite_instruments re-sync):** root cause was upsert-only sync — rows
+absent from Kite's dump (= dead instruments) were never deleted; 1,584
+carcasses accumulated and the "16 stale tokens" were 12 moved-to-BSE +
+4 delisted stocks whose leftover NSE rows kept joining the universe.
+`sync_instruments` now sweeps rows absent from the dump (watermark +
+partial-dump tripwire at 50%); EXECUTED live: 60,751 upserted / 1,582
+swept / forensic snapshot kept; worker join 2,056 → 2,037 — soaks and
+repairs no longer touch dead instruments by construction. **Surfaced
+for user decision (ledger §Decisions): 296 active master stocks are
+T2T-series (`-BE`) listings the join has NEVER covered** — include via
+suffix mapping, accept exclusion, and/or deactivate the ~15 truly-dead
+master rows.
+
 **▶ NEXT ACTION — the queued Phase-3 thread list, in order:**
-kite_instruments re-sync (the deterministic stale tokens — grown
-14 → 16 as of the 07-15 repair run),
 provisional-confidence impl (design pinned, ledger §Decisions), 3.6
-outcome ticks, 3.7 shadow week (30-day paper clock).
+outcome ticks, 3.7 shadow week (30-day paper clock). Plus the pending
+user ruling on the 296 T2T stocks (§Decisions).
 
 Open threads, in order:
 1. **FIRST SOAK RAN 2026-07-10 — PARTIAL; latency verdict OPEN** (full
