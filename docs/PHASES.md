@@ -140,8 +140,10 @@ isolated). Suites 49 green + full non-parity leg.
 **✅ KITE_INSTRUMENTS RE-SYNC — DONE 2026-07-17 (ledger
 §kite_instruments re-sync):** root cause was upsert-only sync — rows
 absent from Kite's dump (= dead instruments) were never deleted; 1,584
-carcasses accumulated and the "16 stale tokens" were 12 moved-to-BSE +
-4 delisted stocks whose leftover NSE rows kept joining the universe.
+carcasses accumulated and the "16 stale tokens" were 15 stocks moved
+to NSE's T2T series (token rotated) + 1 delisted (AURIGROW) — split
+corrected 2026-07-17 during the (c) execution — whose leftover
+plain-symbol NSE rows kept joining the universe.
 `sync_instruments` now sweeps rows absent from the dump (watermark +
 partial-dump tripwire at 50%); EXECUTED live: 60,751 upserted / 1,582
 swept / forensic snapshot kept; worker join 2,056 → 2,037 — soaks and
@@ -151,10 +153,32 @@ T2T-series (`-BE`) listings the join has NEVER covered** — include via
 suffix mapping, accept exclusion, and/or deactivate the ~15 truly-dead
 master rows.
 
-**▶ NEXT ACTION — the queued Phase-3 thread list, in order:**
-provisional-confidence impl (design pinned, ledger §Decisions), 3.6
-outcome ticks, 3.7 shadow week (30-day paper clock). Plus the pending
-user ruling on the 296 T2T stocks (§Decisions).
+**✅ T2T UNIVERSE RULING — MADE + EXECUTED 2026-07-17 (user: (a)+(c);
+ledger §Decisions + §Universe deactivation):** (a) the 296 T2T
+(`-BE`-series) stocks stay excluded from live coverage — self-healing
+exclusion (daily sync + plain-symbol join re-cover any stock NSE
+returns to the EQ series automatically); they remain active master
+rows. Future re-inclusion path recorded in §Decisions + memory: option
+(b) suffix-mapping SCOPED to the Investment engine if it graduates in
+Phase 6. (c) EXECUTED via new committed
+`scripts/deactivate_dead_stocks.py` (+4 tests, T2T-canary): 15 ghost
+rows deactivated (14 dead-everywhere incl. GUJGASLTD/JBCHEPHARM/
+RELINFRA-class corporate deaths + v1 noise like NIFTYNXT50; 1
+BSE-only mover AVAILFC), forensic_stocks_deactivated + documented
+reversal; active master 2,348 → 2,333. Corrected en route: the "16
+stale tokens" were 15 T2T series-moves + 1 delisting (not "12 BSE + 4
+delisted").
+
+**⚠ INCIDENT DISCOVERED (pre-existing): EOD INGESTION DOWN SINCE
+2026-07-02** — Celery worker/beat never ran in the v2 era; ohlcv_1d
+(+ FII/DII etc.) frozen at 07-02; the 07-15/16 soaks' prev-day trigger
+levels came from 07-02 dailies; screener reads 2-week-old state.
+
+**▶ NEXT ACTION — in order:** (0) **EOD ingestion restart + catch-up
+backfill 07-03→today** (+ decide the Celery worker's place in the
+daily ritual next to soaks); (1) provisional-confidence impl (design
+pinned, ledger §Decisions); (2) 3.6 outcome ticks; (3) 3.7 shadow week
+(30-day paper clock).
 
 Open threads, in order:
 1. **FIRST SOAK RAN 2026-07-10 — PARTIAL; latency verdict OPEN** (full

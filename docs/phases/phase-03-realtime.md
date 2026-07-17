@@ -770,12 +770,17 @@ is DEAD (delisted equity, moved exchange, expired derivative). Ten
 days of daily `kite_login` syncs had accumulated **1,584 carcasses**
 (627 CE + 624 PE = expired option contracts; 333 EQ), each keeping its
 last-seen `synced_at`. The 16 repair-failing stocks were exactly this:
-their NSE EQ rows left the dump between 07-06 and 07-15 (**12 are now
-BSE-only listings; 4 — AURIGROW, GANGAFORGE, GRADIENTE, PANACHE — left
-the dump entirely**), but the stale rows kept satisfying the worker's
-symbol join, so every soak subscribed them and every repair fetched
-them with dead tokens. NOT retryable, NOT refreshable — the correct
-outcome is that they leave the universe.
+their plain-symbol NSE EQ rows left the dump between 07-06 and 07-15,
+but the stale rows kept satisfying the worker's symbol join, so every
+soak subscribed them and every repair fetched them with dead tokens.
+NOT retryable, NOT refreshable — the correct outcome is that they
+leave the live universe. **[CORRECTED 2026-07-17 during the (c)
+execution — the split first recorded here ("12 BSE-only + 4 delisted")
+was inference and WRONG: 15 of the 16 moved to NSE's T2T series
+(`SYMBOL-BE`, token rotated — 12 of those also list on BSE;
+GANGAFORGE/GRADIENTE/PANACHE are NSE-BE only) and remain ACTIVE master
+rows per ruling (a); exactly ONE (AURIGROW) is delisted everywhere and
+was deactivated.]**
 
 **The fix:** `sync_instruments` now captures a watermark BEFORE
 mapping (every mapped record is stamped later), upserts as before,
@@ -833,18 +838,20 @@ forensic snapshot first (`forensic_kite_instruments_stale_20260717`,
 1,584 rows — repo precedent), then the real `sync_instruments` via the
 active token: **60,751 upserted · 1,582 swept** (two previously-stale
 rows legitimately reappeared in the intraday dump). Verified: table ==
-dump exactly (60,751, ZERO rows older than today); all 16 doomed NSE
-rows GONE (the 12 BSE listings remain, correctly un-joined — the
-stocks master says NSE); worker join **2,056 → 2,037**; future repairs
-and soaks no longer touch dead instruments by construction.
+dump exactly (60,751, ZERO rows older than today); all 16 doomed
+plain-symbol NSE rows GONE (15 of the stocks live on as `-BE` T2T
+listings, correctly un-joined; see the corrected split above); worker
+join **2,056 → 2,037**; future repairs and soaks no longer touch dead
+instruments by construction.
 
 **Coverage finding surfaced by the audit (pre-existing, now
 quantified):** the join covers 2,037 of 2,348 active stocks. Of the
 311 uncovered: **296 are trade-to-trade / surveillance-series
 listings** whose Kite tradingsymbol carries a series suffix
 (`QUICKHEAL-BE` etc.) that the equality join has NEVER matched — they
-were never live-covered in any soak; ~15 are genuinely absent from
-the dump (long-suspended/delisted, incl. 4 of the 16). Also noted:
+were never live-covered in any soak; 15 are genuinely absent from
+the dump under any symbol/series/exchange (long-suspended, delisted,
+merged, or v1 master noise — incl. AURIGROW from the 16). Also noted:
 index rows ride the dump as `instrument_type='EQ'` with
 `segment='INDICES'` (e.g. BSE INFRA) — verified ZERO collide with the
 worker join today; harmless, filter tightening optional. **Decision
@@ -855,6 +862,86 @@ mapping to cover them, and/or (c) deactivate the truly-dead master
 rows so the screener stops scoring ghosts. Changing the tradable
 universe is a trading-domain decision, not an ops fix — not taken
 autonomously.
+
+## Universe deactivation — 2026-07-17 (ruling (a)+(c) EXECUTED; 15 ghost rows out; EOD-ingestion outage DISCOVERED)
+
+**The tool:** new committed `backend/scripts/deactivate_dead_stocks.py`
+(+4 real-DB tests): deactivates active master rows with NO live Kite
+listing — `dead_no_listing` (nothing under the symbol on the stock's
+exchange, plain or series-suffixed, and no plain BSE row) vs
+`moved_bse_only` (recorded separately so either group reverses alone).
+The load-bearing invariant, pinned by the T2T canary test: a stock
+whose ONLY listing is series-suffixed (`SYMBOL-BE`) is NOT touched —
+ruling (a) keeps it active with live-exclusion done by the join.
+INDICES-segment rows never count as listings. Forensic: rows appended
+to cumulative `forensic_stocks_deactivated` (reason + run_at) BEFORE
+the update; reactivation = one documented UPDATE. Idempotent; safe to
+re-run after any instrument sync as delistings continue.
+
+**Dry-run diff caught my own bad inference (the reason this ran
+dry-first):** the candidate list did NOT match the story told in the
+sweep sections — GANGAFORGE/GRADIENTE/PANACHE were absent (they live
+as `-BE` T2T listings: moved series with token rotation, never left
+NSE) and unexpected large-caps appeared (GUJGASLTD, JBCHEPHARM,
+RELINFRA…). Investigation validated the SCRIPT and corrected the
+NARRATIVE: the 16 = 15 T2T moves + 1 delisting (corrections stamped
+into §Fourth soak / §kite_instruments re-sync / PHASES / CHANGELOG /
+memory), and the 15 candidates are genuinely gone from Kite under any
+symbol, series, exchange, or company NAME (ILIKE hunt) — recent
+corporate deaths (mergers/delistings/suspensions) plus v1 master noise
+(NIFTYNXT50 is an index name; EFCIL-RE an expired rights entitlement;
+CLCIND/QUINTEGRA/GFSTEELS never had one EOD bar).
+
+**EXECUTED:** 15 deactivated — 14 `dead_no_listing` (AURIGROW, CLCIND,
+EFCIL-RE, GFSTEELS, GUJGASLTD, JBCHEPHARM, LYPSAGEMS, MIRCELECTR,
+NIFTYNXT50, QUINTEGRA, RELINFRA, UNIVAFOODS, VISASTEEL, WIMPLAST) + 1
+`moved_bse_only` (AVAILFC). Active master 2,348 → 2,333; worker join
+unchanged at 2,037 (none were in it); forensic table holds all 15.
+Known residual: nothing auto-REACTIVATES a deactivated stock if it
+reappears in the dump — reversal is manual by design (documented in
+the script docstring).
+
+**bug-hunter (same session): no tier-A; the EXECUTED run verified
+consistent end-to-end on prod** (all 15 inactive, forensic reasons
+match, classify now matches 0, ZERO open positions/active signals on
+the 15, OHLCV survives, worker join intact; the LIKE metacharacter /
+hyphen-symbol / NULL-segment / DDL-transactionality edges all proven
+sound with executed repros — metacharacter over-match can only
+false-KEEP, never wrongly deactivate; EFCIL-RE traces correctly
+through the plain-equality branch). Findings, all fixed same session
+for FUTURE runs: (1) MEDIUM — classify → forensic → UPDATE were three
+statements under READ COMMITTED, not one snapshot; an executed
+two-session repro deactivated a stock relisted mid-run and recorded a
+forensic reason disagreeing with the classify print; FIXED by
+collapsing to a single CTE statement (classify + forensic INSERT +
+UPDATE + RETURNING share one snapshot). (2) LOW — case-sensitive
+classify (deliberate: mirrors the worker join) now emits a pre-flight
+WARNING listing any active mixed-case symbols instead of silently
+sweeping them (prod today: zero). (3) LOW test gap — the reason-CASE's
+INDICES exclusion was unpinned (mutant passed); new
+`test_bse_index_row_does_not_flip_the_reason` kills it (reason drives
+group-wise reversal, so mislabels matter). (4) LOW — docstring
+reactivation SQL now compares run_at in IST (UTC-date cast silently
+matched nothing for 00:00–05:29 IST runs) and documents
+APP_DEBUG=false for echo-free output (the raw SQL on stdout is the
+engine's app_debug echo, repo-wide, pre-existing). Suite 5 green after
+fixes.
+
+**INCIDENT DISCOVERED during evidence-checking (pre-existing, NOT
+caused by any of this): EOD ingestion has been DOWN since 2026-07-02**
+— `max(ohlcv_1d.time)` is globally 07-02, the day before Phase 0
+started. The Celery worker/beat has not run during the entire v2 era
+(soak ritual keeps the box quiet; the broker list is even cleared),
+so bhavcopy/FII-DII/EOD tasks never fire. Consequences: (1) EOD
+corroboration was unavailable for the 07-02-dated deactivation
+candidates (Kite-dump absence + name-hunt carried the decision alone
+— acceptable, reversible); (2) **the 07-15/16 soaks' prev-day trigger
+levels were computed from 07-02 dailies** (visible in the soak logs'
+startup `ohlcv_1d` query) — trigger evidence stands but its prev-day
+levels were ~2 weeks stale; (3) screener/suggestions read 07-02 state.
+**Queued as the next ops action (PHASES): restart EOD ingestion +
+catch-up backfill 07-03→today, and decide where the Celery worker fits
+in the daily ritual alongside soaks.**
 
 ## Watchlists (3.5 deferred item — DONE 2026-07-11, same session)
 
@@ -943,16 +1030,31 @@ hardcoded gradient + string-concat className.
 
 ## Decisions made this phase
 
-- (**PENDING — user**, raised 2026-07-17 by the instrument-sweep audit)
-  **The 296 trade-to-trade stocks.** 296 of 2,348 active master stocks
-  are T2T/surveillance-series listings (`SYMBOL-BE`/`-BZ` on Kite) that
-  the equality join has never covered — no live ticks, no candles, no
-  signals, in ANY soak to date. Options: (a) accept exclusion
-  (surveillance-flagged, delivery-only — defensible for the intraday +
-  swing styles), (b) series-suffix mapping in the join to cover them,
-  (c) deactivate the ~15 genuinely-dead master rows regardless (incl.
-  AURIGROW/GANGAFORGE/GRADIENTE/PANACHE from the 16). Universe changes
-  are trading-domain: user's call.
+- (**RULED — user 2026-07-17: options (a)+(c); EXECUTED same day**)
+  **The T2T universe question.** 296 of 2,348 active master stocks are
+  T2T/surveillance-series listings (`SYMBOL-BE`/`-BZ` on Kite) the
+  equality join has never covered — no live ticks in ANY soak.
+  **Ruling (a): accept exclusion from live coverage.** Rationale
+  (recommendation adopted in full): T2T mechanics are structurally
+  incompatible with the current styles — mandatory delivery / no MIS
+  kills intraday; 2–5% circuit bands break the swing risk model's
+  executable-SL assumption (sizing formula + reject-don't-clamp);
+  surveillance lists are enriched with the manipulation patterns that
+  most fool volume/momentum factor models; and the exclusion is
+  SELF-HEALING, not a blacklist — the daily sync + plain-symbol join
+  re-cover any stock the day NSE returns it to the EQ series, zero
+  action. They remain ACTIVE master rows (EOD flows when ingestion
+  runs). **Ruling (c): deactivate ghost master rows — EXECUTED** via
+  new committed `backend/scripts/deactivate_dead_stocks.py` (see
+  §Universe deactivation). **Future path (recorded for re-inclusion,
+  per user request):** if the Investment engine graduates from FLAGGED
+  in Phase 6 and small-cap coverage is wanted, implement option (b) —
+  series-suffix mapping — SCOPED to the Investment style only, with
+  per-instrument series carried into the master, hard ineligibility
+  for intraday/swing signals, explicit T2T/circuit-band labeling in
+  suggestions, and the EOD watch-only rider (series ≠ EQ → no signal
+  generation for other styles) so the EOD and live universes agree.
+  Memory: [[t2t-universe-ruling]].
 - (soak #3 ruling, **user 2026-07-14**) **Latency budget RESTATED and the
   optimization slate chosen — option (b) + restatement together.** The
   written p99 < 10 ms was authored for 200–500 instruments; three
