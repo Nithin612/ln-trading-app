@@ -10,6 +10,7 @@ Covers:
 - API: POST /market/ingest/bhavcopy (admin-only)
 - Backfill range validation
 """
+
 import io
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -54,6 +55,7 @@ WIPRO,EQ,450.00,460.00,445.00,455.00,455.00,440.00,300000,13650.00,not-a-date
 
 # ── Parser unit tests ─────────────────────────────────────────────────────────
 
+
 def test_parse_bhavcopy_csv_happy_path() -> None:
     rows = parse_bhavcopy_csv(io.StringIO(_GOOD_CSV))
     symbols = [r.symbol for r in rows]
@@ -95,6 +97,7 @@ def test_parse_bhavcopy_csv_headers_only() -> None:
 
 
 # ── Upsert / idempotency tests (require DB) ───────────────────────────────────
+
 
 @pytest.mark.anyio
 async def test_upsert_bhavcopy_inserts_and_is_idempotent(db: AsyncSession) -> None:
@@ -224,6 +227,79 @@ def test_parse_fii_dii_response_segments() -> None:
     assert dii_opts == []
 
 
+def test_fiidii_flat_api_shape_parses_to_cash_segment() -> None:
+    """Regression (2026-07-18): the live fiidiiTradeReact endpoint serves a
+    FLAT shape (buyValue/sellValue, no CF/FF/OF breakdown). The old parser
+    only knew the segmented shape, returned ZERO records for real API
+    responses, and fii_dii_daily stayed empty forever."""
+    live_payload: list[dict[str, object]] = [
+        {
+            "buyValue": "17180.08",
+            "category": "DII",
+            "date": "17-Jul-2026",
+            "netValue": "1017.89",
+            "sellValue": "16162.19",
+        },
+        {
+            "buyValue": "14393.77",
+            "category": "FII/FPI",
+            "date": "17-Jul-2026",
+            "netValue": "-376.41",
+            "sellValue": "14770.18",
+        },
+    ]
+    records = parse_fii_dii_response(live_payload)
+    # Canary: the old parser produced [] here.
+    assert len(records) == 2
+    assert all(r.segment == "cash" for r in records)
+    assert all(r.trade_date == date(2026, 7, 17) for r in records)
+
+    fii = next(r for r in records if r.investor_type == "FII")
+    assert fii.buy_value_cr == Decimal("14393.77")
+    assert fii.sell_value_cr == Decimal("14770.18")
+    dii = next(r for r in records if r.investor_type == "DII")
+    assert dii.buy_value_cr == Decimal("17180.08")
+
+
+def test_fiidii_mixed_shape_prefers_segmented_cash() -> None:
+    """Regression (bug-hunter 2026-07-18 #3): in a payload carrying BOTH
+    shapes, buyValue is plausibly a cash+F&O total — the segmented buyCF
+    must win for the cash segment and the F&O breakdown must survive."""
+    mixed: list[dict[str, object]] = [
+        {
+            "date": "17-Jul-2026",
+            "category": "FII/FPI",
+            "buyValue": "99999.99",
+            "sellValue": "88888.88",
+            "buyCF": "12345.67",
+            "sellCF": "9876.54",
+            "buyFF": "100.00",
+            "sellFF": "50.00",
+        }
+    ]
+    records = parse_fii_dii_response(mixed)
+    assert len(records) == 2  # cash (from CF) + futures
+    cash = next(r for r in records if r.segment == "cash")
+    assert cash.buy_value_cr == Decimal("12345.67")
+    futures = next(r for r in records if r.segment == "futures")
+    assert futures.buy_value_cr == Decimal("100.00")
+
+
+def test_fiidii_non_finite_values_rejected() -> None:
+    """Regression (bug-hunter 2026-07-18 #5): "NaN" parses as a valid
+    Decimal AND fits Numeric(12,4) — one such row would poison the §2.7
+    SUM() rollup. Non-finite values must drop the record, not store NaN."""
+    payload: list[dict[str, object]] = [
+        {
+            "date": "17-Jul-2026",
+            "category": "DII",
+            "buyValue": "NaN",
+            "sellValue": "16162.19",
+        }
+    ]
+    assert parse_fii_dii_response(payload) == []
+
+
 @pytest.mark.anyio
 async def test_upsert_fii_dii_idempotent(db: AsyncSession) -> None:
     from app.services.fii_dii_service import FiiDiiRecord
@@ -250,6 +326,7 @@ async def test_upsert_fii_dii_idempotent(db: AsyncSession) -> None:
 
 
 # ── API tests ─────────────────────────────────────────────────────────────────
+
 
 @pytest.mark.anyio
 async def test_ohlcv_endpoint_returns_bars(client: AsyncClient, db: AsyncSession) -> None:
@@ -385,9 +462,7 @@ async def test_bulk_block_deals_endpoint(client: AsyncClient, db: AsyncSession) 
 
 
 @pytest.mark.anyio
-async def test_ingest_bhavcopy_endpoint_admin_only(
-    client: AsyncClient, db: AsyncSession
-) -> None:
+async def test_ingest_bhavcopy_endpoint_admin_only(client: AsyncClient, db: AsyncSession) -> None:
     await create_test_user(db, email="user@example.com", role="user")
     headers = await get_auth_headers(client, "user@example.com")
 

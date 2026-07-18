@@ -169,16 +169,30 @@ reversal; active master 2,348 → 2,333. Corrected en route: the "16
 stale tokens" were 15 T2T series-moves + 1 delisting (not "12 BSE + 4
 delisted").
 
-**⚠ INCIDENT DISCOVERED (pre-existing): EOD INGESTION DOWN SINCE
-2026-07-02** — Celery worker/beat never ran in the v2 era; ohlcv_1d
-(+ FII/DII etc.) frozen at 07-02; the 07-15/16 soaks' prev-day trigger
-levels came from 07-02 dailies; screener reads 2-week-old state.
+**⚠ INCIDENT (pre-existing, discovered 07-17): EOD INGESTION DOWN
+SINCE 2026-07-02** — Celery worker/beat never ran in the v2 era;
+ohlcv_1d (+ FII/DII etc.) frozen at 07-02; the 07-15/16 soaks'
+prev-day trigger levels came from 07-02 dailies; screener read
+2-week-old state. **✅ RESOLVED 2026-07-18** — root-cause fix: EOD
+beat tasks are now SELF-HEALING (services/eod_catchup.py heals every
+missing session ≤21d lookback, interior holes included); `make worker`
+added (celery worker -B, part of the daily ritual — stop it during
+soaks; missed evenings heal on the next run). Backfill EXECUTED
+07-03→07-17: ohlcv_1d 11/11 sessions (~2,030–2,046 rows/day),
+fo_bhavcopy 11/11 (~33–38k rows/day), india_vix_daily 11/11; CA sweep
+quarantined 4 corporate actions from the gap (KRISHANA+MBAPL ≈5:1
+splits 07-03, MWL ≈10:1 07-10, GOLDIAM ≈4:3 bonus 07-10 — pending
+review). FII/DII: live NSE endpoint serves ONLY the latest day and a
+FLAT shape the old parser didn't know (parsed to zero records
+forever) — parser fixed (+regression test), 07-17 captured; 07-02→
+07-16 permanently unavailable from this source (historical fetcher =
+Phase 4, factor scores missing days as zero by design). Full detail:
+phase-03 ledger §EOD restart.
 
-**▶ NEXT ACTION — in order:** (0) **EOD ingestion restart + catch-up
-backfill 07-03→today** (+ decide the Celery worker's place in the
-daily ritual next to soaks); (1) provisional-confidence impl (design
+**▶ NEXT ACTION — in order:** (1) provisional-confidence impl (design
 pinned, ledger §Decisions); (2) 3.6 outcome ticks; (3) 3.7 shadow week
-(30-day paper clock).
+(30-day paper clock). Monday pre-open: start `make worker` alongside
+the live worker (new ritual step).
 
 Open threads, in order:
 1. **FIRST SOAK RAN 2026-07-10 — PARTIAL; latency verdict OPEN** (full

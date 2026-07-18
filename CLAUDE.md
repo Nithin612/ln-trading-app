@@ -92,6 +92,9 @@ docs/             UPGRADE_PLAN (the why) · PHASES (status) · phases/
 ```
 make up / down          postgres+redis (pg on 5433)
 make backend            uvicorn dev server      make frontend   vite dev
+make worker             celery worker+beat — REQUIRED for EOD ingestion +
+                        nightly signals; EOD tasks self-heal ≤21d of missed
+                        sessions (stop it during soaks)
 make migrate            alembic upgrade head    make create-admin
 make test / lint / typecheck / check            (check = the full gate)
 cd backend && uv run pytest tests/<file> -q     (targeted)

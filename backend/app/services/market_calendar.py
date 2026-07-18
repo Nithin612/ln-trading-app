@@ -114,6 +114,23 @@ async def last_n_trading_days(db: AsyncSession, end: date, n: int) -> list[date]
     return days
 
 
+async def trading_days_between(db: AsyncSession, start: date, end: date) -> list[date]:
+    """All trading days in [start, end], ascending ([] when start > end).
+
+    Backbone of the EOD catch-up healer (services/eod_catchup.py)."""
+    if start > end:
+        return []
+    holidays = await _holidays_between(db, start, end)
+    _warn_if_uncovered(await coverage_end(db), end)
+    days: list[date] = []
+    cur = start
+    while cur <= end:
+        if cur.weekday() <= 4 and cur not in holidays:
+            days.append(cur)
+        cur = cur + timedelta(days=1)
+    return days
+
+
 async def validity_offset_days(
     db: AsyncSession, classification: str, created_at: datetime
 ) -> int:

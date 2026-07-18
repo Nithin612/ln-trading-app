@@ -3,7 +3,9 @@ FII/DII institutional flow fetcher and bulk/block deal ingestion.
 
 Sources:
   - FII/DII: NSE API  https://www.nseindia.com/api/fiidiiTradeReact
-    Returns last 30 trading days.  One call gives cash + F&O breakdowns.
+    Serves ONLY the latest trading day (verified 2026-07-18), as flat
+    cash aggregates; the segmented cash+F&O shape is legacy but still
+    parsed if NSE ever reverts.
   - Bulk deals (NSE): https://www.nseindia.com/api/snapshot-capital-market-wholesaleDebt-reports
     or the downloadable CSV from NSE's bulk deal page.
   - Block deals (NSE): similar NSE API endpoint.
@@ -11,6 +13,7 @@ Sources:
 All dates stored as trade_date (DATE), INR values in crores.
 ON CONFLICT DO NOTHING makes all inserts idempotent.
 """
+
 from __future__ import annotations
 
 import logging
@@ -41,8 +44,8 @@ _BULK_DEALS_URL = "https://www.nseindia.com/api/snapshot-capital-market-wholesal
 @dataclass
 class FiiDiiRecord:
     trade_date: date
-    investor_type: str   # 'FII' | 'DII'
-    segment: str         # 'cash' | 'futures' | 'options'
+    investor_type: str  # 'FII' | 'DII'
+    segment: str  # 'cash' | 'futures' | 'options'
     buy_value_cr: Decimal
     sell_value_cr: Decimal
 
@@ -51,12 +54,12 @@ class FiiDiiRecord:
 class BulkDealRecord:
     trade_date: date
     symbol: str
-    deal_type: str       # 'bulk' | 'block'
+    deal_type: str  # 'bulk' | 'block'
     client_name: str | None
-    transaction: str     # 'BUY' | 'SELL'
+    transaction: str  # 'BUY' | 'SELL'
     quantity: int
     price: Decimal
-    source: str          # 'NSE' | 'BSE'
+    source: str  # 'NSE' | 'BSE'
 
 
 def _to_decimal(val: object) -> Decimal | None:
@@ -64,7 +67,12 @@ def _to_decimal(val: object) -> Decimal | None:
         return None
     try:
         cleaned = str(val).replace(",", "").strip()
-        return Decimal(cleaned) if cleaned and cleaned != "-" else None
+        if not cleaned or cleaned == "-":
+            return None
+        d = Decimal(cleaned)
+        # "NaN"/"Infinity" parse as valid Decimals AND fit Numeric columns —
+        # one such row would poison every SUM() rollup downstream (§2.7).
+        return d if d.is_finite() else None
     except InvalidOperation:
         return None
 
@@ -91,15 +99,21 @@ def parse_fii_dii_response(payload: list[dict[str, object]]) -> list[FiiDiiRecor
     """
     Parse the NSE fiidiiTradeReact JSON response into FiiDiiRecord list.
 
-    Each element in payload looks like:
-      {
-        "date": "18-May-2026",
-        "category": "FII/FPI *",
-        "buyCF": "12345.67",
-        "sellCF": "9876.54",
-        "netCF": "2469.13",
-        ...buyFF, sellFF, netFF, buyOF, sellOF, netOF (F&O breakdown)
-      }
+    Handles BOTH shapes NSE has served (2026-07-18 incident: the live API
+    returned the flat shape, the parser only knew the segmented one, so
+    every fetch parsed to ZERO records and fii_dii_daily stayed empty):
+
+    Flat cash aggregate (the live shape as of 2026-07):
+      {"date": "17-Jul-2026", "category": "DII",
+       "buyValue": "17180.08", "sellValue": "16162.19", "netValue": "1017.89"}
+
+    Segmented (legacy):
+      {"date": "18-May-2026", "category": "FII/FPI *",
+       "buyCF": "12345.67", "sellCF": "9876.54", "netCF": "2469.13",
+       ...buyFF, sellFF, netFF, buyOF, sellOF, netOF (F&O breakdown)}
+
+    buyValue/sellValue are the cash-market aggregates — the segment
+    get_market_flow_5d consumes for SIGNAL_ENGINE.md §2.7.
     """
     records: list[FiiDiiRecord] = []
 
@@ -119,41 +133,63 @@ def parse_fii_dii_response(payload: list[dict[str, object]]) -> list[FiiDiiRecor
             log.debug("FII/DII: unknown category %r — skipping", category_raw)
             continue
 
-        # Cash segment (CF = Cash Future?) — labelled CF in NSE response
+        # Cash: segmented buyCF/sellCF wins when present — in a payload
+        # carrying both shapes, buyValue is plausibly a TOTAL (cash+F&O)
+        # and must not be recorded as the cash segment. Flat-only rows
+        # (the live 2026-07 shape) fall back to buyValue/sellValue.
         buy_cf = _to_decimal(item.get("buyCF"))
         sell_cf = _to_decimal(item.get("sellCF"))
+        if buy_cf is None and sell_cf is None:
+            buy_flat = _to_decimal(item.get("buyValue"))
+            sell_flat = _to_decimal(item.get("sellValue"))
+            if buy_flat is not None and sell_flat is not None:
+                records.append(
+                    FiiDiiRecord(
+                        trade_date=trade_date,
+                        investor_type=investor_type,
+                        segment="cash",
+                        buy_value_cr=buy_flat,
+                        sell_value_cr=sell_flat,
+                    )
+                )
         if buy_cf is not None and sell_cf is not None:
-            records.append(FiiDiiRecord(
-                trade_date=trade_date,
-                investor_type=investor_type,
-                segment="cash",
-                buy_value_cr=buy_cf,
-                sell_value_cr=sell_cf,
-            ))
+            records.append(
+                FiiDiiRecord(
+                    trade_date=trade_date,
+                    investor_type=investor_type,
+                    segment="cash",
+                    buy_value_cr=buy_cf,
+                    sell_value_cr=sell_cf,
+                )
+            )
 
         # Futures segment
         buy_ff = _to_decimal(item.get("buyFF"))
         sell_ff = _to_decimal(item.get("sellFF"))
         if buy_ff is not None and sell_ff is not None:
-            records.append(FiiDiiRecord(
-                trade_date=trade_date,
-                investor_type=investor_type,
-                segment="futures",
-                buy_value_cr=buy_ff,
-                sell_value_cr=sell_ff,
-            ))
+            records.append(
+                FiiDiiRecord(
+                    trade_date=trade_date,
+                    investor_type=investor_type,
+                    segment="futures",
+                    buy_value_cr=buy_ff,
+                    sell_value_cr=sell_ff,
+                )
+            )
 
         # Options segment
         buy_of = _to_decimal(item.get("buyOF"))
         sell_of = _to_decimal(item.get("sellOF"))
         if buy_of is not None and sell_of is not None:
-            records.append(FiiDiiRecord(
-                trade_date=trade_date,
-                investor_type=investor_type,
-                segment="options",
-                buy_value_cr=buy_of,
-                sell_value_cr=sell_of,
-            ))
+            records.append(
+                FiiDiiRecord(
+                    trade_date=trade_date,
+                    investor_type=investor_type,
+                    segment="options",
+                    buy_value_cr=buy_of,
+                    sell_value_cr=sell_of,
+                )
+            )
 
     return records
 
@@ -167,7 +203,13 @@ async def _prime_nse_session(client: httpx.AsyncClient) -> None:
 
 
 async def fetch_fii_dii_data() -> list[FiiDiiRecord]:
-    """Download and parse FII/DII data from NSE (last ~30 trading days)."""
+    """Download and parse FII/DII data from NSE.
+
+    The live endpoint serves only the LATEST trading day (verified
+    2026-07-18 — the old "~30 trading days" claim was wrong), so flows
+    are capture-as-you-go: a day the worker misses entirely is gone from
+    this source. The 5-day rollup treats missing days as zero by design.
+    """
     async with httpx.AsyncClient(headers=_NSE_HEADERS, timeout=30, follow_redirects=True) as c:
         await _prime_nse_session(c)
         resp = await c.get(_FIIDII_URL)
@@ -250,16 +292,18 @@ def parse_bulk_deals_response(
         if qty is None or price is None:
             continue
 
-        records.append(BulkDealRecord(
-            trade_date=trade_date,
-            symbol=symbol,
-            deal_type=deal_type,
-            client_name=str(item.get("BD_CLIENT_NAME", "")).strip() or None,
-            transaction=txn,
-            quantity=qty,
-            price=price,
-            source="NSE",
-        ))
+        records.append(
+            BulkDealRecord(
+                trade_date=trade_date,
+                symbol=symbol,
+                deal_type=deal_type,
+                client_name=str(item.get("BD_CLIENT_NAME", "")).strip() or None,
+                transaction=txn,
+                quantity=qty,
+                price=price,
+                source="NSE",
+            )
+        )
 
     return records
 
@@ -348,9 +392,7 @@ async def get_market_flow_5d(db: AsyncSession, as_of: date) -> tuple[Decimal, De
     return nets.get("FII", Decimal("0")), nets.get("DII", Decimal("0"))
 
 
-async def get_stock_block_deal_net_cr(
-    db: AsyncSession, stock_id: int, as_of: date
-) -> Decimal:
+async def get_stock_block_deal_net_cr(db: AsyncSession, stock_id: int, as_of: date) -> Decimal:
     """Net bulk/block-deal value in ₹ crore for one stock over the last 5
     NSE trading days ending at `as_of` (BUY positive, SELL negative)."""
     from app.services.market_calendar import last_n_trading_days

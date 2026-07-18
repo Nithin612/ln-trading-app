@@ -105,6 +105,10 @@ status:  ## Quick health check of all services
 backend:  ## Run FastAPI dev server (hot-reload)
 	@cd backend && uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
+.PHONY: worker
+worker:  ## Celery worker + embedded beat (EOD ingestion, nightly signals). Part of the daily ritual — EOD tasks self-heal missed sessions (services/eod_catchup.py)
+	@cd backend && uv run celery -A app.celery_app worker -B -l info -c 2
+
 .PHONY: live-worker
 live-worker:  ## Run the live worker under a restart supervisor (soak ritual)
 	@cd backend && while true; do \
@@ -120,7 +124,8 @@ live-worker:  ## Run the live worker under a restart supervisor (soak ritual)
 .PHONY: soak
 soak:  ## Quiet-box soak: abs record path + self-log + clears stale broker queue (the market-open ritual)
 	@mkdir -p recordings
-	@echo "$(YELLOW)Pre-flight: backend API should be DOWN and the box quiet (no pytest/cargo).$(NC)"
+	@echo "$(YELLOW)Pre-flight: backend API should be DOWN and the box quiet (no pytest/cargo, stop 'make worker').$(NC)"
+	@echo "$(YELLOW)EOD beat tasks self-heal missed sessions on the next worker evening (services/eod_catchup.py).$(NC)"
 	@echo "Clearing stale Celery broker list (no consumer runs during a soak)…"
 	@docker exec tp_redis redis-cli -n 1 DEL celery >/dev/null 2>&1 || true
 	@ts=$$(date +%Y-%m-%d); \

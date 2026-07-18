@@ -39,12 +39,14 @@ async def scan_for_discontinuities(
             text(
                 """
                 WITH latest AS (
-                    SELECT o.stock_id, o.time::date AS d, o.open,
+                    -- tz-pinned casts: bars sit at UTC midnight of the trade
+                    -- date; a non-UTC session TimeZone must not shift them.
+                    SELECT o.stock_id, (o.time AT TIME ZONE 'UTC')::date AS d, o.open,
                            LAG(o.close) OVER (PARTITION BY o.stock_id ORDER BY o.time)
                                AS prev_close
                     FROM ohlcv_1d o
-                    WHERE o.time::date <= :session_date
-                      AND o.time::date >= :session_date - INTERVAL '14 days'
+                    WHERE (o.time AT TIME ZONE 'UTC')::date <= :session_date
+                      AND (o.time AT TIME ZONE 'UTC')::date >= :session_date - INTERVAL '14 days'
                 )
                 SELECT l.stock_id, l.open, l.prev_close
                 FROM latest l
@@ -69,8 +71,7 @@ async def scan_for_discontinuities(
         )
         await db.execute(
             text(
-                "UPDATE stocks SET ca_flagged_at = :now, ca_flag_reason = :reason"
-                " WHERE id = :sid"
+                "UPDATE stocks SET ca_flagged_at = :now, ca_flag_reason = :reason WHERE id = :sid"
             ),
             {"now": now, "reason": reason[:255], "sid": r.stock_id},
         )

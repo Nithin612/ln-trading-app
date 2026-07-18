@@ -37,26 +37,18 @@ def _within_market_hours(now_utc: datetime | None = None) -> bool:
 
 @celery_app.task(name="app.tasks.fo_tasks.fo_eod_ingestion", bind=True, max_retries=2)  # type: ignore[untyped-decorator]
 def fo_eod_ingestion(self: object) -> dict[str, object]:  # noqa: ARG001
-    """Ingest today's F&O bhavcopy and India VIX. Runs 18:45 IST weekdays."""
+    """Heal F&O bhavcopy + India VIX up to today (self-healing since the
+    2026-07-17 EOD outage — see services/eod_catchup.py). 18:45 IST weekdays."""
     return run_db_task(_run_fo_eod)
 
 
 async def _run_fo_eod() -> dict[str, object]:
     from app.db.session import AsyncSessionFactory
-    from app.services.fo_bhavcopy_service import ingest_fo_bhavcopy_date
-    from app.services.market_calendar import is_trading_day
-    from app.services.vix_service import ingest_vix_date
+    from app.services.eod_catchup import catchup_fo_eod
 
     today_ist = datetime.now(UTC).astimezone(_IST).date()
     async with AsyncSessionFactory() as db:
-        if not await is_trading_day(db, today_ist):
-            log.info("F&O EOD ingestion skipped: %s is not a trading day", today_ist)
-            return {"status": "skipped", "message": "not a trading day"}
-        fo_result = await ingest_fo_bhavcopy_date(db, today_ist)
-        vix_result = await ingest_vix_date(db, today_ist)
-
-    log.info("F&O EOD ingestion: bhavcopy=%s vix=%s", fo_result, vix_result)
-    return {"fo_bhavcopy": fo_result, "india_vix": vix_result}
+        return await catchup_fo_eod(db, today_ist)
 
 
 @celery_app.task(name="app.tasks.fo_tasks.record_option_chains", bind=True, max_retries=0)  # type: ignore[untyped-decorator]

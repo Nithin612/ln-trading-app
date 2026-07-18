@@ -941,7 +941,118 @@ startup `ohlcv_1d` query) — trigger evidence stands but its prev-day
 levels were ~2 weeks stale; (3) screener/suggestions read 07-02 state.
 **Queued as the next ops action (PHASES): restart EOD ingestion +
 catch-up backfill 07-03→today, and decide where the Celery worker fits
-in the daily ritual alongside soaks.**
+in the daily ritual alongside soaks.** → RESOLVED next day, §EOD
+restart below.
+
+## EOD restart — 2026-07-18 (incident RESOLVED: self-healing catch-up SHIPPED, backfill EXECUTED)
+
+Root cause was structural, not operational: there was NO make target
+for Celery (worker/beat existed only as docstring commands), the soak
+ritual deliberately quiesced the box (and even cleared the broker
+list), AND every EOD beat task ingested only `today` — so any evening
+the worker didn't run became a permanent, silent hole. Restarting the
+worker alone would have left the same trap armed.
+
+**Fix shipped (the self-healing layer):**
+- `app/services/eod_catchup.py` — every EOD task body now heals ALL
+  missing trading sessions in a bounded lookback (21d). Presence is
+  checked per session (`missing_sessions`, whitelisted tables), NOT via
+  max(date), so interior holes (late-published archive between two
+  ingested days) heal too. Skipped days (not yet published / unseeded
+  holiday) retry every run until they age out of the window.
+- `trading_days_between` added to market_calendar (coverage-honesty
+  warning included); equities catch-up CA-sweeps EACH healed session in
+  order, mirroring what the nightly runs would have done day by day.
+- Task bodies (`ingest_equities_eod`, `fo_eod_ingestion`,
+  `ingest_fii_dii`) are thin wrappers over the catch-up functions; the
+  old is-trading-day guard is subsumed (no missing sessions →
+  `up_to_date`, zero NSE hits — pinned by test).
+- `scripts/catchup_eod.py` — manual runner over the SAME functions
+  (`--lookback N`); `scripts/backfill_eod.py` remains for holes older
+  than the window.
+- `make worker` (celery worker -B -c 2) — the daily-ritual entry;
+  CLAUDE.md commands updated; soak pre-flight now says to stop it
+  (missed evenings self-heal on the next run, which is the point).
+  celerybeat-schedule* gitignored.
+- +10 tests (test_eod_catchup.py): the incident regression
+  (multi-day gap healed in ONE run — canary fails on ingest-only-today
+  behavior), interior-hole detection, up-to-date = zero downloads
+  (both equities and FII/DII), CA sweep inside catch-up (>20% gap
+  quarantined with the session date in the reason), FO/VIX heal
+  independently (current table must not be re-downloaded), FII/DII
+  still_missing honesty, table whitelist guard, calendar helper
+  weekend+holiday + inverted-range cases.
+
+**Backfill EXECUTED 2026-07-18 (Saturday, via the new script —
+lookback 16 ⇒ start 07-02, already present):** 11/11 sessions healed
+07-03→07-17 in ohlcv_1d (~2,030–2,046 rows/day, consistent with the
+post-T2T ~2,050 baseline), fo_bhavcopy (33,211→37,819 rows/day),
+india_vix_daily (11 closes). CA sweep quarantined 4 gap-window
+corporate actions, all arithmetic-plausible: KRISHANA −79.7% and
+MBAPL −80.1% on 07-03 (≈5:1 splits), MWL −90.2% on 07-10 (≈10:1),
+GOLDIAM −23.5% on 07-10 (≈4:3 bonus) — **pending manual review**
+(quarantine keeps their broken history out of generation, which is
+the mechanism working as designed). Ops note: run catch-up with
+APP_DEBUG=false — the first attempt's SQL echo wrote 1.1MB of log in
+seconds (kill+restart was safe: everything is idempotent, and the
+restarted run's presence check skipped the completed equities stage,
+dogfooding interior-hole logic on day one).
+
+**FII/DII — third latent bug of the incident, and a scope truth:**
+the live fiidiiTradeReact endpoint (a) serves ONLY the latest trading
+day (the "~30 trading days" docstring was wrong) and (b) returns a
+FLAT shape (`buyValue/sellValue/category`) the parser didn't know —
+`parse_fii_dii_response` matched only the legacy segmented CF/FF/OF
+shape, so every real fetch parsed to ZERO records; fii_dii_daily was
+empty since the feature shipped and §2.7 scored zero forever. Parser
+now handles both shapes (flat → segment='cash', exactly what
+get_market_flow_5d consumes; regression test with the verbatim live
+payload). 07-17 captured (FII net −376.41 Cr, DII net +1,017.89 Cr);
+07-02→07-16 is PERMANENTLY unavailable from this source — historical
+FII/DII fetcher is Phase-4 scope (with bulk deals); the rollup treats
+missing days as zero by design. Flows are capture-as-you-go from now
+on: `still_missing` in the task payload keeps the gap visible.
+
+Not recoverable by design, unchanged: corporate_filings (live poller)
+and option_chain_snapshots (needs a live Kite token in market hours)
+have no archive source for the outage window; bulk_block_deals stays
+manual until Phase 4.
+
+Signals were NOT retro-generated for the gap (no-look-ahead: minting
+"historical" signals from data that wasn't ingested at the time would
+fabricate a track record). Monday 19:15 IST beat generates from
+current data; screener/suggestions now read 07-17 state.
+
+bug-hunter (same session): **BUGS-FOUND → all five fixed + 6
+regression tests; re-verified green.** (1) MEDIUM CONFIRMED — one
+transport error (httpx.ConnectError etc.) aborted the whole catch-up
+loop and `max_retries=2` was inert (no autoretry/self.retry anywhere);
+in catchup_fo_eod an fo failure also forfeited the entire VIX loop.
+Fixed: per-session try/except httpx.HTTPError → day lands in
+sessions_skipped and heals next run; per-table isolation; FII fetch
+returns status="fetch_failed" cleanly. DB errors still abort loudly by
+design. (2) MEDIUM SUSPECTED — bars-commit and CA-sweep are separate
+commits, so a crash between them left a day present-but-never-swept
+(presence-based healing skipped it forever). Fixed structurally the
+self-healing way rather than by transaction-coupling: the sweep now
+covers EVERY present session in the lookback window each run
+(idempotent — flags only unflagged stocks), so it also repairs sweeps
+skipped by scripts/backfill_eod.py, which never swept. up_to_date runs
+still make zero NSE calls (pinned). (3) LOW — mixed-shape FII/DII
+payload would have recorded buyValue (plausibly a cash+F&O TOTAL) as
+the cash segment; segmented buyCF now wins, flat is fallback-only.
+(4) LOW latent — `time::date` presence/CA-window casts were session-
+TimeZone-dependent (safe today: server TZ UTC, 100% of 1.31M bars at
+UTC midnight — bug-hunter verified live); now `AT TIME ZONE 'UTC'`-
+pinned in eod_catchup AND ca_detector. (5) LOW — `_to_decimal`
+accepted "NaN"/"Infinity" as valid Decimals (Numeric accepts NaN → one
+row poisons the §2.7 SUM rollup); non-finite now rejected. Bycatch
+hardening: 0.5s inter-day pause between archive downloads (a 21-day
+recovery burst shouldn't look like scraping). Confirmed-sound by the
+same review: tz/boundary math incl. the UTC-midnight storage
+assumption, per-day commit atomicity in all four ingest paths,
+run_db_task bridge, beat-overlap safety at -c 2 (disjoint tables),
+JSON-serializable payloads, monkeypatch seams.
 
 ## Watchlists (3.5 deferred item — DONE 2026-07-11, same session)
 
@@ -1055,6 +1166,17 @@ hardcoded gradient + string-concat className.
   suggestions, and the EOD watch-only rider (series ≠ EQ → no signal
   generation for other styles) so the EOD and live universes agree.
   Memory: [[t2t-universe-ruling]].
+  **CORRECTION (2026-07-18, found during the EOD restart):** the
+  "EOD flows when ingestion resumes" assumption above was WRONG —
+  `parse_bhavcopy_csv` keeps SERIES == "EQ" rows only, so active
+  T2T/-BE stocks receive NO EOD bars either (verified: 0 of the -BE
+  set have a 07-17 bar; this predates the outage — their ohlcv_1d went
+  stale on their series-move date). Today the EOD and live universes
+  DO agree, just at "both dark" rather than "EOD watch-only". Their
+  ~296 active master rows therefore show stale prices in screeners.
+  Widening the parser to BE-series is a universe decision (feeds
+  circuit-band prices into EOD state) — folded into the Phase-6
+  option-(b) work unless the user rules otherwise.
 - (soak #3 ruling, **user 2026-07-14**) **Latency budget RESTATED and the
   optimization slate chosen — option (b) + restatement together.** The
   written p99 < 10 ms was authored for 200–500 instruments; three

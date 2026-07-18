@@ -85,6 +85,7 @@ logs/
 *.sqlite
 *.db
 backups/
+celerybeat-schedule*
 
 # ───────── Docker ─────────
 .docker-volumes/
