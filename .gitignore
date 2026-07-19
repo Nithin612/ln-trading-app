@@ -111,3 +111,6 @@ CLAUDE.local.md
 # Live-worker soak recordings + logs (large; keep local — never commit)
 recordings/
 backend/recordings/
+# Shadow-week decision-diff reports (runtime output; keep local)
+shadow/
+backend/shadow/

@@ -32,6 +32,7 @@ def score_signal(
     timeframe: str = "1d",
     min_confidence: int = 70,
     weight_multipliers: dict[str, float] | None = None,
+    impl: str | None = None,
     **flows: Decimal,
 ) -> "ConfluenceResult | None":
     """ENGINE_IMPL dispatch (Phase 1): frozen Python engine or tradecore.
@@ -45,8 +46,14 @@ def score_signal(
     BacktestEngine sequence run_all_factors → apply_weight_multipliers →
     score_from_factors, so live scoring and the walk-forward honor
     multipliers identically. None/{} is byte-identical to the frozen path.
+
+    impl (Phase-3 slice 3.7): explicit engine override ("python"/"rust"),
+    defaulting to settings.engine_impl. Lets the shadow-compare harness
+    score one window under BOTH engines WITHOUT mutating process-global
+    settings (which a peer thread — e.g. the provisional refresher — reads
+    concurrently). A pure, thread-safe parameter beats a toggle.
     """
-    if settings.engine_impl == "rust":
+    if (impl or settings.engine_impl) == "rust":
         if any(flows.values()):
             # tradecore.score_signal has no flow inputs yet; a weighted factor
             # (±5 pts) silently dropped could flip decisions — fail loud.

@@ -201,26 +201,39 @@ ProvisionalPanel (provisional-labelled end-to-end). +21 backend / +12
 frontend tests, all real seams (incl. run_cycle e2e through the real
 tradecore book). Worker thread behind `live_provisional_enabled`.
 
-**✅ SLICE 3.6 OUTCOME TICKS — DONE 2026-07-19 (ledger §Outcome
-ticks).** Direction-aware SL/TP touch cross levels joined the trigger
-set (BUY: SL=cross_down/TP=cross_up; SELL mirrored; outcome truth =
-touch, not proximity); `signal_outcomes` replaced with the tick-level
-first-touch schema (monotonic ladder open → entry_touched →
-tp_first/sl_first/expired_*; reversible migration proven; the v1 shape
-was dead — 0 rows, no code); durable alerts-stream consumer-group
-recorder in the worker (ack-after-commit, PEL crash recovery, behind
+**✅ SLICE 3.6 OUTCOME TICKS — DONE 2026-07-19 (@fc50483; ledger
+§Outcome ticks + §Reviews outcome ticks).** Direction-aware SL/TP touch
+cross levels joined the trigger set (BUY: SL=cross_down/TP=cross_up;
+SELL mirrored; outcome truth = touch, not proximity); `signal_outcomes`
+replaced with the tick-level first-touch schema (monotonic ladder open →
+entry_touched → tp_first/sl_first/expired_*, crash-window upgrades
+toward truth; reversible migration `s5t6u7v8w9x0` up→down→up proven; the
+v1 EOD shape was dead — 0 rows, no code); durable alerts-stream
+consumer-group recorder in the worker (ack-after-commit, PEL crash
+recovery, per-entry SAVEPOINT poison isolation, behind
 `live_outcome_recorder_enabled`); expiry sweeper finalizes lapsed
-signals (alert-less ones included); REST /signals/{id}/outcome +
-SignalDetailModal Outcome strip. Observability only — never feeds
+signals each 5-min beat (epoch-floored); REST /signals/{id}/outcome +
+SignalDetailModal Outcome strip. Reviews: bug-hunter 2 MEDIUM + 3 LOW
+fixed; quant-verifier HIGH (redelivery reorder) fixed + gap-through-SL/
+at-level limits documented with a **user ruling QUEUED (§Decisions)**.
+Gate 829/16/9 backend + 177 frontend. Observability only — never feeds
 scoring/sizing/gating/backtests.
 
-**▶ NEXT ACTION — in order:** (1) 3.7 shadow week + full-session soak
-(30-day paper clock starts); (2) Phase-3 exit gate (`/phase-gate`).
-Monday pre-open ritual: start `make worker` alongside the live worker;
-first live observation of the provisional cycle cadence (overrun
-warnings = tune `live_provisional_refresh_s` or hotset cap) AND of the
-outcome recorder (`XPENDING alerts:live outcome-recorder` should stay
-~0; signal_outcomes rows should appear as alerts fire).
+**▶ NEXT ACTION = SLICE 3.7 (last Phase-3 deliverable) — LIVE-GATED:**
+(1) SHADOW WEEK: Rust committed decisions double-checked vs the frozen
+Python reference on LIVE closes, zero diffs required (parity is already
+EXACT on the 16 goldens; the shadow week extends it to live data —
+needs live market sessions, cannot run overnight). (2) full-session
+SOAK — already MET ×2 on stability + latency (07-15/16). (3) the 30-day
+paper clock STARTS at 3.7. Then the Phase-3 exit gate (`/phase-gate`).
+The offline-buildable part is the shadow-compare harness (run both
+engine impls on a committed window, diff decision/confidence/direction,
+record) — the week-long RUN is live-only. Monday pre-open ritual: start
+`make worker` alongside the live worker; watch the provisional cadence
+(overrun warnings = tune `live_provisional_refresh_s`/hotset cap) AND
+the outcome recorder (`XPENDING alerts:live outcome-recorder` ~0;
+signal_outcomes rows appear as alerts fire). **QUEUED user ruling**:
+outcome-tick gap-through-SL fidelity (§Decisions).
 
 Open threads, in order:
 1. **FIRST SOAK RAN 2026-07-10 — PARTIAL; latency verdict OPEN** (full

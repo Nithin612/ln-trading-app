@@ -1166,6 +1166,86 @@ active profiles) with universe (600 s) and flows/block-deal (60 s)
 caches; cycle overruns are the logged, expected degradation mode. First
 live-session observation queued for the Monday pre-open ritual.
 
+## Shadow compare (slice 3.7 — offline harness, 2026-07-19)
+
+The Phase-3 exit-gate activity's TOOLING: "One shadow week: Rust
+decisions vs frozen-Python double-check on closes; zero diffs required"
+(UPGRADE_PLAN §Phase 3). The week-long RUN is live (needs market
+sessions); this is the harness it runs, built + verified offline.
+
+**Design — an EOD SWEEP, not a live-worker hook.** Rust is parity-pinned
+only for the base 1d confluence decision (zero flows, no multipliers —
+`score_signal` falls back to the Python reference otherwise), so the
+meaningful shadow check is over 1d committed closes, which land at EOD.
+An after-close sweep over the active universe is the same order of work
+as nightly generation (never the tick path), needs no new architecture,
+and sidesteps the "where does the double-run live" question.
+
+- `app/services/shadow_compare.py`: `compare_pair` scores the SAME
+  window under BOTH engines via a `settings.engine_impl` toggle
+  (restored in `finally`) through the ONE real `score_signal`
+  entrypoint — never a third reimplementation (the provisional-layer
+  discipline). Returns `PairResult(py_emitted, rust_emitted, diff)`;
+  `diff` is None iff decision+direction+confidence-int all agree.
+  `sweep_day` loops raw `is_active` (== nightly's universe), per-stock
+  `_load_window` (last ≤300 completed bars, `time <= as_of_end`;
+  byte-identical to profiles/pipeline `_load_window` + an as-of cutoff),
+  per-stock try/except → `ShadowError` (one bad window never discards
+  the day). Non-1d refused loudly.
+- `scripts/shadow_week.py`: `--day` CLI; writes
+  `backend/shadow/shadow-<day>.json` (gitignored) and EXITS NONZERO on
+  any diff OR error (the zero-diffs gate). Run daily during the shadow
+  week.
+
+**SCOPE (honest, per quant-verifier):** the BASE (flow-free) decision,
+NOT the flow-inclusive committed nightly signal — tradecore raises on
+flows/multipliers, so this is exactly the fixture-pinned parity domain.
+"Zero diffs" proves rust-base == python-base on live windows; the day's
+excluded §2.7 flows are STAMPED in the report (`flows_excluded`) so a
+clean run can't be over-read. Corollary: the frozen Python engine is NOT
+deletable (trading-domain.md) until flows are plumbed through tradecore
+— the shadow week clears the base half of that gate, not the flow half.
+Granularity = the decision (emit/direction/confidence int); per-factor
+exactness stays fixture-covered.
+
+**Executed (day-one evidence, not just unit tests):** the CLI ran
+against the real backfilled DB for 2026-07-17 →
+**2,293/2,293 committed 1d closes matched EXACTLY, 0 diffs, 0 errors**;
+of those, **73 were real emitted signals, all 73 agreed by both
+engines** (the report decomposes matched into emitted vs no-signal);
+40 skipped for thin history; flows_excluded stamped (FII −376.41 /
+DII +1017.89 cr). One live day of the shadow week, base-decision domain
+— strong live-parity evidence, not the full week.
+
+**Tests (+11, real DB + real tradecore):** no-signal-window parity;
+**emitted-signal EXACT parity through tradecore** (a bearish-marubozu
+1d frame both engines score (SELL, 66)); injected divergence
+detected+classified (decision vs direction vs confidence) via the impl=
+argument; compare_pair leaves global engine_impl untouched; sweep skips
+thin history + counters decompose matched; flow stamp; as-of cutoff
+excludes future bars; non-1d refused.
+
+**Reviews.** quant-verifier PASS-WITH-NOTES → all fixed/dispositioned:
+flow-exclusion framing corrected + `flows_excluded` stamped (the harness
+proves BASE-decision parity, not committed-decision — frozen Python
+stays non-deletable until flows reach tradecore); `signals_emitted`/
+`both_emitted` counters so "matched" decomposes; a real emitted-signal
+parity test (not just the None branch); universe switched to raw
+`is_active` == nightly's; per-stock error isolation. bug-hunter
+BUGS-FOUND → all fixed: (MEDIUM) the JSON report omitted the `errors`
+list (only the count) — now serialized with symbol+detail; (LOW,
+latent) the global `engine_impl` toggle would race the provisional
+refresher thread if the sweep ever ran in-process — REMOVED entirely by
+threading an explicit `impl=` param through `score_signal` (pure,
+thread-safe; the toggle + its test are gone); (LOW) `_load_window` sat
+outside the per-stock try/except so a failed SELECT aborted the whole
+day with no report — load now inside the guard with `db.rollback()`
+recovery. Confirmed sound both reviews: no third implementation, window
+faithful to profiles/pipeline `_load_window`, 23:59:59-UTC cutoff
+correct vs the UTC-midnight 1d canon, containment/read-only, tradecore
+genuinely exercised (not hollow), agreement/kind() logic across all
+cases.
+
 ## Outcome ticks (slice 3.6 — 2026-07-19)
 
 "Signal-outcome tick evaluation (did entry zone touch before expiry?)
