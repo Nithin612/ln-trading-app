@@ -219,21 +219,30 @@ at-level limits documented with a **user ruling QUEUED (§Decisions)**.
 Gate 829/16/9 backend + 177 frontend. Observability only — never feeds
 scoring/sizing/gating/backtests.
 
-**▶ NEXT ACTION = SLICE 3.7 (last Phase-3 deliverable) — LIVE-GATED:**
-(1) SHADOW WEEK: Rust committed decisions double-checked vs the frozen
-Python reference on LIVE closes, zero diffs required (parity is already
-EXACT on the 16 goldens; the shadow week extends it to live data —
-needs live market sessions, cannot run overnight). (2) full-session
-SOAK — already MET ×2 on stability + latency (07-15/16). (3) the 30-day
-paper clock STARTS at 3.7. Then the Phase-3 exit gate (`/phase-gate`).
-The offline-buildable part is the shadow-compare harness (run both
-engine impls on a committed window, diff decision/confidence/direction,
-record) — the week-long RUN is live-only. Monday pre-open ritual: start
-`make worker` alongside the live worker; watch the provisional cadence
-(overrun warnings = tune `live_provisional_refresh_s`/hotset cap) AND
-the outcome recorder (`XPENDING alerts:live outcome-recorder` ~0;
-signal_outcomes rows appear as alerts fire). **QUEUED user ruling**:
-outcome-tick gap-through-SL fidelity (§Decisions).
+**✅ SLICE 3.7 SHADOW-COMPARE HARNESS — DONE 2026-07-19 (@25011bb;
+ledger §Shadow compare + §Reviews).** `app/services/shadow_compare.py`
+re-scores each committed 1d close under BOTH engines through the one
+`score_signal` (explicit `impl=` — no global toggle, no reimplementation)
+and reports decision/direction/confidence diffs; EOD sweep over raw
+`is_active` (== nightly), per-stock error isolation. `scripts/
+shadow_week.py --day` writes a gitignored report, exits nonzero on any
+diff/error. SCOPE = base flow-free 1d decision (excluded flows stamped;
+frozen Python not deletable until flows reach tradecore). EXECUTED
+07-17 vs real DB: 2,293/2,293 matched exactly, 73 emitted signals all
+agreeing. quant-verifier + bug-hunter both fixed (toggle race removed).
+Gate 840/16/9 + 177 frontend.
+
+**▶ NEXT ACTION = SLICE 3.7 LIVE RUN — LIVE-GATED (needs market days,
+cannot run overnight):** (1) SHADOW WEEK — run `scripts/shadow_week.py`
+daily after EOD ingestion for a week; zero diffs required (day-one 07-17
+already clean). (2) full-session SOAK — already MET ×2 (07-15/16). (3)
+the 30-day paper clock STARTS at 3.7. Then the Phase-3 exit gate
+(`/phase-gate`). Monday pre-open ritual: start `make worker` alongside
+the live worker; watch the provisional cadence (overrun = tune
+`live_provisional_refresh_s`/hotset cap), the outcome recorder
+(`XPENDING alerts:live outcome-recorder` ~0), and run the EOD shadow
+sweep. **QUEUED user rulings (§Decisions):** outcome-tick gap-through-SL
+fidelity; 4 CA quarantines (KRISHANA/MBAPL/MWL/GOLDIAM) pending review.
 
 Open threads, in order:
 1. **FIRST SOAK RAN 2026-07-10 — PARTIAL; latency verdict OPEN** (full
