@@ -201,11 +201,26 @@ ProvisionalPanel (provisional-labelled end-to-end). +21 backend / +12
 frontend tests, all real seams (incl. run_cycle e2e through the real
 tradecore book). Worker thread behind `live_provisional_enabled`.
 
-**▶ NEXT ACTION — in order:** (1) 3.6 outcome ticks; (2) 3.7 shadow
-week (30-day paper clock). Monday pre-open: start `make worker`
-alongside the live worker (new ritual step); first live observation of
-the provisional cycle cadence (overrun warnings = tune
-`live_provisional_refresh_s` or hotset cap).
+**✅ SLICE 3.6 OUTCOME TICKS — DONE 2026-07-19 (ledger §Outcome
+ticks).** Direction-aware SL/TP touch cross levels joined the trigger
+set (BUY: SL=cross_down/TP=cross_up; SELL mirrored; outcome truth =
+touch, not proximity); `signal_outcomes` replaced with the tick-level
+first-touch schema (monotonic ladder open → entry_touched →
+tp_first/sl_first/expired_*; reversible migration proven; the v1 shape
+was dead — 0 rows, no code); durable alerts-stream consumer-group
+recorder in the worker (ack-after-commit, PEL crash recovery, behind
+`live_outcome_recorder_enabled`); expiry sweeper finalizes lapsed
+signals (alert-less ones included); REST /signals/{id}/outcome +
+SignalDetailModal Outcome strip. Observability only — never feeds
+scoring/sizing/gating/backtests.
+
+**▶ NEXT ACTION — in order:** (1) 3.7 shadow week + full-session soak
+(30-day paper clock starts); (2) Phase-3 exit gate (`/phase-gate`).
+Monday pre-open ritual: start `make worker` alongside the live worker;
+first live observation of the provisional cycle cadence (overrun
+warnings = tune `live_provisional_refresh_s` or hotset cap) AND of the
+outcome recorder (`XPENDING alerts:live outcome-recorder` should stay
+~0; signal_outcomes rows should appear as alerts fire).
 
 Open threads, in order:
 1. **FIRST SOAK RAN 2026-07-10 — PARTIAL; latency verdict OPEN** (full

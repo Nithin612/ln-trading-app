@@ -1058,6 +1058,19 @@ def main(argv: list[str] | None = None) -> int:
                 daemon=True,
             )
         )
+    if settings.live_outcome_recorder_enabled:
+        # Signal-outcome recorder (3.6): durable alerts-stream consumer
+        # group persisting first entry/SL/TP touches per signal.
+        from app.broker.outcome_recorder import run_outcome_recorder
+
+        threads.append(
+            threading.Thread(
+                target=run_outcome_recorder,
+                args=(stop,),
+                name="outcomes",
+                daemon=True,
+            )
+        )
     for t in threads:
         t.start()
     ticker.connect(threaded=True)

@@ -127,7 +127,7 @@ class TestLevelDirectory:
         by_sid = {sid: (levels, meta) for sid, levels, meta in changed}
         levels, meta = by_sid[stock.id]
 
-        zone_id, sl_id, tp_id = signal_level_ids(signal.id)
+        zone_id, sl_id, tp_id, sl_touch_id, tp_touch_id = signal_level_ids(signal.id)
         by_id = {lv["id"]: lv for lv in levels}
         assert by_id[zone_id] == {
             "id": zone_id, "kind": "zone", "low": "99.5000", "high": "100.5000",
@@ -138,12 +138,25 @@ class TestLevelDirectory:
         assert by_id[tp_id] == {
             "id": tp_id, "kind": "near", "price": "104.0000", "within_bp": 25,
         }
+        # 3.6 touch levels: BUY → SL hit crossing DOWN, TP hit crossing UP
+        assert by_id[sl_touch_id] == {
+            "id": sl_touch_id, "kind": "cross_down", "price": "98.0000",
+            "rearm_bp": 10,
+        }
+        assert by_id[tp_touch_id] == {
+            "id": tp_touch_id, "kind": "cross_up", "price": "104.0000",
+            "rearm_bp": 10,
+        }
+        assert meta[sl_touch_id]["source"] == "sl_touch"
+        assert meta[tp_touch_id]["source"] == "tp_touch"
         assert PDH_ID in by_id and PDL_ID in by_id  # statics preserved
         assert meta[zone_id] == {
             "source": "entry_zone", "style": "swing", "signal_id": signal.id,
         }
         # ids are a pure function of the signal uuid — stable across calls
-        assert signal_level_ids(signal.id) == (zone_id, sl_id, tp_id)
+        assert signal_level_ids(signal.id) == (
+            zone_id, sl_id, tp_id, sl_touch_id, tp_touch_id,
+        )
 
     @pytest.mark.asyncio
     async def test_refresh_reports_only_changes_and_expiry_falls_back(self, db) -> None:

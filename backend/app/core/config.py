@@ -52,6 +52,11 @@ class Settings(BaseSettings):
     live_provisional_trigger_window_s: int = 900  # "near-trigger" recency window
     live_provisional_top_n: int = 20         # rows per style leaderboard
     live_provisional_key_ttl_s: int = 60     # leaderboard SET key TTL
+
+    # ── Signal-outcome recorder (Phase 3, slice 3.6) ─────────────────────
+    # Durable alerts-stream consumer persisting first entry/SL/TP touches
+    # per signal — Phase-6 outcome data. Observability only.
+    live_outcome_recorder_enabled: bool = True
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
 

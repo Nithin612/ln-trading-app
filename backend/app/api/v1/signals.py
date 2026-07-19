@@ -16,10 +16,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user as get_current_active_user
 from app.core.deps import get_db, require_admin
-from app.models.signal import Signal
+from app.models.signal import Signal, SignalOutcome
 from app.models.stock import Stock
 from app.models.user import User
-from app.schemas.signal import SignalListResponse, SignalOut
+from app.schemas.signal import SignalListResponse, SignalOut, SignalOutcomeOut
 from app.signals.event_guard import is_signal_suppressed
 
 router = APIRouter(prefix="/signals", tags=["signals"])
@@ -89,6 +89,24 @@ async def get_signal(
     if not signal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Signal not found")
     return await _enrich(signal, db)
+
+
+@router.get("/{signal_id}/outcome", response_model=SignalOutcomeOut)
+async def get_signal_outcome(
+    signal_id: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_active_user)],
+) -> SignalOutcomeOut:
+    """Tick-level outcome record (slice 3.6): first entry/SL/TP touches
+    inside validity + the status ladder. 404 while no alert has touched
+    the signal AND it hasn't expired (the row is written lazily)."""
+    outcome = await db.get(SignalOutcome, signal_id)
+    if not outcome:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="No outcome recorded yet for this signal",
+        )
+    return SignalOutcomeOut.model_validate(outcome)
 
 
 @router.post("/generate", response_model=SignalOut, status_code=status.HTTP_201_CREATED)

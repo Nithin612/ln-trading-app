@@ -29,11 +29,17 @@ preserves armed-state; kept < 2^53 so JSON consumers never lose bits):
     refreshes must not reassign ids (that would reset armed-state, bypass
     the re-arm band, and break consumer (id, day) dedupe — bug-hunter LOW
     2026-07-10). Same-stock hash collisions (~1e-4) skip the weaker zone.
-    signal levels: SIGNAL_BASE_ID + (sha256(signal uuid) & 48 bits)·4 +
-    slot (0=entry zone, 1=SL near, 2=TP near) — signals.id is a UUID, so
-    the id is a stable truncated hash, not arithmetic on the key. The
-    S/R range [100, 100+2^20) overlaps signal ids only for hash values
-    < 2^20/4 (P ≈ 5e-9 per signal — accepted, documented).
+    signal levels: SIGNAL_BASE_ID + (sha256(signal uuid) & 48 bits)·8 +
+    slot (0=entry zone, 1=SL near, 2=TP near, 3=SL touch, 4=TP touch) —
+    signals.id is a UUID, so the id is a stable truncated hash, not
+    arithmetic on the key. Slots 3/4 (slice 3.6): direction-aware CROSS
+    levels at the exact SL/TP prices — the signal-outcome recorder needs
+    touches, not proximity. Spacing ×4 → ×8 on 2026-07-19 (ids are
+    session-ephemeral: armed-state lives within a day and recordings
+    replay their own "lv" lines, so the formula may change between
+    sessions but never within one). The S/R range [100, 100+2^20)
+    overlaps signal ids only for hash values < 2^20/8 (P ≈ 2.5e-9 per
+    signal — accepted, documented).
 """
 
 from __future__ import annotations
@@ -82,12 +88,13 @@ def _q4(value: Decimal | float) -> str:
     return str(Decimal(str(value)).quantize(Decimal("0.0001")))
 
 
-def signal_level_ids(signal_id: str) -> tuple[int, int, int]:
-    """Stable per-signal level ids from the signal UUID (48-bit hash ×4 +
-    slot, offset past the static/S&R ranges; < 2^53 for JSON safety)."""
+def signal_level_ids(signal_id: str) -> tuple[int, int, int, int, int]:
+    """Stable per-signal level ids from the signal UUID (48-bit hash ×8 +
+    slot, offset past the static/S&R ranges; < 2^53 for JSON safety).
+    Slots: 0=entry zone · 1=SL near · 2=TP near · 3=SL touch · 4=TP touch."""
     h = int.from_bytes(hashlib.sha256(signal_id.encode()).digest()[:6], "big")
-    base = SIGNAL_BASE_ID + h * 4
-    return base, base + 1, base + 2
+    base = SIGNAL_BASE_ID + h * 8
+    return base, base + 1, base + 2, base + 3, base + 4
 
 
 async def load_static_levels(
@@ -157,7 +164,7 @@ async def _active_signals(db: Any) -> list[dict[str, Any]]:
     rows = await db.execute(
         text(
             "SELECT id, stock_id, entry_price, stop_loss, take_profit,"
-            " classification, timeframe FROM signals"
+            " classification, timeframe, direction FROM signals"
             " WHERE status = 'active'"
             " AND (validity_until IS NULL OR validity_until > now())"
             " ORDER BY id"
@@ -174,17 +181,32 @@ async def _active_signals(db: Any) -> list[dict[str, Any]]:
             "tp": r[4],
             "classification": r[5],
             "timeframe": r[6],
+            "direction": r[7],
         }
         for r in rows.fetchall()
     ]
 
 
 def _signal_levels(sig: dict[str, Any]) -> tuple[list[LevelDict], LevelMeta]:
-    """Entry zone + SL/TP proximity for one active signal."""
+    """Entry zone + SL/TP proximity + SL/TP TOUCH for one active signal.
+
+    Touch levels (slice 3.6, signal-outcome recording): direction-aware
+    crosses at the exact SL/TP prices. A BUY's TP is hit crossing UP and
+    its SL crossing DOWN; a SELL mirrors. Proximity ("near") stays a
+    separate alert — outcome truth needs the touch, not the approach.
+
+    Measurement limits (documented, ruling queued — ledger §Decisions):
+    cross kinds fire on observed side TRANSITIONS, so overnight gaps
+    beyond a level never fire (first tick of day arms the side); and
+    side_of treats price==level as AboveOrAt, so cross_up fires AT the
+    level while cross_down needs strictly-below — a BUY's exact-tick SL
+    touch doesn't count (SELL mirrored). See SignalOutcome docstring."""
     entry: Decimal = sig["entry"]
-    zone_id, sl_id, tp_id = signal_level_ids(sig["id"])
+    zone_id, sl_id, tp_id, sl_touch_id, tp_touch_id = signal_level_ids(sig["id"])
     half = Decimal(str(settings.live_entry_zone_pct)) / 100
     within = settings.live_sltp_within_bp
+    rearm = settings.live_cross_rearm_bp
+    is_buy = str(sig.get("direction", "BUY")).upper() != "SELL"
     meta_common = {
         "source": "signal",
         "style": str(sig["classification"]),
@@ -204,11 +226,29 @@ def _signal_levels(sig: dict[str, Any]) -> tuple[list[LevelDict], LevelMeta]:
             {"id": sl_id, "kind": "near", "price": _q4(sig["sl"]), "within_bp": within}
         )
         meta[sl_id] = {**meta_common, "source": "sl_near"}
+        levels.append(
+            {
+                "id": sl_touch_id,
+                "kind": "cross_down" if is_buy else "cross_up",
+                "price": _q4(sig["sl"]),
+                "rearm_bp": rearm,
+            }
+        )
+        meta[sl_touch_id] = {**meta_common, "source": "sl_touch"}
     if sig["tp"] and sig["tp"] > 0:
         levels.append(
             {"id": tp_id, "kind": "near", "price": _q4(sig["tp"]), "within_bp": within}
         )
         meta[tp_id] = {**meta_common, "source": "tp_near"}
+        levels.append(
+            {
+                "id": tp_touch_id,
+                "kind": "cross_up" if is_buy else "cross_down",
+                "price": _q4(sig["tp"]),
+                "rearm_bp": rearm,
+            }
+        )
+        meta[tp_touch_id] = {**meta_common, "source": "tp_touch"}
     return levels, meta
 
 

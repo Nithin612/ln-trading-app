@@ -44,9 +44,19 @@ async def sweep_expired(db: AsyncSession, now: datetime) -> int:
 
 async def _run_sweep() -> dict[str, int]:
     from app.db.session import AsyncSessionFactory
+    from app.services.signal_outcomes import finalize_expired_outcomes
 
     async with AsyncSessionFactory() as db:
-        expired = await sweep_expired(db, datetime.now(tz=UTC))
-    if expired:
-        log.info("expiry sweep: %d signals expired", expired)
-    return {"signals_expired": expired}
+        now = datetime.now(tz=UTC)
+        expired = await sweep_expired(db, now)
+        # Outcome ledger (slice 3.6): lapsed signals get their terminal
+        # outcome — expired_untouched / expired_open. Same 5-min beat.
+        finalized = await finalize_expired_outcomes(db, now)
+        await db.commit()
+    if expired or finalized:
+        log.info(
+            "expiry sweep: %d signals expired, %d outcomes finalized",
+            expired,
+            finalized,
+        )
+    return {"signals_expired": expired, "outcomes_finalized": finalized}

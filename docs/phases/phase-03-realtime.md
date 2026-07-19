@@ -30,7 +30,7 @@ any of it provable.
 | 3.3 | live-worker process (`app/broker/live_worker.py`, run as `python -m app.broker.live_worker`): KiteTicker thread → bounded `queue.Queue` (drop-oldest tick batches; time pulses share the queue so ordering is replayable) → consumer THREAD → ONE `tradecore.LiveBook` call per batch → sync redis pipeline (`SET ltp:{stock_id}` + LTP/candle PUBLISH) → committed candles via BLOCKING writer queue → writer thread (own loop + own engine) → Postgres upsert → Celery trigger after commit. PyO3 `LiveBook` binding (money strings in / raw i64·1e-4 out). Token-expiry = process exit 3/4 for the supervisor; `--gap-fill` opt-in startup backfill; JSONL record hook = the 3.4 replay input. XADD alerts stream lands with 3.5; indicator warmup lands with 3.5 triggers | **✅ 2026-07-09** (code+tests; first live market soak pending next session — see exit gate) |
 | 3.4 | Record/replay harness | **✅ 2026-07-10** — recordings are self-describing (session header + tick/pulse lines in engine order; stale/skipped ticks never recorded); `app/broker/replay.py` feeds them through a fresh `LiveBook` → canonical event stream + sha256 digest; CLI `python -m app.broker.replay <rec> [--emit]` is the soak-day pinning ritual. Synthetic golden committed (61 events / 22 committed; pre-open rejection, volume baseline+reset, per-tf late-tick, pulse closes) + a worker-seam fidelity test proving replay ≡ writer-queue stream. `make replay` in the check chain. Tick→publish `LatencyHistogram` in the worker (fixed buckets, p50/p99/max at shutdown) — **p99 < 10 ms VALIDATION happens on soak day, not in CI** | real-session golden joins after the first soak |
 | 3.5 | Tick triggers + provisional layer: entry-zone touches, PDH/PDL/S&R crosses, SL/TP proximity, volume bursts, forming-candle provisional confidence, per-style leaderboards @ 2–4 Hz. Redis Streams for alerts (at-least-once); WS fanout by style/watchlist; drop-oldest backpressure for LTP, never for candle-close | **core ✅ 2026-07-10** (branch `slice-3.5-tick-triggers`): Rust trigger engine (`triggers.rs` + `LiveEvent::Trigger`, armed/re-arm hysteresis, `set_levels` preserves state for unchanged ids) · levels as replayable INPUT (`{"k":"lv"}` recording lines; no-lv recordings byte-identical — 3.4 golden digest untouched) · level sources `live_levels.py` (PDH/PDL from 1d, §2.5-width entry zones + SL/TP proximity per active signal, frozen-detector S/R for signal stocks, 5m vburst baselines; 30s refresher thread) · `alerts:live` stream XADD + `/ws/live` `subscribe_alerts` fanout with style filter. Rust 55 tests · +23 backend tests. **COMPLETE 2026-07-18:** provisional confidence + leaderboards implemented per the pinned design (§Provisional confidence + leaderboards — refresher-thread batch rescore, Mutex'd frozen LiveBook + `forming_snapshot` FFI, per-style SET+PUBLISH, `subscribe_provisional` WS + REST reconciliation + dashboard panel; convergence pinned by test). Watchlist fanout DONE 2026-07-11 (§Watchlists). Alert UI DONE 2026-07-11 (§Alert UI). Reviews DONE 2026-07-10 (quant-verifier FAIL→fixed, bug-hunter BUGS-FOUND→fixed — §Reviews 3.5) | alerts never gate/mint/modify signals — provisional layer only |
-| 3.6 | Signal-outcome tick evaluation (entry-zone touch before expiry) recorded now — Phase 6 needs this data | planned | |
+| 3.6 | Signal-outcome tick evaluation (entry-zone touch before expiry) recorded now — Phase 6 needs this data | **✅ 2026-07-19** (§Outcome ticks): direction-aware SL/TP touch cross levels · `signal_outcomes` replaced (monotonic ladder, first-touch stamps; migration `s5t6u7v8w9x0` up→down→up proven) · durable consumer-group recorder (ack-after-commit, PEL recovery) · expiry finalization on the 5-min beat · REST + modal Outcome strip · +11 backend / +4 frontend tests | observability only — never feeds scoring/sizing/gating/backtests |
 | 3.7 | Shadow week (Rust decides, frozen Python double-checks on closes — zero diffs) → full-session soak (memory flat, zero dropped subscriptions, latency budget met) | planned | python engine deletion decision AFTER shadow week (user ruling) |
 
 ## First soak session — 2026-07-10 (PARTIAL; latency verdict OPEN)
@@ -1166,6 +1166,65 @@ active profiles) with universe (600 s) and flows/block-deal (60 s)
 caches; cycle overruns are the logged, expected degradation mode. First
 live-session observation queued for the Monday pre-open ritual.
 
+## Outcome ticks (slice 3.6 — 2026-07-19)
+
+"Signal-outcome tick evaluation (did entry zone touch before expiry?)
+built into the trigger set now — Phase 6 needs this data"
+(UPGRADE_PLAN §Phase 3). Pure observability: never feeds scoring,
+sizing, gating, or backtests.
+
+**Trigger-set extension (live_levels.py; no Rust changes — cross kinds
+existed):** every active signal adds two direction-aware TOUCH levels
+at the exact SL/TP prices (BUY: SL hit crossing DOWN, TP crossing UP;
+SELL mirrored), sources `sl_touch`/`tp_touch`, alongside the 3.5
+proximity alerts — outcome truth needs the touch, not the approach.
+`signal_level_ids` spacing ×4 → ×8 (slots 3/4); ids are
+session-ephemeral (armed-state lives within a day; recordings carry
+their own "lv" lines) so the formula change is safe across sessions.
+S/R-overlap probability halves to ~2.5e-9/signal.
+
+**Schema:** `signal_outcomes` REPLACED (migration `s5t6u7v8w9x0`,
+up→down→up proven; the v1 EOD-reconciliation shape had zero
+writers/readers and 0 rows — refuse-to-drop-nonempty guard in both
+directions). One row per signal: denormalized style/tf/direction +
+validity snapshot; first-touch stamps+prices for entry/SL/TP; the
+MONOTONIC ladder open → entry_touched → tp_first/sl_first (touch
+resolution requires a PRIOR entry touch and happens inside validity;
+expiry → expired_untouched/expired_open; terminal rows never reopen).
+Stamps record even late/entry-less (Phase-6 honesty) — only STATUS
+transitions are validity-guarded. All writes idempotent
+(COALESCE-first-touch + guarded UPDATEs) because the stream is
+at-least-once.
+
+**Recorder (`app/broker/outcome_recorder.py`, worker thread behind
+`live_outcome_recorder_enabled`):** durable consumer group
+`outcome-recorder` on the alerts stream, XACK strictly AFTER the DB
+commit (crash between commit and ack = harmless redelivery), startup
+PEL recovery pass (id "0") before tailing ">", non-touch/market alerts
+acked immediately (an unacked skip would pin the PEL forever). Own
+loop/engine/redis (refresher pattern); zero consumer-thread work.
+Group created at "$": outcome history begins at deployment; older
+signals resolve via the sweeper.
+
+**Expiry finalization:** `finalize_expired_outcomes` rides the 5-min
+expiry beat — seeds rows for lapsed signals that never fired an alert
+(expired_untouched is DATA, not absence-of-data) and closes
+non-terminal lapsed rows.
+
+**Surfaces:** REST `GET /signals/{id}/outcome` (404 = lazily
+not-yet-written) + SignalDetailModal "Outcome" strip (glyph+tone
+ladder, touch trail in IST; enrichment-only — fetch errors never block
+the modal).
+
+**Tests (+11 backend / +4 frontend / live-levels pins updated):**
+consumer-group drain through BOTH sides on real Redis (fields exactly
+as the worker XADDs them), ack-after-commit proven via XPENDING,
+duplicate delivery + ghost-signal skip, empty-stream block bound;
+status-ladder matrix (entry→tp resolution, sl-after-terminal stamps
+only, no-entry-no-resolution, first-touch-wins, late-touch stamps
+without transition); finalization (untouched/open/terminal/alive ×
+idempotent re-sweep); SELL-mirror level kinds; REST roundtrip + 404.
+
 ## Watchlists (3.5 deferred item — DONE 2026-07-11, same session)
 
 Full vertical slice, zero worker contact: `watchlists` +
@@ -1252,6 +1311,40 @@ sparkline → lib/format.ts; (5) Kite banner hardcoded rgba/yellow-500;
 hardcoded gradient + string-concat className.
 
 ## Decisions made this phase
+
+- (**QUEUED for the user — raised by quant-verifier 2026-07-19, slice
+  3.6**) **Outcome-tick measurement limits: how faithful must the SL/TP
+  touch record be?** The trigger engine fires on OBSERVED intra-session
+  side transitions (`triggers.rs`). Two consequences for the Phase-6
+  outcome ledger, both DOCUMENTED in code as known limits and shipped
+  as-is pending a ruling:
+  1. **Overnight/opening gaps through a level are invisible.** A
+     swing/positional signal that gaps below SL at the open never fires
+     `sl_touch` (the day's first tick just arms the side); if price then
+     reaches TP inside validity it records `tp_first`. So `sl_first` is
+     a FLOOR and gappy-name `tp_first` can include gap-through-SL
+     survivors — the exact worst-loss case Phase 6 most needs.
+  2. **At-level asymmetry.** `side_of` treats `price == level` as
+     AboveOrAt, so `cross_up` fires AT the level but `cross_down` needs
+     strictly below — a BUY's exact-tick SL touch doesn't count (SELL
+     mirrored). Exchange stop orders trigger at LTP == trigger price.
+  **Options:** (a) accept as-is — forward tick facts only, documented
+  limits, Phase-6 reads `sl_first` as a floor (zero new code; keeps the
+  "never repaint, never derive from candles" property intact);
+  (b) session-open reconciliation — synthesize a touch when the first
+  tick of a session is already beyond SL/TP (recorder-side; still
+  forward-only but no longer purely tick-observed); (c) Phase-6
+  candle-based cross-check — a separate EOD reconciliation pass over
+  committed bars that annotates gap-throughs (leaves the tick ledger
+  pure, adds a second oracle). (b)/(c) change the "forward-recorded
+  facts only" contract and need explicit sign-off; a Rust
+  `cross_down_at_or_below` LevelKind (for the at-level case) is a
+  separate semantic-choice sign-off per rules/rust.md. **Recommendation:
+  (a) now + (c) in Phase 6** — keep the live recorder pure and honest
+  about its floor, add the candle cross-check where the hit-rate
+  dashboards are built and a second data source already exists.
+  Straddler cohorting (`created_at >= OUTCOME_EPOCH`) is enforced by
+  convention in the docstring regardless of the choice.
 
 - (**RULED — user 2026-07-17: options (a)+(c); EXECUTED same day**)
   **The T2T universe question.** 296 of 2,348 active master stocks are
@@ -1449,6 +1542,63 @@ one tick per call). At true 2,049-tick full batches the un-gateable LTP
 SET floor (~11 ms even with hiredis) still brushes the budget → restate
 the budget at soak scale or add unchanged-price SET dedupe (decide
 after the next soak's numbers).
+
+## Reviews (outcome ticks — 2026-07-19)
+
+- **bug-hunter: BUGS-FOUND — 2 MEDIUM (both executed repros) + 3 LOW,
+  all fixed same session.** (MEDIUM) the expiry finalizer classified on
+  the raw `entry_touched_at` stamp instead of the validity-guarded
+  ladder — a touch landing in the armed-level lag window AFTER expiry
+  (level refresh ≤30 s vs sweeper 5 min) permanently flipped the
+  Phase-6 headline verdict to `expired_open`; now `CASE WHEN status =
+  'open'` (+late-touch regression). (MEDIUM) the recorder's startup
+  PEL-recovery loop had no armor and a driver-level poison entry
+  (unbindable price) aborted its whole batch pre-commit-pre-ack, then
+  killed the thread on EVERY restart; now recovery retries like the
+  tail loop and each entry runs in its own SAVEPOINT (`begin_nested`) —
+  a poison rolls back only itself and is ACKed as a documented drop
+  (+poison-first regression proving the batch-mate commits and the PEL
+  drains). (LOW) finalizer seeding now floored at `OUTCOME_EPOCH`
+  (2026-07-19) — signals that lapsed before the recorder existed never
+  get fabricated `expired_untouched` rows (+pre-epoch regression).
+  (LOW) `updated_at` was ORM-onupdate-only under raw-SQL writers —
+  frozen forever; every UPDATE now stamps `now()`. (LOW/SUSPECTED)
+  crash window where the sweeper finalizes past an unacked in-validity
+  touch: closed via monotonic-TOWARD-TRUTH upgrades
+  (`expired_untouched → expired_open → tp/sl_first` on PEL-recovered
+  in-validity touches; never back to a live state; +regression).
+  Confirmed sound: ×8 id arithmetic + no 3-tuple consumers + replay
+  feeds recorded lv lines verbatim (old recordings untouched);
+  ack-after-commit; ensure_group offset semantics; two-worker
+  degeneracy harmless; tz/money/UUID round-trips; migration guards
+  both directions and v1 shape recreated verbatim.
+
+- **quant-verifier: FAIL → all findings fixed/dispositioned same
+  session; re-review CONFIRMED the load-bearing fix** (the ordering
+  guard at signal_outcomes.py:141 — "correct NULL semantics for both
+  eligible statuses" — before the re-review hit a usage-credit limit;
+  the reorder regression it was about to read is green in the gate
+  below). (HIGH, fixed) resolution redelivery reorder — a
+  PEL-redelivered PRE-entry TP/SL touch could resolve after the entry
+  landed (`tp_first` with `resolved_at < entry_touched_at`: a win that
+  could never have been taken); resolution now requires
+  `:ts >= entry_touched_at` (+reorder regression test). (HIGH,
+  ruling QUEUED — §Decisions) overnight gap-through-SL is invisible to
+  cross triggers (armed side resets per session); documented as a
+  KNOWN MEASUREMENT LIMIT (sl_first = floor) on the model + levels
+  docstrings pending the user's ruling on semantics-changing fixes.
+  (MEDIUM, same ruling) at-level asymmetry: cross_up fires AT the
+  level, cross_down strictly below — BUY exact-tick SL touches don't
+  count (SELL mirrored); counting them = Rust LevelKind addition +
+  sign-off. (MEDIUM, fixed) OUTCOME_EPOCH docstring now REQUIRES
+  Phase-6 cohorting on `created_at >= epoch` (straddler bias direction
+  unknown). (INFO, fixed) dead `OUTCOME_TERMINAL` deleted; outcome
+  prices through `formatCurrency`. Confirmed clean: observability
+  containment (zero references in analysis/signals/backtest/profiles/
+  engine), validity snapshot can't drift (no UPDATE path on
+  signals.validity_until), no path back to a live state, money
+  discipline (tick price = the honest slippage-aware datum — kept),
+  no-repaint (nothing regenerates rows from candles), test honesty.
 
 ## Reviews (provisional confidence — 2026-07-18/19)
 

@@ -39,3 +39,24 @@ class SignalOut(BaseModel):
 class SignalListResponse(BaseModel):
     total: int
     signals: list[SignalOut]
+
+
+class SignalOutcomeOut(BaseModel):
+    """Tick-level outcome record (slice 3.6) — observability only."""
+
+    signal_id: str
+    stock_id: int
+    direction: str
+    classification: str
+    timeframe: str
+    validity_until: datetime
+    status: str
+    entry_touched_at: datetime | None
+    entry_touch_price: Decimal | None
+    sl_touched_at: datetime | None
+    sl_touch_price: Decimal | None
+    tp_touched_at: datetime | None
+    tp_touch_price: Decimal | None
+    resolved_at: datetime | None
+
+    model_config = {"from_attributes": True}

@@ -16,6 +16,7 @@ from sqlalchemy import (
     Text,
     func,
 )
+from sqlalchemy import Index as SaIndex
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -117,28 +118,95 @@ class Signal(Base):
 
 
 class SignalOutcome(Base):
-    """EOD reconciliation result — did the signal hit TP or SL?"""
+    """Signal-outcome tick evaluation (Phase 3, slice 3.6).
+
+    One row per signal, recording FIRST tick-level touches of its entry
+    zone, SL, and TP inside the validity window — "did the entry zone
+    touch before expiry?" is the Phase-6 headline metric this feeds.
+    Written by the outcome recorder (alerts-stream consumer group,
+    durable at-least-once); finalized by the expiry sweeper. Replaces
+    the v1 EOD-reconciliation shape, which no code ever wrote or read
+    (0 rows; migration s5t6u7v8w9x0).
+
+    Status ladder (monotonic TOWARD TRUTH — never back to a live state):
+        open              → nothing touched yet
+        entry_touched     → entry zone touched inside validity
+        tp_first          → entry touched, then TP before SL
+        sl_first          → entry touched, then SL before TP
+        expired_untouched → validity lapsed, entry never touched
+        expired_open      → lapsed after entry; neither SL nor TP
+    Crash-window upgrades (recorder outage overlapping an expiry sweep;
+    PEL-recovered IN-VALIDITY touches prove a better verdict):
+        expired_untouched → expired_open (recovered entry touch)
+        expired_open      → tp_first / sl_first (recovered SL/TP touch,
+                            entry already proven)
+
+    SL/TP touches WITHOUT a prior entry touch never resolve the outcome
+    (a TP cross on a never-entered setup is a missed trade, not a win) —
+    their first-touch stamps still record for Phase-6 honesty. Pure
+    observability: never feeds scoring, sizing, gating, or backtests.
+
+    KNOWN MEASUREMENT LIMITS (quant-verifier 2026-07-19; ruling queued —
+    ledger §Decisions):
+      - Cross triggers fire on OBSERVED side transitions only. Intra-
+        session gaps through a level fire; an OVERNIGHT gap beyond SL/TP
+        does not (the first tick of the day merely arms the side), so
+        sl_first is a FLOOR and swing/positional tp_first may include
+        gap-through-SL survivors. Candidate fixes (session-open
+        reconciliation / Phase-6 candle cross-check) change recording
+        semantics and await the user's ruling.
+      - At-level asymmetry: cross_up fires AT the level, cross_down only
+        strictly below — a BUY's exact tick AT the SL doesn't count while
+        its TP-at-level does (SELL mirrored). Exchange stop orders
+        trigger at LTP == trigger price; counting exact touches needs a
+        Rust LevelKind addition + user sign-off (rules/rust.md semantic
+        discipline).
+      - Phase-6 hit-rates MUST cohort signals.created_at >= OUTCOME_EPOCH
+        (straddler bias direction unknown — see services/signal_outcomes)."""
 
     __tablename__ = "signal_outcomes"
+    __table_args__ = (
+        SaIndex("idx_signal_outcomes_status", "status"),
+        SaIndex("idx_signal_outcomes_class_status", "classification", "status"),
+    )
 
     signal_id: Mapped[str] = mapped_column(
         UUID(as_uuid=False),
         ForeignKey("signals.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    hit_target: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    hit_sl: Mapped[bool] = mapped_column(Boolean, nullable=False)
-    max_favorable_pct: Mapped[Decimal | None] = mapped_column(Numeric(7, 3), nullable=True)
-    max_adverse_pct: Mapped[Decimal | None] = mapped_column(Numeric(7, 3), nullable=True)
-    exit_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
-    exit_time: Mapped[datetime | None] = mapped_column(TZ, nullable=True)
-    pnl_pct: Mapped[Decimal] = mapped_column(Numeric(7, 3), nullable=False)
-    notes: Mapped[str | None] = mapped_column(Text, nullable=True)
+    stock_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False
+    )
+    # Denormalized for Phase-6 aggregation (hit-rate by style/timeframe
+    # without joining the growing signals table).
+    direction: Mapped[str] = mapped_column(String(8), nullable=False)
+    classification: Mapped[str] = mapped_column(String(16), nullable=False)
+    timeframe: Mapped[str] = mapped_column(String(8), nullable=False)
+    validity_until: Mapped[datetime] = mapped_column(TZ, nullable=False)
+
+    status: Mapped[str] = mapped_column(String(24), nullable=False, default="open")
+
+    entry_touched_at: Mapped[datetime | None] = mapped_column(TZ, nullable=True)
+    entry_touch_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    sl_touched_at: Mapped[datetime | None] = mapped_column(TZ, nullable=True)
+    sl_touch_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    tp_touched_at: Mapped[datetime | None] = mapped_column(TZ, nullable=True)
+    tp_touch_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+
+    resolved_at: Mapped[datetime | None] = mapped_column(TZ, nullable=True)
+
+    created_at: Mapped[datetime] = mapped_column(
+        TZ, nullable=False, server_default=func.now()
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        TZ, nullable=False, server_default=func.now(), onupdate=func.now()
+    )
 
     signal: Mapped["Signal"] = relationship("Signal", back_populates="outcome")
 
     def __repr__(self) -> str:
-        return f"<SignalOutcome signal_id={self.signal_id[:8]}… pnl={self.pnl_pct}%>"
+        return f"<SignalOutcome {self.signal_id[:8]}… [{self.status}]>"
 
 
 # StrategyRun moved to app.models.strategy in Phase 9.

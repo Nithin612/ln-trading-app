@@ -1,4 +1,4 @@
-import { api } from './client'
+import { api, ApiError } from './client'
 
 export interface FactorScore {
   weight: number
@@ -55,5 +55,43 @@ export const signalsApi = {
 
   getById(id: string, token: string): Promise<SignalOut> {
     return api.get<SignalOut>(`/signals/${id}`, token)
+  },
+}
+
+// ── Signal outcomes (Phase 3, slice 3.6) ────────────────────────────────────
+// Tick-level first-touch record — observability only, never tradeable state.
+
+export interface SignalOutcome {
+  signal_id: string
+  stock_id: number
+  direction: string
+  classification: string
+  timeframe: string
+  validity_until: string
+  status:
+    | 'open'
+    | 'entry_touched'
+    | 'tp_first'
+    | 'sl_first'
+    | 'expired_untouched'
+    | 'expired_open'
+  entry_touched_at: string | null
+  entry_touch_price: string | null
+  sl_touched_at: string | null
+  sl_touch_price: string | null
+  tp_touched_at: string | null
+  tp_touch_price: string | null
+  resolved_at: string | null
+}
+
+export const outcomeApi = {
+  /** null = no outcome recorded yet (the row is written lazily). */
+  async getOutcome(signalId: string, token: string): Promise<SignalOutcome | null> {
+    try {
+      return await api.get<SignalOutcome>(`/signals/${signalId}/outcome`, token)
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404) return null
+      throw err
+    }
   },
 }

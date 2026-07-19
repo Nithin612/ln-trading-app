@@ -1,9 +1,80 @@
+import { useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
-import type { SignalOut } from '@/lib/api/signals'
+
+import { useAuth } from '@/hooks/useAuth'
+import { formatCurrency } from '@/lib/format'
+import { outcomeApi } from '@/lib/api/signals'
+import type { SignalOut, SignalOutcome } from '@/lib/api/signals'
 
 interface Props {
   signal: SignalOut
   onClose: () => void
+}
+
+// Outcome ladder → label + tone (glyph + color, never color alone).
+const OUTCOME_LABELS: Record<SignalOutcome['status'], { label: string; color: string }> = {
+  open: { label: '· awaiting entry', color: 'var(--color-text-muted)' },
+  entry_touched: { label: '◆ entry touched', color: 'var(--color-accent)' },
+  tp_first: { label: '▲ target hit', color: 'var(--color-profit)' },
+  sl_first: { label: '▼ stopped out', color: 'var(--color-loss)' },
+  expired_untouched: { label: '— expired, never entered', color: 'var(--color-text-muted)' },
+  expired_open: { label: '— expired after entry', color: 'var(--color-text-muted)' },
+}
+
+function istTime(iso: string | null): string {
+  if (!iso) return ''
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return ''
+  return d.toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short',
+    hour: '2-digit', minute: '2-digit',
+  })
+}
+
+function OutcomeSection({ signalId }: { signalId: string }) {
+  const { accessToken } = useAuth()
+  const query = useQuery({
+    queryKey: ['signal-outcome', signalId],
+    queryFn: () => outcomeApi.getOutcome(signalId, accessToken ?? ''),
+    enabled: accessToken !== null,
+    staleTime: 30_000,
+  })
+  if (query.isLoading || query.isError) return null // enrichment only — never block the modal
+  const outcome = query.data
+  if (!outcome) return null // no row yet (lazily written)
+  const tone = OUTCOME_LABELS[outcome.status] ?? OUTCOME_LABELS.open
+  const touches = [
+    outcome.entry_touched_at
+      ? `entry ${formatCurrency(Number(outcome.entry_touch_price ?? 0))} at ${istTime(outcome.entry_touched_at)}`
+      : null,
+    outcome.tp_touched_at
+      ? `TP ${formatCurrency(Number(outcome.tp_touch_price ?? 0))} at ${istTime(outcome.tp_touched_at)}`
+      : null,
+    outcome.sl_touched_at
+      ? `SL ${formatCurrency(Number(outcome.sl_touch_price ?? 0))} at ${istTime(outcome.sl_touched_at)}`
+      : null,
+  ].filter(Boolean)
+  return (
+    <div
+      style={{
+        background: 'var(--color-surface-3)', borderRadius: 'var(--radius-md)',
+        padding: '0.625rem', marginBottom: '1.25rem',
+        display: 'flex', gap: '0.75rem', alignItems: 'baseline', flexWrap: 'wrap',
+      }}
+    >
+      <span style={{ fontSize: '0.7rem', color: 'var(--color-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+        Outcome
+      </span>
+      <span style={{ fontSize: '0.8rem', fontWeight: 600, color: tone.color }}>
+        {tone.label}
+      </span>
+      {touches.length > 0 && (
+        <span style={{ fontSize: '0.75rem', color: 'var(--color-text-muted)' }}>
+          {touches.join(' · ')}
+        </span>
+      )}
+    </div>
+  )
 }
 
 function pct(value: string) {
@@ -111,6 +182,9 @@ export function SignalDetailModal({ signal, onClose }: Props) {
             ×
           </button>
         </div>
+
+        {/* Outcome ledger (3.6) — shown once anything is recorded */}
+        <OutcomeSection signalId={signal.id} />
 
         {/* Key metrics */}
         <div
