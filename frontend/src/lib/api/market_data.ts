@@ -100,3 +100,36 @@ export const marketDataApi = {
     return api.get<BulkBlockDealsResponse>(`/market/bulk-block-deals?${q.toString()}`, token)
   },
 }
+
+// ── Provisional leaderboards (Phase 3, slice 3.5) ──────────────────────────
+// Derived observability view: provisional-labelled end-to-end, never
+// tradeable state. confidence null on an active-signal row = that
+// signal's setup no longer passes its gate right now.
+
+export interface ProvisionalRow {
+  provisional: true
+  stock_id: number
+  symbol: string
+  profile_key: string | null
+  style: string
+  tf: string
+  confidence: number | null
+  direction: 'BUY' | 'SELL' | null
+  // true = passes gate · false = real below-gate verdict · null = no data
+  gate: boolean | null
+  sources: string[]
+  signal_id?: string | null
+}
+
+export interface ProvisionalLeaderboard {
+  provisional: true
+  style: string
+  as_of: string | null
+  rows: ProvisionalRow[]
+}
+
+export const provisionalApi = {
+  getLeaderboard(style: string, token: string): Promise<ProvisionalLeaderboard> {
+    return api.get<ProvisionalLeaderboard>(`/market/provisional/${style}`, token)
+  },
+}

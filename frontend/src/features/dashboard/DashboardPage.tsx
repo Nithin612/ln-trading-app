@@ -10,6 +10,7 @@ import { tradingApi } from '@/lib/api/trading'
 import type { SignalOut } from '@/lib/api/signals'
 import { SignalDetailModal } from './SignalDetailModal'
 import { FilingsPanel } from './FilingsPanel'
+import { ProvisionalPanel } from './ProvisionalPanel'
 import { useLiveQuotes } from '@/hooks/useLiveQuotes'
 import { Skeleton, SkeletonCard } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -474,6 +475,9 @@ export function DashboardPage() {
               <div className="h-20 flex items-center justify-center text-xs text-(--color-text-muted)">No flow data</div>
             )}
           </div>
+
+          {/* Provisional confidence leaderboard (3.5) */}
+          <ProvisionalPanel />
 
           {/* Filings panel */}
           <FilingsPanel hours={24} />

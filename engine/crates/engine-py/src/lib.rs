@@ -5,8 +5,9 @@
 //! - the GIL is released around anything non-trivial (`py.detach`);
 //! - errors cross the FFI as typed Python exceptions, never panics.
 
-use pyo3::exceptions::PyValueError;
+use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
+use std::sync::{Mutex, MutexGuard};
 
 fn check_length(length: usize) -> PyResult<()> {
     if length == 0 {
@@ -377,10 +378,31 @@ fn run_universe(
 /// Money crosses this boundary as STRINGS in (Decimal-parseable, per
 /// rules/rust.md) and raw i64·1e-4 OUT (host converts exactly via
 /// `Decimal(raw) / 10**4` — never through f64).
-#[pyclass]
+///
+/// Threading contract (slice 3.5-deferred, provisional confidence): the
+/// consumer thread mutates via on_ticks/on_time/set_levels while the
+/// provisional refresher thread reads via forming_snapshot — so the
+/// pyclass is FROZEN and the book lives behind a Mutex. Every lock is
+/// scoped entirely inside a `py.detach` closure or entirely under the
+/// GIL — never across a GIL reacquisition — which makes a GIL↔lock
+/// deadlock structurally impossible. Uncontended cost on the tick path
+/// is one atomic lock/unlock per batch (~tens of ns); worst-case block
+/// is the snapshot's copy window (µs-scale, every few seconds).
+#[pyclass(frozen)]
 struct LiveBook {
-    inner: engine_core::live::LiveBook,
+    inner: Mutex<engine_core::live::LiveBook>,
     tf_minutes: Vec<u32>,
+}
+
+/// Lock the book, mapping poisoning (an engine panic mid-call — "can't
+/// happen" per the no-panic rules, but never silently ignored) to a loud
+/// typed exception instead of unwrap.
+fn lock_book(
+    inner: &Mutex<engine_core::live::LiveBook>,
+) -> PyResult<MutexGuard<'_, engine_core::live::LiveBook>> {
+    inner
+        .lock()
+        .map_err(|_| PyRuntimeError::new_err("LiveBook mutex poisoned — engine panicked"))
 }
 
 fn live_events_to_list(
@@ -514,12 +536,16 @@ impl LiveBook {
             &tf_minutes,
         )
         .map_err(|e| PyValueError::new_err(e.to_string()))?;
-        Ok(Self { inner, tf_minutes })
+        Ok(Self {
+            inner: Mutex::new(inner),
+            tf_minutes,
+        })
     }
 
     /// Pre-create per-instrument state for the subscription list.
-    fn ensure_instruments(&mut self, stock_ids: Vec<u32>) {
-        self.inner.ensure_instruments(&stock_ids);
+    fn ensure_instruments(&self, stock_ids: Vec<u32>) -> PyResult<()> {
+        lock_book(&self.inner)?.ensure_instruments(&stock_ids);
+        Ok(())
     }
 
     /// Replace one instrument's tick-trigger watch list (slice 3.5).
@@ -528,12 +554,12 @@ impl LiveBook {
     /// Armed-state survives for unchanged (id, kind) pairs; validation is
     /// all-or-nothing and fail-loud. The host records every accepted call
     /// as an "lv" line in the replay stream.
-    fn set_levels(&mut self, stock_id: u32, levels: Vec<Bound<'_, PyDict>>) -> PyResult<()> {
+    fn set_levels(&self, stock_id: u32, levels: Vec<Bound<'_, PyDict>>) -> PyResult<()> {
         let parsed = levels
             .iter()
             .map(|d| extract_level(&self.tf_minutes, d))
             .collect::<PyResult<Vec<_>>>()?;
-        self.inner
+        lock_book(&self.inner)?
             .set_levels(stock_id, &parsed)
             .map_err(|e| PyValueError::new_err(e.to_string()))
     }
@@ -542,7 +568,7 @@ impl LiveBook {
     /// day_volume|None, qty)] → list of event dicts. Bad price strings
     /// fail loud (a silently skipped tick is a data hole).
     fn on_ticks(
-        &mut self,
+        &self,
         py: Python<'_>,
         ticks: Vec<(u32, i64, String, Option<u64>, u64)>,
     ) -> PyResult<Py<PyList>> {
@@ -560,32 +586,61 @@ impl LiveBook {
                 },
             ));
         }
-        let inner = &mut self.inner;
-        let events = py.detach(move || {
+        // Lock scoped INSIDE the detach closure — dropped before the GIL
+        // is reacquired (the deadlock rule in the struct docs).
+        let events = py.detach(|| -> PyResult<Vec<(u32, engine_core::live::LiveEvent)>> {
+            let mut inner = lock_book(&self.inner)?;
             let mut out = Vec::with_capacity(parsed.len() * 2);
             inner.on_ticks(&parsed, &mut out);
-            out
-        });
+            Ok(out)
+        })?;
         live_events_to_list(py, &self.tf_minutes, &events)
     }
 
     /// Host time pulse: commit every bucket ended by now_ts. The host
     /// records these pulses in the replay stream alongside ticks (3.4).
-    fn on_time(&mut self, py: Python<'_>, now_ts: i64) -> PyResult<Py<PyList>> {
-        let inner = &mut self.inner;
-        let events = py.detach(move || {
+    fn on_time(&self, py: Python<'_>, now_ts: i64) -> PyResult<Py<PyList>> {
+        let events = py.detach(|| -> PyResult<Vec<(u32, engine_core::live::LiveEvent)>> {
+            let mut inner = lock_book(&self.inner)?;
             let mut out = Vec::new();
             inner.on_time(now_ts, &mut out);
-            out
-        });
+            Ok(out)
+        })?;
         live_events_to_list(py, &self.tf_minutes, &events)
     }
 
     /// (pre_open, post_close, late, bad_price) reject counters.
-    fn rejects(&self, stock_id: u32) -> Option<(u64, u64, u64, u64)> {
-        self.inner
+    fn rejects(&self, stock_id: u32) -> PyResult<Option<(u64, u64, u64, u64)>> {
+        Ok(lock_book(&self.inner)?
             .rejects(stock_id)
-            .map(|r| (r.pre_open, r.post_close, r.late, r.bad_price))
+            .map(|r| (r.pre_open, r.post_close, r.late, r.bad_price)))
+    }
+
+    /// Read-only copy of the CURRENT forming candles for the given stocks
+    /// (slice 3.5-deferred, provisional confidence). Called from the
+    /// provisional refresher thread, never the consumer. Returns the same
+    /// dict shape as "forming" events (money raw i64·1e-4); stocks or
+    /// timeframes with no forming bucket are simply absent. This is a
+    /// DERIVED OBSERVABILITY read: never an engine event, never recorded,
+    /// never in replay.
+    fn forming_snapshot(&self, py: Python<'_>, stock_ids: Vec<u32>) -> PyResult<Py<PyList>> {
+        let tf_count = self.tf_minutes.len();
+        let snap = py.detach(|| -> PyResult<Vec<(u32, engine_core::live::LiveEvent)>> {
+            let inner = lock_book(&self.inner)?;
+            let mut out = Vec::new();
+            for &sid in &stock_ids {
+                for tf_idx in 0..tf_count {
+                    if let Some(candle) = inner.forming_candle(sid, tf_idx) {
+                        out.push((
+                            sid,
+                            engine_core::live::LiveEvent::Forming { tf_idx, candle },
+                        ));
+                    }
+                }
+            }
+            Ok(out)
+        })?;
+        live_events_to_list(py, &self.tf_minutes, &snap)
     }
 }
 

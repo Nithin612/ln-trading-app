@@ -1044,6 +1044,20 @@ def main(argv: list[str] | None = None) -> int:
             daemon=True,
         ),
     ]
+    if settings.live_provisional_enabled:
+        # Provisional confidence refresher (3.5-deferred): reads the book
+        # via forming_snapshot only; publishes derived leaderboards. Zero
+        # work on the consumer thread; daemon like the other refreshers.
+        from app.broker.provisional import run_provisional
+
+        threads.append(
+            threading.Thread(
+                target=run_provisional,
+                args=(book, stop),
+                name="provisional",
+                daemon=True,
+            )
+        )
     for t in threads:
         t.start()
     ticker.connect(threaded=True)

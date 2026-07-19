@@ -189,10 +189,23 @@ forever) — parser fixed (+regression test), 07-17 captured; 07-02→
 Phase 4, factor scores missing days as zero by design). Full detail:
 phase-03 ledger §EOD restart.
 
-**▶ NEXT ACTION — in order:** (1) provisional-confidence impl (design
-pinned, ledger §Decisions); (2) 3.6 outcome ticks; (3) 3.7 shadow week
-(30-day paper clock). Monday pre-open: start `make worker` alongside
-the live worker (new ritual step).
+**✅ PROVISIONAL CONFIDENCE + LEADERBOARDS — DONE 2026-07-18 (ledger
+§Provisional confidence + leaderboards): SLICE 3.5 IS NOW COMPLETE.**
+Refresher-thread batch rescore per the pinned design (frozen scorer on
+the forming-appended window canon; convergence to the committed score
+pinned by test); `LiveBook` frozen+Mutex with a `forming_snapshot` FFI
+getter (GIL-released, deadlock-impossible lock scoping); per-style
+leaderboards SET(TTL)+PUBLISH with signal rows never clipped;
+`subscribe_provisional` WS fanout + REST reconciliation + dashboard
+ProvisionalPanel (provisional-labelled end-to-end). +21 backend / +12
+frontend tests, all real seams (incl. run_cycle e2e through the real
+tradecore book). Worker thread behind `live_provisional_enabled`.
+
+**▶ NEXT ACTION — in order:** (1) 3.6 outcome ticks; (2) 3.7 shadow
+week (30-day paper clock). Monday pre-open: start `make worker`
+alongside the live worker (new ritual step); first live observation of
+the provisional cycle cadence (overrun warnings = tune
+`live_provisional_refresh_s` or hotset cap).
 
 Open threads, in order:
 1. **FIRST SOAK RAN 2026-07-10 — PARTIAL; latency verdict OPEN** (full

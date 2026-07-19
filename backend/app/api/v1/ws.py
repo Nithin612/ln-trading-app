@@ -10,6 +10,9 @@ Protocol (client → server):
                                                 snapshots at subscribe — re-send
                                                 to refresh after edits)
   { "subscribe_alerts": false }                 stop alerts
+  { "subscribe_provisional": true }             all per-style leaderboards
+  { "subscribe_provisional": ["intraday"] }     only these styles
+  { "subscribe_provisional": false }            stop leaderboards
 
 Protocol (server → client):
   { "type": "ltp",    "data": { "symbol": "RELIANCE", "ltp": 2850.5, "ts": "..." } }
@@ -17,6 +20,9 @@ Protocol (server → client):
   { "type": "alert",  "data": { "sid", "level_id", "tag", "price", "ts",
                                 "day", "source", "style", "signal_id"?,
                                 "id": stream-entry-id } }
+  { "type": "provisional", "data": { "provisional": true, "style", "as_of",
+                                     "rows": [...] } }   (leaderboard snapshot;
+                                     at-most-once pub/sub — REST reconciles)
   { "type": "signal", "data": { ... signal JSON ... } }
   { "type": "error",  "data": { "detail": "..." } }
 
@@ -42,6 +48,7 @@ from fastapi import APIRouter, WebSocket, WebSocketDisconnect
 from sqlalchemy import text
 
 from app.broker.candle_aggregator import TIMEFRAME_TABLE
+from app.broker.provisional import ALL_PROVISIONAL_STYLES, LEADERBOARD_CHANNEL
 from app.broker.tick_consumer import CANDLE_CHANNEL, LTP_CHANNEL
 from app.core.config import settings
 from app.core.security import decode_token
@@ -125,7 +132,13 @@ async def ws_live(websocket: WebSocket) -> None:  # noqa: C901
                 symbol = _sid_to_symbol(stock_id, subscribed_sids)
                 await _send({"type": "candle", "data": {**data, "symbol": symbol}})
 
+            elif channel.startswith("provisional:"):
+                # provisional:{style} — payload is already the full
+                # leaderboard snapshot (provisional-labelled at source).
+                await _send({"type": "provisional", "data": data})
+
     alert_task: asyncio.Task[None] | None = None
+    provisional_channels: set[str] = set()
     alert_styles: set[str] = set()
     # None = unscoped; a SET (possibly empty) = only these stock_ids.
     # An empty watchlist legitimately scopes to NOTHING — never conflate
@@ -243,6 +256,44 @@ async def ws_live(websocket: WebSocket) -> None:  # noqa: C901
                     alert_task.cancel()
                     alert_task = None
                     alert_sids = None
+
+            if "subscribe_provisional" in msg:
+                want_p = msg["subscribe_provisional"]
+                if want_p:
+                    if want_p is True:
+                        styles = set(ALL_PROVISIONAL_STYLES)
+                    elif isinstance(want_p, list) and all(
+                        isinstance(s, str) for s in want_p
+                    ):
+                        styles = set(want_p) & set(ALL_PROVISIONAL_STYLES)
+                        if not styles:
+                            await _send({
+                                "type": "error",
+                                "data": {
+                                    "detail": "no valid styles; known: "
+                                    + ", ".join(ALL_PROVISIONAL_STYLES)
+                                },
+                            })
+                            continue
+                    else:
+                        await _send({
+                            "type": "error",
+                            "data": {"detail": "subscribe_provisional: true|false|[styles]"},
+                        })
+                        continue
+                    # REPLACE semantics, like subscribe_alerts: drop channels
+                    # the new set no longer wants, add the new ones.
+                    wanted = {LEADERBOARD_CHANNEL.format(style=s) for s in styles}
+                    stale = provisional_channels - wanted
+                    fresh = wanted - provisional_channels
+                    if stale:
+                        await pubsub.unsubscribe(*stale)
+                    if fresh:
+                        await pubsub.subscribe(*fresh)
+                    provisional_channels = wanted
+                elif provisional_channels:
+                    await pubsub.unsubscribe(*provisional_channels)
+                    provisional_channels = set()
 
     except WebSocketDisconnect:
         pass

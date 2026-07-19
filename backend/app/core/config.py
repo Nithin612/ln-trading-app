@@ -42,6 +42,16 @@ class Settings(BaseSettings):
     live_vburst_mult: float = 3.0        # forming 5m vol ≥ mult × 20d avg
     live_alert_stream: str = "alerts:live"   # Redis Stream (at-least-once)
     live_alert_maxlen: int = 10_000      # stream MAXLEN ~ cap
+
+    # ── Provisional confidence + leaderboards (3.5-deferred; design pinned
+    # 2026-07-11, ledger §Decisions). Derived observability view ONLY —
+    # never engine events, never recorded/replayed, never in backtests.
+    live_provisional_enabled: bool = True    # reversibility switch (worker thread)
+    live_provisional_refresh_s: float = 3.0  # cycle-START cadence (pinned 1–5 s)
+    live_provisional_hotset_max: int = 150   # hot-set cap; clipping is logged
+    live_provisional_trigger_window_s: int = 900  # "near-trigger" recency window
+    live_provisional_top_n: int = 20         # rows per style leaderboard
+    live_provisional_key_ttl_s: int = 60     # leaderboard SET key TTL
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
 

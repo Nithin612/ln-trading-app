@@ -29,7 +29,7 @@ any of it provable.
 | 3.2 | `ohlcv_1h` session-aligned rebuild | **✅ 2026-07-09** — migration `q3r4s5t6u7v8` (delete UTC-floored body, roll up from 11.5M complete 5m bars via shared `app/services/ohlcv_rollup.py`): **1,074,456 rows / 2,036 stocks, anchors exactly 09:15…15:15 IST, zero incomplete**. Interim v1 aggregator floor patched to the 03:45-UTC anchor (identical for 1m/5m/15m; 1h moves to canon) so live minting stays consistent until 3.3. §8 sign-off = walkforward+parity replay green in make check (no golden touches 1h) | downgrade leaves the table EMPTY (documented: pre-rebuild rows were garbage; 5m source re-derives) |
 | 3.3 | live-worker process (`app/broker/live_worker.py`, run as `python -m app.broker.live_worker`): KiteTicker thread → bounded `queue.Queue` (drop-oldest tick batches; time pulses share the queue so ordering is replayable) → consumer THREAD → ONE `tradecore.LiveBook` call per batch → sync redis pipeline (`SET ltp:{stock_id}` + LTP/candle PUBLISH) → committed candles via BLOCKING writer queue → writer thread (own loop + own engine) → Postgres upsert → Celery trigger after commit. PyO3 `LiveBook` binding (money strings in / raw i64·1e-4 out). Token-expiry = process exit 3/4 for the supervisor; `--gap-fill` opt-in startup backfill; JSONL record hook = the 3.4 replay input. XADD alerts stream lands with 3.5; indicator warmup lands with 3.5 triggers | **✅ 2026-07-09** (code+tests; first live market soak pending next session — see exit gate) |
 | 3.4 | Record/replay harness | **✅ 2026-07-10** — recordings are self-describing (session header + tick/pulse lines in engine order; stale/skipped ticks never recorded); `app/broker/replay.py` feeds them through a fresh `LiveBook` → canonical event stream + sha256 digest; CLI `python -m app.broker.replay <rec> [--emit]` is the soak-day pinning ritual. Synthetic golden committed (61 events / 22 committed; pre-open rejection, volume baseline+reset, per-tf late-tick, pulse closes) + a worker-seam fidelity test proving replay ≡ writer-queue stream. `make replay` in the check chain. Tick→publish `LatencyHistogram` in the worker (fixed buckets, p50/p99/max at shutdown) — **p99 < 10 ms VALIDATION happens on soak day, not in CI** | real-session golden joins after the first soak |
-| 3.5 | Tick triggers + provisional layer: entry-zone touches, PDH/PDL/S&R crosses, SL/TP proximity, volume bursts, forming-candle provisional confidence, per-style leaderboards @ 2–4 Hz. Redis Streams for alerts (at-least-once); WS fanout by style/watchlist; drop-oldest backpressure for LTP, never for candle-close | **core ✅ 2026-07-10** (branch `slice-3.5-tick-triggers`): Rust trigger engine (`triggers.rs` + `LiveEvent::Trigger`, armed/re-arm hysteresis, `set_levels` preserves state for unchanged ids) · levels as replayable INPUT (`{"k":"lv"}` recording lines; no-lv recordings byte-identical — 3.4 golden digest untouched) · level sources `live_levels.py` (PDH/PDL from 1d, §2.5-width entry zones + SL/TP proximity per active signal, frozen-detector S/R for signal stocks, 5m vburst baselines; 30s refresher thread) · `alerts:live` stream XADD + `/ws/live` `subscribe_alerts` fanout with style filter. Rust 55 tests · +23 backend tests. **Deferred:** provisional confidence + leaderboards (design PINNED 2026-07-11 — throttled batch rescore of the hot set, see §Decisions; implementation after the Monday soak), watchlist fanout (no watchlist model exists). Alert UI DONE 2026-07-11 (§Alert UI). Reviews DONE 2026-07-10 (quant-verifier FAIL→fixed, bug-hunter BUGS-FOUND→fixed — §Reviews 3.5) | alerts never gate/mint/modify signals — provisional layer only |
+| 3.5 | Tick triggers + provisional layer: entry-zone touches, PDH/PDL/S&R crosses, SL/TP proximity, volume bursts, forming-candle provisional confidence, per-style leaderboards @ 2–4 Hz. Redis Streams for alerts (at-least-once); WS fanout by style/watchlist; drop-oldest backpressure for LTP, never for candle-close | **core ✅ 2026-07-10** (branch `slice-3.5-tick-triggers`): Rust trigger engine (`triggers.rs` + `LiveEvent::Trigger`, armed/re-arm hysteresis, `set_levels` preserves state for unchanged ids) · levels as replayable INPUT (`{"k":"lv"}` recording lines; no-lv recordings byte-identical — 3.4 golden digest untouched) · level sources `live_levels.py` (PDH/PDL from 1d, §2.5-width entry zones + SL/TP proximity per active signal, frozen-detector S/R for signal stocks, 5m vburst baselines; 30s refresher thread) · `alerts:live` stream XADD + `/ws/live` `subscribe_alerts` fanout with style filter. Rust 55 tests · +23 backend tests. **COMPLETE 2026-07-18:** provisional confidence + leaderboards implemented per the pinned design (§Provisional confidence + leaderboards — refresher-thread batch rescore, Mutex'd frozen LiveBook + `forming_snapshot` FFI, per-style SET+PUBLISH, `subscribe_provisional` WS + REST reconciliation + dashboard panel; convergence pinned by test). Watchlist fanout DONE 2026-07-11 (§Watchlists). Alert UI DONE 2026-07-11 (§Alert UI). Reviews DONE 2026-07-10 (quant-verifier FAIL→fixed, bug-hunter BUGS-FOUND→fixed — §Reviews 3.5) | alerts never gate/mint/modify signals — provisional layer only |
 | 3.6 | Signal-outcome tick evaluation (entry-zone touch before expiry) recorded now — Phase 6 needs this data | planned | |
 | 3.7 | Shadow week (Rust decides, frozen Python double-checks on closes — zero diffs) → full-session soak (memory flat, zero dropped subscriptions, latency budget met) | planned | python engine deletion decision AFTER shadow week (user ruling) |
 
@@ -1054,6 +1054,118 @@ assumption, per-day commit atomicity in all four ingest paths,
 run_db_task bridge, beat-overlap safety at -c 2 (disjoint tables),
 JSON-serializable payloads, monkeypatch seams.
 
+## Provisional confidence + leaderboards (3.5 completion — 2026-07-18)
+
+The last deferred 3.5 item, implemented exactly to the pinned design
+(§Decisions 2026-07-11 — throttled batch rescore of a bounded hot set;
+the O(1)-incremental sketch stays rejected). Slice 3.5 is now COMPLETE.
+
+**Compute (`app/broker/provisional.py`, refresher thread `provisional`
+in the worker):**
+- Own event loop + own pool_size=1 engine + own sync redis client (the
+  `run_refresher` pattern — pooled connections never cross loops). Wired
+  in `main()` behind `live_provisional_enabled` (default ON — the
+  reversibility switch); daemon, joins the worker's stop event.
+- In-session gate 09:15–15:35 IST (5-min drain grace so the last forming
+  bars converge on screen); weekends skipped; holidays implicitly (the
+  worker doesn't run).
+- Cycle: hot set → ONE `forming_snapshot` FFI read → rescore → publish.
+  Cadence = `live_provisional_refresh_s` (3 s) between cycle STARTS; an
+  overrun logs loudly and starts the next cycle later — a throttle,
+  never a queue.
+- Hot set: active-signal stocks (each signal also yields a
+  (stock, profile-params) pair scored with ITS profile's real
+  min_confidence + multipliers — even if that profile is now inactive) +
+  near-trigger stocks (alert-stream entries within
+  `live_provisional_trigger_window_s`) + watchlist stocks; bounded by
+  `live_provisional_hotset_max` with priority signal > trigger >
+  watchlist; clipping LOGGED, never silent.
+- Window canon per pair: `_load_window` (≤300 completed) → drop rows the
+  forming bar supersedes → keep ≤299 → append forming. 1d pairs:
+  today's forming 1d bar = grouped-SQL session aggregate of today's
+  committed 5m + the forming 5m snapshot (3.0 own-bars principle;
+  restart re-mint overlap deduped by last_time comparison). Money
+  crosses raw i64·1e-4 → float THROUGH Decimal (`_money_f`).
+- Gate-faithful: pairs go through `score_signal` (the frozen sequence,
+  ADX regime adjustment inside). A row exists only where the engine
+  would speak — EXCEPT active-signal pairs, which always publish
+  (confidence=null = "your signal's setup no longer passes its gate").
+- Publish: per-style `provisional:leaderboard:{style}` SET (TTL
+  `live_provisional_key_ttl_s`=60 s — every key gets a TTL) + PUBLISH
+  `provisional:{style}`; rows sorted confidence-desc None-last; top-N
+  clip (`live_provisional_top_n`=20) NEVER drops signal rows.
+  `ALL_PROVISIONAL_STYLES` = 4 profile styles + legacy classifications
+  (scalp/positional) — WS + REST import it (the LTP_KEY rule).
+
+**Rust (`engine-py`): `LiveBook` → `#[pyclass(frozen)]` + Mutex.** The
+consumer thread mutates (on_ticks/on_time/set_levels) while the
+provisional thread reads; every lock is scoped entirely inside a
+`py.detach` closure or entirely under the GIL — never across a GIL
+reacquisition — so a GIL↔lock deadlock is structurally impossible.
+Uncontended cost ~tens of ns per batch; worst-case block = the
+snapshot's µs-scale copy window every few seconds. Poisoning maps to a
+typed RuntimeError (never unwrap across FFI). New `forming_snapshot`
+getter (GIL released) returns forming-event-shaped dicts; stocks/tfs
+with no forming bucket are simply absent. DERIVED read: never an engine
+event, never recorded, never replayed — 3.4 recording semantics and the
+golden digests are untouched by construction (the recorder path has no
+new call sites).
+
+**Surfaces:**
+- `/ws/live` `subscribe_provisional: true | [styles] | false` — REPLACE
+  semantics like subscribe_alerts; styles validated against
+  `ALL_PROVISIONAL_STYLES` (unknown-only list → error frame, fail
+  closed); frames `{"type": "provisional", "data": <full snapshot>}`.
+  Explicit per-style SUBSCRIBE (never psubscribe: a pattern subscriber
+  flips the worker's `pubsub_numpat` publish-everything sentinel and
+  would un-gate the whole candle fan-out).
+- REST `GET /api/v1/market/provisional/{style}` (auth'd) — the
+  reconciliation path for the at-most-once fan-out: mount, reconnect,
+  late joiners. Missing/expired key or unparsable payload → EMPTY
+  leaderboard (never an error); unknown style → 404 listing the known
+  ones. Typed edge: `ProvisionalRow`/`ProvisionalLeaderboardOut`.
+- Dashboard `ProvisionalPanel` (right column, above filings) fed by
+  `useProvisionalStream` (one socket, latest-snapshot-per-style,
+  REST-first then WS-wins; 4401 → authFailed without a reconnect loop)
+  + TanStack Query for the REST snapshot. Style tabs (role=tablist,
+  focus-visible, aria-selected), ▲/▼ + `--color-profit`/`--color-loss`
+  (glyph+color, never color alone), `formatPct` confidence,
+  tabular-nums right-aligned, skeleton/empty/error+retry states, and
+  the labelling rule made visible: a PROVISIONAL badge + "provisional ·
+  converges at candle close · as of HH:MM:SS IST" footer.
+
+**Convergence (the pinned invariant), proven:** scoring the
+forming-appended window equals scoring the same window with that bar
+committed — `test_provisional_equals_committed_at_close` asserts frame
+equality AND integer-equal confidence/direction, pinned to the frozen
+engine's deterministic verdicts ((SELL, 43) chop fixture at gate 0;
+(SELL, 66) marubozu-rollover fixture ≥ the strong-ADX 65 floor at a
+REAL profile's gate 70 — the config schema floors min_confidence at 70,
+so the e2e uses production-legal params).
+
+**Tests (+21 backend / +12 frontend, all real seams):** window-canon
+cap-at-300 + re-minted-bucket supersede; forming-daily-bar
+committed-only/forming-only/merge/overlap-skip; hot-set sources +
+signal-pair extraction + priority clipping (logged); publish TTL,
+ordering, channel delivery, signal-row clip survival; `score_pair` 1d ==
+manual assembly; **run_cycle end-to-end through the REAL tradecore
+LiveBook** (ticks rebuild the forming bar O→H→L→C inside the engine;
+published row == direct `score_signal` on the identical frame; sources,
+profile_key, gate flags exact); active-signal below-gate row publishes
+confidence=null; WS fanout both sides (pump-published frames received,
+style scoping filters, invalid forms → error frames, unsubscribe
+survives); REST roundtrip + empty + 404. Frontend: hook
+subscribe/parse-refusal/latest-wins/4401/reconnect; panel render,
+loading, empty, error+retry, tab-switch fetch, WS-over-REST preference,
+below-gate signal row rendering.
+
+**Perf note (budget untouched):** zero new work on the consumer thread;
+the tick path gained one uncontended Mutex lock/unlock per batch. The
+provisional thread's DB work is hot-set-bounded (default 150 stocks ×
+active profiles) with universe (600 s) and flows/block-deal (60 s)
+caches; cycle overruns are the logged, expected degradation mode. First
+live-session observation queued for the Monday pre-open ritual.
+
 ## Watchlists (3.5 deferred item — DONE 2026-07-11, same session)
 
 Full vertical slice, zero worker contact: `watchlists` +
@@ -1337,6 +1449,73 @@ one tick per call). At true 2,049-tick full batches the un-gateable LTP
 SET floor (~11 ms even with hiredis) still brushes the budget → restate
 the budget at soak scale or add unchanged-price SET dedupe (decide
 after the next soak's numbers).
+
+## Reviews (provisional confidence — 2026-07-18/19)
+
+- **quant-verifier: PASS-WITH-NOTES — 1 HIGH + 3 LOW fixed same session,
+  4 INFO items dispositioned.** Positively verified: only scoring entry
+  is the frozen `score_signal` (no bypass); window canon
+  supersede→cap-299→append exact (REPL-proven); `forming_snapshot` a
+  pure `&self` read with one call site; zero provisional coupling in
+  backtest/analysis/replay paths and zero new recorder call sites;
+  provisional label stamped at row/payload/schema/WS-frame levels;
+  `_money_f` Decimal-routed; Mutex scoped entirely inside `py.detach`
+  closures; WS never psubscribes (the publish-everything sentinel stays
+  un-tripped); convergence test asserts frame equality + integer-equal
+  verdicts and the (SELL,66) fixture legitimately exercises §4's
+  strong-ADX 65 floor at a production-legal gate-70 profile.
+  **Fixed:** (HIGH) signal pairs bound to a non-active profile silently
+  fell back to legacy defaults (gate 70, multipliers DROPPED, wrong
+  style shelf, wrong timeframe) — run_cycle now fetches non-superseded
+  rows for any pair key the active set missed (+regression test:
+  inactive `fno` profile's style/tf/score bind exactly); (LOW)
+  `KeyError` from a malformed alert-stream entry aborted the whole
+  cycle — now skips the entry; (LOW) signal stocks clipped from the hot
+  set lost their forming bar/1d aggregate and rendered as bare
+  stock_ids — snapshot now covers hot ∪ signal-pair stocks and
+  `SignalPair` carries its symbol; (LOW) no-data and below-gate were
+  conflated on signal rows — `score_pair` returns `(result, had_data)`
+  and rows publish `gate: null` for unusable windows ("no data" in the
+  panel, +regression test both sides; a DB outage must never render as
+  "your setup no longer passes"). Also applied: cycle waits
+  `cadence − elapsed` (start-to-start contract as documented) and a
+  stock_id sort tiebreak (equal-confidence rows can't swap across
+  cycles at the top-N boundary). **Dispositioned INFO:** 1d preview
+  converges to the session-aggregate score, not the bhavcopy VWAP close
+  (documented data-source delta — CHANGELOG now says "intraday tfs");
+  vanished styles TTL-expire within 60 s rather than publishing empty
+  snapshots (as_of is the staleness signal — accepted); leaderboard
+  rows reflect the confluence gate only, not setup
+  conditions/SL-cap/dedupe (per the pinned "where the frozen engine
+  would speak" — revisit if a setup-gated profile activates).
+
+- **bug-hunter: BUGS-FOUND — 1 MEDIUM (executed repro) + 2 LOW, all
+  fixed same session; everything else traced sound both-sides.**
+  **Fixed:** (MEDIUM) a style whose rows dropped to zero was never
+  re-published — no SET overwrite, no frame — so the stale board
+  outlived the setup behind a green "Live" badge (the WS-over-REST
+  precedence made it permanent client-side; repro executed against real
+  Redis). `publish_leaderboards` now publishes EVERY known style EVERY
+  cycle, empty boards included (+canary test: emptied style overwrites
+  the key with fresh as_of AND sends the frame). New key semantics
+  documented: empty rows + fresh as_of = genuinely nothing passes;
+  MISSING key = worker down / off-session. (LOW) the one capped
+  `XREVRANGE count=500` silently shrank the 15-min trigger recency
+  window during open-auction alert bursts — now pages newest-first
+  until past the cutoff (extracted `_recent_trigger_sids`; ≤20 pages at
+  maxlen; +551-entry paging regression test). (LOW) `scalp`/
+  `positional` boards published but unreachable — no UI tab existed;
+  ProvisionalPanel now offers all six styles (a legacy positional
+  holder's "setup no longer passes" preview was invisible).
+  **Confirmed sound:** Rust Mutex/GIL scoping (no lock held across GIL
+  reacquisition; poisoning → typed error; `&mut`→`&` change has no
+  caller assuming exclusivity), run_provisional lifecycle (nothing
+  pooled crosses loops), worker wiring + stop semantics, tz math
+  (aware-vs-aware everywhere), window canon, redis contracts both
+  sides quoted, WS REPLACE bookkeeping unwinding into `pubsub.reset()`,
+  score_pair tuple contract at every call site, frontend hook
+  lifecycle (stylesKey-keyed effect, no churn, 4401 no-retry), panel
+  token/format compliance, REST client lifecycle.
 
 ## Reviews (slice 3.5)
 

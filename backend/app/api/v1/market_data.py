@@ -3,17 +3,23 @@ Phase 4 market-data endpoints:
   GET  /stocks/{stock_id}/ohlcv              — OHLCV bars for candlestick chart
   GET  /market/fii-dii                       — FII/DII daily flows
   GET  /market/bulk-block-deals              — bulk/block deals list
+  GET  /market/provisional/{style}           — provisional leaderboard snapshot
   POST /market/ingest/bhavcopy               — admin: trigger bhavcopy ingestion
   POST /market/ingest/fii-dii                — admin: pull FII/DII from NSE
 """
 from __future__ import annotations
 
+import json
+import logging
 from datetime import UTC, date, datetime, timedelta
 
+import redis.asyncio as aioredis
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.broker.provisional import ALL_PROVISIONAL_STYLES, LEADERBOARD_KEY
+from app.core.config import settings
 from app.core.deps import get_current_user, get_db, require_admin
 from app.models.user import User
 from app.schemas.market_data import (
@@ -25,9 +31,12 @@ from app.schemas.market_data import (
     IngestionResult,
     OhlcvBar,
     OhlcvResponse,
+    ProvisionalLeaderboardOut,
 )
 from app.services.bhavcopy_service import ingest_bhavcopy_date
 from app.services.fii_dii_service import fetch_fii_dii_data, upsert_fii_dii
+
+log = logging.getLogger(__name__)
 
 router = APIRouter(tags=["market-data"])
 
@@ -193,6 +202,38 @@ async def get_bulk_block_deals(
     ]
 
     return BulkBlockDealsResponse(items=items, total=len(items))
+
+
+# ── Provisional leaderboards (3.5-deferred) ───────────────────────────────────
+
+@router.get("/market/provisional/{style}", response_model=ProvisionalLeaderboardOut)
+async def get_provisional_leaderboard(
+    style: str,
+    _: User = Depends(get_current_user),
+) -> ProvisionalLeaderboardOut:
+    """Latest provisional leaderboard snapshot for one style — the
+    reconciliation path for the at-most-once WS fan-out (late joiners,
+    reconnects). Every style publishes every cycle: empty rows with a
+    fresh as_of = genuinely nothing passes the gate; a MISSING key
+    (as_of null here) = worker down / outside session. Both are empty
+    states, never errors."""
+    if style not in ALL_PROVISIONAL_STYLES:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"unknown style; known: {', '.join(ALL_PROVISIONAL_STYLES)}",
+        )
+    r = aioredis.from_url(settings.redis_url, decode_responses=True)
+    try:
+        raw = await r.get(LEADERBOARD_KEY.format(style=style))
+    finally:
+        await r.aclose()
+    if raw is None:
+        return ProvisionalLeaderboardOut(style=style)
+    try:
+        return ProvisionalLeaderboardOut(**json.loads(raw))
+    except (json.JSONDecodeError, TypeError, ValueError):
+        log.exception("provisional leaderboard key unparsable (style=%s)", style)
+        return ProvisionalLeaderboardOut(style=style)
 
 
 # ── Admin ingestion triggers ──────────────────────────────────────────────────
