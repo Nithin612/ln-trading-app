@@ -17,7 +17,7 @@ import { Label } from '@/components/ui/label'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { useToast } from '@/hooks/useToast'
-import { formatCurrency } from '@/lib/format'
+import { formatCurrency, formatInt } from '@/lib/format'
 
 // Bounds mirror backend UserUpdate (app/schemas/user.py) so client-side
 // validation matches the API's.
@@ -233,9 +233,8 @@ export function ProfilePage() {
   const joinedDate = new Date(user.created_at).toLocaleDateString('en-IN', {
     day: '2-digit', month: 'long', year: 'numeric', timeZone: 'Asia/Kolkata',
   })
-  const capital = parseFloat(user.capital_inr).toLocaleString('en-IN', { maximumFractionDigits: 0 })
-  const riskAmount = (parseFloat(user.capital_inr) * parseFloat(user.risk_per_trade_pct) / 100)
-    .toLocaleString('en-IN', { maximumFractionDigits: 0 })
+  const capital = formatInt(parseFloat(user.capital_inr))
+  const riskAmount = formatInt(parseFloat(user.capital_inr) * parseFloat(user.risk_per_trade_pct) / 100)
 
   return (
     <div className="max-w-2xl space-y-6">
@@ -248,7 +247,7 @@ export function ProfilePage() {
           <div className="flex items-center gap-3 flex-wrap">
             <h2 className="text-xl font-bold text-(--color-text)">{user.full_name}</h2>
             {isAdmin && (
-              <Badge className="bg-purple-900/40 text-purple-300 border border-purple-700 text-xs flex items-center gap-1">
+              <Badge className="bg-(--color-accent-bg) text-(--color-accent) border border-(--color-accent) text-xs flex items-center gap-1">
                 <Shield size={10} />
                 Admin
               </Badge>
@@ -259,9 +258,9 @@ export function ProfilePage() {
             <span
               className="text-xs font-semibold px-2.5 py-1 rounded-full border"
               style={{
-                backgroundColor: user.trading_mode === 'live' ? 'rgba(34,197,94,0.15)' : 'rgba(59,130,246,0.15)',
-                color: user.trading_mode === 'live' ? 'var(--color-bull)' : 'var(--color-accent)',
-                borderColor: user.trading_mode === 'live' ? 'rgba(34,197,94,0.3)' : 'rgba(59,130,246,0.3)',
+                backgroundColor: user.trading_mode === 'live' ? 'var(--color-profit-bg)' : 'var(--color-accent-bg)',
+                color: user.trading_mode === 'live' ? 'var(--color-profit)' : 'var(--color-accent)',
+                borderColor: user.trading_mode === 'live' ? 'var(--color-profit)' : 'var(--color-accent)',
               }}
             >
               {user.trading_mode === 'live' ? '● Live Trading' : '● Paper Trading'}
@@ -269,9 +268,9 @@ export function ProfilePage() {
             <span
               className="text-xs font-semibold px-2.5 py-1 rounded-full border"
               style={{
-                backgroundColor: user.is_active ? 'rgba(34,197,94,0.1)' : 'rgba(239,68,68,0.1)',
-                color: user.is_active ? 'var(--color-bull)' : 'var(--color-bear)',
-                borderColor: user.is_active ? 'rgba(34,197,94,0.2)' : 'rgba(239,68,68,0.2)',
+                backgroundColor: user.is_active ? 'var(--color-profit-bg)' : 'var(--color-loss-bg)',
+                color: user.is_active ? 'var(--color-profit)' : 'var(--color-loss)',
+                borderColor: user.is_active ? 'var(--color-profit)' : 'var(--color-loss)',
               }}
             >
               {user.is_active ? 'Active' : 'Inactive'}

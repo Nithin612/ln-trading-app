@@ -166,7 +166,7 @@ export function FilingsPage() {
                         </span>
                         {f.is_high_impact && (
                           <span className="text-[10px] px-1.5 py-0.5 rounded border font-semibold"
-                            style={{ color: 'var(--color-error)', borderColor: 'rgba(218,54,51,0.4)', background: 'rgba(218,54,51,0.1)' }}>
+                            style={{ color: 'var(--color-error)', borderColor: 'color-mix(in srgb, var(--color-loss) 40%, transparent)', background: 'var(--color-loss-bg)' }}>
                             HIGH
                           </span>
                         )}

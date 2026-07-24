@@ -184,7 +184,7 @@ export function SettingsPage() {
                 style={{
                   backgroundColor: fontSizePx === p.px ? 'var(--color-accent)' : 'var(--color-surface-3)',
                   borderColor: fontSizePx === p.px ? 'var(--color-accent)' : 'var(--color-border)',
-                  color: fontSizePx === p.px ? '#fff' : 'var(--color-text-muted)',
+                  color: fontSizePx === p.px ? 'var(--color-primary-foreground)' : 'var(--color-text-muted)',
                 }}
               >
                 {p.label}

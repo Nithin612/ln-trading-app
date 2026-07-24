@@ -23,8 +23,8 @@ export function UserAvatar({ name, size = 'md', className = '' }: UserAvatarProp
     <div
       className={`${outer} rounded-full flex items-center justify-center font-semibold flex-shrink-0 select-none ${className}`}
       style={{
-        background: 'linear-gradient(135deg, var(--color-accent) 0%, #1e40af 100%)',
-        color: '#fff',
+        background: 'linear-gradient(135deg, var(--color-accent) 0%, var(--color-info) 100%)',
+        color: 'var(--color-primary-foreground)',
         letterSpacing: '0.02em',
       }}
     >

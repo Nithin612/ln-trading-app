@@ -10,6 +10,7 @@ import { marketDataApi } from '@/lib/api/market_data'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
+import { formatINR, formatInt } from '@/lib/format'
 
 type Segment = 'ALL' | 'cash' | 'futures' | 'options'
 type InvestorType = 'ALL' | 'FII' | 'DII'
@@ -18,7 +19,7 @@ function crFormat(val: string) {
   const n = parseFloat(val)
   return (
     <span style={{ color: n >= 0 ? 'var(--color-bull)' : 'var(--color-bear)', fontWeight: 600 }}>
-      {n >= 0 ? '+' : ''}{n.toLocaleString('en-IN', { maximumFractionDigits: 2 })} Cr
+      {n >= 0 ? '+' : ''}{formatINR(n)} Cr
     </span>
   )
 }
@@ -122,7 +123,7 @@ export function FiiDiiPage() {
               className="px-3 py-1 text-xs font-medium transition-colors"
               style={{
                 background: days === d ? 'var(--color-accent)' : 'var(--color-surface-3)',
-                color: days === d ? '#fff' : 'var(--color-text-muted)',
+                color: days === d ? 'var(--color-primary-foreground)' : 'var(--color-text-muted)',
               }}
             >
               {d}D
@@ -139,7 +140,7 @@ export function FiiDiiPage() {
               className="px-3 py-1 text-xs font-medium transition-colors"
               style={{
                 background: segment === val ? 'var(--color-accent)' : 'var(--color-surface-3)',
-                color: segment === val ? '#fff' : 'var(--color-text-muted)',
+                color: segment === val ? 'var(--color-primary-foreground)' : 'var(--color-text-muted)',
               }}
             >
               {label}
@@ -156,7 +157,7 @@ export function FiiDiiPage() {
               className="px-3 py-1 text-xs font-medium transition-colors"
               style={{
                 background: investorType === v ? 'var(--color-accent)' : 'var(--color-surface-3)',
-                color: investorType === v ? '#fff' : 'var(--color-text-muted)',
+                color: investorType === v ? 'var(--color-primary-foreground)' : 'var(--color-text-muted)',
               }}
             >
               {v}
@@ -202,11 +203,11 @@ export function FiiDiiPage() {
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
                       <span className="text-(--color-text-muted)">Buy</span>
-                      <span className="font-mono">₹{parseFloat(latestFii.buy_value_cr).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr</span>
+                      <span className="font-mono">₹{formatInt(parseFloat(latestFii.buy_value_cr))} Cr</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-(--color-text-muted)">Sell</span>
-                      <span className="font-mono">₹{parseFloat(latestFii.sell_value_cr).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr</span>
+                      <span className="font-mono">₹{formatInt(parseFloat(latestFii.sell_value_cr))} Cr</span>
                     </div>
                     <div className="flex justify-between font-semibold border-t border-(--color-border) pt-1 mt-1">
                       <span className="text-(--color-text-muted)">Net</span>
@@ -225,11 +226,11 @@ export function FiiDiiPage() {
                   <div className="space-y-1 text-sm">
                     <div className="flex justify-between">
                       <span className="text-(--color-text-muted)">Buy</span>
-                      <span className="font-mono">₹{parseFloat(latestDii.buy_value_cr).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr</span>
+                      <span className="font-mono">₹{formatInt(parseFloat(latestDii.buy_value_cr))} Cr</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-(--color-text-muted)">Sell</span>
-                      <span className="font-mono">₹{parseFloat(latestDii.sell_value_cr).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr</span>
+                      <span className="font-mono">₹{formatInt(parseFloat(latestDii.sell_value_cr))} Cr</span>
                     </div>
                     <div className="flex justify-between font-semibold border-t border-(--color-border) pt-1 mt-1">
                       <span className="text-(--color-text-muted)">Net</span>
@@ -252,10 +253,10 @@ export function FiiDiiPage() {
                   <CartesianGrid strokeDasharray="3 3" stroke="var(--color-chart-grid)" vertical={false} />
                   <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} />
                   <YAxis tick={{ fontSize: 9, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} width={50}
-                    tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`} />
+                    tickFormatter={(v: number) => `${formatInt(v / 1000)}k`} />
                   <ReTooltip
                     contentStyle={{ background: 'var(--color-surface-3)', border: '1px solid var(--color-border)', borderRadius: '4px', fontSize: '11px' }}
-                    formatter={(v, name) => { const n = Number(v ?? 0); return [`${n > 0 ? '+' : ''}${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr`, String(name).toUpperCase()] }}
+                    formatter={(v, name) => { const n = Number(v ?? 0); return [`${n > 0 ? '+' : ''}${formatInt(n)} Cr`, String(name).toUpperCase()] }}
                   />
                   <Legend iconSize={8} wrapperStyle={{ fontSize: '11px', color: 'var(--color-text-muted)' }} />
                   <Bar dataKey="fii" name="fii" radius={[2, 2, 0, 0]}>
@@ -265,7 +266,7 @@ export function FiiDiiPage() {
                   </Bar>
                   <Bar dataKey="dii" name="dii" radius={[2, 2, 0, 0]}>
                     {combinedChartData.map((entry, i) => (
-                      <Cell key={i} fill={entry.dii >= 0 ? '#60a5fa' : '#f87171'} />
+                      <Cell key={i} fill={entry.dii >= 0 ? 'var(--color-info)' : 'var(--color-warning)'} />
                     ))}
                   </Bar>
                 </BarChart>
@@ -301,13 +302,13 @@ export function FiiDiiPage() {
                     tableRows.map((r, i) => (
                       <tr key={i} className="border-b border-(--color-border)/40 hover:bg-(--color-surface-hover) transition-colors">
                         <td className="px-3 py-2 text-(--color-text-muted)">{r.trade_date}</td>
-                        <td className="px-3 py-2 font-mono font-semibold" style={{ color: r.investor_type === 'FII' ? 'var(--color-bull)' : '#60a5fa' }}>{r.investor_type}</td>
+                        <td className="px-3 py-2 font-mono font-semibold" style={{ color: r.investor_type === 'FII' ? 'var(--color-bull)' : 'var(--color-info)' }}>{r.investor_type}</td>
                         <td className="px-3 py-2 text-(--color-text-muted)">{r.segment}</td>
-                        <td className="px-3 py-2 text-right font-mono">{parseFloat(r.buy_value_cr).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
-                        <td className="px-3 py-2 text-right font-mono">{parseFloat(r.sell_value_cr).toLocaleString('en-IN', { maximumFractionDigits: 0 })}</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatInt(parseFloat(r.buy_value_cr))}</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatInt(parseFloat(r.sell_value_cr))}</td>
                         <td className="px-3 py-2 text-right">{crFormat(r.net_value_cr)}</td>
                         <td className="px-3 py-2 text-right font-mono" style={{ color: r.cumNet >= 0 ? 'var(--color-bull)' : 'var(--color-bear)' }}>
-                          {r.cumNet >= 0 ? '+' : ''}{r.cumNet.toLocaleString('en-IN', { maximumFractionDigits: 0 })}
+                          {r.cumNet >= 0 ? '+' : ''}{formatInt(r.cumNet)}
                         </td>
                       </tr>
                     ))

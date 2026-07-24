@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { filingsApi } from '@/lib/api/filings'
 import type { FilingOut } from '@/lib/api/filings'
+import { Skeleton } from '@/components/ui/skeleton'
 
 const TYPE_ICONS: Record<string, string> = {
   earnings: '📊',
@@ -59,8 +60,8 @@ function FilingCard({ filing }: { filing: FilingOut }) {
             <span
               style={{
                 padding: '1px 5px', borderRadius: '3px', fontSize: '0.65rem',
-                background: 'rgba(218,54,51,0.2)', color: 'var(--color-error)',
-                border: '1px solid rgba(218,54,51,0.35)', fontWeight: 600,
+                background: 'var(--color-loss-bg)', color: 'var(--color-error)',
+                border: '1px solid color-mix(in srgb, var(--color-loss) 35%, transparent)', fontWeight: 600,
               }}
             >
               HIGH IMPACT
@@ -153,8 +154,17 @@ export function FilingsPanel({ hours = 24 }: Props) {
 
       <div style={{ flex: 1, overflowY: 'auto' }}>
         {isLoading && (
-          <div style={{ padding: '2rem', textAlign: 'center', color: 'var(--color-text-muted)', fontSize: '0.8rem' }}>
-            Loading…
+          <div style={{ padding: '0.75rem', display: 'flex', flexDirection: 'column', gap: '0.75rem' }}>
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div key={i} style={{ display: 'flex', gap: '0.75rem', alignItems: 'flex-start' }}>
+                <Skeleton width="1rem" height="1rem" />
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: '0.35rem' }}>
+                  <Skeleton width="40%" height="0.7rem" />
+                  <Skeleton width="90%" height="0.8rem" />
+                  <Skeleton width="25%" height="0.6rem" />
+                </div>
+              </div>
+            ))}
           </div>
         )}
         {error && (

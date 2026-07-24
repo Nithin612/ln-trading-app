@@ -151,7 +151,7 @@ function sharpeColor(v: string | null): string {
   if (!v) return 'var(--color-text-muted)'
   const n = parseFloat(v)
   if (n >= 1.5) return 'var(--color-bull)'
-  if (n >= 0.5) return '#f59e0b'
+  if (n >= 0.5) return 'var(--color-warning)'
   return 'var(--color-bear)'
 }
 
@@ -298,7 +298,7 @@ function PresetTable({ entries }: { entries: PresetScanEntry[] }) {
                   </span>
                 </td>
                 <td className="px-3 py-2 text-right font-mono">
-                  <span style={{ color: e.sharpe >= 1 ? 'var(--color-bull)' : e.sharpe >= 0 ? '#f59e0b' : 'var(--color-bear)' }}>
+                  <span style={{ color: e.sharpe >= 1 ? 'var(--color-bull)' : e.sharpe >= 0 ? 'var(--color-warning)' : 'var(--color-bear)' }}>
                     {e.sharpe.toFixed(2)}
                   </span>
                 </td>

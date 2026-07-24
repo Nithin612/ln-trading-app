@@ -7,6 +7,7 @@ import { useAuth } from '../../hooks/useAuth'
 import { PageHeader } from '../../components/layout/PageHeader'
 import { Button } from '../../components/ui/button'
 import { Badge } from '../../components/ui/badge'
+import { Skeleton } from '../../components/ui/skeleton'
 import { useToast } from '../../hooks/useToast'
 
 function formatCountdown(expiresAt: string | null | undefined): string {
@@ -124,7 +125,7 @@ export default function KiteConnectPage() {
         <div className="flex items-center gap-3">
           <span className="text-sm font-medium text-(--color-text-muted)">Broker connection</span>
           {isLoading ? (
-            <Badge variant="secondary">Loading…</Badge>
+            <Skeleton className="h-5 w-24" />
           ) : status?.connected ? (
             <Badge className="bg-(--color-profit-bg) text-(--color-profit) border border-(--color-profit)/30">Connected</Badge>
           ) : (
@@ -185,7 +186,7 @@ export default function KiteConnectPage() {
           <Button
             onClick={() => loginMutation.mutate()}
             disabled={loginMutation.isPending}
-            className="bg-(--color-accent) hover:bg-(--color-accent-hover) text-white"
+            className="bg-(--color-accent) hover:bg-(--color-accent-hover) text-(--color-primary-foreground)"
           >
             <Zap size={14} className="mr-1.5" />
             {loginMutation.isPending ? 'Redirecting…' : 'Connect to Zerodha'}

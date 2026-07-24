@@ -15,12 +15,14 @@ import { useLiveQuotes } from '@/hooks/useLiveQuotes'
 import { Skeleton, SkeletonCard } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Sparkline } from '@/components/ui/sparkline'
+import { PriceCell } from '@/components/ui/PriceCell'
+import { formatCurrency, formatINR, formatInt } from '@/lib/format'
 import { Slider } from '@/components/ui/slider'
 import { useToast } from '@/hooks/useToast'
 import { SimpleSelect } from '@/components/ui/simple-select'
 
 function pctFmt(value: string) {
-  return parseFloat(value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return formatINR(parseFloat(value))
 }
 
 function crFormat(val: string | undefined) {
@@ -29,7 +31,7 @@ function crFormat(val: string | undefined) {
   return (
     <span style={{ color: n >= 0 ? 'var(--color-bull)' : 'var(--color-bear)', fontWeight: 600 }}>
       {n >= 0 ? '+' : ''}
-      {n.toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr
+      {formatInt(n)} Cr
     </span>
   )
 }
@@ -55,7 +57,7 @@ function ConfidenceBadge({ pct }: { pct: number }) {
 }
 
 function DirectionBadge({ dir }: { dir: string }) {
-  const bg = dir === 'BUY' ? 'rgba(22,163,74,0.15)' : 'rgba(220,38,38,0.15)'
+  const bg = dir === 'BUY' ? 'var(--color-profit-bg)' : 'var(--color-loss-bg)'
   const color = dir === 'BUY' ? 'var(--color-bull)' : 'var(--color-bear)'
   return (
     <span style={{ padding: '2px 8px', borderRadius: '9999px', fontSize: '0.7rem', fontWeight: 700, background: bg, color }}>
@@ -77,7 +79,7 @@ function StatCard({ label, value, icon, color, sub }: StatCardProps) {
     <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg p-4 flex items-start gap-3">
       <div
         className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0"
-        style={{ background: color ? `${color}20` : 'var(--color-surface-3)' }}
+        style={{ background: color ? `color-mix(in oklab, ${color} 14%, transparent)` : 'var(--color-surface-3)' }}
       >
         <span style={{ color: color ?? 'var(--color-text-muted)' }}>{icon}</span>
       </div>
@@ -382,11 +384,11 @@ export function DashboardPage() {
                             />
                           </div>
                         </td>
-                        <td className="px-3 py-2 text-right font-mono">
-                          {ltp
-                            ? <span style={{ color: 'var(--color-bull)' }}>₹{ltp.ltp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                            : <span style={{ color: 'var(--color-text-muted)' }}>—</span>
-                          }
+                        <td className="px-3 py-2 text-right font-mono text-(--color-text)">
+                          {/* Live LTP: neutral text, 250ms directional flash on tick
+                              (PriceCell) — never a persistent bull-green (was misleading
+                              on down-ticks). */}
+                          <PriceCell value={ltp?.ltp} format={formatCurrency} />
                         </td>
                         <td className="px-3 py-2 text-right"><DirectionBadge dir={sig.direction} /></td>
                         <td className="px-3 py-2 text-right text-(--color-text-muted)">{sig.classification}</td>
@@ -394,7 +396,7 @@ export function DashboardPage() {
                         <td className="px-3 py-2 text-right font-mono text-(--color-text)">₹{pctFmt(sig.entry_price)}</td>
                         <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bear)' }}>₹{pctFmt(sig.stop_loss)}</td>
                         <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bull)' }}>₹{pctFmt(sig.take_profit)}</td>
-                        <td className="px-3 py-2 text-right font-mono">{sig.suggested_qty.toLocaleString('en-IN')}</td>
+                        <td className="px-3 py-2 text-right font-mono">{formatInt(sig.suggested_qty)}</td>
                         <td className="px-3 py-2 text-right text-(--color-text-muted) whitespace-nowrap">{validUntil}</td>
                         <td className="px-3 py-2 text-right">
                           <button
@@ -461,7 +463,7 @@ export function DashboardPage() {
                   <XAxis dataKey="date" tick={{ fontSize: 9, fill: 'var(--color-text-muted)' }} tickLine={false} axisLine={false} />
                   <ReTooltip
                     contentStyle={{ background: 'var(--color-surface-3)', border: '1px solid var(--color-border)', borderRadius: '4px', fontSize: '10px' }}
-                    formatter={(v, name) => { const n = Number(v ?? 0); return [`${n > 0 ? '+' : ''}${n.toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr`, String(name).toUpperCase()] }}
+                    formatter={(v, name) => { const n = Number(v ?? 0); return [`${n > 0 ? '+' : ''}${formatInt(n)} Cr`, String(name).toUpperCase()] }}
                   />
                   <Bar dataKey="fii" name="fii" radius={[2, 2, 0, 0]}>
                     {fiiDiiChartData.map((entry, i) => (
@@ -470,7 +472,7 @@ export function DashboardPage() {
                   </Bar>
                   <Bar dataKey="dii" name="dii" radius={[2, 2, 0, 0]}>
                     {fiiDiiChartData.map((entry, i) => (
-                      <Cell key={i} fill={entry.dii >= 0 ? '#60a5fa' : '#f87171'} />
+                      <Cell key={i} fill={entry.dii >= 0 ? 'var(--color-info)' : 'var(--color-warning)'} />
                     ))}
                   </Bar>
                 </BarChart>

@@ -11,6 +11,7 @@ import {
   YAxis,
 } from 'recharts'
 import type { FiiDiiRow } from '@/lib/api/market_data'
+import { formatInt } from '@/lib/format'
 
 interface Props {
   rows: FiiDiiRow[]
@@ -23,7 +24,7 @@ interface ChartPoint {
 }
 
 function formatCr(val: number) {
-  return `₹${Math.abs(val).toLocaleString('en-IN', { maximumFractionDigits: 0 })} Cr`
+  return `₹${formatInt(Math.abs(val))} Cr`
 }
 
 export function FiiDiiChart({ rows, investorType }: Props) {
@@ -46,29 +47,29 @@ export function FiiDiiChart({ rows, investorType }: Props) {
   return (
     <ResponsiveContainer width="100%" height={200}>
       <BarChart data={points} margin={{ top: 4, right: 8, left: 8, bottom: 4 }}>
-        <CartesianGrid strokeDasharray="3 3" stroke="#1e2330" />
+        <CartesianGrid strokeDasharray="3 3" stroke="var(--color-chart-grid)" />
         <XAxis
           dataKey="date"
-          tick={{ fontSize: 10, fill: '#9ca3af' }}
+          tick={{ fontSize: 10, fill: 'var(--color-chart-text)' }}
           tickFormatter={(v: string) => v.slice(5)}
         />
         <YAxis
-          tick={{ fontSize: 10, fill: '#9ca3af' }}
-          tickFormatter={(v: number) => `${(v / 1000).toFixed(0)}k`}
+          tick={{ fontSize: 10, fill: 'var(--color-chart-text)' }}
+          tickFormatter={(v: number) => `${formatInt(v / 1000)}k`}
         />
         <Tooltip
           formatter={(val) => [typeof val === 'number' ? formatCr(val) : '—', `${investorType} Net (Cash)`]}
-          labelStyle={{ color: '#9ca3af' }}
-          contentStyle={{ background: '#0e1117', border: '1px solid #1e2330', borderRadius: 6 }}
+          labelStyle={{ color: 'var(--color-chart-text)' }}
+          contentStyle={{ background: 'var(--color-surface-2)', border: '1px solid var(--color-border)', borderRadius: 6 }}
         />
-        <ReferenceLine y={0} stroke="#374151" />
+        <ReferenceLine y={0} stroke="var(--color-border-strong)" />
         <Legend
-          wrapperStyle={{ fontSize: 11, color: '#9ca3af' }}
+          wrapperStyle={{ fontSize: 11, color: 'var(--color-chart-text)' }}
           formatter={() => `${investorType} Net Cash (Cr)`}
         />
         <Bar dataKey="net" name={`${investorType} Net (Cash)`} radius={[2, 2, 0, 0]}>
           {points.map((p, i) => (
-            <Cell key={i} fill={p.net >= 0 ? '#22c55e' : '#ef4444'} />
+            <Cell key={i} fill={p.net >= 0 ? 'var(--color-bull)' : 'var(--color-bear)'} />
           ))}
         </Bar>
       </BarChart>

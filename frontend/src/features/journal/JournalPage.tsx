@@ -16,6 +16,7 @@ import { Pagination } from '@/components/ui/pagination'
 import { EmotionAnalyticsPanel } from './EmotionAnalyticsPanel'
 import { JournalEntryModal } from './JournalEntryModal'
 import { useToast } from '@/hooks/useToast'
+import { formatInt } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import { Plus, Search, X, Pencil, Trash2, BookOpen } from 'lucide-react'
 
@@ -24,13 +25,13 @@ const PAGE_SIZE = 20
 const EMOTION_COLORS: Record<string, string> = {
   confident: 'text-(--color-profit)',
   neutral:   'text-(--color-text-muted)',
-  fear:      'text-orange-400',
-  greed:     'text-purple-400',
-  anxious:   'text-yellow-400',
+  fear:      'text-(--color-warning)',
+  greed:     'text-(--color-accent)',
+  anxious:   'text-(--color-warning)',
   satisfied: 'text-(--color-profit)',
-  excited:   'text-blue-400',
+  excited:   'text-(--color-info)',
   frustrated:'text-(--color-loss)',
-  regret:    'text-orange-400',
+  regret:    'text-(--color-warning)',
 }
 
 function EmotionChip({ emotion }: { emotion: string | null }) {
@@ -45,7 +46,7 @@ function EmotionChip({ emotion }: { emotion: string | null }) {
 function PnlBadge({ pnl }: { pnl: string | null }) {
   if (!pnl) return <span className="text-(--color-text-muted)">—</span>
   const n = Number(pnl)
-  const label = `${n >= 0 ? '+' : ''}₹${Math.abs(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+  const label = `${n >= 0 ? '+' : ''}₹${formatInt(Math.abs(n))}`
   return (
     <span
       className={cn(
@@ -113,7 +114,7 @@ function EntryRow({
             'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
             entry.entry_type === 'auto'
               ? 'bg-(--color-surface-3) text-(--color-text-muted)'
-              : 'bg-(--color-accent) text-white',
+              : 'bg-(--color-accent) text-(--color-primary-foreground)',
           )}
         >
           {entry.entry_type}

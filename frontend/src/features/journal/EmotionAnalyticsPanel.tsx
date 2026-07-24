@@ -10,18 +10,19 @@ import {
 } from 'recharts'
 import { journalApi, type EmotionCount } from '@/lib/api/journal'
 import { Skeleton } from '@/components/ui/skeleton'
+import { formatInt } from '@/lib/format'
 import { cn } from '@/lib/utils'
 
 const EMOTION_COLORS: Record<string, string> = {
-  confident: '#22c55e',
-  neutral:   '#64748b',
-  fear:      '#f97316',
-  greed:     '#a855f7',
-  anxious:   '#f59e0b',
-  satisfied: '#22c55e',
-  excited:   '#3b82f6',
-  frustrated:'#ef4444',
-  regret:    '#f97316',
+  confident: 'var(--color-bull)',
+  neutral:   'var(--color-neutral)',
+  fear:      'var(--color-warning)',
+  greed:     'var(--color-accent)',
+  anxious:   'var(--color-warning)',
+  satisfied: 'var(--color-bull)',
+  excited:   'var(--color-info)',
+  frustrated:'var(--color-bear)',
+  regret:    'var(--color-warning)',
 }
 
 function pnlClass(val: string | null) {
@@ -32,7 +33,7 @@ function pnlClass(val: string | null) {
 function formatPnl(val: string | null) {
   if (!val) return '—'
   const n = Number(val)
-  return `${n >= 0 ? '+' : ''}₹${Math.abs(n).toLocaleString('en-IN', { maximumFractionDigits: 0 })}`
+  return `${n >= 0 ? '+' : ''}₹${formatInt(Math.abs(n))}`
 }
 
 interface EmotionBarProps {
@@ -64,7 +65,7 @@ function EmotionBar({ data, label }: EmotionBarProps) {
             width={72}
           />
           <Tooltip
-            cursor={{ fill: 'rgba(255,255,255,0.04)' }}
+            cursor={{ fill: 'var(--color-surface-hover)' }}
             content={({ active, payload }) => {
               if (!active || !payload?.length) return null
               const d = payload[0].payload as EmotionCount
@@ -83,7 +84,7 @@ function EmotionBar({ data, label }: EmotionBarProps) {
             {data.map((entry) => (
               <Cell
                 key={entry.emotion}
-                fill={EMOTION_COLORS[entry.emotion] ?? '#64748b'}
+                fill={EMOTION_COLORS[entry.emotion] ?? 'var(--color-neutral)'}
                 fillOpacity={0.85}
               />
             ))}

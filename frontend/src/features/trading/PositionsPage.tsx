@@ -11,6 +11,7 @@ import { DailyPnlCard } from './DailyPnlCard'
 import { PaperRecordCard } from './PaperRecordCard'
 import { ClosePositionDialog } from './ClosePositionDialog'
 import { UpdateSlDialog } from './UpdateSlDialog'
+import { formatINR, formatInt } from '@/lib/format'
 
 function pnlFmt(val: string | null): React.ReactNode {
   if (val == null) return <span style={{ color: 'var(--color-text-muted)' }}>—</span>
@@ -18,21 +19,21 @@ function pnlFmt(val: string | null): React.ReactNode {
   const sign = n >= 0 ? '+' : ''
   return (
     <span style={{ color: n >= 0 ? 'var(--color-bull)' : 'var(--color-bear)', fontWeight: 600 }}>
-      {sign}₹{Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      {sign}₹{formatINR(Math.abs(n))}
     </span>
   )
 }
 
 function priceFmt(val: string | null): string {
   if (!val) return '—'
-  return `₹${parseFloat(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return `₹${formatINR(parseFloat(val))}`
 }
 
 function TrailBadge({ state }: { state: string }) {
   if (state === 'none') return <span style={{ color: 'var(--color-text-muted)' }}>—</span>
   const colors: Record<string, string> = {
-    breakeven: '#60a5fa',
-    trailing_1: '#f59e0b',
+    breakeven: 'var(--color-info)',
+    trailing_1: 'var(--color-warning)',
     trailing_2: 'var(--color-bull)',
   }
   return (
@@ -133,13 +134,13 @@ export function PositionsPage() {
                     <td className="px-3 py-2 text-right">
                       <span style={{
                         padding: '2px 6px', borderRadius: '4px', fontWeight: 700, fontSize: '0.7rem',
-                        background: pos.side === 'LONG' ? 'rgba(22,163,74,0.15)' : 'rgba(220,38,38,0.15)',
+                        background: pos.side === 'LONG' ? 'var(--color-profit-bg)' : 'var(--color-loss-bg)',
                         color: pos.side === 'LONG' ? 'var(--color-bull)' : 'var(--color-bear)',
                       }}>
                         {pos.side}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-right font-mono">{pos.quantity.toLocaleString('en-IN')}</td>
+                    <td className="px-3 py-2 text-right font-mono">{formatInt(pos.quantity)}</td>
                     <td className="px-3 py-2 text-right font-mono">{priceFmt(pos.avg_entry_price)}</td>
                     <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bear)' }}>{priceFmt(pos.current_sl)}</td>
                     <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bull)' }}>{priceFmt(pos.current_tp)}</td>

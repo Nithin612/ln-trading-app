@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { Bar, BarChart, CartesianGrid, Cell, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
 
 import { useAuth } from '@/hooks/useAuth'
-import { formatCurrency } from '@/lib/format'
+import { formatCurrency, formatINR, formatInt } from '@/lib/format'
 import { outcomeApi } from '@/lib/api/signals'
 import type { SignalOut, SignalOutcome } from '@/lib/api/signals'
 
@@ -78,7 +78,7 @@ function OutcomeSection({ signalId }: { signalId: string }) {
 }
 
 function pct(value: string) {
-  return parseFloat(value).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return formatINR(parseFloat(value))
 }
 
 function confidenceColor(pct: number) {
@@ -151,7 +151,7 @@ export function SignalDetailModal({ signal, onClose }: Props) {
                   fontSize: '0.75rem',
                   fontWeight: 600,
                   background: signal.direction === 'BUY' ? 'var(--color-bull)' : 'var(--color-bear)',
-                  color: '#fff',
+                  color: 'var(--color-primary-foreground)',
                 }}
               >
                 {signal.direction}
@@ -233,7 +233,7 @@ export function SignalDetailModal({ signal, onClose }: Props) {
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
             <span style={{ fontSize: '0.8rem', color: 'var(--color-text-muted)' }}>Suggested qty</span>
             <span style={{ fontFamily: 'var(--font-mono)', fontWeight: 600, color: 'var(--color-text)' }}>
-              {signal.suggested_qty.toLocaleString('en-IN')}
+              {formatInt(signal.suggested_qty)}
             </span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem' }}>
@@ -250,8 +250,8 @@ export function SignalDetailModal({ signal, onClose }: Props) {
                 key={p}
                 style={{
                   padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem',
-                  background: 'rgba(22,163,74,0.15)', color: 'var(--color-bull)',
-                  border: '1px solid rgba(22,163,74,0.3)',
+                  background: 'var(--color-profit-bg)', color: 'var(--color-bull)',
+                  border: '1px solid color-mix(in srgb, var(--color-bull) 30%, transparent)',
                 }}
               >
                 {p.replace(/_/g, ' ')}
@@ -262,8 +262,8 @@ export function SignalDetailModal({ signal, onClose }: Props) {
                 key={i}
                 style={{
                   padding: '2px 8px', borderRadius: '4px', fontSize: '0.7rem',
-                  background: 'rgba(31,111,235,0.15)', color: 'var(--color-accent)',
-                  border: '1px solid rgba(31,111,235,0.3)',
+                  background: 'var(--color-accent-bg)', color: 'var(--color-accent)',
+                  border: '1px solid color-mix(in srgb, var(--color-accent) 30%, transparent)',
                 }}
               >
                 {i.replace(/_/g, ' ')}
@@ -302,7 +302,7 @@ export function SignalDetailModal({ signal, onClose }: Props) {
                 tickLine={false}
               />
               <Tooltip
-                cursor={{ fill: 'rgba(255,255,255,0.03)' }}
+                cursor={{ fill: 'var(--color-surface-hover)' }}
                 contentStyle={{
                   background: 'var(--color-surface-3)',
                   border: '1px solid var(--color-border)',

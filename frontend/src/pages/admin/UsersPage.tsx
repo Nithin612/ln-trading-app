@@ -190,7 +190,7 @@ export function UsersPage() {
 
   const filterBtnCls = (active: boolean) =>
     `px-2.5 py-1 text-xs font-medium transition-colors ${
-      active ? 'bg-(--color-accent) text-white' : 'bg-(--color-surface-3) text-(--color-text-muted) hover:text-(--color-text)'
+      active ? 'bg-(--color-accent) text-(--color-primary-foreground)' : 'bg-(--color-surface-3) text-(--color-text-muted) hover:text-(--color-text)'
     }`
 
   return (
@@ -264,7 +264,7 @@ export function UsersPage() {
                         <td className="px-3 py-2.5 text-(--color-text-muted) text-xs">{u.email}</td>
                         <td className="px-3 py-2.5">
                           <Badge
-                            className={`text-xs font-mono ${u.role === 'admin' ? 'bg-purple-900/40 text-purple-300 border-purple-700 border' : 'bg-(--color-surface-3) text-(--color-text-muted) border-(--color-border) border'}`}
+                            className={`text-xs font-mono ${u.role === 'admin' ? 'bg-(--color-accent-bg) text-(--color-accent) border-(--color-accent) border' : 'bg-(--color-surface-3) text-(--color-text-muted) border-(--color-border) border'}`}
                           >
                             {u.role}
                           </Badge>

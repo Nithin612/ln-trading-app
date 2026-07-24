@@ -7,6 +7,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Pagination } from '@/components/ui/pagination'
 import { DailyPnlCard } from './DailyPnlCard'
+import { formatINR, formatInt } from '@/lib/format'
 
 const PAGE_SIZE = 20
 
@@ -15,14 +16,14 @@ function pnlCell(val: string): React.ReactNode {
   const sign = n >= 0 ? '+' : '-'
   return (
     <span style={{ color: n >= 0 ? 'var(--color-bull)' : 'var(--color-bear)', fontWeight: 600 }}>
-      {sign}₹{Math.abs(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      {sign}₹{formatINR(Math.abs(n))}
     </span>
   )
 }
 
 function priceFmt(val: string | null): string {
   if (!val) return '—'
-  return `₹${parseFloat(val).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+  return `₹${formatINR(parseFloat(val))}`
 }
 
 export function TradeHistoryPage() {
@@ -53,7 +54,7 @@ export function TradeHistoryPage() {
         {/* Summary cards */}
         {data && positions.length > 0 && (
           <>
-            <SummaryCard label="Page P&L" value={pnlCell(String(totalPnl.toFixed(2)))} />
+            <SummaryCard label="Page P&L" value={pnlCell(String(totalPnl))} />
             <SummaryCard label="Win Rate" value={winRate != null ? `${winRate}%` : '—'} />
             <SummaryCard label="Trades" value={data.total} />
           </>
@@ -110,13 +111,13 @@ export function TradeHistoryPage() {
                     <td className="px-3 py-2 text-right">
                       <span style={{
                         padding: '2px 6px', borderRadius: '4px', fontWeight: 700, fontSize: '0.7rem',
-                        background: pos.side === 'LONG' ? 'rgba(22,163,74,0.15)' : 'rgba(220,38,38,0.15)',
+                        background: pos.side === 'LONG' ? 'var(--color-profit-bg)' : 'var(--color-loss-bg)',
                         color: pos.side === 'LONG' ? 'var(--color-bull)' : 'var(--color-bear)',
                       }}>
                         {pos.side}
                       </span>
                     </td>
-                    <td className="px-3 py-2 text-right font-mono">{pos.quantity.toLocaleString('en-IN')}</td>
+                    <td className="px-3 py-2 text-right font-mono">{formatInt(pos.quantity)}</td>
                     <td className="px-3 py-2 text-right font-mono">{priceFmt(pos.avg_entry_price)}</td>
                     <td className="px-3 py-2 text-right font-mono text-(--color-text-muted)">—</td>
                     <td className="px-3 py-2 text-right">{pnlCell(pos.realized_pnl)}</td>

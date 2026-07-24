@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { tradingApi, type PositionOut } from '@/lib/api/trading'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/hooks/useToast'
+import { formatINR } from '@/lib/format'
 
 interface Props {
   position: PositionOut
@@ -27,8 +28,8 @@ export function UpdateSlDialog({ position, onClose, onUpdated }: Props) {
   })
 
   const hint = position.side === 'LONG'
-    ? `Must be below entry ₹${parseFloat(position.avg_entry_price).toLocaleString('en-IN')}`
-    : `Must be above entry ₹${parseFloat(position.avg_entry_price).toLocaleString('en-IN')}`
+    ? `Must be below entry ₹${formatINR(parseFloat(position.avg_entry_price))}`
+    : `Must be above entry ₹${formatINR(parseFloat(position.avg_entry_price))}`
 
   return createPortal(
     <div

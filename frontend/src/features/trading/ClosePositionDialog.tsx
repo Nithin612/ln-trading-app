@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { PositionOut } from '@/lib/api/trading'
 import { Button } from '@/components/ui/button'
+import { formatInt } from '@/lib/format'
 
 interface Props {
   position: PositionOut
@@ -25,7 +26,7 @@ export function ClosePositionDialog({ position, isLoading, onConfirm, onClose }:
       >
         <h2 className="text-base font-semibold text-(--color-text) mb-1">Close Position</h2>
         <p className="text-sm text-(--color-text-muted) mb-4">
-          Close <span className="font-mono font-bold text-(--color-accent)">{position.symbol}</span> {position.side} × {position.quantity.toLocaleString('en-IN')}
+          Close <span className="font-mono font-bold text-(--color-accent)">{position.symbol}</span> {position.side} × {formatInt(position.quantity)}
         </p>
 
         <label className="block text-xs text-(--color-text-muted) mb-1">

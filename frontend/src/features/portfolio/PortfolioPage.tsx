@@ -15,6 +15,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Dialog } from '@/components/ui/dialog'
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import { useToast } from '@/hooks/useToast'
+import { formatINR, formatInt } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
   UploadCloud, Trash2, Pencil, Plus, ChevronDown, ChevronRight,
@@ -25,7 +26,7 @@ import {
 
 function fmt(value: string | number, digits = 0) {
   const n = typeof value === 'string' ? parseFloat(value) : value
-  return '₹' + n.toLocaleString('en-IN', { minimumFractionDigits: digits, maximumFractionDigits: digits })
+  return '₹' + (digits === 2 ? formatINR(n) : formatInt(n))
 }
 
 function pct(a: string, total: string) {
@@ -51,12 +52,12 @@ const ASSET_TYPE_LABELS: Record<string, string> = {
 }
 
 const ASSET_TYPE_COLORS: Record<string, string> = {
-  gold:        'text-yellow-400',
-  fd:          'text-blue-400',
+  gold:        'text-(--color-warning)',
+  fd:          'text-(--color-info)',
   ppf:         'text-(--color-profit)',
-  nps:         'text-purple-400',
-  bonds:       'text-cyan-400',
-  real_estate: 'text-orange-400',
+  nps:         'text-(--color-accent)',
+  bonds:       'text-(--color-accent)',
+  real_estate: 'text-(--color-warning)',
   other:       'text-(--color-text-muted)',
 }
 
@@ -76,7 +77,7 @@ function NetWorthCard({ data }: { data: NetWorthOut }) {
     {
       label: 'Mutual Funds',
       value: data.mutual_funds.current_value,
-      color: 'bg-purple-500',
+      color: 'bg-(--color-info)',
       icon: <PiggyBank size={16} />,
       sub: data.mutual_funds.last_imported
         ? `${data.mutual_funds.holding_count} scheme${data.mutual_funds.holding_count === 1 ? '' : 's'}`
@@ -85,7 +86,7 @@ function NetWorthCard({ data }: { data: NetWorthOut }) {
     {
       label: 'Other Assets',
       value: data.manual_assets.current_value,
-      color: 'bg-yellow-500',
+      color: 'bg-(--color-neutral)',
       icon: <Coins size={16} />,
       sub: `${data.manual_assets.count} asset${data.manual_assets.count === 1 ? '' : 's'}`,
     },
