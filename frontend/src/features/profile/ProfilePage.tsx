@@ -1,14 +1,31 @@
-import { useQuery } from '@tanstack/react-query'
+import { useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   User, Mail, Shield, TrendingUp, IndianRupee, Percent, AlertTriangle,
-  Calendar, Clock, Activity,
+  Calendar, Clock, Activity, Pencil, Save, X,
 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
+import { useAuthStore } from '@/store/authStore'
 import { authApi } from '@/lib/api/auth'
+import { usersApi } from '@/lib/api/users'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { UserAvatar } from '@/components/ui/user-avatar'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Button } from '@/components/ui/button'
+import { Checkbox } from '@/components/ui/checkbox'
+import { useToast } from '@/hooks/useToast'
+import { formatCurrency } from '@/lib/format'
+
+// Bounds mirror backend UserUpdate (app/schemas/user.py) so client-side
+// validation matches the API's.
+const BOUNDS = {
+  risk: { min: 0.1, max: 10 },
+  loss: { min: 0.1, max: 20 },
+  trades: { min: 1, max: 20 },
+} as const
 
 function InfoRow({ icon, label, value }: { icon: React.ReactNode; label: string; value: React.ReactNode }) {
   return (
@@ -26,6 +43,167 @@ function StatCard({ label, value, sub }: { label: string; value: React.ReactNode
       <div className="text-lg font-bold font-mono text-(--color-accent)">{value}</div>
       <div className="text-xs text-(--color-text-muted) mt-1">{label}</div>
       {sub && <div className="text-xs text-(--color-text-muted) mt-0.5 opacity-60">{sub}</div>}
+    </div>
+  )
+}
+
+interface EditableUser {
+  id: number
+  capital_inr: string
+  risk_per_trade_pct: string
+  daily_loss_limit_pct: string
+  max_trades_per_day: number
+  allow_offmarket_entry: boolean
+}
+
+function TradingSettingsCard({ user }: { user: EditableUser }) {
+  const { accessToken } = useAuth()
+  const setAuth = useAuthStore((s) => s.setAuth)
+  const qc = useQueryClient()
+  const toast = useToast()
+  const [editing, setEditing] = useState(false)
+  const [capital, setCapital] = useState(user.capital_inr)
+  const [risk, setRisk] = useState(user.risk_per_trade_pct)
+  const [loss, setLoss] = useState(user.daily_loss_limit_pct)
+  const [trades, setTrades] = useState(String(user.max_trades_per_day))
+  const [offmkt, setOffmkt] = useState(user.allow_offmarket_entry)
+
+  function reset() {
+    setCapital(user.capital_inr)
+    setRisk(user.risk_per_trade_pct)
+    setLoss(user.daily_loss_limit_pct)
+    setTrades(String(user.max_trades_per_day))
+    setOffmkt(user.allow_offmarket_entry)
+    setEditing(false)
+  }
+
+  const capitalN = parseFloat(capital)
+  const riskN = parseFloat(risk)
+  const lossN = parseFloat(loss)
+  const tradesN = parseInt(trades, 10)
+
+  const errors: string[] = []
+  if (!(capitalN > 0)) errors.push('Capital must be greater than ₹0.')
+  if (!(riskN >= BOUNDS.risk.min && riskN <= BOUNDS.risk.max))
+    errors.push(`Risk per trade must be ${BOUNDS.risk.min}–${BOUNDS.risk.max}%.`)
+  if (!(lossN >= BOUNDS.loss.min && lossN <= BOUNDS.loss.max))
+    errors.push(`Daily loss limit must be ${BOUNDS.loss.min}–${BOUNDS.loss.max}%.`)
+  if (!(Number.isInteger(tradesN) && tradesN >= BOUNDS.trades.min && tradesN <= BOUNDS.trades.max))
+    errors.push(`Max trades/day must be a whole number ${BOUNDS.trades.min}–${BOUNDS.trades.max}.`)
+  const valid = errors.length === 0
+
+  const mutation = useMutation({
+    mutationFn: () =>
+      usersApi.update(accessToken!, user.id, {
+        capital_inr: capital,
+        risk_per_trade_pct: risk,
+        daily_loss_limit_pct: loss,
+        max_trades_per_day: tradesN,
+        allow_offmarket_entry: offmkt,
+      }),
+    onSuccess: (updated) => {
+      if (accessToken) setAuth(accessToken, updated)
+      void qc.invalidateQueries({ queryKey: ['me'] })
+      void qc.invalidateQueries({ queryKey: ['paper-record'] })
+      toast.success('Trading settings updated')
+      setEditing(false)
+    },
+    onError: (err: { message?: string }) => toast.error(err.message ?? 'Update failed'),
+  })
+
+  // Live risk preview from the current (possibly unsaved) inputs.
+  const riskAmt = capitalN > 0 && riskN > 0 ? formatCurrency((capitalN * riskN) / 100) : '—'
+  const lossAmt = capitalN > 0 && lossN > 0 ? formatCurrency((capitalN * lossN) / 100) : '—'
+
+  return (
+    <div className="card">
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold text-(--color-text)">Trading Settings</h3>
+          <p className="text-xs text-(--color-text-muted) mt-0.5">
+            Capital and risk — position sizes are computed from these.
+          </p>
+        </div>
+        {!editing ? (
+          <Button variant="outline" size="sm" onClick={() => setEditing(true)}>
+            <Pencil size={13} /> Edit
+          </Button>
+        ) : (
+          <div className="flex gap-2">
+            <Button variant="ghost" size="sm" onClick={reset} disabled={mutation.isPending}>
+              <X size={13} /> Cancel
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => mutation.mutate()}
+              disabled={!valid || mutation.isPending}
+            >
+              <Save size={13} /> {mutation.isPending ? 'Saving…' : 'Save'}
+            </Button>
+          </div>
+        )}
+      </div>
+
+      {!editing ? (
+        <div className="space-y-0">
+          <InfoRow icon={<IndianRupee size={15} />} label="Capital" value={formatCurrency(capitalN)} />
+          <InfoRow icon={<Percent size={15} />} label="Risk per trade"
+            value={`${user.risk_per_trade_pct}%  ≈ ${riskAmt}`} />
+          <InfoRow icon={<AlertTriangle size={15} />} label="Daily loss limit"
+            value={`${user.daily_loss_limit_pct}%  ≈ ${lossAmt}`} />
+          <InfoRow icon={<Clock size={15} />} label="Max trades / day"
+            value={user.max_trades_per_day} />
+          <InfoRow icon={<Activity size={15} />} label="Off-market entry"
+            value={user.allow_offmarket_entry ? 'Allowed' : 'Blocked (needs live price)'} />
+        </div>
+      ) : (
+        <div className="space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label htmlFor="capital">Capital (₹)</Label>
+              <Input id="capital" type="number" inputMode="numeric" min={1} step={1000}
+                value={capital} onChange={(e) => setCapital(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="risk">Risk / trade (%)</Label>
+              <Input id="risk" type="number" inputMode="decimal"
+                min={BOUNDS.risk.min} max={BOUNDS.risk.max} step={0.1}
+                value={risk} onChange={(e) => setRisk(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="loss">Daily loss limit (%)</Label>
+              <Input id="loss" type="number" inputMode="decimal"
+                min={BOUNDS.loss.min} max={BOUNDS.loss.max} step={0.1}
+                value={loss} onChange={(e) => setLoss(e.target.value)} />
+            </div>
+            <div>
+              <Label htmlFor="trades">Max trades / day</Label>
+              <Input id="trades" type="number" inputMode="numeric"
+                min={BOUNDS.trades.min} max={BOUNDS.trades.max} step={1}
+                value={trades} onChange={(e) => setTrades(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex flex-wrap gap-x-6 gap-y-1 text-xs text-(--color-text-muted)">
+            <span>Risk / trade ≈ <span className="text-(--color-text) font-medium">{riskAmt}</span></span>
+            <span>Daily loss cap ≈ <span className="text-(--color-text) font-medium">{lossAmt}</span></span>
+          </div>
+          <div className="flex items-center gap-2 pt-1">
+            <Checkbox id="offmkt" checked={offmkt} onCheckedChange={(v) => setOffmkt(!!v)} />
+            <Label htmlFor="offmkt" className="cursor-pointer text-sm text-(--color-text)">
+              Allow off-market entry
+            </Label>
+          </div>
+          <p className="text-xs text-(--color-text-muted)">
+            When off (recommended), paper orders are rejected unless the stock has a live price —
+            prevents fills at a stale prior close.
+          </p>
+          {!valid && (
+            <ul className="text-xs text-(--color-loss) space-y-0.5" role="alert">
+              {errors.map((msg) => <li key={msg}>{msg}</li>)}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   )
 }
@@ -141,22 +319,9 @@ export function ProfilePage() {
           <InfoRow icon={<Calendar size={15} />} label="Member since" value={joinedDate} />
         </div>
 
-        <div className="border-t border-(--color-border) mx-5" />
-
-        <p className="text-xs font-semibold text-(--color-text-muted) uppercase tracking-wide px-5 pt-4 pb-2">
-          Risk Parameters
-        </p>
-        <div className="px-5 pb-4">
-          <InfoRow icon={<IndianRupee size={15} />} label="Capital (INR)" value={`₹${capital}`} />
-          <InfoRow icon={<Percent size={15} />} label="Risk per trade" value={`${user.risk_per_trade_pct}% ≈ ₹${riskAmount}`} />
-          <InfoRow icon={<AlertTriangle size={15} />} label="Daily loss limit" value={`${user.daily_loss_limit_pct}%`} />
-          <InfoRow icon={<Clock size={15} />} label="Max trades / day" value={user.max_trades_per_day} />
-        </div>
       </div>
 
-      <p className="text-xs text-(--color-text-muted) text-center">
-        To update your profile or risk parameters, contact your admin.
-      </p>
+      <TradingSettingsCard user={user} />
     </div>
   )
 }

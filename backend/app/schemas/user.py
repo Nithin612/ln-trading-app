@@ -19,6 +19,7 @@ class UserCreate(BaseModel):
         default=Decimal("3.00"), ge=Decimal("0.1"), le=Decimal("20")
     )
     max_trades_per_day: int = Field(default=2, ge=1, le=20)
+    allow_offmarket_entry: bool = False
 
     @field_validator("password")
     @classmethod
@@ -40,6 +41,7 @@ class UserUpdate(BaseModel):
         default=None, ge=Decimal("0.1"), le=Decimal("20")
     )
     max_trades_per_day: int | None = Field(default=None, ge=1, le=20)
+    allow_offmarket_entry: bool | None = None
     is_active: bool | None = None
     # role and trading_mode are intentionally absent —
     # role changes require a dedicated admin endpoint;
@@ -62,6 +64,7 @@ class UserOut(BaseModel):
     risk_per_trade_pct: Decimal
     daily_loss_limit_pct: Decimal
     max_trades_per_day: int
+    allow_offmarket_entry: bool
     is_active: bool
     trading_mode: str
     created_at: datetime

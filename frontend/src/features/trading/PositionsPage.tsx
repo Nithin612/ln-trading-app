@@ -8,6 +8,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/useToast'
 import { DailyPnlCard } from './DailyPnlCard'
+import { PaperRecordCard } from './PaperRecordCard'
 import { ClosePositionDialog } from './ClosePositionDialog'
 import { UpdateSlDialog } from './UpdateSlDialog'
 
@@ -76,6 +77,9 @@ export function PositionsPage() {
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
         <div className="lg:col-span-1">
           <DailyPnlCard />
+        </div>
+        <div className="lg:col-span-3">
+          <PaperRecordCard />
         </div>
       </div>
 

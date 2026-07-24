@@ -21,6 +21,7 @@ from app.models.signal import Signal
 from app.models.stock import Stock
 from app.models.trading import Position
 from app.models.user import User
+from app.trading.fees import roundtrip_charges
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -543,7 +544,12 @@ class TestJournalAutoPopulation:
         entry = data["entries"][0]
         assert entry["entry_type"] == "auto"
         assert entry["position_id"] == pos.id
-        assert Decimal(entry["realized_pnl"]) == Decimal("4000")
+        # realized_pnl is net of round-trip costs (was gross ₹4000)
+        charges, _ = roundtrip_charges(
+            position_side="LONG", entry_price=Decimal("500"), exit_price=Decimal("540"),
+            quantity=100, product="delivery",
+        )
+        assert Decimal(entry["realized_pnl"]) == Decimal("4000") - charges
 
     async def test_auto_entry_has_exit_price(
         self, client: AsyncClient, db: AsyncSession

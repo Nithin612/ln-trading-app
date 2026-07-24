@@ -51,6 +51,13 @@ class User(Base):
         String(16), nullable=False, default="paper"
     )
 
+    # When False (default), paper entries are rejected unless a live tick price
+    # exists (market open + the stock actually trading) — prevents fills at a
+    # stale prior close. User-toggleable in Profile → Trading Settings.
+    allow_offmarket_entry: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         TZ, nullable=False, server_default=func.now()
     )

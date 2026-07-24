@@ -7,6 +7,7 @@ import { useAuthStore } from '@/store/authStore'
 import * as signalsApiModule from '@/lib/api/signals'
 import * as marketDataApiModule from '@/lib/api/market_data'
 import * as filingsApiModule from '@/lib/api/filings'
+import * as tradingApiModule from '@/lib/api/trading'
 
 beforeEach(() => {
   useAuthStore.setState({
@@ -14,7 +15,7 @@ beforeEach(() => {
     user: {
       id: 1, email: 'u@example.com', full_name: 'Test', role: 'user',
       capital_inr: '500000', risk_per_trade_pct: '2', daily_loss_limit_pct: '3',
-      max_trades_per_day: 5, is_active: true, trading_mode: 'paper',
+      max_trades_per_day: 5, is_active: true, trading_mode: 'paper', allow_offmarket_entry: false,
       created_at: '', updated_at: '',
     },
   })
@@ -129,6 +130,50 @@ describe('DashboardPage', () => {
     await waitFor(() => {
       expect(screen.queryByText('Factor breakdown')).not.toBeInTheDocument()
     })
+  })
+
+  it('paper-trade button on a SELL signal places a SELL order (not a wrong-way BUY)', async () => {
+    vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({
+      total: 1,
+      signals: [makeSignal({ direction: 'SELL', headline: 'SELL RELIANCE' })],
+    })
+    const placeSpy = vi
+      .spyOn(tradingApiModule.tradingApi, 'placeOrder')
+      .mockResolvedValue({
+        id: 'o1', user_id: 1, signal_id: 'abc-123', stock_id: 1, symbol: 'RELIANCE',
+        mode: 'paper', side: 'SELL', order_type: 'MARKET', quantity: 35, price: null,
+        status: 'filled', placed_at: '', filled_at: '', filled_price: '2850.0000',
+        filled_qty: 35, error_message: null,
+      })
+    wrap(<DashboardPage />)
+    await waitFor(() => screen.getByText('RELIANCE'))
+
+    fireEvent.click(screen.getByTitle('Paper Sell (open short)'))
+    await waitFor(() =>
+      expect(placeSpy).toHaveBeenCalledWith({ signal_id: 'abc-123', side: 'SELL' }, 'test-token'),
+    )
+  })
+
+  it('paper-trade button on a BUY signal places a BUY order', async () => {
+    vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({
+      total: 1,
+      signals: [makeSignal({ direction: 'BUY' })],
+    })
+    const placeSpy = vi
+      .spyOn(tradingApiModule.tradingApi, 'placeOrder')
+      .mockResolvedValue({
+        id: 'o2', user_id: 1, signal_id: 'abc-123', stock_id: 1, symbol: 'RELIANCE',
+        mode: 'paper', side: 'BUY', order_type: 'MARKET', quantity: 35, price: null,
+        status: 'filled', placed_at: '', filled_at: '', filled_price: '2850.0000',
+        filled_qty: 35, error_message: null,
+      })
+    wrap(<DashboardPage />)
+    await waitFor(() => screen.getByText('RELIANCE'))
+
+    fireEvent.click(screen.getByTitle('Paper Buy (open long)'))
+    await waitFor(() =>
+      expect(placeSpy).toHaveBeenCalledWith({ signal_id: 'abc-123', side: 'BUY' }, 'test-token'),
+    )
   })
 
   it('renders FII/DII net values when data is available', async () => {

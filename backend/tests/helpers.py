@@ -26,6 +26,10 @@ async def create_test_user(
         role=role,
         is_active=True,
         trading_mode="paper",
+        # Tests run without a live market; opt into off-market entry so the
+        # paper-broker off-market guard doesn't block lifecycle tests. The
+        # guard's default-on behaviour has dedicated tests in test_trading.
+        allow_offmarket_entry=True,
     )
     db.add(user)
     await db.commit()

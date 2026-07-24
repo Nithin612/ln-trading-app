@@ -16,7 +16,12 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.broker.paper_broker import close_position, place_paper_order, update_position_pnl
+from app.broker.paper_broker import (
+    PaperOrderError,
+    close_position,
+    place_paper_order,
+    update_position_pnl,
+)
 from app.core.deps import get_current_user, get_db
 from app.models.signal import Signal
 from app.models.stock import Stock
@@ -26,6 +31,8 @@ from app.schemas.trading import (
     ClosePositionRequest,
     DailyPnlOut,
     OrderOut,
+    PaperDayRow,
+    PaperRecordOut,
     PlaceOrderRequest,
     PositionListResponse,
     PositionOut,
@@ -84,9 +91,14 @@ async def place_order(
             detail=f"Signal is {signal.status}, not active",
         )
 
-    order, _pos = await place_paper_order(
-        db, user, signal, side=req.side, quantity=req.quantity
-    )
+    try:
+        order, _pos = await place_paper_order(
+            db, user, signal, side=req.side, quantity=req.quantity
+        )
+    except (PaperOrderError, ValueError) as exc:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
+        ) from exc
     await db.commit()
     await db.refresh(order)
 
@@ -270,4 +282,101 @@ async def daily_pnl(
         daily_loss_limit_inr=limit_inr,
         trades_taken_today=trades_today,
         max_trades_per_day=user.max_trades_per_day,
+    )
+
+
+@router.get("/paper-record", response_model=PaperRecordOut)
+async def paper_record(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    target_days: int = Query(default=30, ge=1, le=365),
+) -> PaperRecordOut:
+    """Per-IST-day realized-P&L history for the paper account.
+
+    Groups every closed paper position by its IST close date and reports the
+    profitable-day count and current streak — the visible surface of the
+    30-day profitable-paper gate. P&L is net of trading costs; a *profitable
+    day* is a day with ≥1 closed trade and net realized P&L > 0. The
+    authoritative promotion gate remains Phase 7.
+    """
+    result = await db.execute(
+        select(Position).where(
+            Position.user_id == user.id,
+            Position.mode == "paper",
+            Position.closed_at.is_not(None),
+        )
+    )
+    closed = result.scalars().all()
+
+    # Aggregate by IST calendar date (small volumes → Python grouping is fine).
+    per_day: dict[str, dict[str, Decimal | int]] = {}
+    for pos in closed:
+        assert pos.closed_at is not None  # WHERE guarantees it
+        day = pos.closed_at.astimezone(_IST).date().isoformat()
+        agg = per_day.setdefault(day, {"pnl": Decimal("0"), "charges": Decimal("0"), "trades": 0})
+        agg["pnl"] = agg["pnl"] + pos.realized_pnl
+        agg["charges"] = agg["charges"] + (pos.charges or Decimal("0"))
+        agg["trades"] = int(agg["trades"]) + 1
+
+    days: list[PaperDayRow] = []
+    cumulative = Decimal("0")
+    profitable_days = losing_days = total_trades = 0
+    total_charges = Decimal("0")
+    best_streak = run = 0
+    for day in sorted(per_day):
+        agg = per_day[day]
+        pnl = Decimal(str(agg["pnl"]))
+        charges = Decimal(str(agg["charges"]))
+        trades = int(agg["trades"])
+        cumulative += pnl
+        total_charges += charges
+        total_trades += trades
+        is_profit = pnl > 0
+        if is_profit:
+            profitable_days += 1
+            run += 1
+            best_streak = max(best_streak, run)
+        else:
+            if pnl < 0:
+                losing_days += 1
+            run = 0
+        days.append(
+            PaperDayRow(
+                date=day,
+                realized_pnl=pnl,
+                charges=charges,
+                trades=trades,
+                profitable=is_profit,
+                cumulative_pnl=cumulative,
+            )
+        )
+
+    # Current streak = trailing run of profitable days (from the newest day).
+    current_streak = 0
+    for row in reversed(days):
+        if row.profitable:
+            current_streak += 1
+        else:
+            break
+
+    total_traded = len(days)
+    win_rate = (
+        (Decimal(profitable_days) / Decimal(total_traded) * Decimal("100")).quantize(Decimal("0.1"))
+        if total_traded
+        else Decimal("0.0")
+    )
+    return PaperRecordOut(
+        days=days,
+        total_days_traded=total_traded,
+        profitable_days=profitable_days,
+        losing_days=losing_days,
+        current_streak=current_streak,
+        best_streak=best_streak,
+        total_realized_pnl=cumulative,
+        total_charges=total_charges,
+        total_trades=total_trades,
+        win_rate_pct=win_rate,
+        target_days=target_days,
+        start_date=days[0].date if days else None,
+        last_date=days[-1].date if days else None,
     )

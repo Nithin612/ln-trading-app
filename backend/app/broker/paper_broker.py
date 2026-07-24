@@ -8,26 +8,64 @@ Simulates order placement and fills entirely in software:
 """
 
 from datetime import UTC, datetime
-from decimal import Decimal
+from decimal import ROUND_HALF_UP, Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.analysis.risk import compute_quantity
+from app.core.config import settings
 from app.models.signal import Signal
 from app.models.trading import Order, Position
 from app.models.user import User
+from app.trading.fees import product_for_classification, roundtrip_charges
 from app.trading.trail_sl import compute_pnl
 
 
-async def get_current_price(db: AsyncSession, stock_id: int) -> Decimal | None:
-    """Best-effort current price: Redis LTP first, then latest daily close."""
+class PaperOrderError(Exception):
+    """Raised when a paper order cannot be placed (e.g. size rounds to zero
+    at the account's capital/risk). The API maps this to HTTP 422."""
+
+
+def _apply_slippage(price: Decimal, order_side: str) -> Decimal:
+    """Adverse slippage on a simulated fill (config `paper_slippage_bps`).
+
+    A BUY fills higher, a SELL lower — the trader always pays the spread.
+    Zero bps (the default) is a no-op.
+    """
+    bps = Decimal(str(settings.paper_slippage_bps))
+    if bps <= 0:
+        return price
+    factor = bps / Decimal("10000")
+    if order_side.upper() == "BUY":
+        return price * (Decimal("1") + factor)
+    return price * (Decimal("1") - factor)
+
+
+def _round_tick(price: Decimal) -> Decimal:
+    """Round a fill to the exchange tick grid (config `paper_tick_size`)."""
+    tick = Decimal(str(settings.paper_tick_size))
+    if tick <= 0:
+        return price.quantize(Decimal("0.0001"))
+    steps = (price / tick).to_integral_value(rounding=ROUND_HALF_UP)
+    return (steps * tick).quantize(Decimal("0.0001"))
+
+
+def _simulated_fill(base_price: Decimal, order_side: str) -> Decimal:
+    """Apply slippage then tick-rounding to a raw reference price."""
+    return _round_tick(_apply_slippage(base_price, order_side))
+
+
+async def get_live_ltp(stock_id: int) -> Decimal | None:
+    """Latest LIVE tick price from Redis (no fallback). None means there is no
+    fresh price — the market is closed or this stock isn't currently trading
+    (the `ltp:` key has a 600s TTL). Used to gate off-market paper entries."""
     try:
         import contextlib
 
         import redis.asyncio as aioredis
 
         from app.broker.tick_consumer import LTP_KEY
-        from app.core.config import settings
 
         r = aioredis.from_url(settings.redis_url, decode_responses=True)
         try:
@@ -36,10 +74,16 @@ async def get_current_price(db: AsyncSession, stock_id: int) -> Decimal | None:
             # aclose in finally — a raised GET must not leak the connection
             with contextlib.suppress(Exception):
                 await r.aclose()
-        if ltp_str:
-            return Decimal(ltp_str)
+        return Decimal(ltp_str) if ltp_str else None
     except Exception:
-        pass
+        return None
+
+
+async def get_current_price(db: AsyncSession, stock_id: int) -> Decimal | None:
+    """Best-effort current price: live Redis LTP first, then latest daily close."""
+    live = await get_live_ltp(stock_id)
+    if live is not None:
+        return live
 
     # Fall back to last daily close in DB
     from app.models.market_data import OhlcvDaily
@@ -67,9 +111,38 @@ async def place_paper_order(
     Opens a new Position (or returns existing open position for the stock).
 
     Returns (order, position) — both are already flushed into the session.
+
+    Quantity: an explicit override is used as-is; otherwise the size is
+    computed from THIS user's capital and per-trade risk (never the signal's
+    generic suggested_qty, which is sized to a house default). A size that
+    rounds to zero (stop too wide for the account) is rejected, not clamped.
     """
-    qty = quantity if quantity is not None else signal.suggested_qty
-    fill_price = await get_current_price(db, signal.stock_id) or Decimal(str(signal.entry_price))
+    entry = Decimal(str(signal.entry_price))
+    stop_loss = Decimal(str(signal.stop_loss))
+    if quantity is not None:
+        qty = quantity
+    else:
+        qty = compute_quantity(user.capital_inr, user.risk_per_trade_pct, entry, stop_loss)
+    if qty <= 0:
+        raise PaperOrderError(
+            "Position size rounds to 0 at your capital and per-trade risk — "
+            "the stop is too wide for this account (raise capital or pick a tighter setup)."
+        )
+
+    # Off-market guard: without a live tick price a fill would use a stale prior
+    # close (misleading for the paper record). Reject unless the user opts out.
+    live_ltp = await get_live_ltp(signal.stock_id)
+    if live_ltp is None and not user.allow_offmarket_entry:
+        raise PaperOrderError(
+            "No live market price for this stock right now — the market may be closed "
+            "or the stock isn't trading, so a fill would use a stale prior close. "
+            "Enable 'Allow off-market entry' in Settings to override."
+        )
+    if live_ltp is not None:
+        base_price = live_ltp
+    else:
+        base_price = await get_current_price(db, signal.stock_id) or entry
+    fill_price = _simulated_fill(base_price, side)
     now = datetime.now(tz=UTC)
 
     order = Order(
@@ -147,12 +220,40 @@ async def close_position(
     if position.closed_at is not None:
         raise ValueError(f"Position {position.id} is already closed")
 
-    price = exit_price or await get_current_price(db, position.stock_id)
-    if price is None:
-        price = position.avg_entry_price  # fallback: flat trade
+    close_side = "SELL" if position.side == "LONG" else "BUY"
+    raw_price = exit_price or await get_current_price(db, position.stock_id)
+    if raw_price is None:
+        raw_price = position.avg_entry_price  # fallback: flat trade
+    price = _simulated_fill(raw_price, close_side)
 
     now = datetime.now(tz=UTC)
-    close_side = "SELL" if position.side == "LONG" else "BUY"
+    entry = Decimal(str(position.avg_entry_price))
+    gross_pnl = compute_pnl(
+        side=position.side, entry=entry, exit_price=price, quantity=position.quantity
+    )
+
+    # Net the round-trip trading costs (fees.py) so realized_pnl reflects
+    # live-trading returns. Product is inferred from the originating signal's
+    # classification (delivery for swing/positional, intraday for scalp/day).
+    charges = Decimal("0")
+    breakdown: dict[str, object] | None = None
+    if settings.paper_costs_enabled:
+        classification = "swing"
+        if position.signal_id is not None:
+            sig = await db.get(Signal, position.signal_id)
+            if sig is not None:
+                classification = sig.classification
+        charges, breakdown = roundtrip_charges(
+            position_side=position.side,
+            entry_price=entry,
+            exit_price=price,
+            quantity=position.quantity,
+            product=product_for_classification(classification),
+        )
+
+    payload: dict[str, object] = {"reason": reason}
+    if breakdown is not None:
+        payload["charges"] = breakdown
 
     order = Order(
         user_id=position.user_id,
@@ -167,17 +268,12 @@ async def close_position(
         filled_at=now,
         filled_price=price,
         filled_qty=position.quantity,
-        broker_payload={"reason": reason},
+        broker_payload=payload,
     )
     db.add(order)
 
-    pnl = compute_pnl(
-        side=position.side,
-        entry=Decimal(str(position.avg_entry_price)),
-        exit_price=price,
-        quantity=position.quantity,
-    )
-    position.realized_pnl = pnl
+    position.realized_pnl = gross_pnl - charges
+    position.charges = charges
     position.unrealized_pnl = Decimal("0")
     position.closed_at = now
 

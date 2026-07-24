@@ -66,7 +66,8 @@ class PositionOut(BaseModel):
     current_tp: Decimal | None
     trail_state: str
     unrealized_pnl: Decimal | None
-    realized_pnl: Decimal
+    realized_pnl: Decimal            # NET of charges once closed
+    charges: Decimal | None = None   # round-trip trading costs (None = pre-cost history)
     opened_at: datetime
     closed_at: datetime | None
     signal_id: str | None
@@ -110,3 +111,34 @@ class DailyPnlOut(BaseModel):
 class TradeHistoryResponse(BaseModel):
     total: int
     positions: list[PositionOut]
+
+
+# ── Paper record (the 30-day-clock view) ──────────────────────────────────────
+
+class PaperDayRow(BaseModel):
+    date: str              # YYYY-MM-DD in IST
+    realized_pnl: Decimal  # NET of charges
+    charges: Decimal
+    trades: int            # positions closed that day
+    profitable: bool       # net realized > 0
+    cumulative_pnl: Decimal
+
+
+class PaperRecordOut(BaseModel):
+    """Per-IST-day realized-P&L history for the paper account — the visible
+    surface of the 30-day profitable-paper gate (the authoritative gate stays
+    Phase 7). P&L is net of trading costs."""
+
+    days: list[PaperDayRow]        # chronological (oldest → newest)
+    total_days_traded: int
+    profitable_days: int
+    losing_days: int
+    current_streak: int            # consecutive most-recent profitable days
+    best_streak: int
+    total_realized_pnl: Decimal    # net
+    total_charges: Decimal
+    total_trades: int
+    win_rate_pct: Decimal
+    target_days: int = 30
+    start_date: str | None = None
+    last_date: str | None = None

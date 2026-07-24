@@ -99,27 +99,30 @@ export function DashboardPage() {
   const [classification, setClassification] = useState('All')
   const [minConfidence, setMinConfidence] = useState(70)
   const [segment, setSegment] = useState('ALL')
-  const [buyingSignalId, setBuyingSignalId] = useState<string | null>(null)
+  const [tradingSignalId, setTradingSignalId] = useState<string | null>(null)
 
-  const paperBuyMutation = useMutation({
-    mutationFn: (signalId: string) =>
-      tradingApi.placeOrder({ signal_id: signalId, side: 'BUY' }, accessToken!),
+  const paperTradeMutation = useMutation({
+    mutationFn: ({ signalId, side }: { signalId: string; side: 'BUY' | 'SELL' }) =>
+      tradingApi.placeOrder({ signal_id: signalId, side }, accessToken!),
     onSuccess: (order) => {
-      toast.success(`Paper BUY placed: ${order.filled_qty} × ${order.symbol}`)
+      toast.success(`Paper ${order.side} placed: ${order.filled_qty} × ${order.symbol}`)
       void qc.invalidateQueries({ queryKey: ['positions-open'] })
       void qc.invalidateQueries({ queryKey: ['daily-pnl'] })
-      setBuyingSignalId(null)
+      void qc.invalidateQueries({ queryKey: ['paper-record'] })
+      setTradingSignalId(null)
     },
     onError: (err: { message?: string }) => {
       toast.error(err.message ?? 'Order rejected')
-      setBuyingSignalId(null)
+      setTradingSignalId(null)
     },
   })
 
-  function handlePaperBuy(e: React.MouseEvent, sig: SignalOut) {
+  function handlePaperTrade(e: React.MouseEvent, sig: SignalOut) {
     e.stopPropagation()
-    setBuyingSignalId(sig.id)
-    paperBuyMutation.mutate(sig.id)
+    // A bearish signal must open a SHORT, not a wrong-way LONG.
+    const side = sig.direction === 'SELL' ? 'SELL' : 'BUY'
+    setTradingSignalId(sig.id)
+    paperTradeMutation.mutate({ signalId: sig.id, side })
   }
 
   const { data: signalData, isLoading: signalsLoading } = useQuery({
@@ -404,18 +407,19 @@ export function DashboardPage() {
                         </td>
                         <td className="px-3 py-2 text-right">
                           <button
-                            onClick={(e) => handlePaperBuy(e, sig)}
-                            disabled={buyingSignalId === sig.id}
-                            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold transition-colors disabled:opacity-50"
+                            onClick={(e) => handlePaperTrade(e, sig)}
+                            disabled={tradingSignalId === sig.id}
+                            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold transition-colors disabled:opacity-50 border"
                             style={{
-                              background: 'rgba(22,163,74,0.15)',
-                              color: 'var(--color-bull)',
-                              border: '1px solid rgba(22,163,74,0.3)',
+                              color: sig.direction === 'SELL' ? 'var(--color-bear)' : 'var(--color-bull)',
+                              borderColor: sig.direction === 'SELL' ? 'var(--color-bear)' : 'var(--color-bull)',
                             }}
-                            title="Paper Buy"
+                            title={sig.direction === 'SELL' ? 'Paper Sell (open short)' : 'Paper Buy (open long)'}
                           >
                             <ShoppingCart size={10} />
-                            {buyingSignalId === sig.id ? '…' : 'Paper'}
+                            {tradingSignalId === sig.id
+                              ? '…'
+                              : sig.direction === 'SELL' ? 'Sell' : 'Buy'}
                           </button>
                         </td>
                       </tr>

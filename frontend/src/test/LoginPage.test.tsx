@@ -16,7 +16,7 @@ vi.mock('react-router-dom', async (importActual) => {
 const mockUser = {
   id: 1, email: 'a@example.com', full_name: 'A', role: 'user',
   capital_inr: '100000', risk_per_trade_pct: '2', daily_loss_limit_pct: '3',
-  max_trades_per_day: 2, is_active: true, trading_mode: 'paper',
+  max_trades_per_day: 2, is_active: true, trading_mode: 'paper', allow_offmarket_entry: false,
   created_at: '', updated_at: '',
 }
 

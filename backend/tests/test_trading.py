@@ -18,11 +18,26 @@ from app.models.signal import Signal
 from app.models.stock import Stock
 from app.models.trading import Position
 from app.models.user import User
+from app.trading.fees import roundtrip_charges
 from app.trading.trail_sl import advance_trail, compute_pnl, is_sl_hit, is_tp_hit
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.helpers import create_test_user, get_auth_headers, make_stock
+
+
+def _net(side: str, entry: str, exit_: str, qty: int, product: str = "delivery") -> Decimal:
+    """Expected NET realized P&L = gross − round-trip charges (source of truth
+    is fees.py, so this tracks the schedule rather than a brittle constant)."""
+    gross = compute_pnl(side=side, entry=Decimal(entry), exit_price=Decimal(exit_), quantity=qty)
+    charges, _ = roundtrip_charges(
+        position_side=side,
+        entry_price=Decimal(entry),
+        exit_price=Decimal(exit_),
+        quantity=qty,
+        product=product,
+    )
+    return gross - charges
 
 # ── Factories ────────────────────────────────────────────────────────────────
 
@@ -32,6 +47,7 @@ async def _make_user(
     capital: Decimal = Decimal("100000"),
     daily_loss_pct: Decimal = Decimal("3.00"),
     max_trades: int = 2,
+    allow_offmarket_entry: bool = True,  # tests fill without a live market
 ) -> User:
     from app.core.security import hash_password
 
@@ -45,6 +61,7 @@ async def _make_user(
         capital_inr=capital,
         daily_loss_limit_pct=daily_loss_pct,
         max_trades_per_day=max_trades,
+        allow_offmarket_entry=allow_offmarket_entry,
     )
     db.add(user)
     await db.flush()
@@ -329,7 +346,11 @@ class TestPaperBroker:
         await db.commit()
 
         assert closed_pos.closed_at is not None
-        assert closed_pos.realized_pnl == Decimal("4000")
+        # realized_pnl is NET of round-trip costs (was gross ₹4000)
+        assert closed_pos.realized_pnl == _net("LONG", "500", "540", 100)
+        assert closed_pos.charges is not None and closed_pos.charges > Decimal("0")
+        # gross is recoverable
+        assert closed_pos.realized_pnl + closed_pos.charges == Decimal("4000")
 
     async def test_average_in_existing_position(self, db: AsyncSession) -> None:
         from app.broker.paper_broker import place_paper_order
@@ -362,7 +383,8 @@ class TestPaperBroker:
         )
         await db.commit()
 
-        assert closed_pos.realized_pnl == Decimal("-2000")  # (480-500)*100
+        # (480-500)*100 = -2000 gross, minus costs
+        assert closed_pos.realized_pnl == _net("LONG", "500", "480", 100)
 
     async def test_tp_hit_closes_at_tp_price(self, db: AsyncSession) -> None:
         from app.broker.paper_broker import close_position
@@ -379,7 +401,7 @@ class TestPaperBroker:
         )
         await db.commit()
 
-        assert closed_pos.realized_pnl == Decimal("4000")
+        assert closed_pos.realized_pnl == _net("LONG", "500", "540", 100)
 
     async def test_close_already_closed_raises(self, db: AsyncSession) -> None:
         from app.broker.paper_broker import close_position
@@ -487,7 +509,8 @@ class TestTradingApi:
         assert r.status_code == 200
         data = r.json()
         assert data["closed_at"] is not None
-        assert Decimal(data["realized_pnl"]) == Decimal("4000")
+        assert Decimal(data["realized_pnl"]) == _net("LONG", "500", "540", 100)
+        assert Decimal(data["charges"]) > Decimal("0")
 
     async def test_close_already_closed_returns_409(
         self, client: AsyncClient, db: AsyncSession
@@ -659,3 +682,198 @@ class TestTradingApi:
             headers=headers,
         )
         assert r.status_code == 422
+
+
+# ── Sizing from user capital + cost model ──────────────────────────────────────
+
+class TestSizingAndCosts:
+    async def test_sizes_from_user_capital_not_suggested_qty(self, db: AsyncSession) -> None:
+        """No explicit quantity → size from THIS user's capital/risk, never the
+        signal's house-default suggested_qty."""
+        from app.analysis.risk import compute_quantity
+        from app.broker.paper_broker import place_paper_order
+
+        user = await _make_user(db, capital=Decimal("100000"))  # 2% risk default
+        stock = await make_stock(db)
+        # suggested_qty deliberately bogus (sized to a ₹5L house default)
+        signal = await _make_signal(db, stock.id, entry="500.0000", sl="480.0000", qty=999)
+
+        _order, pos = await place_paper_order(db, user, signal, side="BUY", quantity=None)
+        await db.commit()
+
+        expected = compute_quantity(
+            Decimal("100000"), Decimal("2.00"), Decimal("500"), Decimal("480")
+        )
+        assert expected == 100  # ₹2000 risk / ₹20 per share
+        assert pos.quantity == expected
+        assert pos.quantity != 999  # did NOT use suggested_qty
+
+    async def test_explicit_quantity_override_honored(self, db: AsyncSession) -> None:
+        from app.broker.paper_broker import place_paper_order
+
+        user = await _make_user(db, capital=Decimal("100000"))
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000", sl="480.0000")
+        _order, pos = await place_paper_order(db, user, signal, side="BUY", quantity=7)
+        await db.commit()
+        assert pos.quantity == 7
+
+    async def test_zero_size_rejected_not_clamped(self, db: AsyncSession) -> None:
+        """Stop wider than the account's per-trade risk → reject (never a
+        0-qty or 1-share clamp)."""
+        from app.broker.paper_broker import PaperOrderError, place_paper_order
+
+        user = await _make_user(db, capital=Decimal("100"))  # ₹2 risk budget
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000", sl="480.0000")  # ₹20/share
+        with pytest.raises(PaperOrderError, match="rounds to 0"):
+            await place_paper_order(db, user, signal, side="BUY", quantity=None)
+
+    async def test_api_rejects_zero_size_422(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        user = await create_test_user(db)
+        user.capital_inr = Decimal("100")  # tiny account
+        headers = await get_auth_headers(client)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000", sl="480.0000")
+        await db.commit()
+
+        r = await client.post(
+            "/api/v1/trading/orders",
+            json={"signal_id": signal.id, "side": "BUY"},
+            headers=headers,
+        )
+        assert r.status_code == 422
+        assert "rounds to 0" in r.json()["detail"]
+
+    async def test_costs_disabled_returns_gross(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.broker.paper_broker import close_position
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "paper_costs_enabled", False)
+        user = await _make_user(db)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id)
+        pos = await _open_position(db, user, stock, signal, entry=Decimal("500"))
+        _order, closed = await close_position(db, pos, exit_price=Decimal("540"))
+        await db.commit()
+        assert closed.realized_pnl == Decimal("4000")  # gross, no costs
+        assert closed.charges == Decimal("0")
+
+    async def test_short_position_net_pnl(self, db: AsyncSession) -> None:
+        """A SHORT nets costs too; charges are symmetric to the long side."""
+        from app.broker.paper_broker import close_position
+
+        user = await _make_user(db)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, direction="SELL")
+        pos = await _open_position(
+            db, user, stock, signal, side="SHORT", entry=Decimal("500"), sl=Decimal("520")
+        )
+        _order, closed = await close_position(db, pos, exit_price=Decimal("460"))
+        await db.commit()
+        assert closed.realized_pnl == _net("SHORT", "500", "460", 100)
+        assert closed.charges is not None and closed.charges > Decimal("0")
+
+    async def test_offmarket_entry_rejected_without_live_ltp(self, db: AsyncSession) -> None:
+        """Default (guard on): no live tick price → reject (would fill at a
+        stale close)."""
+        from app.broker.paper_broker import PaperOrderError, get_live_ltp, place_paper_order
+
+        user = await _make_user(db, allow_offmarket_entry=False)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id)
+        assert await get_live_ltp(stock.id) is None  # no tick set → off-market
+        with pytest.raises(PaperOrderError, match="No live market price"):
+            await place_paper_order(db, user, signal, side="BUY", quantity=100)
+
+    async def test_offmarket_entry_allowed_when_opted_in(self, db: AsyncSession) -> None:
+        """Guard off → off-market entry allowed (fills at the daily-close fallback)."""
+        from app.broker.paper_broker import place_paper_order
+
+        user = await _make_user(db, allow_offmarket_entry=True)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000")
+        _order, pos = await place_paper_order(db, user, signal, side="BUY", quantity=100)
+        await db.commit()
+        assert pos.quantity == 100  # placed; fell back to signal entry (no LTP, no daily bar)
+
+    async def test_entry_allowed_with_live_ltp_fills_at_ltp(self, db: AsyncSession) -> None:
+        """Guard on, but a live tick exists → allowed and fills at the LIVE price."""
+        import redis.asyncio as aioredis
+        from app.broker.paper_broker import place_paper_order
+        from app.broker.tick_consumer import LTP_KEY
+        from app.core.config import settings
+
+        user = await _make_user(db, allow_offmarket_entry=False)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000")
+        r = aioredis.from_url(settings.redis_url, decode_responses=True)
+        key = LTP_KEY.format(stock_id=stock.id)
+        try:
+            await r.set(key, "505.05", ex=600)
+            order, _pos = await place_paper_order(db, user, signal, side="BUY", quantity=100)
+            await db.commit()
+            assert order.filled_price == Decimal("505.0500")  # live LTP (on tick grid)
+        finally:
+            await r.delete(key)
+            await r.aclose()
+
+
+# ── Paper record (30-day-clock view) ───────────────────────────────────────────
+
+class TestPaperRecord:
+    async def test_paper_record_aggregates_by_ist_day(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        user = await create_test_user(db)
+        headers = await get_auth_headers(client)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id)
+
+        def _d(day: int) -> datetime:
+            return datetime(2026, 6, day, 12, 0, tzinfo=UTC)  # noon UTC → same IST date
+
+        # Day 1: two trades net +1500 (profit). Day 2: -300 (loss).
+        # Day 3: +500 (profit). Day 4: +200 (profit) → trailing streak = 2.
+        await _closed_position(db, user, stock, signal, Decimal("1000"), closed_at=_d(1))
+        await _closed_position(db, user, stock, signal, Decimal("500"), closed_at=_d(1))
+        await _closed_position(db, user, stock, signal, Decimal("-300"), closed_at=_d(2))
+        await _closed_position(db, user, stock, signal, Decimal("500"), closed_at=_d(3))
+        await _closed_position(db, user, stock, signal, Decimal("200"), closed_at=_d(4))
+        await db.commit()
+
+        r = await client.get("/api/v1/trading/paper-record", headers=headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert data["total_days_traded"] == 4
+        assert data["profitable_days"] == 3
+        assert data["losing_days"] == 1
+        assert data["current_streak"] == 2      # days 3 and 4
+        assert data["best_streak"] == 2
+        assert data["total_trades"] == 5
+        assert Decimal(data["total_realized_pnl"]) == Decimal("1900")  # 1500-300+500+200
+        assert data["start_date"] == "2026-06-01"
+        assert data["last_date"] == "2026-06-04"
+        # chronological + cumulative
+        assert [d["date"] for d in data["days"]] == [
+            "2026-06-01", "2026-06-02", "2026-06-03", "2026-06-04"
+        ]
+        assert Decimal(data["days"][0]["realized_pnl"]) == Decimal("1500")
+        assert Decimal(data["days"][-1]["cumulative_pnl"]) == Decimal("1900")
+
+    async def test_paper_record_empty(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        r = await client.get("/api/v1/trading/paper-record", headers=headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert data["total_days_traded"] == 0
+        assert data["days"] == []
+        assert data["current_streak"] == 0
+        assert data["start_date"] is None

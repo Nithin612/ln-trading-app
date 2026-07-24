@@ -103,6 +103,17 @@ class Settings(BaseSettings):
     # ── Trading defaults ────────────────────────────────────────────────────
     default_risk_per_trade_pct: float = 2.0
     min_signal_confidence: int = 70
+
+    # ── Paper-trading cost model (app/trading/fees.py) ──────────────────────
+    # Realized P&L is charged with the Zerodha cash-equity schedule so the
+    # 30-day paper record reflects live-trading net returns. Rates live in
+    # fees.py (ZERODHA_EQUITY); these are the behavioural toggles.
+    paper_costs_enabled: bool = True
+    # Adverse slippage applied to paper fills, in basis points (0 = off).
+    # BUY fills move up, SELL fills move down by this fraction of the price.
+    paper_slippage_bps: float = 0.0
+    # NSE equity tick size (₹) for rounding simulated fills; 0 disables.
+    paper_tick_size: float = 0.05
     market_open_hour: int = 9
     market_open_minute: int = 15
     market_close_hour: int = 15

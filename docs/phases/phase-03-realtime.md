@@ -1390,11 +1390,76 @@ sparkline → lib/format.ts; (5) Kite banner hardcoded rgba/yellow-500;
 (7) Badge/SelectItem "Loading…" text vs Skeleton; (8) user-avatar.tsx
 hardcoded gradient + string-concat className.
 
+## Paper-trading credibility pass — 2026-07-23 (pre-live-run; makes the 30-day clock honest)
+
+Prompted by tracing "does starting the live-worker start the 30-day paper
+clock?" The trace (recorded so it isn't re-derived): entry is **manual**
+(`POST /trading/orders` from the Dashboard button → `place_paper_order`;
+nothing auto-trades), exits are **auto** (`monitor_positions` beat reads
+`ltp:{stock_id}` — fed by the live-worker — and closes on SL/TP/trail +
+circuit breaker), and there is **no code gate** for the 30 profitable days
+— that enforcement is Phase 7 (`trading_mode` is never mutated anywhere; only
+comments point to it). So the live-worker makes paper fills/exits use live
+prices; the "clock" is just accumulated closed-position P&L a Phase-7 gate
+will later judge.
+
+The trace surfaced four issues, all fixed (full detail: CHANGELOG
+Unreleased):
+1. **Sizing used a ₹5,00,000 house default** (`signal_tasks._default_risk_params`)
+   while the account is ₹1,00,000 → each suggested-qty trade risked 5× and
+   tripped the ₹3k breaker in one trade. `place_paper_order` now sizes from
+   the user's own `capital_inr`/`risk_per_trade_pct` via the frozen
+   `compute_quantity`; a zero size is **rejected (422), not clamped**.
+2. **P&L was gross** — added `app/trading/fees.py` (configurable Zerodha
+   cash-equity schedule, product-aware) so `realized_pnl` is **net of costs**
+   everywhere; `positions.charges` column (migration `t6u7v8w9x0y1`,
+   up→down→up proven, nullable = pre-cost history); breakdown stashed in the
+   closing order's `broker_payload`. Rates cross-checked vs Zerodha's
+   calculator (delivery ≈ ₹232.60 / intraday ≈ ₹85.30 on a 100-share
+   ₹1000→₹1100 round trip).
+3. **Dashboard "Paper Trade" was BUY-only** → a SELL signal opened a
+   wrong-way long; now direction-aware (backend already supported SHORT).
+4. **No visibility** into the clock → `GET /trading/paper-record` + a
+   PaperRecordCard on the Positions page (per-IST-day net P&L, profit-day
+   count, current/best streak, win rate, total costs). Plus a self-service
+   **Trading Settings** card on the Profile page (capital/risk/limits, live
+   risk preview) since capital varies.
+
+Informed by the user's paper-broker execution-design doc: took the **cost
+model** (the one thing that makes the gate honest); the fuller simulator
+(order state machine, immutable fill ledger, cash/margin ledger, LIMIT/STOP
+types, and the **broker-interface abstraction for the paper→live swap**) is
+recorded as the **Phase-6/7 roadmap**, deliberately out of scope here.
+
+Gate: backend 837 passed (parity/goldens/replay untouched, not re-run) +
+frontend 183; ruff·mypy·eslint·tsc clean; +15 backend / +7 frontend tests.
+**Reviews: bug-hunter CLEAN; ui-reviewer PASS (2 must-fix in the new card —
+raw Retry button + colour-only day strip — fixed).** quant-verifier not
+invoked (no analysis/signals/backtest/engine code changed; sizing uses the
+frozen `compute_quantity` unchanged). Not committed (user commits); browser
+smoke pending (user).
+
+**Follow-up 2026-07-24 (from live use): off-market entry guard.** First live
+day exposed a foot-gun — a paper order placed at 08:08 (pre-open) filled at
+the prior daily close (the `get_current_price` fallback), and two such trades
+tripped the `max_trades_per_day=2` breaker. Added a per-user
+`allow_offmarket_entry` flag (default False = guard on; migration
+`u7v8w9x0y1z2`, up→down→up proven): `place_paper_order` rejects
+(`PaperOrderError` → 422) when there's no live tick price, unless the user
+opts out; `get_current_price` refactored to reuse a new `get_live_ltp`
+(Redis-only). Toggle editable in Profile → Trading Settings. +3 backend
+(reject / opt-in / live-LTP-fills-at-LTP) / +1 frontend (toggle in save)
+tests; fixtures set the flag True (no live market in tests). ruff·mypy·
+eslint·tsc clean; paper suite 45 + fees 8 + journal green, frontend 184.
+Also confirmed: **shadow week COMPLETE** — 6 clean trading days (07-17 +
+07-20→24), zero diffs → slice 3.7's "one shadow week" criterion is met.
+
 ## Decisions made this phase
 
-- (**QUEUED for the user — raised by quant-verifier 2026-07-19, slice
-  3.6**) **Outcome-tick measurement limits: how faithful must the SL/TP
-  touch record be?** The trigger engine fires on OBSERVED intra-session
+- (**RULED — user 2026-07-23: option (a) now + (c) in Phase 6; raised by
+  quant-verifier 2026-07-19, slice 3.6**) **Outcome-tick measurement
+  limits: how faithful must the SL/TP touch record be?** The trigger
+  engine fires on OBSERVED intra-session
   side transitions (`triggers.rs`). Two consequences for the Phase-6
   outcome ledger, both DOCUMENTED in code as known limits and shipped
   as-is pending a ruling:
@@ -1425,7 +1490,49 @@ hardcoded gradient + string-concat className.
   dashboards are built and a second data source already exists.
   Straddler cohorting (`created_at >= OUTCOME_EPOCH`) is enforced by
   convention in the docstring regardless of the choice.
+  **RULING (user, 2026-07-23):** option **(a) now** — accept the live
+  recorder as-is (zero code); `sl_first` stands as a documented FLOOR and
+  gappy `tp_first` may include gap-through-SL survivors. The ledger stays
+  a pure stream of forward-recorded tick facts; option (b) recorder-side
+  synthesis is REJECTED (adds hot-path complexity, breaks the
+  tick-observed contract, still incomplete). **Deferred to Phase 6:**
+  option **(c)** — an EOD candle-based reconciliation pass that annotates
+  gap-throughs, built alongside the hit-rate/expectancy dashboards where
+  a second oracle (committed daily bars) already exists; the
+  `cross_down_at_or_below` at-level LevelKind (Rust semantic sign-off per
+  rules/rust.md, additive so no golden churn) is bundled into that work.
+  Rationale for deferral: the outcome ledger is OBSERVABILITY ONLY (never
+  scoring/sizing/gating/backtests/P&L), so the floor bias is harmless
+  until the dashboards that consume it are built — and reconciliation
+  belongs where a second data source exists, not in the live recorder.
+  Non-blocking for the shadow week, the paper clock, and the Phase-3
+  exit gate.
 
+- (**RULED — user 2026-07-23: confirm true-positive, KEEP quarantined,
+  no action; re-inclusion folded into the Phase-4/6 adjusted-history
+  migration**) **The 4 gap-window CA quarantines (KRISHANA / MBAPL /
+  MWL / GOLDIAM).** The 2026-07-18 EOD backfill's CA sweep flagged four
+  stocks (§EOD restart). Verified against the DB 2026-07-23: every gap is
+  arithmetic-clean and every stock is a small-cap with NO index/F&O
+  membership — KRISHANA 713.50→145.00 (÷4.9, ~5:1 split), MBAPL
+  604.30→120.50 (÷5.0, ~5:1), MWL 370.25→36.15 (÷10.2, ~10:1), GOLDIAM
+  420.50→321.50 (×0.76, ~1:3 bonus). These are TRUE POSITIVES — the
+  `ca_detector` working as designed; the unadjusted-bhavcopy window
+  spanning the split is genuinely un-scoreable. **Ruling: keep all four
+  flagged, take no action now.** Do NOT unflag (windows still span the
+  split); do NOT ad-hoc-refetch adjusted history for just these four —
+  mixing 4 adjusted names against ~2,300 raw ones poisons cross-sectional
+  factors (§2.7 breadth, relative strength), and adopting Kite
+  adjusted-history is a deliberate universe-wide decision that triggers
+  golden regeneration (ARCHITECTURE §Corporate actions, post-Phase-3).
+  Impact of keeping them dark is negligible (4 of 2,333 active, none in
+  intraday/F&O/index engines; zero effect on Phase-3 exit, the shadow
+  week — parity holds since both engines skip/score identically — or the
+  paper clock). **Caveat recorded:** `ca_flagged_at` is
+  permanent-until-manually-cleared with no auto-unflag when the split
+  ages out of the 300-bar window (~late 2027), so re-inclusion is folded
+  into the same Phase-4/6 adjusted-history work as the T2T option-(b)
+  path so these names don't sit dark by omission. Non-blocking.
 - (**RULED — user 2026-07-17: options (a)+(c); EXECUTED same day**)
   **The T2T universe question.** 296 of 2,348 active master stocks are
   T2T/surveillance-series listings (`SYMBOL-BE`/`-BZ` on Kite) the

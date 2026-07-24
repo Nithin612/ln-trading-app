@@ -233,16 +233,26 @@ agreeing. quant-verifier + bug-hunter both fixed (toggle race removed).
 Gate 840/16/9 + 177 frontend.
 
 **▶ NEXT ACTION = SLICE 3.7 LIVE RUN — LIVE-GATED (needs market days,
-cannot run overnight):** (1) SHADOW WEEK — run `scripts/shadow_week.py`
-daily after EOD ingestion for a week; zero diffs required (day-one 07-17
-already clean). (2) full-session SOAK — already MET ×2 (07-15/16). (3)
-the 30-day paper clock STARTS at 3.7. Then the Phase-3 exit gate
-(`/phase-gate`). Monday pre-open ritual: start `make worker` alongside
-the live worker; watch the provisional cadence (overrun = tune
-`live_provisional_refresh_s`/hotset cap), the outcome recorder
-(`XPENDING alerts:live outcome-recorder` ~0), and run the EOD shadow
-sweep. **QUEUED user rulings (§Decisions):** outcome-tick gap-through-SL
-fidelity; 4 CA quarantines (KRISHANA/MBAPL/MWL/GOLDIAM) pending review.
+cannot run overnight):** (1) SHADOW WEEK — run `scripts/shadow_day.sh
+<day…>` (wrapper over `shadow_week.py`, appends PASS/FAIL to
+`backend/shadow/shadow_week.log`) once per day AFTER the evening EOD
+beats land the close (~19:30 IST — equities EOD 18:40, nightly 19:15;
+4:30 PM is too early, the bar isn't ingested yet); zero diffs required
+(day-one 07-17 already clean). A gap can be caught up in one evening —
+the EOD catch-up heals the backlog, then run the wrapper across the
+backfilled days. (2) full-session SOAK — already MET ×2 (07-15/16).
+(3) the 30-day paper clock STARTS at 3.7 (starts when `make live-worker`
+runs the live path). Then the Phase-3 exit gate (`/phase-gate`).
+Pre-open ritual: start `make worker` (from repo ROOT, not backend/)
+before 18:30 IST so the evening beats self-heal + generate; then
+`make live-worker WORKER_ARGS=--gap-fill` pre-open (its own gap-fill
+heals the intraday hole for the subscribed universe — no
+`backfill_intraday.py` needed). Watch the provisional cadence (overrun =
+tune `live_provisional_refresh_s`/hotset cap) and the outcome recorder
+(`XPENDING alerts:live outcome-recorder` ~0). **User rulings CLEARED
+2026-07-23 (§Decisions, both RULED):** outcome-tick gap-through-SL =
+(a) now + (c) Phase 6; the 4 CA quarantines = keep flagged, re-inclusion
+folded into the Phase-4/6 adjusted-history migration.
 
 Open threads, in order:
 1. **FIRST SOAK RAN 2026-07-10 — PARTIAL; latency verdict OPEN** (full

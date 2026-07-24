@@ -14,7 +14,7 @@ const mockUser = {
   daily_loss_limit_pct: '3.00',
   max_trades_per_day: 2,
   is_active: true,
-  trading_mode: 'paper',
+  trading_mode: 'paper', allow_offmarket_entry: false,
   created_at: '2025-01-01T00:00:00Z',
   updated_at: '2025-01-01T00:00:00Z',
 }

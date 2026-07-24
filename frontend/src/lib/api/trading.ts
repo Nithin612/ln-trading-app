@@ -14,6 +14,7 @@ export interface PositionOut {
   trail_state: 'none' | 'breakeven' | 'trailing_1' | 'trailing_2'
   unrealized_pnl: string | null
   realized_pnl: string
+  charges: string | null
   opened_at: string
   closed_at: string | null
   signal_id: string | null
@@ -52,6 +53,31 @@ export interface DailyPnlOut {
   daily_loss_limit_inr: string
   trades_taken_today: number
   max_trades_per_day: number
+}
+
+export interface PaperDayRow {
+  date: string
+  realized_pnl: string
+  charges: string
+  trades: number
+  profitable: boolean
+  cumulative_pnl: string
+}
+
+export interface PaperRecordOut {
+  days: PaperDayRow[]
+  total_days_traded: number
+  profitable_days: number
+  losing_days: number
+  current_streak: number
+  best_streak: number
+  total_realized_pnl: string
+  total_charges: string
+  total_trades: number
+  win_rate_pct: string
+  target_days: number
+  start_date: string | null
+  last_date: string | null
 }
 
 export const tradingApi = {
@@ -99,5 +125,9 @@ export const tradingApi = {
 
   getDailyPnl(token: string): Promise<DailyPnlOut> {
     return api.get<DailyPnlOut>('/trading/daily-pnl', token)
+  },
+
+  getPaperRecord(token: string, targetDays = 30): Promise<PaperRecordOut> {
+    return api.get<PaperRecordOut>(`/trading/paper-record?target_days=${targetDays}`, token)
   },
 }

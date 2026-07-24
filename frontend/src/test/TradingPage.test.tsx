@@ -7,11 +7,12 @@ import * as tradingApiModule from '@/lib/api/trading'
 import { PositionsPage } from '@/features/trading/PositionsPage'
 import { TradeHistoryPage } from '@/features/trading/TradeHistoryPage'
 import { DailyPnlCard } from '@/features/trading/DailyPnlCard'
+import { PaperRecordCard } from '@/features/trading/PaperRecordCard'
 
 const mockUser = {
   id: 1, email: 'u@example.com', full_name: 'Test', role: 'user',
   capital_inr: '100000', risk_per_trade_pct: '2', daily_loss_limit_pct: '3',
-  max_trades_per_day: 2, is_active: true, trading_mode: 'paper',
+  max_trades_per_day: 2, is_active: true, trading_mode: 'paper', allow_offmarket_entry: false,
   created_at: '', updated_at: '',
 }
 
@@ -43,6 +44,7 @@ function makePosition(overrides: Partial<tradingApiModule.PositionOut> = {}): tr
     trail_state: 'none',
     unrealized_pnl: '500.00',
     realized_pnl: '0',
+    charges: null,
     opened_at: new Date().toISOString(),
     closed_at: null,
     signal_id: 'sig-001',
@@ -100,6 +102,7 @@ describe('DailyPnlCard', () => {
 describe('PositionsPage', () => {
   beforeEach(() => {
     vi.spyOn(tradingApiModule.tradingApi, 'getDailyPnl').mockResolvedValue(makeDailyPnl())
+    vi.spyOn(tradingApiModule.tradingApi, 'getPaperRecord').mockResolvedValue(makePaperRecord())
   })
 
   it('shows empty state when no open positions', async () => {
@@ -221,5 +224,60 @@ describe('TradeHistoryPage', () => {
       // Summary card + table row both render the P&L — check at least one is present
       expect(screen.getAllByText(/-₹700/).length).toBeGreaterThan(0)
     })
+  })
+})
+
+function makePaperRecord(
+  overrides: Partial<tradingApiModule.PaperRecordOut> = {},
+): tradingApiModule.PaperRecordOut {
+  return {
+    days: [
+      { date: '2026-06-01', realized_pnl: '1500', charges: '120', trades: 2, profitable: true, cumulative_pnl: '1500' },
+      { date: '2026-06-02', realized_pnl: '-300', charges: '60', trades: 1, profitable: false, cumulative_pnl: '1200' },
+    ],
+    total_days_traded: 2,
+    profitable_days: 1,
+    losing_days: 1,
+    current_streak: 0,
+    best_streak: 1,
+    total_realized_pnl: '1200',
+    total_charges: '180',
+    total_trades: 3,
+    win_rate_pct: '50.0',
+    target_days: 30,
+    start_date: '2026-06-01',
+    last_date: '2026-06-02',
+    ...overrides,
+  }
+}
+
+describe('PaperRecordCard', () => {
+  it('renders the record with net P&L and profitable-day count', async () => {
+    vi.spyOn(tradingApiModule.tradingApi, 'getPaperRecord').mockResolvedValue(makePaperRecord())
+    wrap(<PaperRecordCard />)
+    await waitFor(() => expect(screen.getByText('Paper Record')).toBeInTheDocument())
+    expect(screen.getByText('1/30')).toBeInTheDocument()          // profitable days / target
+    expect(screen.getByText(/Toward 30 profitable days/i)).toBeInTheDocument()
+  })
+
+  it('shows an empty state before the first closed trade', async () => {
+    vi.spyOn(tradingApiModule.tradingApi, 'getPaperRecord').mockResolvedValue(
+      makePaperRecord({ days: [], total_days_traded: 0, profitable_days: 0, losing_days: 0,
+        total_realized_pnl: '0', total_charges: '0', total_trades: 0, win_rate_pct: '0.0',
+        start_date: null, last_date: null }),
+    )
+    wrap(<PaperRecordCard />)
+    await waitFor(() =>
+      expect(screen.getByText(/the 30-day clock starts when you close your first trade/i)).toBeInTheDocument(),
+    )
+  })
+
+  it('shows an error state with retry', async () => {
+    vi.spyOn(tradingApiModule.tradingApi, 'getPaperRecord').mockRejectedValue(new Error('boom'))
+    wrap(<PaperRecordCard />)
+    await waitFor(() =>
+      expect(screen.getByText(/Could not load the paper record/i)).toBeInTheDocument(),
+    )
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
   })
 })

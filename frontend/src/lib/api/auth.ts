@@ -9,6 +9,7 @@ export interface UserOut {
   risk_per_trade_pct: string
   daily_loss_limit_pct: string
   max_trades_per_day: number
+  allow_offmarket_entry: boolean
   is_active: boolean
   trading_mode: string
   created_at: string

@@ -18,6 +18,11 @@ export interface UserCreate {
 export interface UserUpdate {
   full_name?: string
   role?: string
+  capital_inr?: string
+  risk_per_trade_pct?: string
+  daily_loss_limit_pct?: string
+  max_trades_per_day?: number
+  allow_offmarket_entry?: boolean
 }
 
 export const usersApi = {
