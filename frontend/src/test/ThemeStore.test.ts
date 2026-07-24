@@ -4,12 +4,12 @@ import { useUiPrefsStore } from '@/store/uiPrefsStore'
 
 describe('themeStore', () => {
   beforeEach(() => {
-    useThemeStore.setState({ theme: 'midnight' })
+    useThemeStore.setState({ theme: 'slate' })
     localStorage.clear()
   })
 
-  it('defaults to midnight', () => {
-    expect(useThemeStore.getState().theme).toBe('midnight')
+  it('defaults to slate', () => {
+    expect(useThemeStore.getState().theme).toBe('slate')
   })
 
   it('toggles from dark theme to daybreak', () => {
@@ -17,10 +17,10 @@ describe('themeStore', () => {
     expect(useThemeStore.getState().theme).toBe('daybreak')
   })
 
-  it('toggles from daybreak to midnight', () => {
+  it('toggles from daybreak to slate', () => {
     useThemeStore.setState({ theme: 'daybreak' })
     useThemeStore.getState().toggle()
-    expect(useThemeStore.getState().theme).toBe('midnight')
+    expect(useThemeStore.getState().theme).toBe('slate')
   })
 
   it('setTheme sets any valid theme', () => {

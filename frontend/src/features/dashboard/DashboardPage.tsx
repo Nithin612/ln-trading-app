@@ -283,7 +283,7 @@ export function DashboardPage() {
                   className="px-2.5 py-1 text-xs font-semibold transition-colors"
                   style={{
                     background: direction === d ? 'var(--color-accent)' : 'var(--color-surface-3)',
-                    color: direction === d ? '#fff' : 'var(--color-text-muted)',
+                    color: direction === d ? 'var(--color-primary-foreground)' : 'var(--color-text-muted)',
                   }}
                 >
                   {d}

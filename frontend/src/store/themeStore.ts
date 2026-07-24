@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 
-export type Theme = 'midnight' | 'carbon' | 'ocean' | 'daybreak'
+export type Theme = 'slate' | 'midnight' | 'carbon' | 'ocean' | 'daybreak'
+
+const THEMES: readonly Theme[] = ['slate', 'midnight', 'carbon', 'ocean', 'daybreak']
 
 interface ThemeState {
   theme: Theme
@@ -12,12 +14,12 @@ interface ThemeState {
 function readStored(): Theme {
   try {
     const v = localStorage.getItem('ui-theme')
-    if (v === 'midnight' || v === 'carbon' || v === 'ocean' || v === 'daybreak') return v
+    if (v && (THEMES as readonly string[]).includes(v)) return v as Theme
     // Backward compat: map old dark/light to new names
-    if (v === 'dark') return 'midnight'
+    if (v === 'dark') return 'slate'
     if (v === 'light') return 'daybreak'
   } catch { /* */ }
-  return 'midnight'
+  return 'slate'
 }
 
 export const useThemeStore = create<ThemeState>((set, get) => ({
@@ -27,7 +29,7 @@ export const useThemeStore = create<ThemeState>((set, get) => ({
     set({ theme })
   },
   toggle: () => {
-    const next: Theme = get().theme === 'daybreak' ? 'midnight' : 'daybreak'
+    const next: Theme = get().theme === 'daybreak' ? 'slate' : 'daybreak'
     try { localStorage.setItem('ui-theme', next) } catch { /* */ }
     set({ theme: next })
   },

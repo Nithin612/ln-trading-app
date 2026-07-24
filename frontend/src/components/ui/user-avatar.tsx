@@ -23,7 +23,10 @@ export function UserAvatar({ name, size = 'md', className = '' }: UserAvatarProp
     <div
       className={`${outer} rounded-full flex items-center justify-center font-semibold flex-shrink-0 select-none ${className}`}
       style={{
-        background: 'linear-gradient(135deg, var(--color-accent) 0%, var(--color-info) 100%)',
+        // Solid accent + its AA-tuned foreground (same pairing as buttons) —
+        // a gradient's two stops can have opposite lightness per theme, so a
+        // single foreground can't contrast with both.
+        background: 'var(--color-accent)',
         color: 'var(--color-primary-foreground)',
         letterSpacing: '0.02em',
       }}

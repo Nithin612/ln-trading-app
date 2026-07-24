@@ -32,12 +32,20 @@ describe('SettingsPage', () => {
     expect(screen.getByText('Appearance Settings')).toBeInTheDocument()
   })
 
-  it('shows all four theme cards', () => {
+  it('shows all five theme cards', () => {
     setup()
+    expect(screen.getByText('Slate')).toBeInTheDocument()
     expect(screen.getByText('Midnight')).toBeInTheDocument()
     expect(screen.getByText('Carbon')).toBeInTheDocument()
     expect(screen.getByText('Ocean')).toBeInTheDocument()
     expect(screen.getByText('Daybreak')).toBeInTheDocument()
+  })
+
+  it('switches to slate theme on click', () => {
+    setup()
+    useThemeStore.setState({ theme: 'midnight' })
+    fireEvent.click(screen.getByText('Slate'))
+    expect(useThemeStore.getState().theme).toBe('slate')
   })
 
   it('switches to carbon theme on click', () => {

@@ -1,7 +1,7 @@
 /* ══════════════════════════════════════════════════════════════════════════
    Design tokens — single source of truth.
-   Four themes: midnight (default) · carbon · ocean · daybreak
-   Theme is set via data-theme="..." on <html>.
+   Five themes: slate (default) · midnight · carbon · ocean · daybreak
+   Theme is set via data-theme="..." on <html>; bare :root === slate.
    ══════════════════════════════════════════════════════════════════════════ */
 
 @theme {
@@ -90,9 +90,52 @@
 }
 
 /* ══════════════════════════════════════════════════════════════════════════
-   MIDNIGHT — deep navy with cyan accents (default / "dark" alias)
+   SLATE — slate-gray with blue accents (default). White-on-accent passes AA.
    ══════════════════════════════════════════════════════════════════════════ */
 :root,
+:root[data-theme="slate"] {
+  --color-bg:             #0b1220;
+  --color-surface:        #131c2e;
+  --color-surface-2:      #1b2740;
+  --color-surface-3:      #24334f;
+  --color-surface-hover:  #24334f;
+  --color-border:         #24314c;
+  --color-border-strong:  #3a4a68;
+
+  --color-text:           #e6ecf5;
+  --color-text-secondary: #9fb0c9;
+  --color-text-muted:     #6b7c99;
+
+  --color-profit:         #10b981;
+  --color-profit-bg:      #022c22;
+  --color-loss:           #ef4444;
+  --color-loss-bg:        #450a0a;
+  --color-warning:        #f59e0b;
+  --color-warning-bg:     #451a03;
+  --color-info:           #38bdf8;
+  --color-info-bg:        #0c2f52;
+
+  --color-accent:         #2563eb;
+  --color-accent-hover:   #3b82f6;
+  --color-accent-bg:      #16264b;
+  --color-bull:           #10b981;
+  --color-bear:           #ef4444;
+  --color-neutral:        #6b7c99;
+  --color-success:        #10b981;
+  --color-error:          #ef4444;
+
+  --color-chart-bg:       #131c2e;
+  --color-chart-grid:     #24314c;
+  --color-chart-text:     #6b7c99;
+  --color-sidebar:        #080e1a;
+  --color-topbar:         #080e1a;
+  --color-row-alt:        #16223a;
+  /* blue-600 accent → white foreground passes AA (inherits @theme #ffffff) */
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   MIDNIGHT — deep navy with cyan accents ("dark" alias)
+   ══════════════════════════════════════════════════════════════════════════ */
 :root[data-theme="midnight"],
 :root[data-theme="dark"] {
   --color-bg:             #0a0f1c;
@@ -119,6 +162,7 @@
   --color-accent:         #06b6d4;
   --color-accent-hover:   #22d3ee;
   --color-accent-bg:      #083344;
+  --color-primary-foreground: #041019;  /* dark on bright cyan accent (AA) */
   --color-bull:           #10b981;
   --color-bear:           #ef4444;
   --color-neutral:        #64748b;
@@ -161,6 +205,7 @@
   --color-accent:         #f59e0b;
   --color-accent-hover:   #fbbf24;
   --color-accent-bg:      #451a03;
+  --color-primary-foreground: #0a0a0a;  /* dark on amber accent (AA) */
   --color-bull:           #22c55e;
   --color-bear:           #ef4444;
   --color-neutral:        #737373;
@@ -203,6 +248,7 @@
   --color-accent:         #2dd4bf;
   --color-accent-hover:   #5eead4;
   --color-accent-bg:      #134e4a;
+  --color-primary-foreground: #04211d;  /* dark on teal accent (AA) */
   --color-bull:           #34d399;
   --color-bear:           #fb7185;
   --color-neutral:        #4ade80;

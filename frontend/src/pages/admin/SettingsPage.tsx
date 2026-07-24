@@ -7,6 +7,7 @@ import { Slider } from '@/components/ui/slider'
 
 /* ── Theme card data ────────────────────────────────────────────────────── */
 const THEMES: { id: Theme; label: string; desc: string; bg: string; accent: string }[] = [
+  { id: 'slate',    label: 'Slate',    desc: 'Slate-gray · blue',   bg: '#0b1220', accent: '#2563eb' },
   { id: 'midnight', label: 'Midnight', desc: 'Deep navy · cyan',    bg: '#0a0f1c', accent: '#06b6d4' },
   { id: 'carbon',   label: 'Carbon',   desc: 'Pure black · amber',  bg: '#000000', accent: '#f59e0b' },
   { id: 'ocean',    label: 'Ocean',    desc: 'Dark teal · mint',    bg: '#0c1c1f', accent: '#2dd4bf' },

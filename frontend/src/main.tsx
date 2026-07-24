@@ -15,8 +15,8 @@ import { router } from '@/router'
     const el = document.documentElement
 
     // Theme — map old dark/light to new names for backward compat
-    let theme = localStorage.getItem('ui-theme') ?? 'midnight'
-    if (theme === 'dark') theme = 'midnight'
+    let theme = localStorage.getItem('ui-theme') ?? 'slate'
+    if (theme === 'dark') theme = 'slate'
     if (theme === 'light') theme = 'daybreak'
     el.setAttribute('data-theme', theme)
 
