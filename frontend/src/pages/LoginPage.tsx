@@ -62,7 +62,7 @@ export function LoginPage() {
           <div className="flex flex-col items-center mb-8">
             <div
               className="w-12 h-12 rounded-xl flex items-center justify-center mb-4"
-              style={{ background: 'linear-gradient(135deg, var(--color-accent) 0%, #1e3a8a 100%)' }}
+              style={{ background: 'linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-bg) 100%)' }}
             >
               <TrendingUp size={22} className="text-white" />
             </div>
@@ -129,7 +129,7 @@ export function LoginPage() {
               type="submit"
               disabled={loading}
               className="w-full flex items-center justify-center gap-2 h-9 rounded-md text-sm font-semibold transition-opacity disabled:opacity-60 mt-2"
-              style={{ backgroundColor: 'var(--color-accent)', color: '#fff' }}
+              style={{ backgroundColor: 'var(--color-accent)', color: 'var(--color-primary-foreground)' }}
             >
               {loading && <Loader2 size={14} className="animate-spin" />}
               {loading ? 'Signing in…' : 'Sign in'}

@@ -19,6 +19,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { TagPicker } from '@/features/categories/TagPicker'
 import { CandlestickChart, type OhlcvBar } from '@/components/charts/CandlestickChart'
 import { useLiveQuotes } from '@/hooks/useLiveQuotes'
+import { formatINR, formatInt } from '@/lib/format'
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -171,7 +172,7 @@ export function StockDetailPage() {
               <h1 className="text-2xl font-bold font-mono text-(--color-accent)">{stock.symbol}</h1>
               {ltp && (
                 <span className="text-lg font-semibold font-mono" style={{ color: 'var(--color-bull)' }}>
-                  ₹{ltp.ltp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ₹{formatINR(ltp.ltp)}
                 </span>
               )}
               {ltp && (
@@ -184,10 +185,10 @@ export function StockDetailPage() {
           </div>
         </div>
         <div className="flex gap-1.5 flex-wrap justify-end">
-          {stock.is_nifty50 && <Badge className="bg-blue-950 text-blue-300 border-blue-800 border">Nifty 50</Badge>}
-          {stock.is_banknifty && <Badge className="bg-purple-950 text-purple-300 border-purple-800 border">Bank Nifty</Badge>}
-          {stock.is_finnifty && <Badge className="bg-teal-950 text-teal-300 border-teal-800 border">Fin Nifty</Badge>}
-          {stock.is_fno && <Badge className="bg-amber-950 text-amber-300 border-amber-800 border">F&amp;O</Badge>}
+          {stock.is_nifty50 && <Badge className="badge-n50">Nifty 50</Badge>}
+          {stock.is_banknifty && <Badge className="badge-bn">Bank Nifty</Badge>}
+          {stock.is_finnifty && <Badge className="badge-fn">Fin Nifty</Badge>}
+          {stock.is_fno && <Badge className="badge-fno">F&amp;O</Badge>}
         </div>
       </div>
 
@@ -219,7 +220,7 @@ export function StockDetailPage() {
                   className="px-3 py-1 text-xs font-medium transition-colors"
                   style={{
                     background: timeframe === tf ? 'var(--color-accent)' : 'var(--color-surface-3)',
-                    color: timeframe === tf ? '#fff' : 'var(--color-text-muted)',
+                    color: timeframe === tf ? 'var(--color-primary-foreground)' : 'var(--color-text-muted)',
                   }}
                 >
                   {tf}
@@ -229,9 +230,9 @@ export function StockDetailPage() {
 
             <div className="flex items-center gap-2 text-xs text-(--color-text-muted)">
               {[
-                { label: 'EMA 20', show: showEma20, set: setShowEma20, color: '#f59e0b' },
-                { label: 'EMA 50', show: showEma50, set: setShowEma50, color: '#8b5cf6' },
-                { label: 'EMA 200', show: showEma200, set: setShowEma200, color: '#ec4899' },
+                { label: 'EMA 20', show: showEma20, set: setShowEma20, color: 'var(--color-warning)' },
+                { label: 'EMA 50', show: showEma50, set: setShowEma50, color: 'var(--color-info)' },
+                { label: 'EMA 200', show: showEma200, set: setShowEma200, color: 'var(--color-accent)' },
               ].map(({ label, show, set, color }) => (
                 <button
                   key={label}
@@ -240,7 +241,7 @@ export function StockDetailPage() {
                   style={{
                     borderColor: show ? color : 'var(--color-border)',
                     color: show ? color : 'var(--color-text-muted)',
-                    background: show ? `${color}15` : 'transparent',
+                    background: show ? `color-mix(in srgb, ${color} 8%, transparent)` : 'transparent',
                   }}
                 >
                   <span className="w-2 h-2 rounded-full" style={{ background: color }} />
@@ -270,7 +271,7 @@ export function StockDetailPage() {
                     <YAxis hide />
                     <ReTooltip
                       contentStyle={{ background: 'var(--color-surface-3)', border: '1px solid var(--color-border)', borderRadius: '4px', fontSize: '10px' }}
-                      formatter={(v) => [Number(v).toLocaleString('en-IN'), 'Volume']}
+                      formatter={(v) => [formatInt(Number(v)), 'Volume']}
                       labelFormatter={(l) => String(l ?? '')}
                     />
                     <Bar dataKey="volume" fill="var(--color-accent)" opacity={0.6} radius={[1, 1, 0, 0]} />
@@ -312,9 +313,9 @@ export function StockDetailPage() {
               <DetailRow label="Industry" value={stock.industry} />
               <DetailRow
                 label="Market Cap (Cr)"
-                value={stock.market_cap_cr ? `₹${Number(stock.market_cap_cr).toLocaleString('en-IN')}` : '—'}
+                value={stock.market_cap_cr ? `₹${formatInt(Number(stock.market_cap_cr))}` : '—'}
               />
-              <DetailRow label="Lot Size" value={stock.lot_size > 1 ? stock.lot_size.toLocaleString() : '1 (equity)'} />
+              <DetailRow label="Lot Size" value={stock.lot_size > 1 ? formatInt(stock.lot_size) : '1 (equity)'} />
               <DetailRow label="Tick Size" value={`₹${stock.tick_size}`} />
               <DetailRow label="Listed On" value={stock.listed_on} />
             </div>
@@ -347,7 +348,7 @@ export function StockDetailPage() {
                         <span
                           className="px-2 py-0.5 rounded-full text-xs font-bold"
                           style={{
-                            background: sig.direction === 'BUY' ? 'rgba(22,163,74,0.15)' : 'rgba(220,38,38,0.15)',
+                            background: sig.direction === 'BUY' ? 'var(--color-profit-bg)' : 'var(--color-loss-bg)',
                             color: sig.direction === 'BUY' ? 'var(--color-bull)' : 'var(--color-bear)',
                           }}
                         >
@@ -358,10 +359,10 @@ export function StockDetailPage() {
                       <td className="px-3 py-2 font-mono font-bold" style={{ color: sig.confidence_pct >= 80 ? 'var(--color-bull)' : 'var(--color-neutral)' }}>
                         {sig.confidence_pct}%
                       </td>
-                      <td className="px-3 py-2 font-mono">₹{parseFloat(sig.entry_price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      <td className="px-3 py-2 font-mono" style={{ color: 'var(--color-bear)' }}>₹{parseFloat(sig.stop_loss).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      <td className="px-3 py-2 font-mono" style={{ color: 'var(--color-bull)' }}>₹{parseFloat(sig.take_profit).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      <td className="px-3 py-2 font-mono">{sig.suggested_qty.toLocaleString()}</td>
+                      <td className="px-3 py-2 font-mono">₹{formatINR(parseFloat(sig.entry_price))}</td>
+                      <td className="px-3 py-2 font-mono" style={{ color: 'var(--color-bear)' }}>₹{formatINR(parseFloat(sig.stop_loss))}</td>
+                      <td className="px-3 py-2 font-mono" style={{ color: 'var(--color-bull)' }}>₹{formatINR(parseFloat(sig.take_profit))}</td>
+                      <td className="px-3 py-2 font-mono">{formatInt(sig.suggested_qty)}</td>
                       <td className="px-3 py-2 text-(--color-text-muted) whitespace-nowrap">
                         {new Date(sig.validity_until).toLocaleString('en-IN', { timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })}
                       </td>
@@ -435,9 +436,9 @@ export function StockDetailPage() {
                           {deal.transaction}
                         </span>
                       </td>
-                      <td className="px-3 py-2 font-mono">{deal.quantity.toLocaleString('en-IN')}</td>
-                      <td className="px-3 py-2 font-mono">₹{parseFloat(deal.price).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
-                      <td className="px-3 py-2 font-mono">{parseFloat(deal.value_cr).toLocaleString('en-IN', { minimumFractionDigits: 2 })}</td>
+                      <td className="px-3 py-2 font-mono">{formatInt(deal.quantity)}</td>
+                      <td className="px-3 py-2 font-mono">₹{formatINR(parseFloat(deal.price))}</td>
+                      <td className="px-3 py-2 font-mono">{formatINR(parseFloat(deal.value_cr))}</td>
                     </tr>
                   ))}
                 </tbody>

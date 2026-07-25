@@ -15,6 +15,7 @@ import { Pagination } from '@/components/ui/pagination'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { useToast } from '@/hooks/useToast'
 import { useLiveQuotes } from '@/hooks/useLiveQuotes'
+import { formatINR } from '@/lib/format'
 import type { ApiError } from '@/lib/api/client'
 import type { CategoryWithCount } from '@/lib/api/categories'
 
@@ -131,7 +132,7 @@ function CategoryDrawer({ cat, open, onClose }: CategoryDrawerProps) {
                   </div>
                   {ltp ? (
                     <span className="font-mono text-sm font-semibold" style={{ color: 'var(--color-bull)' }}>
-                      ₹{ltp.ltp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                      ₹{formatINR(ltp.ltp)}
                     </span>
                   ) : (
                     <span className="text-xs text-(--color-text-muted)">—</span>

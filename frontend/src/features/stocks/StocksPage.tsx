@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
 import { seededSpark } from '@/lib/sparkline'
+import { formatINR, formatInt } from '@/lib/format'
 
 type SortField = 'symbol' | 'company_name' | 'sector' | 'lot_size' | 'market_cap_cr'
 type ColKey = 'num' | 'symbol' | 'company_name' | 'sector' | 'market_cap_cr' | 'ltp' | 'indices' | 'lot_size' | 'isin' | 'sparkline' | 'actions'
@@ -214,7 +215,7 @@ export function StocksPage() {
         <div>
           <h1 className="text-xl font-semibold text-(--color-text)">Stocks</h1>
           <p className="text-sm text-(--color-text-muted)">
-            {total > 0 ? `${total.toLocaleString()} stocks` : isLoading ? 'Loading…' : '0 stocks'}
+            {total > 0 ? `${formatInt(total)} stocks` : isLoading ? 'Loading…' : '0 stocks'}
           </p>
         </div>
         <Link to="/screener" className="btn btn-primary text-sm">Open Screener</Link>
@@ -481,7 +482,7 @@ export function StocksPage() {
                   {showCol('ltp') && (
                     <TableCell className={cn('text-right font-mono text-sm w-24', rowPy)}>
                       {ltp !== undefined
-                        ? <span className="text-(--color-text)">₹{ltp.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                        ? <span className="text-(--color-text)">₹{formatINR(ltp)}</span>
                         : <span className="text-(--color-text-muted)">—</span>
                       }
                     </TableCell>
@@ -498,7 +499,7 @@ export function StocksPage() {
                   )}
                   {showCol('lot_size') && (
                     <TableCell className={cn('text-right font-mono text-sm text-(--color-text-muted) w-16', rowPy)}>
-                      {stock.lot_size > 1 ? stock.lot_size.toLocaleString() : '—'}
+                      {stock.lot_size > 1 ? formatInt(stock.lot_size) : '—'}
                     </TableCell>
                   )}
                   {showCol('isin') && (
