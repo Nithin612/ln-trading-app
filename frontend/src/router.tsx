@@ -21,6 +21,7 @@ import { JournalPage } from '@/features/journal/JournalPage'
 import { PortfolioPage } from '@/features/portfolio/PortfolioPage'
 import { StylePage } from '@/features/styles/StylePage'
 import { GoLivePage } from '@/features/golive/GoLivePage'
+import { OutcomesPage } from '@/features/analytics/OutcomesPage'
 
 export const router = createBrowserRouter([
   {
@@ -55,6 +56,7 @@ export const router = createBrowserRouter([
       { path: 'strategy',              element: <StrategyLabPage /> },
       { path: 'journal',               element: <JournalPage /> },
       { path: 'portfolio',             element: <PortfolioPage /> },
+      { path: 'analytics/outcomes',    element: <OutcomesPage /> },
       {
         path: 'broker/kite',
         element: <RequireAdmin><KiteConnectPage /></RequireAdmin>,

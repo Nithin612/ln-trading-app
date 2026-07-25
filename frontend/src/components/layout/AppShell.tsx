@@ -309,6 +309,7 @@ function getPageTitle(pathname: string): string {
   if (pathname === '/admin/users')    return 'User Management'
   if (pathname === '/admin/settings') return 'Appearance Settings'
   if (pathname === '/go-live')        return 'Go Live'
+  if (pathname === '/analytics/outcomes') return 'Outcome Analytics'
   if (pathname.startsWith('/styles/')) {
     const labels: Record<string, string> = {
       intraday: 'Intraday', swing: 'Swing', fno: 'F&O', investment: 'Investment',

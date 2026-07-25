@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from app.api.v1 import (
+    analytics,
     auth,
     broker,
     calendar,
@@ -30,6 +31,7 @@ api_router.include_router(market_data.router)
 api_router.include_router(calendar.router)
 api_router.include_router(signals.router)
 api_router.include_router(suggestions.router)
+api_router.include_router(analytics.router)
 api_router.include_router(filings.router)
 api_router.include_router(broker.router)
 api_router.include_router(trading.router)
