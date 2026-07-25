@@ -1,9 +1,13 @@
 import { useState } from 'react'
-import { createPortal } from 'react-dom'
 import { useMutation } from '@tanstack/react-query'
 import { useAuth } from '@/hooks/useAuth'
 import { tradingApi, type PositionOut } from '@/lib/api/trading'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog'
 import { useToast } from '@/hooks/useToast'
 import { formatINR } from '@/lib/format'
 
@@ -31,43 +35,33 @@ export function UpdateSlDialog({ position, onClose, onUpdated }: Props) {
     ? `Must be below entry ₹${formatINR(parseFloat(position.avg_entry_price))}`
     : `Must be above entry ₹${formatINR(parseFloat(position.avg_entry_price))}`
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.6)' }}
-      onClick={onClose}
-    >
-      <div
-        className="bg-(--color-surface-2) border border-(--color-border) rounded-lg p-6 w-full max-w-sm shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-base font-semibold text-(--color-text) mb-1">Update Stop-Loss</h2>
-        <p className="text-xs text-(--color-text-muted) mb-4">
-          {position.symbol} {position.side} · {hint}
-        </p>
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Update Stop-Loss</DialogTitle>
+          <DialogDescription>{position.symbol} {position.side} · {hint}</DialogDescription>
+        </DialogHeader>
 
-        <label className="block text-xs text-(--color-text-muted) mb-1">New Stop-Loss Price</label>
-        <input
-          type="number"
-          step="0.01"
-          value={newSl}
-          onChange={(e) => setNewSl(e.target.value)}
-          className="w-full bg-(--color-surface-3) border border-(--color-border) rounded px-3 py-2 text-sm text-(--color-text) font-mono focus:outline-none focus:border-(--color-accent) mb-4"
-        />
+        <div className="grid gap-1.5">
+          <Label htmlFor="new-sl">New stop-loss price</Label>
+          <Input
+            id="new-sl"
+            type="number"
+            step="0.01"
+            value={newSl}
+            onChange={(e) => setNewSl(e.target.value)}
+            className="font-mono"
+          />
+        </div>
 
-        <div className="flex gap-2 justify-end">
-          <Button variant="ghost" onClick={onClose} disabled={mutation.isPending}>
-            Cancel
-          </Button>
-          <Button
-            onClick={() => mutation.mutate(newSl)}
-            disabled={!newSl || mutation.isPending}
-          >
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={mutation.isPending}>Cancel</Button>
+          <Button onClick={() => mutation.mutate(newSl)} disabled={!newSl || mutation.isPending}>
             {mutation.isPending ? 'Saving…' : 'Update SL'}
           </Button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }

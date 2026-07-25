@@ -1,7 +1,11 @@
 import { useState } from 'react'
-import { createPortal } from 'react-dom'
 import type { PositionOut } from '@/lib/api/trading'
 import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from '@/components/ui/dialog'
 import { formatInt } from '@/lib/format'
 
 interface Props {
@@ -14,37 +18,32 @@ interface Props {
 export function ClosePositionDialog({ position, isLoading, onConfirm, onClose }: Props) {
   const [exitPrice, setExitPrice] = useState('')
 
-  return createPortal(
-    <div
-      className="fixed inset-0 z-50 flex items-center justify-center"
-      style={{ background: 'rgba(0,0,0,0.6)' }}
-      onClick={onClose}
-    >
-      <div
-        className="bg-(--color-surface-2) border border-(--color-border) rounded-lg p-6 w-full max-w-sm shadow-2xl"
-        onClick={(e) => e.stopPropagation()}
-      >
-        <h2 className="text-base font-semibold text-(--color-text) mb-1">Close Position</h2>
-        <p className="text-sm text-(--color-text-muted) mb-4">
-          Close <span className="font-mono font-bold text-(--color-accent)">{position.symbol}</span> {position.side} × {formatInt(position.quantity)}
-        </p>
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Close Position</DialogTitle>
+          <DialogDescription>
+            Close <span className="font-mono font-bold text-(--color-accent)">{position.symbol}</span>{' '}
+            {position.side} × {formatInt(position.quantity)}
+          </DialogDescription>
+        </DialogHeader>
 
-        <label className="block text-xs text-(--color-text-muted) mb-1">
-          Exit Price (leave blank to use current market price)
-        </label>
-        <input
-          type="number"
-          step="0.01"
-          value={exitPrice}
-          onChange={(e) => setExitPrice(e.target.value)}
-          placeholder="e.g. 520.00"
-          className="w-full bg-(--color-surface-3) border border-(--color-border) rounded px-3 py-2 text-sm text-(--color-text) font-mono focus:outline-none focus:border-(--color-accent) mb-4"
-        />
+        <div className="grid gap-1.5">
+          <Label htmlFor="exit-price">Exit price (leave blank to use current market price)</Label>
+          <Input
+            id="exit-price"
+            type="number"
+            step="0.01"
+            value={exitPrice}
+            onChange={(e) => setExitPrice(e.target.value)}
+            placeholder="e.g. 520.00"
+            className="font-mono"
+          />
+        </div>
 
-        <div className="flex gap-2 justify-end">
-          <Button variant="ghost" onClick={onClose} disabled={isLoading}>
-            Cancel
-          </Button>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={isLoading}>Cancel</Button>
           <Button
             variant="destructive"
             onClick={() => onConfirm(exitPrice || undefined)}
@@ -52,9 +51,8 @@ export function ClosePositionDialog({ position, isLoading, onConfirm, onClose }:
           >
             {isLoading ? 'Closing…' : 'Close Position'}
           </Button>
-        </div>
-      </div>
-    </div>,
-    document.body,
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   )
 }
