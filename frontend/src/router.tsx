@@ -20,6 +20,7 @@ import { StrategyLabPage } from '@/features/strategy/StrategyLabPage'
 import { JournalPage } from '@/features/journal/JournalPage'
 import { PortfolioPage } from '@/features/portfolio/PortfolioPage'
 import { StylePage } from '@/features/styles/StylePage'
+import { GoLivePage } from '@/features/golive/GoLivePage'
 
 export const router = createBrowserRouter([
   {
@@ -50,6 +51,7 @@ export const router = createBrowserRouter([
       { path: 'profile',               element: <ProfilePage /> },
       { path: 'trading/positions',     element: <PositionsPage /> },
       { path: 'trading/history',       element: <TradeHistoryPage /> },
+      { path: 'go-live',               element: <GoLivePage /> },
       { path: 'strategy',              element: <StrategyLabPage /> },
       { path: 'journal',               element: <JournalPage /> },
       { path: 'portfolio',             element: <PortfolioPage /> },

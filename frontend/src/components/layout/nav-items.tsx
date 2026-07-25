@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, TrendingUp, SlidersHorizontal, ListChecks, Tags, Building2,
   FileText, Briefcase, History, FlaskConical, BookOpen, Wallet, Zap, Users, Settings,
-  Activity, Layers, Landmark,
+  Activity, Layers, Landmark, Rocket,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -45,6 +45,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/trading/positions', icon: <Briefcase size={18} />, label: 'Positions' },
       { to: '/trading/history',   icon: <History size={18} />,   label: 'Trade History' },
+      { to: '/go-live',           icon: <Rocket size={18} />,    label: 'Go Live' },
     ],
   },
   {

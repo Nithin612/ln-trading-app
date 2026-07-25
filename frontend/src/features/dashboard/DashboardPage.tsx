@@ -12,6 +12,7 @@ import { SignalDetailModal } from './SignalDetailModal'
 import { FilingsPanel } from './FilingsPanel'
 import { ProvisionalPanel } from './ProvisionalPanel'
 import { useLiveQuotes } from '@/hooks/useLiveQuotes'
+import { useTradingHaltStore } from '@/store/tradingHaltStore'
 import { Skeleton, SkeletonCard } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Sparkline } from '@/components/ui/sparkline'
@@ -102,6 +103,7 @@ export function DashboardPage() {
   const [minConfidence, setMinConfidence] = useState(70)
   const [segment, setSegment] = useState('ALL')
   const [tradingSignalId, setTradingSignalId] = useState<string | null>(null)
+  const halted = useTradingHaltStore((s) => s.halted)
 
   const paperTradeMutation = useMutation({
     mutationFn: ({ signalId, side }: { signalId: string; side: 'BUY' | 'SELL' }) =>
@@ -121,6 +123,7 @@ export function DashboardPage() {
 
   function handlePaperTrade(e: React.MouseEvent, sig: SignalOut) {
     e.stopPropagation()
+    if (halted) { toast.error('Trading is halted — release the kill switch on Go Live.'); return }
     // A bearish signal must open a SHORT, not a wrong-way LONG.
     const side = sig.direction === 'SELL' ? 'SELL' : 'BUY'
     setTradingSignalId(sig.id)
@@ -410,7 +413,7 @@ export function DashboardPage() {
                         <td className="px-3 py-2 text-right">
                           <button
                             onClick={(e) => handlePaperTrade(e, sig)}
-                            disabled={tradingSignalId === sig.id}
+                            disabled={tradingSignalId === sig.id || halted}
                             className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold transition-colors disabled:opacity-50 border"
                             style={{
                               color: sig.direction === 'SELL' ? 'var(--color-bear)' : 'var(--color-bull)',

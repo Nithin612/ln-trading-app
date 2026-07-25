@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/useAuth'
 import { useKiteStatus } from '@/hooks/useKiteStatus'
 import { useThemeStore } from '@/store/themeStore'
 import { useUiPrefsStore } from '@/store/uiPrefsStore'
+import { useTradingHaltStore } from '@/store/tradingHaltStore'
 import { ProfileDropdown } from '@/components/ui/profile-dropdown'
 import { AlertBell } from '@/features/alerts/AlertBell'
 import { SidebarNav } from './Sidebar'
@@ -81,6 +82,7 @@ export function AppShell() {
   const kite = useKiteStatus()
   const location = useLocation()
   const { theme, toggle: toggleTheme } = useThemeStore()
+  const halted = useTradingHaltStore((s) => s.halted)
 
   const [collapsed, setCollapsed] = useState(() => {
     try { return localStorage.getItem(SIDEBAR_KEY) === 'true' } catch { return false }
@@ -256,6 +258,28 @@ export function AppShell() {
             </div>
           )}
 
+          {/* ── Trading-halt banner (kill switch) ── */}
+          {halted && (
+            <div
+              className="flex-shrink-0 flex items-center justify-between px-5 py-1.5 text-xs border-b"
+              style={{ backgroundColor: 'var(--color-loss-bg)', borderColor: 'var(--color-loss)' }}
+            >
+              <div className="flex items-center gap-2">
+                <Circle size={6} className="text-(--color-loss) fill-(--color-loss)" />
+                <span style={{ color: 'var(--color-loss)' }}>
+                  Trading is HALTED — new paper orders are blocked.
+                </span>
+              </div>
+              <Link
+                to="/go-live"
+                className="font-semibold text-xs hover:underline ml-4 flex-shrink-0"
+                style={{ color: 'var(--color-loss)' }}
+              >
+                Manage →
+              </Link>
+            </div>
+          )}
+
           {/* ── Page content ── */}
           <main className="flex-1 overflow-y-auto p-5">
             <Outlet />
@@ -284,6 +308,7 @@ function getPageTitle(pathname: string): string {
   if (pathname === '/broker/kite')    return 'Kite Connect'
   if (pathname === '/admin/users')    return 'User Management'
   if (pathname === '/admin/settings') return 'Appearance Settings'
+  if (pathname === '/go-live')        return 'Go Live'
   if (pathname.startsWith('/styles/')) {
     const labels: Record<string, string> = {
       intraday: 'Intraday', swing: 'Swing', fno: 'F&O', investment: 'Investment',

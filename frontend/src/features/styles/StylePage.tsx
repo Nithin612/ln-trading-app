@@ -5,6 +5,7 @@ import { Activity, TrendingUp, Layers, Landmark } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { suggestionsApi, PROFILE_STYLES, type ProfileStyle } from '@/lib/api/suggestions'
 import { tradingApi } from '@/lib/api/trading'
+import { useTradingHaltStore } from '@/store/tradingHaltStore'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -44,6 +45,7 @@ export function StylePage() {
   const toast = useToast()
   const qc = useQueryClient()
   const [tradingId, setTradingId] = useState<string | null>(null)
+  const halted = useTradingHaltStore((s) => s.halted)
 
   const valid = isStyle(style)
 
@@ -152,8 +154,11 @@ export function StylePage() {
                       <Button
                         variant="outline"
                         size="xs"
-                        disabled={tradingId === s.id}
-                        onClick={() => { setTradingId(s.id); paperTrade.mutate({ id: s.id, dir: s.direction }) }}
+                        disabled={tradingId === s.id || halted}
+                        onClick={() => {
+                          if (halted) { toast.error('Trading is halted — release the kill switch on Go Live.'); return }
+                          setTradingId(s.id); paperTrade.mutate({ id: s.id, dir: s.direction })
+                        }}
                         style={{ color: s.direction === 'BUY' ? 'var(--color-bull)' : 'var(--color-bear)' }}
                         title={s.direction === 'BUY' ? 'Paper Buy (open long)' : 'Paper Sell (open short)'}
                       >
