@@ -19,6 +19,7 @@ import { TradeHistoryPage } from '@/features/trading/TradeHistoryPage'
 import { StrategyLabPage } from '@/features/strategy/StrategyLabPage'
 import { JournalPage } from '@/features/journal/JournalPage'
 import { PortfolioPage } from '@/features/portfolio/PortfolioPage'
+import { StylePage } from '@/features/styles/StylePage'
 
 export const router = createBrowserRouter([
   {
@@ -38,6 +39,7 @@ export const router = createBrowserRouter([
         element: <Navigate to="/dashboard" replace />,
       },
       { path: 'dashboard',             element: <DashboardPage /> },
+      { path: 'styles/:style',         element: <StylePage /> },
       { path: 'stocks',                element: <StocksPage /> },
       { path: 'stocks/:id',            element: <StockDetailPage /> },
       { path: 'screener',              element: <ScreenerPage /> },

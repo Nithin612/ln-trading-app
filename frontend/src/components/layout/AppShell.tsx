@@ -284,5 +284,12 @@ function getPageTitle(pathname: string): string {
   if (pathname === '/broker/kite')    return 'Kite Connect'
   if (pathname === '/admin/users')    return 'User Management'
   if (pathname === '/admin/settings') return 'Appearance Settings'
+  if (pathname.startsWith('/styles/')) {
+    const labels: Record<string, string> = {
+      intraday: 'Intraday', swing: 'Swing', fno: 'F&O', investment: 'Investment',
+    }
+    const label = labels[pathname.split('/')[2] ?? '']
+    return label ? `${label} Suggestions` : 'Suggestions'
+  }
   return 'Trading Platform'
 }

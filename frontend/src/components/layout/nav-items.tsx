@@ -1,6 +1,7 @@
 import {
   LayoutDashboard, TrendingUp, SlidersHorizontal, ListChecks, Tags, Building2,
   FileText, Briefcase, History, FlaskConical, BookOpen, Wallet, Zap, Users, Settings,
+  Activity, Layers, Landmark,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -28,6 +29,15 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: '/categories',     icon: <Tags size={18} />,              label: 'Categories' },
       { to: '/market/fii-dii', icon: <Building2 size={18} />,         label: 'FII / DII' },
       { to: '/filings',        icon: <FileText size={18} />,          label: 'Filings' },
+    ],
+  },
+  {
+    title: 'Styles',
+    items: [
+      { to: '/styles/intraday',   icon: <Activity size={18} />,   label: 'Intraday' },
+      { to: '/styles/swing',      icon: <TrendingUp size={18} />, label: 'Swing' },
+      { to: '/styles/fno',        icon: <Layers size={18} />,     label: 'F&O' },
+      { to: '/styles/investment', icon: <Landmark size={18} />,   label: 'Investment' },
     ],
   },
   {
