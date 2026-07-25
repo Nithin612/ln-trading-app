@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { memo, useCallback, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { Copy, TrendingUp, TrendingDown, Minus, Activity, ShoppingCart } from 'lucide-react'
@@ -67,6 +67,82 @@ function DirectionBadge({ dir }: { dir: string }) {
   )
 }
 
+/** Memoized signal row — only re-renders when its own `ltp`/state changes, so a
+    per-tick live-quote update to one symbol doesn't re-render the whole table. */
+const SignalRow = memo(function SignalRow({
+  sig, ltp, isTrading, halted, onSelect, onTrade, onCopy,
+}: {
+  sig: SignalOut
+  ltp: number | undefined
+  isTrading: boolean
+  halted: boolean
+  onSelect: (sig: SignalOut) => void
+  onTrade: (e: React.MouseEvent, sig: SignalOut) => void
+  onCopy: (sig: SignalOut) => void
+}) {
+  const isSell = sig.direction === 'SELL'
+  const validUntil = new Date(sig.validity_until).toLocaleString('en-IN', {
+    timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
+  })
+  return (
+    <tr
+      onClick={() => onSelect(sig)}
+      className="border-b border-(--color-border) cursor-pointer transition-colors hover:bg-(--color-surface-hover)"
+    >
+      <td className="px-3 py-2">
+        <Link
+          to={`/stocks/${sig.stock_id}`}
+          onClick={(e) => e.stopPropagation()}
+          className="font-mono font-bold text-(--color-accent) hover:text-(--color-accent-hover) text-sm"
+          style={{ textDecoration: 'none' }}
+        >
+          {sig.symbol}
+        </Link>
+      </td>
+      <td className="px-3 py-2" style={{ textAlign: 'right' }}>
+        <div className="flex justify-end">
+          <Sparkline data={generateFakeSpark(sig.entry_price, sig.stop_loss, sig.take_profit)} width={60} height={24} />
+        </div>
+      </td>
+      <td className="px-3 py-2 text-right font-mono text-(--color-text)">
+        <PriceCell value={ltp} format={formatCurrency} />
+      </td>
+      <td className="px-3 py-2 text-right"><DirectionBadge dir={sig.direction} /></td>
+      <td className="px-3 py-2 text-right text-(--color-text-muted)">{sig.classification}</td>
+      <td className="px-3 py-2 text-right"><ConfidenceBadge pct={sig.confidence_pct} /></td>
+      <td className="px-3 py-2 text-right font-mono text-(--color-text)">₹{pctFmt(sig.entry_price)}</td>
+      <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bear)' }}>₹{pctFmt(sig.stop_loss)}</td>
+      <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bull)' }}>₹{pctFmt(sig.take_profit)}</td>
+      <td className="px-3 py-2 text-right font-mono">{formatInt(sig.suggested_qty)}</td>
+      <td className="px-3 py-2 text-right text-(--color-text-muted) whitespace-nowrap">{validUntil}</td>
+      <td className="px-3 py-2 text-right">
+        <button
+          onClick={(e) => { e.stopPropagation(); onCopy(sig) }}
+          className="p-1 rounded text-(--color-text-muted) hover:text-(--color-text) hover:bg-(--color-surface-3) transition-colors"
+          title="Copy signal"
+        >
+          <Copy size={12} />
+        </button>
+      </td>
+      <td className="px-3 py-2 text-right">
+        <button
+          onClick={(e) => onTrade(e, sig)}
+          disabled={isTrading || halted}
+          className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold transition-colors disabled:opacity-50 border"
+          style={{
+            color: isSell ? 'var(--color-bear)' : 'var(--color-bull)',
+            borderColor: isSell ? 'var(--color-bear)' : 'var(--color-bull)',
+          }}
+          title={isSell ? 'Paper Sell (open short)' : 'Paper Buy (open long)'}
+        >
+          <ShoppingCart size={10} />
+          {isTrading ? '…' : isSell ? 'Sell' : 'Buy'}
+        </button>
+      </td>
+    </tr>
+  )
+})
+
 interface StatCardProps {
   label: string
   value: React.ReactNode
@@ -105,7 +181,7 @@ export function DashboardPage() {
   const [tradingSignalId, setTradingSignalId] = useState<string | null>(null)
   const halted = useTradingHaltStore((s) => s.halted)
 
-  const paperTradeMutation = useMutation({
+  const { mutate: placePaperOrder } = useMutation({
     mutationFn: ({ signalId, side }: { signalId: string; side: 'BUY' | 'SELL' }) =>
       tradingApi.placeOrder({ signal_id: signalId, side }, accessToken!),
     onSuccess: (order) => {
@@ -121,14 +197,14 @@ export function DashboardPage() {
     },
   })
 
-  function handlePaperTrade(e: React.MouseEvent, sig: SignalOut) {
+  const handlePaperTrade = useCallback((e: React.MouseEvent, sig: SignalOut) => {
     e.stopPropagation()
     if (halted) { toast.error('Trading is halted — release the kill switch on Go Live.'); return }
     // A bearish signal must open a SHORT, not a wrong-way LONG.
     const side = sig.direction === 'SELL' ? 'SELL' : 'BUY'
     setTradingSignalId(sig.id)
-    paperTradeMutation.mutate({ signalId: sig.id, side })
-  }
+    placePaperOrder({ signalId: sig.id, side })
+  }, [halted, toast, placePaperOrder])
 
   const { data: signalData, isLoading: signalsLoading } = useQuery({
     queryKey: ['signals-active', direction, classification, minConfidence],
@@ -197,10 +273,10 @@ export function DashboardPage() {
     return signals // CASH — no good way to filter without stock metadata, show all
   }, [signals, segment])
 
-  function copySignal(sig: SignalOut) {
+  const copySignal = useCallback((sig: SignalOut) => {
     const text = `${sig.symbol} ${sig.direction} @ ₹${pctFmt(sig.entry_price)} | SL ₹${pctFmt(sig.stop_loss)} | TP ₹${pctFmt(sig.take_profit)} | Conf: ${sig.confidence_pct}% | Qty: ${sig.suggested_qty}`
     void navigator.clipboard.writeText(text).then(() => toast.success('Signal copied to clipboard'))
-  }
+  }, [toast])
 
   return (
     <div className="flex flex-col gap-4">
@@ -356,80 +432,18 @@ export function DashboardPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filteredSignals.map((sig) => {
-                    const validUntil = new Date(sig.validity_until).toLocaleString('en-IN', {
-                      timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
-                    })
-                    const ltp = liveQuotes[sig.symbol]
-                    return (
-                      <tr
-                        key={sig.id}
-                        onClick={() => setSelectedSignal(sig)}
-                        className="border-b border-(--color-border) cursor-pointer transition-colors hover:bg-(--color-surface-hover)"
-                      >
-                        <td className="px-3 py-2">
-                          <Link
-                            to={`/stocks/${sig.stock_id}`}
-                            onClick={(e) => e.stopPropagation()}
-                            className="font-mono font-bold text-(--color-accent) hover:text-(--color-accent-hover) text-sm"
-                            style={{ textDecoration: 'none' }}
-                          >
-                            {sig.symbol}
-                          </Link>
-                        </td>
-                        <td className="px-3 py-2" style={{ textAlign: 'right' }}>
-                          {/* sparkline placeholder — real data needs historical prices per symbol */}
-                          <div className="flex justify-end">
-                            <Sparkline
-                              data={generateFakeSpark(sig.entry_price, sig.stop_loss, sig.take_profit)}
-                              width={60}
-                              height={24}
-                            />
-                          </div>
-                        </td>
-                        <td className="px-3 py-2 text-right font-mono text-(--color-text)">
-                          {/* Live LTP: neutral text, 250ms directional flash on tick
-                              (PriceCell) — never a persistent bull-green (was misleading
-                              on down-ticks). */}
-                          <PriceCell value={ltp?.ltp} format={formatCurrency} />
-                        </td>
-                        <td className="px-3 py-2 text-right"><DirectionBadge dir={sig.direction} /></td>
-                        <td className="px-3 py-2 text-right text-(--color-text-muted)">{sig.classification}</td>
-                        <td className="px-3 py-2 text-right"><ConfidenceBadge pct={sig.confidence_pct} /></td>
-                        <td className="px-3 py-2 text-right font-mono text-(--color-text)">₹{pctFmt(sig.entry_price)}</td>
-                        <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bear)' }}>₹{pctFmt(sig.stop_loss)}</td>
-                        <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bull)' }}>₹{pctFmt(sig.take_profit)}</td>
-                        <td className="px-3 py-2 text-right font-mono">{formatInt(sig.suggested_qty)}</td>
-                        <td className="px-3 py-2 text-right text-(--color-text-muted) whitespace-nowrap">{validUntil}</td>
-                        <td className="px-3 py-2 text-right">
-                          <button
-                            onClick={(e) => { e.stopPropagation(); copySignal(sig) }}
-                            className="p-1 rounded text-(--color-text-muted) hover:text-(--color-text) hover:bg-(--color-surface-3) transition-colors"
-                            title="Copy signal"
-                          >
-                            <Copy size={12} />
-                          </button>
-                        </td>
-                        <td className="px-3 py-2 text-right">
-                          <button
-                            onClick={(e) => handlePaperTrade(e, sig)}
-                            disabled={tradingSignalId === sig.id || halted}
-                            className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold transition-colors disabled:opacity-50 border"
-                            style={{
-                              color: sig.direction === 'SELL' ? 'var(--color-bear)' : 'var(--color-bull)',
-                              borderColor: sig.direction === 'SELL' ? 'var(--color-bear)' : 'var(--color-bull)',
-                            }}
-                            title={sig.direction === 'SELL' ? 'Paper Sell (open short)' : 'Paper Buy (open long)'}
-                          >
-                            <ShoppingCart size={10} />
-                            {tradingSignalId === sig.id
-                              ? '…'
-                              : sig.direction === 'SELL' ? 'Sell' : 'Buy'}
-                          </button>
-                        </td>
-                      </tr>
-                    )
-                  })}
+                  {filteredSignals.map((sig) => (
+                    <SignalRow
+                      key={sig.id}
+                      sig={sig}
+                      ltp={liveQuotes[sig.symbol]?.ltp}
+                      isTrading={tradingSignalId === sig.id}
+                      halted={halted}
+                      onSelect={setSelectedSignal}
+                      onTrade={handlePaperTrade}
+                      onCopy={copySignal}
+                    />
+                  ))}
                 </tbody>
               </table>
             </div>
