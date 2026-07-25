@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { Suspense, useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
 import { TrendingUp, ChevronLeft, ChevronRight, Circle, Moon, Sun } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
@@ -9,6 +9,7 @@ import { useTradingHaltStore } from '@/store/tradingHaltStore'
 import { ProfileDropdown } from '@/components/ui/profile-dropdown'
 import { AlertBell } from '@/features/alerts/AlertBell'
 import { SidebarNav } from './Sidebar'
+import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 const SIDEBAR_KEY = 'sidebar-collapsed'
@@ -280,9 +281,18 @@ export function AppShell() {
             </div>
           )}
 
-          {/* ── Page content ── */}
+          {/* ── Page content (lazy route chunks behind one Suspense) ── */}
           <main className="flex-1 overflow-y-auto p-5">
-            <Outlet />
+            <Suspense
+              fallback={
+                <div className="space-y-4" aria-label="loading page">
+                  <Skeleton className="h-8 w-48" />
+                  <Skeleton className="h-64 w-full" />
+                </div>
+              }
+            >
+              <Outlet />
+            </Suspense>
           </main>
         </div>
       </div>

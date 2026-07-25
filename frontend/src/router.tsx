@@ -2,26 +2,13 @@ import { Navigate, createBrowserRouter } from 'react-router-dom'
 import { AppShell } from '@/components/layout/AppShell'
 import { RequireAdmin, RequireAuth } from '@/components/auth/ProtectedRoute'
 import { LoginPage } from '@/pages/LoginPage'
-import { UsersPage } from '@/pages/admin/UsersPage'
-import { SettingsPage } from '@/pages/admin/SettingsPage'
-import { StocksPage } from '@/features/stocks/StocksPage'
-import { StockDetailPage } from '@/pages/stocks/StockDetailPage'
-import { ScreenerPage } from '@/features/screener/ScreenerPage'
-import { WatchlistsPage } from '@/features/watchlists/WatchlistsPage'
-import { CategoriesPage } from '@/features/categories/CategoriesPage'
-import { FiiDiiPage } from '@/features/market/FiiDiiPage'
-import { DashboardPage } from '@/features/dashboard/DashboardPage'
-import KiteConnectPage from '@/features/broker/KiteConnectPage'
-import { FilingsPage } from '@/features/filings/FilingsPage'
-import { ProfilePage } from '@/features/profile/ProfilePage'
-import { PositionsPage } from '@/features/trading/PositionsPage'
-import { TradeHistoryPage } from '@/features/trading/TradeHistoryPage'
-import { StrategyLabPage } from '@/features/strategy/StrategyLabPage'
-import { JournalPage } from '@/features/journal/JournalPage'
-import { PortfolioPage } from '@/features/portfolio/PortfolioPage'
-import { StylePage } from '@/features/styles/StylePage'
-import { GoLivePage } from '@/features/golive/GoLivePage'
-import { OutcomesPage } from '@/features/analytics/OutcomesPage'
+// The shell + auth load eagerly; every page is a lazy chunk (see lazyPages).
+import {
+  CategoriesPage, DashboardPage, FiiDiiPage, FilingsPage, GoLivePage, JournalPage,
+  KiteConnectPage, OutcomesPage, PortfolioPage, PositionsPage, ProfilePage, ScreenerPage,
+  SettingsPage, StockDetailPage, StocksPage, StrategyLabPage, StylePage, TradeHistoryPage,
+  UsersPage, WatchlistsPage,
+} from '@/routes/lazyPages'
 
 export const router = createBrowserRouter([
   {
