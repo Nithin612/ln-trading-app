@@ -1,65 +1,16 @@
 import { useEffect, useState } from 'react'
 import { Link, Outlet, useLocation } from 'react-router-dom'
-import {
-  LayoutDashboard,
-  TrendingUp,
-  SlidersHorizontal,
-  ListChecks,
-  Tags,
-  Building2,
-  Zap,
-  Users,
-  FileText,
-  ChevronLeft,
-  ChevronRight,
-  Circle,
-  Moon,
-  Sun,
-  Settings,
-  Briefcase,
-  History,
-  FlaskConical,
-  BookOpen,
-  Wallet,
-} from 'lucide-react'
+import { TrendingUp, ChevronLeft, ChevronRight, Circle, Moon, Sun } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
 import { useKiteStatus } from '@/hooks/useKiteStatus'
 import { useThemeStore } from '@/store/themeStore'
 import { useUiPrefsStore } from '@/store/uiPrefsStore'
 import { ProfileDropdown } from '@/components/ui/profile-dropdown'
 import { AlertBell } from '@/features/alerts/AlertBell'
+import { SidebarNav } from './Sidebar'
 import { cn } from '@/lib/utils'
 
 const SIDEBAR_KEY = 'sidebar-collapsed'
-
-interface NavItem {
-  to: string
-  icon: React.ReactNode
-  label: string
-  adminOnly?: boolean
-  warnIcon?: string
-}
-
-const NAV_ITEMS: NavItem[] = [
-  { to: '/dashboard',         icon: <LayoutDashboard size={18} />, label: 'Dashboard' },
-  { to: '/stocks',            icon: <TrendingUp size={18} />,      label: 'Stocks' },
-  { to: '/screener',          icon: <SlidersHorizontal size={18} />,label: 'Screener' },
-  { to: '/watchlists',        icon: <ListChecks size={18} />,      label: 'Watchlists' },
-  { to: '/categories',        icon: <Tags size={18} />,            label: 'Categories' },
-  { to: '/market/fii-dii',    icon: <Building2 size={18} />,       label: 'FII / DII' },
-  { to: '/filings',           icon: <FileText size={18} />,        label: 'Filings' },
-  { to: '/trading/positions', icon: <Briefcase size={18} />,       label: 'Positions' },
-  { to: '/trading/history',   icon: <History size={18} />,         label: 'Trade History' },
-  { to: '/strategy',          icon: <FlaskConical size={18} />,    label: 'Strategy Lab' },
-  { to: '/journal',           icon: <BookOpen size={18} />,        label: 'Journal' },
-  { to: '/portfolio',         icon: <Wallet size={18} />,          label: 'Portfolio' },
-]
-
-const ADMIN_NAV_ITEMS: NavItem[] = [
-  { to: '/broker/kite',   icon: <Zap size={18} />,     label: 'Kite',     adminOnly: true },
-  { to: '/admin/users',   icon: <Users size={18} />,   label: 'Users',    adminOnly: true },
-  { to: '/admin/settings',icon: <Settings size={18} />,label: 'Settings', adminOnly: true },
-]
 
 function useMarketStatus() {
   const [now, setNow] = useState(new Date())
@@ -178,9 +129,9 @@ export function AppShell() {
           >
             <div
               className="w-7 h-7 rounded-md flex items-center justify-center flex-shrink-0"
-              style={{ background: 'linear-gradient(135deg, var(--color-accent) 0%, #1e3a8a 100%)' }}
+              style={{ background: 'linear-gradient(135deg, var(--color-accent) 0%, var(--color-accent-bg) 100%)' }}
             >
-              <TrendingUp size={15} className="text-white" />
+              <TrendingUp size={15} style={{ color: 'var(--color-primary-foreground)' }} />
             </div>
             {!collapsed && (
               <span className="font-bold text-sm font-mono tracking-widest whitespace-nowrap overflow-hidden"
@@ -190,40 +141,13 @@ export function AppShell() {
             )}
           </div>
 
-          {/* Nav links */}
-          <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto overflow-x-hidden">
-            {NAV_ITEMS.map((item) => (
-              <SidebarLink
-                key={item.to}
-                item={item}
-                collapsed={collapsed}
-                active={location.pathname === item.to || (item.to !== '/dashboard' && location.pathname.startsWith(item.to))}
-              />
-            ))}
-
-            {isAdmin && (
-              <>
-                <div className="my-2 mx-2 border-t border-(--color-border)" />
-                {ADMIN_NAV_ITEMS.map((item) => {
-                  const hasBanner = item.to === '/broker/kite' && banner
-                  return (
-                    <SidebarLink
-                      key={item.to}
-                      item={{
-                        ...item,
-                        warnIcon: hasBanner
-                          ? banner === 'not-connected' ? '⚠' : '!'
-                          : undefined,
-                      }}
-                      collapsed={collapsed}
-                      active={location.pathname.startsWith(item.to)}
-                      warn={!!hasBanner}
-                    />
-                  )
-                })}
-              </>
-            )}
-          </nav>
+          {/* Nav links — grouped IA (Markets / Trading / Analysis / Admin) */}
+          <SidebarNav
+            collapsed={collapsed}
+            pathname={location.pathname}
+            isAdmin={isAdmin}
+            kiteBanner={banner}
+          />
 
           {/* Collapse toggle */}
           <div className="flex-shrink-0 border-t border-(--color-border) p-2">
@@ -307,16 +231,16 @@ export function AppShell() {
             <div
               className="flex-shrink-0 flex items-center justify-between px-5 py-1.5 text-xs border-b"
               style={{
-                backgroundColor: banner === 'not-connected' ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)',
-                borderColor: banner === 'not-connected' ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.25)',
+                backgroundColor: banner === 'not-connected' ? 'var(--color-loss-bg)' : 'var(--color-warning-bg)',
+                borderColor: banner === 'not-connected' ? 'var(--color-loss)' : 'var(--color-warning)',
               }}
             >
               <div className="flex items-center gap-2">
                 <Circle
                   size={6}
-                  className={banner === 'not-connected' ? 'text-(--color-bear) fill-(--color-bear)' : 'text-yellow-500 fill-yellow-500'}
+                  className={banner === 'not-connected' ? 'text-(--color-loss) fill-(--color-loss)' : 'text-(--color-warning) fill-(--color-warning)'}
                 />
-                <span style={{ color: banner === 'not-connected' ? 'var(--color-bear)' : '#f59e0b' }}>
+                <span style={{ color: banner === 'not-connected' ? 'var(--color-loss)' : 'var(--color-warning)' }}>
                   {banner === 'not-connected'
                     ? 'Zerodha Kite is not connected — live data and signals are paused.'
                     : `Kite token expires in ${kite.minutesLeft} minute${kite.minutesLeft === 1 ? '' : 's'} — re-authenticate before market opens.`}
@@ -325,7 +249,7 @@ export function AppShell() {
               <Link
                 to="/broker/kite"
                 className="font-semibold text-xs hover:underline ml-4 flex-shrink-0"
-                style={{ color: banner === 'not-connected' ? 'var(--color-bear)' : '#f59e0b' }}
+                style={{ color: banner === 'not-connected' ? 'var(--color-loss)' : 'var(--color-warning)' }}
               >
                 {banner === 'not-connected' ? 'Connect →' : 'Re-authenticate →'}
               </Link>
@@ -339,45 +263,6 @@ export function AppShell() {
         </div>
       </div>
     </>
-  )
-}
-
-interface SidebarLinkProps {
-  item: NavItem
-  collapsed: boolean
-  active: boolean
-  warn?: boolean
-}
-
-function SidebarLink({ item, collapsed, active, warn }: SidebarLinkProps) {
-  return (
-    <Link
-      to={item.to}
-      title={collapsed ? item.label : undefined}
-      className={cn(
-        'flex items-center gap-2.5 px-2.5 py-2 rounded-md text-sm transition-colors relative overflow-hidden',
-        active
-          ? 'text-(--color-accent)'
-          : warn
-            ? 'text-(--color-bear) hover:bg-(--color-surface-3)'
-            : 'text-(--color-text-muted) hover:bg-(--color-surface-3) hover:text-(--color-text)',
-        collapsed && 'justify-center',
-      )}
-      style={active ? { backgroundColor: 'color-mix(in srgb, var(--color-accent) 12%, transparent)' } : {}}
-    >
-      {active && (
-        <span className="absolute left-0 top-0 bottom-0 w-[3px] bg-(--color-accent) rounded-r-sm" />
-      )}
-      <span className="flex-shrink-0 relative">
-        {item.icon}
-        {item.warnIcon && (
-          <span className="absolute -top-1 -right-1 text-[8px] font-bold leading-none">{item.warnIcon}</span>
-        )}
-      </span>
-      {!collapsed && (
-        <span className="whitespace-nowrap overflow-hidden text-ellipsis">{item.label}</span>
-      )}
-    </Link>
   )
 }
 
