@@ -18,6 +18,8 @@ export interface PositionOut {
   exit_price: string | null
   exit_reason: 'sl_hit' | 'tp_hit' | 'manual' | null
   current_price: string | null
+  peak_price: string | null
+  peak_pnl: string | null
   opened_at: string
   closed_at: string | null
   signal_id: string | null

@@ -6,8 +6,10 @@ POST /trading/positions/{id}/close — manually close a position
 POST /trading/positions/{id}/update-sl — update stop loss
 GET  /trading/history              — closed positions (trade history)
 GET  /trading/daily-pnl            — today's P&L + circuit breaker status
+GET  /trading/shadow-compare       — profit-lock shadow comparator (read-only)
 """
 
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated
 from zoneinfo import ZoneInfo
@@ -36,10 +38,13 @@ from app.schemas.trading import (
     PlaceOrderRequest,
     PositionListResponse,
     PositionOut,
+    ShadowCompareResponse,
+    ShadowComparisonOut,
     TradeHistoryResponse,
     UpdateSlRequest,
 )
 from app.services.journal_service import auto_create_journal_entry
+from app.services.profit_lock_shadow import compare_position
 from app.trading.circuit_breaker import (
     check_circuit_breaker,
     get_daily_realized_pnl,
@@ -236,6 +241,35 @@ async def trade_history(
 
     enriched = [_enrich_position(p, await _get_symbol(db, p.stock_id)) for p in positions]
     return TradeHistoryResponse(total=total, positions=enriched)
+
+
+@router.get("/shadow-compare", response_model=ShadowCompareResponse)
+async def shadow_compare(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    limit: int = Query(default=20, ge=1, le=100),
+) -> ShadowCompareResponse:
+    """Replay candidate exit policies (current ladder vs Layered Ratchet Stop)
+    over recent closed positions' 1m tapes. Read-only evidence — controls no
+    real orders. See app/services/profit_lock_shadow.py."""
+    result = await db.execute(
+        select(Position)
+        .where(
+            Position.user_id == user.id,
+            Position.mode == "paper",
+            Position.closed_at.is_not(None),
+        )
+        .order_by(Position.closed_at.desc())
+        .limit(limit)
+    )
+    positions = result.scalars().all()
+
+    now = datetime.now(tz=UTC)
+    comparisons = [
+        ShadowComparisonOut.model_validate(await compare_position(db, pos, now=now))
+        for pos in positions
+    ]
+    return ShadowCompareResponse(total=len(comparisons), comparisons=comparisons)
 
 
 @router.get("/daily-pnl", response_model=DailyPnlOut)

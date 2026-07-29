@@ -48,6 +48,8 @@ function makePosition(overrides: Partial<tradingApiModule.PositionOut> = {}): tr
     exit_price: null,
     exit_reason: null,
     current_price: '2860.0000',
+    peak_price: null,
+    peak_pnl: null,
     opened_at: new Date().toISOString(),
     closed_at: null,
     signal_id: 'sig-001',

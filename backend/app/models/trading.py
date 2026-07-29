@@ -90,6 +90,10 @@ class Position(Base):
     exit_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
     # exit_reason ∈ {sl_hit, tp_hit, manual}
     exit_reason: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    # Max favourable excursion while open (best price + GROSS peak profit).
+    # Updated each live monitor tick; NULL until the first live tick is seen.
+    peak_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    peak_pnl: Mapped[Decimal | None] = mapped_column(Numeric(14, 2), nullable=True)
     opened_at: Mapped[datetime] = mapped_column(TZ, nullable=False, server_default=func.now())
     closed_at: Mapped[datetime | None] = mapped_column(TZ, nullable=True)
     signal_id: Mapped[str | None] = mapped_column(

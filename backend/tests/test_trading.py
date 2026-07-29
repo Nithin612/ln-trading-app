@@ -562,6 +562,30 @@ class TestTradingApi:
             await r.delete(key)
             await r.aclose()
 
+    async def test_shadow_compare_endpoint(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """The read-only shadow comparator endpoint wires the replay service."""
+        from app.broker.paper_broker import close_position
+
+        user = await create_test_user(db)
+        headers = await get_auth_headers(client)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id)
+        pos = await _open_position(db, user, stock, signal)
+        await close_position(db, pos, exit_price=Decimal("540"), reason="tp_hit")
+        await db.commit()
+
+        r = await client.get("/api/v1/trading/shadow-compare", headers=headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert data["total"] == 1
+        comp = data["comparisons"][0]
+        assert comp["symbol"] == stock.symbol
+        # no 1m candles seeded → the comparator reports insufficient data, no policies
+        assert comp["note"] is not None
+        assert comp["policies"] == []
+
     async def test_close_position_endpoint(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
@@ -986,6 +1010,28 @@ class TestPositionMonitor:
         assert pos.closed_at is not None
         assert pos.exit_reason == "sl_hit"
         assert pos.exit_price == Decimal("480.0000")  # filled at the SL
+
+    async def test_tracks_peak_favourable_excursion(self, db: AsyncSession) -> None:
+        """Each live tick updates the position's max favourable excursion."""
+        from app.broker.tick_consumer import LTP_KEY
+        from app.tasks.position_monitor import scan_positions
+
+        user = await _make_user(db)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000", sl="480.0000", tp="540.0000")
+        pos = await _open_position(db, user, stock, signal, entry=Decimal("500"), qty=100)
+        await db.commit()
+
+        r = await self._set_ltp(stock.id, "520.00")  # favourable, below TP
+        try:
+            result = await scan_positions(db, now=_MON_IN_SESSION)
+        finally:
+            await r.delete(LTP_KEY.format(stock_id=stock.id))
+            await r.aclose()
+
+        assert result["closed"] == 0 and result["updated"] == 1
+        assert pos.peak_price == Decimal("520")
+        assert pos.peak_pnl == Decimal("2000")  # (520-500)*100 gross
 
     async def test_in_session_skips_when_no_live_price(self, db: AsyncSession) -> None:
         """No live LTP → the position is left untouched (never closed on the

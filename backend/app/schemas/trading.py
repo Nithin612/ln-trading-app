@@ -71,6 +71,8 @@ class PositionOut(BaseModel):
     exit_price: Decimal | None = None    # closing fill price (None while open)
     exit_reason: str | None = None       # sl_hit | tp_hit | manual (None while open)
     current_price: Decimal | None = None  # transient live/last price (open positions)
+    peak_price: Decimal | None = None    # best price seen while open (MFE)
+    peak_pnl: Decimal | None = None      # GROSS peak profit (max favourable excursion)
     opened_at: datetime
     closed_at: datetime | None
     signal_id: str | None
@@ -79,6 +81,44 @@ class PositionOut(BaseModel):
 class PositionListResponse(BaseModel):
     total: int
     positions: list[PositionOut]
+
+
+# ── Profit-lock shadow comparator (read-only evidence) ─────────────────────────
+
+class ShadowPolicyOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    policy: str
+    exit_price: Decimal | None
+    exit_time: datetime | None
+    exit_net: Decimal | None
+    still_open: bool
+    capture_pct: float | None
+
+
+class ShadowComparisonOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    position_id: str
+    symbol: str
+    side: str
+    quantity: int
+    entry: Decimal
+    original_sl: Decimal
+    classification: str
+    bars: int
+    peak_price: Decimal | None
+    peak_gross: Decimal | None
+    actual_exit_price: Decimal | None
+    actual_net: Decimal | None
+    actual_capture_pct: float | None
+    policies: list[ShadowPolicyOut]
+    note: str | None = None
+
+
+class ShadowCompareResponse(BaseModel):
+    total: int
+    comparisons: list[ShadowComparisonOut]
 
 
 class ClosePositionRequest(BaseModel):

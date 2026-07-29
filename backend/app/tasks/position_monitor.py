@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 from datetime import UTC, datetime
+from decimal import Decimal
 
 from app.celery_app import celery_app
 from app.tasks._runner import run_db_task
@@ -55,7 +56,7 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
     from app.models.trading import Position
     from app.services.journal_service import auto_create_journal_entry
     from app.trading.market_hours import is_market_session
-    from app.trading.trail_sl import advance_trail, is_sl_hit, is_tp_hit
+    from app.trading.trail_sl import advance_trail, compute_pnl, is_sl_hit, is_tp_hit
 
     assert isinstance(db, AsyncSession)  # narrow the DI'd session type for mypy
     now = now or datetime.now(tz=UTC)
@@ -85,6 +86,22 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
         if price is None:
             skipped += 1
             continue
+
+        # Track max favourable excursion (GROSS peak profit) for leakage
+        # analysis and the profit-lock shadow comparator.
+        better = (
+            pos.peak_price is None
+            or (pos.side == "LONG" and price > pos.peak_price)
+            or (pos.side == "SHORT" and price < pos.peak_price)
+        )
+        if better:
+            pos.peak_price = price
+            pos.peak_pnl = compute_pnl(
+                side=pos.side,
+                entry=pos.avg_entry_price,
+                exit_price=price,
+                quantity=pos.quantity,
+            )
 
         # SL/TP hit → auto-close (reason encodes the trigger for Trade History)
         if pos.current_sl is not None and is_sl_hit(
@@ -119,9 +136,9 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
             if sig is not None:
                 trail = advance_trail(
                     side=pos.side,
-                    entry=pos.avg_entry_price,
-                    original_sl=sig.stop_loss,
-                    current_sl=pos.current_sl,
+                    entry=Decimal(str(pos.avg_entry_price)),
+                    original_sl=Decimal(str(sig.stop_loss)),
+                    current_sl=Decimal(str(pos.current_sl)),
                     current_price=price,
                     current_state=pos.trail_state,
                 )
