@@ -894,6 +894,119 @@ class TestSizingAndCosts:
             await r.aclose()
 
 
+# ── Position monitor (auto-close) + market-session guard ───────────────────────
+
+# UTC instants chosen for their IST mapping on a known weekday/weekend:
+_MON_PRE_OPEN = datetime(2026, 7, 27, 3, 0, tzinfo=UTC)    # Mon 08:30 IST
+_MON_IN_SESSION = datetime(2026, 7, 27, 3, 50, tzinfo=UTC)  # Mon 09:20 IST
+_MON_POST_CLOSE = datetime(2026, 7, 27, 10, 1, tzinfo=UTC)  # Mon 15:31 IST
+_SAT_IN_HOURS = datetime(2026, 8, 1, 4, 0, tzinfo=UTC)      # Sat 09:30 IST
+
+
+class TestMarketSession:
+    def test_pre_open_is_not_a_session(self) -> None:
+        from app.trading.market_hours import is_market_session
+
+        assert not is_market_session(_MON_PRE_OPEN)
+
+    def test_in_session(self) -> None:
+        from app.trading.market_hours import is_market_session
+
+        assert is_market_session(_MON_IN_SESSION)
+
+    def test_post_close_is_not_a_session(self) -> None:
+        from app.trading.market_hours import is_market_session
+
+        assert not is_market_session(_MON_POST_CLOSE)
+
+    def test_weekend_is_not_a_session(self) -> None:
+        from app.trading.market_hours import is_market_session
+
+        assert not is_market_session(_SAT_IN_HOURS)
+
+
+class TestPositionMonitor:
+    async def _set_ltp(self, stock_id: int, price: str) -> object:
+        import redis.asyncio as aioredis
+        from app.broker.tick_consumer import LTP_KEY
+        from app.core.config import settings
+
+        r = aioredis.from_url(settings.redis_url, decode_responses=True)
+        await r.set(LTP_KEY.format(stock_id=stock_id), price, ex=600)
+        return r
+
+    async def test_pre_open_beat_does_not_close_even_when_sl_breached(
+        self, db: AsyncSession
+    ) -> None:
+        """Regression (2026-07-28): the 08:30 IST pre-open beat auto-closed a
+        LENSKART position on the previous session's stale close. The session
+        guard must make the pre-open scan a no-op even when a (would-be) price
+        breaches the SL."""
+        from app.broker.tick_consumer import LTP_KEY
+        from app.tasks.position_monitor import scan_positions
+
+        user = await _make_user(db)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000", sl="480.0000")
+        pos = await _open_position(
+            db, user, stock, signal, entry=Decimal("500"), sl=Decimal("480")
+        )
+        await db.commit()
+
+        r = await self._set_ltp(stock.id, "479.00")  # below SL → would close
+        try:
+            result = await scan_positions(db, now=_MON_PRE_OPEN)
+        finally:
+            await r.delete(LTP_KEY.format(stock_id=stock.id))
+            await r.aclose()
+
+        assert result == {"closed": 0, "updated": 0, "skipped": 0}
+        assert pos.closed_at is None  # canary: pre-old-code this was closed
+
+    async def test_closes_on_sl_hit_during_session(self, db: AsyncSession) -> None:
+        from app.broker.tick_consumer import LTP_KEY
+        from app.tasks.position_monitor import scan_positions
+
+        user = await _make_user(db)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000", sl="480.0000")
+        pos = await _open_position(
+            db, user, stock, signal, entry=Decimal("500"), sl=Decimal("480")
+        )
+        await db.commit()
+
+        r = await self._set_ltp(stock.id, "479.00")
+        try:
+            result = await scan_positions(db, now=_MON_IN_SESSION)
+        finally:
+            await r.delete(LTP_KEY.format(stock_id=stock.id))
+            await r.aclose()
+
+        assert result["closed"] == 1
+        assert pos.closed_at is not None
+        assert pos.exit_reason == "sl_hit"
+        assert pos.exit_price == Decimal("480.0000")  # filled at the SL
+
+    async def test_in_session_skips_when_no_live_price(self, db: AsyncSession) -> None:
+        """No live LTP → the position is left untouched (never closed on the
+        stale daily-close fallback the old exit path used)."""
+        from app.tasks.position_monitor import scan_positions
+
+        user = await _make_user(db)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000", sl="480.0000")
+        pos = await _open_position(
+            db, user, stock, signal, entry=Decimal("500"), sl=Decimal("480")
+        )
+        await db.commit()
+
+        # no Redis key set → get_live_ltp returns None
+        result = await scan_positions(db, now=_MON_IN_SESSION)
+
+        assert result == {"closed": 0, "updated": 0, "skipped": 1}
+        assert pos.closed_at is None
+
+
 # ── Paper record (30-day-clock view) ───────────────────────────────────────────
 
 class TestPaperRecord:

@@ -56,13 +56,18 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.filing_tasks.poll_filings",
         "schedule": 60.0,
     },
-    # Monitor open paper positions every 60s during market hours (9:15–15:30 IST)
-    # IST offsets: 9:15 IST = 3:45 UTC; 15:30 IST = 10:00 UTC
+    # Monitor open paper positions every 60s during market hours (9:15–15:30 IST).
+    # IST offsets: 9:15 IST = 3:45 UTC; 15:30 IST = 10:00 UTC. This crontab is a
+    # COARSE gate (03:00–10:59 UTC = 08:30–16:29 IST, a superset); the task's
+    # in-run `is_market_session` guard is authoritative and enforces the exact
+    # 09:15–15:30 IST window (a crontab hour-range can't express :45-precision,
+    # and hour="3-9" used to fire the 08:30 IST pre-open beat that auto-closed
+    # positions on the previous session's stale close).
     "monitor-positions": {
         "task": "app.tasks.position_monitor.monitor_positions",
         "schedule": crontab(
             minute="*/1",
-            hour="3-9",
+            hour="3-10",
             day_of_week="1-5",
         ),
     },
