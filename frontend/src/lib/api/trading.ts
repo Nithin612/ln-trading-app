@@ -15,6 +15,9 @@ export interface PositionOut {
   unrealized_pnl: string | null
   realized_pnl: string
   charges: string | null
+  exit_price: string | null
+  exit_reason: 'sl_hit' | 'tp_hit' | 'manual' | null
+  current_price: string | null
   opened_at: string
   closed_at: string | null
   signal_id: string | null

@@ -275,26 +275,65 @@ async def close_position(
     position.realized_pnl = gross_pnl - charges
     position.charges = charges
     position.unrealized_pnl = Decimal("0")
+    position.exit_price = price
+    position.exit_reason = reason
     position.closed_at = now
 
     await db.flush()
     return order, position
 
 
+async def _estimated_roundtrip_charges(
+    db: AsyncSession, position: Position, exit_price: Decimal
+) -> Decimal:
+    """Estimated round-trip cost for an OPEN position exiting at `exit_price`.
+
+    Lets `unrealized_pnl` be reported NET of costs, so open and closed
+    positions read in the same units (a realised trade's `realized_pnl` is
+    already net). Returns Decimal('0') when the cost model is disabled.
+    """
+    if not settings.paper_costs_enabled:
+        return Decimal("0")
+    classification = "swing"
+    if position.signal_id is not None:
+        sig = await db.get(Signal, position.signal_id)
+        if sig is not None:
+            classification = sig.classification
+    charges, _ = roundtrip_charges(
+        position_side=position.side,
+        entry_price=Decimal(str(position.avg_entry_price)),
+        exit_price=exit_price,
+        quantity=position.quantity,
+        product=product_for_classification(classification),
+    )
+    return charges
+
+
 async def update_position_pnl(
     db: AsyncSession,
     position: Position,
-) -> None:
-    """Refresh unrealized_pnl on an open position using the current price."""
+    price: Decimal | None = None,
+) -> Decimal | None:
+    """Refresh unrealized_pnl (NET of estimated round-trip costs) on an open
+    position and return the price used.
+
+    Pass `price` to reuse a price the caller already fetched (the monitor
+    passes the live LTP it acted on); otherwise the best-effort current price
+    is used (live LTP → last daily close). Returns None if the position is
+    closed or no price is available.
+    """
     if position.closed_at is not None:
-        return
-    price = await get_current_price(db, position.stock_id)
+        return None
     if price is None:
-        return
-    pnl = compute_pnl(
+        price = await get_current_price(db, position.stock_id)
+    if price is None:
+        return None
+    gross = compute_pnl(
         side=position.side,
         entry=Decimal(str(position.avg_entry_price)),
         exit_price=price,
         quantity=position.quantity,
     )
-    position.unrealized_pnl = pnl
+    charges = await _estimated_roundtrip_charges(db, position, price)
+    position.unrealized_pnl = gross - charges
+    return price

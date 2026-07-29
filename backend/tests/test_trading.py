@@ -416,6 +416,50 @@ class TestPaperBroker:
         with pytest.raises(ValueError, match="already closed"):
             await close_position(db, closed_pos, exit_price=Decimal("510"))
 
+    async def test_close_records_exit_price_and_reason(self, db: AsyncSession) -> None:
+        """Exit facts are denormalised onto the position for Trade History."""
+        from app.broker.paper_broker import close_position
+
+        user = await _make_user(db)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000", tp="540.0000")
+        pos = await _open_position(db, user, stock, signal, entry=Decimal("500"))
+
+        assert pos.exit_price is None and pos.exit_reason is None  # open
+        close_order, closed = await close_position(
+            db, pos, exit_price=Decimal("540"), reason="tp_hit"
+        )
+        await db.commit()
+
+        assert closed.exit_reason == "tp_hit"
+        assert closed.exit_price == close_order.filled_price == Decimal("540.0000")
+
+    async def test_update_position_pnl_is_net_and_returns_price(
+        self, db: AsyncSession
+    ) -> None:
+        """Open-position P&L is NET of estimated round-trip costs (so it reads in
+        the same units as a closed trade's realized_pnl) and returns the price
+        it used (the caller reuses it as the current market price)."""
+        from app.broker.paper_broker import update_position_pnl
+
+        user = await _make_user(db)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000")  # swing→delivery
+        pos = await _open_position(db, user, stock, signal, entry=Decimal("500"), qty=100)
+
+        used = await update_position_pnl(db, pos, price=Decimal("540"))
+        assert used == Decimal("540")
+        # net = gross 4000 − estimated round-trip delivery charges
+        est, _ = roundtrip_charges(
+            position_side="LONG",
+            entry_price=Decimal("500"),
+            exit_price=Decimal("540"),
+            quantity=100,
+            product="delivery",
+        )
+        assert est > Decimal("0")
+        assert pos.unrealized_pnl == Decimal("4000") - est
+
 
 # ── API endpoint tests ─────────────────────────────────────────────────────────
 
@@ -490,6 +534,33 @@ class TestTradingApi:
         data = r.json()
         assert data["total"] == 1
         assert data["positions"][0]["side"] == "LONG"
+
+    async def test_list_open_positions_reports_current_price(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """The open-positions list carries the live market price for display."""
+        import redis.asyncio as aioredis
+        from app.broker.tick_consumer import LTP_KEY
+        from app.core.config import settings
+
+        user = await create_test_user(db)
+        headers = await get_auth_headers(client)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id)
+        await _open_position(db, user, stock, signal)
+        await db.commit()
+
+        r = aioredis.from_url(settings.redis_url, decode_responses=True)
+        key = LTP_KEY.format(stock_id=stock.id)
+        try:
+            await r.set(key, "515.50", ex=600)
+            resp = await client.get("/api/v1/trading/positions", headers=headers)
+            assert resp.status_code == 200
+            row = resp.json()["positions"][0]
+            assert Decimal(row["current_price"]) == Decimal("515.50")
+        finally:
+            await r.delete(key)
+            await r.aclose()
 
     async def test_close_position_endpoint(
         self, client: AsyncClient, db: AsyncSession

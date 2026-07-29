@@ -45,6 +45,9 @@ function makePosition(overrides: Partial<tradingApiModule.PositionOut> = {}): tr
     unrealized_pnl: '500.00',
     realized_pnl: '0',
     charges: null,
+    exit_price: null,
+    exit_reason: null,
+    current_price: '2860.0000',
     opened_at: new Date().toISOString(),
     closed_at: null,
     signal_id: 'sig-001',
@@ -129,6 +132,16 @@ describe('PositionsPage', () => {
     expect(screen.getByText('35')).toBeInTheDocument()
   })
 
+  it('shows the current market price alongside entry', async () => {
+    vi.spyOn(tradingApiModule.tradingApi, 'getOpenPositions').mockResolvedValue({
+      total: 1,
+      positions: [makePosition({ current_price: '2999.0000' })],
+    })
+    wrap(<PositionsPage />)
+    await waitFor(() => screen.getByText('RELIANCE'))
+    expect(screen.getByText(/2,999/)).toBeInTheDocument()
+  })
+
   it('shows close button on each position row', async () => {
     vi.spyOn(tradingApiModule.tradingApi, 'getOpenPositions').mockResolvedValue({
       total: 1,
@@ -208,6 +221,41 @@ describe('TradeHistoryPage', () => {
     })
     // Summary card + table row both render the P&L — at least one must be present
     expect(screen.getAllByText(/\+₹2,000/).length).toBeGreaterThan(0)
+  })
+
+  it('shows exit price and reason (auto) for an SL/TP-closed trade', async () => {
+    const closed = makePosition({
+      closed_at: new Date().toISOString(),
+      realized_pnl: '2000.00',
+      exit_price: '2909.0000',
+      exit_reason: 'tp_hit',
+    })
+    vi.spyOn(tradingApiModule.tradingApi, 'getHistory').mockResolvedValue({
+      total: 1,
+      positions: [closed],
+    })
+    wrap(<TradeHistoryPage />)
+    await waitFor(() => expect(screen.getByText('RELIANCE')).toBeInTheDocument())
+    expect(screen.getByText(/2,909/)).toBeInTheDocument() // exit price
+    expect(screen.getByText('Target')).toBeInTheDocument() // tp_hit label
+    expect(screen.getByText(/· auto/)).toBeInTheDocument()
+  })
+
+  it('labels a manual close as manual', async () => {
+    const closed = makePosition({
+      closed_at: new Date().toISOString(),
+      realized_pnl: '100.00',
+      exit_price: '2860.0000',
+      exit_reason: 'manual',
+    })
+    vi.spyOn(tradingApiModule.tradingApi, 'getHistory').mockResolvedValue({
+      total: 1,
+      positions: [closed],
+    })
+    wrap(<TradeHistoryPage />)
+    await waitFor(() => expect(screen.getByText('RELIANCE')).toBeInTheDocument())
+    expect(screen.getByText('Manual')).toBeInTheDocument()
+    expect(screen.getByText(/· manual/)).toBeInTheDocument()
   })
 
   it('shows losing trade in red', async () => {

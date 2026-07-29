@@ -65,9 +65,12 @@ class PositionOut(BaseModel):
     current_sl: Decimal | None
     current_tp: Decimal | None
     trail_state: str
-    unrealized_pnl: Decimal | None
+    unrealized_pnl: Decimal | None   # NET of estimated round-trip costs (open)
     realized_pnl: Decimal            # NET of charges once closed
     charges: Decimal | None = None   # round-trip trading costs (None = pre-cost history)
+    exit_price: Decimal | None = None    # closing fill price (None while open)
+    exit_reason: str | None = None       # sl_hit | tp_hit | manual (None while open)
+    current_price: Decimal | None = None  # transient live/last price (open positions)
     opened_at: datetime
     closed_at: datetime | None
     signal_id: str | None

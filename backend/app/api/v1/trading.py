@@ -57,9 +57,12 @@ def _enrich_order(order: Order, symbol: str) -> OrderOut:
     return out
 
 
-def _enrich_position(position: Position, symbol: str) -> PositionOut:
+def _enrich_position(
+    position: Position, symbol: str, current_price: Decimal | None = None
+) -> PositionOut:
     out = PositionOut.model_validate(position)
     out.symbol = symbol
+    out.current_price = current_price
     return out
 
 
@@ -121,12 +124,17 @@ async def list_open_positions(
     )
     positions = result.scalars().all()
 
-    # Refresh unrealized P&L
+    # Refresh unrealized P&L; keep the price each refresh used so the UI can
+    # show the current market price alongside entry.
+    prices: dict[str, Decimal | None] = {}
     for pos in positions:
-        await update_position_pnl(db, pos)
+        prices[pos.id] = await update_position_pnl(db, pos)
     await db.commit()
 
-    enriched = [_enrich_position(p, await _get_symbol(db, p.stock_id)) for p in positions]
+    enriched = [
+        _enrich_position(p, await _get_symbol(db, p.stock_id), prices.get(p.id))
+        for p in positions
+    ]
     return PositionListResponse(total=len(enriched), positions=enriched)
 
 

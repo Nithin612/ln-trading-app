@@ -108,7 +108,7 @@ export function PositionsPage() {
             <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
               <thead>
                 <tr className="border-b border-(--color-border)">
-                  {['Symbol', 'Side', 'Qty', 'Entry', 'SL', 'TP', 'Trail', 'Unreal. P&L', 'Opened', ''].map((h) => (
+                  {['Symbol', 'Side', 'Qty', 'Entry', 'Current', 'SL', 'TP', 'Trail', 'Unreal. P&L', 'Opened', ''].map((h) => (
                     <th
                       key={h}
                       className="px-3 py-2 text-[10px] uppercase tracking-wide font-medium whitespace-nowrap"
@@ -142,6 +142,7 @@ export function PositionsPage() {
                     </td>
                     <td className="px-3 py-2 text-right font-mono">{formatInt(pos.quantity)}</td>
                     <td className="px-3 py-2 text-right font-mono">{priceFmt(pos.avg_entry_price)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-(--color-text)">{priceFmt(pos.current_price)}</td>
                     <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bear)' }}>{priceFmt(pos.current_sl)}</td>
                     <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bull)' }}>{priceFmt(pos.current_tp)}</td>
                     <td className="px-3 py-2 text-right"><TrailBadge state={pos.trail_state} /></td>

@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import { tradingApi } from '@/lib/api/trading'
+import { tradingApi, type PositionOut } from '@/lib/api/trading'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Pagination } from '@/components/ui/pagination'
@@ -24,6 +24,24 @@ function pnlCell(val: string): React.ReactNode {
 function priceFmt(val: string | null): string {
   if (!val) return '—'
   return `₹${formatINR(parseFloat(val))}`
+}
+
+// sl_hit/tp_hit are auto-closes by the position monitor; manual is a REST
+// close by the user. Older rows (pre-migration) have no reason → em dash.
+function ExitReason({ reason }: { reason: PositionOut['exit_reason'] }) {
+  const map: Record<string, { text: string; auto: boolean }> = {
+    sl_hit: { text: 'Stop loss', auto: true },
+    tp_hit: { text: 'Target', auto: true },
+    manual: { text: 'Manual', auto: false },
+  }
+  const r = reason ? map[reason] : undefined
+  if (!r) return <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+  return (
+    <span>
+      <span style={{ color: 'var(--color-text)' }}>{r.text}</span>
+      <span className="text-(--color-text-muted)"> · {r.auto ? 'auto' : 'manual'}</span>
+    </span>
+  )
 }
 
 export function TradeHistoryPage() {
@@ -85,7 +103,7 @@ export function TradeHistoryPage() {
             <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
               <thead>
                 <tr className="border-b border-(--color-border)">
-                  {['Symbol', 'Side', 'Qty', 'Entry', 'Exit', 'Realized P&L', 'Opened', 'Closed'].map((h) => (
+                  {['Symbol', 'Side', 'Qty', 'Entry', 'Exit', 'Reason', 'Realized P&L', 'Opened', 'Closed'].map((h) => (
                     <th
                       key={h}
                       className="px-3 py-2 text-[10px] uppercase tracking-wide font-medium whitespace-nowrap"
@@ -119,7 +137,8 @@ export function TradeHistoryPage() {
                     </td>
                     <td className="px-3 py-2 text-right font-mono">{formatInt(pos.quantity)}</td>
                     <td className="px-3 py-2 text-right font-mono">{priceFmt(pos.avg_entry_price)}</td>
-                    <td className="px-3 py-2 text-right font-mono text-(--color-text-muted)">—</td>
+                    <td className="px-3 py-2 text-right font-mono">{priceFmt(pos.exit_price)}</td>
+                    <td className="px-3 py-2 text-right whitespace-nowrap"><ExitReason reason={pos.exit_reason} /></td>
                     <td className="px-3 py-2 text-right">{pnlCell(pos.realized_pnl)}</td>
                     <td className="px-3 py-2 text-right text-(--color-text-muted) whitespace-nowrap">
                       {new Date(pos.opened_at).toLocaleDateString('en-IN', {
