@@ -16,6 +16,7 @@ import { watchlistsApi } from '@/lib/api/watchlists'
 import { Popover } from '@/components/ui/popover'
 import { EmptyState } from '@/components/ui/empty-state'
 import { SimpleSelect } from '@/components/ui/simple-select'
+import { Checkbox } from '@/components/ui/checkbox'
 import { formatCurrency } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
@@ -26,10 +27,41 @@ import {
   formatAlertTime,
 } from './alertPresentation'
 
+// "Entered zone" (source `entry_zone`) is the actionable buy/sell trigger:
+// price re-entered the entry band of a signal the confluence engine already
+// generated. The bell defaults to showing ONLY these — level crosses, S/R
+// zone entries and volume bursts are context, hidden until the user opts in.
+const ENTRY_ONLY_KEY = 'alertbell:entryOnly'
+const ENTRY_SOURCE = 'entry_zone'
+
+function loadEntryOnly(): boolean {
+  try {
+    const v = localStorage.getItem(ENTRY_ONLY_KEY)
+    return v === null ? true : v === '1'
+  } catch {
+    return true
+  }
+}
+
 export function AlertBell() {
   const { alerts, connected, authFailed, styles, setStyles, watchlist, setWatchlist } =
     useAlertStream()
   const { accessToken } = useAuth()
+
+  // Entry-only view (buy/sell zone triggers), persisted across sessions.
+  const [entryOnly, setEntryOnlyState] = useState(loadEntryOnly)
+  const setEntryOnly = (v: boolean) => {
+    setEntryOnlyState(v)
+    try {
+      localStorage.setItem(ENTRY_ONLY_KEY, v ? '1' : '0')
+    } catch {
+      /* private mode / storage disabled — filter still works in-memory */
+    }
+  }
+  const visibleAlerts = useMemo(
+    () => (entryOnly ? alerts.filter((a) => a.source === ENTRY_SOURCE) : alerts),
+    [alerts, entryOnly],
+  )
 
   // Watchlist scope options — cached; the bell mounts once in AppShell.
   const { data: watchlists } = useQuery({
@@ -44,14 +76,14 @@ export function AlertBell() {
   // derived from length drift once trimming starts.
   const [lastSeenId, setLastSeenId] = useState<string | null>(null)
   const unseen = useMemo(() => {
-    if (alerts.length === 0) return 0
-    if (lastSeenId === null) return alerts.length
-    const idx = alerts.findIndex((a) => a.id === lastSeenId)
-    return idx === -1 ? alerts.length : idx
-  }, [alerts, lastSeenId])
+    if (visibleAlerts.length === 0) return 0
+    if (lastSeenId === null) return visibleAlerts.length
+    const idx = visibleAlerts.findIndex((a) => a.id === lastSeenId)
+    return idx === -1 ? visibleAlerts.length : idx
+  }, [visibleAlerts, lastSeenId])
 
   // sid → symbol, cached forever (stock identity is immutable intraday).
-  const sids = useMemo(() => [...new Set(alerts.map((a) => a.sid))], [alerts])
+  const sids = useMemo(() => [...new Set(visibleAlerts.map((a) => a.sid))], [visibleAlerts])
   const stockQueries = useQueries({
     queries: sids.map((sid) => ({
       queryKey: ['alert-stock', sid],
@@ -77,7 +109,7 @@ export function AlertBell() {
       className="w-[360px]"
       trigger={
         <button
-          onClick={() => setLastSeenId(alerts[0]?.id ?? null)}
+          onClick={() => setLastSeenId(visibleAlerts[0]?.id ?? null)}
           className="relative p-1.5 rounded-md text-(--color-text-muted) hover:text-(--color-text) hover:bg-(--color-surface-3) transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-accent)"
           aria-label={unseen > 0 ? `Live alerts, ${unseen} unseen` : 'Live alerts'}
           data-testid="alert-bell"
@@ -108,6 +140,21 @@ export function AlertBell() {
             />
           </div>
           <span className="text-[10px] text-(--color-text-muted)">this session</span>
+        </div>
+
+        <div className="flex items-center gap-2 px-3 py-2 border-b border-(--color-border)">
+          <Checkbox
+            id="alert-entry-only"
+            checked={entryOnly}
+            onCheckedChange={setEntryOnly}
+          />
+          <label
+            htmlFor="alert-entry-only"
+            className="text-[11px] text-(--color-text) select-none cursor-pointer"
+          >
+            Entry signals only
+            <span className="text-(--color-text-muted)"> · buy/sell zone triggers</span>
+          </label>
         </div>
 
         <div className="flex flex-wrap gap-1 px-3 py-2 border-b border-(--color-border)">
@@ -163,17 +210,21 @@ export function AlertBell() {
           </div>
         )}
 
-        {alerts.length === 0 ? (
+        {visibleAlerts.length === 0 ? (
           <EmptyState
             className="py-10 px-6"
-            title="No alerts yet"
-            description="Tick-trigger alerts — level crosses, entry-zone touches, volume bursts — stream here in real time during market hours."
+            title={entryOnly && alerts.length > 0 ? 'No entry signals yet' : 'No alerts yet'}
+            description={
+              entryOnly && alerts.length > 0
+                ? 'Only buy/sell entry-zone triggers are shown. Turn off “Entry signals only” to see level crosses and volume bursts.'
+                : 'Tick-trigger alerts — entry-zone touches, level crosses, volume bursts — stream here in real time during market hours.'
+            }
           />
         ) : (
           // Capped at 100 rows (hook-side) with memoized rows — small
           // enough for a popover without virtualization.
           <ul className="overflow-y-auto divide-y divide-(--color-border)" role="list">
-            {alerts.map((a) => (
+            {visibleAlerts.map((a) => (
               <AlertRow key={a.id} alert={a} symbol={symbolBySid.get(a.sid)} />
             ))}
           </ul>

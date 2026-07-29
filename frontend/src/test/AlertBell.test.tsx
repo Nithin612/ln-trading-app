@@ -59,6 +59,7 @@ function setup() {
 
 describe('AlertBell', () => {
   beforeEach(() => {
+    localStorage.clear() // entry-only default persists here — reset per test
     stream.alerts = []
     stream.connected = true
     stream.authFailed = false
@@ -70,6 +71,8 @@ describe('AlertBell', () => {
     vi.mocked(watchlistsApi.list).mockReset()
     vi.mocked(watchlistsApi.list).mockResolvedValue([])
   })
+
+  const ENTRY_ALERT: LiveAlert = { ...ALERT, tag: 'zone_enter', source: 'entry_zone' }
 
   it('shows the empty state when no alerts have arrived', () => {
     setup()
@@ -88,6 +91,8 @@ describe('AlertBell', () => {
     stream.alerts = [ALERT]
     setup()
     fireEvent.click(screen.getByTestId('alert-bell'))
+    // ALERT is a PDH cross, not an entry-zone trigger → reveal it
+    fireEvent.click(screen.getByRole('checkbox'))
 
     // symbol not yet loaded → sid placeholder, but the alert itself renders
     expect(screen.getByText('#42')).toBeInTheDocument()
@@ -101,7 +106,8 @@ describe('AlertBell', () => {
   })
 
   it('unseen badge counts new alerts and clears on open', () => {
-    stream.alerts = [ALERT, { ...ALERT, id: '1752212345679-0' }]
+    // Badge counts the VISIBLE set — use entry-zone alerts (the default view)
+    stream.alerts = [ENTRY_ALERT, { ...ENTRY_ALERT, id: '1752212345679-0' }]
     vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
     setup()
     expect(screen.getByTestId('alert-unseen')).toHaveTextContent('2')
@@ -114,18 +120,56 @@ describe('AlertBell', () => {
     vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
     setup()
     fireEvent.click(screen.getByTestId('alert-bell'))
+    fireEvent.click(screen.getByRole('checkbox')) // non-entry source → reveal it
     expect(screen.getByText('future_condition')).toBeInTheDocument()
     expect(screen.getByText(/future_source/)).toBeInTheDocument()
   })
 
   it('badge caps its display at 99+', () => {
     stream.alerts = Array.from({ length: 100 }, (_, i) => ({
-      ...ALERT,
+      ...ENTRY_ALERT,
       id: `id-${i}`,
     }))
     vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
     setup()
     expect(screen.getByTestId('alert-unseen')).toHaveTextContent('99+')
+  })
+
+  it('defaults to entry-only: shows entry-zone triggers, hides other alerts', () => {
+    stream.alerts = [
+      { ...ENTRY_ALERT, id: 'e', price: '111.0000' },
+      { ...ALERT, id: 'p', tag: 'cross_up', source: 'pdh', price: '222.0000' },
+    ]
+    vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    expect(screen.getByText('Entered zone')).toBeInTheDocument()
+    expect(screen.getByText(/111\.00/)).toBeInTheDocument()
+    // the PDH cross is hidden by default
+    expect(screen.queryByText('Crossed above')).not.toBeInTheDocument()
+    expect(screen.queryByText(/222\.00/)).not.toBeInTheDocument()
+  })
+
+  it('toggling entry-only off reveals all triggers and persists the choice', () => {
+    stream.alerts = [
+      { ...ENTRY_ALERT, id: 'e', price: '111.0000' },
+      { ...ALERT, id: 'p', tag: 'cross_up', source: 'pdh', price: '222.0000' },
+    ]
+    vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    fireEvent.click(screen.getByRole('checkbox'))
+    expect(screen.getByText('Entered zone')).toBeInTheDocument()
+    expect(screen.getByText('Crossed above')).toBeInTheDocument()
+    expect(localStorage.getItem('alertbell:entryOnly')).toBe('0')
+  })
+
+  it('shows the entry-only empty state when only non-entry alerts exist', () => {
+    stream.alerts = [{ ...ALERT, tag: 'cross_up', source: 'pdh' }]
+    vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    expect(screen.getByText('No entry signals yet')).toBeInTheDocument()
   })
 
   it('style filter chips toggle the server-side subscription', () => {
