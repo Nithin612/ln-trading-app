@@ -1,8 +1,11 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "@fontsource-variable/geist/index.css";
-@import "@fontsource-variable/inter/index.css";
-@import "@fontsource-variable/jetbrains-mono/index.css";
+/* Inter + JetBrains Mono are not installed on this machine (not in
+   package.json or the pnpm store), so their @imports 500'd the whole
+   stylesheet. Geist is the one bundled variable font; the Inter/JetBrains
+   families remain listed in tokens.css and fall back gracefully to system
+   fonts when not present. Re-add the @fontsource packages to restore them. */
 @import "./tokens.css";
 
 *, *::before, *::after {
