@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
-import { tradingApi, type PositionOut } from '@/lib/api/trading'
+import { tradingApi, type PositionOut, type ShadowComparison } from '@/lib/api/trading'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Pagination } from '@/components/ui/pagination'
@@ -44,6 +44,37 @@ function ExitReason({ reason }: { reason: PositionOut['exit_reason'] }) {
   )
 }
 
+function pctFmt(x: number | null): string {
+  if (x == null) return '—'
+  return `${Math.round(x * 100)}%`
+}
+
+// Max favourable excursion (gross) reached while the trade was open. Only
+// meaningful when the trade actually went into profit at some point.
+function PeakCell({ cmp }: { cmp: ShadowComparison | undefined }) {
+  const n = cmp?.peak_gross != null ? parseFloat(cmp.peak_gross) : null
+  if (n == null || n <= 0) return <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+  return <span className="font-mono">₹{formatINR(n)}</span>
+}
+
+// How much of the peak (gross) the realised (net) exit kept, and — when the
+// Layered Ratchet Stop would have done better — what it would have captured.
+function CaptureCell({ cmp }: { cmp: ShadowComparison | undefined }) {
+  const actual = cmp?.actual_capture_pct
+  if (actual == null) return <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+  const layered = cmp?.policies.find((p) => p.policy === 'layered')?.capture_pct ?? null
+  const col =
+    actual >= 0.6 ? 'var(--color-bull)' : actual >= 0.3 ? 'var(--color-warning)' : 'var(--color-bear)'
+  return (
+    <span className="whitespace-nowrap">
+      <span style={{ color: col, fontWeight: 600 }}>{pctFmt(actual)}</span>
+      {layered != null && layered > actual && (
+        <span className="text-(--color-text-muted)"> · layered {pctFmt(layered)}</span>
+      )}
+    </span>
+  )
+}
+
 export function TradeHistoryPage() {
   const { accessToken } = useAuth()
   const [page, setPage] = useState(0)
@@ -53,6 +84,18 @@ export function TradeHistoryPage() {
     queryFn: () => tradingApi.getHistory({ limit: PAGE_SIZE, offset: page * PAGE_SIZE }, accessToken!),
     enabled: !!accessToken,
   })
+
+  // Shadow comparison (peak / capture %) for recent closed trades — replayed
+  // from 1m candles server-side; cached, not re-fetched per page.
+  const { data: shadow } = useQuery({
+    queryKey: ['shadow-compare'],
+    queryFn: () => tradingApi.getShadowCompare({ limit: 100 }, accessToken!),
+    enabled: !!accessToken,
+    staleTime: 300_000,
+  })
+  const shadowById = new Map<string, ShadowComparison>(
+    (shadow?.comparisons ?? []).map((c) => [c.position_id, c]),
+  )
 
   const positions = data?.positions ?? []
   const totalPages = data ? Math.ceil(data.total / PAGE_SIZE) : 0
@@ -80,13 +123,19 @@ export function TradeHistoryPage() {
       </div>
 
       <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg">
-        <div className="px-4 py-3 border-b border-(--color-border) flex items-center justify-between">
-          <span className="text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">
-            Trade History
-          </span>
-          {data && (
-            <span className="text-xs text-(--color-text-muted)">{data.total} trades</span>
-          )}
+        <div className="px-4 py-3 border-b border-(--color-border)">
+          <div className="flex items-center justify-between">
+            <span className="text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">
+              Trade History
+            </span>
+            {data && (
+              <span className="text-xs text-(--color-text-muted)">{data.total} trades</span>
+            )}
+          </div>
+          <p className="text-[11px] text-(--color-text-muted) mt-1">
+            Peak = best unrealised profit reached · Capture = realised ÷ peak ·
+            {' '}“layered” = what the Layered Ratchet Stop would have kept (shadow, not live).
+          </p>
         </div>
 
         {isLoading && <div className="p-4"><Skeleton className="h-48 w-full" /></div>}
@@ -103,7 +152,7 @@ export function TradeHistoryPage() {
             <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
               <thead>
                 <tr className="border-b border-(--color-border)">
-                  {['Symbol', 'Side', 'Qty', 'Entry', 'Exit', 'Reason', 'Realized P&L', 'Opened', 'Closed'].map((h) => (
+                  {['Symbol', 'Side', 'Qty', 'Entry', 'Exit', 'Reason', 'Realized P&L', 'Peak', 'Capture', 'Opened', 'Closed'].map((h) => (
                     <th
                       key={h}
                       className="px-3 py-2 text-[10px] uppercase tracking-wide font-medium whitespace-nowrap"
@@ -140,6 +189,8 @@ export function TradeHistoryPage() {
                     <td className="px-3 py-2 text-right font-mono">{priceFmt(pos.exit_price)}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap"><ExitReason reason={pos.exit_reason} /></td>
                     <td className="px-3 py-2 text-right">{pnlCell(pos.realized_pnl)}</td>
+                    <td className="px-3 py-2 text-right"><PeakCell cmp={shadowById.get(pos.id)} /></td>
+                    <td className="px-3 py-2 text-right"><CaptureCell cmp={shadowById.get(pos.id)} /></td>
                     <td className="px-3 py-2 text-right text-(--color-text-muted) whitespace-nowrap">
                       {new Date(pos.opened_at).toLocaleDateString('en-IN', {
                         timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: '2-digit',

@@ -15,6 +15,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import logging
 import sys
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -38,6 +39,9 @@ def _money(x: Decimal | None) -> str:
 
 
 async def run(limit: int) -> int:
+    # Silence SQLAlchemy echo (the app engine enables it on import) so the
+    # report is the only thing on stdout.
+    logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     now = datetime.now(tz=UTC)
     async with AsyncSessionFactory() as db:
         rows = (

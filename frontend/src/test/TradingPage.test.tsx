@@ -195,6 +195,58 @@ describe('PositionsPage', () => {
 describe('TradeHistoryPage', () => {
   beforeEach(() => {
     vi.spyOn(tradingApiModule.tradingApi, 'getDailyPnl').mockResolvedValue(makeDailyPnl())
+    vi.spyOn(tradingApiModule.tradingApi, 'getShadowCompare').mockResolvedValue({
+      total: 0,
+      comparisons: [],
+    })
+  })
+
+  it('shows peak and capture % (incl. layered) from the shadow comparator', async () => {
+    const closed = makePosition({
+      id: 'pos-cap',
+      closed_at: new Date().toISOString(),
+      realized_pnl: '1020.89',
+    })
+    vi.spyOn(tradingApiModule.tradingApi, 'getHistory').mockResolvedValue({
+      total: 1,
+      positions: [closed],
+    })
+    vi.spyOn(tradingApiModule.tradingApi, 'getShadowCompare').mockResolvedValue({
+      total: 1,
+      comparisons: [
+        {
+          position_id: 'pos-cap',
+          symbol: 'RELIANCE',
+          side: 'SHORT',
+          quantity: 547,
+          entry: '556.75',
+          original_sl: '563.00',
+          classification: 'swing',
+          bars: 151,
+          peak_price: '546.90',
+          peak_gross: '5388.00',
+          actual_exit_price: '553.62',
+          actual_net: '1020.89',
+          actual_capture_pct: 0.19,
+          policies: [
+            {
+              policy: 'layered',
+              exit_price: '551.89',
+              exit_time: null,
+              exit_net: '1984.00',
+              still_open: false,
+              capture_pct: 0.37,
+            },
+          ],
+          note: null,
+        },
+      ],
+    })
+    wrap(<TradeHistoryPage />)
+    await waitFor(() => expect(screen.getByText('RELIANCE')).toBeInTheDocument())
+    expect(screen.getByText(/5,388/)).toBeInTheDocument() // peak (gross)
+    expect(screen.getByText('19%')).toBeInTheDocument() // actual capture
+    expect(screen.getByText(/layered 37%/)).toBeInTheDocument() // upside vs layered
   })
 
   it('shows empty state when no history', async () => {

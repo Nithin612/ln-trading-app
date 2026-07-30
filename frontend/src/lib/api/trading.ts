@@ -85,6 +85,39 @@ export interface PaperRecordOut {
   last_date: string | null
 }
 
+// Profit-lock shadow comparator (read-only evidence — controls no orders).
+export interface ShadowPolicy {
+  policy: string
+  exit_price: string | null
+  exit_time: string | null
+  exit_net: string | null
+  still_open: boolean
+  capture_pct: number | null
+}
+
+export interface ShadowComparison {
+  position_id: string
+  symbol: string
+  side: 'LONG' | 'SHORT'
+  quantity: number
+  entry: string
+  original_sl: string
+  classification: string
+  bars: number
+  peak_price: string | null
+  peak_gross: string | null
+  actual_exit_price: string | null
+  actual_net: string | null
+  actual_capture_pct: number | null
+  policies: ShadowPolicy[]
+  note: string | null
+}
+
+export interface ShadowCompareResponse {
+  total: number
+  comparisons: ShadowComparison[]
+}
+
 export const tradingApi = {
   placeOrder(
     params: { signal_id: string; side?: string; quantity?: number },
@@ -130,6 +163,14 @@ export const tradingApi = {
 
   getDailyPnl(token: string): Promise<DailyPnlOut> {
     return api.get<DailyPnlOut>('/trading/daily-pnl', token)
+  },
+
+  getShadowCompare(
+    params: { limit?: number },
+    token: string,
+  ): Promise<ShadowCompareResponse> {
+    const qs = params.limit != null ? `?limit=${params.limit}` : ''
+    return api.get<ShadowCompareResponse>(`/trading/shadow-compare${qs}`, token)
   },
 
   getPaperRecord(token: string, targetDays = 30): Promise<PaperRecordOut> {
