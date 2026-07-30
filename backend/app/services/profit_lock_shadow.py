@@ -70,6 +70,11 @@ class ShadowComparison:
     actual_net: Decimal | None       # realised (closed) — net of costs
     actual_capture_pct: float | None
     policies: list[PolicyResult]
+    # True when the recorded exit price is BETTER than anything that really
+    # traded in the window — i.e. the trade closed on a stale/pre-open price
+    # (the fixed monitor bug). The realised P&L is then untrustworthy and no
+    # capture % is computed against it.
+    actual_exit_off_tape: bool = False
     note: str | None = None
 
 
@@ -225,12 +230,26 @@ async def compare_position(
     orig_sl = Decimal(str(original_sl))
     is_long = side.upper() == "LONG"
 
-    # MFE over the window (gross peak profit).
-    peak_price = max(b.high for b in bars) if is_long else min(b.low for b in bars)
+    # MFE over the window (gross peak profit), from the real tape.
+    true_high = max(b.high for b in bars)
+    true_low = min(b.low for b in bars)
+    peak_price = true_high if is_long else true_low
     peak_gross = compute_pnl(side=side, entry=entry, exit_price=peak_price, quantity=qty)
     base.peak_price = peak_price
     base.peak_gross = peak_gross
-    base.actual_capture_pct = _capture(base.actual_net, peak_gross)
+
+    # If the recorded exit is BETTER than anything that really traded (a short
+    # closed below the true low, or a long above the true high), it closed on a
+    # stale/pre-open price — the fixed monitor bug. The realised P&L is then
+    # fictional (Peak < realised), so flag it and don't compute a capture %.
+    exit_px = base.actual_exit_price
+    if exit_px is not None and (
+        (is_long and exit_px > true_high) or (not is_long and exit_px < true_low)
+    ):
+        base.actual_exit_off_tape = True
+        base.note = "exit off-tape (stale/pre-open close) — realised P&L unreliable"
+    else:
+        base.actual_capture_pct = _capture(base.actual_net, peak_gross)
 
     atr = await latest_atr(
         db,

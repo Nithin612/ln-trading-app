@@ -213,6 +213,28 @@ class TestShadowCompare:
         # capture ratios are populated and ordered the same way
         assert by["layered"].capture_pct > by["ladder"].capture_pct
 
+    async def test_off_tape_exit_is_flagged_and_capture_suppressed(
+        self, db: AsyncSession
+    ) -> None:
+        """Regression (07-27 LENSKART): a SHORT recorded a favourable exit BELOW
+        anything that really traded (a stale/pre-open close). The realised P&L
+        is then fictional — flag it, and compute no capture % against it — while
+        peak and the policy replays stay real."""
+        from app.services.profit_lock_shadow import compare_position
+
+        pos = await self._short_scenario(db)  # real 1m low is 91
+        pos.exit_price = Decimal("88.00")     # below the true low → never traded
+        pos.realized_pnl = Decimal("6000")    # fictional profit
+        await db.flush()
+
+        comp = await compare_position(db, pos, now=datetime.now(tz=UTC))
+
+        assert comp.actual_exit_off_tape is True
+        assert comp.actual_capture_pct is None          # no nonsensical % vs a fake exit
+        assert comp.note is not None and "off-tape" in comp.note
+        assert comp.peak_gross == Decimal("900")        # peak still real
+        assert any(p.policy == "layered" for p in comp.policies)  # policies still replayed
+
     async def test_insufficient_candles_notes_and_skips(self, db: AsyncSession) -> None:
         from app.core.security import hash_password
         from app.models.user import User

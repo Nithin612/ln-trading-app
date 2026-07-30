@@ -228,6 +228,7 @@ describe('TradeHistoryPage', () => {
           actual_exit_price: '553.62',
           actual_net: '1020.89',
           actual_capture_pct: 0.19,
+          actual_exit_off_tape: false,
           policies: [
             {
               policy: 'layered',
@@ -246,7 +247,61 @@ describe('TradeHistoryPage', () => {
     await waitFor(() => expect(screen.getByText('RELIANCE')).toBeInTheDocument())
     expect(screen.getByText(/5,388/)).toBeInTheDocument() // peak (gross)
     expect(screen.getByText('19%')).toBeInTheDocument() // actual capture
-    expect(screen.getByText(/layered 37%/)).toBeInTheDocument() // upside vs layered
+    expect(screen.getByText(/1,984/)).toBeInTheDocument() // after-lock ₹ (realistic keep)
+    expect(screen.getByText(/37%/)).toBeInTheDocument() // after-lock capture
+  })
+
+  it('flags an off-tape (stale-price) close and shows the real after-lock value', async () => {
+    // Regression: the 07-27 LENSKART closed 08:30 pre-open on a stale price
+    // (556.35) that never traded — peak (real ₹218) < realised (fictional
+    // ₹2,711). The row must flag it and show the true-tape outcome, not a
+    // nonsensical 1239% capture.
+    const closed = makePosition({
+      id: 'pos-off',
+      closed_at: new Date().toISOString(),
+      realized_pnl: '2711.54',
+    })
+    vi.spyOn(tradingApiModule.tradingApi, 'getHistory').mockResolvedValue({
+      total: 1,
+      positions: [closed],
+    })
+    vi.spyOn(tradingApiModule.tradingApi, 'getShadowCompare').mockResolvedValue({
+      total: 1,
+      comparisons: [
+        {
+          position_id: 'pos-off',
+          symbol: 'RELIANCE',
+          side: 'SHORT',
+          quantity: 547,
+          entry: '562.55',
+          original_sl: '563.00',
+          classification: 'swing',
+          bars: 320,
+          peak_price: '562.15',
+          peak_gross: '250.00',
+          actual_exit_price: '556.35',
+          actual_net: '2711.54',
+          actual_capture_pct: null,
+          actual_exit_off_tape: true,
+          policies: [
+            {
+              policy: 'layered',
+              exit_price: '563.00',
+              exit_time: null,
+              exit_net: '-930.00',
+              still_open: false,
+              capture_pct: null,
+            },
+          ],
+          note: 'exit off-tape (stale/pre-open close) — realised P&L unreliable',
+        },
+      ],
+    })
+    wrap(<TradeHistoryPage />)
+    await waitFor(() => expect(screen.getByText('RELIANCE')).toBeInTheDocument())
+    expect(screen.getByText('⚠ off-tape')).toBeInTheDocument() // capture flagged, no % shown
+    expect(screen.getByText(/250/)).toBeInTheDocument() // peak still shown (real tape)
+    expect(screen.getByText(/₹930/)).toBeInTheDocument() // after-lock = true-price outcome (loss)
   })
 
   it('shows empty state when no history', async () => {

@@ -57,19 +57,57 @@ function PeakCell({ cmp }: { cmp: ShadowComparison | undefined }) {
   return <span className="font-mono">₹{formatINR(n)}</span>
 }
 
-// How much of the peak (gross) the realised (net) exit kept, and — when the
-// Layered Ratchet Stop would have done better — what it would have captured.
+const OFF_TAPE_TITLE =
+  'Closed on a stale/pre-open price that never actually traded — this realised ' +
+  'P&L is unreliable. See “After-lock” for the real-tape outcome.'
+
+// How much of the peak (gross) the realised (net) exit kept. When the trade
+// closed off-tape (stale price), realised P&L is fictional → no % is shown.
 function CaptureCell({ cmp }: { cmp: ShadowComparison | undefined }) {
+  if (cmp?.actual_exit_off_tape) {
+    return (
+      <span style={{ color: 'var(--color-warning)' }} title={OFF_TAPE_TITLE}>
+        ⚠ off-tape
+      </span>
+    )
+  }
   const actual = cmp?.actual_capture_pct
   if (actual == null) return <span style={{ color: 'var(--color-text-muted)' }}>—</span>
-  const layered = cmp?.policies.find((p) => p.policy === 'layered')?.capture_pct ?? null
   const col =
     actual >= 0.6 ? 'var(--color-bull)' : actual >= 0.3 ? 'var(--color-warning)' : 'var(--color-bear)'
+  return <span style={{ color: col, fontWeight: 600 }}>{pctFmt(actual)}</span>
+}
+
+// "Realistic value after giveback" — the ₹ the Layered Ratchet Stop would have
+// kept, replayed on the real 1m tape. Robust even when the recorded exit is
+// off-tape (that's the whole point: it shows the true-price outcome).
+function AfterLockCell({ cmp }: { cmp: ShadowComparison | undefined }) {
+  const layered = cmp?.policies.find((p) => p.policy === 'layered')
+  if (!layered || layered.exit_net == null) {
+    return <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+  }
+  const n = parseFloat(layered.exit_net)
   return (
     <span className="whitespace-nowrap">
-      <span style={{ color: col, fontWeight: 600 }}>{pctFmt(actual)}</span>
-      {layered != null && layered > actual && (
-        <span className="text-(--color-text-muted)"> · layered {pctFmt(layered)}</span>
+      <span style={{ color: n >= 0 ? 'var(--color-bull)' : 'var(--color-bear)', fontWeight: 600 }}>
+        {n >= 0 ? '+' : '-'}₹{formatINR(Math.abs(n))}
+      </span>
+      {layered.capture_pct != null && (
+        <span className="text-(--color-text-muted)"> · {pctFmt(layered.capture_pct)}</span>
+      )}
+    </span>
+  )
+}
+
+// Realised P&L with an off-tape warning marker (the ₹ figure is fictional then).
+function RealizedCell({ val, offTape }: { val: string; offTape: boolean }) {
+  return (
+    <span className="whitespace-nowrap">
+      {pnlCell(val)}
+      {offTape && (
+        <span style={{ color: 'var(--color-warning)' }} title={OFF_TAPE_TITLE}>
+          {' '}⚠
+        </span>
       )}
     </span>
   )
@@ -133,8 +171,9 @@ export function TradeHistoryPage() {
             )}
           </div>
           <p className="text-[11px] text-(--color-text-muted) mt-1">
-            Peak = best unrealised profit reached · Capture = realised ÷ peak ·
-            {' '}“layered” = what the Layered Ratchet Stop would have kept (shadow, not live).
+            Peak = best unrealised profit reached (real 1m tape) · Capture = realised ÷ peak ·
+            {' '}After-lock = what the Layered Ratchet Stop would realistically have kept (shadow, not live).
+            {' '}⚠ = closed on a stale/off-tape price, so realised P&L is unreliable.
           </p>
         </div>
 
@@ -152,7 +191,7 @@ export function TradeHistoryPage() {
             <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
               <thead>
                 <tr className="border-b border-(--color-border)">
-                  {['Symbol', 'Side', 'Qty', 'Entry', 'Exit', 'Reason', 'Realized P&L', 'Peak', 'Capture', 'Opened', 'Closed'].map((h) => (
+                  {['Symbol', 'Side', 'Qty', 'Entry', 'Exit', 'Reason', 'Realized P&L', 'Peak', 'Capture', 'After-lock', 'Opened', 'Closed'].map((h) => (
                     <th
                       key={h}
                       className="px-3 py-2 text-[10px] uppercase tracking-wide font-medium whitespace-nowrap"
@@ -188,9 +227,12 @@ export function TradeHistoryPage() {
                     <td className="px-3 py-2 text-right font-mono">{priceFmt(pos.avg_entry_price)}</td>
                     <td className="px-3 py-2 text-right font-mono">{priceFmt(pos.exit_price)}</td>
                     <td className="px-3 py-2 text-right whitespace-nowrap"><ExitReason reason={pos.exit_reason} /></td>
-                    <td className="px-3 py-2 text-right">{pnlCell(pos.realized_pnl)}</td>
+                    <td className="px-3 py-2 text-right">
+                      <RealizedCell val={pos.realized_pnl} offTape={!!shadowById.get(pos.id)?.actual_exit_off_tape} />
+                    </td>
                     <td className="px-3 py-2 text-right"><PeakCell cmp={shadowById.get(pos.id)} /></td>
                     <td className="px-3 py-2 text-right"><CaptureCell cmp={shadowById.get(pos.id)} /></td>
+                    <td className="px-3 py-2 text-right"><AfterLockCell cmp={shadowById.get(pos.id)} /></td>
                     <td className="px-3 py-2 text-right text-(--color-text-muted) whitespace-nowrap">
                       {new Date(pos.opened_at).toLocaleDateString('en-IN', {
                         timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: '2-digit',

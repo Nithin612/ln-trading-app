@@ -109,6 +109,7 @@ export interface ShadowComparison {
   actual_exit_price: string | null
   actual_net: string | null
   actual_capture_pct: number | null
+  actual_exit_off_tape: boolean
   policies: ShadowPolicy[]
   note: string | null
 }

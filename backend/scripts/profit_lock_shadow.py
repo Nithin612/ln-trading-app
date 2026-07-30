@@ -60,13 +60,16 @@ async def run(limit: int) -> int:
         for pos in rows:
             comp = await compare_position(db, pos, now=now)
             head = f"{comp.symbol:<12} {comp.side:<5} {comp.classification:<10} qty={comp.quantity}"
-            if comp.note:
+            # No replay possible (no SL / no candles) → one-line note, skip.
+            if not comp.policies:
                 print(f"{head}   [{comp.note}]", flush=True)
                 continue
+            warn = f"   ⚠ {comp.note}" if comp.note else ""
+            actual = "off-tape" if comp.actual_exit_off_tape else _money(comp.actual_net)
             print(
-                f"\n{head}\n"
+                f"\n{head}{warn}\n"
                 f"  peak(gross) {_money(comp.peak_gross)}   "
-                f"actual(net) {_money(comp.actual_net)}   "
+                f"actual(net) {actual:>10}   "
                 f"capture {_pct(comp.actual_capture_pct)}   bars={comp.bars}",
                 flush=True,
             )

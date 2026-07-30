@@ -112,6 +112,7 @@ class ShadowComparisonOut(BaseModel):
     actual_exit_price: Decimal | None
     actual_net: Decimal | None
     actual_capture_pct: float | None
+    actual_exit_off_tape: bool = False
     policies: list[ShadowPolicyOut]
     note: str | None = None
 
