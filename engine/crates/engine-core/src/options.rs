@@ -69,8 +69,10 @@ pub struct Bsm {
 
 /// The option Greeks. Units: `delta` per ₹1 of spot; `gamma` per ₹1²; `vega`
 /// per 1.00 of vol (÷100 for per-1%); `theta` per YEAR (÷365 for per-day);
-/// `rho` per 1.00 of rate. `vega`/`theta`/`rho` follow the standard BSM
-/// definitions holding `carry` fixed as `rate` varies.
+/// `rho` per 1.00 of rate. `rho` is per-instrument (Haug): for `carry == 0`
+/// (Black-76, options on futures) the forward is rate-independent so
+/// `rho = −T·price`; otherwise `carry` is coupled to `rate` (equity/index
+/// spot) and `rho` is the standard `±T·K·e^{−rT}·N(±d2)`.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Greeks {
     pub delta: f64,
@@ -143,7 +145,14 @@ pub fn greeks(kind: OptionType, p: &Bsm) -> Option<Greeks> {
             let theta = -p.spot * carry_disc * pdf_d1 * p.vol / (2.0 * sqrt_t)
                 - (p.carry - p.rate) * p.spot * carry_disc * norm_cdf(d1)
                 - p.rate * p.strike * rate_disc * norm_cdf(d2);
-            let rho = p.t * p.strike * rate_disc * norm_cdf(d2);
+            let rho = if p.carry == 0.0 {
+                // Black-76 (options on futures): the forward is rate-independent,
+                // r only discounts → ρ = −T·price.
+                -p.t * (p.spot * carry_disc * norm_cdf(d1) - p.strike * rate_disc * norm_cdf(d2))
+            } else {
+                // carry coupled to r (equity/index spot): standard Black-Scholes ρ.
+                p.t * p.strike * rate_disc * norm_cdf(d2)
+            };
             (delta, theta, rho)
         }
         OptionType::Put => {
@@ -151,7 +160,11 @@ pub fn greeks(kind: OptionType, p: &Bsm) -> Option<Greeks> {
             let theta = -p.spot * carry_disc * pdf_d1 * p.vol / (2.0 * sqrt_t)
                 + (p.carry - p.rate) * p.spot * carry_disc * norm_cdf(-d1)
                 + p.rate * p.strike * rate_disc * norm_cdf(-d2);
-            let rho = -p.t * p.strike * rate_disc * norm_cdf(-d2);
+            let rho = if p.carry == 0.0 {
+                -p.t * (p.strike * rate_disc * norm_cdf(-d2) - p.spot * carry_disc * norm_cdf(-d1))
+            } else {
+                -p.t * p.strike * rate_disc * norm_cdf(-d2)
+            };
             (delta, theta, rho)
         }
     };
@@ -207,6 +220,17 @@ pub fn implied_vol(
         return None;
     }
 
+    // A converged root is only trustworthy where the premium is vol-sensitive.
+    // Deep-ITM / near-expiry premia sit in a flat band (vega → 0) where any vol
+    // in a wide interval reprices within TOL — report those as undefined.
+    const VEGA_FLOOR: f64 = 1e-6;
+    let accept = |vol: f64| -> Option<f64> {
+        match greeks(kind, &at(vol)) {
+            Some(g) if g.vega >= VEGA_FLOOR => Some(vol),
+            _ => None,
+        }
+    };
+
     // Manaster–Koehler seed.
     let seed = (2.0 * ((spot / strike).ln() + carry * t).abs() / t).sqrt();
     let mut vol = seed.clamp(1e-3, 5.0);
@@ -216,7 +240,7 @@ pub fn implied_vol(
         let p = price(kind, &at(vol))?;
         let diff = p - market_price;
         if diff.abs() < TOL {
-            return Some(vol);
+            return accept(vol);
         }
         let v = greeks(kind, &at(vol))?.vega;
         if v < 1e-8 {
@@ -233,7 +257,7 @@ pub fn implied_vol(
         let mid = 0.5 * (lo + hi);
         let pmid = price(kind, &at(mid))? - market_price;
         if pmid.abs() < TOL {
-            return Some(mid);
+            return accept(mid);
         }
         if (pmid > 0.0) == (plo > 0.0) {
             lo = mid;
@@ -242,7 +266,7 @@ pub fn implied_vol(
             hi = mid;
         }
         if (hi - lo) < 1e-9 {
-            return Some(0.5 * (lo + hi));
+            return accept(0.5 * (lo + hi));
         }
     }
     None
@@ -342,6 +366,46 @@ mod tests {
         assert!(implied_vol(OptionType::Call, 1e9, 100.0, 100.0, 0.25, 0.06, 0.0).is_none());
         assert!(implied_vol(OptionType::Call, 5.0, 100.0, 100.0, 0.0, 0.06, 0.0).is_none());
         // t<=0
+    }
+
+    // ── rho is per-instrument (Haug). ───────────────────────────────────────
+    #[test]
+    fn rho_black76_is_minus_t_price() {
+        // Options on futures (carry = 0): ρ = −T·price for call AND put.
+        let p = bsm(100.0, 100.0, 0.5, 0.06, 0.0, 0.25);
+        for kind in [OptionType::Call, OptionType::Put] {
+            let px = price(kind, &p).unwrap();
+            let g = greeks(kind, &p).unwrap();
+            assert!(
+                (g.rho - (-0.5 * px)).abs() < 1e-9,
+                "{kind:?} rho {} vs {}",
+                g.rho,
+                -0.5 * px
+            );
+        }
+    }
+
+    #[test]
+    fn rho_equity_matches_finite_difference() {
+        // Equity (carry = rate): ρ = ∂price/∂r with carry coupled to r.
+        let (s, k, t, r, v) = (100.0, 100.0, 0.5, 0.06, 0.25);
+        let h = 1e-4;
+        for kind in [OptionType::Call, OptionType::Put] {
+            let up = price(kind, &bsm(s, k, t, r + h, r + h, v)).unwrap();
+            let dn = price(kind, &bsm(s, k, t, r - h, r - h, v)).unwrap();
+            let fd = (up - dn) / (2.0 * h);
+            let rho = greeks(kind, &bsm(s, k, t, r, r, v)).unwrap().rho;
+            assert!((rho - fd).abs() < 1e-4, "{kind:?} rho {rho} vs fd {fd}");
+        }
+    }
+
+    #[test]
+    fn implied_vol_rejects_low_vega_premium() {
+        // Deep-ITM, near-expiry, priced at intrinsic → vega ≈ 0, no recoverable
+        // vol → None (not an arbitrary in-band value).
+        let (s, k, t, r, b): (f64, f64, f64, f64, f64) = (150.0, 100.0, 0.05, 0.06, 0.0);
+        let at_intrinsic = (s - k) * (-r * t).exp();
+        assert!(implied_vol(OptionType::Call, at_intrinsic, s, k, t, r, b).is_none());
     }
 
     // ── Greek signs / bounds. ────────────────────────────────────────────────

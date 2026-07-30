@@ -79,6 +79,8 @@ def greeks(kind: str, spot, strike, t, rate, carry, vol) -> dict[str, float]:
     pdf_d1 = norm_pdf(d1)
     gamma = carry_disc * pdf_d1 / (spot * vol * sqrt_t)
     vega = spot * carry_disc * pdf_d1 * sqrt_t
+    # rho is per-instrument (Haug): carry==0 (Black-76) → −T·price; else the
+    # standard equity form with carry coupled to rate. Mirrors options.rs.
     if kind == "call":
         delta = carry_disc * norm_cdf(d1)
         theta = (
@@ -86,7 +88,10 @@ def greeks(kind: str, spot, strike, t, rate, carry, vol) -> dict[str, float]:
             - (carry - rate) * spot * carry_disc * norm_cdf(d1)
             - rate * strike * rate_disc * norm_cdf(d2)
         )
-        rho = t * strike * rate_disc * norm_cdf(d2)
+        if carry == 0.0:
+            rho = -t * (spot * carry_disc * norm_cdf(d1) - strike * rate_disc * norm_cdf(d2))
+        else:
+            rho = t * strike * rate_disc * norm_cdf(d2)
     else:
         delta = carry_disc * (norm_cdf(d1) - 1.0)
         theta = (
@@ -94,7 +99,10 @@ def greeks(kind: str, spot, strike, t, rate, carry, vol) -> dict[str, float]:
             + (carry - rate) * spot * carry_disc * norm_cdf(-d1)
             + rate * strike * rate_disc * norm_cdf(-d2)
         )
-        rho = -t * strike * rate_disc * norm_cdf(-d2)
+        if carry == 0.0:
+            rho = -t * (strike * rate_disc * norm_cdf(-d2) - spot * carry_disc * norm_cdf(-d1))
+        else:
+            rho = -t * strike * rate_disc * norm_cdf(-d2)
     return {"delta": delta, "gamma": gamma, "vega": vega, "theta": theta, "rho": rho}
 
 
