@@ -105,6 +105,58 @@ class TestStockList:
         symbols = [s["symbol"] for s in resp.json()["items"]]
         assert "RELIANCE" in symbols
 
+    async def test_search_ranks_prefix_over_bigger_cap_substring(
+        self, client: AsyncClient, auth_headers: dict, db: AsyncSession
+    ) -> None:
+        """Regression: search used to order by market cap, burying the intended
+        match. A prefix match must beat a bigger-cap non-prefix match."""
+        from decimal import Decimal
+
+        ts = await make_stock(db, symbol="TATASTEEL", company_name="Tata Steel Ltd")
+        ts.market_cap_cr = Decimal("50000")
+        # XTATAY contains "TATA" (substring) but is not a prefix match
+        xy = await make_stock(db, symbol="XTATAY", company_name="X Tata Y Ltd")
+        xy.market_cap_cr = Decimal("999999")  # far larger cap
+        await db.commit()
+
+        resp = await client.get(
+            "/api/v1/stocks",
+            params={"q": "TATA", "sort_by": "market_cap_cr", "sort_dir": "desc"},
+            headers=auth_headers,
+        )
+        symbols = [s["symbol"] for s in resp.json()["items"]]
+        assert symbols[0] == "TATASTEEL"  # prefix wins despite ~20× smaller cap
+        assert symbols.index("TATASTEEL") < symbols.index("XTATAY")
+
+    async def test_search_drops_low_similarity_noise(
+        self, client: AsyncClient, auth_headers: dict, db: AsyncSession
+    ) -> None:
+        """Regression: the 0.1 trigram threshold dredged up near-unrelated
+        symbols (e.g. ATAM for 'TATA'). ATAM must no longer be a match."""
+        await make_stock(db, symbol="TATASTEEL", company_name="Tata Steel Ltd")
+        await make_stock(db, symbol="ATAM", company_name="Atam Valves Ltd")
+        await db.commit()
+
+        resp = await client.get(
+            "/api/v1/stocks", params={"q": "TATA"}, headers=auth_headers
+        )
+        symbols = [s["symbol"] for s in resp.json()["items"]]
+        assert "TATASTEEL" in symbols
+        assert "ATAM" not in symbols  # canary: matched on the old 0.1 threshold
+
+    async def test_search_matches_substring_in_symbol(
+        self, client: AsyncClient, auth_headers: dict, db: AsyncSession
+    ) -> None:
+        await make_stock(db, symbol="HDFCBANK", company_name="HDFC Bank Ltd")
+        await make_stock(db, symbol="ICICIBANK", company_name="ICICI Bank Ltd")
+        await db.commit()
+
+        resp = await client.get(
+            "/api/v1/stocks", params={"q": "BANK"}, headers=auth_headers
+        )
+        symbols = [s["symbol"] for s in resp.json()["items"]]
+        assert "HDFCBANK" in symbols and "ICICIBANK" in symbols
+
     async def test_requires_auth(self, client: AsyncClient) -> None:
         resp = await client.get("/api/v1/stocks")
         assert resp.status_code == 401
