@@ -9,7 +9,7 @@ import { StrategyLabPage } from '@/features/strategy/StrategyLabPage'
 const mockUser = {
   id: 1, email: 'lab@example.com', full_name: 'Lab User', role: 'user',
   capital_inr: '100000', risk_per_trade_pct: '2', daily_loss_limit_pct: '3',
-  max_trades_per_day: 2, is_active: true, trading_mode: 'paper', allow_offmarket_entry: false,
+  max_trades_per_day: 2, is_active: true, trading_mode: 'paper', allow_offmarket_entry: false, profit_lock_enabled: false,
   created_at: '', updated_at: '',
 }
 

@@ -48,6 +48,7 @@ async def _make_user(
     daily_loss_pct: Decimal = Decimal("3.00"),
     max_trades: int = 2,
     allow_offmarket_entry: bool = True,  # tests fill without a live market
+    profit_lock_enabled: bool = False,
 ) -> User:
     from app.core.security import hash_password
 
@@ -57,6 +58,7 @@ async def _make_user(
         full_name="Trader",
         role="user",
         is_active=True,
+        profit_lock_enabled=profit_lock_enabled,
         trading_mode="paper",
         capital_inr=capital,
         daily_loss_limit_pct=daily_loss_pct,
@@ -1081,6 +1083,97 @@ class TestPositionMonitor:
 
         assert result == {"closed": 0, "updated": 0, "skipped": 1}
         assert pos.closed_at is None
+
+    # ── Governor selection: Layered Ratchet Stop vs the trail ladder ──────────
+    # No OHLCV bars exist in the test DB, so latest_atr → None and the ATR
+    # chandelier layer contributes nothing; the giveback cap governs. For a
+    # swing signal (arm_r=1.0, giveback tapers 0.55→0.40), entry 500 / SL 480
+    # (R=20) at a peak of 530 (1.5R): giveback = 0.5125, cap = 500 + 30·0.4875
+    # = 514.625. The fixed ladder at the same 1.5R would only reach entry+0.5R
+    # = 510 (state trailing_1). The two values are the discriminator.
+
+    async def test_profit_lock_governs_when_enabled(self, db: AsyncSession) -> None:
+        """profit_lock_enabled → the layered ratchet moves the stop to the
+        giveback cap (514.625), not the ladder rung (510)."""
+        from app.broker.tick_consumer import LTP_KEY
+        from app.tasks.position_monitor import scan_positions
+
+        user = await _make_user(db, profit_lock_enabled=True)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000", sl="480.0000", tp="600.0000")
+        pos = await _open_position(
+            db, user, stock, signal, entry=Decimal("500"), sl=Decimal("480"),
+            tp=Decimal("600"), qty=100,
+        )
+        await db.commit()
+
+        r = await self._set_ltp(stock.id, "530.00")  # 1.5R favourable, below TP
+        try:
+            result = await scan_positions(db, now=_MON_IN_SESSION)
+        finally:
+            await r.delete(LTP_KEY.format(stock_id=stock.id))
+            await r.aclose()
+
+        assert result["updated"] == 1 and result["closed"] == 0
+        assert pos.current_sl == Decimal("514.625")   # giveback cap
+        assert pos.current_sl != Decimal("510")        # canary: NOT the ladder rung
+        assert pos.trail_state == "none"               # lock never touches ladder state
+
+    async def test_ladder_governs_when_profit_lock_disabled(self, db: AsyncSession) -> None:
+        """Regression canary: with the flag OFF (default) the exit path is the
+        unchanged trail ladder — SL to entry+0.5R (510), state trailing_1 — NOT
+        the layered cap (514.625). Pins the OFF path so the wiring can't drift."""
+        from app.broker.tick_consumer import LTP_KEY
+        from app.tasks.position_monitor import scan_positions
+
+        user = await _make_user(db)  # profit_lock_enabled defaults False
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000", sl="480.0000", tp="600.0000")
+        pos = await _open_position(
+            db, user, stock, signal, entry=Decimal("500"), sl=Decimal("480"),
+            tp=Decimal("600"), qty=100,
+        )
+        await db.commit()
+
+        r = await self._set_ltp(stock.id, "530.00")
+        try:
+            result = await scan_positions(db, now=_MON_IN_SESSION)
+        finally:
+            await r.delete(LTP_KEY.format(stock_id=stock.id))
+            await r.aclose()
+
+        assert result["updated"] == 1
+        assert pos.current_sl == Decimal("510")        # ladder rung (entry + 0.5R)
+        assert pos.current_sl != Decimal("514.625")    # canary: NOT the layered cap
+        assert pos.trail_state == "trailing_1"
+
+    async def test_profit_lock_governs_short_side(self, db: AsyncSession) -> None:
+        """Side flows through the wiring: a SHORT (entry 500 / SL 520, R=20) at a
+        low of 470 (1.5R) locks to the mirror cap 500 − 30·0.4875 = 485.375."""
+        from app.broker.tick_consumer import LTP_KEY
+        from app.tasks.position_monitor import scan_positions
+
+        user = await _make_user(db, profit_lock_enabled=True)
+        stock = await make_stock(db)
+        signal = await _make_signal(
+            db, stock.id, direction="SELL", entry="500.0000", sl="520.0000", tp="400.0000"
+        )
+        pos = await _open_position(
+            db, user, stock, signal, side="SHORT", entry=Decimal("500"),
+            sl=Decimal("520"), tp=Decimal("400"), qty=100,
+        )
+        await db.commit()
+
+        r = await self._set_ltp(stock.id, "470.00")  # 1.5R favourable for a short
+        try:
+            result = await scan_positions(db, now=_MON_IN_SESSION)
+        finally:
+            await r.delete(LTP_KEY.format(stock_id=stock.id))
+            await r.aclose()
+
+        assert result["updated"] == 1 and result["closed"] == 0
+        assert pos.current_sl == Decimal("485.375")
+        assert pos.peak_price == Decimal("470")
 
 
 # ── Paper record (30-day-clock view) ───────────────────────────────────────────

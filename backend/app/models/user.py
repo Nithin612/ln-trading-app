@@ -58,6 +58,15 @@ class User(Base):
         Boolean, nullable=False, default=False
     )
 
+    # When True, the position monitor governs open paper positions with the
+    # Layered Ratchet Stop (app/trading/profit_lock.py) instead of the fixed
+    # trail_sl ladder. Default False (ladder) so behaviour is unchanged until
+    # explicitly opted in. Shadow-first: this only affects paper exits.
+    # User-toggleable in Profile → Trading Settings.
+    profit_lock_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False
+    )
+
     created_at: Mapped[datetime] = mapped_column(
         TZ, nullable=False, server_default=func.now()
     )

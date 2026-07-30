@@ -9,7 +9,7 @@ import KiteConnectPage from '@/features/broker/KiteConnectPage'
 const mockUser = {
   id: 1, email: 'admin@trading.com', full_name: 'Admin', role: 'admin',
   capital_inr: '100000', risk_per_trade_pct: '2', daily_loss_limit_pct: '3',
-  max_trades_per_day: 2, allow_offmarket_entry: false, is_active: true,
+  max_trades_per_day: 2, allow_offmarket_entry: false, profit_lock_enabled: false, is_active: true,
   trading_mode: 'paper', created_at: '', updated_at: '',
 }
 

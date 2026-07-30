@@ -34,7 +34,7 @@ vi.mock('@/components/charts/CandlestickChart', async (importOriginal) => {
 const USER = {
   id: 1, email: 'u@example.com', full_name: 'Test', role: 'user' as const,
   capital_inr: '100000', risk_per_trade_pct: '2', daily_loss_limit_pct: '3',
-  max_trades_per_day: 2, is_active: true, trading_mode: 'paper' as const, allow_offmarket_entry: false,
+  max_trades_per_day: 2, is_active: true, trading_mode: 'paper' as const, allow_offmarket_entry: false, profit_lock_enabled: false,
   created_at: '', updated_at: '',
 }
 
