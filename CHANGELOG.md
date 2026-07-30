@@ -7,6 +7,14 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### v2 Phase 4 — F&O analytics (in progress, started 2026-07-30)
+
+- **F&O analytics foundation — slice 4.1 (2026-07-30).** New arithmetic-only analytics computed from the Phase-0 recorders (`fo_bhavcopy`, `option_chain_snapshots`, `india_vix_daily`), read-only (no migration, no frontend):
+  - `app/services/fo_analytics.py` — pure functions `put_call_ratio` (by OI and volume; None when the call side is zero), `max_pain` (writer-payout-minimising strike; ties → lower strike), `atm_strike`/`near_atm` (±N strike window); async loaders `load_chain` (EOD bhavcopy or intraday snapshot — latest at/before `as_of`), `latest_spot`, `futures_basis` (FUT − underlying, absolute + %), `vix_regime` (India VIX percentile within a trailing lookback → low/normal/high band). Money = Decimal, ratios/percentiles = float.
+  - `GET /fo/chain`, `GET /fo/analytics`, `GET /fo/vix-regime` (`app/api/v1/fo.py` + `app/schemas/fo.py`), registered on the v1 router.
+  - Scope boundary: implied vol, Greeks and IV-rank (needing Black-Scholes) are intentionally **not** here — that is Rust-only (`engine/`, slice 4.2). The option-selling suggestion engine (slice 4.3) is deferred pending rule calibration.
+  - Tests: `tests/test_fo_analytics.py` — hand-computed PCR / max-pain / ATM / window, DB loaders (latest-day/-snapshot selection, basis, VIX percentile), and /fo API smoke incl. auth + empty-state 404. 23 tests.
+
 ### v2 Phase 3 — Realtime v2 (in progress, started 2026-07-09)
 
 - **Layered Ratchet Stop wired into live paper exits, behind a per-user toggle (2026-07-30).** New `users.profit_lock_enabled` (default **False** = the unchanged `trail_sl` ladder). When on, the position monitor governs open **paper** positions with the Layered Ratchet Stop (`app/trading/profit_lock.py` — peak-anchored ATR chandelier + tapering giveback cap, one-way, no profit ceiling) instead of the fixed rung ladder. Entry-time ATR (`before=opened_at`) matches the shadow comparator, so the live path tracks the shadow evidence. The SL/TP-hit check still runs against the *pre-advance* stop (no intra-beat look-ahead) and the lock only ever tightens the stop; `trail_state` stays a ladder-only concept (frontend union unchanged). Paper exits only — never places live orders. Toggle lives in Profile → Trading Settings. Migration `x0y1z2a3b4c5` (reversible; `server_default false`). +3 backend governor tests (ON=layered / OFF=ladder regression canary / SHORT) and a frontend toggle test; bug-hunter review clean (all seven exit-seam risks verified). Default-off, so behaviour is unchanged until explicitly opted in.
