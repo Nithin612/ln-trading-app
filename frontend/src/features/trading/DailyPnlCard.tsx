@@ -54,9 +54,18 @@ export function DailyPnlCard() {
         )}
       </div>
 
-      <div className="text-xl font-bold font-mono mb-2"
+      <div className="text-xl font-bold font-mono"
         style={{ color: pnl >= 0 ? 'var(--color-bull)' : 'var(--color-bear)' }}>
         {fmt(data.realized_pnl)}
+      </div>
+      <div className="text-[11px] font-mono mb-2 text-(--color-text-muted)">
+        Unreal. (open){' '}
+        <span
+          className="font-semibold"
+          style={{ color: parseFloat(data.total_unrealized_pnl) >= 0 ? 'var(--color-bull)' : 'var(--color-bear)' }}
+        >
+          {fmt(data.total_unrealized_pnl)}
+        </span>
       </div>
 
       {/* Loss limit bar */}

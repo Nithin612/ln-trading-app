@@ -61,6 +61,7 @@ function makeDailyPnl(overrides: Partial<tradingApiModule.DailyPnlOut> = {}): tr
   return {
     trade_date: '2026-05-21',
     realized_pnl: '0',
+    total_unrealized_pnl: '0',
     open_count: 0,
     closed_count: 0,
     circuit_breaker_triggered: false,
@@ -81,6 +82,15 @@ describe('DailyPnlCard', () => {
       expect(screen.getByText(/\+₹1,500/)).toBeInTheDocument()
     })
     expect(screen.getByText(/OK/i)).toBeInTheDocument()
+  })
+
+  it('shows total unrealised P&L across open positions', async () => {
+    vi.spyOn(tradingApiModule.tradingApi, 'getDailyPnl').mockResolvedValue(
+      makeDailyPnl({ realized_pnl: '500.00', total_unrealized_pnl: '1250.00', open_count: 3 }),
+    )
+    wrap(<DailyPnlCard />)
+    await waitFor(() => expect(screen.getByText(/Unreal\. \(open\)/)).toBeInTheDocument())
+    expect(screen.getByText(/\+₹1,250/)).toBeInTheDocument()
   })
 
   it('shows BREAKER ON when circuit breaker is triggered', async () => {

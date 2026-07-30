@@ -288,15 +288,22 @@ async def daily_pnl(
     trades_today = await get_trades_taken_today(db, user.id)
     triggered, _reason = await check_circuit_breaker(db, user)
 
-    # Count open positions
+    # Open positions — refresh each P&L (same as the positions list) and sum,
+    # so the card's total unrealised matches the table exactly.
     open_result = await db.execute(
-        select(func.count(Position.id)).where(
+        select(Position).where(
             Position.user_id == user.id,
             Position.mode == "paper",
             Position.closed_at.is_(None),
         )
     )
-    open_count = int(open_result.scalar() or 0)
+    open_positions = open_result.scalars().all()
+    open_count = len(open_positions)
+    total_unrealized = Decimal("0")
+    for pos in open_positions:
+        await update_position_pnl(db, pos)
+        if pos.unrealized_pnl is not None:
+            total_unrealized += pos.unrealized_pnl
 
     # Count positions closed today
     from app.trading.circuit_breaker import _ist_date_window
@@ -318,6 +325,7 @@ async def daily_pnl(
     return DailyPnlOut(
         trade_date=ist_today,
         realized_pnl=realized,
+        total_unrealized_pnl=total_unrealized,
         open_count=open_count,
         closed_count=closed_count,
         circuit_breaker_triggered=triggered,

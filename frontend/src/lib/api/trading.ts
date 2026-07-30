@@ -52,6 +52,7 @@ export interface OrderOut {
 export interface DailyPnlOut {
   trade_date: string
   realized_pnl: string
+  total_unrealized_pnl: string
   open_count: number
   closed_count: number
   circuit_breaker_triggered: boolean

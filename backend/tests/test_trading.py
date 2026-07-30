@@ -696,6 +696,36 @@ class TestTradingApi:
         assert "circuit_breaker_triggered" in data
         assert data["circuit_breaker_triggered"] is False
 
+    async def test_daily_pnl_totals_open_unrealized(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """The card's total unrealised P&L sums the open positions (net)."""
+        import redis.asyncio as aioredis
+        from app.broker.tick_consumer import LTP_KEY
+        from app.core.config import settings
+
+        user = await create_test_user(db)
+        headers = await get_auth_headers(client)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000")
+        await _open_position(db, user, stock, signal, entry=Decimal("500"), qty=100)
+        await db.commit()
+
+        r = aioredis.from_url(settings.redis_url, decode_responses=True)
+        key = LTP_KEY.format(stock_id=stock.id)
+        try:
+            await r.set(key, "520.00", ex=600)  # +₹2000 gross before costs
+            resp = await client.get("/api/v1/trading/daily-pnl", headers=headers)
+            assert resp.status_code == 200
+            data = resp.json()
+            assert data["open_count"] == 1
+            # net of estimated round-trip costs → positive but < 2000
+            total = Decimal(data["total_unrealized_pnl"])
+            assert Decimal("0") < total < Decimal("2000")
+        finally:
+            await r.delete(key)
+            await r.aclose()
+
     async def test_daily_pnl_shows_circuit_breaker_active(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:

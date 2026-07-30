@@ -142,6 +142,7 @@ class UpdateSlRequest(BaseModel):
 class DailyPnlOut(BaseModel):
     trade_date: str        # YYYY-MM-DD in IST
     realized_pnl: Decimal
+    total_unrealized_pnl: Decimal = Decimal("0")  # sum across open positions (net)
     open_count: int
     closed_count: int
     circuit_breaker_triggered: bool
