@@ -12,6 +12,7 @@ pub mod confluence;
 pub mod factors;
 pub mod indicators;
 pub mod live;
+pub mod options;
 pub mod patterns;
 pub mod pivots;
 pub mod risk;
