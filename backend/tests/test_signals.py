@@ -1,6 +1,7 @@
 """Integration tests for signal API endpoints."""
 
 from datetime import UTC, datetime, timedelta
+from decimal import Decimal
 
 from app.models.signal import Signal
 from app.models.stock import Stock
@@ -246,6 +247,52 @@ class TestSignalsActive:
         ).json()
         assert shown["total"] == 1
         assert shown["signals"][0]["near_expiry"] is True
+
+    async def _seed_daily(self, db: AsyncSession, stock_id: int, closes: list[float]) -> None:
+        from app.models.market_data import OhlcvDaily
+        base = datetime.now(tz=UTC) - timedelta(days=len(closes))
+        for i, c in enumerate(closes):
+            d = Decimal(str(c))
+            db.add(OhlcvDaily(
+                time=base + timedelta(days=i), stock_id=stock_id,
+                open=d, high=d, low=d, close=d, volume=1, is_complete=True,
+            ))
+
+    async def test_choppy_regime_hidden_by_default(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """A signal on a choppy daily tape (low efficiency ratio) is hidden by
+        default and flagged when included — the 07-30/31 review's loss driver."""
+        await create_admin(db)
+        token = await get_token(client, "admin@example.com", "adminpass123")
+        hdr = {"Authorization": f"Bearer {token}"}
+        stock = await _make_stock(db)
+        # oscillating closes → efficiency ratio ≈ 0 (choppy)
+        await self._seed_daily(db, stock.id, [100 + (i % 2) for i in range(15)])
+        await _make_signal(db, stock.id)  # fresh (not near-expiry)
+        await db.commit()
+
+        assert (await client.get("/api/v1/signals/active", headers=hdr)).json()["total"] == 0
+        shown = (await client.get("/api/v1/signals/active?include_choppy=true", headers=hdr)).json()
+        assert shown["total"] == 1
+        assert shown["signals"][0]["choppy"] is True
+        assert shown["signals"][0]["regime_er"] < 0.30
+
+    async def test_trending_regime_shown_by_default(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        await create_admin(db)
+        token = await get_token(client, "admin@example.com", "adminpass123")
+        hdr = {"Authorization": f"Bearer {token}"}
+        stock = await _make_stock(db)
+        await self._seed_daily(db, stock.id, [100 + i * 2 for i in range(15)])  # straight up → ER~1
+        await _make_signal(db, stock.id)
+        await db.commit()
+
+        shown = (await client.get("/api/v1/signals/active", headers=hdr)).json()
+        assert shown["total"] == 1
+        assert shown["signals"][0]["choppy"] is False
+        assert shown["signals"][0]["regime_er"] >= 0.30
 
 
 class TestSignalDetail:

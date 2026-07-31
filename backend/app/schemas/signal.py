@@ -38,6 +38,10 @@ class SignalOut(BaseModel):
     sources_count: int = 1
     near_expiry: bool = False
     days_valid_remaining: float = 0.0  # calendar days until validity_until (server-computed)
+    # Daily Kaufman efficiency ratio (0-1): >~0.4 clean trend, <~0.3 choppy.
+    # The 07-30/31 review showed choppy tapes drove ~all the losses.
+    regime_er: float | None = None
+    choppy: bool = False
 
     model_config = {"from_attributes": True}
 

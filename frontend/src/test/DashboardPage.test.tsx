@@ -51,6 +51,8 @@ function makeSignal(overrides: Partial<signalsApiModule.SignalOut> = {}): signal
     sources_count: 1,
     near_expiry: false,
     days_valid_remaining: 4,
+    regime_er: 0.5,
+    choppy: false,
     ...overrides,
   }
 }
@@ -124,10 +126,31 @@ describe('DashboardPage', () => {
       expect.objectContaining({ includeExpiring: false }),
       expect.anything(),
     )
-    fireEvent.click(screen.getByRole('checkbox'))
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Near-expiry' }))
     await waitFor(() =>
       expect(spy).toHaveBeenCalledWith(
         expect.objectContaining({ includeExpiring: true }),
+        expect.anything(),
+      ),
+    )
+  })
+
+  it('flags a choppy-regime signal and toggling shows them', async () => {
+    const spy = vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({
+      total: 1,
+      signals: [makeSignal({ symbol: 'RELIANCE', choppy: true, regime_er: 0.1 })],
+    })
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('RELIANCE')).toBeInTheDocument())
+    expect(screen.getByText('· chop')).toBeInTheDocument()
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ includeChoppy: false }),
+      expect.anything(),
+    )
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Choppy' }))
+    await waitFor(() =>
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({ includeChoppy: true }),
         expect.anything(),
       ),
     )

@@ -37,6 +37,8 @@ const SIGNAL: SignalOut = {
   sources_count: 1,
   near_expiry: false,
   days_valid_remaining: 4,
+  regime_er: 0.5,
+  choppy: false,
 }
 
 function outcome(overrides: Partial<SignalOutcome> = {}): SignalOutcome {

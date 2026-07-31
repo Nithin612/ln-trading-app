@@ -90,7 +90,7 @@ const SignalRow = memo(function SignalRow({
   return (
     <tr
       onClick={() => onSelect(sig)}
-      style={{ opacity: sig.near_expiry ? 0.6 : 1 }}
+      style={{ opacity: sig.near_expiry || sig.choppy ? 0.6 : 1 }}
       className="border-b border-(--color-border) cursor-pointer transition-colors hover:bg-(--color-surface-hover)"
     >
       <td className="px-3 py-2">
@@ -120,7 +120,18 @@ const SignalRow = memo(function SignalRow({
         <PriceCell value={ltp} format={formatCurrency} />
       </td>
       <td className="px-3 py-2 text-right"><DirectionBadge dir={sig.direction} /></td>
-      <td className="px-3 py-2 text-right text-(--color-text-muted)">{sig.classification}</td>
+      <td className="px-3 py-2 text-right text-(--color-text-muted)">
+        {sig.classification}
+        {sig.choppy && (
+          <span
+            className="ml-1"
+            style={{ color: 'var(--color-warning)' }}
+            title={`Choppy regime — daily efficiency ratio ${sig.regime_er?.toFixed(2) ?? '—'} (<0.30). The 07-30/31 review showed choppy tapes drove ~all losses.`}
+          >
+            · chop
+          </span>
+        )}
+      </td>
       <td className="px-3 py-2 text-right"><ConfidenceBadge pct={sig.confidence_pct} /></td>
       <td className="px-3 py-2 text-right font-mono text-(--color-text)">₹{pctFmt(sig.entry_price)}</td>
       <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bear)' }}>₹{pctFmt(sig.stop_loss)}</td>
@@ -198,6 +209,7 @@ export function DashboardPage() {
   const [classification, setClassification] = useState('All')
   const [minConfidence, setMinConfidence] = useState(70)
   const [showNearExpiry, setShowNearExpiry] = useState(false)
+  const [showChoppy, setShowChoppy] = useState(false)
   const [segment, setSegment] = useState('ALL')
   const [tradingSignalId, setTradingSignalId] = useState<string | null>(null)
   const halted = useTradingHaltStore((s) => s.halted)
@@ -228,7 +240,7 @@ export function DashboardPage() {
   }, [halted, toast, placePaperOrder])
 
   const { data: signalData, isLoading: signalsLoading } = useQuery({
-    queryKey: ['signals-active', direction, classification, minConfidence, showNearExpiry],
+    queryKey: ['signals-active', direction, classification, minConfidence, showNearExpiry, showChoppy],
     queryFn: () =>
       signalsApi.getActive(
         {
@@ -236,6 +248,7 @@ export function DashboardPage() {
           classification: classification !== 'All' ? classification : undefined,
           minConfidence,
           includeExpiring: showNearExpiry,
+          includeChoppy: showChoppy,
           limit: 100,
         },
         accessToken!,
@@ -433,6 +446,17 @@ export function DashboardPage() {
                 className="text-[11px] text-(--color-text-muted) whitespace-nowrap cursor-pointer"
               >
                 Near-expiry
+              </label>
+            </div>
+
+            {/* Choppy-regime (low daily efficiency ratio) signals are hidden by default */}
+            <div className="flex items-center gap-1.5">
+              <Checkbox id="show-choppy" checked={showChoppy} onCheckedChange={setShowChoppy} />
+              <label
+                htmlFor="show-choppy"
+                className="text-[11px] text-(--color-text-muted) whitespace-nowrap cursor-pointer"
+              >
+                Choppy
               </label>
             </div>
           </div>
