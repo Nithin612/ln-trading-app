@@ -23,10 +23,14 @@ from app.schemas.fo import (
     ChainOut,
     FoAnalyticsOut,
     IvRankOut,
+    OptionLegOut,
     PcrOut,
+    SuggestionOut,
+    SuggestionsOut,
     VixRegimeOut,
 )
 from app.services import fo_analytics as fa
+from app.services import fo_suggestions as fs
 
 router = APIRouter(prefix="/fo", tags=["f&o"])
 
@@ -110,6 +114,44 @@ async def get_analytics(
         basis=_basis_out(basis),
         vix=_vix_out(vix),
     )
+
+
+def _suggestion_out(c: fs.SpreadCandidate) -> SuggestionOut:
+    return SuggestionOut(
+        structure=c.structure,
+        legs=[
+            OptionLegOut(action=leg.action, option_type=leg.option_type, strike=leg.strike,
+                         premium=leg.premium)
+            for leg in c.legs
+        ],
+        net_credit=c.net_credit,
+        max_profit=c.max_profit,
+        max_loss=c.max_loss,
+        width=c.width,
+        breakevens=list(c.breakevens),
+        pop=c.pop,
+        margin_est=c.margin_est,
+        return_on_margin=c.return_on_margin,
+        short_delta=c.short_delta,
+        dte=c.dte,
+        expiry=c.expiry,
+        rationale=c.rationale,
+    )
+
+
+@router.get("/suggestions", response_model=SuggestionsOut)
+async def get_suggestions(
+    symbol: str = Query(..., min_length=1, max_length=32),
+    rate: float = Query(0.065, ge=0.0, le=0.5),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> SuggestionsOut:
+    """DRAFT (slice 4.3 strawman) — defined-risk option-selling candidates. An
+    empty list is a valid answer (nothing clears the gates). Rules are
+    conservative placeholders pending calibration; not a recommendation yet."""
+    sym = symbol.upper()
+    candidates = await fs.suggest_option_sells(db, sym, rate=rate)
+    return SuggestionsOut(symbol=sym, candidates=[_suggestion_out(c) for c in candidates])
 
 
 @router.get("/iv-rank", response_model=IvRankOut)

@@ -57,6 +57,35 @@ class IvRankOut(BaseModel):
     sample: int
 
 
+class OptionLegOut(BaseModel):
+    action: str          # sell | buy
+    option_type: str     # CE | PE
+    strike: Decimal
+    premium: Decimal
+
+
+class SuggestionOut(BaseModel):
+    structure: str       # bull_put | bear_call | iron_condor
+    legs: list[OptionLegOut]
+    net_credit: Decimal
+    max_profit: Decimal
+    max_loss: Decimal
+    width: Decimal
+    breakevens: list[Decimal]
+    pop: float
+    margin_est: Decimal
+    return_on_margin: float
+    short_delta: float
+    dte: int
+    expiry: date
+    rationale: str
+
+
+class SuggestionsOut(BaseModel):
+    symbol: str
+    candidates: list[SuggestionOut]
+
+
 class FoAnalyticsOut(BaseModel):
     symbol: str
     expiry: date
