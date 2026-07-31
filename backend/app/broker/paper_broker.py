@@ -80,22 +80,39 @@ async def get_live_ltp(stock_id: int) -> Decimal | None:
 
 
 async def get_current_price(db: AsyncSession, stock_id: int) -> Decimal | None:
-    """Best-effort current price: live Redis LTP first, then latest daily close."""
+    """Best-effort current price: live Redis LTP, else the FRESHEST stored close.
+
+    When live ticks are cold (off-market, or a tick outage), the last completed
+    1-minute close is the freshest mark available — much fresher than the daily
+    close, which lags a full session until the evening EOD ingest. Preferring
+    the 1m close keeps unrealised P&L honest instead of stuck a day behind.
+    """
     live = await get_live_ltp(stock_id)
     if live is not None:
         return live
 
-    # Fall back to last daily close in DB
-    from app.models.market_data import OhlcvDaily
+    from app.models.market_data import Ohlcv1m, OhlcvDaily
 
-    result = await db.execute(
-        select(OhlcvDaily.close)
-        .where(OhlcvDaily.stock_id == stock_id, OhlcvDaily.is_complete.is_(True))
-        .order_by(OhlcvDaily.time.desc())
-        .limit(1)
-    )
-    row = result.scalar_one_or_none()
-    return Decimal(str(row)) if row is not None else None
+    minute = (
+        await db.execute(
+            select(Ohlcv1m.close)
+            .where(Ohlcv1m.stock_id == stock_id, Ohlcv1m.is_complete.is_(True))
+            .order_by(Ohlcv1m.time.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    if minute is not None:
+        return Decimal(str(minute))
+
+    daily = (
+        await db.execute(
+            select(OhlcvDaily.close)
+            .where(OhlcvDaily.stock_id == stock_id, OhlcvDaily.is_complete.is_(True))
+            .order_by(OhlcvDaily.time.desc())
+            .limit(1)
+        )
+    ).scalar_one_or_none()
+    return Decimal(str(daily)) if daily is not None else None
 
 
 async def place_paper_order(

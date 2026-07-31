@@ -34,6 +34,9 @@ const SIGNAL: SignalOut = {
   status: 'active',
   validity_until: '2026-07-23T10:00:00+00:00',
   created_at: '2026-07-16T05:00:00+00:00',
+  sources_count: 1,
+  near_expiry: false,
+  days_valid_remaining: 4,
 }
 
 function outcome(overrides: Partial<SignalOutcome> = {}): SignalOutcome {

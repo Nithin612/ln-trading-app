@@ -434,6 +434,29 @@ class TestPaperBroker:
         assert closed.exit_reason == "tp_hit"
         assert closed.exit_price == close_order.filled_price == Decimal("540.0000")
 
+    async def test_get_current_price_prefers_latest_1m_over_daily(
+        self, db: AsyncSession
+    ) -> None:
+        """When live ticks are cold, mark to the freshest close — the last 1m
+        candle — not the stale daily close (which lags a full session)."""
+        from app.broker.paper_broker import get_current_price
+        from app.models.market_data import Ohlcv1m, OhlcvDaily
+
+        stock = await make_stock(db)  # fresh stock id → no live LTP key
+        db.add(OhlcvDaily(
+            time=datetime(2026, 7, 30, tzinfo=UTC), stock_id=stock.id,
+            open=Decimal("100"), high=Decimal("101"), low=Decimal("99"),
+            close=Decimal("100"), volume=1, is_complete=True,
+        ))
+        db.add(Ohlcv1m(
+            time=datetime(2026, 7, 31, 10, 0, tzinfo=UTC), stock_id=stock.id,
+            open=Decimal("105"), high=Decimal("106"), low=Decimal("104"),
+            close=Decimal("105.50"), volume=1, is_complete=True,
+        ))
+        await db.flush()
+
+        assert await get_current_price(db, stock.id) == Decimal("105.50")
+
     async def test_update_position_pnl_is_net_and_returns_price(
         self, db: AsyncSession
     ) -> None:

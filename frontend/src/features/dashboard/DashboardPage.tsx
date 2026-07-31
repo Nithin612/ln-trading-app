@@ -21,6 +21,7 @@ import { formatCurrency, formatINR, formatInt } from '@/lib/format'
 import { Slider } from '@/components/ui/slider'
 import { useToast } from '@/hooks/useToast'
 import { SimpleSelect } from '@/components/ui/simple-select'
+import { Checkbox } from '@/components/ui/checkbox'
 
 function pctFmt(value: string) {
   return formatINR(parseFloat(value))
@@ -84,9 +85,12 @@ const SignalRow = memo(function SignalRow({
   const validUntil = new Date(sig.validity_until).toLocaleString('en-IN', {
     timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
   })
+  const daysLeftStr =
+    sig.days_valid_remaining < 1 ? '<1d left' : `${Math.floor(sig.days_valid_remaining)}d left`
   return (
     <tr
       onClick={() => onSelect(sig)}
+      style={{ opacity: sig.near_expiry ? 0.6 : 1 }}
       className="border-b border-(--color-border) cursor-pointer transition-colors hover:bg-(--color-surface-hover)"
     >
       <td className="px-3 py-2">
@@ -98,6 +102,14 @@ const SignalRow = memo(function SignalRow({
         >
           {sig.symbol}
         </Link>
+        {sig.sources_count > 1 && (
+          <span
+            title={`${sig.sources_count} signals (base + profile) merged into one`}
+            className="ml-1.5 text-[9px] px-1 rounded bg-(--color-surface-3) text-(--color-text-muted) align-middle"
+          >
+            ×{sig.sources_count}
+          </span>
+        )}
       </td>
       <td className="px-3 py-2" style={{ textAlign: 'right' }}>
         <div className="flex justify-end">
@@ -114,7 +126,15 @@ const SignalRow = memo(function SignalRow({
       <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bear)' }}>₹{pctFmt(sig.stop_loss)}</td>
       <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bull)' }}>₹{pctFmt(sig.take_profit)}</td>
       <td className="px-3 py-2 text-right font-mono">{formatInt(sig.suggested_qty)}</td>
-      <td className="px-3 py-2 text-right text-(--color-text-muted) whitespace-nowrap">{validUntil}</td>
+      <td className="px-3 py-2 text-right text-(--color-text-muted) whitespace-nowrap">
+        {validUntil}
+        <span
+          className="block text-[10px]"
+          style={{ color: sig.near_expiry ? 'var(--color-warning)' : 'var(--color-text-muted)' }}
+        >
+          {sig.near_expiry ? '⚠ expiring' : daysLeftStr}
+        </span>
+      </td>
       <td className="px-3 py-2 text-right">
         <button
           onClick={(e) => { e.stopPropagation(); onCopy(sig) }}
@@ -177,6 +197,7 @@ export function DashboardPage() {
   const [direction, setDirection] = useState('All')
   const [classification, setClassification] = useState('All')
   const [minConfidence, setMinConfidence] = useState(70)
+  const [showNearExpiry, setShowNearExpiry] = useState(false)
   const [segment, setSegment] = useState('ALL')
   const [tradingSignalId, setTradingSignalId] = useState<string | null>(null)
   const halted = useTradingHaltStore((s) => s.halted)
@@ -207,13 +228,14 @@ export function DashboardPage() {
   }, [halted, toast, placePaperOrder])
 
   const { data: signalData, isLoading: signalsLoading } = useQuery({
-    queryKey: ['signals-active', direction, classification, minConfidence],
+    queryKey: ['signals-active', direction, classification, minConfidence, showNearExpiry],
     queryFn: () =>
       signalsApi.getActive(
         {
           direction: direction !== 'All' ? direction : undefined,
           classification: classification !== 'All' ? classification : undefined,
           minConfidence,
+          includeExpiring: showNearExpiry,
           limit: 100,
         },
         accessToken!,
@@ -398,6 +420,21 @@ export function DashboardPage() {
               options={[50, 60, 70, 75, 80, 85, 90].map((v) => ({ value: String(v), label: `${v}%+` }))}
               onChange={(v) => setMinConfidence(Number(v))}
             />
+
+            {/* Near-expiry (day-4/5) signals are hidden by default — little runway */}
+            <div className="flex items-center gap-1.5">
+              <Checkbox
+                id="show-near-expiry"
+                checked={showNearExpiry}
+                onCheckedChange={setShowNearExpiry}
+              />
+              <label
+                htmlFor="show-near-expiry"
+                className="text-[11px] text-(--color-text-muted) whitespace-nowrap cursor-pointer"
+              >
+                Near-expiry
+              </label>
+            </div>
           </div>
 
           {/* Table */}

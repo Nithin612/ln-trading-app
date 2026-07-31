@@ -48,6 +48,9 @@ function makeSignal(overrides: Partial<signalsApiModule.SignalOut> = {}): signal
     status: 'active',
     validity_until: validity,
     created_at: new Date().toISOString(),
+    sources_count: 1,
+    near_expiry: false,
+    days_valid_remaining: 4,
     ...overrides,
   }
 }
@@ -96,6 +99,38 @@ describe('DashboardPage', () => {
     await waitFor(() => {
       expect(screen.getAllByText('3').length).toBeGreaterThanOrEqual(1)
     })
+  })
+
+  it('badges a merged (base+profile) signal with ×N', async () => {
+    vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({
+      total: 1,
+      signals: [makeSignal({ symbol: 'NILKAMAL', sources_count: 2 })],
+    })
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('NILKAMAL')).toBeInTheDocument())
+    expect(screen.getByText('×2')).toBeInTheDocument()
+  })
+
+  it('flags a near-expiry signal and toggling shows them', async () => {
+    const spy = vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({
+      total: 1,
+      signals: [makeSignal({ symbol: 'RELIANCE', near_expiry: true })],
+    })
+    wrap(<DashboardPage />)
+    await waitFor(() => expect(screen.getByText('RELIANCE')).toBeInTheDocument())
+    expect(screen.getByText('⚠ expiring')).toBeInTheDocument()
+    // default call excludes near-expiry; toggling requests them
+    expect(spy).toHaveBeenCalledWith(
+      expect.objectContaining({ includeExpiring: false }),
+      expect.anything(),
+    )
+    fireEvent.click(screen.getByRole('checkbox'))
+    await waitFor(() =>
+      expect(spy).toHaveBeenCalledWith(
+        expect.objectContaining({ includeExpiring: true }),
+        expect.anything(),
+      ),
+    )
   })
 
   it('opens signal detail modal when row is clicked', async () => {

@@ -46,6 +46,26 @@ async def _enrich(signal: Signal, db: AsyncSession) -> SignalOut:
     return out
 
 
+_NEAR_EXPIRY_FRAC = 0.8  # ≥80% of the validity window elapsed = stale / little runway
+
+
+def _near_expiry(sig: Signal, now: datetime) -> bool:
+    span = (sig.validity_until - sig.created_at).total_seconds()
+    if span <= 0:
+        return False
+    return (now - sig.created_at).total_seconds() / span >= _NEAR_EXPIRY_FRAC
+
+
+def _reward_risk(sig: Signal) -> float:
+    # Decimal(str(...)) — robust whether the ORM attr is a Decimal (fresh load)
+    # or a str (unrefreshed in-session), matching the project's money pattern.
+    entry = Decimal(str(sig.entry_price))
+    risk = abs(entry - Decimal(str(sig.stop_loss)))
+    if risk == 0:
+        return 0.0
+    return float(abs(Decimal(str(sig.take_profit)) - entry) / risk)
+
+
 @router.get("/active", response_model=SignalListResponse)
 async def list_active_signals(
     db: Annotated[AsyncSession, Depends(get_db)],
@@ -53,9 +73,16 @@ async def list_active_signals(
     direction: str | None = Query(default=None, description="BUY | SELL"),
     classification: str | None = Query(default=None),
     min_confidence: int = Query(default=70, ge=0, le=100),
+    include_expiring: bool = Query(
+        default=False, description="Include signals with ≥80% of validity elapsed"
+    ),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> SignalListResponse:
+    """Active signals — presentation overlay applied (engine unchanged): the
+    base engine and named profiles can each emit a signal for the same stock;
+    they are DEDUPED to one row per (stock, direction) (best confidence, then
+    reward:risk, then recency), and near-expiry signals are hidden by default."""
     now = datetime.now(tz=UTC)
     q = (
         select(Signal)
@@ -67,15 +94,35 @@ async def list_active_signals(
     if classification:
         q = q.where(Signal.classification == classification.lower())
 
-    q = q.order_by(Signal.confidence_pct.desc(), Signal.created_at.desc())
+    all_sigs = (await db.execute(q)).scalars().all()
 
-    count_q = q.with_only_columns(Signal.id)
-    total_result = await db.execute(count_q)
-    total = len(total_result.scalars().all())
+    # Dedup by (stock, direction, classification): the base engine and named
+    # profiles emit near-identical signals for the same setup. Keep the best
+    # representative; remember how many collapsed so the UI can badge it. Keying
+    # on classification too means a legitimate swing + scalp on one stock is NOT
+    # merged (different trade types, different horizons).
+    groups: dict[tuple[int, str, str], list[Signal]] = {}
+    for s in all_sigs:
+        groups.setdefault((s.stock_id, s.direction, s.classification), []).append(s)
+    reps: list[tuple[Signal, int]] = []
+    for grp in groups.values():
+        best = max(grp, key=lambda s: (s.confidence_pct, _reward_risk(s), s.created_at))
+        reps.append((best, len(grp)))
 
-    result = await db.execute(q.offset(offset).limit(limit))
-    signals = result.scalars().all()
-    enriched = [await _enrich(s, db) for s in signals]
+    if not include_expiring:
+        reps = [(s, n) for (s, n) in reps if not _near_expiry(s, now)]
+
+    reps.sort(key=lambda t: (t[0].confidence_pct, t[0].created_at), reverse=True)
+    total = len(reps)
+    page = reps[offset : offset + limit]
+
+    enriched = []
+    for s, n in page:
+        out = await _enrich(s, db)
+        out.sources_count = n
+        out.near_expiry = _near_expiry(s, now)
+        out.days_valid_remaining = max(0.0, (s.validity_until - now).total_seconds() / 86_400)
+        enriched.append(out)
     return SignalListResponse(total=total, signals=enriched)
 
 

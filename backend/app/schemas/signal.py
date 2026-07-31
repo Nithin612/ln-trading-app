@@ -32,6 +32,12 @@ class SignalOut(BaseModel):
     status: str
     validity_until: datetime
     created_at: datetime
+    # Presentation overlay (engine unchanged): how many active signals for this
+    # (stock, direction) were collapsed into this one (base + profiles); and
+    # whether ≥80% of the validity window has elapsed (stale — little runway).
+    sources_count: int = 1
+    near_expiry: bool = False
+    days_valid_remaining: float = 0.0  # calendar days until validity_until (server-computed)
 
     model_config = {"from_attributes": True}
 

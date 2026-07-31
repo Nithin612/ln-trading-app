@@ -180,10 +180,13 @@ class TestSignalsActive:
     async def test_sorted_by_confidence_desc(self, client: AsyncClient, db: AsyncSession) -> None:
         await create_admin(db)
         token = await get_token(client, "admin@example.com", "adminpass123")
-        stock = await _make_stock(db)
-        await _make_signal(db, stock.id, confidence_pct=75)
-        await _make_signal(db, stock.id, confidence_pct=90)
-        await _make_signal(db, stock.id, confidence_pct=82)
+        # distinct stocks — same-stock signals are deduped into one row
+        s1 = await _make_stock(db, symbol="SORT1")
+        s2 = await _make_stock(db, symbol="SORT2")
+        s3 = await _make_stock(db, symbol="SORT3")
+        await _make_signal(db, s1.id, confidence_pct=75)
+        await _make_signal(db, s2.id, confidence_pct=90)
+        await _make_signal(db, s3.id, confidence_pct=82)
         await db.commit()
 
         r = await client.get(
@@ -192,6 +195,57 @@ class TestSignalsActive:
         )
         confidences = [s["confidence_pct"] for s in r.json()["signals"]]
         assert confidences == sorted(confidences, reverse=True)
+
+    async def test_dedup_collapses_base_and_profile(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """Base engine + a profile emit near-identical signals for one setup;
+        the list collapses them to one row and reports how many collapsed."""
+        await create_admin(db)
+        token = await get_token(client, "admin@example.com", "adminpass123")
+        stock = await _make_stock(db)
+        await _make_signal(db, stock.id, confidence_pct=78)          # base
+        best = await _make_signal(db, stock.id, confidence_pct=80)   # profile (wins)
+        await db.commit()
+
+        r = await client.get(
+            "/api/v1/signals/active",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        data = r.json()
+        assert data["total"] == 1
+        assert data["signals"][0]["id"] == best.id
+        assert data["signals"][0]["confidence_pct"] == 80
+        assert data["signals"][0]["sources_count"] == 2
+
+    async def test_near_expiry_hidden_by_default_shown_on_toggle(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """A signal with ≥80% of its validity elapsed is stale (little runway) —
+        hidden by default, shown + flagged with include_expiring."""
+        await create_admin(db)
+        token = await get_token(client, "admin@example.com", "adminpass123")
+        hdr = {"Authorization": f"Bearer {token}"}
+        stock = await _make_stock(db)
+        now = datetime.now(tz=UTC)
+        db.add(
+            Signal(
+                stock_id=stock.id, direction="BUY", classification="swing", timeframe="1d",
+                entry_price="490.0000", stop_loss="482.0000", take_profit="506.0000",
+                suggested_qty=250, confidence_pct=80, factor_scores={}, headline="stale",
+                status="active",
+                validity_until=now + timedelta(hours=2),   # ~98% elapsed
+                created_at=now - timedelta(days=5),
+            )
+        )
+        await db.commit()
+
+        assert (await client.get("/api/v1/signals/active", headers=hdr)).json()["total"] == 0
+        shown = (
+            await client.get("/api/v1/signals/active?include_expiring=true", headers=hdr)
+        ).json()
+        assert shown["total"] == 1
+        assert shown["signals"][0]["near_expiry"] is True
 
 
 class TestSignalDetail:
