@@ -12,18 +12,20 @@ import { Bell } from 'lucide-react'
 import { useAlertStream, type LiveAlert } from '@/hooks/useAlertStream'
 import { useAuth } from '@/hooks/useAuth'
 import { stocksApi } from '@/lib/api/stocks'
+import { signalsApi, type SignalOut } from '@/lib/api/signals'
 import { watchlistsApi } from '@/lib/api/watchlists'
 import { Popover } from '@/components/ui/popover'
 import { EmptyState } from '@/components/ui/empty-state'
 import { SimpleSelect } from '@/components/ui/simple-select'
 import { Checkbox } from '@/components/ui/checkbox'
-import { formatCurrency } from '@/lib/format'
+import { formatCurrency, formatPct } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
   ALERT_STYLES,
   SOURCE_LABEL,
   TAG_META,
   TONE_CLASS,
+  chaseGuidance,
   formatAlertTime,
 } from './alertPresentation'
 
@@ -99,6 +101,35 @@ export function AlertBell() {
     }
     return m
   }, [stockQueries])
+
+  // Entry-zone alerts carry the originating signal; fetch its entry/SL/direction
+  // once (immutable once created) to render the anti-chase guardrail. Cached
+  // forever, like symbols — only entry alerts trigger a lookup.
+  const signalIds = useMemo(
+    () => [
+      ...new Set(
+        visibleAlerts
+          .filter((a) => a.source === ENTRY_SOURCE && a.signalId)
+          .map((a) => a.signalId as string),
+      ),
+    ],
+    [visibleAlerts],
+  )
+  const signalQueries = useQueries({
+    queries: signalIds.map((id) => ({
+      queryKey: ['alert-signal', id],
+      queryFn: () => signalsApi.getById(id, accessToken ?? ''),
+      staleTime: Infinity,
+      enabled: accessToken !== null,
+    })),
+  })
+  const signalById = useMemo(() => {
+    const m = new Map<string, SignalOut>()
+    for (const q of signalQueries) {
+      if (q.data) m.set(q.data.id, q.data)
+    }
+    return m
+  }, [signalQueries])
 
   const toggleStyle = (s: string) =>
     setStyles(styles.includes(s) ? styles.filter((x) => x !== s) : [...styles, s])
@@ -225,7 +256,12 @@ export function AlertBell() {
           // enough for a popover without virtualization.
           <ul className="overflow-y-auto divide-y divide-(--color-border)" role="list">
             {visibleAlerts.map((a) => (
-              <AlertRow key={a.id} alert={a} symbol={symbolBySid.get(a.sid)} />
+              <AlertRow
+                key={a.id}
+                alert={a}
+                symbol={symbolBySid.get(a.sid)}
+                signal={a.signalId ? signalById.get(a.signalId) : undefined}
+              />
             ))}
           </ul>
         )}
@@ -237,11 +273,14 @@ export function AlertBell() {
 const AlertRow = memo(function AlertRow({
   alert,
   symbol,
+  signal,
 }: {
   alert: LiveAlert
   symbol: string | undefined
+  signal: SignalOut | undefined
 }) {
   const meta = TAG_META[alert.tag]
+  const chase = signal ? chaseGuidance(signal, Number(alert.price)) : null
   return (
     <li className="px-3 py-2 text-xs hover:bg-(--color-surface-3)">
       <div className="flex items-baseline justify-between gap-2">
@@ -265,6 +304,37 @@ const AlertRow = memo(function AlertRow({
           <time className="font-mono tabular-nums">{formatAlertTime(alert.ts)}</time>
         </span>
       </div>
+      {chase && (
+        // Anti-chase guardrail: direction + ideal entry on the left, the
+        // don't-chase price on the right (warns when the trigger already ran
+        // past it). Direction encoded by glyph + word + colour, never colour
+        // alone (UI_GUIDELINES §colours).
+        <div
+          className="flex items-center justify-between gap-2 mt-1"
+          title="Past a third of the trade's risk (entry→SL) beyond entry, the reward:risk is materially worse — this is chasing."
+        >
+          <span
+            className="flex items-center gap-1 font-medium"
+            style={{ color: chase.isBuy ? 'var(--color-bull)' : 'var(--color-bear)' }}
+          >
+            <span aria-hidden="true">{chase.isBuy ? '▲' : '▼'}</span>
+            <span>{chase.isBuy ? 'BUY' : 'SELL'}</span>
+            <span className="text-(--color-text-muted) font-normal font-mono tabular-nums">
+              @ {formatCurrency(chase.entry)}
+            </span>
+          </span>
+          {chase.extended ? (
+            <span className="flex items-center gap-1 text-(--color-warning) flex-shrink-0">
+              <span aria-hidden="true">⚠</span>
+              <span>chasing {formatPct(chase.pastEntryPct)} past entry</span>
+            </span>
+          ) : (
+            <span className="text-(--color-text-muted) font-mono tabular-nums flex-shrink-0">
+              don&apos;t chase {chase.isBuy ? '>' : '<'} {formatCurrency(chase.limit)}
+            </span>
+          )}
+        </div>
+      )}
     </li>
   )
 })

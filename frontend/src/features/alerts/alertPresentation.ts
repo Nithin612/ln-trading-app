@@ -8,7 +8,42 @@
  * alerts.
  */
 
+import type { SignalOut } from "@/lib/api/signals";
+
 export const ALERT_STYLES = ["market", "scalp", "intraday", "swing", "positional"] as const;
+
+// Anti-chase guardrail. A signal is meant to be entered at its `entry_price`.
+// Once price runs past that by ~a third of the trade's risk (entry→SL distance
+// = 1R), the reward:risk you were shown is materially gone — buying there is
+// chasing. We surface that ceiling/floor and flag when the trigger price has
+// already blown through it. Static: derived from the signal alone.
+export const CHASE_R_FRACTION = 0.33;
+
+export interface ChaseInfo {
+  isBuy: boolean;
+  entry: number;
+  limit: number; // don't-chase price (entry ± 0.33R)
+  extended: boolean; // trigger price already past the limit
+  pastEntryPct: number; // signed % beyond entry in the trade's direction
+}
+
+export function chaseGuidance(signal: SignalOut, triggerPrice: number): ChaseInfo | null {
+  const entry = Number(signal.entry_price);
+  const stop = Number(signal.stop_loss);
+  if (!Number.isFinite(entry) || !Number.isFinite(stop) || entry <= 0) return null;
+  const risk = Math.abs(entry - stop);
+  if (risk <= 0) return null;
+  const isBuy = signal.direction === "BUY";
+  const limit = isBuy ? entry + CHASE_R_FRACTION * risk : entry - CHASE_R_FRACTION * risk;
+  const beyond = isBuy ? triggerPrice - entry : entry - triggerPrice;
+  return {
+    isBuy,
+    entry,
+    limit,
+    extended: isBuy ? triggerPrice > limit : triggerPrice < limit,
+    pastEntryPct: (beyond / entry) * 100,
+  };
+}
 
 export interface TagMeta {
   label: string;

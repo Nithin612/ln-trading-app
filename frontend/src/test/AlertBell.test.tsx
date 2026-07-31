@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AlertBell } from '@/features/alerts/AlertBell'
+import { chaseGuidance } from '@/features/alerts/alertPresentation'
 import type { LiveAlert } from '@/hooks/useAlertStream'
 import type { Stock } from '@/lib/api/stocks'
 
@@ -32,8 +33,15 @@ vi.mock('@/lib/api/watchlists', () => ({
   watchlistsApi: { list: vi.fn() },
 }))
 
+vi.mock('@/lib/api/signals', async (importOriginal) => {
+  const mod = await importOriginal<typeof import('@/lib/api/signals')>()
+  return { ...mod, signalsApi: { getById: vi.fn() } }
+})
+
 import { stocksApi } from '@/lib/api/stocks'
 import { watchlistsApi } from '@/lib/api/watchlists'
+import { signalsApi } from '@/lib/api/signals'
+import type { SignalOut } from '@/lib/api/signals'
 
 const ALERT: LiveAlert = {
   id: '1752212345678-0',
@@ -70,9 +78,40 @@ describe('AlertBell', () => {
     vi.mocked(stocksApi.get).mockReset()
     vi.mocked(watchlistsApi.list).mockReset()
     vi.mocked(watchlistsApi.list).mockResolvedValue([])
+    vi.mocked(signalsApi.getById).mockReset()
   })
 
   const ENTRY_ALERT: LiveAlert = { ...ALERT, tag: 'zone_enter', source: 'entry_zone' }
+
+  // A BUY signal at ₹100 with SL ₹96 → 1R = ₹4, so the don't-chase ceiling is
+  // 100 + 0.33·4 = ₹101.32.
+  const makeSignal = (o: Partial<SignalOut> = {}): SignalOut =>
+    ({
+      id: 'sig-1',
+      stock_id: 42,
+      symbol: 'RELIANCE',
+      direction: 'BUY',
+      classification: 'swing',
+      timeframe: '1h',
+      entry_price: '100.0000',
+      stop_loss: '96.0000',
+      take_profit: '112.0000',
+      suggested_qty: 10,
+      confidence_pct: 78,
+      factor_scores: {},
+      triggering_patterns: [],
+      triggering_indicators: [],
+      headline: 'test',
+      status: 'active',
+      validity_until: '2026-07-23T10:00:00+00:00',
+      created_at: '2026-07-16T05:00:00+00:00',
+      sources_count: 1,
+      near_expiry: false,
+      days_valid_remaining: 4,
+      regime_er: 0.5,
+      choppy: false,
+      ...o,
+    }) as SignalOut
 
   it('shows the empty state when no alerts have arrived', () => {
     setup()
@@ -170,6 +209,85 @@ describe('AlertBell', () => {
     setup()
     fireEvent.click(screen.getByTestId('alert-bell'))
     expect(screen.getByText('No entry signals yet')).toBeInTheDocument()
+  })
+
+  // ── Anti-chase guardrail ──────────────────────────────────────────────────
+  it('shows BUY + entry + the don’t-chase ceiling for an entry-zone alert', async () => {
+    // Trigger ₹100.50 is inside the ceiling (₹101.32) → not chasing.
+    stream.alerts = [{ ...ENTRY_ALERT, id: 'e', price: '100.5000', signalId: 'sig-1' }]
+    vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
+    vi.mocked(signalsApi.getById).mockResolvedValue(makeSignal())
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    await waitFor(() => expect(screen.getByText('BUY')).toBeInTheDocument())
+    expect(screen.getByText(/₹100\.00/)).toBeInTheDocument() // ideal entry
+    expect(screen.getByText(/chase.*₹101\.32/)).toBeInTheDocument()
+    expect(screen.queryByText(/chasing/)).not.toBeInTheDocument()
+  })
+
+  it('warns when the trigger price has already run past the ceiling', async () => {
+    // Trigger ₹102 is past the ₹101.32 ceiling → +2.00% past entry.
+    stream.alerts = [{ ...ENTRY_ALERT, id: 'e', price: '102.0000', signalId: 'sig-1' }]
+    vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
+    vi.mocked(signalsApi.getById).mockResolvedValue(makeSignal())
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    await waitFor(() =>
+      expect(screen.getByText(/chasing \+2\.00% past entry/)).toBeInTheDocument(),
+    )
+    expect(screen.queryByText(/don.t chase/)).not.toBeInTheDocument()
+  })
+
+  it('flips the guardrail direction for a SELL signal', async () => {
+    // SELL entry ₹100, SL ₹104 → floor = 100 − 0.33·4 = ₹98.68; ₹99.50 is inside.
+    stream.alerts = [{ ...ENTRY_ALERT, id: 'e', price: '99.5000', signalId: 'sig-1' }]
+    vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
+    vi.mocked(signalsApi.getById).mockResolvedValue(
+      makeSignal({ direction: 'SELL', stop_loss: '104.0000' }),
+    )
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    await waitFor(() => expect(screen.getByText('SELL')).toBeInTheDocument())
+    expect(screen.getByText(/chase.*<.*₹98\.68/)).toBeInTheDocument()
+  })
+
+  it('renders no guardrail when the alert carries no signal', () => {
+    stream.alerts = [{ ...ENTRY_ALERT, id: 'e', price: '100.5000', signalId: null }]
+    vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    expect(screen.getByText('Entered zone')).toBeInTheDocument()
+    expect(screen.queryByText('BUY')).not.toBeInTheDocument()
+    expect(vi.mocked(signalsApi.getById)).not.toHaveBeenCalled()
+  })
+
+  describe('chaseGuidance (pure)', () => {
+    it('computes the BUY ceiling at entry + 0.33R and flags extension', () => {
+      const inside = chaseGuidance(makeSignal(), 100.5)
+      expect(inside).not.toBeNull()
+      expect(inside?.isBuy).toBe(true)
+      expect(inside?.entry).toBe(100)
+      expect(inside?.limit).toBeCloseTo(101.32, 4)
+      expect(inside?.extended).toBe(false)
+      expect(inside?.pastEntryPct).toBeCloseTo(0.5, 6)
+
+      const past = chaseGuidance(makeSignal(), 102)
+      expect(past?.extended).toBe(true)
+      expect(past?.pastEntryPct).toBeCloseTo(2, 6)
+    })
+
+    it('computes the SELL floor at entry − 0.33R', () => {
+      const s = chaseGuidance(makeSignal({ direction: 'SELL', stop_loss: '104.0000' }), 99)
+      expect(s?.isBuy).toBe(false)
+      expect(s?.limit).toBeCloseTo(98.68, 4)
+      expect(s?.extended).toBe(false) // 99 is still above the floor
+      expect(s?.pastEntryPct).toBeCloseTo(1, 6)
+    })
+
+    it('returns null when risk is zero or inputs are non-finite', () => {
+      expect(chaseGuidance(makeSignal({ stop_loss: '100.0000' }), 100)).toBeNull()
+      expect(chaseGuidance(makeSignal({ entry_price: 'nan' }), 100)).toBeNull()
+    })
   })
 
   it('style filter chips toggle the server-side subscription', () => {
