@@ -17,7 +17,7 @@ const USER = {
   daily_loss_limit_pct: '3',
   max_trades_per_day: 5,
   is_active: true,
-  trading_mode: 'paper', allow_offmarket_entry: false,
+  trading_mode: 'paper', allow_offmarket_entry: false, profit_lock_enabled: false,
   created_at: '2025-01-15T00:00:00Z',
   updated_at: '2025-01-15T00:00:00Z',
 }
@@ -115,6 +115,7 @@ describe('ProfilePage', () => {
         daily_loss_limit_pct: '3',
         max_trades_per_day: 5,
         allow_offmarket_entry: false,
+        profit_lock_enabled: false,
       }),
     )
   })
@@ -133,6 +134,24 @@ describe('ProfilePage', () => {
     await waitFor(() =>
       expect(updateSpy).toHaveBeenCalledWith(
         'tok', 1, expect.objectContaining({ allow_offmarket_entry: true }),
+      ),
+    )
+  })
+
+  it('includes the profit-lock toggle in the save payload', async () => {
+    const updateSpy = vi
+      .spyOn(usersApiModule.usersApi, 'update')
+      .mockResolvedValue({ ...USER, profit_lock_enabled: true })
+    setup()
+    await waitFor(() => expect(screen.getByText('Trading Settings')).toBeInTheDocument())
+
+    fireEvent.click(screen.getByRole('button', { name: /edit/i }))
+    fireEvent.click(await screen.findByRole('checkbox', { name: /profit-lock exits/i }))
+    fireEvent.click(screen.getByRole('button', { name: /save/i }))
+
+    await waitFor(() =>
+      expect(updateSpy).toHaveBeenCalledWith(
+        'tok', 1, expect.objectContaining({ profit_lock_enabled: true }),
       ),
     )
   })

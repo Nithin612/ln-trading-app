@@ -23,6 +23,7 @@ export interface UserUpdate {
   daily_loss_limit_pct?: string
   max_trades_per_day?: number
   allow_offmarket_entry?: boolean
+  profit_lock_enabled?: boolean
 }
 
 export const usersApi = {

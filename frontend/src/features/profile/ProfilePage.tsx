@@ -54,6 +54,7 @@ interface EditableUser {
   daily_loss_limit_pct: string
   max_trades_per_day: number
   allow_offmarket_entry: boolean
+  profit_lock_enabled: boolean
 }
 
 function TradingSettingsCard({ user }: { user: EditableUser }) {
@@ -67,6 +68,7 @@ function TradingSettingsCard({ user }: { user: EditableUser }) {
   const [loss, setLoss] = useState(user.daily_loss_limit_pct)
   const [trades, setTrades] = useState(String(user.max_trades_per_day))
   const [offmkt, setOffmkt] = useState(user.allow_offmarket_entry)
+  const [profitLock, setProfitLock] = useState(user.profit_lock_enabled)
 
   function reset() {
     setCapital(user.capital_inr)
@@ -74,6 +76,7 @@ function TradingSettingsCard({ user }: { user: EditableUser }) {
     setLoss(user.daily_loss_limit_pct)
     setTrades(String(user.max_trades_per_day))
     setOffmkt(user.allow_offmarket_entry)
+    setProfitLock(user.profit_lock_enabled)
     setEditing(false)
   }
 
@@ -100,6 +103,7 @@ function TradingSettingsCard({ user }: { user: EditableUser }) {
         daily_loss_limit_pct: loss,
         max_trades_per_day: tradesN,
         allow_offmarket_entry: offmkt,
+        profit_lock_enabled: profitLock,
       }),
     onSuccess: (updated) => {
       if (accessToken) setAuth(accessToken, updated)
@@ -155,6 +159,8 @@ function TradingSettingsCard({ user }: { user: EditableUser }) {
             value={user.max_trades_per_day} />
           <InfoRow icon={<Activity size={15} />} label="Off-market entry"
             value={user.allow_offmarket_entry ? 'Allowed' : 'Blocked (needs live price)'} />
+          <InfoRow icon={<TrendingUp size={15} />} label="Exit governor"
+            value={user.profit_lock_enabled ? 'Profit lock (layered ratchet)' : 'Trail ladder'} />
         </div>
       ) : (
         <div className="space-y-3">
@@ -196,6 +202,16 @@ function TradingSettingsCard({ user }: { user: EditableUser }) {
           <p className="text-xs text-(--color-text-muted)">
             When off (recommended), paper orders are rejected unless the stock has a live price —
             prevents fills at a stale prior close.
+          </p>
+          <div className="flex items-center gap-2 pt-1">
+            <Checkbox id="profitLock" checked={profitLock} onCheckedChange={(v) => setProfitLock(!!v)} />
+            <Label htmlFor="profitLock" className="cursor-pointer text-sm text-(--color-text)">
+              Profit-lock exits (layered ratchet stop)
+            </Label>
+          </div>
+          <p className="text-xs text-(--color-text-muted)">
+            When on, open paper positions trail with the Layered Ratchet Stop (peak-anchored ATR +
+            giveback cap) instead of the fixed rung ladder. Paper only — never places live orders.
           </p>
           {!valid && (
             <ul className="text-xs text-(--color-loss) space-y-0.5" role="alert">

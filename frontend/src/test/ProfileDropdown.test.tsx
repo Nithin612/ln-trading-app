@@ -13,7 +13,7 @@ const USER = {
   daily_loss_limit_pct: '3',
   max_trades_per_day: 5,
   is_active: true,
-  trading_mode: 'paper', allow_offmarket_entry: false,
+  trading_mode: 'paper', allow_offmarket_entry: false, profit_lock_enabled: false,
   created_at: '2025-01-15T00:00:00Z',
   updated_at: '2025-01-15T00:00:00Z',
 }

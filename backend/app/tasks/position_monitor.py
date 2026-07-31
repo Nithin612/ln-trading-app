@@ -54,8 +54,11 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
 
     from app.broker.paper_broker import close_position, get_live_ltp, update_position_pnl
     from app.models.trading import Position
+    from app.models.user import User
     from app.services.journal_service import auto_create_journal_entry
+    from app.trading.atr import atr_timeframe_for, latest_atr
     from app.trading.market_hours import is_market_session
+    from app.trading.profit_lock import layered_ratchet_stop, params_for
     from app.trading.trail_sl import advance_trail, compute_pnl, is_sl_hit, is_tp_hit
 
     assert isinstance(db, AsyncSession)  # narrow the DI'd session type for mypy
@@ -78,6 +81,10 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
         )
     )
     positions = result.scalars().all()
+
+    # Which stop governor runs is a per-user setting; resolve it once per user
+    # per scan (a handful of users at most).
+    profit_lock_by_user: dict[int, bool] = {}
 
     for pos in positions:
         # Live tick only — never the daily-close fallback. No fresh price
@@ -128,23 +135,62 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
             closed += 1
             continue
 
-        # Advance trail SL if the signal had one (original SL known from signal)
+        # Advance the stop for the NEXT beat (the SL/TP hit check above ran
+        # against the pre-advance stop — no intra-beat look-ahead). Which
+        # governor runs depends on the owning user's setting:
+        #   profit_lock_enabled → Layered Ratchet Stop (app/trading/profit_lock)
+        #   otherwise            → the fixed trail_sl ladder (unchanged).
         if pos.current_sl is not None and pos.signal_id is not None:
             from app.models.signal import Signal
 
             sig = await db.get(Signal, pos.signal_id)
             if sig is not None:
-                trail = advance_trail(
-                    side=pos.side,
-                    entry=Decimal(str(pos.avg_entry_price)),
-                    original_sl=Decimal(str(sig.stop_loss)),
-                    current_sl=Decimal(str(pos.current_sl)),
-                    current_price=price,
-                    current_state=pos.trail_state,
-                )
-                if trail.advanced:
-                    pos.current_sl = trail.new_sl
-                    pos.trail_state = trail.new_state
+                if pos.user_id not in profit_lock_by_user:
+                    owner = await db.get(User, pos.user_id)
+                    profit_lock_by_user[pos.user_id] = bool(
+                        owner is not None and owner.profit_lock_enabled
+                    )
+
+                entry = Decimal(str(pos.avg_entry_price))
+                original_sl = Decimal(str(sig.stop_loss))
+                current_stop = Decimal(str(pos.current_sl))
+
+                if profit_lock_by_user[pos.user_id]:
+                    # peak_price was refreshed from this beat's price above; ATR
+                    # is the entry-time volatility, matching the shadow model so
+                    # live behaviour tracks the shadow evidence.
+                    peak = pos.peak_price if pos.peak_price is not None else price
+                    atr = await latest_atr(
+                        db,
+                        pos.stock_id,
+                        timeframe=atr_timeframe_for(sig.classification),
+                        before=pos.opened_at,
+                    )
+                    new_sl = layered_ratchet_stop(
+                        side=pos.side,
+                        entry=entry,
+                        original_sl=original_sl,
+                        peak_price=Decimal(str(peak)),
+                        atr=atr,
+                        params=params_for(sig.classification),
+                        current_stop=current_stop,
+                    )
+                    # trail_state stays a ladder-only concept; the lock moves
+                    # only the stop price (one-way, never against the position).
+                    if new_sl != current_stop:
+                        pos.current_sl = new_sl
+                else:
+                    trail = advance_trail(
+                        side=pos.side,
+                        entry=entry,
+                        original_sl=original_sl,
+                        current_sl=current_stop,
+                        current_price=price,
+                        current_state=pos.trail_state,
+                    )
+                    if trail.advanced:
+                        pos.current_sl = trail.new_sl
+                        pos.trail_state = trail.new_state
 
         await update_position_pnl(db, pos, price=price)
         updated += 1
