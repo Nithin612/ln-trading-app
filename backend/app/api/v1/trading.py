@@ -32,10 +32,12 @@ from app.models.user import User
 from app.schemas.trading import (
     ClosePositionRequest,
     DailyPnlOut,
+    HealthReasonOut,
     OrderOut,
     PaperDayRow,
     PaperRecordOut,
     PlaceOrderRequest,
+    PositionHealthOut,
     PositionListResponse,
     PositionOut,
     ShadowCompareResponse,
@@ -50,6 +52,8 @@ from app.trading.circuit_breaker import (
     get_daily_realized_pnl,
     get_trades_taken_today,
 )
+from app.trading.position_health import PositionHealth, assess_position_health
+from app.trading.regime import er_by_stock
 
 router = APIRouter(prefix="/trading", tags=["trading"])
 
@@ -62,18 +66,51 @@ def _enrich_order(order: Order, symbol: str) -> OrderOut:
     return out
 
 
+def _health_out(h: PositionHealth) -> PositionHealthOut:
+    return PositionHealthOut(
+        verdict=h.verdict.value,
+        reasons=[
+            HealthReasonOut(code=r.code, severity=r.severity.value, detail=r.detail)
+            for r in h.reasons
+        ],
+        drawdown_r=h.drawdown_r,
+        rr_remaining=h.rr_remaining,
+        regime_er=h.regime_er,
+    )
+
+
 def _enrich_position(
-    position: Position, symbol: str, current_price: Decimal | None = None
+    position: Position,
+    symbol: str,
+    current_price: Decimal | None = None,
+    health: PositionHealth | None = None,
 ) -> PositionOut:
     out = PositionOut.model_validate(position)
     out.symbol = symbol
     out.current_price = current_price
+    out.health = _health_out(health) if health is not None else None
     return out
 
 
 async def _get_symbol(db: AsyncSession, stock_id: int) -> str:
     stock = await db.get(Stock, stock_id)
     return stock.symbol if stock else ""
+
+
+async def _validity_by_signal(
+    db: AsyncSession, signal_ids: list[str]
+) -> dict[str, datetime]:
+    """Validity-until per signal for the given ids (one query). Positions held
+    past their signal's validity are flagged stale by the health watcher."""
+    ids = [s for s in signal_ids if s]
+    if not ids:
+        return {}
+    rows = (
+        await db.execute(
+            select(Signal.id, Signal.validity_until).where(Signal.id.in_(ids))
+        )
+    ).all()
+    return {r.id: r.validity_until for r in rows}
 
 
 @router.post("/orders", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
@@ -136,10 +173,27 @@ async def list_open_positions(
         prices[pos.id] = await update_position_pnl(db, pos)
     await db.commit()
 
-    enriched = [
-        _enrich_position(p, await _get_symbol(db, p.stock_id), prices.get(p.id))
-        for p in positions
-    ]
+    # Emergency-exit watcher: regime ER (one batch) + signal validity feed the
+    # advisory health assessment per open position.
+    now = datetime.now(UTC)
+    er_map = await er_by_stock(db, list({p.stock_id for p in positions}), now)
+    validity = await _validity_by_signal(db, [p.signal_id for p in positions if p.signal_id])
+
+    enriched = []
+    for p in positions:
+        health = assess_position_health(
+            side=p.side,
+            entry=p.avg_entry_price,
+            current_price=prices.get(p.id),
+            stop_loss=p.current_sl,
+            take_profit=p.current_tp,
+            regime_er=er_map.get(p.stock_id),
+            validity_until=validity.get(p.signal_id) if p.signal_id else None,
+            now=now,
+        )
+        enriched.append(
+            _enrich_position(p, await _get_symbol(db, p.stock_id), prices.get(p.id), health)
+        )
     return PositionListResponse(total=len(enriched), positions=enriched)
 
 

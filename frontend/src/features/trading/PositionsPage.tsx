@@ -3,7 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import { X, Edit2 } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
-import { tradingApi, type PositionOut } from '@/lib/api/trading'
+import { tradingApi, type PositionOut, type PositionHealth, type HealthReason } from '@/lib/api/trading'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/hooks/useToast'
@@ -27,6 +27,54 @@ function pnlFmt(val: string | null): React.ReactNode {
 function priceFmt(val: string | null): string {
   if (!val) return '—'
   return `₹${formatINR(parseFloat(val))}`
+}
+
+const REASON_LABEL: Record<HealthReason['code'], string> = {
+  thesis_break: 'stop broken',
+  trend_dead: 'trend dead',
+  rr_inverted: 'R:R inverted',
+  deep_mae: 'deep in red',
+  stale: 'expired',
+}
+
+// Advisory emergency-exit verdict. CUT = structurally dead, consider exiting;
+// WATCH = one soft warning. Glyph + word + colour, never colour alone (UI §5.2).
+// The full reasons ride in the title so hovering explains the "why".
+function HealthBadge({ health }: { health: PositionHealth | null }) {
+  if (!health || health.verdict === 'hold') {
+    return <span style={{ color: 'var(--color-text-muted)' }}>—</span>
+  }
+  const isCut = health.verdict === 'cut'
+  const color = isCut ? 'var(--color-bear)' : 'var(--color-warning)'
+  const bg = isCut ? 'var(--color-loss-bg)' : 'var(--color-warning-bg)'
+  const glyph = isCut ? '⚠' : '◆' // glyph + word + colour — never colour alone (UI §5.2)
+  const primary = health.reasons[0]
+  const title = health.reasons.map((r) => `• ${r.detail}`).join('\n')
+  return (
+    <span title={title} className="inline-flex items-center gap-1.5 justify-end whitespace-nowrap">
+      <span
+        style={{
+          padding: '2px 6px', borderRadius: '4px', fontWeight: 700, fontSize: '0.7rem',
+          background: bg, color,
+        }}
+      >
+        <span aria-hidden="true">{glyph} </span>
+        {isCut ? 'CUT' : 'WATCH'}
+      </span>
+      {primary && (
+        <span style={{ color: 'var(--color-text-muted)', fontSize: '0.68rem' }}>
+          {REASON_LABEL[primary.code]}
+          {health.reasons.length > 1 ? ` +${health.reasons.length - 1}` : ''}
+        </span>
+      )}
+    </span>
+  )
+}
+
+function healthEdge(health: PositionHealth | null): string {
+  if (health?.verdict === 'cut') return 'var(--color-bear)'
+  if (health?.verdict === 'watch') return 'var(--color-warning)'
+  return 'transparent'
 }
 
 function TrailBadge({ state }: { state: string }) {
@@ -108,7 +156,7 @@ export function PositionsPage() {
             <table className="w-full text-xs" style={{ borderCollapse: 'collapse' }}>
               <thead>
                 <tr className="border-b border-(--color-border)">
-                  {['Symbol', 'Side', 'Qty', 'Entry', 'Current', 'SL', 'TP', 'Trail', 'Unreal. P&L', 'Opened', ''].map((h) => (
+                  {['Symbol', 'Side', 'Qty', 'Entry', 'Current', 'SL', 'TP', 'Trail', 'Unreal. P&L', 'Health', 'Opened', ''].map((h) => (
                     <th
                       key={h}
                       className="px-3 py-2 text-[10px] uppercase tracking-wide font-medium whitespace-nowrap"
@@ -122,7 +170,7 @@ export function PositionsPage() {
               <tbody>
                 {positions.map((pos) => (
                   <tr key={pos.id} className="border-b border-(--color-border) hover:bg-(--color-surface-hover)">
-                    <td className="px-3 py-2">
+                    <td className="px-3 py-2" style={{ borderLeft: `2px solid ${healthEdge(pos.health)}` }}>
                       <Link
                         to={`/stocks/${pos.stock_id}`}
                         className="font-mono font-bold text-(--color-accent) hover:text-(--color-accent-hover)"
@@ -147,6 +195,7 @@ export function PositionsPage() {
                     <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bull)' }}>{priceFmt(pos.current_tp)}</td>
                     <td className="px-3 py-2 text-right"><TrailBadge state={pos.trail_state} /></td>
                     <td className="px-3 py-2 text-right">{pnlFmt(pos.unrealized_pnl)}</td>
+                    <td className="px-3 py-2 text-right"><HealthBadge health={pos.health} /></td>
                     <td className="px-3 py-2 text-right text-(--color-text-muted) whitespace-nowrap">
                       {new Date(pos.opened_at).toLocaleString('en-IN', {
                         timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short',

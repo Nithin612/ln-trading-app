@@ -1,5 +1,19 @@
 import { api } from './client'
 
+export interface HealthReason {
+  code: 'thesis_break' | 'trend_dead' | 'rr_inverted' | 'deep_mae' | 'stale'
+  severity: 'watch' | 'cut'
+  detail: string
+}
+
+export interface PositionHealth {
+  verdict: 'hold' | 'watch' | 'cut'
+  reasons: HealthReason[]
+  drawdown_r: number | null
+  rr_remaining: number | null
+  regime_er: number | null
+}
+
 export interface PositionOut {
   id: string
   user_id: number
@@ -20,6 +34,7 @@ export interface PositionOut {
   current_price: string | null
   peak_price: string | null
   peak_pnl: string | null
+  health: PositionHealth | null
   opened_at: string
   closed_at: string | null
   signal_id: string | null

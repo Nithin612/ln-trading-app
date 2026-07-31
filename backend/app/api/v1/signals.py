@@ -5,7 +5,7 @@ GET  /signals/{id}            — full detail including factor breakdown
 POST /signals/generate        — (admin) trigger generation for a stock
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated
 
@@ -16,12 +16,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user as get_current_active_user
 from app.core.deps import get_db, require_admin
-from app.models.market_data import OhlcvDaily
 from app.models.signal import Signal, SignalOutcome
 from app.models.stock import Stock
 from app.models.user import User
 from app.schemas.signal import SignalListResponse, SignalOut, SignalOutcomeOut
 from app.signals.event_guard import is_signal_suppressed
+from app.trading.regime import CHOPPY_ER, er_by_stock
 
 router = APIRouter(prefix="/signals", tags=["signals"])
 
@@ -48,8 +48,6 @@ async def _enrich(signal: Signal, db: AsyncSession) -> SignalOut:
 
 
 _NEAR_EXPIRY_FRAC = 0.8  # ≥80% of the validity window elapsed = stale / little runway
-_CHOPPY_ER = 0.30        # daily Kaufman ER below this = choppy (07-30/31 review threshold)
-_ER_PERIOD = 10
 
 
 def _near_expiry(sig: Signal, now: datetime) -> bool:
@@ -57,41 +55,6 @@ def _near_expiry(sig: Signal, now: datetime) -> bool:
     if span <= 0:
         return False
     return (now - sig.created_at).total_seconds() / span >= _NEAR_EXPIRY_FRAC
-
-
-def _kaufman_er(closes: list[float], n: int = _ER_PERIOD) -> float | None:
-    """Efficiency ratio over the last n moves: |net| / sum(|steps|). None if too
-    few bars; 0-1 where >~0.4 is a clean trend and <~0.3 is chop."""
-    if len(closes) < n + 1:
-        return None
-    seg = closes[-(n + 1):]
-    net = abs(seg[-1] - seg[0])
-    path = sum(abs(seg[i] - seg[i - 1]) for i in range(1, len(seg)))
-    return (net / path) if path else 0.0
-
-
-async def _er_by_stock(
-    db: AsyncSession, stock_ids: list[int], now: datetime
-) -> dict[int, float | None]:
-    """Current daily-regime ER for each stock, from recent completed daily bars."""
-    if not stock_ids:
-        return {}
-    cutoff = now - timedelta(days=45)  # ~30 trading days → enough for ER(10)
-    rows = (
-        await db.execute(
-            select(OhlcvDaily.stock_id, OhlcvDaily.close)
-            .where(
-                OhlcvDaily.stock_id.in_(stock_ids),
-                OhlcvDaily.is_complete.is_(True),
-                OhlcvDaily.time >= cutoff,
-            )
-            .order_by(OhlcvDaily.stock_id, OhlcvDaily.time)
-        )
-    ).all()
-    by_stock: dict[int, list[float]] = {}
-    for r in rows:
-        by_stock.setdefault(r.stock_id, []).append(float(r.close))
-    return {sid: _kaufman_er(closes) for sid, closes in by_stock.items()}
 
 
 def _reward_risk(sig: Signal) -> float:
@@ -151,11 +114,11 @@ async def list_active_signals(
         reps.append((best, len(grp)))
 
     # Regime ER per stock (current daily tape) — choppy = below the threshold.
-    er_by_stock = await _er_by_stock(db, [s.stock_id for s, _ in reps], now)
+    er_map = await er_by_stock(db, [s.stock_id for s, _ in reps], now)
 
     def _choppy(s: Signal) -> bool:
-        er = er_by_stock.get(s.stock_id)
-        return er is not None and er < _CHOPPY_ER
+        er = er_map.get(s.stock_id)
+        return er is not None and er < CHOPPY_ER
 
     if not include_expiring:
         reps = [(s, n) for (s, n) in reps if not _near_expiry(s, now)]
@@ -172,7 +135,7 @@ async def list_active_signals(
         out.sources_count = n
         out.near_expiry = _near_expiry(s, now)
         out.days_valid_remaining = max(0.0, (s.validity_until - now).total_seconds() / 86_400)
-        out.regime_er = er_by_stock.get(s.stock_id)
+        out.regime_er = er_map.get(s.stock_id)
         out.choppy = _choppy(s)
         enriched.append(out)
     return SignalListResponse(total=total, signals=enriched)

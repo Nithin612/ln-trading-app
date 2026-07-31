@@ -51,6 +51,22 @@ class OrderOut(BaseModel):
 
 # ── Position schemas ───────────────────────────────────────────────────────────
 
+class HealthReasonOut(BaseModel):
+    code: str      # thesis_break | trend_dead | rr_inverted | deep_mae | stale
+    severity: str  # watch | cut
+    detail: str
+
+
+class PositionHealthOut(BaseModel):
+    """Advisory emergency-exit assessment (never auto-executes)."""
+
+    verdict: str                    # hold | watch | cut
+    reasons: list[HealthReasonOut]
+    drawdown_r: float | None        # current adverse excursion in R (+ = underwater)
+    rr_remaining: float | None      # remaining reward:risk from the current price
+    regime_er: float | None         # daily Kaufman efficiency ratio (trend strength)
+
+
 class PositionOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -73,6 +89,7 @@ class PositionOut(BaseModel):
     current_price: Decimal | None = None  # transient live/last price (open positions)
     peak_price: Decimal | None = None    # best price seen while open (MFE)
     peak_pnl: Decimal | None = None      # GROSS peak profit (max favourable excursion)
+    health: PositionHealthOut | None = None  # advisory emergency-exit assessment (open)
     opened_at: datetime
     closed_at: datetime | None
     signal_id: str | None

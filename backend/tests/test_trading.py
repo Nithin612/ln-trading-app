@@ -585,6 +585,40 @@ class TestTradingApi:
             await r.delete(key)
             await r.aclose()
 
+    async def test_list_open_positions_includes_health(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """The open-positions list carries the advisory emergency-exit verdict.
+        A LONG whose price is through its stop is a structurally-dead CUT."""
+        import redis.asyncio as aioredis
+        from app.broker.tick_consumer import LTP_KEY
+        from app.core.config import settings
+
+        user = await create_test_user(db)
+        headers = await get_auth_headers(client)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000", sl="480.0000")
+        await _open_position(db, user, stock, signal)  # SL 480
+        await db.commit()
+
+        r = aioredis.from_url(settings.redis_url, decode_responses=True)
+        key = LTP_KEY.format(stock_id=stock.id)
+        try:
+            await r.set(key, "479.00", ex=600)  # through the stop
+            resp = await client.get("/api/v1/trading/positions", headers=headers)
+            assert resp.status_code == 200
+            health = resp.json()["positions"][0]["health"]
+            assert health is not None
+            assert health["verdict"] == "cut"
+            codes = {reason["code"] for reason in health["reasons"]}
+            assert "thesis_break" in codes
+            assert all({"code", "severity", "detail"} <= r.keys() for r in health["reasons"])
+            # 479 is past a 20-wide stop from entry 500 → >1R underwater.
+            assert health["drawdown_r"] is not None and health["drawdown_r"] > 1.0
+        finally:
+            await r.delete(key)
+            await r.aclose()
+
     async def test_shadow_compare_endpoint(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:

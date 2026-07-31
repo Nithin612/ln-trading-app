@@ -50,9 +50,25 @@ function makePosition(overrides: Partial<tradingApiModule.PositionOut> = {}): tr
     current_price: '2860.0000',
     peak_price: null,
     peak_pnl: null,
+    health: null,
     opened_at: new Date().toISOString(),
     closed_at: null,
     signal_id: 'sig-001',
+    ...overrides,
+  }
+}
+
+function makeHealth(
+  overrides: Partial<tradingApiModule.PositionHealth> = {},
+): tradingApiModule.PositionHealth {
+  return {
+    verdict: 'cut',
+    reasons: [
+      { code: 'thesis_break', severity: 'cut', detail: 'Price ₹2799 through stop ₹2800.' },
+    ],
+    drawdown_r: 1.1,
+    rr_remaining: 0.4,
+    regime_er: 0.2,
     ...overrides,
   }
 }
@@ -199,6 +215,49 @@ describe('PositionsPage', () => {
     await waitFor(() => {
       expect(screen.getByText(/\+₹1,750/)).toBeInTheDocument()
     })
+  })
+
+  it('flags a structurally-dead position with a CUT health badge', async () => {
+    vi.spyOn(tradingApiModule.tradingApi, 'getOpenPositions').mockResolvedValue({
+      total: 1,
+      positions: [makePosition({ health: makeHealth() })],
+    })
+    wrap(<PositionsPage />)
+    await waitFor(() => expect(screen.getByText('CUT')).toBeInTheDocument())
+    // primary reason surfaced inline, full detail available on hover
+    expect(screen.getByText('stop broken')).toBeInTheDocument()
+    expect(screen.getByTitle(/through stop ₹2800/)).toBeInTheDocument()
+  })
+
+  it('shows a WATCH badge with the extra-reason count', async () => {
+    vi.spyOn(tradingApiModule.tradingApi, 'getOpenPositions').mockResolvedValue({
+      total: 1,
+      positions: [
+        makePosition({
+          health: makeHealth({
+            verdict: 'watch',
+            reasons: [
+              { code: 'trend_dead', severity: 'watch', detail: 'Daily trend efficiency 0.20 — choppy.' },
+              { code: 'stale', severity: 'watch', detail: 'Held past the validity window.' },
+            ],
+          }),
+        }),
+      ],
+    })
+    wrap(<PositionsPage />)
+    await waitFor(() => expect(screen.getByText('WATCH')).toBeInTheDocument())
+    expect(screen.getByText(/trend dead \+1/)).toBeInTheDocument()
+  })
+
+  it('renders no badge for a healthy position', async () => {
+    vi.spyOn(tradingApiModule.tradingApi, 'getOpenPositions').mockResolvedValue({
+      total: 1,
+      positions: [makePosition({ health: makeHealth({ verdict: 'hold', reasons: [] }) })],
+    })
+    wrap(<PositionsPage />)
+    await waitFor(() => expect(screen.getByText('RELIANCE')).toBeInTheDocument())
+    expect(screen.queryByText('CUT')).not.toBeInTheDocument()
+    expect(screen.queryByText('WATCH')).not.toBeInTheDocument()
   })
 })
 
