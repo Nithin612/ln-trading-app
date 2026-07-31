@@ -22,6 +22,7 @@ from app.schemas.fo import (
     ChainLegOut,
     ChainOut,
     FoAnalyticsOut,
+    IvRankOut,
     PcrOut,
     VixRegimeOut,
 )
@@ -108,6 +109,33 @@ async def get_analytics(
         max_pain=fa.max_pain(rows),
         basis=_basis_out(basis),
         vix=_vix_out(vix),
+    )
+
+
+@router.get("/iv-rank", response_model=IvRankOut)
+async def get_iv_rank(
+    symbol: str = Query(..., min_length=1, max_length=32),
+    rate: float = Query(0.065, ge=0.0, le=0.5, description="risk-free proxy (cont. comp.)"),
+    lookback: int = Query(252, ge=2, le=2000),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> IvRankOut:
+    sym = symbol.upper()
+    r = await fa.iv_rank(db, sym, rate=rate, lookback=lookback)
+    if r is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="insufficient option history to compute IV rank",
+        )
+    return IvRankOut(
+        symbol=sym,
+        as_of=r.as_of,
+        current_iv=r.current_iv,
+        rank=r.rank,
+        percentile=r.percentile,
+        min_iv=r.min_iv,
+        max_iv=r.max_iv,
+        sample=r.sample,
     )
 
 

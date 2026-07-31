@@ -5,6 +5,7 @@
 //! - the GIL is released around anything non-trivial (`py.detach`);
 //! - errors cross the FFI as typed Python exceptions, never panics.
 
+use engine_core::options::{Bsm, OptionType};
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
 use std::sync::{Mutex, MutexGuard};
@@ -14,6 +15,19 @@ fn check_length(length: usize) -> PyResult<()> {
         return Err(PyValueError::new_err("length must be >= 1"));
     }
     Ok(())
+}
+
+/// (delta, gamma, vega, theta, rho) — one option's Greeks across the FFI.
+type GreekTuple = (f64, f64, f64, f64, f64);
+
+fn parse_kind(kind: &str) -> PyResult<OptionType> {
+    match kind.to_ascii_lowercase().as_str() {
+        "call" | "c" | "ce" => Ok(OptionType::Call),
+        "put" | "p" | "pe" => Ok(OptionType::Put),
+        _ => Err(PyValueError::new_err(
+            "option kind must be 'call'/'CE'/'c' or 'put'/'PE'/'p'",
+        )),
+    }
 }
 
 /// Version banner: "tradecore x.y.z (engine-core x.y.z)".
@@ -644,6 +658,83 @@ impl LiveBook {
     }
 }
 
+/// Batch Black-Scholes–Merton prices. `kind` applies to the whole batch;
+/// `rows` are (spot, strike, t, rate, carry, vol). Returns one price per row,
+/// or `None` for a degenerate contract. `carry`: rate=BS, 0=Black-76, rate−q=Merton.
+#[pyfunction]
+fn option_price(
+    py: Python<'_>,
+    kind: &str,
+    rows: Vec<(f64, f64, f64, f64, f64, f64)>,
+) -> PyResult<Vec<Option<f64>>> {
+    let k = parse_kind(kind)?;
+    Ok(py.detach(|| {
+        rows.iter()
+            .map(|&(spot, strike, t, rate, carry, vol)| {
+                engine_core::options::price(
+                    k,
+                    &Bsm {
+                        spot,
+                        strike,
+                        t,
+                        rate,
+                        carry,
+                        vol,
+                    },
+                )
+            })
+            .collect()
+    }))
+}
+
+/// Batch Greeks. `rows` are (spot, strike, t, rate, carry, vol); each result is
+/// (delta, gamma, vega, theta, rho) or `None` for a degenerate contract.
+#[pyfunction]
+fn option_greeks(
+    py: Python<'_>,
+    kind: &str,
+    rows: Vec<(f64, f64, f64, f64, f64, f64)>,
+) -> PyResult<Vec<Option<GreekTuple>>> {
+    let k = parse_kind(kind)?;
+    Ok(py.detach(|| {
+        rows.iter()
+            .map(|&(spot, strike, t, rate, carry, vol)| {
+                engine_core::options::greeks(
+                    k,
+                    &Bsm {
+                        spot,
+                        strike,
+                        t,
+                        rate,
+                        carry,
+                        vol,
+                    },
+                )
+                .map(|g| (g.delta, g.gamma, g.vega, g.theta, g.rho))
+            })
+            .collect()
+    }))
+}
+
+/// Batch implied volatility. `rows` are (market_price, spot, strike, t, rate,
+/// carry); each result is the annualized IV or `None` when the premium violates
+/// the no-arbitrage bounds / carries no recoverable vol.
+#[pyfunction]
+fn implied_vol(
+    py: Python<'_>,
+    kind: &str,
+    rows: Vec<(f64, f64, f64, f64, f64, f64)>,
+) -> PyResult<Vec<Option<f64>>> {
+    let k = parse_kind(kind)?;
+    Ok(py.detach(|| {
+        rows.iter()
+            .map(|&(price, spot, strike, t, rate, carry)| {
+                engine_core::options::implied_vol(k, price, spot, strike, t, rate, carry)
+            })
+            .collect()
+    }))
+}
+
 #[pymodule]
 fn tradecore(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(version, m)?)?;
@@ -654,6 +745,9 @@ fn tradecore(m: &Bound<'_, PyModule>) -> PyResult<()> {
     m.add_function(wrap_pyfunction!(atr, m)?)?;
     m.add_function(wrap_pyfunction!(adx, m)?)?;
     m.add_function(wrap_pyfunction!(bbands, m)?)?;
+    m.add_function(wrap_pyfunction!(option_price, m)?)?;
+    m.add_function(wrap_pyfunction!(option_greeks, m)?)?;
+    m.add_function(wrap_pyfunction!(implied_vol, m)?)?;
     m.add_function(wrap_pyfunction!(score_signal, m)?)?;
     m.add_function(wrap_pyfunction!(run_backtest_single, m)?)?;
     m.add_function(wrap_pyfunction!(run_universe, m)?)?;

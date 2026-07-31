@@ -46,6 +46,17 @@ class VixRegimeOut(BaseModel):
     sample: int
 
 
+class IvRankOut(BaseModel):
+    symbol: str
+    as_of: date
+    current_iv: float
+    rank: float
+    percentile: float
+    min_iv: float
+    max_iv: float
+    sample: int
+
+
 class FoAnalyticsOut(BaseModel):
     symbol: str
     expiry: date

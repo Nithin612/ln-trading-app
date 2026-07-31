@@ -21,7 +21,7 @@ from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fo_data import FoBhavcopy, IndiaVixDaily, OptionChainSnapshot
@@ -64,6 +64,17 @@ class VixRegime:
     percentile: float          # 0–100, share of the lookback strictly below current
     band: str                  # "low" | "normal" | "high"
     sample: int                # sessions counted in the lookback (incl. current)
+
+
+@dataclass(frozen=True)
+class IvRank:
+    as_of: date                # the latest trading day with a computable IV
+    current_iv: float          # ATM front-month implied vol (annualized) on as_of
+    rank: float                # (current − min)/(max − min)·100 over the window
+    percentile: float          # % of the window strictly below current
+    min_iv: float
+    max_iv: float
+    sample: int                # days with a computable IV in the window
 
 
 # ── Pure analytics (no I/O — hand-testable) ─────────────────────────────────────
@@ -312,3 +323,133 @@ async def vix_regime(
     percentile = below / len(closes) * 100
     band = "low" if percentile < 25 else ("high" if percentile > 75 else "normal")
     return VixRegime(current=current, percentile=percentile, band=band, sample=len(closes))
+
+
+# ── Implied-vol rank (Black-76 on the front-month future) ───────────────────────
+#
+# IV itself needs Black-Scholes, which is Rust-only (engine-core/options.rs via
+# `tradecore`). Here we assemble the per-day ATM inputs from bhavcopy and invert
+# them in ONE batched FFI call, then rank the latest against the window. Using
+# the FUTURE as the underlying (carry=0, Black-76) keeps it dividend-free.
+
+_DEFAULT_RATE = 0.065  # continuously-compounded proxy; IV is weakly rate-sensitive
+
+
+async def _front_month_days(
+    db: AsyncSession, symbol: str, *, as_of: date | None, lookback: int
+) -> list[tuple[date, date]]:
+    """(trade_date, front-month expiry) for the latest `lookback` futures trading
+    days at or before `as_of`. Front month = nearest expiry ≥ the trade date."""
+    stmt = select(FoBhavcopy.trade_date, func.min(FoBhavcopy.expiry_date)).where(
+        FoBhavcopy.symbol == symbol,
+        FoBhavcopy.instrument == "FUT",
+        FoBhavcopy.expiry_date >= FoBhavcopy.trade_date,
+    )
+    if as_of is not None:
+        stmt = stmt.where(FoBhavcopy.trade_date <= as_of)
+    stmt = (
+        stmt.group_by(FoBhavcopy.trade_date)
+        .order_by(FoBhavcopy.trade_date.desc())
+        .limit(lookback)
+    )
+    rows = (await db.execute(stmt)).all()
+    return [(r[0], r[1]) for r in reversed(rows)]  # ascending by date
+
+
+async def _atm_iv_by_day(
+    db: AsyncSession, symbol: str, pairs: list[tuple[date, date]], *, rate: float
+) -> dict[date, float]:
+    """Invert the ATM front-month call to an implied vol for each (day, expiry).
+    Three queries + one batched `tradecore.implied_vol` call. Days lacking a
+    future close, an ATM call, or positive time-to-expiry drop out."""
+    if not pairs:
+        return {}
+    front = dict(pairs)
+    days = [d for d, _ in pairs]
+    exps = list({e for _, e in pairs})
+
+    fut_rows = (
+        await db.execute(
+            select(FoBhavcopy.trade_date, FoBhavcopy.expiry_date, FoBhavcopy.close).where(
+                FoBhavcopy.symbol == symbol,
+                FoBhavcopy.instrument == "FUT",
+                FoBhavcopy.trade_date.in_(days),
+                FoBhavcopy.expiry_date.in_(exps),
+            )
+        )
+    ).all()
+    fut = {(r.trade_date, r.expiry_date): r.close for r in fut_rows if r.close is not None}
+
+    ce_rows = (
+        await db.execute(
+            select(
+                FoBhavcopy.trade_date,
+                FoBhavcopy.expiry_date,
+                FoBhavcopy.strike,
+                FoBhavcopy.close,
+            ).where(
+                FoBhavcopy.symbol == symbol,
+                FoBhavcopy.instrument == "CE",
+                FoBhavcopy.trade_date.in_(days),
+                FoBhavcopy.expiry_date.in_(exps),
+            )
+        )
+    ).all()
+    ce: dict[tuple[date, date], list[tuple[Decimal, Decimal]]] = {}
+    for r in ce_rows:
+        if r.close is not None:
+            ce.setdefault((r.trade_date, r.expiry_date), []).append((r.strike, r.close))
+
+    ordered_days: list[date] = []
+    inputs: list[tuple[float, float, float, float, float, float]] = []
+    for d in days:
+        exp = front[d]
+        fwd = fut.get((d, exp))
+        legs = ce.get((d, exp))
+        if fwd is None or not legs:
+            continue
+        t = (exp - d).days / 365.0
+        if t <= 0:
+            continue
+        strike, ce_close = min(legs, key=lambda sc: (abs(sc[0] - fwd), sc[0]))  # ATM (tie → lower)
+        inputs.append((float(ce_close), float(fwd), float(strike), t, rate, 0.0))
+        ordered_days.append(d)
+
+    if not inputs:
+        return {}
+    import tradecore  # deferred: parity-gated wheel (idiom: signal_service, walkforward)
+
+    ivs = tradecore.implied_vol("call", inputs)
+    return {d: iv for d, iv in zip(ordered_days, ivs, strict=True) if iv is not None}
+
+
+async def iv_rank(
+    db: AsyncSession,
+    symbol: str,
+    *,
+    rate: float = _DEFAULT_RATE,
+    lookback: int = 252,
+    as_of: date | None = None,
+) -> IvRank | None:
+    """ATM front-month IV rank/percentile over the trailing `lookback` futures
+    sessions. `None` when no day in the window yields a computable IV."""
+    pairs = await _front_month_days(db, symbol, as_of=as_of, lookback=lookback)
+    series = await _atm_iv_by_day(db, symbol, pairs, rate=rate)
+    if not series:
+        return None
+    as_of_day = max(series)
+    current = series[as_of_day]
+    vals = list(series.values())
+    lo, hi = min(vals), max(vals)
+    rank = 0.0 if hi == lo else (current - lo) / (hi - lo) * 100.0
+    below = sum(1 for v in vals if v < current)
+    percentile = below / len(vals) * 100.0
+    return IvRank(
+        as_of=as_of_day,
+        current_iv=current,
+        rank=rank,
+        percentile=percentile,
+        min_iv=lo,
+        max_iv=hi,
+        sample=len(vals),
+    )

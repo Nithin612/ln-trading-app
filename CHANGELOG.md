@@ -9,6 +9,10 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### v2 Phase 4 — F&O analytics (in progress, started 2026-07-30)
 
+- **Options math over the FFI + IV-rank — slice 4.2b (2026-07-30).**
+  - `engine-py` (`tradecore`): batch `option_price`, `option_greeks`, `implied_vol` — one call per batch (rows are tuples), GIL released around the compute (`py.detach`), `None` per row for degenerate/no-solution, `ValueError` on a bad `kind`. Rebuilt via `make engine-build`.
+  - `app/services/fo_analytics.py`: `iv_rank` — ATM front-month implied-vol rank/percentile over the trailing lookback of futures sessions. IV is computed via Black-76 on the **future** (carry=0, dividend-free): three bhavcopy queries assemble the per-day ATM call inputs, then a single batched `tradecore.implied_vol` call inverts them; rank = (cur−min)/(max−min)·100, percentile = % of the window below current. `GET /fo/iv-rank`.
+  - Tests: `tests/test_options_ffi.py` (8 — Hull values, Greek shape, Black-76 rho identity, batch IV round-trip, `None` propagation, bad-kind `ValueError`, put–call parity) and `TestIvRank` in `tests/test_fo_analytics.py` (4 — round-trips a known vol series through the DB + `tradecore`, empty→`None`, API 200/404). ruff/mypy clean.
 - **Rust options math — slice 4.2a (2026-07-30).** `engine-core/src/options.rs`: generalized Black-Scholes–Merton pricing, the five Greeks, and implied volatility — pure, deterministic f64, no panics (every entry point returns `Option`; degenerate inputs collapse to discounted intrinsic).
   - One cost-of-carry `b` serves both F&O instruments: `b=rate` → Black-Scholes (equity/index spot), `b=0` → Black-76 (options on futures), `b=rate−q` → Merton (dividend).
   - Implied vol: Newton–Raphson (Manaster–Koehler seed) with a bisection fallback and no-arbitrage bound checks. Normal CDF = Abramowitz–Stegun 26.2.17 (|err| < 7.5e-8, proven at golden-gen time against `math.erf`).
