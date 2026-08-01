@@ -8,6 +8,12 @@ description: Run the full quality gate for a phase or feature — all checks, su
 The exit ritual. A phase is closed only when every gate below passes and the
 results are written down where future-you will find them.
 
+> **Phases 4–7 — architecture cross-check:** before starting and again at this
+> gate, consult `docs/NAUTILUS_TRADER_ANALYSIS.md` for the adopt/adapt/avoid
+> items relevant to the phase (§6 gap-analysis · §9 India adaptations · §8
+> don't-copy). **Phase 7 opens with slice 1 = the RiskEngine single-gate
+> consolidation** (test-first, equivalence-pinned) — before any live-order path.
+
 ## Gates (run in order, stop on first hard failure)
 
 1. **Static:** `cd backend && uv run ruff check app/ tests/ && uv run mypy app/`
