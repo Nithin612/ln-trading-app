@@ -111,9 +111,32 @@ class Settings(BaseSettings):
     paper_costs_enabled: bool = True
     # Adverse slippage applied to paper fills, in basis points (0 = off).
     # BUY fills move up, SELL fills move down by this fraction of the price.
-    paper_slippage_bps: float = 0.0
+    # Default 2 bps (~₹0.10 on a ₹500 name each way): a real market order never
+    # fills at the exact screen price, so a 0-slippage paper record is optimistic
+    # — and that record gates live trading. Conservative-in-the-right-direction;
+    # tune per the names/size actually traded. Tests pin this to 0 (conftest
+    # `_neutral_paper_slippage`) so fill assertions aren't coupled to the knob;
+    # the 2-bps path is exercised explicitly in the dedicated slippage tests.
+    paper_slippage_bps: float = 2.0
     # NSE equity tick size (₹) for rounding simulated fills; 0 disables.
     paper_tick_size: float = 0.05
+
+    # ── Profit-lock: absolute-rupee ladder (app/trading/profit_lock.py) ─────
+    # When a user opts in (users.profit_lock_enabled), the position monitor
+    # governs open PAPER exits with a rupee-denominated profit ladder — the
+    # trader's own model: once peak profit ≥ breakeven_inr, lock breakeven (no
+    # loss); once ≥ trail_start_inr, seal (peak_profit − giveback_inr), a fixed-₹
+    # trailing giveback that tightens as a fraction as the trade runs. The giveback
+    # is at least atr_k × ATR in price, so a volatile name in a genuine trend gets
+    # room and isn't stopped by normal pullback noise. Coherent across trades
+    # because P1 sizes every trade to the same per-trade risk budget (so ₹≈R).
+    # These are calibration starting points — tune on the tape toward the daily
+    # profit goal; per-user overrides can come later.
+    profit_lock_breakeven_inr: float = 2000.0
+    profit_lock_trail_start_inr: float = 3000.0
+    profit_lock_giveback_inr: float = 1000.0
+    profit_lock_atr_k: float = 2.0
+
     market_open_hour: int = 9
     market_open_minute: int = 15
     market_close_hour: int = 15

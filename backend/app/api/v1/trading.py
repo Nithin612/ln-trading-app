@@ -403,13 +403,16 @@ async def paper_record(
     day* is a day with ≥1 closed trade and net realized P&L > 0. The
     authoritative promotion gate remains Phase 7.
     """
-    result = await db.execute(
-        select(Position).where(
-            Position.user_id == user.id,
-            Position.mode == "paper",
-            Position.closed_at.is_not(None),
-        )
-    )
+    conditions = [
+        Position.user_id == user.id,
+        Position.mode == "paper",
+        Position.closed_at.is_not(None),
+    ]
+    # Clock reset: once the honest-fill clock is (re)started, count only trades
+    # closed on/after that instant — the days before were a different fill model.
+    if user.paper_clock_started_at is not None:
+        conditions.append(Position.closed_at >= user.paper_clock_started_at)
+    result = await db.execute(select(Position).where(*conditions))
     closed = result.scalars().all()
 
     # Aggregate by IST calendar date (small volumes → Python grouping is fine).
@@ -483,4 +486,23 @@ async def paper_record(
         target_days=target_days,
         start_date=days[0].date if days else None,
         last_date=days[-1].date if days else None,
+        clock_started_at=user.paper_clock_started_at,
     )
+
+
+@router.post("/paper-clock/reset", response_model=PaperRecordOut)
+async def reset_paper_clock(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+) -> PaperRecordOut:
+    """Restart the 30-day profitable-paper clock from now.
+
+    Sets the user's paper-clock start to the current instant, so the record
+    (and the eventual Phase-7 go-live gate) counts only closed paper trades
+    from here — used after a material fill-model change so the whole 30-day
+    record is measured under one honest fill model. Past trades stay in the DB
+    for history; they simply no longer count toward the clock.
+    """
+    user.paper_clock_started_at = datetime.now(tz=UTC)
+    await db.commit()
+    return await paper_record(db, user, target_days=30)

@@ -5,7 +5,7 @@ markets (NSE/BSE). Solo developer, personal use first, possible future
 productization. Read this fully at session start; it points to everything
 else.
 
-## Current truth (updated 2026-08-06 — v2 Phase 3 done, Phase 4 backend done)
+## Current truth (updated 2026-08-06 — v2 Phase 3 in progress · Phase 4 backend done)
 
 - **v1 phases 0–11 are built and tested** (auth, stock master, screener,
   categories, EOD + FII/DII ingestion, 14-factor confluence signal engine,
@@ -15,20 +15,47 @@ else.
 - **The v2 upgrade is governed by `docs/UPGRADE_PLAN.md`** (approved
   2026-07-03): Rust compute core, tick-to-tick realtime layer, four
   trading-style engines (Intraday / Swing / F&O / Investment), UI overhaul,
-  outcome tracking, then live trading. `docs/PHASES.md` tracks status;
-  each finished phase writes a report to `docs/phases/`.
-- **v2 status:** Phases 0–2 ✅; **Phase 3 realtime ✅** (soak-clean; 30-day
-  paper clock running); **Phase 4 F&O analytics — backend done** (slices 4.1
-  analytics · 4.2 Rust BS/Black-76 IV+Greeks over `tradecore` + IV-rank · 4.3
-  option-selling suggestion engine, defined-risk index-only, on branch
-  `phase4-fo-analytics`; the F&O **UI** is Phase 5). A "signal-intelligence
-  overlay" (dedup / regime filter / anti-chase / emergency-exit) + profit-lock
-  live-wiring also landed on main. `docs/PHASES.md` top block is the canonical
-  status; each phase writes `docs/phases/`.
-- `make check` green is the baseline — keep it that way. (Test counts grow every
-  slice; don't trust any hard-coded number — run the gate. Note: options math
-  and F&O suggestions run behind the `tradecore` wheel — `make engine-build`
-  after pulling engine changes.)
+  outcome tracking, then live trading. `docs/PHASES.md` tracks status (its
+  top block is the at-a-glance state); each finished phase reports to
+  `docs/phases/`.
+- **v2 Phases 0–2 done; Phase 3 (realtime) in progress — slices 3.0–3.7 all
+  done and on main.** Phase-3 exit needs two LIVE-GATED items: a clean
+  quiet-box **full-session soak** (p99 tick→publish ≤ 50 ms still unproven —
+  the 07-10 soak was partial) and a **clean shadow week**
+  (`scripts/shadow_day.sh`, zero diffs), then `/phase-gate`.
+- **Phase 4 F&O analytics — backend done** (slices 4.1 analytics ·
+  4.2 Rust BS/Black-76 IV+Greeks via `tradecore` + IV-rank · 4.3 option-selling
+  suggestion engine: defined-risk **index-only**, breakeven-POP, expectancy
+  **report-only** (edge = vol-risk-premium, not a price guarantee),
+  **fail-closed** VIX veto, calibrated `SellRules`; suggestions only, never
+  auto-trades). F&O **UI = Phase 5**.
+- **Paper trading runs daily** and feeds the 30-day paper clock (the *Phase-7*
+  go-live gate, not the Phase-3 exit). Exit governance is per-user
+  (`users.profit_lock_enabled`): ON = the **absolute-₹ profit ladder**
+  (`app/trading/profit_lock.absolute_ladder_stop` — breakeven at +₹2k, seal
+  peak−₹1k above ₹3k, ATR room; knobs = `settings.profit_lock_*`), OFF = the
+  fixed `trail_sl` ladder. Paper entries size **risk-first from the actual
+  fill** (`paper_broker.size_for_fill`), so a chased fill shrinks qty instead
+  of over-risking, and repeat entries can't stack past the budget.
+- **Daily analysis loop:** `make analysis [DATE=…] [WEEK_OF=…]` (or
+  `/daily-analysis`) writes `docs/analysis/<date>.md` + `LEDGER.md`. Open
+  fixes and priorities live in `docs/analysis/FIX_PLAN.md`. Current evidence
+  (08-03→05, 15 trades): only 1/15 reached +1R — **the binding constraint is
+  entry/regime selection, not the exit logic**; expectancy calibration is
+  Phase 6.
+- **Architecture-review backlog (2026-08-01)** is phase-mapped at the end of
+  `docs/PHASES.md` (source synthesis: `~/Downloads/ARCHITECTURE_RECOMMENDATIONS.md`).
+  Its now-fixes shipped — honest gap-through-stop paper fills (P0.3), 2 bps
+  slippage, paper-clock reset; the rest is Phase-6 (expectancy calibration),
+  the Market Context Engine phase, or Phase-7 (exchange stops, exposure caps).
+  Key framing: **live trading isn't built yet** (`place_order` is paper-only,
+  no Kite order/GTT path), so every "live" recommendation is a Phase-7
+  constraint.
+- Backend test suite **974**, frontend **257** (+ Phase-4 F&O suites). `make
+  check` green is the baseline state — keep it that way. Tests use an isolated
+  Redis logical DB (15), flushed per test — never point them at dev db 0.
+  Options math + F&O suggestions run behind the `tradecore` wheel — run
+  `make engine-build` after pulling engine changes.
 
 ## Tech stack (locked in — ask before substituting)
 

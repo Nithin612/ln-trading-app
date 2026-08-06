@@ -58,8 +58,14 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
     from app.services.journal_service import auto_create_journal_entry
     from app.trading.atr import atr_timeframe_for, latest_atr
     from app.trading.market_hours import is_market_session
-    from app.trading.profit_lock import layered_ratchet_stop, params_for
-    from app.trading.trail_sl import advance_trail, compute_pnl, is_sl_hit, is_tp_hit
+    from app.trading.profit_lock import absolute_ladder_stop, ladder_params_from_settings
+    from app.trading.trail_sl import (
+        advance_trail,
+        compute_pnl,
+        is_sl_hit,
+        is_tp_hit,
+        stop_fill_price,
+    )
 
     assert isinstance(db, AsyncSession)  # narrow the DI'd session type for mypy
     now = now or datetime.now(tz=UTC)
@@ -110,12 +116,20 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
                 quantity=pos.quantity,
             )
 
-        # SL/TP hit → auto-close (reason encodes the trigger for Trade History)
+        # SL/TP hit → auto-close (reason encodes the trigger for Trade History).
+        # A stop guarantees an exit, not a price: fill at the WORSE of the stop
+        # and the live price, so a gap through the stop is booked at the market
+        # it actually gapped to — never flattered back to the stop price. TP
+        # keeps filling at the target (a favourable gap filled there is already
+        # conservative).
         if pos.current_sl is not None and is_sl_hit(
             side=pos.side, current_price=price, current_sl=pos.current_sl
         ):
+            sl_fill = stop_fill_price(
+                side=pos.side, stop=pos.current_sl, market_price=price
+            )
             close_order, closed_pos = await close_position(
-                db, pos, exit_price=pos.current_sl, reason="sl_hit"
+                db, pos, exit_price=sl_fill, reason="sl_hit"
             )
             journal = await auto_create_journal_entry(db, closed_pos)
             if journal and close_order.filled_price:
@@ -156,9 +170,12 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
                 current_stop = Decimal(str(pos.current_sl))
 
                 if profit_lock_by_user[pos.user_id]:
-                    # peak_price was refreshed from this beat's price above; ATR
-                    # is the entry-time volatility, matching the shadow model so
-                    # live behaviour tracks the shadow evidence.
+                    # Rupee profit ladder: breakeven once peak profit ≥ ₹X, then
+                    # seal (peak_profit − giveback), with an ATR-room floor so a
+                    # volatile trend isn't noise-stopped. peak_price was refreshed
+                    # from this beat above; ATR is entry-time volatility (matches
+                    # the shadow model). Sized-to-budget entries (paper_broker
+                    # size_for_fill) make the ₹ thresholds mean the same R per trade.
                     peak = pos.peak_price if pos.peak_price is not None else price
                     atr = await latest_atr(
                         db,
@@ -166,13 +183,14 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
                         timeframe=atr_timeframe_for(sig.classification),
                         before=pos.opened_at,
                     )
-                    new_sl = layered_ratchet_stop(
+                    new_sl = absolute_ladder_stop(
                         side=pos.side,
                         entry=entry,
                         original_sl=original_sl,
                         peak_price=Decimal(str(peak)),
+                        quantity=pos.quantity,
                         atr=atr,
-                        params=params_for(sig.classification),
+                        params=ladder_params_from_settings(),
                         current_stop=current_stop,
                     )
                     # trail_state stays a ladder-only concept; the lock moves

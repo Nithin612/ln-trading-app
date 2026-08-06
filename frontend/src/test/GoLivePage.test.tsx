@@ -20,7 +20,7 @@ function makeRecord(o: Partial<PaperRecordOut> = {}): PaperRecordOut {
     days: [], total_days_traded: 3, profitable_days: 3, losing_days: 0,
     current_streak: 3, best_streak: 3, total_realized_pnl: '1500', total_charges: '120',
     total_trades: 5, win_rate_pct: '100.0', target_days: 30,
-    start_date: '2026-07-20', last_date: '2026-07-24', ...o,
+    start_date: '2026-07-20', last_date: '2026-07-24', clock_started_at: null, ...o,
   }
 }
 

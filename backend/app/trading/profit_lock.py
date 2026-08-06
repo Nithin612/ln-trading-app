@@ -1,9 +1,12 @@
 """Layered Ratchet Stop — the Dynamic Profit Lock mechanism (design 2026-07-29).
 
 Pure, deterministic stop-computation. No I/O, no clocks — prices/ATR enter as
-parameters. This is the piece a shadow comparator replays over history and, if
-it proves out, would eventually drive live stops. It is NOT wired into the live
-exit path — the current `trail_sl` ladder still governs real positions.
+parameters. A shadow comparator replays it over history (evidence), and it is
+ALSO wired into the live PAPER exit path per-user: `position_monitor` selects
+this ratchet when `User.profit_lock_enabled` is set, otherwise the fixed
+`trail_sl` ladder governs. Still shadow-first — it only moves paper stops and
+gates nothing real until the Phase-7 live cutover; the per-class params below
+are calibration starting points, not final.
 
 The effective stop is the TIGHTEST of several candidate floors, ratcheted one
 way only (up for a long, down for a short):
@@ -115,3 +118,79 @@ def layered_ratchet_stop(
         g = giveback_fraction(params, move / risk)
         candidates.append(entry - move * (_ONE - g))
     return min(current_stop, min(candidates))
+
+
+# --------------------------------------------------------------------------- #
+# Absolute-rupee profit ladder — the trader's "seal ₹X" model (live paper path) #
+# --------------------------------------------------------------------------- #
+
+
+@dataclass(frozen=True)
+class AbsoluteLadderParams:
+    """Rupee-denominated profit ladder. Coherent across trades once every trade
+    is sized to the same per-trade risk budget (paper_broker.size_for_fill), so
+    a ₹ profit maps to a consistent R. Amounts are position-level rupees."""
+
+    breakeven_inr: Decimal      # peak profit ≥ this → lock breakeven (no loss)
+    trail_start_inr: Decimal    # peak profit ≥ this → start sealing profit
+    giveback_inr: Decimal       # seal (peak_profit − giveback): a fixed-₹ trailing giveback
+    atr_k: Decimal              # giveback is at least atr_k·ATR in price (elasticity/room)
+
+
+def absolute_ladder_stop(
+    *,
+    side: str,
+    entry: Decimal,
+    original_sl: Decimal,
+    peak_price: Decimal,
+    quantity: int,
+    atr: Decimal | None,
+    params: AbsoluteLadderParams,
+    current_stop: Decimal,
+) -> Decimal:
+    """New effective stop under the rupee profit ladder, ratcheted one way only.
+
+    Tightest of these floors wins (max for a long, min for a short); never moves
+    against the position:
+      - original risk SL   the disaster floor, never removed
+      - breakeven (entry)  armed once peak profit ≥ breakeven_inr (kills the
+                           "went +₹2k then back to a loss" case)
+      - sealed floor       armed once peak profit ≥ trail_start_inr: the price
+                           giving (peak_profit − giveback), i.e. peak ∓ giveback_price
+                           with giveback_price = max(giveback_inr/qty, atr_k·ATR) —
+                           a quiet name seals tight to the ₹ giveback, a volatile
+                           one keeps more room so a normal pullback doesn't exit it.
+
+    `peak_price` is the best price reached; `atr` may be None (no ATR room)."""
+    is_long = side.upper() == "LONG"
+    qty = Decimal(quantity)
+    if qty <= 0:
+        return current_stop
+    peak_profit = (peak_price - entry) * qty if is_long else (entry - peak_price) * qty
+
+    candidates = [original_sl]
+    if peak_profit >= params.breakeven_inr:
+        candidates.append(entry)
+    if peak_profit >= params.trail_start_inr:
+        giveback_price = params.giveback_inr / qty
+        if atr is not None and atr > 0:
+            giveback_price = max(giveback_price, params.atr_k * atr)
+        seal = (peak_price - giveback_price) if is_long else (peak_price + giveback_price)
+        candidates.append(seal)
+
+    if is_long:
+        return max(current_stop, max(candidates))
+    return min(current_stop, min(candidates))
+
+
+def ladder_params_from_settings() -> AbsoluteLadderParams:
+    """Resolve the ladder tuning from config (deferred import keeps the stop
+    functions above pure and dependency-free)."""
+    from app.core.config import settings
+
+    return AbsoluteLadderParams(
+        breakeven_inr=Decimal(str(settings.profit_lock_breakeven_inr)),
+        trail_start_inr=Decimal(str(settings.profit_lock_trail_start_inr)),
+        giveback_inr=Decimal(str(settings.profit_lock_giveback_inr)),
+        atr_k=Decimal(str(settings.profit_lock_atr_k)),
+    )

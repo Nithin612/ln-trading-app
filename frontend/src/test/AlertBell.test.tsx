@@ -38,9 +38,20 @@ vi.mock('@/lib/api/signals', async (importOriginal) => {
   return { ...mod, signalsApi: { getById: vi.fn() } }
 })
 
+const toast = { success: vi.fn(), error: vi.fn() }
+vi.mock('@/hooks/useToast', () => ({ useToast: () => toast }))
+
+vi.mock('@/lib/api/trading', () => ({ tradingApi: { placeOrder: vi.fn() } }))
+
+const haltState = { halted: false }
+vi.mock('@/store/tradingHaltStore', () => ({
+  useTradingHaltStore: (sel: (s: { halted: boolean }) => unknown) => sel(haltState),
+}))
+
 import { stocksApi } from '@/lib/api/stocks'
 import { watchlistsApi } from '@/lib/api/watchlists'
 import { signalsApi } from '@/lib/api/signals'
+import { tradingApi } from '@/lib/api/trading'
 import type { SignalOut } from '@/lib/api/signals'
 
 const ALERT: LiveAlert = {
@@ -79,6 +90,10 @@ describe('AlertBell', () => {
     vi.mocked(watchlistsApi.list).mockReset()
     vi.mocked(watchlistsApi.list).mockResolvedValue([])
     vi.mocked(signalsApi.getById).mockReset()
+    vi.mocked(tradingApi.placeOrder).mockReset()
+    toast.success.mockReset()
+    toast.error.mockReset()
+    haltState.halted = false
   })
 
   const ENTRY_ALERT: LiveAlert = { ...ALERT, tag: 'zone_enter', source: 'entry_zone' }
@@ -259,6 +274,73 @@ describe('AlertBell', () => {
     expect(screen.getByText('Entered zone')).toBeInTheDocument()
     expect(screen.queryByText('BUY')).not.toBeInTheDocument()
     expect(vi.mocked(signalsApi.getById)).not.toHaveBeenCalled()
+  })
+
+  // ── Trade from the bell (P3) ────────────────────────────────────────────────
+  it('places a paper BUY from an entry alert’s signal', async () => {
+    stream.alerts = [{ ...ENTRY_ALERT, id: 'e', price: '100.5000', signalId: 'sig-1' }]
+    vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
+    vi.mocked(signalsApi.getById).mockResolvedValue(makeSignal())
+    vi.mocked(tradingApi.placeOrder).mockResolvedValue({
+      side: 'BUY',
+      filled_qty: 11,
+      symbol: 'RELIANCE',
+    } as never)
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    const buy = await screen.findByRole('button', { name: /Paper buy/i })
+    fireEvent.click(buy)
+    await waitFor(() =>
+      expect(vi.mocked(tradingApi.placeOrder)).toHaveBeenCalledWith(
+        { signal_id: 'sig-1', side: 'BUY' },
+        'tok',
+      ),
+    )
+    await waitFor(() => expect(toast.success).toHaveBeenCalled())
+  })
+
+  it('places a paper SELL from a bearish alert’s signal', async () => {
+    stream.alerts = [{ ...ENTRY_ALERT, id: 'e', price: '99.5000', signalId: 'sig-1' }]
+    vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
+    vi.mocked(signalsApi.getById).mockResolvedValue(
+      makeSignal({ direction: 'SELL', stop_loss: '104.0000' }),
+    )
+    vi.mocked(tradingApi.placeOrder).mockResolvedValue({
+      side: 'SELL',
+      filled_qty: 5,
+      symbol: 'RELIANCE',
+    } as never)
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    const sell = await screen.findByRole('button', { name: /Paper sell/i })
+    fireEvent.click(sell)
+    await waitFor(() =>
+      expect(vi.mocked(tradingApi.placeOrder)).toHaveBeenCalledWith(
+        { signal_id: 'sig-1', side: 'SELL' },
+        'tok',
+      ),
+    )
+  })
+
+  it('shows no trade button when the alert carries no signal', () => {
+    stream.alerts = [{ ...ENTRY_ALERT, id: 'e', price: '100.5000', signalId: null }]
+    vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    expect(screen.queryByRole('button', { name: /Paper (buy|sell)/i })).not.toBeInTheDocument()
+  })
+
+  it('disables the trade button while trading is halted', async () => {
+    haltState.halted = true
+    stream.alerts = [{ ...ENTRY_ALERT, id: 'e', price: '100.5000', signalId: 'sig-1' }]
+    vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
+    vi.mocked(signalsApi.getById).mockResolvedValue(makeSignal())
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    const buy = await screen.findByRole('button', { name: /Paper buy/i })
+    expect(buy).toBeDisabled()
+    fireEvent.click(buy)
+    expect(vi.mocked(tradingApi.placeOrder)).not.toHaveBeenCalled()
   })
 
   describe('chaseGuidance (pure)', () => {

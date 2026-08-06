@@ -145,6 +145,11 @@ migrate:  ## Apply pending Alembic migrations
 create-admin:  ## Interactively create the first admin user
 	@cd backend && uv run python scripts/create_admin.py
 
+.PHONY: analysis
+analysis:  ## Daily trading-analysis report → docs/analysis/. DATE=YYYY-MM-DD (default today IST), WEEK_OF=YYYY-MM-DD for the weekly roll-up, USER_ID=id
+	@cd backend && uv run python scripts/daily_analysis.py \
+		$(if $(DATE),--date $(DATE),) $(if $(WEEK_OF),--week-of $(WEEK_OF),) $(if $(USER_ID),--user $(USER_ID),)
+
 # ════════════════════════ Engine (Rust) ════════════════════════
 
 .PHONY: engine-build

@@ -8,7 +8,7 @@ Simulates order placement and fills entirely in software:
 """
 
 from datetime import UTC, datetime
-from decimal import ROUND_HALF_UP, Decimal
+from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -31,7 +31,7 @@ def _apply_slippage(price: Decimal, order_side: str) -> Decimal:
     """Adverse slippage on a simulated fill (config `paper_slippage_bps`).
 
     A BUY fills higher, a SELL lower — the trader always pays the spread.
-    Zero bps (the default) is a no-op.
+    Zero bps is a no-op; the configured default is 2 bps.
     """
     bps = Decimal(str(settings.paper_slippage_bps))
     if bps <= 0:
@@ -115,6 +115,41 @@ async def get_current_price(db: AsyncSession, stock_id: int) -> Decimal | None:
     return Decimal(str(daily)) if daily is not None else None
 
 
+def size_for_fill(
+    *,
+    capital: Decimal,
+    risk_pct: Decimal,
+    fill: Decimal,
+    stop_loss: Decimal,
+    existing_qty: int = 0,
+    existing_entry: Decimal | None = None,
+) -> int:
+    """Risk-first quantity sized from the ACTUAL fill price (not the signal's
+    entry), so a fill that drifted from the plan — a chase, a gap, slippage —
+    shrinks the quantity to hold the trade's risk at the per-trade budget rather
+    than silently over-risking: ``floor(budget / |fill - stop_loss|)``.
+
+    When adding to an ``existing`` open position, the add is sized against the
+    REMAINING budget (budget minus the risk already on the book), so repeated
+    entries on the same name can't stack risk past the budget. Returns 0 when no
+    budget remains, or the stop sits at/through the fill (the caller rejects the
+    order — never clamps to a token size)."""
+    per_share = abs(fill - stop_loss)
+    if per_share <= 0:
+        return 0
+    if existing_qty <= 0 or existing_entry is None:
+        try:
+            return compute_quantity(capital, risk_pct, fill, stop_loss)
+        except ValueError:
+            return 0
+    budget = capital * risk_pct / Decimal("100")
+    used = Decimal(existing_qty) * abs(existing_entry - stop_loss)
+    remaining = budget - used
+    if remaining <= 0:
+        return 0
+    return int((remaining / per_share).to_integral_value(rounding=ROUND_DOWN))
+
+
 async def place_paper_order(
     db: AsyncSession,
     user: User,
@@ -125,29 +160,26 @@ async def place_paper_order(
     """Place a paper MARKET order and immediately simulate a fill.
 
     Fill price = current LTP from Redis, or signal's entry_price if unavailable.
-    Opens a new Position (or returns existing open position for the stock).
+    Opens a new Position (or averages into an existing open one for the stock).
 
     Returns (order, position) — both are already flushed into the session.
 
-    Quantity: an explicit override is used as-is; otherwise the size is
-    computed from THIS user's capital and per-trade risk (never the signal's
-    generic suggested_qty, which is sized to a house default). A size that
-    rounds to zero (stop too wide for the account) is rejected, not clamped.
+    Quantity: an explicit override is used as-is; otherwise the size is computed
+    RISK-FIRST from THIS user's capital/risk% **and the actual fill price** (via
+    `size_for_fill`), not the signal's entry — so a fill that ran past the plan
+    (a chase) reduces the size to keep the trade's risk at the budget instead of
+    silently over-risking, and a repeat entry on the same name is sized against
+    the remaining budget so risk can't stack. A size that rounds to zero (stop
+    too wide, price too far past entry, or already at budget) is rejected, not
+    clamped. The entry order records `chase` telemetry in `broker_payload`.
     """
     entry = Decimal(str(signal.entry_price))
     stop_loss = Decimal(str(signal.stop_loss))
-    if quantity is not None:
-        qty = quantity
-    else:
-        qty = compute_quantity(user.capital_inr, user.risk_per_trade_pct, entry, stop_loss)
-    if qty <= 0:
-        raise PaperOrderError(
-            "Position size rounds to 0 at your capital and per-trade risk — "
-            "the stop is too wide for this account (raise capital or pick a tighter setup)."
-        )
+    pos_side = "LONG" if side == "BUY" else "SHORT"
 
-    # Off-market guard: without a live tick price a fill would use a stale prior
-    # close (misleading for the paper record). Reject unless the user opts out.
+    # Determine the FILL first — sizing is risk-first from the actual fill, so
+    # the fill must be known before the quantity. Off-market guard is unchanged:
+    # without a live tick a fill would use a stale prior close.
     live_ltp = await get_live_ltp(signal.stock_id)
     if live_ltp is None and not user.allow_offmarket_entry:
         raise PaperOrderError(
@@ -160,7 +192,59 @@ async def place_paper_order(
     else:
         base_price = await get_current_price(db, signal.stock_id) or entry
     fill_price = _simulated_fill(base_price, side)
+
+    # Existing open position for this stock/user/side (a repeat entry averages in).
+    existing_result = await db.execute(
+        select(Position).where(
+            Position.user_id == user.id,
+            Position.stock_id == signal.stock_id,
+            Position.mode == "paper",
+            Position.closed_at.is_(None),
+            Position.side == pos_side,
+        )
+    )
+    existing = existing_result.scalar_one_or_none()
+
+    if quantity is not None:
+        qty = quantity
+    else:
+        qty = size_for_fill(
+            capital=user.capital_inr,
+            risk_pct=user.risk_per_trade_pct,
+            fill=fill_price,
+            stop_loss=stop_loss,
+            existing_qty=existing.quantity if existing is not None else 0,
+            existing_entry=(
+                Decimal(str(existing.avg_entry_price)) if existing is not None else None
+            ),
+        )
+    if qty <= 0:
+        if existing is not None:
+            raise PaperOrderError(
+                "This position is already at your per-trade risk budget — close or "
+                "reduce it before adding more (a repeat entry would stack risk)."
+            )
+        raise PaperOrderError(
+            "Position size rounds to 0 at your capital and per-trade risk — the stop "
+            "is too wide (or the price ran too far past entry) for this account "
+            "(raise capital, wait for a better entry, or pick a tighter setup)."
+        )
+
     now = datetime.now(tz=UTC)
+
+    # Chase telemetry (informational; risk is already capped by sizing from the
+    # fill). How far past the signal's entry, in R = |entry − SL|, did we fill?
+    r_designed = abs(entry - stop_loss)
+    chase_move = (fill_price - entry) if pos_side == "LONG" else (entry - fill_price)
+    chase_r = (chase_move / r_designed) if r_designed > 0 else Decimal("0")
+    order_payload: dict[str, object] = {
+        "chase": {
+            "signal_entry": str(entry),
+            "fill": str(fill_price),
+            "chase_r": str(chase_r.quantize(Decimal("0.001"))),
+            "past_chase_ceiling": bool(chase_r > Decimal("0.33")),
+        }
+    }
 
     order = Order(
         user_id=user.id,
@@ -175,31 +259,17 @@ async def place_paper_order(
         filled_at=now,
         filled_price=fill_price,
         filled_qty=qty,
+        broker_payload=order_payload,
     )
     db.add(order)
 
-    # Determine position side from order side
-    pos_side = "LONG" if side == "BUY" else "SHORT"
-
-    # Check for an existing open position for this stock/user (paper)
-    existing_result = await db.execute(
-        select(Position).where(
-            Position.user_id == user.id,
-            Position.stock_id == signal.stock_id,
-            Position.mode == "paper",
-            Position.closed_at.is_(None),
-            Position.side == pos_side,
-        )
-    )
-    existing = existing_result.scalar_one_or_none()
-
     if existing:
-        # Average in — weighted average entry price
+        # Average in — weighted average entry price. SL/TP stay from the first
+        # entry (the structural levels the trade was planned around).
         total_qty = existing.quantity + qty
         new_avg = (existing.avg_entry_price * existing.quantity + fill_price * qty) / total_qty
         existing.avg_entry_price = new_avg.quantize(Decimal("0.0001"))
         existing.quantity = total_qty
-        # Keep original SL/TP from the first entry
         position = existing
     else:
         position = Position(

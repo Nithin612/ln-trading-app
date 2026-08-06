@@ -5,15 +5,18 @@
  * only — nothing here gates or modifies signals.
  */
 
-import { memo, useMemo, useState } from 'react'
-import { useQueries, useQuery } from '@tanstack/react-query'
-import { Bell } from 'lucide-react'
+import { memo, useCallback, useMemo, useState } from 'react'
+import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { Bell, ShoppingCart } from 'lucide-react'
 
 import { useAlertStream, type LiveAlert } from '@/hooks/useAlertStream'
 import { useAuth } from '@/hooks/useAuth'
+import { useToast } from '@/hooks/useToast'
 import { stocksApi } from '@/lib/api/stocks'
 import { signalsApi, type SignalOut } from '@/lib/api/signals'
+import { tradingApi } from '@/lib/api/trading'
 import { watchlistsApi } from '@/lib/api/watchlists'
+import { useTradingHaltStore } from '@/store/tradingHaltStore'
 import { Popover } from '@/components/ui/popover'
 import { EmptyState } from '@/components/ui/empty-state'
 import { SimpleSelect } from '@/components/ui/simple-select'
@@ -49,6 +52,40 @@ export function AlertBell() {
   const { alerts, connected, authFailed, styles, setStyles, watchlist, setWatchlist } =
     useAlertStream()
   const { accessToken } = useAuth()
+  const toast = useToast()
+  const qc = useQueryClient()
+  const halted = useTradingHaltStore((s) => s.halted)
+
+  // Trade an alert directly (its originating signal) through the same paper
+  // order path + circuit breaker the dashboard uses — so an alerted stock that
+  // isn't on the (deduped, filtered, paginated) dashboard list is still tradable.
+  const [tradingSignalId, setTradingSignalId] = useState<string | null>(null)
+  const { mutate: placePaperOrder } = useMutation({
+    mutationFn: ({ signalId, side }: { signalId: string; side: 'BUY' | 'SELL' }) =>
+      tradingApi.placeOrder({ signal_id: signalId, side }, accessToken!),
+    onSuccess: (order) => {
+      toast.success(`Paper ${order.side} placed: ${order.filled_qty} × ${order.symbol}`)
+      void qc.invalidateQueries({ queryKey: ['positions-open'] })
+      void qc.invalidateQueries({ queryKey: ['daily-pnl'] })
+      void qc.invalidateQueries({ queryKey: ['paper-record'] })
+      setTradingSignalId(null)
+    },
+    onError: (err: { message?: string }) => {
+      toast.error(err.message ?? 'Order rejected')
+      setTradingSignalId(null)
+    },
+  })
+  const handleTrade = useCallback(
+    (signalId: string, side: 'BUY' | 'SELL') => {
+      if (halted) {
+        toast.error('Trading is halted — release the kill switch on Go Live.')
+        return
+      }
+      setTradingSignalId(signalId)
+      placePaperOrder({ signalId, side })
+    },
+    [halted, toast, placePaperOrder],
+  )
 
   // Entry-only view (buy/sell zone triggers), persisted across sessions.
   const [entryOnly, setEntryOnlyState] = useState(loadEntryOnly)
@@ -261,6 +298,9 @@ export function AlertBell() {
                 alert={a}
                 symbol={symbolBySid.get(a.sid)}
                 signal={a.signalId ? signalById.get(a.signalId) : undefined}
+                onTrade={handleTrade}
+                isTrading={tradingSignalId !== null && tradingSignalId === a.signalId}
+                halted={halted}
               />
             ))}
           </ul>
@@ -274,10 +314,16 @@ const AlertRow = memo(function AlertRow({
   alert,
   symbol,
   signal,
+  onTrade,
+  isTrading,
+  halted,
 }: {
   alert: LiveAlert
   symbol: string | undefined
   signal: SignalOut | undefined
+  onTrade?: (signalId: string, side: 'BUY' | 'SELL') => void
+  isTrading?: boolean
+  halted?: boolean
 }) {
   const meta = TAG_META[alert.tag]
   const chase = signal ? chaseGuidance(signal, Number(alert.price)) : null
@@ -333,6 +379,28 @@ const AlertRow = memo(function AlertRow({
               don&apos;t chase {chase.isBuy ? '>' : '<'} {formatCurrency(chase.limit)}
             </span>
           )}
+        </div>
+      )}
+      {signal && onTrade && (
+        // Trade the alert's originating signal directly — routes through the
+        // paper order path (risk-first sizing from the actual fill + circuit
+        // breaker), so an alerted stock that isn't on the dashboard list is
+        // still one click from a paper trade.
+        <div className="flex justify-end mt-1.5">
+          <button
+            onClick={() => onTrade(signal.id, signal.direction === 'SELL' ? 'SELL' : 'BUY')}
+            disabled={isTrading || halted}
+            className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold transition-colors disabled:opacity-50 border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-accent)"
+            style={{
+              color: signal.direction === 'SELL' ? 'var(--color-bear)' : 'var(--color-bull)',
+              borderColor: signal.direction === 'SELL' ? 'var(--color-bear)' : 'var(--color-bull)',
+            }}
+            title={signal.direction === 'SELL' ? 'Paper Sell (open short)' : 'Paper Buy (open long)'}
+            aria-label={`Paper ${signal.direction === 'SELL' ? 'sell' : 'buy'} ${symbol ?? alert.sid}`}
+          >
+            <ShoppingCart size={10} aria-hidden="true" />
+            {isTrading ? '…' : signal.direction === 'SELL' ? 'Sell' : 'Buy'}
+          </button>
         </div>
       )}
     </li>
