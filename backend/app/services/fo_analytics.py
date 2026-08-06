@@ -4,12 +4,13 @@ Computes option-chain analytics from the Phase-0 recorders (`fo_bhavcopy`,
 `option_chain_snapshots`, `india_vix_daily`). Read-only: no writes, no
 migration — it only reads already-recorded history.
 
-Scope boundary: anything that needs Black-Scholes — implied vol, Greeks,
-IV-rank/percentile — is deliberately NOT here. Per the locked-in rule, options
-math is Rust-only (`engine/`, Phase 4 slice 4.2, validated against goldens).
-This module is the pure-arithmetic layer that needs no solver: put/call ratio,
-max pain, futures basis, and the India VIX volatility regime — all derivable
-directly from recorded prices and open interest.
+Scope boundary: the options MATH itself — Black-Scholes/Black-76 pricing,
+implied-vol inversion, Greeks — is Rust-only (`engine/`, Phase 4 slice 4.2,
+validated against goldens) and is never reimplemented here. What lives here is
+(a) the pure-arithmetic layer that needs no solver — put/call ratio, max pain,
+futures basis, India VIX regime — and (b) the orchestration that assembles
+inputs, makes ONE batched `tradecore` call, and shapes the result: `iv_rank`
+(4.2b) and `price_chain_greeks` (per-leg IV + Greeks for the chain ladder, 5.2).
 
 Money = Decimal. Ratios / percentiles = float (analytical, never money).
 """
@@ -64,6 +65,22 @@ class VixRegime:
     percentile: float          # 0–100, share of the lookback strictly below current
     band: str                  # "low" | "normal" | "high"
     sample: int                # sessions counted in the lookback (incl. current)
+
+
+@dataclass(frozen=True)
+class LegGreeks:
+    """Implied vol + Greeks for ONE chain leg, priced off the future (Black-76).
+
+    Per-contract values as `tradecore` returns them: `theta` is per year and
+    `vega` per 1.00 (100 vol points) of implied vol — the display layer scales
+    them, so nothing here is pre-divided.
+    """
+
+    iv: float                  # annualized implied vol, inverted from the quote
+    delta: float
+    gamma: float
+    vega: float
+    theta: float
 
 
 @dataclass(frozen=True)
@@ -154,6 +171,161 @@ def near_atm(rows: Sequence[ChainRow], spot: Decimal, n: int) -> list[ChainRow]:
 
 
 # ── Async loaders (read the recorders) ──────────────────────────────────────────
+
+def price_chain_greeks(
+    rows: Sequence[ChainRow], *, fwd: float, t: float, rate: float
+) -> dict[tuple[Decimal, str], LegGreeks]:
+    """Invert every quoted leg to an implied vol, then price its Greeks.
+
+    Black-76 on the FUTURE (carry = 0) — the same convention `iv_rank` uses, so
+    a strike's IV here is directly comparable to the IV-rank history rather than
+    being a second, subtly different number for the same thing.
+
+    Keyed by `(strike, option_type)`. Legs without a positive quote, or whose
+    premium won't invert (deep-ITM at intrinsic, negligible vega), are simply
+    ABSENT from the result — never zero-filled, because a 0.0 delta or IV reads
+    as a real, tradeable value on screen. Two batched `tradecore` calls per
+    side; the Rust wheel remains the only options-math implementation.
+    """
+    if t <= 0 or fwd <= 0:
+        return {}
+
+    import tradecore  # deferred: parity-gated wheel (idiom: signal_service)
+
+    out: dict[tuple[Decimal, str], LegGreeks] = {}
+    for kind in ("CE", "PE"):
+        quoted: list[tuple[ChainRow, float]] = []
+        for r in rows:
+            if r.option_type != kind or r.ltp is None or r.ltp <= _ZERO:
+                continue
+            quoted.append((r, float(r.ltp)))
+        if not quoted:
+            continue
+
+        ivs = tradecore.implied_vol(
+            kind, [(prem, fwd, float(r.strike), t, rate, 0.0) for r, prem in quoted]
+        )
+        priced = [
+            (r, iv)
+            for (r, _prem), iv in zip(quoted, ivs, strict=True)
+            if iv is not None and iv > 0
+        ]
+        if not priced:
+            continue
+
+        greeks = tradecore.option_greeks(
+            kind, [(fwd, float(r.strike), t, rate, 0.0, iv) for r, iv in priced]
+        )
+        for (r, iv), g in zip(priced, greeks, strict=True):
+            if g is None:
+                continue
+            delta, gamma, vega, theta, _rho = g  # tradecore order, NOT alphabetical
+            out[(r.strike, kind)] = LegGreeks(
+                iv=iv, delta=delta, gamma=gamma, vega=vega, theta=theta
+            )
+    return out
+
+
+async def chain_day(
+    db: AsyncSession,
+    symbol: str,
+    expiry: date,
+    *,
+    as_of: datetime | None = None,
+    source: str = "eod",
+) -> date | None:
+    """The trading day the chain `load_chain` would return actually belongs to.
+
+    Greeks need a time-to-expiry, and dating them off `today` would silently
+    misprice a chain loaded on a Monday from Friday's close (and every holiday).
+    Returns None when nothing is recorded.
+    """
+    if source == "intraday":
+        stmt = select(OptionChainSnapshot.time).where(
+            OptionChainSnapshot.symbol == symbol,
+            OptionChainSnapshot.expiry_date == expiry,
+            OptionChainSnapshot.option_type.in_(("CE", "PE")),
+        )
+        if as_of is not None:
+            stmt = stmt.where(OptionChainSnapshot.time <= as_of)
+        snap = (await db.execute(stmt.order_by(OptionChainSnapshot.time.desc()).limit(1))).scalar()
+        return snap.date() if snap is not None else None
+    if source == "eod":
+        day_stmt = select(FoBhavcopy.trade_date).where(
+            FoBhavcopy.symbol == symbol,
+            FoBhavcopy.expiry_date == expiry,
+            FoBhavcopy.instrument.in_(("CE", "PE")),
+        )
+        if as_of is not None:
+            day_stmt = day_stmt.where(FoBhavcopy.trade_date <= as_of.date())
+        return (
+            await db.execute(day_stmt.order_by(FoBhavcopy.trade_date.desc()).limit(1))
+        ).scalar()
+    raise ValueError(f"unknown chain source: {source!r} (expected 'eod' | 'intraday')")
+
+
+async def available_underlyings(
+    db: AsyncSession, *, as_of: datetime | None = None
+) -> tuple[date | None, list[str]]:
+    """`(day, symbols)` — F&O underlyings with option rows on the most recent
+    recorded day.
+
+    Scoped to the latest day rather than all history so the picker offers what
+    is currently tradeable (contracts get delisted) and stays index-fast
+    instead of DISTINCT-scanning years of bhavcopy. The day is returned so
+    callers can state what the list is as-of.
+    """
+    day_stmt = select(func.max(FoBhavcopy.trade_date)).where(
+        FoBhavcopy.instrument.in_(("CE", "PE"))
+    )
+    if as_of is not None:
+        day_stmt = day_stmt.where(FoBhavcopy.trade_date <= as_of.date())
+    day = (await db.execute(day_stmt)).scalar()
+    if day is None:
+        return None, []
+    rows = (
+        await db.execute(
+            select(FoBhavcopy.symbol)
+            .where(FoBhavcopy.trade_date == day, FoBhavcopy.instrument.in_(("CE", "PE")))
+            .distinct()
+            .order_by(FoBhavcopy.symbol)
+        )
+    ).scalars()
+    return day, list(rows)
+
+
+async def available_expiries(
+    db: AsyncSession, symbol: str, *, as_of: datetime | None = None
+) -> tuple[date | None, list[date]]:
+    """`(chain_day, expiries)` — expiries still open on the latest recorded day.
+
+    Expiries strictly BEFORE that day are dropped: a settled contract has no
+    tradeable chain, and offering one would produce a ladder with no Greeks
+    (t <= 0). Ascending, so the nearest expiry is the natural default.
+    """
+    day_stmt = select(func.max(FoBhavcopy.trade_date)).where(
+        FoBhavcopy.symbol == symbol, FoBhavcopy.instrument.in_(("CE", "PE"))
+    )
+    if as_of is not None:
+        day_stmt = day_stmt.where(FoBhavcopy.trade_date <= as_of.date())
+    day = (await db.execute(day_stmt)).scalar()
+    if day is None:
+        return None, []
+    rows = (
+        await db.execute(
+            select(FoBhavcopy.expiry_date)
+            .where(
+                FoBhavcopy.symbol == symbol,
+                FoBhavcopy.trade_date == day,
+                FoBhavcopy.instrument.in_(("CE", "PE")),
+                FoBhavcopy.expiry_date >= day,
+            )
+            .distinct()
+            .order_by(FoBhavcopy.expiry_date)
+        )
+    ).scalars()
+    return day, list(rows)
+
 
 async def load_chain(
     db: AsyncSession,

@@ -325,3 +325,264 @@ class TestIvRank:
         headers = await get_auth_headers(client)
         resp = await client.get("/api/v1/fo/iv-rank", params={"symbol": "NOPE"}, headers=headers)
         assert resp.status_code == 404
+
+
+# ── Chain pickers: underlyings + open expiries (Phase 5 slice 5.2) ────────────
+
+class TestAvailablePickers:
+    async def test_underlyings_from_latest_day_only(self, db: AsyncSession) -> None:
+        # BANKNIFTY only traded on the older day — it must not be offered as
+        # currently tradeable once a newer day exists.
+        db.add(FoBhavcopy(
+            trade_date=date(2026, 7, 20), symbol="BANKNIFTY", instrument="CE",
+            expiry_date=NIFTY_EXPIRY, strike=Decimal("52000"), close=Decimal("100.00"),
+            open_interest=10, volume_contracts=5,
+        ))
+        await db.commit()
+        await _seed_bhav(db, date(2026, 7, 21))
+        day, symbols = await fa.available_underlyings(db)
+        assert day == date(2026, 7, 21)
+        assert symbols == ["NIFTY"]
+
+    async def test_underlyings_empty_when_nothing_recorded(self, db: AsyncSession) -> None:
+        assert await fa.available_underlyings(db) == (None, [])
+
+    async def test_expiries_drop_settled_contracts(self, db: AsyncSession) -> None:
+        """A settled expiry has no tradeable chain (t <= 0 → no Greeks), so it
+        must not be offered."""
+        past = date(2026, 7, 16)
+        for inst, strike in (("CE", 24600), ("PE", 24600)):
+            db.add(FoBhavcopy(
+                trade_date=date(2026, 7, 20), symbol="NIFTY", instrument=inst,
+                expiry_date=past, strike=Decimal(strike), close=Decimal("10.00"),
+                open_interest=10, volume_contracts=5,
+            ))
+        await _seed_bhav(db, date(2026, 7, 20))     # the 07-30 expiry
+        day, expiries = await fa.available_expiries(db, "NIFTY")
+        assert day == date(2026, 7, 20)
+        assert expiries == [NIFTY_EXPIRY]
+
+    async def test_expiries_sorted_nearest_first(self, db: AsyncSession) -> None:
+        far = date(2026, 8, 27)
+        for inst in ("CE", "PE"):
+            db.add(FoBhavcopy(
+                trade_date=date(2026, 7, 20), symbol="NIFTY", instrument=inst,
+                expiry_date=far, strike=Decimal("24600"), close=Decimal("300.00"),
+                open_interest=10, volume_contracts=5,
+            ))
+        await _seed_bhav(db, date(2026, 7, 20))
+        _day, expiries = await fa.available_expiries(db, "NIFTY")
+        assert expiries == [NIFTY_EXPIRY, far]      # nearest first
+
+    async def test_expiries_empty_for_unknown_symbol(self, db: AsyncSession) -> None:
+        await _seed_bhav(db, date(2026, 7, 20))
+        assert await fa.available_expiries(db, "NOPE") == (None, [])
+
+    async def test_pickers_api(self, client: AsyncClient, db: AsyncSession) -> None:
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        await _seed_bhav(db, date(2026, 7, 20))
+
+        u = await client.get("/api/v1/fo/underlyings", headers=headers)
+        assert u.status_code == 200, u.text
+        assert u.json() == {"as_of": "2026-07-20", "symbols": ["NIFTY"]}
+
+        e = await client.get("/api/v1/fo/expiries", params={"symbol": "nifty"}, headers=headers)
+        assert e.status_code == 200, e.text
+        body = e.json()
+        assert body["symbol"] == "NIFTY" and body["as_of"] == "2026-07-20"
+        assert body["expiries"] == [{"expiry": "2026-07-30", "dte": 10}]
+
+    async def test_pickers_require_auth(self, client: AsyncClient) -> None:
+        assert (await client.get("/api/v1/fo/underlyings")).status_code == 401
+        assert (
+            await client.get("/api/v1/fo/expiries", params={"symbol": "NIFTY"})
+        ).status_code == 401
+
+    async def test_pickers_empty_states(self, client: AsyncClient, db: AsyncSession) -> None:
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        u = await client.get("/api/v1/fo/underlyings", headers=headers)
+        assert u.status_code == 200 and u.json() == {"as_of": None, "symbols": []}
+        e = await client.get("/api/v1/fo/expiries", params={"symbol": "NIFTY"}, headers=headers)
+        assert e.status_code == 200 and e.json()["expiries"] == []
+
+
+# ── Per-leg IV + Greeks for the chain ladder (Phase 5 slice 5.2) ──────────────
+
+class TestChainDay:
+    """Greeks need the chain's OWN trading day — dating them off `today` would
+    misprice every chain loaded on a Monday from Friday's close."""
+
+    async def test_eod_returns_latest_recorded_day(self, db: AsyncSession) -> None:
+        await _seed_bhav(db, date(2026, 7, 20))
+        await _seed_bhav(db, date(2026, 7, 21))
+        assert await fa.chain_day(db, "NIFTY", NIFTY_EXPIRY) == date(2026, 7, 21)
+
+    async def test_eod_respects_as_of(self, db: AsyncSession) -> None:
+        await _seed_bhav(db, date(2026, 7, 20))
+        await _seed_bhav(db, date(2026, 7, 21))
+        day = await fa.chain_day(
+            db, "NIFTY", NIFTY_EXPIRY, as_of=datetime(2026, 7, 20, 18, 0, tzinfo=UTC)
+        )
+        assert day == date(2026, 7, 20)
+
+    async def test_none_when_nothing_recorded(self, db: AsyncSession) -> None:
+        assert await fa.chain_day(db, "NIFTY", NIFTY_EXPIRY) is None
+
+    async def test_matches_the_day_load_chain_used(self, db: AsyncSession) -> None:
+        # The contract that makes the Greeks honest: same day, same rows.
+        await _seed_bhav(db, date(2026, 7, 20))
+        await _seed_bhav(db, date(2026, 7, 21))
+        day = await fa.chain_day(db, "NIFTY", NIFTY_EXPIRY)
+        rows = await fa.load_chain(db, "NIFTY", NIFTY_EXPIRY)
+        assert day == date(2026, 7, 21)
+        assert len(rows) == 6          # 3 strikes × CE/PE, latest day only
+
+    async def test_intraday_uses_snapshot_date(self, db: AsyncSession) -> None:
+        db.add(OptionChainSnapshot(
+            time=datetime(2026, 7, 21, 9, 30, tzinfo=UTC), instrument_token=5001,
+            symbol="NIFTY", expiry_date=NIFTY_EXPIRY, strike=Decimal("24600"),
+            option_type="CE", oi=100, volume=10, ltp=Decimal("150.00"),
+        ))
+        await db.commit()
+        assert await fa.chain_day(db, "NIFTY", NIFTY_EXPIRY, source="intraday") == date(2026, 7, 21)
+
+    async def test_unknown_source_raises(self, db: AsyncSession) -> None:
+        with pytest.raises(ValueError, match="unknown chain source"):
+            await fa.chain_day(db, "NIFTY", NIFTY_EXPIRY, source="tea-leaves")
+
+
+class TestPriceChainGreeks:
+    def test_prices_every_quoted_leg_with_sane_greek_signs(self) -> None:
+        pytest.importorskip("tradecore")
+        # ATM-ish chain on a 24600 forward, 30 days out.
+        rows = [
+            _row("24400", "CE", 100, ltp="320.00"), _row("24400", "PE", 100, ltp="130.00"),
+            _row("24600", "CE", 200, ltp="210.00"), _row("24600", "PE", 200, ltp="205.00"),
+            _row("24800", "CE", 300, ltp="125.00"), _row("24800", "PE", 300, ltp="325.00"),
+        ]
+        g = fa.price_chain_greeks(rows, fwd=24600.0, t=30 / 365.0, rate=0.065)
+        assert len(g) == 6
+
+        for (_strike, kind), leg in g.items():
+            assert 0.01 < leg.iv < 3.0, f"implausible IV for {kind}: {leg.iv}"
+            assert leg.gamma > 0            # long gamma either side
+            assert leg.vega > 0             # long vega either side
+            if kind == "CE":
+                assert 0.0 < leg.delta < 1.0
+            else:
+                assert -1.0 < leg.delta < 0.0    # puts are short delta
+
+        # Moneyness ordering: a call's delta falls as the strike rises.
+        ce = {s: v.delta for (s, k), v in g.items() if k == "CE"}
+        assert ce[Decimal("24400")] > ce[Decimal("24600")] > ce[Decimal("24800")]
+
+    def test_iv_matches_the_iv_rank_convention(self) -> None:
+        """Black-76 on the FUTURE (carry=0) — so a ladder IV is comparable to
+        the IV-rank history rather than a second, subtly different number."""
+        tc = pytest.importorskip("tradecore")
+        fwd, t, rate = 24600.0, 30 / 365.0, 0.065
+        target_iv = 0.18
+        premium = tc.option_price("CE", [(fwd, 24600.0, t, rate, 0.0, target_iv)])[0]
+        g = fa.price_chain_greeks(
+            [_row("24600", "CE", 100, ltp=f"{premium:.4f}")], fwd=fwd, t=t, rate=rate
+        )
+        assert abs(g[(Decimal("24600"), "CE")].iv - target_iv) < 1e-4
+
+    def test_unquoted_and_zero_legs_are_absent_not_zero_filled(self) -> None:
+        pytest.importorskip("tradecore")
+        rows = [
+            _row("24600", "CE", 100, ltp="210.00"),
+            _row("24700", "CE", 100),                # no quote at all
+            _row("24800", "CE", 100, ltp="0.00"),     # zero quote
+        ]
+        g = fa.price_chain_greeks(rows, fwd=24600.0, t=30 / 365.0, rate=0.065)
+        # A 0.0 delta/IV would read as a real, tradeable value on screen.
+        assert set(g) == {(Decimal("24600"), "CE")}
+
+    def test_degenerate_inputs_return_empty(self) -> None:
+        rows = [_row("24600", "CE", 100, ltp="210.00")]
+        assert fa.price_chain_greeks(rows, fwd=24600.0, t=0.0, rate=0.065) == {}
+        assert fa.price_chain_greeks(rows, fwd=24600.0, t=-1.0, rate=0.065) == {}
+        assert fa.price_chain_greeks(rows, fwd=0.0, t=0.1, rate=0.065) == {}
+        assert fa.price_chain_greeks([], fwd=24600.0, t=0.1, rate=0.065) == {}
+
+
+class TestChainGreeksApi:
+    async def test_greeks_absent_by_default(self, client: AsyncClient, db: AsyncSession) -> None:
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        await _seed_bhav(db, date(2026, 7, 20))
+        resp = await client.get(
+            "/api/v1/fo/chain",
+            params={"symbol": "nifty", "expiry": NIFTY_EXPIRY.isoformat()},
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["as_of"] is None and body["fut_price"] is None and body["dte"] is None
+        assert all(leg["iv"] is None and leg["delta"] is None for leg in body["legs"])
+
+    async def test_greeks_true_prices_the_ladder(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        pytest.importorskip("tradecore")
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        await _seed_bhav(db, date(2026, 7, 20))       # 10 days before expiry
+        resp = await client.get(
+            "/api/v1/fo/chain",
+            params={"symbol": "nifty", "expiry": NIFTY_EXPIRY.isoformat(), "greeks": "true"},
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        # The UI must be able to state exactly what the Greeks were priced off.
+        assert body["as_of"] == "2026-07-20"
+        assert Decimal(body["fut_price"]) == Decimal("24620.00")
+        assert body["dte"] == 10
+
+        priced = [leg for leg in body["legs"] if leg["iv"] is not None]
+        assert len(priced) == 6
+        for leg in priced:
+            assert leg["gamma"] > 0 and leg["vega"] > 0
+            assert (leg["delta"] > 0) if leg["option_type"] == "CE" else (leg["delta"] < 0)
+
+    async def test_greeks_none_without_a_futures_close(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """No forward → no Black-76 input. Report None, never guess a forward."""
+        pytest.importorskip("tradecore")
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        await _seed_bhav(db, date(2026, 7, 20), with_fut=False)
+        resp = await client.get(
+            "/api/v1/fo/chain",
+            params={"symbol": "nifty", "expiry": NIFTY_EXPIRY.isoformat(), "greeks": "true"},
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["fut_price"] is None and body["dte"] is None
+        assert all(leg["iv"] is None for leg in body["legs"])
+        assert len(body["legs"]) == 6      # the chain itself still renders
+
+    async def test_greeks_none_on_an_expired_chain(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """as_of ON/after expiry → t <= 0; pricing must stand down, not divide."""
+        pytest.importorskip("tradecore")
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        await _seed_bhav(db, NIFTY_EXPIRY)     # chain dated the expiry day itself
+        resp = await client.get(
+            "/api/v1/fo/chain",
+            params={"symbol": "nifty", "expiry": NIFTY_EXPIRY.isoformat(), "greeks": "true"},
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["as_of"] == NIFTY_EXPIRY.isoformat()
+        assert body["dte"] is None
+        assert all(leg["iv"] is None for leg in body["legs"])

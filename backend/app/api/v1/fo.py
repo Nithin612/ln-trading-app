@@ -1,16 +1,19 @@
 """F&O analytics endpoints — Phase 4 slice 4.1 (read-only).
 
-  GET /fo/chain       — option chain (CE/PE legs) for an underlying + expiry
+  GET /fo/chain       — option chain (CE/PE legs) for an underlying + expiry,
+                        optionally with per-leg IV + Greeks (?greeks=true)
   GET /fo/analytics   — PCR, max pain, futures basis, India VIX regime
   GET /fo/vix-regime  — India VIX volatility regime standalone
 
-All arithmetic-only, computed from the Phase-0 recorders. Implied vol / Greeks
-/ IV-rank (needing Black-Scholes) are NOT here — that is Rust, slice 4.2.
+Computed from the Phase-0 recorders. The options MATH (implied vol, Greeks) is
+never implemented here — it is Rust (`tradecore`, slice 4.2); this layer only
+assembles inputs and shapes results.
 """
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
+from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -22,12 +25,15 @@ from app.schemas.fo import (
     ChainLegOut,
     ChainOut,
     ExitPlanOut,
+    ExpiriesOut,
+    ExpiryOut,
     FoAnalyticsOut,
     IvRankOut,
     OptionLegOut,
     PcrOut,
     SuggestionOut,
     SuggestionsOut,
+    UnderlyingsOut,
     VixRegimeOut,
 )
 from app.services import fo_analytics as fa
@@ -64,12 +70,42 @@ def _vix_out(v: fa.VixRegime | None) -> VixRegimeOut | None:
     return VixRegimeOut(current=v.current, percentile=v.percentile, band=v.band, sample=v.sample)
 
 
+@router.get("/underlyings", response_model=UnderlyingsOut)
+async def get_underlyings(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> UnderlyingsOut:
+    """Underlyings the chain/analytics endpoints can actually serve — so the UI
+    offers what has been recorded rather than hardcoding a symbol list."""
+    day, symbols = await fa.available_underlyings(db)
+    return UnderlyingsOut(as_of=day, symbols=symbols)
+
+
+@router.get("/expiries", response_model=ExpiriesOut)
+async def get_expiries(
+    symbol: str = Query(..., min_length=1, max_length=32),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> ExpiriesOut:
+    """Expiries still open on the latest recorded day (nearest first). Empty is
+    a valid answer — nothing recorded for that underlying."""
+    sym = symbol.upper()
+    day, expiries = await fa.available_expiries(db, sym)
+    return ExpiriesOut(
+        symbol=sym,
+        as_of=day,
+        expiries=[ExpiryOut(expiry=e, dte=(e - day).days) for e in expiries] if day else [],
+    )
+
+
 @router.get("/chain", response_model=ChainOut)
 async def get_chain(
     symbol: str = Query(..., min_length=1, max_length=32),
     expiry: date = Query(...),
     source: str = Query("eod", pattern=_SOURCE),
     strikes: int = Query(0, ge=0, le=50, description="±N strikes around ATM; 0 = all"),
+    greeks: bool = Query(False, description="also invert each quote to IV + Greeks (Black-76)"),
+    rate: float = Query(0.065, ge=0.0, le=0.5, description="risk-free proxy (cont. comp.)"),
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
 ) -> ChainOut:
@@ -79,14 +115,56 @@ async def get_chain(
     atm = fa.atm_strike(rows, spot) if spot is not None else None
     if strikes > 0 and spot is not None:
         rows = fa.near_atm(rows, spot, strikes)
-    legs = [
-        ChainLegOut(
-            strike=r.strike, option_type=r.option_type, oi=r.oi, volume=r.volume, ltp=r.ltp
+
+    # Greeks are opt-in: two batched tradecore calls per side, and they need a
+    # forward + a time-to-expiry that are only resolvable when the chain has a
+    # dated trading day AND a futures close. Any missing piece leaves every
+    # Greek None rather than guessing an input.
+    priced: dict[tuple[Decimal, str], fa.LegGreeks] = {}
+    as_of_day: date | None = None
+    fut_price: Decimal | None = None
+    dte: int | None = None
+    if greeks and rows:
+        as_of_day = await fa.chain_day(db, sym, expiry, source=source)
+        if as_of_day is not None:
+            days = (expiry - as_of_day).days
+            basis = await fa.futures_basis(
+                db, sym, expiry, as_of=datetime(as_of_day.year, as_of_day.month, as_of_day.day)
+            )
+            if basis is not None and days > 0:
+                fut_price = basis.fut_close
+                dte = days
+                priced = fa.price_chain_greeks(
+                    rows, fwd=float(basis.fut_close), t=days / 365.0, rate=rate
+                )
+
+    legs: list[ChainLegOut] = []
+    for r in sorted(rows, key=lambda r: (r.strike, r.option_type)):
+        g = priced.get((r.strike, r.option_type))
+        legs.append(
+            ChainLegOut(
+                strike=r.strike,
+                option_type=r.option_type,
+                oi=r.oi,
+                volume=r.volume,
+                ltp=r.ltp,
+                iv=g.iv if g else None,
+                delta=g.delta if g else None,
+                gamma=g.gamma if g else None,
+                vega=g.vega if g else None,
+                theta=g.theta if g else None,
+            )
         )
-        for r in sorted(rows, key=lambda r: (r.strike, r.option_type))
-    ]
     return ChainOut(
-        symbol=sym, expiry=expiry, source=source, spot=spot, atm_strike=atm, legs=legs
+        symbol=sym,
+        expiry=expiry,
+        source=source,
+        spot=spot,
+        atm_strike=atm,
+        legs=legs,
+        as_of=as_of_day,
+        fut_price=fut_price,
+        dte=dte,
     )
 
 

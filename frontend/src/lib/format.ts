@@ -37,6 +37,13 @@ export const formatPct = (n: number, opts?: { signed?: boolean }) => {
   return `${sign}${n.toFixed(2)}%`
 }
 
+/**
+ * Greeks and other small analytical values: fixed decimals, no grouping.
+ * Delta/gamma need 4 dp (index gamma is ~1e-4); vega/theta read better at 2.
+ * Lives here so feature code never reaches for `toFixed` (.claude/rules/ui.md).
+ */
+export const formatGreek = (n: number, dp = 4) => n.toFixed(dp)
+
 /** "▲ +2.34%" / "▼ -1.12%" / "— 0.00%" — directional glyph included */
 export const formatChange = (n: number) => {
   const epsilon = 0.005

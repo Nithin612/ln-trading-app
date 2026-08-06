@@ -4,7 +4,7 @@ import { RequireAdmin, RequireAuth } from '@/components/auth/ProtectedRoute'
 import { LoginPage } from '@/pages/LoginPage'
 // The shell + auth load eagerly; every page is a lazy chunk (see lazyPages).
 import {
-  CategoriesPage, DashboardPage, FiiDiiPage, FilingsPage, GoLivePage, JournalPage,
+  CategoriesPage, DashboardPage, FiiDiiPage, FilingsPage, FoPage, GoLivePage, JournalPage,
   KiteConnectPage, OutcomesPage, PortfolioPage, PositionsPage, ProfilePage, ScreenerPage,
   SettingsPage, StockDetailPage, StocksPage, StrategyLabPage, StylePage, TradeHistoryPage,
   UsersPage, WatchlistsPage,
@@ -28,6 +28,9 @@ export const router = createBrowserRouter([
         element: <Navigate to="/dashboard" replace />,
       },
       { path: 'dashboard',             element: <DashboardPage /> },
+      // F&O has its own page (chain ladder + option-selling candidates), so it
+      // is matched BEFORE the generic style route.
+      { path: 'styles/fno',            element: <FoPage /> },
       { path: 'styles/:style',         element: <StylePage /> },
       { path: 'stocks',                element: <StocksPage /> },
       { path: 'stocks/:id',            element: <StockDetailPage /> },

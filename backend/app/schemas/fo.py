@@ -8,12 +8,37 @@ from decimal import Decimal
 from pydantic import BaseModel
 
 
+class UnderlyingsOut(BaseModel):
+    """F&O underlyings with option rows on the latest recorded day."""
+
+    as_of: date | None
+    symbols: list[str]
+
+
+class ExpiryOut(BaseModel):
+    expiry: date
+    dte: int                  # calendar days from the chain's day to expiry
+
+
+class ExpiriesOut(BaseModel):
+    symbol: str
+    as_of: date | None        # the recorded day these expiries are open on
+    expiries: list[ExpiryOut]
+
+
 class ChainLegOut(BaseModel):
     strike: Decimal
     option_type: str          # CE | PE
     oi: int
     volume: int
     ltp: Decimal | None
+    # Populated only when ?greeks=true AND the quote inverts. None means
+    # "not priced" — never zero, which would read as a real value on screen.
+    iv: float | None = None           # annualized, Black-76 on the future
+    delta: float | None = None
+    gamma: float | None = None
+    vega: float | None = None         # per 1.00 of IV (100 vol points)
+    theta: float | None = None        # per year
 
 
 class ChainOut(BaseModel):
@@ -23,6 +48,11 @@ class ChainOut(BaseModel):
     spot: Decimal | None
     atm_strike: Decimal | None
     legs: list[ChainLegOut]
+    # What the Greeks were priced off (null unless ?greeks=true resolved them).
+    # Stated explicitly so the UI can never imply live Greeks off a stale chain.
+    as_of: date | None = None         # the chain's own trading day
+    fut_price: Decimal | None = None  # Black-76 forward
+    dte: int | None = None            # calendar days from as_of to expiry
 
 
 class PcrOut(BaseModel):
