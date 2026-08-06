@@ -12,8 +12,20 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ## ▶ STATE AT A GLANCE (updated 2026-08-06) — read this block first
 
-**v2 Phases 0–2 ✅ done · Phase 3 (realtime) ▶ in progress · Phases 4–7 not started.**
-Suites: backend **974**, frontend **257**, parity 16, walkforward 9, replay 11.
+**v2 Phases 0–2 ✅ done · Phase 3 (realtime) ▶ in progress · Phase 4 backend done ·
+Phase 5 ▶ slices 5.1–5.4 built (branch, not merged) · Phases 6–7 not started.**
+Suites: backend **974 + 18 F&O** , frontend **328** (was 257), parity 16,
+walkforward 9, replay 11.
+
+**Phase 5 — remaining (see [phase-05](phases/phase-05-ui-overhaul.md) §7):**
+full `make check` · ui-reviewer on the four new surfaces · a **live-gated**
+in-browser 60 fps reading under replayed full-rate ticks (the render-cost half
+IS measured and regression-gated — `docs/PERFORMANCE.md` 2026-08-06) · manual
+smoke in daybreak + carbon · then `/phase-gate`.
+**Machine follow-up:** the pnpm store for `frontend/node_modules` was pruned by a
+snap refresh, so **no new frontend dependency can be installed** until
+`store-dir` is repointed outside `~/snap/` and one full `pnpm install` runs.
+That is why virtualization is an in-repo hook rather than `@tanstack/react-virtual`.
 
 **Phase 3 — remaining (both LIVE-GATED, need market days):**
 
@@ -50,7 +62,7 @@ which is what Phase-6 expectancy calibration is for.
 | 2 | Strategy profiles — 4 style engines, offline | **✅ done 2026-07-07** (gate: suites 616/131/35 green · smoke · reviews; 8c trails by approved plan) | [phase-02](phases/phase-02-strategy-profiles.md) | versioned profiles + 8 seeds · NSE calendar · FII/DII + EOD chain wired · suggestions API · **walk-forward evidence: rrbo +41.3%/+1.97 sharpe POSITIVE; dc1/dc2/multibagger FLAGGED** · §8 golden harness in make check · Kite login + throttled REST + intraday backfill |
 | 3 | Realtime v2 — tick-to-tick | **▶ in progress** (started 2026-07-09) | [phase-03](phases/phase-03-realtime.md) | live-worker + Rust LiveEngine, committed vs forming layers, record/replay harness, latency budget p99 ≤ 50 ms tick→publish at full universe (restated 2026-07-14; original 10 ms was authored for 200–500 instruments). **Kite subscription required from slice 3.3.** Slice 3.0 (pre-work MEDIUMs) ✅ 2026-07-09 |
 | 4 | F&O analytics | **▶ backend done 2026-08-06** (branch `phase4-fo-analytics`; UI = Phase 5) | [phase-04](phases/phase-04-fo-suggestions.md) | 4.1 chain/PCR/max-pain/basis/VIX-regime · 4.2 Rust BS/Black-76 IV+Greeks (`tradecore`) + IV-rank · 4.3 option-selling engine (defined-risk index-only; breakeven-POP; expectancy report-only=VRP; fail-closed VIX veto; user-calibrated `SellRules`). Follow-ups: confluence direction-tilt, event/ban gate (=deferred Market Context Engine), Kite SPAN margin, forward-validation dashboard (P6) · 🧭 **Nautilus doc** §9 — Greeks as a first-class data type; options/accounting (margin) refs |
-| 5 | UI overhaul | planned | — | new sidebar IA, slate theme default, 4 style pages, chain ladder, virtualized live tables @60fps · 🧭 **Nautilus doc** §4.2 — cache-then-publish lets UI subscribe without touching producers |
+| 5 | UI overhaul | **▶ slices 5.1–5.4 built 2026-08-06** (branch `worktree-phase5-ui-overhaul`; exit needs full `make check` + ui-reviewer + the live-gated 60 fps verdict) | [phase-05](phases/phase-05-ui-overhaul.md) | 5.1 `useLiveQuotes` v2 (rAF-batched; fixed socket-churn, resubscribe-per-render + subscription-leak bugs) + `useVirtualRows` · 5.2 **F&O page** (chain ladder w/ per-leg IV+Greeks via `/fo/chain?greeks=true`, `/fo/underlyings`, `/fo/expiries`, strategy cards, expectancy labelled report-only) · 5.3 style pages v2 (committed-vs-forming, outcome stats w/ small-sample refusal, factor drawer) · 5.4 Live Signals feed + opt-in notifications (bursts coalesce). **IA + slate default were already done in Phase 3.** 🧭 **Nautilus doc** §4.2 — cache-then-publish lets UI subscribe without touching producers |
 | 6 | Outcome tracking + strategy lab v2 | planned | — | per-style hit-rate/expectancy dashboards, factor attribution, Rayon weight tuning + promotion workflow · 🧭 **Nautilus doc** §7 — mimalloc on batch backtest sweeps; §4.3 richer bar aggregations for research |
 | 7 | Live-trading hardening | planned | — | Kite orders behind trading_mode + 30-day gate, kill switch, reconciliation, VPS runbook · 🧭 **Nautilus doc** §6 — **SLICE 1 = RiskEngine single-gate** (test-first, equivalence-pinned) → then BrokerAdapter port · order FSM (Denied vs Rejected) · reconciliation |
 

@@ -141,3 +141,43 @@ tradecore.run_universe per profile, 15-symbol load chunks (a 400-symbol
 
 Harness replay of all 8 goldens ≈ 7 min (inside make check via
 `make walkforward`). Loading dominates; the engine itself is seconds.
+
+---
+
+## 2026-08-06 — Phase 5: live-layer render cost (UI)
+
+Source: `frontend/src/test/livePerf.test.ts` (runs in `make check`, so these
+are regression-gated, not one-off readings). Measures `useLiveQuotes` v2 with a
+500-symbol subscription and a stubbed rAF driven off the fake-timer clock.
+
+**What the Phase-5 UI budget actually rests on** — render count is a function of
+FRAMES, not of tick count:
+
+| Measurement | Result |
+|---|---|
+| 12,000 ticks delivered over 60 frames | **60 renders** (exactly one per frame) |
+| 10 ticks vs 10,000 ticks inside ONE frame | **1 render either way** |
+| A frame with no ticks | **0 renders** — no rAF is scheduled, so an idle tape is free |
+| Coalescing correctness | newest price per symbol survives the frame (latest-wins) |
+
+The "before" for context: v1 did one `setState` per tick, each cloning the whole
+quote map — i.e. 12,000 renders and 12,000 O(n) copies for the same input, plus
+a socket teardown on every symbol-list change and a `subscribe` re-sent every
+render. Those are fixed (Phase 5 slice 5.1); the numbers above are the after.
+
+### The 60 fps budget row is NOT met — it is UNMEASURED
+
+| Path | Budget | Status |
+|---|---|---|
+| UI live-table commit under full tick rate | ≤ 16 ms (60 fps) | **UNPROVEN — needs a browser** |
+
+jsdom does no layout, paint or compositing, so a frame-time verdict **cannot**
+be concluded from the table above however good those numbers look. What is
+proven is the decoupling of renders from tick rate — a necessary condition for
+60 fps, not a sufficient one.
+
+To close it: profile a real browser (DevTools Performance, "Frames" track)
+against a **replayed full-rate session** — the `make replay` tape plus the live
+worker — with a style page and the F&O ladder open, and record commit time p50/p99
+here. Deliberately left open rather than asserted, the same treatment the
+tick→publish p99 got before its 07-15/16 soaks (see §Budgets).

@@ -28,7 +28,23 @@ else.
   suggestion engine: defined-risk **index-only**, breakeven-POP, expectancy
   **report-only** (edge = vol-risk-premium, not a price guarantee),
   **fail-closed** VIX veto, calibrated `SellRules`; suggestions only, never
-  auto-trades). F&O **UI = Phase 5**.
+  auto-trades).
+- **Phase 5 UI overhaul — slices 5.1–5.4 built 2026-08-06** on branch
+  `worktree-phase5-ui-overhaul` (NOT merged): `useLiveQuotes` v2 (rAF-batched
+  ticks; fixed socket-churn-per-watchlist-edit, resubscribe-per-render, and a
+  server-side subscription leak) + `useVirtualRows`; the **F&O page** (chain
+  ladder with per-leg IV+Greeks — `/fo/chain?greeks=true` prices Black-76 off
+  the future dated from the chain's OWN day, plus `/fo/underlyings` +
+  `/fo/expiries`); style pages v2 (committed-vs-forming, outcome stats that
+  **refuse to dress up a small sample**, factor drawer); Live Signals feed with
+  opt-in notifications (bursts coalesce). The sidebar IA + slate default landed
+  back in Phase 3. Exit needs full `make check`, ui-reviewer, and a **live-gated**
+  in-browser 60 fps reading — the render-cost half is measured and CI-gated
+  (`docs/PERFORMANCE.md` 2026-08-06). Detail: `docs/phases/phase-05-ui-overhaul.md`.
+- **Frontend deps are currently uninstallable:** a snap refresh pruned the pnpm
+  store `frontend/node_modules` is hard-linked to, so `pnpm add` fails
+  (`ERR_PNPM_UNEXPECTED_STORE`). Repoint `store-dir` outside `~/snap/` + one full
+  `pnpm install` before adding any package.
 - **Paper trading runs daily** and feeds the 30-day paper clock (the *Phase-7*
   go-live gate, not the Phase-3 exit). Exit governance is per-user
   (`users.profit_lock_enabled`): ON = the **absolute-₹ profit ladder**
@@ -51,7 +67,7 @@ else.
   Key framing: **live trading isn't built yet** (`place_order` is paper-only,
   no Kite order/GTT path), so every "live" recommendation is a Phase-7
   constraint.
-- Backend test suite **974**, frontend **257** (+ Phase-4 F&O suites). `make
+- Backend test suite **974 + 18** (Phase-5 F&O additions), frontend **328**. `make
   check` green is the baseline state — keep it that way. Tests use an isolated
   Redis logical DB (15), flushed per test — never point them at dev db 0.
   Options math + F&O suggestions run behind the `tradecore` wheel — run
