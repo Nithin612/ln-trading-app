@@ -50,6 +50,10 @@ pnpm-debug.log*
 dist/
 dist-ssr/
 .vite/
+# Isolated optimize cache for the live-table benchmark dev server
+# (perf/vite.bench.config.ts) — kept out of node_modules/.vite so it can never
+# clobber a running dev server's cache.
+.vite-bench-cache/
 *.local
 
 # Build artifacts

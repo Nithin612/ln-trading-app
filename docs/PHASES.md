@@ -17,11 +17,15 @@ Phase 5 ▶ slices 5.1–5.4 built (branch, not merged) · Phases 6–7 not star
 Suites: backend **974 + 18 F&O** , frontend **328** (was 257), parity 16,
 walkforward 9, replay 11.
 
-**Phase 5 — remaining (see [phase-05](phases/phase-05-ui-overhaul.md) §7):**
-full `make check` · ui-reviewer on the four new surfaces · a **live-gated**
-in-browser 60 fps reading under replayed full-rate ticks (the render-cost half
-IS measured and regression-gated — `docs/PERFORMANCE.md` 2026-08-06) · manual
-smoke in daybreak + carbon · then `/phase-gate`.
+**Phase 5 — status (see [phase-05](phases/phase-05-ui-overhaul.md) §7):**
+bug-hunter + ui-reviewer ✅ run 2026-08-06 (all findings in new code fixed with
+regression tests — incl. a HIGH that would have shipped the F&O page with
+**every Greek null by default**, because index options are weekly but futures
+monthly and only 3 of 12 NIFTY expiries have a same-expiry future). The **60 fps
+budget is MEASURED and MET** — React commit p99 **7.6–8.8 ms** vs 16.7 ms in real
+Chrome 151 (`docs/PERFORMANCE.md` 2026-08-06; harness `frontend/perf/`).
+Remaining: full `make check` from a checkout **with `.env`** · manual smoke in
+daybreak + carbon · then `/phase-gate`.
 **Machine follow-up:** the pnpm store for `frontend/node_modules` was pruned by a
 snap refresh, so **no new frontend dependency can be installed** until
 `store-dir` is repointed outside `~/snap/` and one full `pnpm install` runs.

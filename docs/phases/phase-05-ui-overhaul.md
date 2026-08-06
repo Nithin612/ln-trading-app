@@ -201,12 +201,71 @@ render count is a function of **frames, not ticks**.
 | A frame with no ticks | **0 renders** (no rAF is scheduled — an idle tape is free) |
 | Coalescing correctness | newest price per symbol survives the frame |
 
-**NOT proven — the live-gated exit item.** The budget row "UI live-table commit
-under full tick rate ≤ 16 ms (60 fps)" **cannot** be concluded from the above:
-jsdom does no layout, paint or compositing. That verdict needs a real browser
-profiled against a **replayed full-rate session** (`make replay` tape + the live
-worker), and is recorded as unproven in `docs/PERFORMANCE.md` — deliberately the
-same treatment the tick→publish p99 got rather than a number nobody measured.
+**Proven in a real browser (2026-08-06) — the budget row is MET.** jsdom does no
+layout or paint, so the numbers above are necessary but not sufficient. A
+browser harness now closes it: `frontend/perf/run-bench.mjs` drives
+`perf/live-table-bench.html` (source `src/perf/LiveTableBench.tsx`) in **Chrome
+151** over the DevTools Protocol — zero new dependencies, because this box
+cannot install packages (Node 22's built-in WebSocket speaks CDP). It mounts the
+REAL `useLiveQuotes` + `useVirtualRows` + `PriceCell` + themed table, moves the
+price on every tick so `PriceCell` really flashes, and reports React
+`<Profiler>` `actualDuration` — literally the quantity the budget names.
+
+| Profile | Rows | Ticks/s | **Commit p99** | Frame p50 | Jank frames (>20 ms) |
+|---|---|---|---|---|---|
+| Realistic (suggestions cap at 50) | 50 | 500 | **8.8 ms** | 16.7 ms | **0** of 595 |
+| Stress | 300 | 2,000 | **7.8 ms** | 16.7 ms | 2 of 598 (mount) |
+| Headroom | 1,000 | 5,000 | **7.6 ms** | 16.7 ms | 2 of 598 (mount) |
+
+Budget ≤ 16.7 ms → **MET with ~2× headroom**. Row count and tick rate barely
+move the cost (50→1,000 rows shifts p99 by ~1 ms), which is the windowing and
+the rAF batching each doing their job. Full method, caveats and reproduction
+steps: `docs/PERFORMANCE.md` §2026-08-06.
+
+Caveats stated rather than buried: headless Chrome (compositor path differs from
+a windowed browser), and the socket is stubbed — this is the CLIENT's cost to
+apply and paint a full-rate tape; the backend tick→publish path is a separate,
+already-measured budget.
+
+## 6b. Review round (2026-08-06) — what the agents caught
+
+Both reviews ran read-only (the user's `make check` held the test DB). Every
+finding below was verified against source or real data before being fixed, and
+each carries a regression test.
+
+**bug-hunter — the one that mattered.** `futures_basis` required a future with
+the **same expiry as the option**, but index options are **weekly** and index
+futures **monthly**. Checked against the live dev DB: on the latest recorded
+NIFTY day only **3 of 12** option expiries have a FUT row, and the *nearest*
+expiry — the one the page defaults to, 226 legs — has none. So the F&O page
+would have shipped with **every Greek null by default**, and because spot keyed
+the same way, `atm_strike` was null too and the ±N strike window silently
+degraded to the entire chain. Fixed with `forward_for_expiry` (exact-expiry
+future when it exists, else the market's own carry implied from the nearest
+future) + `spot_on_day`, and a new `forward_source` field so the UI states which
+was used. Also fixed: an **intraday** chain was being priced against the
+*previous* day's futures close (EOD bhavcopy lands ~18:45 IST) — it now stands
+down instead; `chain_day` derived a trading day from a UTC instant; and two
+`useLiveQuotes` pruning holes plus a socket-identity bug where a stale socket's
+late close clobbered the live one (the first fix attempt was wrong — a shared
+`let` that reconnect reassigns — and the regression test caught it).
+
+**ui-reviewer.** Token usage was clean (all 20 referenced tokens exist in all 5
+themes). Real defects: `hit_rate`/`entry_rate` are **fractions** from the API
+but were rendered as percents and toned against `>= 50`, so a 60% hit rate read
+"0.60%" and was painted loss-red always — and the test hid it by mocking
+percent-shaped data; the honest-sample gate used the wrong denominator;
+`StylePage` rows weren't memoised, so every rAF flush re-rendered all visible
+rows; daybreak's `--color-warning` measured **2.91:1** (below AA) while carrying
+the safety copy; the ladder's two-row header gave every label twice with no
+call/put distinction; and several missing skeleton/retry/aria-label states.
+
+**Knowingly deferred** (systemic, pre-existing, not introduced here): the
+`--color-bull`/`--color-profit-bg` pairing measures 3.32:1 in daybreak on 10px
+bold badges — but that pairing is what §19.3 `StatusPill` prescribes app-wide,
+so changing it is a design-system decision, not a Phase-5 one. Likewise
+`components/ui/drawer.tsx` predates this phase and lacks a Portal and a focus
+trap. Both are listed in §8.
 
 ## 7. Exit checklist
 
@@ -215,9 +274,10 @@ same treatment the tick→publish p99 got rather than a number nobody measured.
       eslint · tsc · ruff · mypy
 - [ ] **Full `make check` from a checkout that has `.env`** (adds the cargo gates;
       no `engine/` code changed this phase, so those should be unaffected)
-- [ ] **ui-reviewer** on the four new pages/components
-- [ ] **In-browser 60 fps under replayed full-rate ticks** → then the
-      PERFORMANCE.md budget row can be marked MET or restated
+- [x] **bug-hunter** + **ui-reviewer** — run 2026-08-06; all findings in new
+      code fixed with regression tests (§6b); two systemic/pre-existing ones
+      deferred to §8 with reasons
+- [x] **In-browser 60 fps** — MEASURED and **MET** (§6, `PERFORMANCE.md`)
 - [ ] Manual smoke in the browser across **daybreak (light)** and **carbon
       (highest contrast)**, not just slate
 - [ ] **Verify the sticky table header still sticks inside `VirtualViewport`.**
@@ -232,6 +292,16 @@ same treatment the tick→publish p99 got rather than a number nobody measured.
 - [ ] `/phase-gate`
 
 ## 8. Follow-ups handed forward
+
+- **Daybreak badge contrast (systemic).** `--color-bull` on `--color-profit-bg`
+  is 3.32:1 and `--color-bear` on `--color-loss-bg` 3.95:1 in the light theme,
+  on 10–11 px bold badges — below AA. This is the pairing §19.3 `StatusPill`
+  prescribes app-wide, so the fix is a token decision (add
+  `--color-profit-strong`/`--color-loss-strong`, or darken daybreak's pair to
+  the 700 shades), not a Phase-5 edit.
+- **`components/ui/drawer.tsx`** (pre-existing, now used by `FactorDrawer`):
+  no `createPortal`, `--color-border` instead of `--color-border-strong`,
+  `duration-300` over the 200 ms cap, and `aria-modal` without a focus trap.
 
 - **Repair the pnpm store** (durable `store-dir` outside `~/snap/`, one full
   install), then optionally swap `useVirtualRows` for `@tanstack/react-virtual`

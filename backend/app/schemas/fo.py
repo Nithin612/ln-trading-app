@@ -48,8 +48,10 @@ class ChainOut(BaseModel):
     spot: Decimal | None
     atm_strike: Decimal | None
     legs: list[ChainLegOut]
-    # What the Greeks were priced off (null unless ?greeks=true resolved them).
-    # Stated explicitly so the UI can never imply live Greeks off a stale chain.
+    # Provenance. `as_of` is ALWAYS reported when the chain has rows — it is the
+    # chain's own trading day, which the UI needs to state whether or not Greeks
+    # were requested (an undated EOD chain reads as live). The pricing fields
+    # below are null unless ?greeks=true actually resolved a forward.
     as_of: date | None = None         # the chain's own trading day
     fut_price: Decimal | None = None  # Black-76 forward for THIS expiry
     # How that forward was obtained. Index options are weekly but futures are

@@ -449,7 +449,7 @@ class TestChainDay:
         await db.commit()
         assert await fa.chain_day(db, "NIFTY", NIFTY_EXPIRY, source="intraday") == date(2026, 7, 21)
 
-    async def test_intraday_day_is_the_IST_trading_day_not_the_UTC_one(
+    async def test_intraday_day_is_the_ist_trading_day_not_the_utc_one(
         self, db: AsyncSession
     ) -> None:
         """Snapshots are stored UTC; the trading day is IST. 19:00 UTC on the
@@ -632,7 +632,13 @@ class TestChainGreeksApi:
         )
         assert resp.status_code == 200, resp.text
         body = resp.json()
-        assert body["as_of"] is None and body["fut_price"] is None and body["dte"] is None
+        # `as_of` is always reported — the UI must be able to date the chain
+        # even without Greeks, or an EOD chain reads as live.
+        assert body["as_of"] == "2026-07-20"
+        # ...but nothing pricing-related is resolved unless greeks were asked for.
+        assert body["fut_price"] is None
+        assert body["forward_source"] is None
+        assert body["dte"] is None
         assert all(leg["iv"] is None and leg["delta"] is None for leg in body["legs"])
 
     async def test_greeks_true_prices_the_ladder(

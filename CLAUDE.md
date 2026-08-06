@@ -38,9 +38,12 @@ else.
   `/fo/expiries`); style pages v2 (committed-vs-forming, outcome stats that
   **refuse to dress up a small sample**, factor drawer); Live Signals feed with
   opt-in notifications (bursts coalesce). The sidebar IA + slate default landed
-  back in Phase 3. Exit needs full `make check`, ui-reviewer, and a **live-gated**
-  in-browser 60 fps reading — the render-cost half is measured and CI-gated
-  (`docs/PERFORMANCE.md` 2026-08-06). Detail: `docs/phases/phase-05-ui-overhaul.md`.
+  back in Phase 3. **bug-hunter + ui-reviewer run and their findings fixed**
+  (incl. the weekly-expiry forward bug that would have left every Greek null),
+  and the **60 fps budget is MEASURED and MET** — commit p99 7.6–8.8 ms vs 16.7 ms
+  in real Chrome (harness `frontend/perf/`, method in `docs/PERFORMANCE.md`).
+  Exit needs a full `make check` from a checkout with `.env` + a browser smoke in
+  daybreak/carbon. Detail: `docs/phases/phase-05-ui-overhaul.md`.
 - **Frontend deps are currently uninstallable:** a snap refresh pruned the pnpm
   store `frontend/node_modules` is hard-linked to, so `pnpm add` fails
   (`ERR_PNPM_UNEXPECTED_STORE`). Repoint `store-dir` outside `~/snap/` + one full
