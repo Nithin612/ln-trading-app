@@ -115,3 +115,6 @@ backend/recordings/
 # Shadow-week decision-diff reports (runtime output; keep local)
 shadow/
 backend/shadow/
+
+# git worktrees created by the Claude worktree tool
+.claude/worktrees/

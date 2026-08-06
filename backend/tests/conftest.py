@@ -11,7 +11,7 @@ Test isolation: each test gets a clean slate via TRUNCATE on all tables.
 import os
 import subprocess
 import sys
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
 
 import psycopg
@@ -29,6 +29,13 @@ os.environ.setdefault("DATABASE_URL", f"{_ASYNC_BASE}/trading_platform_test")
 os.environ.setdefault("DATABASE_URL_SYNC", f"{_SYNC_BASE}/trading_platform_test".replace(
     "postgresql://", "postgresql+psycopg://"
 ))
+
+# Isolate the test Redis to a dedicated logical DB (15) so `ltp:`/stream/cache
+# keys can't leak into — or across — tests via the shared dev Redis (db 0). The
+# DB is flushed per test by `clean_tables`. (Same isolation the test Postgres DB
+# already gets; without it a leaked `ltp:{id}` poisons a later test once
+# RESTART IDENTITY recycles the stock id — the 2026-08-06 full-suite flake.)
+os.environ.setdefault("REDIS_URL", "redis://localhost:6379/15")
 
 # ── Ensure the test database exists ──────────────────────────────────────────
 def _ensure_test_db() -> None:
@@ -76,12 +83,42 @@ _SessionFactory: async_sessionmaker[AsyncSession] = async_sessionmaker(
 
 @pytest.fixture(autouse=True)
 async def clean_tables() -> None:
-    """Truncate all tables before each test for deterministic state."""
+    """Truncate all tables AND flush the isolated test Redis before each test —
+    deterministic Postgres AND Redis state, so a leaked `ltp:` key from an
+    earlier test can't poison a later one after RESTART IDENTITY recycles ids."""
     async with _engine.begin() as conn:
         for table in reversed(Base.metadata.sorted_tables):
             await conn.execute(
                 text(f'TRUNCATE TABLE "{table.name}" RESTART IDENTITY CASCADE')
             )
+
+    import redis.asyncio as aioredis
+
+    from app.core.config import settings
+
+    # Guard: only ever flush the dedicated test logical DB, never the dev cache
+    # (db 0), in case the REDIS_URL isolation above didn't take (a stale env).
+    if settings.redis_url.rstrip("/").endswith("/15"):
+        r = aioredis.from_url(settings.redis_url)
+        try:
+            await r.flushdb()
+        finally:
+            await r.aclose()
+
+
+@pytest.fixture(autouse=True)
+def _neutral_paper_slippage() -> Generator[None, None, None]:
+    """Keep unrelated tests slippage-neutral so fill-price assertions aren't
+    coupled to the production `paper_slippage_bps` calibration knob (default
+    2 bps). Tests that need the haircut set `settings.paper_slippage_bps`
+    themselves (monkeypatch restores it); the dedicated slippage tests exercise
+    the real 2-bps path."""
+    from app.core.config import settings
+
+    original = settings.paper_slippage_bps
+    settings.paper_slippage_bps = 0.0
+    yield
+    settings.paper_slippage_bps = original
 
 
 @pytest.fixture

@@ -99,6 +99,7 @@ export interface PaperRecordOut {
   target_days: number
   start_date: string | null
   last_date: string | null
+  clock_started_at: string | null
 }
 
 // Profit-lock shadow comparator (read-only evidence — controls no orders).
@@ -192,5 +193,9 @@ export const tradingApi = {
 
   getPaperRecord(token: string, targetDays = 30): Promise<PaperRecordOut> {
     return api.get<PaperRecordOut>(`/trading/paper-record?target_days=${targetDays}`, token)
+  },
+
+  resetPaperClock(token: string): Promise<PaperRecordOut> {
+    return api.post<PaperRecordOut>('/trading/paper-clock/reset', {}, token)
   },
 }

@@ -110,6 +110,31 @@ def is_tp_hit(
     return current_price <= current_tp
 
 
+def stop_fill_price(
+    *,
+    side: str,
+    stop: Decimal,
+    market_price: Decimal,
+) -> Decimal:
+    """Realistic fill price when a protective stop triggers.
+
+    A stop guarantees an EXIT, not a PRICE. The monitor only ever sees an SL
+    breach when the live price is already AT or THROUGH the stop, so on a gap
+    (an overnight gap surfaced at the 09:15 first tick, or a fast move between
+    60-second polls) the true fill is the market — at or WORSE than the stop.
+    Booking the fill at the exact stop flatters the paper record on precisely
+    the moves that hurt most, and the paper record is what gates live trading.
+
+    Return the worse of {stop, market} on the position's losing side; a clean
+    touch (market == stop) returns the stop unchanged, so non-gap fills are
+    identical to the old behaviour. TP fills are deliberately NOT routed through
+    this — a favourable target-gap filled at the target is already conservative.
+    """
+    if side.upper() == "LONG":
+        return min(stop, market_price)
+    return max(stop, market_price)
+
+
 def compute_pnl(
     *,
     side: str,

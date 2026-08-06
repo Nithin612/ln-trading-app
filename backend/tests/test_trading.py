@@ -19,7 +19,13 @@ from app.models.stock import Stock
 from app.models.trading import Position
 from app.models.user import User
 from app.trading.fees import roundtrip_charges
-from app.trading.trail_sl import advance_trail, compute_pnl, is_sl_hit, is_tp_hit
+from app.trading.trail_sl import (
+    advance_trail,
+    compute_pnl,
+    is_sl_hit,
+    is_tp_hit,
+    stop_fill_price,
+)
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -238,6 +244,31 @@ class TestTrailSl:
     def test_tp_hit_long(self) -> None:
         assert is_tp_hit(side="LONG", current_price=Decimal("541"), current_tp=Decimal("540"))
         assert not is_tp_hit(side="LONG", current_price=Decimal("539"), current_tp=Decimal("540"))
+
+    def test_stop_fill_long_takes_worse_of_stop_and_market(self) -> None:
+        # gap through → the lower (worse) price; clean touch → the stop; a tick
+        # above the stop can never fill better than the stop.
+        assert stop_fill_price(
+            side="LONG", stop=Decimal("480"), market_price=Decimal("470")
+        ) == Decimal("470")
+        assert stop_fill_price(
+            side="LONG", stop=Decimal("480"), market_price=Decimal("480")
+        ) == Decimal("480")
+        assert stop_fill_price(
+            side="LONG", stop=Decimal("480"), market_price=Decimal("482")
+        ) == Decimal("480")
+
+    def test_stop_fill_short_takes_worse_of_stop_and_market(self) -> None:
+        # short mirrors: gap through → the higher (worse) price.
+        assert stop_fill_price(
+            side="SHORT", stop=Decimal("520"), market_price=Decimal("530")
+        ) == Decimal("530")
+        assert stop_fill_price(
+            side="SHORT", stop=Decimal("520"), market_price=Decimal("520")
+        ) == Decimal("520")
+        assert stop_fill_price(
+            side="SHORT", stop=Decimal("520"), market_price=Decimal("518")
+        ) == Decimal("520")
 
     def test_compute_pnl_long_profit(self) -> None:
         pnl = compute_pnl(
@@ -1088,7 +1119,9 @@ class TestPositionMonitor:
         )
         await db.commit()
 
-        r = await self._set_ltp(stock.id, "479.00")
+        # Clean touch exactly at the stop → fills at the stop (worse-of returns
+        # the stop when there is no gap).
+        r = await self._set_ltp(stock.id, "480.00")
         try:
             result = await scan_positions(db, now=_MON_IN_SESSION)
         finally:
@@ -1098,7 +1131,41 @@ class TestPositionMonitor:
         assert result["closed"] == 1
         assert pos.closed_at is not None
         assert pos.exit_reason == "sl_hit"
-        assert pos.exit_price == Decimal("480.0000")  # filled at the SL
+        assert pos.exit_price == Decimal("480.0000")  # clean touch → filled at the SL
+
+    async def test_sl_gap_through_fills_at_market_not_the_stop(
+        self, db: AsyncSession
+    ) -> None:
+        """A stop guarantees an exit, not a price. When the live price has
+        gapped THROUGH the stop, the fill is booked at the gapped market — not
+        flattered back to the stop — so the paper record tells the truth about
+        gap losses (the record that gates live trading)."""
+        from app.broker.tick_consumer import LTP_KEY
+        from app.tasks.position_monitor import scan_positions
+
+        user = await _make_user(db)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000", sl="480.0000")
+        pos = await _open_position(
+            db, user, stock, signal, entry=Decimal("500"), sl=Decimal("480"), qty=100
+        )
+        await db.commit()
+
+        # Gapped to 470 — 10 rupees below the 480 stop.
+        r = await self._set_ltp(stock.id, "470.00")
+        try:
+            result = await scan_positions(db, now=_MON_IN_SESSION)
+        finally:
+            await r.delete(LTP_KEY.format(stock_id=stock.id))
+            await r.aclose()
+
+        assert result["closed"] == 1
+        assert pos.exit_reason == "sl_hit"
+        assert pos.exit_price == Decimal("470.0000")  # gapped market, NOT the 480 stop
+        # Realized P&L reflects the deeper gap loss, and is strictly worse than
+        # the old flattered-at-the-stop fill would have booked (the canary).
+        assert pos.realized_pnl == _net("LONG", "500", "470", 100)
+        assert pos.realized_pnl < _net("LONG", "500", "480", 100)
 
     async def test_tracks_peak_favourable_excursion(self, db: AsyncSession) -> None:
         """Each live tick updates the position's max favourable excursion."""
@@ -1143,15 +1210,15 @@ class TestPositionMonitor:
 
     # ── Governor selection: Layered Ratchet Stop vs the trail ladder ──────────
     # No OHLCV bars exist in the test DB, so latest_atr → None and the ATR
-    # chandelier layer contributes nothing; the giveback cap governs. For a
-    # swing signal (arm_r=1.0, giveback tapers 0.55→0.40), entry 500 / SL 480
-    # (R=20) at a peak of 530 (1.5R): giveback = 0.5125, cap = 500 + 30·0.4875
-    # = 514.625. The fixed ladder at the same 1.5R would only reach entry+0.5R
-    # = 510 (state trailing_1). The two values are the discriminator.
+    # profit_lock ON = the rupee ladder. entry 500 / SL 480, qty 100, at LTP 530
+    # → peak profit ₹3000: breakeven arms (SL→500) and the seal = peak −
+    # giveback ₹1000/100sh = 530 − 10 = 520 (no ATR here, so the ₹ giveback
+    # binds). The fixed ladder at the same 1.5R reaches only entry+0.5R = 510
+    # (trailing_1). 520 vs 510 is the discriminator between the two exit paths.
 
     async def test_profit_lock_governs_when_enabled(self, db: AsyncSession) -> None:
-        """profit_lock_enabled → the layered ratchet moves the stop to the
-        giveback cap (514.625), not the ladder rung (510)."""
+        """profit_lock_enabled → the rupee ladder seals (peak − ₹1000/sh) = 520,
+        not the fixed-ladder rung (510)."""
         from app.broker.tick_consumer import LTP_KEY
         from app.tasks.position_monitor import scan_positions
 
@@ -1172,8 +1239,8 @@ class TestPositionMonitor:
             await r.aclose()
 
         assert result["updated"] == 1 and result["closed"] == 0
-        assert pos.current_sl == Decimal("514.625")   # giveback cap
-        assert pos.current_sl != Decimal("510")        # canary: NOT the ladder rung
+        assert pos.current_sl == Decimal("520")        # sealed: peak 530 − ₹1000/100sh
+        assert pos.current_sl != Decimal("510")        # canary: NOT the fixed-ladder rung
         assert pos.trail_state == "none"               # lock never touches ladder state
 
     async def test_ladder_governs_when_profit_lock_disabled(self, db: AsyncSession) -> None:
@@ -1201,12 +1268,13 @@ class TestPositionMonitor:
 
         assert result["updated"] == 1
         assert pos.current_sl == Decimal("510")        # ladder rung (entry + 0.5R)
-        assert pos.current_sl != Decimal("514.625")    # canary: NOT the layered cap
+        assert pos.current_sl != Decimal("520")        # canary: NOT the rupee-ladder seal
         assert pos.trail_state == "trailing_1"
 
     async def test_profit_lock_governs_short_side(self, db: AsyncSession) -> None:
-        """Side flows through the wiring: a SHORT (entry 500 / SL 520, R=20) at a
-        low of 470 (1.5R) locks to the mirror cap 500 − 30·0.4875 = 485.375."""
+        """Side flows through the wiring: a SHORT (entry 500 / SL 520, qty 100) at
+        a low of 470 → peak profit ₹3000 seals the mirror floor 470 + ₹1000/100sh
+        = 480."""
         from app.broker.tick_consumer import LTP_KEY
         from app.tasks.position_monitor import scan_positions
 
@@ -1229,8 +1297,90 @@ class TestPositionMonitor:
             await r.aclose()
 
         assert result["updated"] == 1 and result["closed"] == 0
-        assert pos.current_sl == Decimal("485.375")
+        assert pos.current_sl == Decimal("480")        # 470 + ₹1000/100sh
         assert pos.peak_price == Decimal("470")
+
+
+# ── Paper-fill slippage (the honest-fill calibration knob) ─────────────────────
+# Unrelated tests are pinned slippage-neutral by conftest `_neutral_paper_slippage`;
+# these exercise the real production default (2 bps) explicitly.
+
+class TestPaperSlippage:
+    def test_shipped_slippage_default_is_adverse(self) -> None:
+        """Canary: the SHIPPED default stays 2 bps (adverse). The autouse
+        `_neutral_paper_slippage` fixture pins the live singleton to 0.0 for the
+        rest of the suite, so a silent revert of the config default to 0.0 would
+        otherwise pass CI unnoticed — assert the declared field default directly
+        (env-independent)."""
+        from app.core.config import Settings
+
+        assert Settings.model_fields["paper_slippage_bps"].default == 2.0
+
+    def test_apply_slippage_is_adverse_both_sides(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.broker.paper_broker import _apply_slippage
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "paper_slippage_bps", 2.0)
+        # BUY pays up, SELL receives down — the trader always crosses the spread.
+        assert _apply_slippage(Decimal("500"), "BUY") == Decimal("500.1000")
+        assert _apply_slippage(Decimal("500"), "SELL") == Decimal("499.9000")
+
+    def test_apply_slippage_zero_is_noop(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        from app.broker.paper_broker import _apply_slippage
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "paper_slippage_bps", 0.0)
+        assert _apply_slippage(Decimal("500"), "BUY") == Decimal("500")
+
+    def test_simulated_fill_slips_then_rounds_to_tick(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.broker.paper_broker import _simulated_fill
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "paper_slippage_bps", 2.0)
+        # 480 SELL → 479.904 → tick-rounded to the 0.05 grid → 479.90.
+        assert _simulated_fill(Decimal("480"), "SELL") == Decimal("479.9000")
+
+    async def test_close_applies_slippage_worse_than_neutral(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A close under the production slippage default fills adverse to the
+        reference price, so realized P&L is strictly worse than the neutral
+        (0-bps) baseline the rest of the suite asserts against."""
+        from app.broker.paper_broker import _simulated_fill, close_position
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "paper_slippage_bps", 2.0)
+        user = await _make_user(db)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000")
+        pos = await _open_position(db, user, stock, signal, entry=Decimal("500"), qty=100)
+        await db.commit()
+
+        _, closed = await close_position(db, pos, exit_price=Decimal("540"), reason="test")
+        await db.commit()
+
+        assert closed.exit_price == _simulated_fill(Decimal("540"), "SELL")  # 539.90
+        assert closed.realized_pnl < _net("LONG", "500", "540", 100)  # worse than 0-bps
+
+    async def test_entry_fill_slips_adverse(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A BUY entry fills UP from the reference under slippage."""
+        from app.broker.paper_broker import _simulated_fill, place_paper_order
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "paper_slippage_bps", 2.0)
+        user = await _make_user(db)  # allow_offmarket_entry → fills off the signal price
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000")
+
+        _, pos = await place_paper_order(db, user, signal, side="BUY", quantity=100)
+        await db.commit()
+
+        assert pos.avg_entry_price == _simulated_fill(Decimal("500"), "BUY")  # 500.10
+        assert pos.avg_entry_price > Decimal("500")
 
 
 # ── Paper record (30-day-clock view) ───────────────────────────────────────────
@@ -1287,3 +1437,183 @@ class TestPaperRecord:
         assert data["days"] == []
         assert data["current_streak"] == 0
         assert data["start_date"] is None
+        assert data["clock_started_at"] is None
+
+    async def test_record_excludes_trades_before_clock_start(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """Once the honest-fill clock is set, trades closed before it no longer
+        count toward the record."""
+        user = await create_test_user(db)
+        headers = await get_auth_headers(client)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id)
+
+        await _closed_position(
+            db, user, stock, signal, Decimal("1000"),
+            closed_at=datetime(2026, 6, 1, 12, 0, tzinfo=UTC),
+        )
+        await _closed_position(
+            db, user, stock, signal, Decimal("500"),
+            closed_at=datetime(2026, 6, 10, 12, 0, tzinfo=UTC),
+        )
+        user.paper_clock_started_at = datetime(2026, 6, 5, 0, 0, tzinfo=UTC)
+        await db.commit()
+
+        r = await client.get("/api/v1/trading/paper-record", headers=headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert data["total_days_traded"] == 1  # only the 2026-06-10 day
+        assert data["start_date"] == "2026-06-10"
+        assert Decimal(data["total_realized_pnl"]) == Decimal("500")
+        assert data["clock_started_at"] is not None
+
+    async def test_reset_paper_clock_drops_prior_days(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """POST /paper-clock/reset stamps the start now and drops every prior
+        day from the count — the trades stay in the DB, they just stop counting."""
+        user = await create_test_user(db)
+        headers = await get_auth_headers(client)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id)
+        await _closed_position(
+            db, user, stock, signal, Decimal("1000"),
+            closed_at=datetime(2026, 6, 1, 12, 0, tzinfo=UTC),
+        )
+        await db.commit()
+
+        # Before reset the past day counts.
+        r0 = await client.get("/api/v1/trading/paper-record", headers=headers)
+        assert r0.json()["total_days_traded"] == 1
+
+        # Reset → clock stamped, prior day excluded.
+        r = await client.post("/api/v1/trading/paper-clock/reset", headers=headers)
+        assert r.status_code == 200
+        data = r.json()
+        assert data["clock_started_at"] is not None
+        assert data["total_days_traded"] == 0
+        assert data["days"] == []
+
+        # A subsequent GET reflects the same reset.
+        r2 = await client.get("/api/v1/trading/paper-record", headers=headers)
+        assert r2.json()["total_days_traded"] == 0
+
+
+class TestChaseAndSizeForFill:
+    """P1 — size risk-first from the ACTUAL fill so a chased/gapped fill can't
+    silently over-risk, and repeat entries can't stack risk past the budget."""
+
+    def test_size_for_fill_fresh_is_budget_over_fill_distance(self) -> None:
+        from app.broker.paper_broker import size_for_fill
+
+        # ₹2000 budget, fill 500, SL 480 → floor(2000/20) = 100
+        assert (
+            size_for_fill(
+                capital=Decimal("100000"), risk_pct=Decimal("2"),
+                fill=Decimal("500"), stop_loss=Decimal("480"),
+            )
+            == 100
+        )
+
+    def test_size_for_fill_chase_shrinks_qty_to_cap_risk(self) -> None:
+        from app.broker.paper_broker import size_for_fill
+
+        # A fill 7 past entry widens |fill-SL| 20→27 → qty 100→74, risk ≤ ₹2000
+        qty = size_for_fill(
+            capital=Decimal("100000"), risk_pct=Decimal("2"),
+            fill=Decimal("507"), stop_loss=Decimal("480"),
+        )
+        assert qty == 74  # floor(2000/27)
+        assert qty * Decimal("27") <= Decimal("2000")
+
+    def test_size_for_fill_better_fill_allows_more(self) -> None:
+        from app.broker.paper_broker import size_for_fill
+
+        # A fill below entry tightens |fill-SL| → more shares for the same ₹ risk
+        assert (
+            size_for_fill(
+                capital=Decimal("100000"), risk_pct=Decimal("2"),
+                fill=Decimal("490"), stop_loss=Decimal("480"),
+            )
+            == 200  # floor(2000/10)
+        )
+
+    def test_size_for_fill_add_uses_remaining_budget(self) -> None:
+        from app.broker.paper_broker import size_for_fill
+
+        # Existing 100 @ 500 (SL 480) already uses the whole ₹2000 → add = 0
+        assert (
+            size_for_fill(
+                capital=Decimal("100000"), risk_pct=Decimal("2"),
+                fill=Decimal("500"), stop_loss=Decimal("480"),
+                existing_qty=100, existing_entry=Decimal("500"),
+            )
+            == 0
+        )
+        # Existing 50 @ 500 uses ₹1000 → ₹1000 left → add floor(1000/20) = 50
+        assert (
+            size_for_fill(
+                capital=Decimal("100000"), risk_pct=Decimal("2"),
+                fill=Decimal("500"), stop_loss=Decimal("480"),
+                existing_qty=50, existing_entry=Decimal("500"),
+            )
+            == 50
+        )
+
+    def test_size_for_fill_stop_at_fill_returns_zero(self) -> None:
+        from app.broker.paper_broker import size_for_fill
+
+        assert (
+            size_for_fill(
+                capital=Decimal("100000"), risk_pct=Decimal("2"),
+                fill=Decimal("480"), stop_loss=Decimal("480"),
+            )
+            == 0
+        )
+
+    async def test_place_order_sizes_from_chased_fill_not_entry(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Regression for the silent-oversize bug: a market fill above the signal
+        entry sizes on |fill-SL| (risk capped at the ₹2000 budget) and records
+        the chase — NOT the old |entry-SL| sizing that risked ~₹3366."""
+        from app.broker import paper_broker
+
+        async def _fake_ltp(stock_id: int) -> Decimal:
+            return Decimal("2104.80")  # ~0.75R past entry
+
+        monkeypatch.setattr(paper_broker, "get_live_ltp", _fake_ltp)
+        user = await _make_user(db, capital=Decimal("100000"))  # ₹2000 budget
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="2029.10", sl="1927.60", tp="2333.60")
+
+        order, pos = await paper_broker.place_paper_order(
+            db, user, signal, side="BUY", quantity=None
+        )
+
+        risk = pos.quantity * (pos.avg_entry_price - Decimal("1927.60"))
+        assert risk <= Decimal("2000")     # never exceeds the per-trade budget
+        assert pos.quantity == 11          # floor(2000/177.20); entry-based was 19 (risk ₹3364)
+        assert order.broker_payload is not None
+        assert order.broker_payload["chase"]["past_chase_ceiling"] is True
+
+    async def test_repeat_entry_does_not_stack_risk(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A second auto-sized Buy on the same name is capped by remaining budget
+        — it can't re-risk the full 2% again (the HAL 3-click stacking case)."""
+        from app.broker import paper_broker
+
+        async def _fake_ltp(stock_id: int) -> Decimal:
+            return Decimal("500")
+
+        monkeypatch.setattr(paper_broker, "get_live_ltp", _fake_ltp)
+        user = await _make_user(db, capital=Decimal("100000"))
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000", sl="480.0000")
+
+        _o1, pos1 = await paper_broker.place_paper_order(db, user, signal, quantity=None)
+        assert pos1.quantity == 100  # full budget used on the first entry
+        with pytest.raises(paper_broker.PaperOrderError, match="already at your per-trade risk"):
+            await paper_broker.place_paper_order(db, user, signal, quantity=None)

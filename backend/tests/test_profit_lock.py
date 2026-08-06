@@ -16,7 +16,9 @@ from app.models.trading import Position
 from app.trading.profit_lock import (
     CLASS_PARAMS,
     DEFAULT_PARAMS,
+    AbsoluteLadderParams,
     RatchetParams,
+    absolute_ladder_stop,
     giveback_fraction,
     layered_ratchet_stop,
     params_for,
@@ -26,6 +28,79 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from tests.helpers import make_stock
 
 SWING = CLASS_PARAMS["swing"]  # arm 1.0R, atr_k 2.5, giveback 0.55→0.40, late 3
+
+_LADDER = AbsoluteLadderParams(
+    breakeven_inr=Decimal("2000"),
+    trail_start_inr=Decimal("3000"),
+    giveback_inr=Decimal("1000"),
+    atr_k=Decimal("2.0"),
+)
+
+
+# ── Pure: absolute-rupee profit ladder (the trader's "seal ₹X" model) ──────────
+
+class TestAbsoluteLadder:
+    def test_below_breakeven_holds_original_sl(self) -> None:
+        # peak profit 1500 (< ₹2000) → nothing arms, stop stays at the signal SL
+        stop = absolute_ladder_stop(
+            side="LONG", entry=Decimal("500"), original_sl=Decimal("480"),
+            peak_price=Decimal("515"), quantity=100, atr=None,
+            params=_LADDER, current_stop=Decimal("480"),
+        )
+        assert stop == Decimal("480")
+
+    def test_breakeven_arms_between_thresholds(self) -> None:
+        # peak profit 2500 (≥₹2000, <₹3000) → SL to breakeven (entry)
+        stop = absolute_ladder_stop(
+            side="LONG", entry=Decimal("500"), original_sl=Decimal("480"),
+            peak_price=Decimal("525"), quantity=100, atr=None,
+            params=_LADDER, current_stop=Decimal("480"),
+        )
+        assert stop == Decimal("500")
+
+    def test_seals_fixed_rupee_giveback(self) -> None:
+        # peak profit 4000 (≥₹3000), no ATR → seal peak − ₹1000/100sh = 540 − 10
+        stop = absolute_ladder_stop(
+            side="LONG", entry=Decimal("500"), original_sl=Decimal("480"),
+            peak_price=Decimal("540"), quantity=100, atr=None,
+            params=_LADDER, current_stop=Decimal("500"),
+        )
+        assert stop == Decimal("530")
+
+    def test_atr_elasticity_widens_giveback(self) -> None:
+        # ATR 8 → giveback_price = max(₹1000/100=10, 2.0×8=16) = 16 → seals less
+        stop = absolute_ladder_stop(
+            side="LONG", entry=Decimal("500"), original_sl=Decimal("480"),
+            peak_price=Decimal("540"), quantity=100, atr=Decimal("8"),
+            params=_LADDER, current_stop=Decimal("500"),
+        )
+        assert stop == Decimal("524")   # more room for a volatile name
+
+    def test_one_way_never_loosens(self) -> None:
+        # current stop already 530; a pullback (lower peak) must not pull it down
+        stop = absolute_ladder_stop(
+            side="LONG", entry=Decimal("500"), original_sl=Decimal("480"),
+            peak_price=Decimal("525"), quantity=100, atr=None,
+            params=_LADDER, current_stop=Decimal("530"),
+        )
+        assert stop == Decimal("530")
+
+    def test_short_mirror(self) -> None:
+        # SHORT entry 500 / SL 520, peak low 465 → profit 3500 → seal 465 + 10
+        stop = absolute_ladder_stop(
+            side="SHORT", entry=Decimal("500"), original_sl=Decimal("520"),
+            peak_price=Decimal("465"), quantity=100, atr=None,
+            params=_LADDER, current_stop=Decimal("520"),
+        )
+        assert stop == Decimal("475")
+
+    def test_zero_quantity_returns_current(self) -> None:
+        stop = absolute_ladder_stop(
+            side="LONG", entry=Decimal("500"), original_sl=Decimal("480"),
+            peak_price=Decimal("600"), quantity=0, atr=None,
+            params=_LADDER, current_stop=Decimal("480"),
+        )
+        assert stop == Decimal("480")
 
 
 # ── Pure: giveback taper ───────────────────────────────────────────────────────

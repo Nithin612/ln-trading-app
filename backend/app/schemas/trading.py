@@ -204,3 +204,6 @@ class PaperRecordOut(BaseModel):
     target_days: int = 30
     start_date: str | None = None
     last_date: str | None = None
+    # When set, the record counts only trades on/after this instant (the
+    # honest-fill clock restart); null = counting all paper history.
+    clock_started_at: datetime | None = None

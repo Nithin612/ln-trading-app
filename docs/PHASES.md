@@ -10,6 +10,37 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
+## ▶ STATE AT A GLANCE (updated 2026-08-06) — read this block first
+
+**v2 Phases 0–2 ✅ done · Phase 3 (realtime) ▶ in progress · Phases 4–7 not started.**
+Suites: backend **974**, frontend **257**, parity 16, walkforward 9, replay 11.
+
+**Phase 3 — remaining (both LIVE-GATED, need market days):**
+
+- [ ] **Quiet-box full-session soak** → the p99 tick→publish **≤ 50 ms** verdict
+      at full universe. Still UNPROVEN: the 07-10 soak was partial (a load
+      spike on the box starved the consumer). Ritual + caveats: open thread 1
+      below. Known risk: at ~2,049-instrument batches the LTP-write floor
+      (~11 ms) brushes the budget → restate the budget or add unchanged-price
+      SET dedupe, decided on the soak's numbers.
+- [ ] **Clean shadow week** — `scripts/shadow_day.sh <day…>` once per day AFTER
+      the evening EOD beats land (~19:30 IST); zero diffs required. Day one
+      (07-17) already clean; a full week isn't logged yet.
+- [ ] Then **`/phase-gate`** → Phase 3 closes.
+
+Everything else in Phase 3 (slices **3.0–3.7**) is DONE and on `main` — live
+worker + Rust LiveEngine, committed/forming layers, record-replay, tick
+triggers + alert UI, watchlists, provisional leaderboards, outcome ticks,
+shadow-compare harness. Detail: the narrative below + `phases/phase-03-realtime.md`.
+
+**Not a Phase-3 blocker (common confusion):** the **30-day paper clock** is the
+*Phase-7* go-live gate. It runs daily now; the loop is `make analysis` →
+`docs/analysis/` (+ `FIX_PLAN.md`). Current evidence: the binding constraint is
+**entry/regime selection, not exits** (1/15 trades reached +1R on 08-03→05) —
+which is what Phase-6 expectancy calibration is for.
+
+---
+
 ## v2 upgrade phases (current)
 
 | # | Phase | Status | Report | Key deliverable |
@@ -395,6 +426,86 @@ automatically once a token exists.
 \* v1 Phase 7 shipped with four integration defects that made the live path
 inoperable end-to-end (documented in UPGRADE_PLAN.md and repaired, with
 regression tests, in v2 Phase 0 — see `docs/phases/phase-00-workbench.md`).
+
+## Architecture-review backlog (2026-08-01) — phase-mapped
+
+From the external-review synthesis
+(`~/Downloads/ARCHITECTURE_RECOMMENDATIONS.md`), each item fit-checked
+against the code (the code is ground truth). **Done now (2026-08-01):** the
+honest-fill program that was current-stage-relevant and invariant-safe —
+**P0.3 gap-through-stop** (paper SL exits book the gapped market, not the
+stop), **adverse slippage on** (`paper_slippage_bps` default 0→2 bps), and a
+**paper-clock reset** (`users.paper_clock_started_at` + `POST
+/trading/paper-clock/reset` + card button) so the 30-day count restarts under
+one consistent fill model. See CHANGELOG 2026-08-01. Everything else maps to an
+existing planned phase and is recorded
+here so it is not lost. The reframing finding: **live trading does not exist
+yet** (`place_order` is paper-only, no Kite order/GTT path), so every "live"
+recommendation is a Phase-7 design constraint, not a now-fix.
+
+**Phase 6 (outcome tracking + calibration):**
+- Empirical regime-conditional **expectancy tables** (confidence-bucket × class
+  × ADX/market regime → resolved TP-first %, avg R, sample size) from the
+  outcome recorder — **CALIBRATION ONLY, never auto-adapting weights** (the
+  frozen-and-adjudicated discipline holds). Data not yet ripe (outcome epoch
+  2026-07-19). Then let expectancy — not raw confluence — inform sizing, and
+  **replace the "30 calendar days profitable" go-live gate** with "N trades
+  across ≥2 regimes, positive expectancy, bounded max drawdown" (the current
+  gate is display-only today; `schemas/user.py` deliberately omits
+  `trading_mode` from updates). (review P1.1)
+- **Signal-level MFE/MAE** in the outcome recorder. Position-level MFE already
+  exists (`positions.peak_price`/`peak_pnl`); MAE and signal-level (all
+  signals, not just taken trades) do not. (review P1.2)
+- **PKScreener setup-catalog harvest** — VCP / NR7 / momentum / delivery
+  setups as *candidate factors* for the confluence scorer (never standalone,
+  gated ≥70%, §8 backtest required). Idea list only; see
+  `docs/EXTERNAL_LIBS_REVIEW_2026-08-02.md`.
+- **Kronos (post-Phase-6, research-track only)** — an OHLCV foundation-model
+  *confidence input* experiment, gated-input-only, measured against the
+  Phase-6 outcome baseline; never a direction generator, never in the live
+  path. Deferred per the "AI/ML only after the rule engine proves out" policy
+  (see external-libs review §4).
+
+**Market Context Engine (named phase after Phase 6 — see auto-memory):**
+- **Proactive pre-event (earnings) blackout** — suppress new signals N trading
+  days before a known results/event date, scaled by class. Needs a forward
+  earnings/event-calendar source; today's `event_guard` is reactive
+  (post-filing 60 min) only. (review P1.4)
+- **One simple top-down market/sector gate** — suppress/downweight longs when
+  NIFTY is below its 200-DMA or India VIX is high, plus a sector-RS check on
+  existing sector metadata. Behaviour-changing → needs a §8 backtest.
+  **NOT** a multi-state regime engine. (review P2.1)
+
+**Phase 7 (live-trading hardening — opens with the RiskEngine slice):**
+- **Exchange-resident protective stops (Kite GTT / SL-M)** as the primary live
+  exit; the position monitor becomes a supervisor/reconciler, and each trail
+  ratchet becomes a MODIFY of the exchange-side order. (review P0.1)
+- **LTP-absence alarm** for an open live position (loud, matching the
+  "dead consumer is loud" culture); in live, the exchange stop covers the
+  process's blind window. The paper monitor currently skips silently on absent
+  LTP. (review P0.2)
+- **Sector-exposure caps + a single total-open-risk (exposure heat) number** —
+  simple caps in the RiskEngine gate. **NOT** VaR/ES, **NOT** a rolling
+  correlation matrix. (review P2.2)
+- **Corporate-action adjustment of OPEN positions** through an ex-date
+  (entry/SL/TP/qty, so R is preserved). CA quarantine currently covers the
+  selection universe only, not held positions. (review P1.5)
+- **Fill-model reference (LEAN / Nautilus §4)** when building the execution
+  handler — a catalog to consult for realistic paper/live fill behaviour, not
+  a dependency. See `docs/EXTERNAL_LIBS_REVIEW_2026-08-02.md` §3 (LEAN).
+
+**Optional test hardening (any time):** exact-boundary parity fixtures
+straddling confidence 69/70 and ADX 19/20/40/41. The Python↔Rust ADX-regime
+logic is already textually identical (`confluence.rs` ≡ `confluence.py`; the
+`+5`/`−5` lands on the *threshold*, not the score, after `int()` truncation),
+so this only hardens the float-comparison edge (already bounded by the 1e-6
+Wilder tolerance). Low value, cheap. (review P1.3)
+
+**Rejected — verified against this system:** auto-adaptive/self-learning
+weights (curve-fits; breaks frozen-engine discipline) · VaR/Expected Shortfall
+· execution algos (VWAP/TWAP/iceberg — irrelevant at this size) · rolling
+correlation matrix · factor family-capping (already tested & rejected
+2026-07-05 item H: ~400 weak trades, crushed total P&L). (review "Do NOT build")
 
 ## Consciously deferred (unchanged)
 

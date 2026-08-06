@@ -67,6 +67,12 @@ class User(Base):
         Boolean, nullable=False, default=False
     )
 
+    # Honest-fill paper-clock reset point. When set, the paper record (and the
+    # eventual Phase-7 go-live gate) counts only closed paper trades on/after
+    # this instant — used to restart the 30-day profitable-paper clock after a
+    # material fill-model change. NULL = count all history.
+    paper_clock_started_at: Mapped[datetime | None] = mapped_column(TZ, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         TZ, nullable=False, server_default=func.now()
     )

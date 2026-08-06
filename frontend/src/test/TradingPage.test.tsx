@@ -473,6 +473,7 @@ function makePaperRecord(
     target_days: 30,
     start_date: '2026-06-01',
     last_date: '2026-06-02',
+    clock_started_at: null,
     ...overrides,
   }
 }
@@ -505,5 +506,32 @@ describe('PaperRecordCard', () => {
       expect(screen.getByText(/Could not load the paper record/i)).toBeInTheDocument(),
     )
     expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
+  })
+
+  it('resets the clock on a two-step confirm and reflects the new start date', async () => {
+    vi.spyOn(tradingApiModule.tradingApi, 'getPaperRecord').mockResolvedValue(makePaperRecord())
+    const resetSpy = vi
+      .spyOn(tradingApiModule.tradingApi, 'resetPaperClock')
+      .mockResolvedValue(
+        makePaperRecord({
+          days: [], total_days_traded: 0, profitable_days: 0, losing_days: 0,
+          total_realized_pnl: '0', total_charges: '0', total_trades: 0, win_rate_pct: '0.0',
+          // Evening UTC that is the NEXT day in IST (20:30Z = 02:00 IST) — pins
+          // the label to IST, not the raw UTC date.
+          start_date: null, last_date: null, clock_started_at: '2026-08-01T20:30:00Z',
+        }),
+      )
+    wrap(<PaperRecordCard />)
+    await waitFor(() => expect(screen.getByText('Paper Record')).toBeInTheDocument())
+
+    // Two-step: the first click only arms the confirm (no API call yet).
+    fireEvent.click(screen.getByRole('button', { name: /reset clock/i }))
+    expect(resetSpy).not.toHaveBeenCalled()
+    fireEvent.click(screen.getByRole('button', { name: /confirm reset/i }))
+
+    await waitFor(() => expect(resetSpy).toHaveBeenCalledTimes(1))
+    await waitFor(() =>
+      expect(screen.getByText(/counting since 2026-08-02/i)).toBeInTheDocument(),
+    )
   })
 })
