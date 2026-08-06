@@ -37,6 +37,27 @@ export const formatPct = (n: number, opts?: { signed?: boolean }) => {
   return `${sign}${n.toFixed(2)}%`
 }
 
+const IST_DATETIME = new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata",
+  day: "2-digit",
+  month: "short",
+  year: "numeric",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+})
+
+/**
+ * Market datetimes ALWAYS display as IST, never the browser's zone: a signal's
+ * validity deadline read in the wrong timezone is a trading hazard, and storage
+ * is UTC while market logic is IST (.claude/rules/trading-domain.md).
+ * Returns "—" for an unparseable value rather than "Invalid Date".
+ */
+export const formatIstDateTime = (iso: string) => {
+  const d = new Date(iso)
+  return Number.isNaN(d.getTime()) ? "—" : `${IST_DATETIME.format(d)} IST`
+}
+
 /**
  * Greeks and other small analytical values: fixed decimals, no grouping.
  * Delta/gamma need 4 dp (index gamma is ~1e-4); vega/theta read better at 2.

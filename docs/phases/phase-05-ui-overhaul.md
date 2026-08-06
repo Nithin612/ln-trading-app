@@ -209,6 +209,15 @@ same treatment the tick→publish p99 got rather than a number nobody measured.
       PERFORMANCE.md budget row can be marked MET or restated
 - [ ] Manual smoke in the browser across **daybreak (light)** and **carbon
       (highest contrast)**, not just slate
+- [ ] **Verify the sticky table header still sticks inside `VirtualViewport`.**
+      `Table` renders its own `overflow-x-auto` wrapper, and per CSS an element
+      with one axis `auto` and the other `visible` computes the visible axis to
+      `auto` too — so that wrapper is technically a Y scroll container even
+      though it never scrolls (no height bound). `position: sticky` on the
+      `<thead>` may therefore resolve against the wrapper instead of the
+      bounded `VirtualViewport`. Cannot be settled in jsdom (no layout). If it
+      does fail, the fix is to let `Table` take the scroll container role rather
+      than nesting one inside it.
 - [ ] `/phase-gate`
 
 ## 8. Follow-ups handed forward

@@ -30,7 +30,10 @@ class FakeWebSocket {
   onclose: ((ev: { code: number }) => void) | null = null
   onerror: (() => void) | null = null
 
-  constructor(public url: string) {
+  url: string
+
+  constructor(url: string) {
+    this.url = url
     FakeWebSocket.instances.push(this)
   }
   send(d: string) { this.sent.push(d) }

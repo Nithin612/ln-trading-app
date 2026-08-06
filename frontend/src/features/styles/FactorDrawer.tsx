@@ -12,7 +12,7 @@
  */
 
 import type { SuggestionOut } from '@/lib/api/suggestions'
-import { formatGreek, formatINR, formatPct } from '@/lib/format'
+import { formatGreek, formatINR, formatIstDateTime, formatPct } from '@/lib/format'
 import { Drawer } from '@/components/ui/drawer'
 
 interface Props {
@@ -73,7 +73,7 @@ export function FactorDrawer({ suggestion, onClose }: Props) {
               value={`${s.profile_name} v${s.profile_version}`}
             />
             <Row label="Classification" value={`${s.classification} · ${s.timeframe}`} />
-            <Row label="Valid until" value={new Date(s.validity_until).toLocaleString('en-IN')} />
+            <Row label="Valid until" value={formatIstDateTime(s.validity_until)} />
             {s.volatility_reduced && (
               <p className="mt-1 text-xs text-(--color-warning)">
                 Size was reduced for volatility.
