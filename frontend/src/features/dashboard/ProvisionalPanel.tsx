@@ -65,10 +65,26 @@ function DirectionCell({ row }: { row: ProvisionalRow }) {
   )
 }
 
-export function ProvisionalPanel() {
+type ProvisionalStyle = (typeof STYLES)[number]
+
+interface ProvisionalPanelProps {
+  /**
+   * Lock the panel to one style and hide the tab strip — used by the style
+   * pages, where the surrounding page already establishes the style and a
+   * tab row would let you navigate to a style the page isn't about.
+   * Omitted on the dashboard, which keeps the full tabbed leaderboard.
+   */
+  style?: ProvisionalStyle
+}
+
+export function ProvisionalPanel({ style: lockedStyle }: ProvisionalPanelProps = {}) {
   const { accessToken } = useAuth()
-  const [style, setStyle] = useState<(typeof STYLES)[number]>('intraday')
-  const { boards, connected } = useProvisionalStream([...STYLES])
+  const [tabStyle, setTabStyle] = useState<ProvisionalStyle>('intraday')
+  const style = lockedStyle ?? tabStyle
+  const setStyle = setTabStyle
+  // Subscribe to only what is rendered: one style when locked, all six when
+  // the tabs can switch between them.
+  const { boards, connected } = useProvisionalStream(lockedStyle ? [lockedStyle] : [...STYLES])
 
   const query = useQuery<ProvisionalLeaderboard>({
     queryKey: ['provisional-leaderboard', style],
@@ -108,6 +124,7 @@ export function ProvisionalPanel() {
         </span>
       </div>
 
+      {!lockedStyle && (
       <div className="px-4 pt-3 flex gap-1" role="tablist" aria-label="Leaderboard style">
         {STYLES.map((s) => (
           <button
@@ -126,6 +143,7 @@ export function ProvisionalPanel() {
           </button>
         ))}
       </div>
+      )}
 
       <div className="p-4 pt-3">
         {query.isLoading && !board ? (
