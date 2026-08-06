@@ -12,7 +12,7 @@
  */
 
 import type { SuggestionOut } from '@/lib/api/suggestions'
-import { formatGreek, formatINR, formatIstDateTime, formatPct } from '@/lib/format'
+import { formatCurrency, formatGreek, formatInt, formatIstDateTime, formatPct } from '@/lib/format'
 import { Drawer } from '@/components/ui/drawer'
 
 interface Props {
@@ -63,10 +63,12 @@ export function FactorDrawer({ suggestion, onClose }: Props) {
             <h3 className="text-xs font-semibold uppercase tracking-wider text-(--color-text-muted) mb-1">
               Plan
             </h3>
-            <Row label="Entry" value={`₹${formatINR(parseFloat(s.entry_price))}`} />
-            <Row label="Stop loss" value={`₹${formatINR(parseFloat(s.stop_loss))}`} />
-            <Row label="Take profit" value={`₹${formatINR(parseFloat(s.take_profit))}`} />
-            <Row label="Suggested qty" value={formatINR(s.suggested_qty)} />
+            <Row label="Entry" value={formatCurrency(parseFloat(s.entry_price))} />
+            <Row label="Stop loss" value={formatCurrency(parseFloat(s.stop_loss))} />
+            <Row label="Take profit" value={formatCurrency(parseFloat(s.take_profit))} />
+            {/* A share count, not money: formatINR would render "1,250.00",
+                and a quantity with a decimal point reads as a price. */}
+            <Row label="Suggested qty" value={formatInt(s.suggested_qty)} />
             <Row label="Reward : risk" value={rr != null ? `${formatGreek(rr, 2)} : 1` : '—'} />
             <Row
               label="Profile"

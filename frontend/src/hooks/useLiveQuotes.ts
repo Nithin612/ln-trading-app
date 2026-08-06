@@ -146,20 +146,27 @@ export function useLiveQuotes(symbols: string[]): UseQuotesResult {
     function connect() {
       // Read the token at (re)connect time so a refreshed token is picked up.
       const token = useAuthStore.getState().accessToken;
-      ws = new WebSocket(buildWsUrl(token));
-      wsRef.current = ws;
+      // `socket` is per-invocation on purpose. Handlers must close over THEIR
+      // OWN socket: a shared outer variable is reassigned on reconnect, so a
+      // stale socket's late close would compare equal to the live one and pass
+      // any "is this still current?" guard.
+      const socket = new WebSocket(buildWsUrl(token));
+      ws = socket;
+      wsRef.current = socket;
 
-      ws.onopen = () => {
+      socket.onopen = () => {
+        if (unmounted || wsRef.current !== socket) return;
         setConnected(true);
         setAuthFailed(false);
         // A reconnect starts from a clean server-side subscription set, so
         // re-send the full want-set rather than a delta against stale state.
         const want = [...wantRef.current];
         subscribedRef.current = new Set(want);
-        if (want.length > 0) ws.send(JSON.stringify({ subscribe: want }));
+        if (want.length > 0) socket.send(JSON.stringify({ subscribe: want }));
       };
 
-      ws.onmessage = (ev) => {
+      socket.onmessage = (ev) => {
+        if (wsRef.current !== socket) return; // ticks from a superseded socket
         try {
           const msg = JSON.parse(ev.data as string) as { type: string; data: unknown };
           if (msg.type === "ltp") {
@@ -179,10 +186,15 @@ export function useLiveQuotes(symbols: string[]): UseQuotesResult {
         }
       };
 
-      ws.onclose = (ev) => {
+      socket.onclose = (ev) => {
+        // Guard FIRST. StrictMode double-mounts, so an aborted socket's close
+        // can land after the live one has opened; letting it run would clear
+        // `connected` while ticks flow and empty `subscribedRef`, after which
+        // every symbol removal computes an empty delta and no `unsubscribe` is
+        // ever sent again — resurrecting the v1 leak for the whole session.
+        if (unmounted || wsRef.current !== socket) return;
         setConnected(false);
         subscribedRef.current = new Set();
-        if (unmounted) return;
         // 4401 = server rejected the token; reconnecting with the same
         // credentials would just loop. Surface it and wait for a remount
         // with a fresh session instead.
@@ -193,7 +205,7 @@ export function useLiveQuotes(symbols: string[]): UseQuotesResult {
         reconnectTimeout = setTimeout(connect, WS_RECONNECT_DELAY_MS);
       };
 
-      ws.onerror = () => ws.close();
+      socket.onerror = () => socket.close();
     }
 
     connect();
@@ -214,26 +226,39 @@ export function useLiveQuotes(symbols: string[]): UseQuotesResult {
 
   useEffect(() => {
     const want = new Set(symbolsKey ? symbolsKey.split(",") : []);
+    const prevWant = wantRef.current;
     wantRef.current = want;
 
+    // Pruning is driven by what the CALLER dropped (prevWant → want), not by
+    // `subscribedRef`: while the socket is down, `subscribedRef` is empty, so a
+    // subscribedRef-based diff would find nothing to drop and leave a stale
+    // price on screen under a symbol that is no longer tracked.
+    const dropped = [...prevWant].filter((s) => !want.has(s));
+
     const add = [...want].filter((s) => !subscribedRef.current.has(s));
-    const drop = [...subscribedRef.current].filter((s) => !want.has(s));
-    if (add.length === 0 && drop.length === 0) return;
+    const unsub = [...subscribedRef.current].filter((s) => !want.has(s));
 
     const ws = wsRef.current;
-    if (ws?.readyState === WebSocket.OPEN) {
+    if (ws?.readyState === WebSocket.OPEN && (add.length > 0 || unsub.length > 0)) {
       if (add.length > 0) ws.send(JSON.stringify({ subscribe: add }));
-      if (drop.length > 0) ws.send(JSON.stringify({ unsubscribe: drop }));
+      if (unsub.length > 0) ws.send(JSON.stringify({ unsubscribe: unsub }));
       subscribedRef.current = want;
     }
 
-    if (drop.length > 0) {
-      // Drop stale prices for symbols we no longer track (one state update
-      // per symbol-set change — not per tick).
+    if (dropped.length > 0) {
+      // Also discard anything already buffered for a dropped symbol, or the
+      // next frame's flush would re-insert the very price we just pruned.
+      for (const s of dropped) pendingQuotes.current.delete(s);
       setQuotes((prev) => {
         const next = { ...prev };
-        for (const s of drop) delete next[s];
-        return next;
+        let changed = false;
+        for (const s of dropped) {
+          if (s in next) {
+            delete next[s];
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
       });
     }
   }, [symbolsKey]);

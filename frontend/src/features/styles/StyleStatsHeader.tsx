@@ -71,9 +71,25 @@ export function StyleStatsHeader({ stats, statsLoading, suggestions }: Props) {
       ? suggestions.reduce((t, s) => t + s.confidence_pct, 0) / suggestions.length
       : null
 
-  const enoughSample = (stats?.sample ?? 0) >= MIN_HONEST_SAMPLE
+  // UNIT CONTRACT (backend app/api/v1/analytics.py) — these are NOT alike:
+  //   hit_rate   = wins / decided        → a FRACTION (0.6 means 60%)
+  //   entry_rate = entered / total       → a FRACTION
+  //   avg_return_pct                     → ALREADY A PERCENT (1.4 means 1.4%)
+  // Treating the fractions as percents renders "0.60%" and, worse, makes every
+  // possible hit rate fail a `>= 50` test and paint loss-red. OutcomesPage is
+  // the reference consumer: it scales by 100 and compares against 0.5.
   const hitRate = stats?.hit_rate ?? null
+  const entryRate = stats?.entry_rate ?? null
   const avgReturn = stats?.avg_return_pct ?? null
+
+  // The honest-sample gate must use the SAME denominator as the rate it guards.
+  // `sample` includes no_entry + timed_out, so 2W/2L alongside 30 no-entries
+  // would pass a `sample >= 20` check and endorse a hit rate built on 4
+  // decisions — defeating the guardrail. Hit rate is decided-only; avg return
+  // is per resolved signal, so it keeps `sample`.
+  const decided = (stats?.wins ?? 0) + (stats?.losses ?? 0)
+  const enoughDecided = decided >= MIN_HONEST_SAMPLE
+  const enoughSample = (stats?.sample ?? 0) >= MIN_HONEST_SAMPLE
 
   return (
     <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
@@ -85,26 +101,26 @@ export function StyleStatsHeader({ stats, statsLoading, suggestions }: Props) {
         <>
           <Stat
             label="Hit rate"
-            value={hitRate != null ? formatPct(hitRate, { signed: false }) : '—'}
+            value={hitRate != null ? formatPct(hitRate * 100, { signed: false }) : '—'}
             sub={
               stats
-                ? enoughSample
-                  ? `${stats.wins}W / ${stats.losses}L · n=${stats.sample}`
-                  : `n=${stats.sample} — too small to read`
+                ? enoughDecided
+                  ? `${stats.wins}W / ${stats.losses}L · n=${decided} decided`
+                  : `n=${decided} decided — too small to read`
                 : 'no tracked outcomes yet'
             }
             tone={
-              hitRate == null || !enoughSample
+              hitRate == null || !enoughDecided
                 ? 'muted'
-                : hitRate >= 50
+                : hitRate >= 0.5
                   ? 'profit'
                   : 'loss'
             }
-            title="Share of ENTERED suggestions that hit target before stop. Tracked outcomes only — not a backtest."
+            title="Share of ENTERED suggestions that hit target before stop, over wins+losses only. Tracked outcomes — not a backtest."
           />
           <Stat
             label="Entry rate"
-            value={stats?.entry_rate != null ? formatPct(stats.entry_rate, { signed: false }) : '—'}
+            value={entryRate != null ? formatPct(entryRate * 100, { signed: false }) : '—'}
             sub={stats ? `${stats.entered} entered of ${stats.total}` : '—'}
             tone="neutral"
             title="How often the entry zone was actually touched before the signal expired. A low entry rate means the entries are priced too far away."

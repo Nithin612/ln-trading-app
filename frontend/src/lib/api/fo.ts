@@ -33,6 +33,13 @@ export interface OptionChain {
   /** The chain's own trading day — what the Greeks were priced off. */
   as_of: string | null
   fut_price: string | null
+  /**
+   * How the forward was obtained: "fut_exact" (a future expiring with the
+   * option) or "fut_carry_implied" (spot grown by the carry implied by the
+   * nearest future — index options are weekly, futures are monthly, so most
+   * expiries have no future of their own). null = Greeks unpriced.
+   */
+  forward_source: 'fut_exact' | 'fut_carry_implied' | null
   dte: number | null
 }
 

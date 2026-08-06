@@ -5,6 +5,7 @@ loaders and the /fo API are exercised against real recorded-row fixtures.
 Money is asserted as exact Decimals; ratios/percentiles as floats.
 """
 
+import math
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
@@ -448,9 +449,119 @@ class TestChainDay:
         await db.commit()
         assert await fa.chain_day(db, "NIFTY", NIFTY_EXPIRY, source="intraday") == date(2026, 7, 21)
 
+    async def test_intraday_day_is_the_IST_trading_day_not_the_UTC_one(
+        self, db: AsyncSession
+    ) -> None:
+        """Snapshots are stored UTC; the trading day is IST. 19:00 UTC on the
+        20th is 00:30 IST on the 21st — taking `.date()` on the UTC instant
+        would date the whole ladder a day early and put dte out by one."""
+        db.add(OptionChainSnapshot(
+            time=datetime(2026, 7, 20, 19, 0, tzinfo=UTC), instrument_token=5002,
+            symbol="NIFTY", expiry_date=NIFTY_EXPIRY, strike=Decimal("24600"),
+            option_type="CE", oi=100, volume=10, ltp=Decimal("150.00"),
+        ))
+        await db.commit()
+        day = await fa.chain_day(db, "NIFTY", NIFTY_EXPIRY, source="intraday")
+        assert day == date(2026, 7, 21)
+
     async def test_unknown_source_raises(self, db: AsyncSession) -> None:
         with pytest.raises(ValueError, match="unknown chain source"):
             await fa.chain_day(db, "NIFTY", NIFTY_EXPIRY, source="tea-leaves")
+
+
+class TestForwardForExpiry:
+    """Index options are WEEKLY, index futures MONTHLY — on a real NIFTY day
+    only 3 of 12 option expiries have a future of their own. Requiring an
+    exact-expiry future left every Greek null for the default (nearest) expiry.
+    """
+
+    async def test_exact_expiry_future_used_directly(self, db: AsyncSession) -> None:
+        day = date(2026, 7, 20)
+        await _seed_bhav(db, day)                     # FUT expiring 07-30
+        fwd = await fa.forward_for_expiry(db, "NIFTY", NIFTY_EXPIRY, on_day=day)
+        assert fwd is not None
+        assert fwd.price == Decimal("24620.00")
+        assert fwd.source == "fut_exact"
+        assert fwd.fut_expiry == NIFTY_EXPIRY
+        assert fwd.trade_date == day
+
+    async def test_weekly_expiry_implies_carry_from_the_nearest_future(
+        self, db: AsyncSession
+    ) -> None:
+        day = date(2026, 7, 20)
+        weekly = date(2026, 7, 23)                    # 3 days out, NO future
+        await _seed_bhav(db, day)                     # monthly FUT 07-30 @24620, spot 24600
+        # Weekly option legs so the expiry exists in the chain.
+        for inst in ("CE", "PE"):
+            db.add(FoBhavcopy(
+                trade_date=day, symbol="NIFTY", instrument=inst, expiry_date=weekly,
+                strike=Decimal("24600"), close=Decimal("100.00"),
+                open_interest=10, volume_contracts=5, underlying_close=Decimal("24600.00"),
+            ))
+        await db.commit()
+
+        fwd = await fa.forward_for_expiry(db, "NIFTY", weekly, on_day=day)
+        assert fwd is not None
+        assert fwd.source == "fut_carry_implied"
+        assert fwd.fut_expiry == NIFTY_EXPIRY        # the monthly it leaned on
+        # carry b = ln(24620/24600)/(10/365); F(3d) = 24600·e^(b·3/365)
+        t_fut, t_opt = 10 / 365.0, 3 / 365.0
+        b = math.log(24620.0 / 24600.0) / t_fut
+        expected = 24600.0 * math.exp(b * t_opt)
+        assert abs(float(fwd.price) - expected) < 1e-3
+        # Sanity: between spot and the monthly future, and much nearer spot.
+        assert Decimal("24600") < fwd.price < Decimal("24620")
+
+    async def test_none_when_no_future_reaches_the_expiry(self, db: AsyncSession) -> None:
+        # A LEAP-style expiry beyond the futures curve must not be priced.
+        day = date(2026, 7, 20)
+        await _seed_bhav(db, day)
+        assert await fa.forward_for_expiry(db, "NIFTY", date(2028, 6, 27), on_day=day) is None
+
+    async def test_pinned_to_the_day_so_a_stale_future_cannot_leak_in(
+        self, db: AsyncSession
+    ) -> None:
+        """An INTRADAY chain dated today must not be priced against yesterday's
+        futures close — EOD bhavcopy only lands ~18:45 IST, and a stale forward
+        skews every IV and delta."""
+        await _seed_bhav(db, date(2026, 7, 20))       # yesterday's futures exist
+        assert (
+            await fa.forward_for_expiry(db, "NIFTY", NIFTY_EXPIRY, on_day=date(2026, 7, 21))
+        ) is None
+
+    async def test_zero_or_missing_spot_is_refused(self, db: AsyncSession) -> None:
+        day = date(2026, 7, 20)
+        weekly = date(2026, 7, 23)
+        db.add(FoBhavcopy(
+            trade_date=day, symbol="NIFTY", instrument="FUT", expiry_date=NIFTY_EXPIRY,
+            strike=Decimal("0"), close=Decimal("24620.00"), underlying_close=None,
+            open_interest=1, volume_contracts=1,
+        ))
+        await db.commit()
+        # No spot → no carry → refuse rather than invent a forward.
+        assert await fa.forward_for_expiry(db, "NIFTY", weekly, on_day=day) is None
+
+
+class TestSpotOnDay:
+    async def test_spot_from_any_contract_including_option_rows(
+        self, db: AsyncSession
+    ) -> None:
+        # Weekly expiries have no FUT row, so `latest_spot` finds nothing and the
+        # ATM strike (and therefore the +/-N window) silently disappears.
+        day = date(2026, 7, 20)
+        for inst in ("CE", "PE"):
+            db.add(FoBhavcopy(
+                trade_date=day, symbol="NIFTY", instrument=inst,
+                expiry_date=date(2026, 7, 23), strike=Decimal("24600"),
+                close=Decimal("100.00"), open_interest=10, volume_contracts=5,
+                underlying_close=Decimal("24600.00"),
+            ))
+        await db.commit()
+        assert await fa.latest_spot(db, "NIFTY", date(2026, 7, 23)) is None   # no FUT
+        assert await fa.spot_on_day(db, "NIFTY", day) == Decimal("24600.00")
+
+    async def test_none_when_nothing_recorded(self, db: AsyncSession) -> None:
+        assert await fa.spot_on_day(db, "NIFTY", date(2026, 7, 20)) is None
 
 
 class TestPriceChainGreeks:
@@ -541,6 +652,7 @@ class TestChainGreeksApi:
         # The UI must be able to state exactly what the Greeks were priced off.
         assert body["as_of"] == "2026-07-20"
         assert Decimal(body["fut_price"]) == Decimal("24620.00")
+        assert body["forward_source"] == "fut_exact"
         assert body["dte"] == 10
 
         priced = [leg for leg in body["legs"] if leg["iv"] is not None]
@@ -548,6 +660,46 @@ class TestChainGreeksApi:
         for leg in priced:
             assert leg["gamma"] > 0 and leg["vega"] > 0
             assert (leg["delta"] > 0) if leg["option_type"] == "CE" else (leg["delta"] < 0)
+
+    async def test_weekly_expiry_still_prices_and_still_windows(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """The regression that mattered: the DEFAULT (nearest) index expiry is a
+        weekly with no future of its own. Before the carry-implied forward and
+        the spot fallback, this returned every Greek null AND silently dropped
+        the +/-N strike window (rendering the whole 200+ leg chain)."""
+        pytest.importorskip("tradecore")
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        day, weekly = date(2026, 7, 20), date(2026, 7, 23)
+        await _seed_bhav(db, day)                      # monthly FUT only
+        for strike in (24400, 24500, 24600, 24700, 24800):
+            for inst, px in (("CE", "150.00"), ("PE", "120.00")):
+                db.add(FoBhavcopy(
+                    trade_date=day, symbol="NIFTY", instrument=inst, expiry_date=weekly,
+                    strike=Decimal(strike), close=Decimal(px),
+                    open_interest=100, volume_contracts=50,
+                    underlying_close=Decimal("24600.00"),
+                ))
+        await db.commit()
+
+        resp = await client.get(
+            "/api/v1/fo/chain",
+            params={
+                "symbol": "nifty", "expiry": weekly.isoformat(),
+                "greeks": "true", "strikes": 1,
+            },
+            headers=headers,
+        )
+        assert resp.status_code == 200, resp.text
+        body = resp.json()
+        assert body["forward_source"] == "fut_carry_implied"
+        assert body["fut_price"] is not None and body["dte"] == 3
+        # Spot resolved off the option rows, so ATM and the window still work.
+        assert Decimal(body["spot"]) == Decimal("24600.00")
+        assert Decimal(body["atm_strike"]) == Decimal("24600.00")
+        assert len(body["legs"]) == 6                  # +/-1 strike => 3 strikes x CE/PE
+        assert all(leg["iv"] is not None for leg in body["legs"])
 
     async def test_greeks_none_without_a_futures_close(
         self, client: AsyncClient, db: AsyncSession

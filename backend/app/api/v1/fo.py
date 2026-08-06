@@ -111,32 +111,37 @@ async def get_chain(
 ) -> ChainOut:
     sym = symbol.upper()
     rows = await fa.load_chain(db, sym, expiry, source=source)
+    # The chain's own trading day drives BOTH the spot lookup and the Greeks,
+    # so the ladder is internally consistent.
+    as_of_day = await fa.chain_day(db, sym, expiry, source=source)
+
+    # Spot: prefer this expiry's own futures row, else any contract recorded
+    # that day. Weekly expiries have no future, and without a spot there is no
+    # ATM strike — which would silently turn "±N strikes" into the whole chain.
     spot = await fa.latest_spot(db, sym, expiry)
+    if spot is None and as_of_day is not None:
+        spot = await fa.spot_on_day(db, sym, as_of_day)
     atm = fa.atm_strike(rows, spot) if spot is not None else None
     if strikes > 0 and spot is not None:
         rows = fa.near_atm(rows, spot, strikes)
 
-    # Greeks are opt-in: two batched tradecore calls per side, and they need a
-    # forward + a time-to-expiry that are only resolvable when the chain has a
-    # dated trading day AND a futures close. Any missing piece leaves every
-    # Greek None rather than guessing an input.
+    # Greeks are opt-in: two batched tradecore calls per side. They need a
+    # forward for THIS expiry and a positive time-to-expiry. Any missing piece
+    # leaves every Greek None rather than pricing against a guessed input.
     priced: dict[tuple[Decimal, str], fa.LegGreeks] = {}
-    as_of_day: date | None = None
     fut_price: Decimal | None = None
+    forward_source: str | None = None
     dte: int | None = None
-    if greeks and rows:
-        as_of_day = await fa.chain_day(db, sym, expiry, source=source)
-        if as_of_day is not None:
-            days = (expiry - as_of_day).days
-            basis = await fa.futures_basis(
-                db, sym, expiry, as_of=datetime(as_of_day.year, as_of_day.month, as_of_day.day)
+    if greeks and rows and as_of_day is not None and (expiry - as_of_day).days > 0:
+        days = (expiry - as_of_day).days
+        fwd = await fa.forward_for_expiry(db, sym, expiry, on_day=as_of_day)
+        if fwd is not None:
+            fut_price = fwd.price
+            forward_source = fwd.source
+            dte = days
+            priced = fa.price_chain_greeks(
+                rows, fwd=float(fwd.price), t=days / 365.0, rate=rate
             )
-            if basis is not None and days > 0:
-                fut_price = basis.fut_close
-                dte = days
-                priced = fa.price_chain_greeks(
-                    rows, fwd=float(basis.fut_close), t=days / 365.0, rate=rate
-                )
 
     legs: list[ChainLegOut] = []
     for r in sorted(rows, key=lambda r: (r.strike, r.option_type)):
@@ -164,6 +169,7 @@ async def get_chain(
         legs=legs,
         as_of=as_of_day,
         fut_price=fut_price,
+        forward_source=forward_source,
         dte=dte,
     )
 

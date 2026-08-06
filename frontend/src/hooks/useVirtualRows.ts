@@ -29,12 +29,23 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 export interface VirtualRowsOptions {
   /** Total row count in the dataset. */
   count: number;
-  /** Height of one rendered row, in px. Must match the real row height. */
+  /**
+   * Expected height of one rendered row, in px — used until a real row can be
+   * measured. A hardcoded value alone is fragile here: the app has a
+   * user-adjustable font size, so rows can render taller than the constant,
+   * and the windowing maths would then drift (wrong rows, unreachable tail).
+   */
   rowHeight: number;
   /** Extra rows rendered above and below the viewport (default 8). */
   overscan?: number;
   /** Row count below which windowing is disabled entirely (default 200). */
   threshold?: number;
+  /**
+   * Selector for one rendered row inside the viewport. When it matches, its
+   * measured height REPLACES `rowHeight`, so a theme or font-size change can't
+   * desynchronise the spacers from reality. Defaults to the table-row slot.
+   */
+  rowSelector?: string;
 }
 
 export interface VirtualRowsResult {
@@ -63,33 +74,53 @@ const DEFAULT_THRESHOLD = 200;
 
 export function useVirtualRows(
   viewportRef: React.RefObject<HTMLElement | null>,
-  { count, rowHeight, overscan = DEFAULT_OVERSCAN, threshold = DEFAULT_THRESHOLD }: VirtualRowsOptions,
+  {
+    count,
+    rowHeight,
+    overscan = DEFAULT_OVERSCAN,
+    threshold = DEFAULT_THRESHOLD,
+    rowSelector = '[data-slot="table-row"]',
+  }: VirtualRowsOptions,
 ): VirtualRowsResult {
   const virtualized = count >= threshold && rowHeight > 0;
 
   const [range, setRange] = useState<{ start: number; end: number }>({ start: 0, end: count });
   const viewportHeightRef = useRef(ASSUMED_VIEWPORT_PX);
+  // The height actually used by the maths: the caller's estimate until a real
+  // row can be measured, then the measured value.
+  const [measuredRowHeight, setMeasuredRowHeight] = useState<number | null>(null);
   const rafRef = useRef<number | null>(null);
+
+  const effectiveRowHeight = measuredRowHeight ?? rowHeight;
 
   const recompute = useCallback(() => {
     const el = viewportRef.current;
     const scrollTop = el?.scrollTop ?? 0;
     const height = viewportHeightRef.current || ASSUMED_VIEWPORT_PX;
 
-    const first = Math.max(0, Math.floor(scrollTop / rowHeight) - overscan);
-    const visible = Math.ceil(height / rowHeight);
+    const first = Math.max(0, Math.floor(scrollTop / effectiveRowHeight) - overscan);
+    const visible = Math.ceil(height / effectiveRowHeight);
     const last = Math.min(count, first + visible + overscan * 2);
 
     // Only re-render when the window actually moved.
     setRange((prev) => (prev.start === first && prev.end === last ? prev : { start: first, end: last }));
-  }, [count, overscan, rowHeight, viewportRef]);
+  }, [count, overscan, effectiveRowHeight, viewportRef]);
 
   // Measure the container, then keep it measured. useLayoutEffect so the
   // first committed paint already uses the real height where available.
   useLayoutEffect(() => {
     if (!virtualized) return;
     const el = viewportRef.current;
-    if (el) viewportHeightRef.current = el.clientHeight || ASSUMED_VIEWPORT_PX;
+    if (el) {
+      viewportHeightRef.current = el.clientHeight || ASSUMED_VIEWPORT_PX;
+      // Measure a real row so the spacers and the window agree with what the
+      // browser actually laid out. Rounded, so sub-pixel jitter can't loop.
+      const row = el.querySelector(rowSelector);
+      const h = row ? Math.round(row.getBoundingClientRect().height) : 0;
+      if (h > 0) {
+        setMeasuredRowHeight((prev) => (prev === h ? prev : h));
+      }
+    }
     recompute();
 
     // jsdom (and older browsers) may not implement ResizeObserver — the
@@ -102,7 +133,7 @@ export function useVirtualRows(
       ro.observe(el);
       return () => ro.disconnect();
     }
-  }, [virtualized, recompute, viewportRef]);
+  }, [virtualized, recompute, viewportRef, rowSelector]);
 
   useEffect(() => {
     if (!virtualized) return;
@@ -146,7 +177,7 @@ export function useVirtualRows(
     virtualized: true,
     startIndex,
     endIndex,
-    padTop: startIndex * rowHeight,
-    padBottom: Math.max(0, (count - endIndex) * rowHeight),
+    padTop: startIndex * effectiveRowHeight,
+    padBottom: Math.max(0, (count - endIndex) * effectiveRowHeight),
   };
 }

@@ -7,7 +7,8 @@
  */
 
 import type { FoAnalytics, IvRank } from '@/lib/api/fo'
-import { formatINR, formatLakh, formatPct } from '@/lib/format'
+import { formatCurrency, formatINR, formatLakh, formatPct } from '@/lib/format'
+import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
 
 interface TileProps {
@@ -62,9 +63,13 @@ interface Props {
   /** True while IV-rank is loading; a 404 means "not enough history", not an error. */
   ivRankMissing: boolean
   isLoading: boolean
+  isError?: boolean
+  onRetry?: () => void
 }
 
-export function FoAnalyticsHeader({ analytics, ivRank, ivRankMissing, isLoading }: Props) {
+export function FoAnalyticsHeader({
+  analytics, ivRank, ivRankMissing, isLoading, isError, onRetry,
+}: Props) {
   if (isLoading) {
     return (
       <div
@@ -75,7 +80,20 @@ export function FoAnalyticsHeader({ analytics, ivRank, ivRankMissing, isLoading 
       </div>
     )
   }
-  if (!analytics) return null
+  // Say so rather than vanishing: silently dropping the whole strip would read
+  // as "this underlying has no analytics", which is a different claim.
+  if (isError || !analytics) {
+    return (
+      <div className="px-3 py-2 rounded-lg bg-(--color-surface-2) border border-(--color-border) text-sm text-(--color-text-secondary)">
+        {isError ? 'Could not load F&O analytics for this expiry.' : 'No F&O analytics recorded for this expiry.'}
+        {isError && onRetry && (
+          <Button variant="link" size="sm" onClick={onRetry}>
+            Retry
+          </Button>
+        )}
+      </div>
+    )
+  }
 
   const { pcr, basis, vix, spot, atm_strike, max_pain } = analytics
   const vixCopy = vix ? VIX_COPY[vix.band] : undefined
@@ -84,7 +102,7 @@ export function FoAnalyticsHeader({ analytics, ivRank, ivRankMissing, isLoading 
     <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-6">
       <Tile
         label="Spot / ATM"
-        value={spot ? `₹${formatINR(parseFloat(spot))}` : '—'}
+        value={spot ? formatCurrency(parseFloat(spot)) : '—'}
         sub={atm_strike ? `ATM ${formatINR(parseFloat(atm_strike))}` : 'no ATM'}
         title="Underlying close from the futures row; ATM = nearest strike"
       />

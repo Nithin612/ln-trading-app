@@ -14,7 +14,7 @@
  * serves intraday / swing / investment.
  */
 
-import { useMemo, useRef, useState } from 'react'
+import { memo, useCallback, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Activity, TrendingUp, Layers, Landmark } from 'lucide-react'
@@ -39,7 +39,7 @@ import {
 } from '@/components/ui/table'
 import { ProvisionalPanel } from '@/features/dashboard/ProvisionalPanel'
 import { useToast } from '@/hooks/useToast'
-import { formatGreek, formatINR, formatInt, formatPct } from '@/lib/format'
+import { formatCurrency, formatGreek, formatInt, formatPct } from '@/lib/format'
 import { StyleStatsHeader } from './StyleStatsHeader'
 import { FactorDrawer } from './FactorDrawer'
 
@@ -72,6 +72,80 @@ function DirBadge({ dir }: { dir: 'BUY' | 'SELL' }) {
     </span>
   )
 }
+
+/**
+ * Memoised row. `quotes` is component state, so EVERY rAF flush re-renders the
+ * page — without this, all visible rows and all 11 cells re-run their
+ * parseFloat/format work per frame. `PriceCell` isolates the flash, not the
+ * render. Only the row whose `ltp` actually changed re-renders now.
+ */
+const SuggestionRow = memo(function SuggestionRow({
+  s,
+  ltp,
+  rr,
+  isTrading,
+  halted,
+  onDetail,
+  onTrade,
+}: {
+  s: SuggestionOut
+  ltp: number | undefined
+  rr: number | null
+  isTrading: boolean
+  halted: boolean
+  onDetail: (s: SuggestionOut) => void
+  onTrade: (s: SuggestionOut) => void
+}) {
+  return (
+    <TableRow style={{ height: ROW_HEIGHT }}>
+      <TableCell>
+        {/* A button, not a clickable row: the drawer has to be reachable by
+            keyboard with a visible focus ring. */}
+        <button
+          type="button"
+          onClick={() => onDetail(s)}
+          className="font-mono font-bold text-(--color-text) underline decoration-dotted decoration-(--color-border-strong) underline-offset-4 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-accent)"
+          aria-label={`Why ${s.symbol} fired`}
+        >
+          {s.symbol}
+        </button>
+      </TableCell>
+      <TableCell><DirBadge dir={s.direction} /></TableCell>
+      <TableCell numeric className="text-(--color-accent)">
+        {formatPct(s.confidence_pct, { signed: false })}
+      </TableCell>
+      <TableCell numeric>{formatCurrency(parseFloat(s.entry_price))}</TableCell>
+      <TableCell numeric>
+        <PriceCell value={ltp} format={formatCurrency} />
+      </TableCell>
+      <TableCell numeric style={{ color: 'var(--color-bear)' }}>
+        {formatCurrency(parseFloat(s.stop_loss))}
+      </TableCell>
+      <TableCell numeric style={{ color: 'var(--color-bull)' }}>
+        {formatCurrency(parseFloat(s.take_profit))}
+      </TableCell>
+      <TableCell numeric className="text-(--color-text-secondary)">
+        {rr != null ? `${formatGreek(rr, 2)}:1` : '—'}
+      </TableCell>
+      <TableCell numeric>{formatInt(s.suggested_qty)}</TableCell>
+      <TableCell className="text-(--color-text-secondary) whitespace-nowrap">
+        {s.profile_name}
+      </TableCell>
+      <TableCell numeric>
+        <Button
+          variant="outline"
+          size="xs"
+          disabled={isTrading || halted}
+          onClick={() => onTrade(s)}
+          style={{ color: s.direction === 'BUY' ? 'var(--color-bull)' : 'var(--color-bear)' }}
+          title={s.direction === 'BUY' ? 'Paper Buy (open long)' : 'Paper Sell (open short)'}
+        >
+          {isTrading ? '…' : s.direction === 'BUY' ? '▲ Buy' : '▼ Sell'}
+        </Button>
+      </TableCell>
+    </TableRow>
+  )
+})
 
 function rewardRisk(s: SuggestionOut): number | null {
   const entry = parseFloat(s.entry_price)
@@ -135,6 +209,22 @@ export function StylePage() {
       setTradingId(null)
     },
   })
+
+  // Stable identity, or every memoised row re-renders on each parent render.
+  const handleTrade = useCallback(
+    (s: SuggestionOut) => {
+      if (halted) {
+        toast.error('Trading is halted — release the kill switch on Go Live.')
+        return
+      }
+      setTradingId(s.id)
+      paperTrade.mutate({ id: s.id, dir: s.direction })
+    },
+    // `toast` and the mutation object are recreated per render; the mutate fn
+    // and the halt flag are what actually matter here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [halted, paperTrade.mutate],
+  )
 
   if (!valid) {
     return (
@@ -219,68 +309,18 @@ export function StylePage() {
               </TableHeader>
               <TableBody>
                 <VirtualSpacer height={win.padTop} colSpan={TABLE_COLUMNS} />
-                {visible.map((s) => {
-                  const rr = rewardRisk(s)
-                  return (
-                    <TableRow key={s.id} style={{ height: ROW_HEIGHT }}>
-                      <TableCell>
-                        {/* A button, not a clickable row: the drawer has to be
-                            reachable by keyboard with a visible focus ring. */}
-                        <button
-                          type="button"
-                          onClick={() => setDetail(s)}
-                          className="font-mono font-bold text-(--color-text) underline decoration-dotted decoration-(--color-border-strong) underline-offset-4 rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-accent)"
-                          aria-label={`Why ${s.symbol} fired`}
-                        >
-                          {s.symbol}
-                        </button>
-                      </TableCell>
-                      <TableCell><DirBadge dir={s.direction} /></TableCell>
-                      <TableCell numeric className="text-(--color-accent)">
-                        {formatPct(s.confidence_pct, { signed: false })}
-                      </TableCell>
-                      <TableCell numeric>₹{formatINR(parseFloat(s.entry_price))}</TableCell>
-                      <TableCell numeric>
-                        <PriceCell
-                          value={quotes[s.symbol]?.ltp}
-                          format={(n) => `₹${formatINR(n)}`}
-                        />
-                      </TableCell>
-                      <TableCell numeric style={{ color: 'var(--color-bear)' }}>
-                        ₹{formatINR(parseFloat(s.stop_loss))}
-                      </TableCell>
-                      <TableCell numeric style={{ color: 'var(--color-bull)' }}>
-                        ₹{formatINR(parseFloat(s.take_profit))}
-                      </TableCell>
-                      <TableCell numeric className="text-(--color-text-muted)">
-                        {rr != null ? `${formatGreek(rr, 2)}:1` : '—'}
-                      </TableCell>
-                      <TableCell numeric>{formatInt(s.suggested_qty)}</TableCell>
-                      <TableCell className="text-(--color-text-muted) whitespace-nowrap">
-                        {s.profile_name}
-                      </TableCell>
-                      <TableCell numeric>
-                        <Button
-                          variant="outline"
-                          size="xs"
-                          disabled={tradingId === s.id || halted}
-                          onClick={() => {
-                            if (halted) {
-                              toast.error('Trading is halted — release the kill switch on Go Live.')
-                              return
-                            }
-                            setTradingId(s.id)
-                            paperTrade.mutate({ id: s.id, dir: s.direction })
-                          }}
-                          style={{ color: s.direction === 'BUY' ? 'var(--color-bull)' : 'var(--color-bear)' }}
-                          title={s.direction === 'BUY' ? 'Paper Buy (open long)' : 'Paper Sell (open short)'}
-                        >
-                          {tradingId === s.id ? '…' : s.direction === 'BUY' ? '▲ Buy' : '▼ Sell'}
-                        </Button>
-                      </TableCell>
-                    </TableRow>
-                  )
-                })}
+                {visible.map((s) => (
+                  <SuggestionRow
+                    key={s.id}
+                    s={s}
+                    ltp={quotes[s.symbol]?.ltp}
+                    rr={rewardRisk(s)}
+                    isTrading={tradingId === s.id}
+                    halted={halted}
+                    onDetail={setDetail}
+                    onTrade={handleTrade}
+                  />
+                ))}
                 <VirtualSpacer height={win.padBottom} colSpan={TABLE_COLUMNS} />
               </TableBody>
             </Table>

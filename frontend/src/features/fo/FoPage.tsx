@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { SimpleSelect } from '@/components/ui/simple-select'
+import { formatINR } from '@/lib/format'
 import { FoAnalyticsHeader } from './FoAnalyticsHeader'
 import { ChainLadder } from './ChainLadder'
 import { StrategyCards } from './StrategyCards'
@@ -143,6 +144,7 @@ export function FoPage() {
             options={symbolOptions.length > 0 ? symbolOptions : [{ value: symbol, label: symbol }]}
             size="sm"
             className="min-w-36"
+            aria-label="Underlying"
           />
         </label>
 
@@ -158,6 +160,7 @@ export function FoPage() {
             disabled={expiryOptions.length === 0}
             size="sm"
             className="min-w-44"
+            aria-label="Expiry"
           />
         </label>
 
@@ -171,6 +174,7 @@ export function FoPage() {
             options={SOURCE_OPTIONS}
             size="sm"
             className="min-w-48"
+            aria-label="Chain source"
           />
         </label>
 
@@ -184,6 +188,7 @@ export function FoPage() {
             options={STRIKE_WINDOWS.map((n) => ({ value: n, label: `± ${n}` }))}
             size="sm"
             className="min-w-24"
+            aria-label="Strike window"
           />
         </label>
 
@@ -203,6 +208,8 @@ export function FoPage() {
         ivRank={ivRank.data}
         ivRankMissing={ivRankMissing}
         isLoading={analytics.isLoading}
+        isError={analytics.isError}
+        onRetry={() => void analytics.refetch()}
       />
 
       {/* Option-selling candidates */}
@@ -218,6 +225,7 @@ export function FoPage() {
             candidates={suggestions.data?.candidates}
             isLoading={suggestions.isLoading}
             isError={suggestions.isError}
+            onRetry={() => void suggestions.refetch()}
           />
         </div>
       </section>
@@ -236,7 +244,11 @@ export function FoPage() {
                 ? 'EOD close'
                 : 'intraday snapshot'}
             {chainData?.fut_price &&
-              ` · Greeks off future ${chainData.fut_price}${
+              ` · Greeks off ${
+                chainData.forward_source === 'fut_carry_implied'
+                  ? 'implied forward'
+                  : 'future'
+              } ${formatINR(parseFloat(chainData.fut_price))}${
                 chainData.dte != null ? ` · ${chainData.dte}d` : ''
               }`}
           </span>
@@ -272,8 +284,15 @@ export function FoPage() {
           <>
             {showGreeks && chainData.fut_price == null && (
               <p className="px-4 pt-3 text-xs text-(--color-warning)">
-                Greeks unavailable — no futures close for this expiry, so there is no Black-76
-                forward to price against. OI, volume and LTP are unaffected.
+                {source === 'intraday'
+                  ? 'Greeks unavailable — the futures close for this snapshot’s day has not been recorded yet (EOD lands ~18:45 IST). Pricing live premiums against yesterday’s forward would skew every IV and delta, so it stands down. OI, volume and LTP are unaffected.'
+                  : 'Greeks unavailable — no future expiring on or after this expiry was recorded for that day, so there is no Black-76 forward to price against. OI, volume and LTP are unaffected.'}
+              </p>
+            )}
+            {showGreeks && chainData.forward_source === 'fut_carry_implied' && (
+              <p className="px-4 pt-3 text-xs text-(--color-text-muted)">
+                This expiry has no future of its own (index options are weekly, futures monthly),
+                so the forward is spot grown by the carry implied by the nearest future.
               </p>
             )}
             <ChainLadder chain={chainData} showGreeks={showGreeks} />

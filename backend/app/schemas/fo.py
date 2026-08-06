@@ -51,7 +51,14 @@ class ChainOut(BaseModel):
     # What the Greeks were priced off (null unless ?greeks=true resolved them).
     # Stated explicitly so the UI can never imply live Greeks off a stale chain.
     as_of: date | None = None         # the chain's own trading day
-    fut_price: Decimal | None = None  # Black-76 forward
+    fut_price: Decimal | None = None  # Black-76 forward for THIS expiry
+    # How that forward was obtained. Index options are weekly but futures are
+    # monthly, so most expiries have no future of their own:
+    #   "fut_exact"          — a future expiring with the option
+    #   "fut_carry_implied"  — spot grown by the carry implied by the nearest future
+    # None means the Greeks are unpriced. The UI must not imply a same-expiry
+    # future that doesn't exist.
+    forward_source: str | None = None
     dte: int | None = None            # calendar days from as_of to expiry
 
 

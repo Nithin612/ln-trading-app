@@ -39,7 +39,7 @@ function makeChain(o: Partial<OptionChain> = {}): OptionChain {
       leg({ strike: '24600.00', option_type: 'CE', oi: 2400, delta: 0.51 }),
       leg({ strike: '24600.00', option_type: 'PE', oi: 2000, delta: -0.49 }),
     ],
-    as_of: '2026-07-20', fut_price: '24620.00', dte: 10,
+    as_of: '2026-07-20', fut_price: '24620.00', forward_source: 'fut_exact', dte: 10,
     ...o,
   }
 }
@@ -178,8 +178,31 @@ describe('FoPage', () => {
     )
     // One line, stating source + day + the forward and dte the Greeks used.
     expect(
-      screen.getByText(/EOD close 2026-07-20 · Greeks off future 24620\.00 · 10d/),
+      screen.getByText(/EOD close 2026-07-20 · Greeks off future 24,620\.00 · 10d/),
     ).toBeInTheDocument()
+  })
+
+  it('says "implied forward" when this expiry has no future of its own', async () => {
+    // Index options are WEEKLY, index futures MONTHLY — on real NIFTY data only
+    // 3 of 12 option expiries have a future. The ladder must not imply one.
+    stubAll({
+      chain: { fut_price: '24631.4200', forward_source: 'fut_carry_implied', dte: 7 },
+    })
+    renderFo()
+    await waitFor(() =>
+      expect(screen.getByText(/Greeks off implied forward 24,631\.42 · 7d/)).toBeInTheDocument(),
+    )
+    expect(
+      screen.getByText(/no future of its own \(index options are weekly, futures monthly\)/i),
+    ).toBeInTheDocument()
+  })
+
+  it('explains an intraday stand-down differently from a missing future', async () => {
+    stubAll({ chain: { fut_price: null, forward_source: null, dte: null } })
+    renderFo()
+    await waitFor(() => expect(screen.getByText(/Greeks unavailable/i)).toBeInTheDocument())
+    // EOD wording: no future recorded for that day.
+    expect(screen.getByText(/no future expiring on or after this expiry/i)).toBeInTheDocument()
   })
 
   it('shows "—" not 0 for legs that could not be priced', async () => {
@@ -192,7 +215,7 @@ describe('FoPage', () => {
             iv: null, delta: null, gamma: null, vega: null, theta: null,
           }),
         ],
-        fut_price: null, dte: null, as_of: '2026-07-20',
+        fut_price: null, forward_source: null, dte: null, as_of: '2026-07-20',
       },
     })
     renderFo()
@@ -200,7 +223,7 @@ describe('FoPage', () => {
     expect(t.queryByText('0.0000')).not.toBeInTheDocument()
     expect(t.getAllByText('—').length).toBeGreaterThan(0)
     // And it explains WHY the Greeks are missing.
-    expect(screen.getByText(/no futures close for this expiry/i)).toBeInTheDocument()
+    expect(screen.getByText(/Greeks unavailable/i)).toBeInTheDocument()
   })
 
   it('toggling Greeks off drops the Γ/V/Θ columns and refetches without them', async () => {
@@ -278,6 +301,61 @@ describe('FoPage', () => {
     )
     renderFo()
     await waitFor(() => expect(screen.getByText(/not enough history/i)).toBeInTheDocument())
+  })
+
+  it('gives every picker an accessible name', async () => {
+    // A base-ui select trigger renders only its VALUE, so without aria-label
+    // it is an unnamed combobox to assistive tech.
+    stubAll()
+    renderFo()
+    await waitFor(() => expect(screen.getByText('Chain ladder')).toBeInTheDocument())
+    for (const name of [/Underlying/i, /Expiry/i, /Chain source/i, /Strike window/i]) {
+      expect(screen.getByRole('combobox', { name })).toBeInTheDocument()
+    }
+  })
+
+  it('disambiguates the two-sided ladder header for screen readers', async () => {
+    // Every visible label appears twice (once per side); without a
+    // side-qualified name a cell announces "OI 1,25,000" with no call/put.
+    stubAll()
+    renderFo()
+    const t = within(await ladder())
+    expect(t.getByRole('columnheader', { name: /call open interest/i })).toBeInTheDocument()
+    expect(t.getByRole('columnheader', { name: /put open interest/i })).toBeInTheDocument()
+    expect(t.getByRole('columnheader', { name: /call vega/i })).toBeInTheDocument()
+    expect(t.getByRole('columnheader', { name: /put volume/i })).toBeInTheDocument()
+    expect(t.getByRole('columnheader', { name: 'Strike' })).toBeInTheDocument()
+    // The em-dash placeholder header is gone.
+    expect(t.queryByRole('columnheader', { name: '—' })).toBeNull()
+  })
+
+  it('reports an analytics failure instead of silently deleting the strip', async () => {
+    stubAll()
+    vi.spyOn(foApiModule.foApi, 'getAnalytics').mockRejectedValue(new ApiError(500, 'boom'))
+    renderFo()
+    await waitFor(() =>
+      expect(screen.getByText(/Could not load F&O analytics/i)).toBeInTheDocument(),
+    )
+    expect(screen.getAllByRole('button', { name: /retry/i }).length).toBeGreaterThan(0)
+  })
+
+  it('offers a retry when the candidates request fails', async () => {
+    stubAll()
+    vi.spyOn(foApiModule.foApi, 'getSuggestions').mockRejectedValue(new ApiError(500, 'boom'))
+    renderFo()
+    await waitFor(() =>
+      expect(screen.getByText(/Could not load option-selling candidates/i)).toBeInTheDocument(),
+    )
+    expect(screen.getAllByRole('button', { name: /retry/i }).length).toBeGreaterThan(0)
+  })
+
+  it('shows skeletons, not a sentence, while candidates load', async () => {
+    stubAll()
+    vi.spyOn(foApiModule.foApi, 'getSuggestions').mockReturnValue(new Promise(() => {}))
+    renderFo()
+    expect(
+      await screen.findByLabelText('loading option-selling candidates'),
+    ).toBeInTheDocument()
   })
 
   it('shows loading skeletons for the chain', async () => {

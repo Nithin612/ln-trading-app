@@ -185,18 +185,60 @@ describe('StylePage', () => {
       .mockResolvedValue({ style: 'swing', total: 1, suggestions: [makeSuggestion()] })
     vi.spyOn(analyticsApiModule.analyticsApi, 'getOutcomes').mockResolvedValue({
       epoch: '2026-08-06', total_outcomes: 40,
+      // REAL backend contract (app/api/v1/analytics.py): hit_rate and
+      // entry_rate are FRACTIONS; avg_return_pct is already a PERCENT.
       styles: [{
         style: 'swing', total: 50, entered: 40, wins: 24, losses: 16, no_entry: 8,
-        timed_out: 2, pending: 0, sample: 40, hit_rate: 60.0, entry_rate: 80.0,
+        timed_out: 2, pending: 0, sample: 50, hit_rate: 24 / 40, entry_rate: 40 / 50,
         avg_return_pct: 1.4,
       }],
     })
     renderStyle('swing')
     await waitFor(() => expect(screen.getByText('Hit rate')).toBeInTheDocument())
-    expect(screen.getByText('60.00%')).toBeInTheDocument()
-    expect(screen.getByText(/24W \/ 16L · n=40/)).toBeInTheDocument()
-    expect(screen.getByText('80.00%')).toBeInTheDocument()     // entry rate
-    expect(screen.getByText('+1.40%')).toBeInTheDocument()     // avg return
+    expect(screen.getByText('60.00%')).toBeInTheDocument()     // 0.6 → 60%
+    expect(screen.getByText(/24W \/ 16L · n=40 decided/)).toBeInTheDocument()
+    expect(screen.getByText('80.00%')).toBeInTheDocument()     // 0.8 → 80%
+    expect(screen.getByText('+1.40%')).toBeInTheDocument()     // already a percent
+    // Canary for the units bug: a fraction rendered raw reads as "0.60%".
+    expect(screen.queryByText('0.60%')).not.toBeInTheDocument()
+    expect(screen.queryByText('0.80%')).not.toBeInTheDocument()
+  })
+
+  it('colours a healthy hit rate as profit, not loss (fraction threshold)', async () => {
+    // Regression: comparing a 0..1 fraction against 50 made EVERY hit rate red.
+    vi.spyOn(suggestionsApiModule.suggestionsApi, 'getByStyle')
+      .mockResolvedValue({ style: 'swing', total: 1, suggestions: [makeSuggestion()] })
+    vi.spyOn(analyticsApiModule.analyticsApi, 'getOutcomes').mockResolvedValue({
+      epoch: '2026-08-06', total_outcomes: 40,
+      styles: [{
+        style: 'swing', total: 50, entered: 40, wins: 24, losses: 16, no_entry: 8,
+        timed_out: 2, pending: 0, sample: 50, hit_rate: 0.6, entry_rate: 0.8,
+        avg_return_pct: 1.4,
+      }],
+    })
+    renderStyle('swing')
+    const value = await screen.findByText('60.00%')
+    expect(value).toHaveStyle({ color: 'var(--color-profit)' })
+  })
+
+  it('judges the hit-rate sample on DECIDED outcomes, not resolved ones', async () => {
+    // 2W/2L with 30 no-entries: `sample` is 34 but only 4 decisions back the
+    // rate — it must not be endorsed just because no_entry inflates the count.
+    vi.spyOn(suggestionsApiModule.suggestionsApi, 'getByStyle')
+      .mockResolvedValue({ style: 'swing', total: 1, suggestions: [makeSuggestion()] })
+    vi.spyOn(analyticsApiModule.analyticsApi, 'getOutcomes').mockResolvedValue({
+      epoch: '2026-08-06', total_outcomes: 34,
+      styles: [{
+        style: 'swing', total: 40, entered: 4, wins: 2, losses: 2, no_entry: 30,
+        timed_out: 2, pending: 0, sample: 34, hit_rate: 0.5, entry_rate: 0.1,
+        avg_return_pct: 0.2,
+      }],
+    })
+    renderStyle('swing')
+    await waitFor(() =>
+      expect(screen.getByText(/n=4 decided — too small to read/)).toBeInTheDocument(),
+    )
+    expect(await screen.findByText('50.00%')).toHaveStyle({ color: 'var(--color-text-muted)' })
   })
 
   it('refuses to dress up a hit rate computed from too few outcomes', async () => {
@@ -208,13 +250,15 @@ describe('StylePage', () => {
       epoch: '2026-08-06', total_outcomes: 3,
       styles: [{
         style: 'swing', total: 4, entered: 3, wins: 3, losses: 0, no_entry: 1,
-        timed_out: 0, pending: 0, sample: 3, hit_rate: 100.0, entry_rate: 75.0,
+        timed_out: 0, pending: 0, sample: 4, hit_rate: 1.0, entry_rate: 0.75,
         avg_return_pct: 2.0,
       }],
     })
     renderStyle('swing')
     await waitFor(() => expect(screen.getByText('100.00%')).toBeInTheDocument())
-    expect(screen.getAllByText(/n=3 — too small to read/).length).toBeGreaterThan(0)
+    expect(screen.getByText(/n=3 decided — too small to read/)).toBeInTheDocument()
+    // A perfect 3/3 must NOT be dressed up in profit green.
+    expect(screen.getByText('100.00%')).toHaveStyle({ color: 'var(--color-text-muted)' })
   })
 
   it('virtualizes a large suggestion list instead of rendering every row', async () => {

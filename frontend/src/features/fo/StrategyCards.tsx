@@ -17,8 +17,10 @@
  */
 
 import type { SpreadCandidate, SpreadStructure } from '@/lib/api/fo'
-import { formatGreek, formatINR, formatPct } from '@/lib/format'
+import { formatCurrency, formatGreek, formatINR, formatPct } from '@/lib/format'
+import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
+import { Skeleton } from '@/components/ui/skeleton'
 
 const STRUCTURE_LABEL: Record<SpreadStructure, string> = {
   bull_put: 'Bull put spread',
@@ -110,13 +112,13 @@ function CandidateCard({ c }: { c: SpreadCandidate }) {
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-1 border-t border-(--color-border)">
         <Metric
           label="Net credit"
-          value={`₹${formatINR(parseFloat(c.net_credit))}`}
+          value={formatCurrency(parseFloat(c.net_credit))}
           tone="profit"
           title="Premium received after a conservative per-leg fill haircut"
         />
         <Metric
           label="Max loss"
-          value={`₹${formatINR(parseFloat(c.max_loss))}`}
+          value={formatCurrency(parseFloat(c.max_loss))}
           tone="loss"
           title="Width − credit. Defined risk: this is the worst case at expiry."
         />
@@ -140,7 +142,7 @@ function CandidateCard({ c }: { c: SpreadCandidate }) {
         <Metric label="Width" value={formatINR(parseFloat(c.width))} />
         <Metric
           label="Margin est."
-          value={`₹${formatINR(parseFloat(c.margin_est))}`}
+          value={formatCurrency(parseFloat(c.margin_est))}
           title="Defined-risk upper bound = max loss"
         />
         <Metric
@@ -174,20 +176,33 @@ interface Props {
   candidates: SpreadCandidate[] | undefined
   isLoading: boolean
   isError: boolean
+  onRetry?: () => void
 }
 
-export function StrategyCards({ symbol, candidates, isLoading, isError }: Props) {
+export function StrategyCards({ symbol, candidates, isLoading, isError, onRetry }: Props) {
   if (isLoading) {
+    // Skeletons in the real card shape, not a sentence — the layout should not
+    // jump when the data lands.
     return (
-      <div className="text-sm text-(--color-text-muted)" aria-label="loading option-selling candidates">
-        Scanning {symbol} for defined-risk credit structures…
+      <div
+        className="grid gap-3 lg:grid-cols-2"
+        aria-label="loading option-selling candidates"
+      >
+        {Array.from({ length: 2 }).map((_, i) => (
+          <Skeleton key={i} className="h-64 w-full rounded-lg" />
+        ))}
       </div>
     )
   }
   if (isError) {
     return (
-      <div className="text-sm text-(--color-text-muted)">
-        Could not load option-selling candidates for {symbol}.
+      <div className="text-sm text-(--color-text-secondary)">
+        Could not load option-selling candidates for {symbol}.{' '}
+        {onRetry && (
+          <Button variant="link" size="sm" onClick={onRetry}>
+            Retry
+          </Button>
+        )}
       </div>
     )
   }

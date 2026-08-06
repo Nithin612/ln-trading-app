@@ -287,7 +287,11 @@
   --color-profit-bg:      #d1fae5;
   --color-loss:           #dc2626;
   --color-loss-bg:        #fee2e2;
-  --color-warning:        #d97706;
+  /* amber-700, not amber-600: on this theme's light surfaces amber-600 is
+     2.91:1 — below WCAG AA — and --color-warning carries safety copy
+     ("chasing N% past entry", "Greeks unavailable", "selling vetoed").
+     amber-700 measures 4.58:1 on --color-surface-2 and 5.02:1 on white. */
+  --color-warning:        #b45309;
   --color-warning-bg:     #fef3c7;
   --color-info:           #2563eb;
   --color-info-bg:        #dbeafe;

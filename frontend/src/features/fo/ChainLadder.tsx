@@ -65,13 +65,13 @@ function GreekCells({ leg, showGreeks }: { leg: ChainLeg | undefined; showGreeks
   if (!showGreeks) return null
   return (
     <>
-      <TableCell numeric className="text-(--color-text-muted)">
+      <TableCell numeric className="text-(--color-text-secondary)">
         {leg?.gamma != null ? formatGreek(leg.gamma) : '—'}
       </TableCell>
-      <TableCell numeric className="text-(--color-text-muted)">
+      <TableCell numeric className="text-(--color-text-secondary)">
         {leg?.vega != null ? formatGreek(leg.vega, 2) : '—'}
       </TableCell>
-      <TableCell numeric className="text-(--color-text-muted)">
+      <TableCell numeric className="text-(--color-text-secondary)">
         {leg?.theta != null ? formatGreek(leg.theta, 2) : '—'}
       </TableCell>
     </>
@@ -95,42 +95,55 @@ export function ChainLadder({ chain, showGreeks }: Props) {
 
   return (
     <Table aria-label="Option chain ladder">
+      {/*
+        Every visible label (OI, Vol, IV, Δ, Γ, V, Θ, LTP) appears TWICE — once
+        per side — so on its own a screen reader announces "OI 1,25,000" with no
+        way to tell a call from a put. Each head therefore carries a
+        side-qualified sr-only name alongside the compact visible glyph, and
+        `scope` ties the group row to its columns. `V` (vega) and `Vol`
+        (volume) also collide aurally, so both are spelled out.
+      */}
       <TableHeader>
         <TableRow>
-          <TableHead numeric colSpan={perSide} className="text-center">
+          <TableHead numeric colSpan={perSide} scope="colgroup" className="text-center">
             Calls
           </TableHead>
-          <TableHead className="text-center">Strike</TableHead>
-          <TableHead numeric colSpan={perSide} className="text-center">
+          <TableHead scope="col" rowSpan={2} className="text-center align-bottom">
+            Strike
+          </TableHead>
+          <TableHead numeric colSpan={perSide} scope="colgroup" className="text-center">
             Puts
           </TableHead>
         </TableRow>
         <TableRow>
-          <TableHead numeric>OI</TableHead>
-          <TableHead numeric>Vol</TableHead>
-          <TableHead numeric>IV</TableHead>
-          <TableHead numeric>Δ</TableHead>
-          {showGreeks && (
-            <>
-              <TableHead numeric>Γ</TableHead>
-              <TableHead numeric>V</TableHead>
-              <TableHead numeric>Θ</TableHead>
-            </>
-          )}
-          <TableHead numeric>LTP</TableHead>
-          <TableHead className="text-center">—</TableHead>
-          <TableHead numeric>LTP</TableHead>
-          <TableHead numeric>Δ</TableHead>
-          <TableHead numeric>IV</TableHead>
-          {showGreeks && (
-            <>
-              <TableHead numeric>Γ</TableHead>
-              <TableHead numeric>V</TableHead>
-              <TableHead numeric>Θ</TableHead>
-            </>
-          )}
-          <TableHead numeric>Vol</TableHead>
-          <TableHead numeric>OI</TableHead>
+          {(['CE', 'PE'] as const).map((side) => {
+            const word = side === 'CE' ? 'call' : 'put'
+            // Calls read outward-in, puts inward-out, mirroring the ladder.
+            const cols =
+              side === 'CE'
+                ? ([
+                    ['OI', 'open interest'], ['Vol', 'volume'], ['IV', 'implied volatility'],
+                    ['Δ', 'delta'],
+                    ...(showGreeks
+                      ? ([['Γ', 'gamma'], ['V', 'vega'], ['Θ', 'theta']] as const)
+                      : []),
+                    ['LTP', 'last traded price'],
+                  ] as const)
+                : ([
+                    ['LTP', 'last traded price'], ['Δ', 'delta'],
+                    ['IV', 'implied volatility'],
+                    ...(showGreeks
+                      ? ([['Γ', 'gamma'], ['V', 'vega'], ['Θ', 'theta']] as const)
+                      : []),
+                    ['Vol', 'volume'], ['OI', 'open interest'],
+                  ] as const)
+            return cols.map(([glyph, name]) => (
+              <TableHead numeric scope="col" key={`${side}-${glyph}`}>
+                <span aria-hidden="true">{glyph}</span>
+                <span className="sr-only">{`${word} ${name}`}</span>
+              </TableHead>
+            ))
+          })}
         </TableRow>
       </TableHeader>
       <TableBody>
@@ -144,7 +157,7 @@ export function ChainLadder({ chain, showGreeks }: Props) {
               <TableCell numeric>
                 {r.ce ? <OiBar oi={r.ce.oi} maxOi={maxOi} side="call" /> : '—'}
               </TableCell>
-              <TableCell numeric className="text-(--color-text-muted)">
+              <TableCell numeric className="text-(--color-text-secondary)">
                 {r.ce ? formatInt(r.ce.volume) : '—'}
               </TableCell>
               <TableCell numeric>
@@ -185,7 +198,7 @@ export function ChainLadder({ chain, showGreeks }: Props) {
                 {r.pe?.iv != null ? formatPct(r.pe.iv * 100, { signed: false }) : '—'}
               </TableCell>
               <GreekCells leg={r.pe} showGreeks={showGreeks} />
-              <TableCell numeric className="text-(--color-text-muted)">
+              <TableCell numeric className="text-(--color-text-secondary)">
                 {r.pe ? formatInt(r.pe.volume) : '—'}
               </TableCell>
               <TableCell numeric>

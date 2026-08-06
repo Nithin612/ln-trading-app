@@ -247,6 +247,75 @@ describe('useLiveQuotes v2', () => {
     expect(result.current.quotes.A.ltp).toBe(99)
   })
 
+  it('prunes a dropped symbol even while the socket is down', () => {
+    // Regression: the prune diffed against `subscribedRef`, which a close
+    // empties — so a symbol removed during a reconnect was never pruned and
+    // its last price lingered as if live when it came back.
+    const { result, rerender } = renderHook(({ syms }) => useLiveQuotes(syms), {
+      initialProps: { syms: ['A', 'B'] },
+    })
+    const ws = lastSocket()
+    act(() => ws.serverOpen())
+    act(() => {
+      ws.serverMessage(tick('A', 10))
+      ws.serverMessage(tick('B', 20))
+    })
+    act(() => vi.advanceTimersByTime(FRAME_MS))
+    expect(result.current.quotes.A.ltp).toBe(10)
+
+    act(() => ws.serverClose(1006)) // socket down; reconnect pending
+    act(() => rerender({ syms: ['B'] }))
+    expect(result.current.quotes.A).toBeUndefined()
+    expect(result.current.quotes.B.ltp).toBe(20)
+  })
+
+  it('does not resurrect a dropped symbol from the pending buffer', () => {
+    // A tick buffered before the drop must not be re-inserted by the next flush.
+    const { result, rerender } = renderHook(({ syms }) => useLiveQuotes(syms), {
+      initialProps: { syms: ['A', 'B'] },
+    })
+    const ws = lastSocket()
+    act(() => ws.serverOpen())
+    act(() => {
+      ws.serverMessage(tick('A', 10))
+      ws.serverMessage(tick('B', 20))
+    })
+    // Drop A while its tick is still buffered (no frame has run yet).
+    act(() => rerender({ syms: ['B'] }))
+    act(() => vi.advanceTimersByTime(FRAME_MS))
+    expect(result.current.quotes.A).toBeUndefined()
+    expect(result.current.quotes.B.ltp).toBe(20)
+  })
+
+  it('ignores a stale socket close after a newer socket is live', () => {
+    // StrictMode double-mounts: an aborted socket's close landing after the
+    // live one opened used to clear `connected` and empty the subscribed set,
+    // permanently disabling unsubscribe for the session.
+    const { result, rerender } = renderHook(({ syms }) => useLiveQuotes(syms), {
+      initialProps: { syms: ['A', 'B'] },
+    })
+    const stale = lastSocket()
+    act(() => stale.serverOpen())
+
+    // Socket drops, a reconnect takes over and is live.
+    act(() => stale.serverClose(1006))
+    act(() => vi.advanceTimersByTime(3000))
+    const live = lastSocket()
+    expect(live).not.toBe(stale)
+    act(() => live.serverOpen())
+    expect(result.current.connected).toBe(true)
+
+    // The superseded socket's close arrives LATE — it must be ignored, or it
+    // clears `connected` and empties the subscribed set.
+    act(() => stale.onclose?.({ code: 1006 }))
+    expect(result.current.connected).toBe(true)
+
+    // And unsubscribe still works afterwards (the set wasn't wiped).
+    const sentBefore = live.sent.length
+    act(() => rerender({ syms: ['B'] }))
+    expect(JSON.parse(live.sent[sentBefore])).toEqual({ unsubscribe: ['A'] })
+  })
+
   it('cancels a pending flush on unmount', () => {
     const { unmount } = renderHook(() => useLiveQuotes(['A']))
     const ws = lastSocket()

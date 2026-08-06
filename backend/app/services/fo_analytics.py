@@ -17,10 +17,12 @@ Money = Decimal. Ratios / percentiles = float (analytical, never money).
 
 from __future__ import annotations
 
+import math
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -28,6 +30,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.fo_data import FoBhavcopy, IndiaVixDaily, OptionChainSnapshot
 
 _ZERO = Decimal(0)
+_IST = ZoneInfo("Asia/Kolkata")
 
 
 # ── Value types ───────────────────────────────────────────────────────────────
@@ -65,6 +68,23 @@ class VixRegime:
     percentile: float          # 0–100, share of the lookback strictly below current
     band: str                  # "low" | "normal" | "high"
     sample: int                # sessions counted in the lookback (incl. current)
+
+
+@dataclass(frozen=True)
+class ChainForward:
+    """The Black-76 forward to price ONE option expiry against.
+
+    Index options are weekly; index futures are monthly — so most option
+    expiries have NO future of their own and a same-expiry lookup returns
+    nothing (on a real NIFTY day, 3 of 12 option expiries have a FUT row).
+    `source` records how the forward was obtained so the UI can never imply a
+    same-expiry future that doesn't exist.
+    """
+
+    price: Decimal
+    source: str          # "fut_exact" | "fut_carry_implied"
+    trade_date: date     # the bhavcopy day the inputs came from
+    fut_expiry: date     # which future was used
 
 
 @dataclass(frozen=True)
@@ -226,6 +246,88 @@ def price_chain_greeks(
     return out
 
 
+async def spot_on_day(db: AsyncSession, symbol: str, day: date) -> Decimal | None:
+    """Underlying spot for `symbol` on `day`, from ANY contract's recorded
+    `underlying_close`.
+
+    `latest_spot` reads it off the FUT row for a specific expiry, which is
+    empty for every weekly option expiry. Every CE/PE row carries the same
+    underlying price, so the chain day always has a spot even when its expiry
+    has no future — without one there is no ATM strike and the ±N strike
+    window silently degrades to the whole chain.
+    """
+    return (
+        await db.execute(
+            select(FoBhavcopy.underlying_close)
+            .where(
+                FoBhavcopy.symbol == symbol,
+                FoBhavcopy.trade_date == day,
+                FoBhavcopy.underlying_close.is_not(None),
+            )
+            .limit(1)
+        )
+    ).scalar()
+
+
+async def forward_for_expiry(
+    db: AsyncSession, symbol: str, expiry: date, *, on_day: date
+) -> ChainForward | None:
+    """Black-76 forward for `expiry`, using futures recorded on `on_day`.
+
+    - Exact-expiry future (monthly option expiries) → use its close directly.
+    - Otherwise (every weekly expiry) → imply the market's own cost of carry
+      from the NEAREST future expiring on/after the option, and grow spot by it:
+      `b = ln(F_fut / S) / T_fut`, `F_opt = S · e^(b · T_opt)`. This uses the
+      traded curve rather than assuming a rate or a dividend yield.
+    - No usable future on that day → None, and the caller reports Greeks as
+      unknown rather than pricing against a guessed forward.
+
+    Deliberately pinned to `on_day`: reading "the latest FUT row at or before"
+    would price an INTRADAY chain against yesterday's futures close (EOD
+    bhavcopy lands ~18:45 IST), silently skewing every IV and delta.
+    """
+    row = (
+        await db.execute(
+            select(FoBhavcopy.close, FoBhavcopy.underlying_close, FoBhavcopy.expiry_date)
+            .where(
+                FoBhavcopy.symbol == symbol,
+                FoBhavcopy.instrument == "FUT",
+                FoBhavcopy.trade_date == on_day,
+                FoBhavcopy.expiry_date >= expiry,
+            )
+            .order_by(FoBhavcopy.expiry_date.asc())
+            .limit(1)
+        )
+    ).first()
+    if row is None or row.close is None or row.close <= _ZERO:
+        return None
+
+    if row.expiry_date == expiry:
+        return ChainForward(
+            price=row.close, source="fut_exact", trade_date=on_day, fut_expiry=expiry
+        )
+
+    spot = row.underlying_close
+    if spot is None or spot <= _ZERO:
+        return None
+    t_fut = (row.expiry_date - on_day).days / 365.0
+    t_opt = (expiry - on_day).days / 365.0
+    if t_fut <= 0 or t_opt <= 0:
+        return None
+
+    carry = math.log(float(row.close) / float(spot)) / t_fut
+    fwd = float(spot) * math.exp(carry * t_opt)
+    if not math.isfinite(fwd) or fwd <= 0:
+        return None
+    return ChainForward(
+        # float-tainted → build the Decimal from a string, never from the float.
+        price=Decimal(str(fwd)).quantize(Decimal("0.0001")),
+        source="fut_carry_implied",
+        trade_date=on_day,
+        fut_expiry=row.expiry_date,
+    )
+
+
 async def chain_day(
     db: AsyncSession,
     symbol: str,
@@ -249,7 +351,10 @@ async def chain_day(
         if as_of is not None:
             stmt = stmt.where(OptionChainSnapshot.time <= as_of)
         snap = (await db.execute(stmt.order_by(OptionChainSnapshot.time.desc()).limit(1))).scalar()
-        return snap.date() if snap is not None else None
+        # Snapshot times are stored UTC; the TRADING day is an IST calendar day.
+        # `.date()` on the UTC instant lands a day early for anything after
+        # 18:30 UTC (= 00:00 IST next day) — a whole day of error in dte.
+        return snap.astimezone(_IST).date() if snap is not None else None
     if source == "eod":
         day_stmt = select(FoBhavcopy.trade_date).where(
             FoBhavcopy.symbol == symbol,
