@@ -93,7 +93,6 @@ async def clean_tables() -> None:
             )
 
     import redis.asyncio as aioredis
-
     from app.core.config import settings
 
     # Guard: only ever flush the dedicated test logical DB, never the dev cache
