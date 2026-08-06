@@ -22,6 +22,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { SimpleSelect } from '@/components/ui/simple-select'
+import { VirtualViewport } from '@/components/ui/virtual-table'
 import { formatINR } from '@/lib/format'
 import { FoAnalyticsHeader } from './FoAnalyticsHeader'
 import { ChainLadder } from './ChainLadder'
@@ -295,7 +296,12 @@ export function FoPage() {
                 so the forward is spot grown by the carry implied by the nearest future.
               </p>
             )}
-            <ChainLadder chain={chainData} showGreeks={showGreeks} />
+            {/* Bounded scroll container so the ladder's "Calls / Strike / Puts"
+                header stays pinned to its own card instead of scrolling away
+                with the page (verified in Chrome — see virtual-table.tsx). */}
+            <VirtualViewport className="max-h-[70vh]">
+              <ChainLadder chain={chainData} showGreeks={showGreeks} />
+            </VirtualViewport>
           </>
         )}
       </section>

@@ -280,15 +280,17 @@ trap. Both are listed in §8.
 - [x] **In-browser 60 fps** — MEASURED and **MET** (§6, `PERFORMANCE.md`)
 - [ ] Manual smoke in the browser across **daybreak (light)** and **carbon
       (highest contrast)**, not just slate
-- [ ] **Verify the sticky table header still sticks inside `VirtualViewport`.**
-      `Table` renders its own `overflow-x-auto` wrapper, and per CSS an element
-      with one axis `auto` and the other `visible` computes the visible axis to
-      `auto` too — so that wrapper is technically a Y scroll container even
-      though it never scrolls (no height bound). `position: sticky` on the
-      `<thead>` may therefore resolve against the wrapper instead of the
-      bounded `VirtualViewport`. Cannot be settled in jsdom (no layout). If it
-      does fail, the fix is to let `Table` take the scroll container role rather
-      than nesting one inside it.
+- [x] **Sticky table header inside `VirtualViewport` — it was BROKEN; fixed and
+      re-verified in Chrome.** `Table` wraps itself in `overflow-x-auto`, and CSS
+      promotes the other axis to `auto` too, so that wrapper became the
+      containing block for `position: sticky`. Being unbounded it never scrolls,
+      so the header travelled with the content: scrolling the viewport 800 px
+      put the `<thead>` at `top: -761` — straight off screen, losing the column
+      headers on exactly the long tables that need them. The static review had
+      cleared this; only the browser caught it. `VirtualViewport` now neutralises
+      the inner wrapper (`overflow-visible`) and owns both scroll axes; measured
+      after the fix, the header holds at the viewport top (`sticks: true`). The
+      F&O ladder, which had no bounded container at all, now uses one too.
 - [ ] `/phase-gate`
 
 ## 8. Follow-ups handed forward

@@ -24,9 +24,20 @@ import * as React from "react"
 import { cn } from "@/lib/utils"
 
 /**
- * A bounded, vertically scrolling container — the scroll parent that
- * `useVirtualRows` measures and that the sticky table header sticks to.
- * Give it a height bound (`max-h-*`/`h-*`) or nothing will ever scroll.
+ * A bounded, scrolling container — the scroll parent that `useVirtualRows`
+ * measures and that the sticky table header sticks to. Give it a height bound
+ * (`max-h-*`/`h-*`) or nothing will ever scroll.
+ *
+ * The `[&_[data-slot=table-container]]:overflow-visible` override is load
+ * bearing, not tidying. `Table` wraps itself in `overflow-x-auto`, and CSS
+ * promotes the other axis to `auto` too — so that wrapper becomes a scroll
+ * container and therefore the containing block for `position: sticky`. Because
+ * it is unbounded it never actually scrolls, so the sticky `<thead>` inside it
+ * simply travels with the content: measured in Chrome, scrolling this viewport
+ * 800 px moved the header to `top: -761` — i.e. straight off screen, losing the
+ * column headers on exactly the long tables that need them. Neutralising the
+ * inner wrapper makes THIS element the sticky ancestor. Horizontal scrolling
+ * moves here too (`overflow-auto`), so wide tables still scroll sideways.
  */
 const VirtualViewport = React.forwardRef<HTMLDivElement, React.ComponentProps<"div">>(
   function VirtualViewport({ className, ...props }, ref) {
@@ -34,7 +45,11 @@ const VirtualViewport = React.forwardRef<HTMLDivElement, React.ComponentProps<"d
       <div
         ref={ref}
         data-slot="virtual-viewport"
-        className={cn("overflow-y-auto overscroll-contain", className)}
+        className={cn(
+          "overflow-auto overscroll-contain",
+          "[&_[data-slot=table-container]]:overflow-visible",
+          className,
+        )}
         {...props}
       />
     )
