@@ -16,16 +16,8 @@
 import { useEffect, useState } from "react";
 
 import type { ProvisionalLeaderboard } from "@/lib/api/market_data";
+import { buildWsUrl, WS_CLOSE_UNAUTHORIZED, WS_RECONNECT_DELAY_MS } from "@/lib/ws";
 import { useAuthStore } from "@/store/authStore";
-
-const WS_CLOSE_UNAUTHORIZED = 4401;
-const RECONNECT_DELAY_MS = 3000;
-
-function buildWsUrl(token: string | null): string {
-  const proto = window.location.protocol === "https:" ? "wss" : "ws";
-  const base = `${proto}://${window.location.host}/api/v1/ws/live`;
-  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
-}
 
 export function parseLeaderboard(raw: unknown): ProvisionalLeaderboard | null {
   if (typeof raw !== "object" || raw === null) return null;
@@ -93,7 +85,7 @@ export function useProvisionalStream(styles: string[]): UseProvisionalStreamResu
           setAuthFailed(true);
           return;
         }
-        reconnectTimeout = setTimeout(connect, RECONNECT_DELAY_MS);
+        reconnectTimeout = setTimeout(connect, WS_RECONNECT_DELAY_MS);
       };
 
       ws.onerror = () => ws.close();

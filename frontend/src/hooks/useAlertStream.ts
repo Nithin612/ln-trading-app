@@ -10,6 +10,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { buildWsUrl, WS_CLOSE_UNAUTHORIZED, WS_RECONNECT_DELAY_MS } from "@/lib/ws";
 import { useAuthStore } from "@/store/authStore";
 
 export interface LiveAlert {
@@ -60,16 +61,6 @@ interface UseAlertStreamResult {
   setWatchlist: (id: number | null) => void;
 }
 
-// wss under https, ws under http; JWT goes as ?token= (validated server-side
-// before the upgrade is accepted — close code 4401 means auth failure).
-function buildWsUrl(token: string | null): string {
-  const proto = window.location.protocol === "https:" ? "wss" : "ws";
-  const base = `${proto}://${window.location.host}/api/v1/ws/live`;
-  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
-}
-
-const WS_CLOSE_UNAUTHORIZED = 4401;
-const RECONNECT_DELAY_MS = 3000;
 // Bursts (an open-auction XADD batch fans out as individual frames) flush
 // as ONE state update per window — never one setState per alert.
 const FLUSH_INTERVAL_MS = 200;
@@ -152,7 +143,7 @@ export function useAlertStream(): UseAlertStreamResult {
           setAuthFailed(true);
           return;
         }
-        reconnectTimeout = setTimeout(connect, RECONNECT_DELAY_MS);
+        reconnectTimeout = setTimeout(connect, WS_RECONNECT_DELAY_MS);
       };
 
       ws.onerror = () => ws.close();

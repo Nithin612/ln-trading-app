@@ -1,14 +1,38 @@
 /**
- * useLiveQuotes — subscribes to live LTP and candle updates via the backend
- * WebSocket (/api/v1/ws/live).
+ * useLiveQuotes v2 (Phase 5) — live LTP / candle / signal push from the
+ * backend WebSocket (/api/v1/ws/live).
  *
  * Usage:
  *   const { quotes, candles } = useLiveQuotes(["RELIANCE", "TATAMOTORS"]);
  *   quotes["RELIANCE"]?.ltp  // current LTP
+ *
+ * What v2 fixes (v1 was written for a handful of instruments):
+ *
+ * 1. **rAF-batched application.** v1 did one `setState` per tick, each
+ *    cloning the whole quote map — at full-universe tick rates that is a
+ *    render per tick and O(n) copying per tick. v2 buffers frames in a ref
+ *    and applies them in ONE state update per animation frame; repeated
+ *    ticks for the same symbol inside a frame collapse to the newest (for a
+ *    last-traded price, latest wins — nothing is lost by coalescing).
+ * 2. **Connect once per mount.** v1 keyed the connect effect on the symbol
+ *    list, so every watchlist edit tore down and reopened the socket; and a
+ *    second effect re-sent `subscribe` on EVERY render (callers pass a fresh
+ *    array literal each time). v2 opens one socket per mount and sends
+ *    subscribe/unsubscribe DELTAS when the symbol set actually changes.
+ * 3. **Symbols are unsubscribed.** v1 never sent `unsubscribe`, so a long
+ *    session leaked server-side Redis subscriptions for every symbol ever
+ *    viewed. Dropped symbols now unsubscribe and their stale quotes are
+ *    pruned (a stale price under a symbol you stopped tracking is a
+ *    money-UI hazard, not just waste).
+ * 4. **`authFailed` is surfaced**, matching useAlertStream/useProvisionalStream.
+ *
+ * Only the LTP/candle layer is coalesced — `signal` frames are rare and are
+ * appended in the same flush.
  */
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
+import { buildWsUrl, WS_CLOSE_UNAUTHORIZED, WS_RECONNECT_DELAY_MS } from "@/lib/ws";
 import { useAuthStore } from "@/store/authStore";
 
 export interface LtpQuote {
@@ -35,37 +59,86 @@ export interface LiveSignal {
 
 interface UseQuotesResult {
   quotes: Record<string, LtpQuote>;
-  candles: Record<string, LiveCandle>;  // key = "{symbol}:{timeframe}"
+  candles: Record<string, LiveCandle>; // key = "{symbol}:{timeframe}"
   signals: LiveSignal[];
   connected: boolean;
+  authFailed: boolean;
 }
 
-// wss under https, ws under http; JWT goes as ?token= (validated server-side
-// before the upgrade is accepted — close code 4401 means auth failure).
-function buildWsUrl(token: string | null): string {
-  const proto = window.location.protocol === "https:" ? "wss" : "ws";
-  const base = `${proto}://${window.location.host}/api/v1/ws/live`;
-  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
-}
+const MAX_SIGNALS = 50;
 
-const WS_CLOSE_UNAUTHORIZED = 4401;
+/**
+ * Schedule on the next animation frame, falling back to a macrotask where
+ * rAF is unavailable (a background tab never fires rAF — the fallback keeps
+ * state converging either way).
+ */
+function scheduleFlush(fn: () => void): () => void {
+  if (typeof requestAnimationFrame === "function") {
+    const id = requestAnimationFrame(() => fn());
+    return () => cancelAnimationFrame(id);
+  }
+  const id = setTimeout(fn, 16);
+  return () => clearTimeout(id);
+}
 
 export function useLiveQuotes(symbols: string[]): UseQuotesResult {
   const [quotes, setQuotes] = useState<Record<string, LtpQuote>>({});
   const [candles, setCandles] = useState<Record<string, LiveCandle>>({});
   const [signals, setSignals] = useState<LiveSignal[]>([]);
   const [connected, setConnected] = useState(false);
+  const [authFailed, setAuthFailed] = useState(false);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const symbolsRef = useRef<string[]>(symbols);
+  // Symbols the server is currently sending, and the set we WANT. They
+  // diverge between a symbol-set change and the socket being open.
+  const subscribedRef = useRef<Set<string>>(new Set());
+  const wantRef = useRef<Set<string>>(new Set());
 
+  // Per-frame buffers. Quote/candle buffers are keyed maps (coalescing);
+  // signals are a list (each one matters).
+  const pendingQuotes = useRef<Map<string, LtpQuote>>(new Map());
+  const pendingCandles = useRef<Map<string, LiveCandle>>(new Map());
+  const pendingSignals = useRef<LiveSignal[]>([]);
+  const cancelFlushRef = useRef<(() => void) | null>(null);
+
+  const flush = useCallback(() => {
+    cancelFlushRef.current = null;
+
+    if (pendingQuotes.current.size > 0) {
+      const batch = pendingQuotes.current;
+      pendingQuotes.current = new Map();
+      setQuotes((prev) => {
+        const next = { ...prev };
+        for (const [symbol, q] of batch) next[symbol] = q;
+        return next;
+      });
+    }
+
+    if (pendingCandles.current.size > 0) {
+      const batch = pendingCandles.current;
+      pendingCandles.current = new Map();
+      setCandles((prev) => {
+        const next = { ...prev };
+        for (const [key, c] of batch) next[key] = c;
+        return next;
+      });
+    }
+
+    if (pendingSignals.current.length > 0) {
+      const batch = pendingSignals.current;
+      pendingSignals.current = [];
+      // batch is in arrival order; the feed renders newest first
+      setSignals((prev) => [...batch.reverse(), ...prev].slice(0, MAX_SIGNALS));
+    }
+  }, []);
+
+  const scheduleIfNeeded = useCallback(() => {
+    cancelFlushRef.current ??= scheduleFlush(flush);
+  }, [flush]);
+
+  // One socket per mount. Deliberately no `symbols` dependency — the
+  // subscription-delta effect below drives what the socket is watching.
   useEffect(() => {
-    symbolsRef.current = symbols;
-  });
-
-  useEffect(() => {
-    if (symbols.length === 0) return;
-
     let ws: WebSocket;
     let reconnectTimeout: ReturnType<typeof setTimeout>;
     let unmounted = false;
@@ -78,21 +151,28 @@ export function useLiveQuotes(symbols: string[]): UseQuotesResult {
 
       ws.onopen = () => {
         setConnected(true);
-        ws.send(JSON.stringify({ subscribe: symbolsRef.current }));
+        setAuthFailed(false);
+        // A reconnect starts from a clean server-side subscription set, so
+        // re-send the full want-set rather than a delta against stale state.
+        const want = [...wantRef.current];
+        subscribedRef.current = new Set(want);
+        if (want.length > 0) ws.send(JSON.stringify({ subscribe: want }));
       };
 
       ws.onmessage = (ev) => {
         try {
-          const msg = JSON.parse(ev.data) as { type: string; data: unknown };
+          const msg = JSON.parse(ev.data as string) as { type: string; data: unknown };
           if (msg.type === "ltp") {
             const d = msg.data as LtpQuote;
-            setQuotes((prev) => ({ ...prev, [d.symbol]: d }));
+            pendingQuotes.current.set(d.symbol, d);
+            scheduleIfNeeded();
           } else if (msg.type === "candle") {
             const d = msg.data as LiveCandle;
-            const key = `${d.symbol}:${d.timeframe}`;
-            setCandles((prev) => ({ ...prev, [key]: d }));
+            pendingCandles.current.set(`${d.symbol}:${d.timeframe}`, d);
+            scheduleIfNeeded();
           } else if (msg.type === "signal") {
-            setSignals((prev) => [msg.data as LiveSignal, ...prev].slice(0, 50));
+            pendingSignals.current.push(msg.data as LiveSignal);
+            scheduleIfNeeded();
           }
         } catch {
           // ignore malformed messages
@@ -101,12 +181,16 @@ export function useLiveQuotes(symbols: string[]): UseQuotesResult {
 
       ws.onclose = (ev) => {
         setConnected(false);
+        subscribedRef.current = new Set();
+        if (unmounted) return;
         // 4401 = server rejected the token; reconnecting with the same
-        // credentials would just loop. Wait for a fresh token (next mount
-        // or manual retry) instead.
-        if (!unmounted && ev.code !== WS_CLOSE_UNAUTHORIZED) {
-          reconnectTimeout = setTimeout(connect, 3000);
+        // credentials would just loop. Surface it and wait for a remount
+        // with a fresh session instead.
+        if (ev.code === WS_CLOSE_UNAUTHORIZED) {
+          setAuthFailed(true);
+          return;
         }
+        reconnectTimeout = setTimeout(connect, WS_RECONNECT_DELAY_MS);
       };
 
       ws.onerror = () => ws.close();
@@ -117,16 +201,42 @@ export function useLiveQuotes(symbols: string[]): UseQuotesResult {
     return () => {
       unmounted = true;
       clearTimeout(reconnectTimeout);
+      cancelFlushRef.current?.();
+      cancelFlushRef.current = null;
       ws?.close();
     };
-  }, [symbols.join(",")]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scheduleIfNeeded]);
 
-  // Send subscribe/unsubscribe when symbol list changes
+  // Callers pass a fresh array literal every render, so this effect keys off
+  // the SET's content, not the array identity — otherwise it resubscribes on
+  // every render (the v1 bug).
+  const symbolsKey = [...new Set(symbols)].sort().join(",");
+
   useEffect(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) {
-      wsRef.current.send(JSON.stringify({ subscribe: symbols }));
-    }
-  }, [symbols]);
+    const want = new Set(symbolsKey ? symbolsKey.split(",") : []);
+    wantRef.current = want;
 
-  return { quotes, candles, signals, connected };
+    const add = [...want].filter((s) => !subscribedRef.current.has(s));
+    const drop = [...subscribedRef.current].filter((s) => !want.has(s));
+    if (add.length === 0 && drop.length === 0) return;
+
+    const ws = wsRef.current;
+    if (ws?.readyState === WebSocket.OPEN) {
+      if (add.length > 0) ws.send(JSON.stringify({ subscribe: add }));
+      if (drop.length > 0) ws.send(JSON.stringify({ unsubscribe: drop }));
+      subscribedRef.current = want;
+    }
+
+    if (drop.length > 0) {
+      // Drop stale prices for symbols we no longer track (one state update
+      // per symbol-set change — not per tick).
+      setQuotes((prev) => {
+        const next = { ...prev };
+        for (const s of drop) delete next[s];
+        return next;
+      });
+    }
+  }, [symbolsKey]);
+
+  return { quotes, candles, signals, connected, authFailed };
 }
