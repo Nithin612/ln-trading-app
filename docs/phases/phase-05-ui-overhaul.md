@@ -1,9 +1,18 @@
 # Phase 5 — UI overhaul
 
 > **Status: slices 5.1–5.4 built 2026-08-06** (branch `worktree-phase5-ui-overhaul`).
-> Frontend suite **257 → 328**; backend F&O suite **31 → 49**; eslint · tsc ·
+> Frontend suite **257 → 332**; backend F&O suite **31 → 49**; eslint · tsc ·
 > ruff · mypy clean. The one **live-gated** exit item is the in-browser 60 fps
 > verdict under replayed full-rate ticks — see §6.
+>
+> **Full backend run in this worktree: 1032 passed, 9 failed, 13 errors.** All 22
+> non-passes are `FileNotFoundError` on the worktree's missing root `.env` — the
+> `tests/goldens` and `tests/parity` harnesses read it. **Verified** by running
+> those two directories alone: identical 9 failed + 13 errors, so nothing in the
+> Phase-5 diff contributes a single failure. They pass in the main checkout, where
+> `.env` exists; re-run the gate there (or with `.env` present) before
+> `/phase-gate`. Everything else in this worktree runs with an inline
+> `JWT_SECRET_KEY=…`, because symlinking `.env` is (correctly) blocked.
 
 ## 1. Goal & why
 
@@ -202,8 +211,10 @@ same treatment the tick→publish p99 got rather than a number nobody measured.
 ## 7. Exit checklist
 
 - [x] 5.1 live-data infra · 5.2 F&O page · 5.3 style pages v2 · 5.4 Live Signals
-- [x] Frontend 328 green · backend F&O suite 49 green · eslint · tsc · ruff · mypy
-- [ ] **Full `make check`** (incl. cargo gates + the whole backend suite)
+- [x] Frontend 332 green · backend 1032 pass (22 `.env`-only, see the banner) ·
+      eslint · tsc · ruff · mypy
+- [ ] **Full `make check` from a checkout that has `.env`** (adds the cargo gates;
+      no `engine/` code changed this phase, so those should be unaffected)
 - [ ] **ui-reviewer** on the four new pages/components
 - [ ] **In-browser 60 fps under replayed full-rate ticks** → then the
       PERFORMANCE.md budget row can be marked MET or restated
