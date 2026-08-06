@@ -33,14 +33,15 @@ describe('SidebarNav', () => {
     renderNav({ isAdmin: false })
     expect(screen.queryByText('Admin')).not.toBeInTheDocument()
     expect(screen.queryByRole('link', { name: /Users/ })).not.toBeInTheDocument()
-    expect(screen.getAllByRole('link')).toHaveLength(18) // Markets 7 + Styles 4 + Trading 3 + Analysis 4
+    // Markets 7 + Styles 5 (4 styles + Live Signals) + Trading 3 + Analysis 4
+    expect(screen.getAllByRole('link')).toHaveLength(19)
   })
 
   it('shows the Admin group for admins', () => {
     renderNav({ isAdmin: true })
     expect(screen.getByText('Admin')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Users/ })).toHaveAttribute('href', '/admin/users')
-    expect(screen.getAllByRole('link')).toHaveLength(21) // + 3 admin
+    expect(screen.getAllByRole('link')).toHaveLength(22) // + 3 admin
   })
 
   it('marks the active route with aria-current', () => {
@@ -52,7 +53,7 @@ describe('SidebarNav', () => {
   it('hides section labels when collapsed but keeps every link', () => {
     renderNav({ collapsed: true })
     expect(screen.queryByText('Markets')).not.toBeInTheDocument()
-    expect(screen.getAllByRole('link')).toHaveLength(18)
+    expect(screen.getAllByRole('link')).toHaveLength(19)
   })
 
   it('every route appears in exactly one group', () => {

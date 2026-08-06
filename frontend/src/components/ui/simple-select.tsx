@@ -25,6 +25,12 @@ interface SimpleSelectProps {
   className?: string
   disabled?: boolean
   size?: 'sm' | 'default'
+  /**
+   * Accessible name for the trigger. Required in practice whenever the select
+   * has no visible <label> next to it — the trigger renders only the selected
+   * value, so without this it is an unnamed combobox to assistive tech.
+   */
+  'aria-label'?: string
 }
 
 const EMPTY = '__empty__'
@@ -37,6 +43,7 @@ export function SimpleSelect({
   className,
   disabled,
   size = 'default',
+  'aria-label': ariaLabel,
 }: SimpleSelectProps) {
   const selectValue = value === '' ? EMPTY : value || undefined
 
@@ -46,7 +53,7 @@ export function SimpleSelect({
       onValueChange={(v) => onChange(v === EMPTY ? '' : (v ?? ''))}
       disabled={disabled}
     >
-      <SelectTrigger size={size} className={cn('min-w-[110px]', className)}>
+      <SelectTrigger size={size} className={cn('min-w-[110px]', className)} aria-label={ariaLabel}>
         {/* base-ui's Value renders the raw VALUE by default — invisible
             while every caller had value≡label (sectors, segments), wrong
             once watchlists select by id ("4" instead of "Momo"), and the

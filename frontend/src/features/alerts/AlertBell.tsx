@@ -6,14 +6,13 @@
  */
 
 import { memo, useCallback, useMemo, useState } from 'react'
-import { useMutation, useQueries, useQuery, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Bell, ShoppingCart } from 'lucide-react'
 
 import { useAlertStream, type LiveAlert } from '@/hooks/useAlertStream'
 import { useAuth } from '@/hooks/useAuth'
 import { useToast } from '@/hooks/useToast'
-import { stocksApi } from '@/lib/api/stocks'
-import { signalsApi, type SignalOut } from '@/lib/api/signals'
+import { type SignalOut } from '@/lib/api/signals'
 import { tradingApi } from '@/lib/api/trading'
 import { watchlistsApi } from '@/lib/api/watchlists'
 import { useTradingHaltStore } from '@/store/tradingHaltStore'
@@ -31,13 +30,13 @@ import {
   chaseGuidance,
   formatAlertTime,
 } from './alertPresentation'
+import { ENTRY_SOURCE, useAlertContext } from './useAlertContext'
 
 // "Entered zone" (source `entry_zone`) is the actionable buy/sell trigger:
 // price re-entered the entry band of a signal the confluence engine already
 // generated. The bell defaults to showing ONLY these — level crosses, S/R
 // zone entries and volume bursts are context, hidden until the user opts in.
 const ENTRY_ONLY_KEY = 'alertbell:entryOnly'
-const ENTRY_SOURCE = 'entry_zone'
 
 function loadEntryOnly(): boolean {
   try {
@@ -121,52 +120,9 @@ export function AlertBell() {
     return idx === -1 ? visibleAlerts.length : idx
   }, [visibleAlerts, lastSeenId])
 
-  // sid → symbol, cached forever (stock identity is immutable intraday).
-  const sids = useMemo(() => [...new Set(visibleAlerts.map((a) => a.sid))], [visibleAlerts])
-  const stockQueries = useQueries({
-    queries: sids.map((sid) => ({
-      queryKey: ['alert-stock', sid],
-      queryFn: () => stocksApi.get(sid, accessToken ?? ''),
-      staleTime: Infinity,
-      enabled: accessToken !== null,
-    })),
-  })
-  const symbolBySid = useMemo(() => {
-    const m = new Map<number, string>()
-    for (const q of stockQueries) {
-      if (q.data) m.set(q.data.id, q.data.symbol)
-    }
-    return m
-  }, [stockQueries])
-
-  // Entry-zone alerts carry the originating signal; fetch its entry/SL/direction
-  // once (immutable once created) to render the anti-chase guardrail. Cached
-  // forever, like symbols — only entry alerts trigger a lookup.
-  const signalIds = useMemo(
-    () => [
-      ...new Set(
-        visibleAlerts
-          .filter((a) => a.source === ENTRY_SOURCE && a.signalId)
-          .map((a) => a.signalId as string),
-      ),
-    ],
-    [visibleAlerts],
-  )
-  const signalQueries = useQueries({
-    queries: signalIds.map((id) => ({
-      queryKey: ['alert-signal', id],
-      queryFn: () => signalsApi.getById(id, accessToken ?? ''),
-      staleTime: Infinity,
-      enabled: accessToken !== null,
-    })),
-  })
-  const signalById = useMemo(() => {
-    const m = new Map<string, SignalOut>()
-    for (const q of signalQueries) {
-      if (q.data) m.set(q.data.id, q.data)
-    }
-    return m
-  }, [signalQueries])
+  // sid → symbol and signalId → signal (for the anti-chase guardrail), both
+  // immutable for an alert's life. Shared with the Live Signals page.
+  const { symbolBySid, signalById } = useAlertContext(visibleAlerts, accessToken)
 
   const toggleStyle = (s: string) =>
     setStyles(styles.includes(s) ? styles.filter((x) => x !== s) : [...styles, s])

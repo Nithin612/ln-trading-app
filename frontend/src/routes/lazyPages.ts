@@ -27,5 +27,6 @@ export const JournalPage = lazy(() => named(import('@/features/journal/JournalPa
 export const PortfolioPage = lazy(() => named(import('@/features/portfolio/PortfolioPage'), 'PortfolioPage'))
 export const StylePage = lazy(() => named(import('@/features/styles/StylePage'), 'StylePage'))
 export const FoPage = lazy(() => named(import('@/features/fo/FoPage'), 'FoPage'))
+export const LiveSignalsPage = lazy(() => named(import('@/features/alerts/LiveSignalsPage'), 'LiveSignalsPage'))
 export const GoLivePage = lazy(() => named(import('@/features/golive/GoLivePage'), 'GoLivePage'))
 export const OutcomesPage = lazy(() => named(import('@/features/analytics/OutcomesPage'), 'OutcomesPage'))

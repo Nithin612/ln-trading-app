@@ -5,7 +5,7 @@ import { LoginPage } from '@/pages/LoginPage'
 // The shell + auth load eagerly; every page is a lazy chunk (see lazyPages).
 import {
   CategoriesPage, DashboardPage, FiiDiiPage, FilingsPage, FoPage, GoLivePage, JournalPage,
-  KiteConnectPage, OutcomesPage, PortfolioPage, PositionsPage, ProfilePage, ScreenerPage,
+  KiteConnectPage, LiveSignalsPage, OutcomesPage, PortfolioPage, PositionsPage, ProfilePage, ScreenerPage,
   SettingsPage, StockDetailPage, StocksPage, StrategyLabPage, StylePage, TradeHistoryPage,
   UsersPage, WatchlistsPage,
 } from '@/routes/lazyPages'
@@ -32,6 +32,7 @@ export const router = createBrowserRouter([
       // is matched BEFORE the generic style route.
       { path: 'styles/fno',            element: <FoPage /> },
       { path: 'styles/:style',         element: <StylePage /> },
+      { path: 'live-signals',          element: <LiveSignalsPage /> },
       { path: 'stocks',                element: <StocksPage /> },
       { path: 'stocks/:id',            element: <StockDetailPage /> },
       { path: 'screener',              element: <ScreenerPage /> },
