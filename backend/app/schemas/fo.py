@@ -64,6 +64,12 @@ class OptionLegOut(BaseModel):
     premium: Decimal
 
 
+class ExitPlanOut(BaseModel):
+    take_profit_credit: Decimal
+    stop_loss_amount: Decimal
+    time_stop_dte: int
+
+
 class SuggestionOut(BaseModel):
     structure: str       # bull_put | bear_call | iron_condor
     legs: list[OptionLegOut]
@@ -73,11 +79,13 @@ class SuggestionOut(BaseModel):
     width: Decimal
     breakevens: list[Decimal]
     pop: float
+    expectancy: Decimal
     margin_est: Decimal
     return_on_margin: float
     short_delta: float
     dte: int
     expiry: date
+    exit_plan: ExitPlanOut
     rationale: str
 
 

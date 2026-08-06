@@ -21,6 +21,7 @@ from app.schemas.fo import (
     BasisOut,
     ChainLegOut,
     ChainOut,
+    ExitPlanOut,
     FoAnalyticsOut,
     IvRankOut,
     OptionLegOut,
@@ -130,11 +131,17 @@ def _suggestion_out(c: fs.SpreadCandidate) -> SuggestionOut:
         width=c.width,
         breakevens=list(c.breakevens),
         pop=c.pop,
+        expectancy=c.expectancy,
         margin_est=c.margin_est,
         return_on_margin=c.return_on_margin,
         short_delta=c.short_delta,
         dte=c.dte,
         expiry=c.expiry,
+        exit_plan=ExitPlanOut(
+            take_profit_credit=c.exit_plan.take_profit_credit,
+            stop_loss_amount=c.exit_plan.stop_loss_amount,
+            time_stop_dte=c.exit_plan.time_stop_dte,
+        ),
         rationale=c.rationale,
     )
 

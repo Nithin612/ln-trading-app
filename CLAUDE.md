@@ -5,7 +5,7 @@ markets (NSE/BSE). Solo developer, personal use first, possible future
 productization. Read this fully at session start; it points to everything
 else.
 
-## Current truth (updated 2026-07-03, Phase 0 of the v2 upgrade)
+## Current truth (updated 2026-08-06 — v2 Phase 3 done, Phase 4 backend done)
 
 - **v1 phases 0–11 are built and tested** (auth, stock master, screener,
   categories, EOD + FII/DII ingestion, 14-factor confluence signal engine,
@@ -17,8 +17,18 @@ else.
   trading-style engines (Intraday / Swing / F&O / Investment), UI overhaul,
   outcome tracking, then live trading. `docs/PHASES.md` tracks status;
   each finished phase writes a report to `docs/phases/`.
-- Backend test suite 439, frontend 131. `make check` green is the
-  baseline state — keep it that way.
+- **v2 status:** Phases 0–2 ✅; **Phase 3 realtime ✅** (soak-clean; 30-day
+  paper clock running); **Phase 4 F&O analytics — backend done** (slices 4.1
+  analytics · 4.2 Rust BS/Black-76 IV+Greeks over `tradecore` + IV-rank · 4.3
+  option-selling suggestion engine, defined-risk index-only, on branch
+  `phase4-fo-analytics`; the F&O **UI** is Phase 5). A "signal-intelligence
+  overlay" (dedup / regime filter / anti-chase / emergency-exit) + profit-lock
+  live-wiring also landed on main. `docs/PHASES.md` top block is the canonical
+  status; each phase writes `docs/phases/`.
+- `make check` green is the baseline — keep it that way. (Test counts grow every
+  slice; don't trust any hard-coded number — run the gate. Note: options math
+  and F&O suggestions run behind the `tradecore` wheel — `make engine-build`
+  after pulling engine changes.)
 
 ## Tech stack (locked in — ask before substituting)
 

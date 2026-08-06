@@ -1,10 +1,27 @@
-# Phase 4 slice 4.3 — F&O suggestion engine (DESIGN DRAFT / strawman)
+# Phase 4 slice 4.3 — F&O option-selling suggestion engine (v1 FINALIZED)
 
-> **Status: DRAFT for calibration.** This is option **B** from the 2026-07-30
-> discussion — a concrete strawman to react to, *not* a finished spec. Every
-> numeric threshold here is a **conservative placeholder** to be replaced by the
-> user's masterclass option rules. Structure and payoff math are settled; the
-> **rules** (§4) and the **open questions** (§7) are what we calibrate together.
+> **Status: v1 built & calibrated 2026-08-06** (`app/services/fo_suggestions.py`,
+> `GET /fo/suggestions`, 23 tests, quant-verifier PASS). The user approved the
+> conservative recommendations below; the numeric defaults live in `SellRules`
+> and are still **forward-tested on paper** before any live use. Suggestions
+> only — never auto-trades.
+>
+> **Two clinical corrections made during the build (important):**
+> 1. **Expectancy is REPORT-ONLY, not a gate.** With a risk-neutral (breakeven
+>    N(d2)) POP, a fairly-priced credit spread's expectancy is ≈0 by
+>    construction — so gating `expectancy > 0` would reject everything. The edge
+>    is the **volatility risk premium** (selling IV that exceeds later realized
+>    vol), which the **IV-rank gate proxies** and **forward-testing validates**;
+>    it is NOT provable from prices. (Reported expectancy uses a conservative,
+>    slightly negative-biased two-point estimator — a mildly negative value on a
+>    fair spread is expected.)
+> 2. **Hard vetoes fail CLOSED.** The India-VIX regime veto stands down not only
+>    on a confirmed high-vol regime but also when the regime can't be assessed
+>    (no VIX data) — a blind safety gate must not pass, because a vol spike
+>    lifts IV-rank (so that gate passes) leaving VIX as the only backstop.
+>
+> The remaining **follow-ups** (still open) are in §7; the calibratable knobs are
+> §4 (now the shipped defaults, not placeholders).
 
 ## 1. Scope & principles
 
@@ -54,37 +71,45 @@ net credit `C = premium(short) − premium(long) > 0`, width `W = |Ks − Kl|`:
 - **Margin estimate (v1):** defined-risk → margin ≈ **max loss**. Return-on-margin
   `RoM = C / max_loss`. (The plan's Kite-margins-API refinement is a follow-up;
   max-loss is a safe upper bound for a defined-risk spread.)
-- **POP (probability of profit):** two options, both computable from what we have:
-  1. **Delta proxy (v1 default):** `POP ≈ 1 − |Δ(short strike)|` — the trader
-     heuristic (a 0.16-delta short ≈ 84% POP). Uses `tradecore.option_greeks`.
-     Ignores the credit's breakeven shift, so it is *slightly conservative* for
-     credit spreads.
-  2. **Breakeven-exact (refinement):** risk-neutral `P(finish on the profitable
-     side of the breakeven)` = `N(d2)` at the breakeven strike (Black-76 on the
-     future). More accurate; needs a tiny `prob_itm` FFI or a Python normal-CDF.
-     **Open question §7.5** — which POP do you want as the headline number?
+- **POP (probability of profit) — SHIPPED = breakeven-exact:** risk-neutral
+  `P(finish on the profitable side of the breakeven)` = `N(d2)` at the breakeven
+  (Black-76 on the future), computed in `breakeven_pop`. The delta proxy
+  (`1 − |Δ(short)|`) remains a fallback when a strike's IV can't be priced.
+- **Expectancy:** `POP·C − (1−POP)·max_loss`, **reported not gated** (see the
+  correction in the status banner — risk-neutral expectancy is ≈0 by
+  construction; the edge is the VRP, gated via IV-rank + forward-testing).
+- **Fills (conservative):** each leg is haircut by `max(premium·slippage_frac,
+  min_slippage)` — sold legs down, bought legs up — so the credit is never
+  optimistic. A per-leg absolute floor (default 1 pt) prevents narrow index
+  spreads from being over-slipped by a naive %-of-premium. (Real per-leg bid/ask
+  from the intraday snapshots is the calibration refinement.)
 
-Premiums come from the chain LTP when liquid, else the `tradecore` model price
-at the strike's IV — **open question §7.4** (LTP vs model, and mid-vs-last).
+## 4. Selection rules — SHIPPED v1 DEFAULTS (`SellRules`, calibratable)
 
-## 4. Selection rules — CONSERVATIVE PLACEHOLDERS (⚠ calibrate)
+The v1 defaults (user-approved 2026-08-06). Conservative; forward-tested before
+live. Tighten/loosen in `SellRules`.
 
-These are the `SellRules` defaults. **None are your rules yet** — they are
-defensible conservative starting points so the strawman runs end-to-end.
-
-| Rule | Placeholder | Rationale / to calibrate |
+| Rule | v1 default (`SellRules`) | Rationale |
 |---|---|---|
-| Sell only when IV-rank ≥ | **50** | sell rich vol; you may prefer an absolute IV floor too |
-| Short-strike selection | **\|Δ\| ≈ 0.16** (±0.04 band) | ≈1 SD OTM; you may select by % OTM or max-pain distance |
-| Spread width | **1–2 strikes** | balance credit vs max-loss |
-| DTE window | **14–45 days** | theta sweet spot; NSE weeklies (Tue) vs monthly? |
-| Min OI / leg | **500** | liquidity floor; per-underlying? |
-| VIX regime = high | **skip** (or halve) | risk-off; §7.9 which events hard-block |
-| Expiry week | **skip** | pin/gamma risk; calibrate |
-| Direction bias | max-pain + (optional) confluence | bull put if under-lying > max-pain & not bearish; bear call if <; iron condor if range-bound (near max-pain, low ADX) |
-| Min POP | **0.70** | reject low-probability credits |
-| Rank by | **RoM × POP** | or credit/width, or POP-first |
-| Max risk / trade | **reuse account risk% (2%)** | defined-risk max-loss ≤ risk budget; §7.6 |
+| Universe | **index only** {NIFTY, BANKNIFTY, FINNIFTY} | cash-settled → no physical settlement / assignment |
+| IV-rank ≥ | **50** (`iv_rank_min`) | sell rich vol only (VRP proxy) |
+| Short-strike | **\|Δ\| ≈ 0.16 ± 0.06** (`short_delta_target/_band`) | ≈1 SD OTM |
+| Spread width | **1 strike** (`width_strikes`) | defined risk; wider = calibrate |
+| DTE window | **20–45 days** (`dte_min/_max`) | theta window, off the gamma zone |
+| Min OI / leg | **500** (`min_oi`) | liquidity floor |
+| VIX regime | **skip if high OR unknown** (`skip_high_vix`) | hard veto, **fail-closed** |
+| Reward floor | **credit ≥ 0.30·width** (`min_credit_to_width`) | no high-POP "pennies" |
+| POP floor | **0.65** (`min_pop`) | breakeven-exact; reject low-probability |
+| Fills | **max(0.5%·prem, 1 pt)/leg** (`slippage_frac`,`min_slippage`) | conservative bid/ask haircut |
+| Exits (metadata) | **TP 50% · SL 2×credit · 21 DTE** | mechanical; execution is Phase-6/7 |
+| Rank by | **RoM × POP** | `rank_candidates` |
+
+**Note on the default's selectivity:** 0.16Δ + a 0.30 reward-floor on a 1-strike
+spread is *deliberately* very selective — far-OTM narrow spreads rarely clear a
+30% credit/width, so the engine often returns **nothing** (a safe "no trade"
+stance). Sell nearer (~0.30Δ) or wider for more credit/width if you want more
+signals. **Sizing** (2% account-risk against defined-risk max-loss) is applied
+at the trade layer, not in this suggestions slice.
 
 ## 5. Output contract
 
@@ -109,28 +134,38 @@ weaker). Emits a directional futures idea with the same sizing discipline.
 Deferred until the selling engine is calibrated — flagging so it isn't
 forgotten. Touching the confluence framework needs your sign-off (it's frozen).
 
-## 7. OPEN QUESTIONS FOR CALIBRATION (the point of this doc)
+## 7. Calibration decisions (v1) + remaining follow-ups
 
-1. **Structures** — bull put / bear call / iron condor only, or also
-   ratio spreads, broken-wing, calendars, cash-secured puts?
-2. **Short-strike selection** — by delta (what target?), % OTM, max-pain
-   distance, or S/R levels?
-3. **IV gate** — IV-rank threshold, and/or an absolute IV floor? Per underlying?
-4. **Premium source** — chain LTP (last vs mid) when liquid, model price when not?
-5. **POP** — delta proxy or breakeven-exact `N(d2)`? Minimum POP?
-6. **Sizing** — reuse the account 2% risk rule against defined-risk max-loss, or
-   a fixed max-loss per trade, or margin-based?
-7. **DTE / expiry** — window, and weekly (NSE Tue / BSE Thu) vs monthly?
-8. **Direction bias** — from the confluence engine, PCR, max-pain, or a manual
-   regime switch? When do you prefer a neutral condor vs a directional vertical?
-9. **Regime / event gates** — which events hard-block selling (RBI, results,
-   F&O ban)? This is where the deferred Market Context Engine plugs in.
-10. **Exits / adjustments** — roll at X% credit captured, stop at Y× credit loss?
-    (Likely Phase-6/live, but shapes the candidate metadata.)
+**Answered / shipped in v1** (2026-08-06):
+1. **Structures** — bull put / bear call / iron condor only (defined-risk). No
+   naked / cash-secured / ratio / calendars in v1.
+2. **Short-strike** — by delta, ≈0.16 ± 0.06.
+3. **IV gate** — IV-rank ≥ 50.
+4. **Premium source** — chain close with a conservative per-leg haircut (bid/ask
+   proxy); model price is the fallback for IV when a quote won't invert.
+5. **POP** — breakeven-exact `N(d2)`; min POP 0.65. Expectancy report-only (VRP).
+6. **DTE / expiry** — 20–45 days, monthly index (weeklies excluded in v1).
+7. **Vetoes** — index-only universe; VIX high/unknown fail-closed; per-leg OI.
+8. **Exits** — TP 50% / SL 2× credit / 21-DTE (metadata).
 
-## 8. Build plan once calibrated
+**Still open (deliberate follow-ups, NOT in v1):**
+- **Direction tilt (Q8):** v1 emits neutral condor + both verticals and ranks;
+  gating the directional tilt on the **frozen confluence engine** (on the index)
+  is a follow-up (needs sign-off — the engine is frozen).
+- **Event/ban gate (Q9):** beyond VIX, the full event calendar + F&O-ban veto is
+  the **deferred Market Context Engine** (post-Phase-6) — this is exactly its
+  hook. See [[market-context-engine-deferred]].
+- **Sizing (Q6):** the 2%-of-capital-on-max-loss rule is applied at the trade
+  layer, not this suggestions slice.
+- **Margin:** Kite SPAN-margin API refinement (v1 uses defined-risk max-loss).
+- **Realized-vs-POP forward-validation dashboard:** Phase 6.
+- **Premium source refinement:** true per-leg bid/ask from the intraday snapshots
+  (v1 uses close + haircut).
 
-`SellRules` ← your answers → finalize `suggest_option_sells` orchestration →
-`GET /fo/suggestions` → tests on real recorded chains → quant-verifier →
-(Phase 5) chain-ladder UI + strategy cards → (Phase 6) forward-validation
-(POP vs realized) dashboard.
+## 8. What shipped
+
+`app/services/fo_suggestions.py` (structures + payoff math + breakeven POP +
+expectancy + `SellRules` + `suggest_option_sells` orchestration wired to 4.1/4.2
++ `tradecore`), `GET /fo/suggestions`, `tests/test_fo_suggestions.py` (23),
+quant-verifier PASS. Next: (Phase 5) chain-ladder UI + strategy cards; (Phase 6)
+forward-validation dashboard; the direction-tilt + event-gate follow-ups above.
