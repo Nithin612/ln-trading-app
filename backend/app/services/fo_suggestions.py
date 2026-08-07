@@ -22,9 +22,10 @@ SPAN-margin refinement (we use defined-risk max-loss as the margin proxy).
 
 from __future__ import annotations
 
+import logging
 import math
 from dataclasses import dataclass
-from datetime import date, datetime
+from datetime import UTC, date, datetime, time
 from decimal import Decimal
 
 from sqlalchemy import select
@@ -32,6 +33,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.fo_data import FoBhavcopy
 from app.services import fo_analytics as fa
+
+log = logging.getLogger(__name__)
 
 # ── Structures ──────────────────────────────────────────────────────────────
 
@@ -87,7 +90,18 @@ class SellRules:
     width_strikes: int = 1               # protection this many strikes further OTM
     dte_min: int = 20                    # theta window, away from the gamma zone
     dte_max: int = 45
-    min_oi: int = 500                    # per-leg liquidity floor
+    # Monthly expiries only — the v1 ruling (phase-04 §7.6, "weeklies excluded
+    # in v1"). Index futures are monthly, so "has a same-expiry future" IS the
+    # monthly test. This is not just deference to the ruling: on real NIFTY
+    # bhavcopy for 2026-08-05 the 09-01 weekly's ENTIRE chain carried 921,960 OI
+    # against 95,937,855 on the 08-25 monthly (~1%), and the 09-08 weekly totalled
+    # 3,705 across 142 legs — three of which cleared `min_oi`, on daily volumes of
+    # 43/39/14 contracts. `min_oi` is a per-LEG floor and cannot tell a live chain
+    # from a dead one, and the fill haircut below was fitted to monthly quotes, so
+    # a weekly's true half-spread would exceed `min_slippage` and OVERSTATE credit.
+    # Flip only with a liquidity gate to match — see phase-04 §9.
+    require_exact_expiry_future: bool = True
+    min_oi: int = 500                    # per-leg liquidity floor (NOT a chain-level one)
     skip_high_vix: bool = True           # hard veto: stand down in risk-off vol
     min_pop: float = 0.65                # breakeven-exact (risk-neutral) POP floor
     min_credit_to_width: float = 0.30    # reward floor — no high-POP "pennies"
@@ -316,9 +330,23 @@ def passes_gates(c: SpreadCandidate, rules: SellRules) -> bool:
 
 async def _pick_expiry(
     db: AsyncSession, symbol: str, *, as_of: date, rules: SellRules
-) -> tuple[date, date] | None:
-    """(trade_date, expiry) — the latest bhavcopy day and the nearest expiry
-    whose days-to-expiry fall in the rules' DTE window."""
+) -> tuple[date, date, fa.ChainForward] | None:
+    """(trade_date, expiry, forward) — the latest bhavcopy day, the nearest
+    ELIGIBLE in-window expiry, and that expiry's Black-76 forward.
+
+    Index options expire WEEKLY but index futures only MONTHLY. This used to
+    take the first in-window expiry unconditionally and then price it with
+    `futures_basis`, which needs an exact expiry match — so a weekly sitting in
+    front of an in-window monthly killed the whole run, returning `[]`, which is
+    INDISTINGUISHABLE from "no candidate cleared the gates". Measured over the
+    42 weekdays 2026-08-06 → 10-02 on the real NIFTY expiry calendar, that
+    dead-end cost 26 of the 33 days the engine should have produced on.
+
+    Walking the window instead of dead-ending on its first entry is the fix.
+    `require_exact_expiry_future` (default True, per the v1 ruling in
+    `phase-04-fo-suggestions.md` §7.6, "weeklies excluded in v1") decides what
+    counts as eligible; see that flag for why the default is not merely caution.
+    """
     day = (
         await db.execute(
             select(FoBhavcopy.trade_date)
@@ -345,9 +373,24 @@ async def _pick_expiry(
         .scalars()
         .all()
     )
-    for e in expiries:
-        if rules.dte_min <= (e - day).days <= rules.dte_max:
-            return day, e
+    in_window = [e for e in expiries if rules.dte_min <= (e - day).days <= rules.dte_max]
+    for e in in_window:
+        fwd = await fa.forward_for_expiry(db, symbol, e, on_day=day)
+        if fwd is None:
+            continue
+        if rules.require_exact_expiry_future and fwd.source != "fut_exact":
+            continue
+        return day, e, fwd
+    if in_window:
+        log.warning(
+            "fo_suggestions: no ELIGIBLE in-window expiry — the empty result is a "
+            "PRICING/POLICY outcome, not a gate rejection "
+            "(symbol=%s day=%s in_window=%s require_exact_expiry_future=%s)",
+            symbol,
+            day,
+            [e.isoformat() for e in in_window],
+            rules.require_exact_expiry_future,
+        )
     return None
 
 
@@ -376,25 +419,52 @@ async def suggest_option_sells(
     # Gate 2 — HARD veto (fail-CLOSED): stand down in a risk-off vol regime AND
     # when the regime can't be assessed (no VIX data). A blind safety gate must
     # not pass — a vol spike lifts IV-rank (Gate 1 passes), so this is the backstop.
-    vix = await fa.vix_regime(db, as_of=datetime(ref.year, ref.month, ref.day))
+    vix = await fa.vix_regime(db, as_of=datetime.combine(ref, time.max, tzinfo=UTC))
     if rules.skip_high_vix and (vix is None or vix.band == "high"):
         return []
 
     picked = await _pick_expiry(db, symbol, as_of=ref, rules=rules)
     if picked is None:
         return []
-    day, expiry = picked
-    dte = (expiry - day).days
+    day, expiry, forward = picked
 
-    basis = await fa.futures_basis(db, symbol, expiry, as_of=datetime(day.year, day.month, day.day))
-    if basis is None:
-        return []
-    fwd = float(basis.fut_close)  # Black-76 forward
+    # Both gates above are bounded by `ref` (no look-ahead) but neither is
+    # ALIGNED to `day`, so a stale IV-rank can authorize a trade priced off a
+    # much later chain — silently. Not hypothetical: EOD ingestion has skipped
+    # a session before (docs/PHASES.md ops note). Making staleness a hard
+    # rejection would change gate semantics and is a calibration decision, so
+    # for now it is made LOUD rather than fatal. See phase-04 §9.7.
+    if ivr.as_of != day:
+        log.warning(
+            "fo_suggestions: IV-rank is STALE relative to the priced day — the "
+            "vol gate was judged on older data than the chain "
+            "(symbol=%s chain_day=%s iv_rank_as_of=%s rank=%.1f)",
+            symbol,
+            day,
+            ivr.as_of,
+            ivr.rank,
+        )
+    dte = (expiry - day).days
+    fwd = float(forward.price)  # Black-76 forward, pinned to `day`'s futures
     t = dte / 365.0
 
-    chain = await fa.load_chain(db, symbol, expiry, source="eod")
+    # NO LOOK-AHEAD: bind the chain to the SAME day the forward and `t` came
+    # from. `load_chain` without `as_of` takes the latest recorded day for the
+    # expiry, unbounded — so any historical `as_of` priced a LATER chain against
+    # an EARLIER forward. Inert on the live endpoint (which never passes
+    # `as_of`), but it would have silently corrupted the Phase-6
+    # realized-vs-POP forward-validation dashboard, which is exactly a
+    # historical-`as_of` consumer.
+    chain = await fa.load_chain(
+        db,
+        symbol,
+        expiry,
+        as_of=datetime.combine(day, time.max, tzinfo=UTC),
+        source="eod",
+    )
     candidates = _select_and_build(
-        chain, fwd=fwd, t=t, rate=rate, dte=dte, expiry=expiry, ivr=ivr.rank, rules=rules
+        chain, fwd=fwd, t=t, rate=rate, dte=dte, expiry=expiry, ivr=ivr.rank, rules=rules,
+        forward_source=forward.source,
     )
     return rank_candidates([c for c in candidates if passes_gates(c, rules)])
 
@@ -417,11 +487,20 @@ def _select_and_build(  # noqa: C901 — linear strike-selection + three structu
     expiry: date,
     ivr: float,
     rules: SellRules,
+    forward_source: str,
 ) -> list[SpreadCandidate]:
     """From a chain: price IV+delta per strike (tradecore), pick short strikes
     near the target delta, and build the defined-risk structures with
-    conservative fills and breakeven-exact POP. tradecore is the only compute."""
+    conservative fills and breakeven-exact POP. tradecore is the only compute.
+
+    `forward_source` is carried into every rationale. A carry-implied forward
+    carries a measured ~0.12% bias (phase-05 §6c) which is CONSISTENTLY positive,
+    not zero-mean, and moves POP by ~1.1pp — enough to cross the hard
+    `min_pop` gate — so a suggestion must never hide which kind it was priced
+    against."""
     import tradecore  # deferred: parity-gated wheel (idiom: signal_service)
+
+    prov = "" if forward_source == "fut_exact" else f", forward {forward_source}"
 
     def build_side(kind: str) -> dict[Decimal, _StrikeInfo]:
         rows = {r.strike: r for r in chain if r.option_type == kind and r.ltp and r.ltp > 0}
@@ -491,7 +570,7 @@ def _select_and_build(  # noqa: C901 — linear strike-selection + three structu
             draft = bull_put(
                 sell=sell_leg(pe, ps, "PE"), buy=buy_leg(pe, pl, "PE"),
                 short_delta=pe[ps].delta, dte=dte, expiry=expiry,
-                rationale=f"IV-rank {ivr:.0f}, {abs(pe[ps].delta):.2f}Δ short put",
+                rationale=f"IV-rank {ivr:.0f}, {abs(pe[ps].delta):.2f}Δ short put{prov}",
             )
             if draft is not None:
                 pop = breakeven_pop(
@@ -514,7 +593,7 @@ def _select_and_build(  # noqa: C901 — linear strike-selection + three structu
             draft = bear_call(
                 sell=sell_leg(ce, cs, "CE"), buy=buy_leg(ce, ch, "CE"),
                 short_delta=ce[cs].delta, dte=dte, expiry=expiry,
-                rationale=f"IV-rank {ivr:.0f}, {abs(ce[cs].delta):.2f}Δ short call",
+                rationale=f"IV-rank {ivr:.0f}, {abs(ce[cs].delta):.2f}Δ short call{prov}",
             )
             if draft is not None:
                 pop = breakeven_pop(
@@ -538,7 +617,7 @@ def _select_and_build(  # noqa: C901 — linear strike-selection + three structu
             )
             ic = iron_condor(
                 put=bp, call=bc, dte=dte, expiry=expiry,
-                rationale=f"IV-rank {ivr:.0f}, neutral condor", pop_override=pop,
+                rationale=f"IV-rank {ivr:.0f}, neutral condor{prov}", pop_override=pop,
             )
             if ic is not None:
                 out.append(ic)

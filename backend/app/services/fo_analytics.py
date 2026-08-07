@@ -31,6 +31,10 @@ from app.models.fo_data import FoBhavcopy, IndiaVixDaily, OptionChainSnapshot
 
 _ZERO = Decimal(0)
 _IST = ZoneInfo("Asia/Kolkata")
+# How many futures expiries past the option to consider when the nearest one has
+# no settlement price. Indian index futures list 3 serial months, so 4 covers the
+# whole board with room to spare while staying an indexed, bounded lookup.
+_FUT_FALLBACK_DEPTH = 4
 
 
 # ── Value types ───────────────────────────────────────────────────────────────
@@ -286,7 +290,11 @@ async def forward_for_expiry(
     would price an INTRADAY chain against yesterday's futures close (EOD
     bhavcopy lands ~18:45 IST), silently skewing every IV and delta.
     """
-    row = (
+    # Take the NEAREST future on/after the option that actually has a settlement
+    # price. Looking at only the nearest row meant one unpriced recorder row
+    # killed the forward — and so every Greek — for the whole front chain, even
+    # with a perfectly good future one expiry further out.
+    candidates = (
         await db.execute(
             select(FoBhavcopy.close, FoBhavcopy.underlying_close, FoBhavcopy.expiry_date)
             .where(
@@ -296,18 +304,21 @@ async def forward_for_expiry(
                 FoBhavcopy.expiry_date >= expiry,
             )
             .order_by(FoBhavcopy.expiry_date.asc())
-            .limit(1)
+            .limit(_FUT_FALLBACK_DEPTH)
         )
-    ).first()
-    if row is None or row.close is None or row.close <= _ZERO:
+    ).all()
+    row = next((r for r in candidates if r.close is not None and r.close > _ZERO), None)
+    if row is None:
         return None
+    # Spot is the same underlying for every contract, so prefer the NEAREST row
+    # that carries it rather than whichever row happened to supply the price.
+    spot = next((r.underlying_close for r in candidates if r.underlying_close is not None), None)
 
     if row.expiry_date == expiry:
         return ChainForward(
             price=row.close, source="fut_exact", trade_date=on_day, fut_expiry=expiry
         )
 
-    spot = row.underlying_close
     if spot is None or spot <= _ZERO:
         return None
     t_fut = (row.expiry_date - on_day).days / 365.0
