@@ -12,17 +12,27 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ## ▶ STATE AT A GLANCE (updated 2026-08-06) — read this block first
 
-**v2 Phases 0–2 ✅ done · Phase 3 (realtime) ▶ in progress · Phase 4 ✅ done ·
-Phase 5 ✅ slices 5.1–5.4 MERGED to main 2026-08-07 · Phases 6–7 not started.**
-Suites: backend **1038**, frontend **344** (was 257), parity 16, walkforward 9,
-replay 19. **Full `make check` GREEN on main 2026-08-07** (all legs through
-`replay`).
+**v2 Phases 0–2 ✅ done · Phase 3 (realtime) ▶ gate ritual only · Phase 4 ✅ done ·
+Phase 5 ✅ GATED 2026-08-07 · Phases 6–7 not started.**
+Suites: backend **1073**, frontend **344** (was 257), parity 16, walkforward 9,
+replay 19, cargo 86. Gate run 2026-08-07 on
+`worktree-phase5-gate-fo-expiry`.
 
-**Phase 5 — done (see [phase-05](phases/phase-05-ui-overhaul.md)):** merged to
-main; `make check` green. bug-hunter + ui-reviewer run, all findings in new code
+**Phase 5 — GATED 2026-08-07 (see [phase-05](phases/phase-05-ui-overhaul.md) §7
+for the verdict block).** bug-hunter + ui-reviewer run, all findings in new code
 fixed with regression tests — incl. a HIGH that would have shipped the F&O page
 with **every Greek null by default**, because index options are weekly but
 futures monthly and only 3 of 12 NIFTY expiries have a same-expiry future.
+The gate also closed the Phase-4 expiry bug §8 had handed forward, and the owed
+quant-verifier pass turned up a **CRITICAL look-ahead** next to it — both fixed
+with revert-proven canaries (`phases/phase-04-fo-suggestions.md` §9).
+**Caveat on the gate:** `make check` as a single target cannot run in a worktree
+(its ESLint leg shells out to `pnpm install`, which tries to purge a
+`node_modules` this box cannot reinstall — the known snap-store breakage). Every
+leg was therefore run individually and all passed; the frontend legs ran against
+the main checkout's `node_modules`. Backend-only diff, so that substitution is
+sound, but a single-command `make check` on main is still worth doing once the
+pnpm store is repaired.
 The **60 fps budget is MEASURED and MET** — React commit p99 **7.6–8.8 ms** vs
 16.7 ms in real Chrome 151 (`docs/PERFORMANCE.md`; harness `frontend/perf/`).
 **Visual smoke passed in all 5 themes** via `perf/theme-gallery.html` +
@@ -34,22 +44,39 @@ snap refresh, so **no new frontend dependency can be installed** until
 `store-dir` is repointed outside `~/snap/` and one full `pnpm install` runs.
 That is why virtualization is an in-repo hook rather than `@tanstack/react-virtual`.
 
-**Phase 3 — ONE item remains. (Corrected 2026-08-07: this checklist used to
-call the soak "UNPROVEN", contradicting both the narrative below and
-`PERFORMANCE.md`. The soak is DONE.)**
+**Phase 3 — BOTH exit criteria are now MET; only the gate ritual is left.
+(Corrected twice on 2026-08-07: the checklist used to call the soak "UNPROVEN",
+contradicting both the narrative below and `PERFORMANCE.md`; and it then called
+the shadow week outstanding when the log shows three weeks of clean runs. Read
+the artifacts before trusting a checkbox.)**
 
 - [x] **Quiet-box full-session soak — MET ×2 (2026-07-15 + 07-16).** Budget
       restated to p99 ≤ 50 ms by user ruling on 07-14 and then met on the
       optimized worker across two full sessions; verdict recorded 07-16
       (`PERFORMANCE.md` §Budgets, ledger §Fourth soak). **No further soak is
       needed.**
-- [ ] **Clean shadow week** — the ONLY outstanding Phase-3 item.
-      `scripts/shadow_day.sh <day…>` once per day AFTER the evening EOD beats
-      land (~19:30 IST); zero diffs required. Day one (07-17) already clean.
-      **This does NOT require waiting a calendar week:** a gap catches up in one
-      evening — the EOD catch-up heals the backlog (≤ 21 days), then run the
-      wrapper across the backfilled days in a single sitting.
-- [ ] Then **`/phase-gate`** → Phase 3 closes.
+- [x] **Clean shadow week — MET. (Corrected 2026-08-07: this said "the ONLY
+      outstanding Phase-3 item" and implied one clean day. It had in fact been
+      running daily for three weeks and the log was never read back.)**
+      `backend/shadow/shadow_week.log` records **14 consecutive trading days,
+      2026-07-20 → 08-06, every one `PASS diffs=0 errors=0`** (2295–2299 stocks
+      matched per day, 58–93 signals emitted under BOTH engines). The criterion
+      is "a clean week"; this is nearly three.
+      *One caveat, stated for honesty:* the 08-06 entry is soft — no 08-06 daily
+      bar exists in the DB (the worker was down that evening, see below), so that
+      run almost certainly re-scored the 08-05 close under an 08-06 cutoff.
+      **07-20 → 08-05 alone is 13 clean days on real data**, so the criterion
+      stands on its own without it.
+- [ ] **`/phase-gate` for Phase 3** — the only thing left. Nothing to wait for:
+      the evidence for both exit criteria is already on disk.
+
+> **Ops note (2026-08-07), not a Phase-3 item.** Every EOD table stops at
+> **2026-08-05** — `ohlcv_1d`, `india_vix_daily`, `fii_dii_daily`, `fo_bhavcopy`
+> and `signals` (last nightly generation 08-05 22:44 IST). The worker stack was
+> only restarted 08-07 09:13, so 08-06's 18:40 EOD and 19:15 generation beats
+> never ran; the 08-06 analysis + shadow runs that DO exist were manual. The
+> ≤ 21-day EOD self-heal should absorb 08-06 at the next evening beat — verify
+> it did rather than assuming.
 
 **Not a Phase-3 item:** the 30-day paper clock is the **Phase-7** go-live gate,
 and it only *starts* when the live path runs (slice 3.7).
@@ -88,28 +115,40 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-08-07.**
-Phases **0–2, 4 and 5 are CLOSED**; **Phase 3 has exactly one item left**.
-Everything below this line is historical narrative — read the STATE AT A GLANCE
-block at the top of this file first, not the 400 lines that follow.
+**▶ CONTINUE HERE (next session, any account) — updated 2026-08-07 (2nd pass).**
+Phases **0–2, 4 and 5 are CLOSED**; **Phase 3's two exit criteria are both MET
+and only its gate ritual is left**. Everything below this line is historical
+narrative — read the STATE AT A GLANCE block at the top of this file first, not
+the 400 lines that follow.
 
 **Do these, in this order:**
 
-1. **Phase 3 — the clean shadow week** (the only thing standing between you and
-   closing Phase 3). `scripts/shadow_day.sh <day…>` after ~19:30 IST; zero diffs
-   required; day one (07-17) already clean. Backfilled days can be run in ONE
-   sitting — you are not waiting a calendar week. Then `/phase-gate` for Phase 3.
-   The soak is already MET — do NOT re-run it.
+1. **`/phase-gate` for Phase 3 — nothing left to wait for.** Both criteria are
+   already satisfied on disk: the soak is MET ×2 (`PERFORMANCE.md`) and the
+   shadow week is MET with **14 consecutive clean days 07-20 → 08-06** in
+   `backend/shadow/shadow_week.log`. Do NOT re-run either. (Both of these
+   checkboxes were stale for weeks — the work was done and never read back.
+   If a checkbox here disagrees with an artifact, trust the artifact.)
 2. **Phase 6 — outcome tracking + strategy lab v2** is the next *build* phase,
    and the daily analysis says why: the binding constraint on profit is
    **entry/regime selection, not exits** (only ~2 of 20 trades reached +1R over
    08-03→06, and open heat has twice touched ~30% of capital). Phase 6 is where
    expectancy calibration lives.
-3. **One imminent bug is logged, not fixed** —
-   `fo_suggestions._pick_expiry` will start returning an empty candidate list
-   that looks like "no setup qualified" as soon as the current monthly expiry
-   ages past dte 20. Needs a user ruling because `SellRules` were calibrated
-   against the old forward. Detail: `phases/phase-05-ui-overhaul.md` §8.
+3. ~~One imminent bug is logged, not fixed~~ — **FIXED 2026-08-07**, plus a
+   CRITICAL look-ahead the owed quant-verifier pass turned up next to it.
+   `_pick_expiry` walks the in-window expiries instead of dead-ending on the
+   first (recovers **26 of 35** lost trading days), the chain is now bound to the
+   forward's own day, and weeklies stay excluded per §7.6 via an explicit
+   `SellRules.require_exact_expiry_future`. No calibrated number moves. Detail:
+   `phases/phase-04-fo-suggestions.md` §9.
+   **▶ ONE USER RULING IS OPEN:** flipping that flag takes the engine from
+   33/42 to 42/42 producing days, but real OI data (§9.3) shows a NIFTY weekly's
+   whole chain carries ~1% of the monthly's, so the fill model would overstate
+   credit. Don't flip it without a chain-level liquidity gate first.
+4. **Check the EOD self-heal actually caught 2026-08-06.** All EOD tables stop
+   at 08-05 because the worker was down that evening (see the ops note above).
+   `SELECT max(time) FROM ohlcv_1d;` should read 08-06 or later after the next
+   evening beat — if it doesn't, the ≤21-day catch-up needs a look.
 
 Kite subscription ACTIVE. Push to origin is MANUAL (user). History on main is
 linear — merge phase branches with `--ff-only`.

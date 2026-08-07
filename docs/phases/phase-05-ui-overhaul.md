@@ -330,9 +330,25 @@ hand-verification in §6b stand in its place; a quant-verifier pass on
       palette. Notably the review's predicted carbon OI-bar invisibility
       (1.63:1) does **not** occur — carbon's accent is a warm amber that reads
       clearly, so nothing was "fixed" on a false alarm.
-- [ ] Page-level smoke **with live data** (`/styles/fno`, `/live-signals`) —
-      still needs a logged-in session; the components above are covered, this
-      would exercise the query/auth plumbing the 344 unit tests already assert.
+- [~] Page-level smoke **with live data** (`/styles/fno`, `/live-signals`) —
+      **partially done 2026-08-07, at the service layer.** The F&O page's whole
+      data path was exercised against the REAL dev DB (NIFTY, latest recorded
+      day 2026-08-05): `available_underlyings` (208 symbols), `available_expiries`
+      (18, settled ones dropped), `chain_day`, `forward_for_expiry` and
+      `price_chain_greeks` for three expiries —
+
+      | expiry | forward | source | legs | Greeks priced | ATM CE IV / Δ |
+      |---|---|---|---:|---:|---|
+      | 08-25 monthly | 24647.7000 | `fut_exact` | 242 | 195 | 0.1094 / 0.5333 |
+      | 09-01 weekly | 24695.8967 | `fut_carry_implied` | 210 | 172 | 0.1056 / 0.5568 |
+      | 09-08 weekly | 24714.4017 | `fut_carry_implied` | 142 | 142 | 0.1086 / 0.5588 |
+
+      The term structure is coherent rather than merely non-null: gamma falls
+      (0.000627 → 0.000553 → 0.000478) and |theta| shrinks (2264 → 1861 → 1697)
+      as expiry lengthens, and the ATM deltas sit just above 0.5 with the forward
+      just above the 24600 strike. **Still open:** the browser render itself
+      (React Query wiring, auth, the ladder's visual layout on live data), which
+      needs a logged-in session.
 - [x] **Sticky table header inside `VirtualViewport` — it was BROKEN; fixed and
       re-verified in Chrome.** `Table` wraps itself in `overflow-x-auto`, and CSS
       promotes the other axis to `auto` too, so that wrapper became the
@@ -344,28 +360,75 @@ hand-verification in §6b stand in its place; a quant-verifier pass on
       the inner wrapper (`overflow-visible`) and owns both scroll axes; measured
       after the fix, the header holds at the viewport top (`sticks: true`). The
       F&O ladder, which had no bounded container at all, now uses one too.
-- [ ] `/phase-gate`
+- [x] **`/phase-gate` — run 2026-08-07.**
+
+```
+PHASE GATE: PASS (with two open user rulings, neither blocking)
+  static:      ruff ✓ · mypy strict ✓ (159 files) · eslint ✓ · tsc ✓ ·
+               tsc -b + vite build ✓ · cargo fmt ✓ · cargo clippy -D warnings ✓
+  tests:       backend 1073 passed · frontend 344 passed · cargo 86 passed ·
+               parity 16 · walkforward 9 · replay 19
+  regression:  no trading-logic change to the confluence engine — the diff is
+               F&O expiry SELECTION + a look-ahead fix. Calibration invariance
+               proven instead of backtested: on the exact-expiry path the
+               forward is Decimal-identical to what `futures_basis` returned
+               (real DB, NIFTY 2026-08-05: 24647.7000 both paths), and
+               `require_exact_expiry_future=True` keeps the engine on that path.
+               Zero divergence cases across all 886,577 recorded bhavcopy rows.
+  smoke:       F&O data path against the REAL dev DB — underlyings/expiries
+               pickers, chain_day, forward, per-leg Greeks for 3 expiries, with
+               a coherent term structure (gamma 0.000627→0.000478, |theta|
+               2264→1697 as expiry lengthens). Browser render still unsmoked.
+  reviews:     quant-verifier round 1 FAIL → fixes → round 2 PASS-WITH-NOTES,
+               blockers revert-proven; bug-hunter + ui-reviewer clean (5.5)
+  docs:        CHANGELOG ✓ · phase-04 §9 ✓ · phase-05 §7/§8 ✓ · PHASES.md ✓
+Open rulings (do not block the gate; both are documented, defaulted safe):
+  1. Weeklies — `SellRules.require_exact_expiry_future` (phase-04 §9.3)
+  2. Hard-reject on stale vol gates vs the current warning (phase-04 §9.7)
+Known gap: single-command `make check` cannot run in a worktree (pnpm store);
+every leg was run individually. Re-run on main once the store is repaired.
+```
 
 ## 8. Follow-ups handed forward
 
-- **⚠ IMMINENT, Phase-4 code, NOT fixed here.**
-  `fo_suggestions._pick_expiry` picks the first OPTION expiry whose DTE falls in
+- ~~**⚠ IMMINENT, Phase-4 code, NOT fixed here.**~~ **RESOLVED 2026-08-07 —
+  and it was not imminent, it had already tripped.** The entry below is kept
+  because the *misjudgement* is the lesson.
+  `fo_suggestions._pick_expiry` picked the first OPTION expiry whose DTE fell in
   `[dte_min, dte_max]` **without checking that a same-expiry FUTURE exists**;
-  `suggest_option_sells` then calls `futures_basis`, which requires an exact
+  `suggest_option_sells` then called `futures_basis`, which requires an exact
   expiry match and returns `None` otherwise — making the whole engine
   `return []`. That empty list is **indistinguishable from "no candidate cleared
   the gates"**, which the docs teach you to read as normal.
-  Checked against real data (latest day 2026-08-05): the first in-window expiry
-  is **2026-08-25, dte 20, which HAS a future — so it works today**. But once
-  that ages past dte 20, the next in-window expiry is **2026-09-01, a weekly
-  with zero futures rows**, and the engine goes silently empty.
-  The fix is small — swap `futures_basis` for the new `forward_for_expiry` — but
-  it was left alone on purpose: `SellRules` were user-calibrated against an
-  exact-expiry-future forward, so changing what the engine prices against is a
-  calibration decision, not a gate-time edit. **Needs a user ruling + a
-  quant-verifier pass.**
-- **quant-verifier on `forward_for_expiry`** — the Phase-5 run aborted on an
-  account spend limit with no findings (see §6c).
+  This entry read the evidence correctly (on 2026-08-05 the first in-window
+  expiry was 08-25 at DTE exactly 20, which has a future, "so it works today")
+  and then drew the wrong conclusion from it. DTE 20 is the *floor* of the
+  window, so "works today" meant the last day it would work: on the very next
+  bhavcopy day the monthly drops to DTE 19 and the 09-01 weekly takes its place.
+  The engine was one trading day from silence, not comfortably ahead of it, and
+  would have stayed silent ~20 trading days until 09-29 entered the window.
+  **Fixed:** `_pick_expiry` now walks the in-window expiries instead of
+  dead-ending on the first, and takes the first ELIGIBLE one; the
+  empty-for-pricing case is logged distinctly from the empty-for-gates case.
+  Weeklies stay excluded per §7.6 — now enforced by an explicit
+  `SellRules.require_exact_expiry_future` rather than emerging by accident from
+  which expiry owns a futures row — so no calibrated number moves. Measured on
+  the real expiry calendar, the walk alone recovers **26 of the 35** lost
+  trading days between 08-06 and 10-02. Full write-up:
+  `phase-04-fo-suggestions.md` §9.
+  **Lesson:** "checked against real data, works today" is not a safety margin
+  unless you also check what happens on the next tick of the clock — DTE 20 was
+  the *floor* of the window, so "works today" meant "breaks tomorrow".
+- **quant-verifier on `forward_for_expiry`** — **owed pass RUN 2026-08-07**
+  (the Phase-5 run had aborted on an account spend limit with no findings, see
+  §6c). It returned **FAIL**, and was right to: it found a **CRITICAL
+  look-ahead** in `suggest_option_sells` (an unbounded `load_chain` priced a
+  later chain against an earlier forward — inert live, but it would have
+  corrupted the Phase-6 realized-vs-POP dashboard), and it caught that the first
+  draft of the fix **overrode the §7.6 weeklies-excluded ruling** on a
+  liquidity argument the real OI data refutes. Both are fixed in
+  `phase-04-fo-suggestions.md` §9.2 / §9.3, with canaries. The function's own
+  algebra came back clean (§9 item 9.4).
 
 - **Daybreak badge contrast (systemic).** `--color-bull` on `--color-profit-bg`
   is 3.32:1 and `--color-bear` on `--color-loss-bg` 3.95:1 in the light theme,
