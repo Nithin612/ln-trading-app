@@ -29,10 +29,13 @@ export interface AccessTokenResponse {
 }
 
 export const authApi = {
+  // Anonymous by construction: login has no token yet, and refresh authenticates
+  // with the httpOnly cookie — sending the expired bearer it is replacing would
+  // be misleading at best.
   login: (email: string, password: string) =>
-    api.post<TokenResponse>('/auth/login', { email, password }),
+    api.anon.post<TokenResponse>('/auth/login', { email, password }),
 
-  refresh: () => api.post<AccessTokenResponse>('/auth/refresh', {}),
+  refresh: () => api.anon.post<AccessTokenResponse>('/auth/refresh', {}),
 
   logout: (token: string) => api.post<{ message: string }>('/auth/logout', {}, token),
 

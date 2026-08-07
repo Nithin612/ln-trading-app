@@ -1,3 +1,5 @@
+import { useAuthStore } from '@/store/authStore'
+
 const BASE = '/api/v1'
 
 export class ApiError extends Error {
@@ -9,17 +11,43 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Resolve the bearer token for a request.
+ *
+ * The access token lives in memory (Zustand) — `credentials: 'include'` only
+ * carries the refresh COOKIE, which `get_current_user` does not accept. So a
+ * call that forgets to pass a token is not "unauthenticated but working": it
+ * is a hard 401. Two whole features (journal, portfolio) shipped that way —
+ * every one of their 17 calls omitted the argument and 401'd against a live
+ * backend, invisible to the suite because page tests mock the API module.
+ *
+ * Falling back to the store makes the token the client's business, not each
+ * call site's. An explicit argument still wins (tests and the auth flow pass
+ * one deliberately); `anonymous` opts out entirely for login/refresh.
+ */
+function resolveToken(explicit: string | undefined, anonymous: boolean): string | undefined {
+  if (anonymous) return undefined
+  if (explicit) return explicit
+  return useAuthStore.getState().accessToken ?? undefined
+}
+
 async function request<T>(
   method: string,
   path: string,
-  options: { body?: unknown; token?: string; formData?: FormData } = {},
+  options: {
+    body?: unknown
+    token?: string
+    formData?: FormData
+    anonymous?: boolean
+  } = {},
 ): Promise<T> {
   const headers: Record<string, string> = {}
   if (!options.formData) {
     headers['Content-Type'] = 'application/json'
   }
-  if (options.token) {
-    headers['Authorization'] = `Bearer ${options.token}`
+  const token = resolveToken(options.token, options.anonymous ?? false)
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`
   }
 
   const res = await fetch(`${BASE}${path}`, {
@@ -62,4 +90,10 @@ export const api = {
   patch: <T>(path: string, body: unknown, token?: string) =>
     request<T>('PATCH', path, { body, token }),
   delete: <T>(path: string, token?: string) => request<T>('DELETE', path, { token }),
+
+  /** Login / refresh — these MINT the token, so they must never carry a stale one. */
+  anon: {
+    post: <T>(path: string, body: unknown) =>
+      request<T>('POST', path, { body, anonymous: true }),
+  },
 }

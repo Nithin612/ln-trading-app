@@ -31,11 +31,21 @@ export interface EventGuardStatus {
 
 export const filingsApi = {
   getRecent(
-    params: { hours?: number; filingType?: string; limit?: number; offset?: number },
+    params: {
+      hours?: number
+      /** Inclusive IST dates (YYYY-MM-DD). When given, they override `hours`. */
+      startDate?: string
+      endDate?: string
+      filingType?: string
+      limit?: number
+      offset?: number
+    },
     token: string,
   ): Promise<FilingListResponse> {
     const q = new URLSearchParams()
     if (params.hours != null) q.set('hours', String(params.hours))
+    if (params.startDate) q.set('start_date', params.startDate)
+    if (params.endDate) q.set('end_date', params.endDate)
     if (params.filingType) q.set('filing_type', params.filingType)
     if (params.limit != null) q.set('limit', String(params.limit))
     if (params.offset != null) q.set('offset', String(params.offset))

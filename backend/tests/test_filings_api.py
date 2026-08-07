@@ -1,6 +1,7 @@
 """Integration tests for the corporate filings API — Phase 6."""
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, time, timedelta
+from zoneinfo import ZoneInfo
 
 from app.models.filing import CorporateFiling
 from httpx import AsyncClient
@@ -77,6 +78,143 @@ class TestFilingsRecent:
 
         r = await client.get("/api/v1/filings/recent?hours=24", headers=headers)
         assert r.json()["total"] == 0
+
+    async def test_default_page_lookback_is_accepted(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """Regression: the Filings page's own default view used to 422.
+
+        Its date pickers default to a 7-day range, which spans 8 calendar days
+        once the end day is included → hours=192, over the old `le=168` cap. The
+        page therefore rendered empty on every load. Canary: on the old code
+        this assertion sees 422.
+        """
+        await create_test_user(db)
+        headers = await _auth(client)
+        stock = await make_stock(db, symbol="LT")
+        await _make_filing(db, stock.id, hours_ago=180)
+        await db.commit()
+
+        r = await client.get("/api/v1/filings/recent?hours=192", headers=headers)
+        assert r.status_code == 200, r.text
+        assert r.json()["total"] == 1
+
+    async def test_hours_over_one_year_still_rejected(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """The cap moved to a year; it did not disappear."""
+        await create_test_user(db)
+        headers = await _auth(client)
+        r = await client.get("/api/v1/filings/recent?hours=8761", headers=headers)
+        assert r.status_code == 422
+
+    async def test_date_range_bounds_both_ends(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """Regression: the end date was discarded (only a look-back was sent).
+
+        A range ending days ago must NOT return filings newer than it. Canary:
+        the old handler had no upper bound at all, so `recent` came back too.
+        """
+        await create_test_user(db)
+        headers = await _auth(client)
+        stock = await make_stock(db, symbol="SBIN")
+        ist = ZoneInfo("Asia/Kolkata")
+        today_ist = datetime.now(tz=UTC).astimezone(ist).date()
+        old = today_ist - timedelta(days=10)
+
+        await _make_filing(db, stock.id, hours_ago=1, headline="recent")
+        # Squarely inside the old IST day, immune to the 5:30 offset.
+        in_window = datetime.combine(old, time(12, 0), tzinfo=ist).astimezone(UTC)
+        db.add(
+            CorporateFiling(
+                stock_id=stock.id,
+                filing_type="earnings",
+                headline="in-window",
+                filing_date=in_window.date(),
+                filing_time=in_window,
+                source="NSE",
+            )
+        )
+        await db.commit()
+
+        r = await client.get(
+            f"/api/v1/filings/recent?start_date={old - timedelta(days=1)}&end_date={old}",
+            headers=headers,
+        )
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["total"] == 1
+        assert data["filings"][0]["headline"] == "in-window"
+
+    async def test_date_range_includes_the_whole_end_day(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """end_date is INCLUSIVE — an evening IST filing on that day counts."""
+        await create_test_user(db)
+        headers = await _auth(client)
+        stock = await make_stock(db, symbol="ITC")
+        ist = ZoneInfo("Asia/Kolkata")
+        day = datetime.now(tz=UTC).astimezone(ist).date() - timedelta(days=3)
+        evening = datetime.combine(day, time(21, 30), tzinfo=ist).astimezone(UTC)
+        db.add(
+            CorporateFiling(
+                stock_id=stock.id,
+                filing_type="earnings",
+                headline="late filing",
+                filing_date=evening.date(),
+                filing_time=evening,
+                source="NSE",
+            )
+        )
+        await db.commit()
+
+        r = await client.get(
+            f"/api/v1/filings/recent?start_date={day}&end_date={day}", headers=headers
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["total"] == 1
+
+    async def test_end_date_alone_still_bounds_the_window(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """An upper bound must never be silently dropped for lacking a partner."""
+        await create_test_user(db)
+        headers = await _auth(client)
+        stock = await make_stock(db, symbol="AXISBANK")
+        ist = ZoneInfo("Asia/Kolkata")
+        day = datetime.now(tz=UTC).astimezone(ist).date() - timedelta(days=2)
+        inside = datetime.combine(day, time(12, 0), tzinfo=ist).astimezone(UTC)
+        db.add(
+            CorporateFiling(
+                stock_id=stock.id,
+                filing_type="earnings",
+                headline="in-window",
+                filing_date=inside.date(),
+                filing_time=inside,
+                source="NSE",
+            )
+        )
+        await _make_filing(db, stock.id, hours_ago=1, headline="after the window")
+        await db.commit()
+
+        r = await client.get(
+            f"/api/v1/filings/recent?hours=48&end_date={day}", headers=headers
+        )
+        assert r.status_code == 200, r.text
+        data = r.json()
+        assert data["total"] == 1
+        assert data["filings"][0]["headline"] == "in-window"
+
+    async def test_reversed_date_range_is_rejected(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        await create_test_user(db)
+        headers = await _auth(client)
+        r = await client.get(
+            "/api/v1/filings/recent?start_date=2026-08-07&end_date=2026-08-01", headers=headers
+        )
+        assert r.status_code == 422
 
     async def test_filter_by_filing_type(self, client: AsyncClient, db: AsyncSession) -> None:
         await create_test_user(db)

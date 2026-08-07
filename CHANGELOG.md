@@ -7,6 +7,52 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — Journal and Portfolio were unreachable; the Filings page 422'd on its own default (2026-08-07)
+
+Both were caught from a pasted server log, not from the suite. That is the story
+of this entry: every one of these failures is at a seam the tests mock away.
+
+- **Journal and Portfolio 401'd on every request — the features were entirely
+  unusable against a live backend.** `lib/api/journal.ts` (8 calls) and
+  `lib/api/portfolio.ts` (9 calls) never took a token parameter, so no request
+  from either module carried an `Authorization` header. The access token lives
+  in memory; `credentials: 'include'` only sends the refresh **cookie**, which
+  `get_current_user` does not accept — so this was a hard 401 on list, create,
+  update, delete, screenshot upload and net-worth alike. Page tests mock the API
+  module, so 100% green tests coexisted with two dead features (the same lesson
+  as the 453-green-tests / dead-live-pipeline incident).
+  - **Fix is in the client, not the 17 call sites:** `request()` now falls back
+    to the auth store's token when none is passed, making the token the API
+    client's business. An explicit argument still wins, so every existing module
+    is untouched. `api.anon.post` opts login and refresh out — they mint the
+    token and must never send a stale one.
+  - Tests: new `src/test/apiClient.test.ts` (8) exercises the module→client seam
+    through a mocked `fetch` — store fallback, explicit-token precedence, no
+    header when logged out, login/refresh staying anonymous, and the exact
+    journal/portfolio calls from the log carrying the bearer. **5 of the 8 fail
+    on the old client** (verified by reverting).
+- **`GET /filings/recent` rejected the Filings page's own default view.** The
+  page's date pickers default to 7 days, which spans **8 calendar days** once the
+  end day is included → `hours=192`, over the endpoint's `le=168` cap → **422 on
+  every load**, and the page rendered its empty state. The cap is now one year,
+  matching the sibling `/by-stock` endpoint's `days` cap.
+- **The same request was silently discarding the end date.** The from/to pickers
+  were being flattened into a single look-back window, so a range ending last
+  month returned everything since then. `/filings/recent` now accepts
+  `start_date`/`end_date` as **inclusive IST calendar days** (resolved to UTC
+  instants for the tz-aware column, end day inclusive through 23:59 IST); the
+  page sends the range it actually shows. `hours` remains for the dashboard
+  panel's 24h view.
+- Riders in the same handler: the total count was pulling every matching row id
+  into Python to call `len()` on it — now a database `COUNT`; and the page's
+  default range was built with `toISOString()`, which yields the **UTC** day and
+  so reads a day early before 05:30 IST.
+- Tests: `tests/test_filings_api.py` 14 → **19** (the 192-hour default accepted,
+  the year cap still enforced, both ends of a date range bounded, the end day
+  inclusive for an evening IST filing, reversed ranges rejected);
+  `src/test/FilingsPage.test.tsx` asserts the request carries dates and no
+  `hours`. Backend regressions carry canaries that fail on the old handler.
+
 ### Daily analysis — §7 F&O option-selling engine (2026-08-07)
 
 - **The daily report had zero F&O coverage**, so the two calibration decisions taken the same day (`docs/phases/phase-04-fo-suggestions.md` §9.3 weeklies-excluded, §9.7 stale-vol-gates-warn) could only be reviewed from recollection. Both were taken on an *argument*, not a measurement — reviewing them needs a day-by-day record. And since the engine returning `[]` was already the ambiguity that hid a month-long outage, "no suggestions today" must never again be the only artifact.

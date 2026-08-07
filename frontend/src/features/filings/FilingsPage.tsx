@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { ExternalLink, Search } from 'lucide-react'
 import { useAuth } from '@/hooks/useAuth'
@@ -25,14 +25,17 @@ const TYPE_ICONS: Record<string, string> = {
   bonus: '🎁', merger: '🤝', agm: '🏛️', rating_change: '⭐', other: '📄',
 }
 
+/** YYYY-MM-DD for the IST calendar day — `toISOString()` would give the UTC
+ *  day, which is yesterday's date for anyone looking at this before 05:30 IST. */
+function istDate(d: Date): string {
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+}
+
 function defaultDateRange() {
   const to = new Date()
   const from = new Date()
   from.setDate(from.getDate() - 7)
-  return {
-    from: from.toISOString().slice(0, 10),
-    to: to.toISOString().slice(0, 10),
-  }
+  return { from: istDate(from), to: istDate(to) }
 }
 
 const PAGE_SIZE = 25
@@ -47,19 +50,21 @@ export function FilingsPage() {
 
   const offset = (page - 1) * PAGE_SIZE
 
-  // hours = days * 24 (we'll pass a large hours value if date range is set)
-  const hours = useMemo(() => {
-    const from = new Date(dateRange.from)
-    const to = new Date(dateRange.to)
-    const diffMs = to.getTime() - from.getTime() + 86400000 // include full end day
-    return Math.ceil(diffMs / 3600000)
-  }, [dateRange])
-
+  // Send the range the pickers actually describe. This used to be flattened
+  // into a single `hours` look-back, which (a) discarded the end date and
+  // (b) exceeded the endpoint's 168h cap on the DEFAULT 7-day view, so every
+  // load returned 422 and the page rendered empty.
   const { data, isLoading } = useQuery({
-    queryKey: ['filings-page', hours, filingType, offset],
+    queryKey: ['filings-page', dateRange.from, dateRange.to, filingType, offset],
     queryFn: () =>
       filingsApi.getRecent(
-        { hours, filingType: filingType || undefined, limit: PAGE_SIZE, offset },
+        {
+          startDate: dateRange.from,
+          endDate: dateRange.to,
+          filingType: filingType || undefined,
+          limit: PAGE_SIZE,
+          offset,
+        },
         accessToken!,
       ),
     enabled: !!accessToken,
@@ -94,7 +99,7 @@ export function FilingsPage() {
           label="Date range"
           value={dateRange}
           onChange={(r) => { setDateRange(r); setPage(1) }}
-          maxDate={new Date().toISOString().slice(0, 10)}
+          maxDate={istDate(new Date())}
         />
 
         <div className="flex flex-col gap-1">

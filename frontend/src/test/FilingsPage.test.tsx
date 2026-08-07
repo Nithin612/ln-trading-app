@@ -38,6 +38,24 @@ function setup() {
 }
 
 describe('FilingsPage', () => {
+  it('requests the picked date range, not an unbounded look-back', async () => {
+    // Regression: the from/to pickers were collapsed into a single `hours`
+    // value. That discarded the end date AND produced hours=192 on the default
+    // 7-day view, which the endpoint rejected with 422 — so the page was blank
+    // on every load. Canary: on the old code the call carries `hours` and no
+    // dates.
+    const spy = vi
+      .spyOn(filingsApi, 'getRecent')
+      .mockResolvedValue({ total: 0, filings: [] })
+    setup()
+
+    await waitFor(() => expect(spy).toHaveBeenCalled())
+    const params = spy.mock.calls[0][0]
+    expect(params.startDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(params.endDate).toMatch(/^\d{4}-\d{2}-\d{2}$/)
+    expect(params.hours).toBeUndefined()
+  })
+
   it('shows a loading skeleton while filings are pending', () => {
     vi.spyOn(filingsApi, 'getRecent').mockReturnValue(new Promise(() => {}))
     const { container } = setup()
