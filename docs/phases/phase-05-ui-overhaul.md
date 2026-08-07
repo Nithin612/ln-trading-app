@@ -286,8 +286,22 @@ trap. Both are listed in §8.
       code fixed with regression tests (§6b); two systemic/pre-existing ones
       deferred to §8 with reasons
 - [x] **In-browser 60 fps** — MEASURED and **MET** (§6, `PERFORMANCE.md`)
-- [ ] Manual smoke in the browser across **daybreak (light)** and **carbon
-      (highest contrast)**, not just slate
+- [x] **Visual smoke across ALL FIVE themes — done 2026-08-07, no defects.**
+      `perf/theme-gallery.html` (source `src/perf/ThemeGallery.tsx`) mounts the
+      phase's presentational components — `StyleStatsHeader` (healthy AND
+      too-small sample), `FoAnalyticsHeader` (normal AND fail-closed VIX-unknown),
+      `StrategyCards` (populated AND no-trade empty state), `ChainLadder` — from
+      fixtures, so no backend or session is needed; `perf/shoot-themes.mjs`
+      screenshots each theme headlessly. Confirmed by eye in slate, daybreak,
+      carbon, midnight and ocean: the daybreak `--color-warning` fix is legible
+      on the safety copy, the small-sample stats read muted rather than
+      endorsed, and the OI bars, ATM badge and BUY/SELL glyphs survive every
+      palette. Notably the review's predicted carbon OI-bar invisibility
+      (1.63:1) does **not** occur — carbon's accent is a warm amber that reads
+      clearly, so nothing was "fixed" on a false alarm.
+- [ ] Page-level smoke **with live data** (`/styles/fno`, `/live-signals`) —
+      still needs a logged-in session; the components above are covered, this
+      would exercise the query/auth plumbing the 344 unit tests already assert.
 - [x] **Sticky table header inside `VirtualViewport` — it was BROKEN; fixed and
       re-verified in Chrome.** `Table` wraps itself in `overflow-x-auto`, and CSS
       promotes the other axis to `auto` too, so that wrapper became the
