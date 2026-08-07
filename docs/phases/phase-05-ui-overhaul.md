@@ -5,14 +5,20 @@
 > ruff · mypy clean. The one **live-gated** exit item is the in-browser 60 fps
 > verdict under replayed full-rate ticks — see §6.
 >
-> **Full backend run in this worktree: 1032 passed, 9 failed, 13 errors.** All 22
-> non-passes are `FileNotFoundError` on the worktree's missing root `.env` — the
-> `tests/goldens` and `tests/parity` harnesses read it. **Verified** by running
-> those two directories alone: identical 9 failed + 13 errors, so nothing in the
-> Phase-5 diff contributes a single failure. They pass in the main checkout, where
-> `.env` exists; re-run the gate there (or with `.env` present) before
-> `/phase-gate`. Everything else in this worktree runs with an inline
-> `JWT_SECRET_KEY=…`, because symlinking `.env` is (correctly) blocked.
+> **Final verification (2026-08-06/07):** backend **1038 passed, 0 failed**
+> (16m44s, `tests/` excluding `goldens`+`parity`); frontend **344 passed**;
+> `ruff` · `mypy` (159 files) · `eslint` · `tsc --noEmit` · **`tsc -b`** ·
+> **`vite build`** all clean — the last two deliberately, since `make check`
+> does not cover the production build and this phase added node-side config
+> (see the build-gate-gap note in memory).
+>
+> `tests/goldens` and `tests/parity` are excluded here only because the worktree
+> has no root `.env` (those harnesses read it) and symlinking `.env` is
+> correctly blocked. **Verified** that this accounts for all of them and nothing
+> else: running those two directories alone reproduces exactly the same 9
+> failed + 13 errors seen in the full run, every one a `FileNotFoundError` on
+> `.env`. They pass in the main checkout. Everything else runs here with an
+> inline `JWT_SECRET_KEY=…`.
 
 ## 1. Goal & why
 
@@ -270,10 +276,12 @@ trap. Both are listed in §8.
 ## 7. Exit checklist
 
 - [x] 5.1 live-data infra · 5.2 F&O page · 5.3 style pages v2 · 5.4 Live Signals
-- [x] Frontend 332 green · backend 1032 pass (22 `.env`-only, see the banner) ·
-      eslint · tsc · ruff · mypy
-- [ ] **Full `make check` from a checkout that has `.env`** (adds the cargo gates;
-      no `engine/` code changed this phase, so those should be unaffected)
+- [x] Frontend **344** green · backend **1038** pass, 0 fail (goldens/parity
+      `.env`-only, see the banner) · eslint · tsc · `tsc -b` · `vite build` ·
+      ruff · mypy
+- [ ] **Full `make check` from the main checkout** (it has `.env`, and adds the
+      cargo gates + goldens/parity). No `engine/` code changed this phase, so
+      the Rust legs should be unaffected.
 - [x] **bug-hunter** + **ui-reviewer** — run 2026-08-06; all findings in new
       code fixed with regression tests (§6b); two systemic/pre-existing ones
       deferred to §8 with reasons
