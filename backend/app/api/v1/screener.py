@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.deps import get_current_user, get_db
@@ -8,13 +8,63 @@ from app.models.user import User
 from app.schemas.screener import (
     SavedScreenCreate,
     SavedScreenRead,
+    ScreenerFieldInfo,
+    ScreenerFieldsResponse,
     ScreenerRequest,
     ScreenerResult,
 )
 from app.schemas.stock import StockRead
+from app.screener.catalog import CATALOG
 from app.screener.compiler import compile_count, compile_screener
 
 router = APIRouter(prefix="/screener", tags=["screener"])
+
+
+@router.get("/fields", response_model=ScreenerFieldsResponse)
+async def list_fields(
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> ScreenerFieldsResponse:
+    """The filterable catalog, each field carrying how much of the universe it
+    actually covers.
+
+    A filter on a column that is null for most rows silently returns almost
+    nothing, which reads as "no stocks match your criteria" rather than "this
+    data isn't there". Sector sat at 59 of 2,333 stocks for months behind exactly
+    that ambiguity. Coverage is COUNTED, never hardcoded — it moves every time
+    the stock master is reseeded.
+    """
+    total: int = (
+        await db.execute(
+            select(func.count()).select_from(Stock).where(Stock.is_active.is_(True))
+        )
+    ).scalar_one()
+
+    fields: list[ScreenerFieldInfo] = []
+    for name, defn in CATALOG.items():
+        populated: int | None = None
+        if defn.available and defn.column.table is Stock.__table__:
+            populated = (
+                await db.execute(
+                    select(func.count())
+                    .select_from(Stock)
+                    .where(Stock.is_active.is_(True), defn.column.isnot(None))
+                )
+            ).scalar_one()
+        fields.append(
+            ScreenerFieldInfo(
+                field=name,
+                field_type=defn.field_type,
+                allowed_ops=sorted(defn.allowed_ops),
+                available=defn.available,
+                note=defn.note,
+                populated=populated,
+            )
+        )
+    return ScreenerFieldsResponse(
+        total_active_stocks=total,
+        fields=sorted(fields, key=lambda f: f.field),
+    )
 
 
 @router.post("/run", response_model=ScreenerResult)

@@ -2,12 +2,15 @@
 user_id, so a foreign watchlist id is indistinguishable from an absent
 one (404, never 403 — don't leak existence)."""
 
+from decimal import Decimal
+
 from fastapi import HTTPException, status
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.models.market_data import OhlcvDaily
 from app.models.stock import Stock
 from app.models.watchlist import Watchlist, WatchlistItem
 from app.schemas.watchlist import (
@@ -34,6 +37,28 @@ async def _owned_watchlist(
     return wl
 
 
+async def _prev_closes(db: AsyncSession, stock_ids: list[int]) -> dict[int, Decimal]:
+    """Last COMPLETED daily close per stock — the reference for today's change.
+
+    One DISTINCT ON query, not one per row: a watchlist is a list, and a
+    per-item lookup here would be an N+1 on every page load.
+
+    `is_complete` matters. Today's daily bar does not exist until EOD ingestion
+    (~18:40 IST), so during a session this correctly returns yesterday's close;
+    scoring a live LTP against a still-forming bar would compare a price to
+    itself.
+    """
+    if not stock_ids:
+        return {}
+    rows = await db.execute(
+        select(OhlcvDaily.stock_id, OhlcvDaily.close)
+        .where(OhlcvDaily.stock_id.in_(stock_ids), OhlcvDaily.is_complete.is_(True))
+        .distinct(OhlcvDaily.stock_id)
+        .order_by(OhlcvDaily.stock_id, OhlcvDaily.time.desc())
+    )
+    return {stock_id: close for stock_id, close in rows.all()}
+
+
 async def _read_model(db: AsyncSession, wl: Watchlist) -> WatchlistRead:
     rows = await db.execute(
         select(WatchlistItem, Stock.symbol, Stock.company_name)
@@ -41,14 +66,17 @@ async def _read_model(db: AsyncSession, wl: Watchlist) -> WatchlistRead:
         .where(WatchlistItem.watchlist_id == wl.id)
         .order_by(Stock.symbol)
     )
+    fetched = rows.all()
+    closes = await _prev_closes(db, [item.stock_id for item, _s, _c in fetched])
     items = [
         WatchlistItemRead(
             stock_id=item.stock_id,
             symbol=symbol,
             company_name=company_name,
             added_at=item.added_at,
+            prev_close=closes.get(item.stock_id),
         )
-        for item, symbol, company_name in rows.all()
+        for item, symbol, company_name in fetched
     ]
     return WatchlistRead(
         id=wl.id,

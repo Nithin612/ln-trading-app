@@ -21,6 +21,21 @@ beforeEach(() => {
     limit: 50, offset: 0, result: null, isRunning: false, activeSavedScreen: null,
   })
   vi.spyOn(stocksApiModule.stocksApi, 'savedList').mockResolvedValue([])
+  vi.spyOn(stocksApiModule.stocksApi, 'screenerFields').mockResolvedValue(
+    makeFields(),
+  )
+})
+
+/** Coverage payload: sector populated for 500 of 2,365 active stocks — the real
+ *  post-reseed shape. `symbol` is fully populated and must NOT warn. */
+const makeFields = (
+  sectorPopulated = 500,
+): stocksApiModule.ScreenerFieldsResponse => ({
+  total_active_stocks: 2365,
+  fields: [
+    { field: 'sector', field_type: 'str', allowed_ops: ['eq'], available: true, note: '', populated: sectorPopulated },
+    { field: 'symbol', field_type: 'str', allowed_ops: ['eq'], available: true, note: '', populated: 2365 },
+  ],
 })
 
 function wrap(ui: React.ReactElement) {
@@ -41,6 +56,38 @@ const makeResult = (): stocksApiModule.ScreenerResult => ({
     is_active: true, listed_on: null, created_at: '', updated_at: '',
   }],
   total: 1, limit: 50, offset: 0,
+})
+
+describe('ScreenerPage — field coverage honesty', () => {
+  // A filter on a mostly-null column returns almost nothing, which reads as
+  // "no stocks match" rather than "this data isn't loaded". Sector sat at 59 of
+  // 2,333 stocks for months behind exactly that ambiguity.
+  it('warns that a sparse field cannot match most of the universe', async () => {
+    useScreenerStore.setState({ filters: [{ field: 'sector', op: 'eq', value: 'Energy' }] })
+    wrap(<ScreenerPage />)
+
+    const note = await screen.findByRole('note')
+    expect(note).toHaveTextContent('Only 500 of 2,365 stocks have a sector')
+  })
+
+  it('says nothing when the field covers the whole universe', async () => {
+    useScreenerStore.setState({ filters: [{ field: 'symbol', op: 'eq', value: 'RELIANCE' }] })
+    wrap(<ScreenerPage />)
+
+    await waitFor(() =>
+      expect(stocksApiModule.stocksApi.screenerFields).toHaveBeenCalled(),
+    )
+    expect(screen.queryByRole('note')).not.toBeInTheDocument()
+  })
+
+  it('reflects the live count rather than a hardcoded one', async () => {
+    // The number moves on every reseed; a baked-in constant would rot.
+    vi.spyOn(stocksApiModule.stocksApi, 'screenerFields').mockResolvedValue(makeFields(59))
+    useScreenerStore.setState({ filters: [{ field: 'sector', op: 'eq', value: 'Energy' }] })
+    wrap(<ScreenerPage />)
+
+    expect(await screen.findByRole('note')).toHaveTextContent('Only 59 of 2,365')
+  })
 })
 
 describe('ScreenerPage', () => {

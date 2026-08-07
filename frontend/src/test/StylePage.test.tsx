@@ -70,6 +70,31 @@ describe('StylePage', () => {
     await waitFor(() => expect(screen.getByText(/No F&O suggestions/i)).toBeInTheDocument())
   })
 
+  it('explains WHY intraday is empty instead of blaming the EOD clock', async () => {
+    // Every style used to show "generated nightly after EOD" — true for the
+    // EOD-scheduled styles, false for intraday, whose profiles are inactive
+    // because walk-forward returned negative risk-adjusted returns. Blaming the
+    // clock makes a deliberate refusal look like a broken pipeline.
+    vi.spyOn(suggestionsApiModule.suggestionsApi, 'getByStyle')
+      .mockResolvedValue({ style: 'intraday', total: 0, suggestions: [] })
+    renderStyle('intraday')
+
+    await waitFor(() =>
+      expect(screen.getByText(/No intraday profile has passed validation/i)).toBeInTheDocument(),
+    )
+    expect(screen.queryByText(/generated nightly after EOD/i)).not.toBeInTheDocument()
+  })
+
+  it('still tells EOD styles about the nightly run', async () => {
+    vi.spyOn(suggestionsApiModule.suggestionsApi, 'getByStyle')
+      .mockResolvedValue({ style: 'swing', total: 0, suggestions: [] })
+    renderStyle('swing')
+
+    await waitFor(() =>
+      expect(screen.getByText(/generated nightly after EOD/i)).toBeInTheDocument(),
+    )
+  })
+
   it('shows an error state with retry', async () => {
     vi.spyOn(suggestionsApiModule.suggestionsApi, 'getByStyle')
       .mockRejectedValue(new Error('boom'))

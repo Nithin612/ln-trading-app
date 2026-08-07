@@ -5,6 +5,9 @@ export interface WatchlistItem {
   symbol: string
   company_name: string
   added_at: string
+  /** Last completed daily close, as a Decimal string. Null when the stock has
+   *  no daily bar yet. The reference the live LTP is a change against. */
+  prev_close: string | null
 }
 
 export interface Watchlist {

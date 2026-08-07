@@ -1,6 +1,7 @@
 import { Trash2 } from 'lucide-react'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Input } from '@/components/ui/input'
+import { formatInt } from '@/lib/format'
 import type { FilterSpec } from '@/lib/api/stocks'
 
 // Phase 2 available fields (matches backend catalog.py)
@@ -61,11 +62,28 @@ interface Props {
   filter: FilterSpec
   onChange: (patch: Partial<FilterSpec>) => void
   onRemove: () => void
+  /** Live per-field coverage from /screener/fields, keyed by field name. */
+  coverage?: Record<string, number | null>
+  totalStocks?: number
 }
 
-export function FilterRow({ filter, onChange, onRemove }: Props) {
+/** Below this share of the universe, a filter is more likely to be measuring
+ *  missing data than the market, and the row says so. */
+const COVERAGE_WARN_RATIO = 0.9
+
+export function FilterRow({ filter, onChange, onRemove, coverage, totalStocks }: Props) {
   const fieldDef = FIELDS.find(f => f.value === filter.field) ?? FIELDS[0]
   const ops = OPS_BY_TYPE[fieldDef.type] ?? []
+
+  // A filter on a sparsely-populated column returns almost nothing, which reads
+  // as "nothing matched your criteria" instead of "this data isn't loaded".
+  // Sector sat at 59 of 2,333 stocks for months behind exactly that ambiguity.
+  const populated = coverage?.[filter.field]
+  const sparse =
+    populated != null &&
+    totalStocks != null &&
+    totalStocks > 0 &&
+    populated < totalStocks * COVERAGE_WARN_RATIO
 
   function handleFieldChange(newField: string | null) {
     if (!newField) return
@@ -182,6 +200,17 @@ export function FilterRow({ filter, onChange, onRemove }: Props) {
       >
         <Trash2 size={14} />
       </button>
+
+      {/* Coverage honesty — an empty result must be attributable. */}
+      {sparse && (
+        <span
+          role="note"
+          className="basis-full text-xs text-(--color-warning)"
+        >
+          Only {formatInt(populated!)} of {formatInt(totalStocks!)} stocks have a{' '}
+          {fieldDef.label.toLowerCase()} — the rest cannot match this filter.
+        </span>
+      )}
     </div>
   )
 }

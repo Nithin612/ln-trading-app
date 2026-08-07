@@ -9,6 +9,19 @@ vi.mock('@/hooks/useAuth', () => ({
   useAuth: () => ({ accessToken: 'tok' }),
 }))
 
+// Live quotes are injected per test via `liveQuotes` so the price/change
+// columns can be asserted without a socket.
+let liveQuotes: Record<string, { symbol: string; ltp: number; ts: string }> = {}
+vi.mock('@/hooks/useLiveQuotes', () => ({
+  useLiveQuotes: () => ({
+    quotes: liveQuotes,
+    candles: {},
+    signals: [],
+    connected: true,
+    authFailed: false,
+  }),
+}))
+
 vi.mock('@/lib/api/watchlists', () => ({
   watchlistsApi: {
     list: vi.fn(),
@@ -38,6 +51,7 @@ const WL: Watchlist = {
       symbol: 'RELIANCE',
       company_name: 'Reliance Industries',
       added_at: '2026-07-11T00:00:00Z',
+      prev_close: '2000.00',
     },
   ],
 }
@@ -58,6 +72,67 @@ describe('WatchlistsPage', () => {
     vi.mocked(watchlistsApi.addStock).mockReset()
     vi.mocked(watchlistsApi.removeStock).mockReset()
     vi.mocked(stocksApi.list).mockReset()
+    liveQuotes = {}
+  })
+
+  describe('live prices', () => {
+    // The page used to render symbol + company name and nothing else — the only
+    // live surface in the app with no prices on it, while the backend was
+    // already fanning ticks out per watchlist.
+    it('renders the live LTP for a watched stock', async () => {
+      liveQuotes = { RELIANCE: { symbol: 'RELIANCE', ltp: 2100, ts: '' } }
+      vi.mocked(watchlistsApi.list).mockResolvedValue([WL])
+      setup()
+      expect(await screen.findByText('₹2,100.00')).toBeInTheDocument()
+    })
+
+    it('computes change% against the last completed close', async () => {
+      // 2000 → 2100 is +5.00%, and the glyph carries the direction (colour alone
+      // is not a direction).
+      liveQuotes = { RELIANCE: { symbol: 'RELIANCE', ltp: 2100, ts: '' } }
+      vi.mocked(watchlistsApi.list).mockResolvedValue([WL])
+      setup()
+      expect(await screen.findByText('▲ +5.00%')).toBeInTheDocument()
+    })
+
+    it('shows a down move with the down glyph', async () => {
+      liveQuotes = { RELIANCE: { symbol: 'RELIANCE', ltp: 1900, ts: '' } }
+      vi.mocked(watchlistsApi.list).mockResolvedValue([WL])
+      setup()
+      expect(await screen.findByText('▼ -5.00%')).toBeInTheDocument()
+    })
+
+    it('renders a dash, not a fake 0%, when no tick has arrived', async () => {
+      vi.mocked(watchlistsApi.list).mockResolvedValue([WL])
+      setup()
+      // Symbol still renders; the price columns stay empty rather than implying
+      // the stock is flat.
+      expect(await screen.findByText('RELIANCE')).toBeInTheDocument()
+      expect(screen.queryByText('▲ +0.00%')).not.toBeInTheDocument()
+      expect(screen.queryByText('— 0.00%')).not.toBeInTheDocument()
+    })
+
+    it('renders a dash when the stock has no daily bar to compare against', async () => {
+      // ~268 series-moved names receive no EOD bars; a null prev_close must not
+      // become a division by zero or a bogus percentage.
+      liveQuotes = { RELIANCE: { symbol: 'RELIANCE', ltp: 2100, ts: '' } }
+      vi.mocked(watchlistsApi.list).mockResolvedValue([
+        { ...WL, items: [{ ...WL.items[0], prev_close: null }] },
+      ])
+      setup()
+      expect(await screen.findByText('₹2,100.00')).toBeInTheDocument()
+      expect(screen.queryByText(/[▲▼]/)).not.toBeInTheDocument()
+    })
+
+    it('does not divide by a zero previous close', async () => {
+      liveQuotes = { RELIANCE: { symbol: 'RELIANCE', ltp: 2100, ts: '' } }
+      vi.mocked(watchlistsApi.list).mockResolvedValue([
+        { ...WL, items: [{ ...WL.items[0], prev_close: '0' }] },
+      ])
+      setup()
+      expect(await screen.findByText('₹2,100.00')).toBeInTheDocument()
+      expect(screen.queryByText(/Infinity|NaN/)).not.toBeInTheDocument()
+    })
   })
 
   it('shows a loading skeleton while fetching', () => {

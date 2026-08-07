@@ -5,7 +5,11 @@ authenticated user, and a foreign watchlist id must be indistinguishable
 from an absent one (404 — existence never leaks).
 """
 
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+
 import pytest
+from app.models.market_data import OhlcvDaily
 from app.models.watchlist import WatchlistItem
 from app.services.watchlist_service import watchlist_stock_ids
 from httpx import AsyncClient
@@ -250,3 +254,119 @@ class TestIdBounds:
             f"/api/v1/watchlists/{wl['id']}/stocks/{huge}", headers=headers
         )
         assert resp.status_code == 422
+
+
+async def _daily_bar(
+    db: AsyncSession,
+    stock_id: int,
+    days_ago: int,
+    close: Decimal,
+    complete: bool = True,
+) -> None:
+    ts = datetime.now(tz=UTC).replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(
+        days=days_ago
+    )
+    db.add(
+        OhlcvDaily(
+            stock_id=stock_id,
+            time=ts,
+            open=close,
+            high=close,
+            low=close,
+            close=close,
+            volume=1000,
+            is_complete=complete,
+        )
+    )
+    await db.flush()
+
+
+class TestPrevClose:
+    """The reference price a live LTP is a change against.
+
+    Without it the watchlist could only render a bare number — the page shipped
+    for months as symbol + company name and nothing else, the only live surface
+    in the app with no prices on it, while the backend was already fanning ticks
+    out per watchlist.
+    """
+
+    async def _item_for(
+        self, client: AsyncClient, headers: dict[str, str], stock_id: int
+    ) -> dict:
+        wl = (
+            await client.post("/api/v1/watchlists", json={"name": "L"}, headers=headers)
+        ).json()
+        await client.post(
+            f"/api/v1/watchlists/{wl['id']}/stocks",
+            json={"stock_id": stock_id},
+            headers=headers,
+        )
+        r = await client.get("/api/v1/watchlists", headers=headers)
+        assert r.status_code == 200, r.text
+        return r.json()[0]["items"][0]
+
+    async def test_returns_the_latest_completed_close(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        headers = await _owner(db, client)
+        stock = await make_stock(db, symbol="PCLOSE1")
+        await _daily_bar(db, stock.id, days_ago=2, close=Decimal("100.0000"))
+        await _daily_bar(db, stock.id, days_ago=1, close=Decimal("111.2500"))
+        await db.commit()
+
+        item = await self._item_for(client, headers, stock.id)
+        assert Decimal(item["prev_close"]) == Decimal("111.2500")
+
+    async def test_ignores_an_incomplete_bar(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """Today's forming bar must not become the reference.
+
+        Scoring a live LTP against the bar that same tick is building compares a
+        price to itself and reports a flat move. Canary: without the is_complete
+        filter this returns 999.
+        """
+        headers = await _owner(db, client)
+        stock = await make_stock(db, symbol="PCLOSE2")
+        await _daily_bar(db, stock.id, days_ago=1, close=Decimal("100.0000"))
+        await _daily_bar(db, stock.id, days_ago=0, close=Decimal("999.0000"), complete=False)
+        await db.commit()
+
+        item = await self._item_for(client, headers, stock.id)
+        assert Decimal(item["prev_close"]) == Decimal("100.0000")
+
+    async def test_is_null_when_the_stock_has_no_daily_bar(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """~268 series-moved names receive no EOD bars — null, never a fake 0."""
+        headers = await _owner(db, client)
+        stock = await make_stock(db, symbol="NOBARS")
+        await db.commit()
+
+        item = await self._item_for(client, headers, stock.id)
+        assert item["prev_close"] is None
+
+    async def test_each_stock_gets_its_own_close(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """The single DISTINCT ON query must not smear one close onto another."""
+        headers = await _owner(db, client)
+        a = await make_stock(db, symbol="AAAA")
+        b = await make_stock(db, symbol="BBBB")
+        await _daily_bar(db, a.id, days_ago=1, close=Decimal("10.0000"))
+        await _daily_bar(db, b.id, days_ago=1, close=Decimal("20.0000"))
+        await db.commit()
+
+        wl = (
+            await client.post("/api/v1/watchlists", json={"name": "L"}, headers=headers)
+        ).json()
+        for s in (a, b):
+            await client.post(
+                f"/api/v1/watchlists/{wl['id']}/stocks",
+                json={"stock_id": s.id},
+                headers=headers,
+            )
+        items = (await client.get("/api/v1/watchlists", headers=headers)).json()[0]["items"]
+        by_symbol = {i["symbol"]: i["prev_close"] for i in items}
+        assert Decimal(by_symbol["AAAA"]) == Decimal("10.0000")
+        assert Decimal(by_symbol["BBBB"]) == Decimal("20.0000")

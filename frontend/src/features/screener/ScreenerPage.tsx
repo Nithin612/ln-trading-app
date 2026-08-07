@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { Plus, Play, Save, Trash2, BookOpen, Download, Filter } from 'lucide-react'
@@ -30,10 +30,13 @@ const STARTER_SCREENS = [
   ]},
 ]
 
-function exportCsv(items: { symbol: string; company_name: string; sector: string | null; market_cap_cr: string | null; lot_size: number }[]) {
-  const header = 'Symbol,Company,Sector,Market Cap (Cr),Lot Size'
+// Market cap is dropped, not blanked: nothing populates `stocks.market_cap_cr`
+// (NSE publishes no free shares-outstanding source), so the column was an
+// always-empty field in every export — a promise the data cannot keep.
+function exportCsv(items: { symbol: string; company_name: string; sector: string | null; lot_size: number }[]) {
+  const header = 'Symbol,Company,Sector,Lot Size'
   const rows = items.map((s) =>
-    [s.symbol, `"${s.company_name}"`, s.sector ?? '', s.market_cap_cr ?? '', s.lot_size].join(','),
+    [s.symbol, `"${s.company_name}"`, s.sector ?? '', s.lot_size].join(','),
   )
   const csv = [header, ...rows].join('\n')
   const blob = new Blob([csv], { type: 'text/csv' })
@@ -60,6 +63,22 @@ export function ScreenerPage() {
     queryFn: () => stocksApi.savedList(accessToken!),
     enabled: !!accessToken,
   })
+
+  // Field coverage, so a filter row can admit when the column behind it is
+  // mostly empty. Counted server-side per request rather than hardcoded — the
+  // numbers move every time the stock master is reseeded. Long staleTime: this
+  // only changes on a reseed.
+  const fields = useQuery({
+    queryKey: ['screener-fields'],
+    queryFn: () => stocksApi.screenerFields(accessToken!),
+    enabled: !!accessToken,
+    staleTime: 30 * 60_000,
+  })
+  const coverage = useMemo(() => {
+    const map: Record<string, number | null> = {}
+    for (const f of fields.data?.fields ?? []) map[f.field] = f.populated
+    return map
+  }, [fields.data])
 
   const runMutation = useMutation({
     mutationFn: () => {
@@ -230,6 +249,8 @@ export function ScreenerPage() {
                   filter={filter}
                   onChange={(patch) => store.updateFilter(i, patch)}
                   onRemove={() => store.removeFilter(i)}
+                  coverage={coverage}
+                  totalStocks={fields.data?.total_active_stocks}
                 />
               ))}
             </div>

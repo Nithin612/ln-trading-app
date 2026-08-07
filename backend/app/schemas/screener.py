@@ -83,3 +83,28 @@ class SavedScreenRead(BaseModel):
     filter_spec: dict[str, Any]
     created_at: datetime
     updated_at: datetime
+
+
+# ---------------------------------------------------------------------------
+# Field catalog (with coverage)
+# ---------------------------------------------------------------------------
+
+
+class ScreenerFieldInfo(BaseModel):
+    """One filterable field, plus how much of the universe it actually covers."""
+
+    field: str
+    field_type: str
+    allowed_ops: list[str]
+    available: bool
+    note: str
+    # Active stocks with a non-null value. None when coverage is not meaningful
+    # (an unavailable field has no real column behind it). A field whose
+    # `populated` is far below `total_active_stocks` will silently match almost
+    # nothing — the UI is expected to say so rather than return an empty table.
+    populated: int | None = None
+
+
+class ScreenerFieldsResponse(BaseModel):
+    total_active_stocks: int
+    fields: list[ScreenerFieldInfo]

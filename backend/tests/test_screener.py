@@ -263,3 +263,79 @@ class TestSavedScreens:
             f"/api/v1/screener/saved/{screen_id}", headers=headers_b
         )
         assert resp.status_code == 404
+
+
+class TestFieldCoverage:
+    """`GET /screener/fields` — every filterable field with how much of the
+    universe it actually covers.
+
+    A filter on a mostly-null column returns almost nothing, which reads as "no
+    stocks match your criteria" rather than "this data isn't loaded". Sector sat
+    at 59 of 2,333 stocks for months behind exactly that ambiguity.
+    """
+
+    async def test_requires_auth(self, client: AsyncClient) -> None:
+        assert (await client.get("/api/v1/screener/fields")).status_code == 401
+
+    async def test_counts_are_measured_not_hardcoded(
+        self, client: AsyncClient, db: AsyncSession, auth_headers: dict[str, str]
+    ) -> None:
+        await make_stock(db, symbol="WITHSEC", sector="Energy")
+        await make_stock(db, symbol="NOSEC1", sector=None)
+        await make_stock(db, symbol="NOSEC2", sector=None)
+        await db.commit()
+
+        body = (await client.get("/api/v1/screener/fields", headers=auth_headers)).json()
+        by_field = {f["field"]: f for f in body["fields"]}
+
+        assert body["total_active_stocks"] == 3
+        assert by_field["sector"]["populated"] == 1
+        # symbol is NOT NULL, so it covers the whole universe and must not warn.
+        assert by_field["symbol"]["populated"] == 3
+
+    async def test_unavailable_fields_report_no_coverage(
+        self, client: AsyncClient, db: AsyncSession, auth_headers: dict[str, str]
+    ) -> None:
+        """An `available=False` field has no real column — coverage is None, not 0.
+
+        Reporting 0 would render as "0 of N stocks have this", implying the data
+        merely hasn't loaded when the feature does not exist yet.
+        """
+        await make_stock(db, symbol="ANY")
+        await db.commit()
+
+        body = (await client.get("/api/v1/screener/fields", headers=auth_headers)).json()
+        by_field = {f["field"]: f for f in body["fields"]}
+
+        rsi = by_field["indicator.rsi_14"]
+        assert rsi["available"] is False
+        assert rsi["populated"] is None
+        assert rsi["note"]
+
+    async def test_market_cap_is_reported_empty_rather_than_hidden(
+        self, client: AsyncClient, db: AsyncSession, auth_headers: dict[str, str]
+    ) -> None:
+        """Nothing populates market_cap_cr — say so instead of matching nothing."""
+        await make_stock(db, symbol="ANY")
+        await db.commit()
+
+        body = (await client.get("/api/v1/screener/fields", headers=auth_headers)).json()
+        by_field = {f["field"]: f for f in body["fields"]}
+        assert by_field["market_cap_cr"]["populated"] == 0
+
+    async def test_inactive_stocks_are_excluded_from_both_counts(
+        self, client: AsyncClient, db: AsyncSession, auth_headers: dict[str, str]
+    ) -> None:
+        """Coverage is a ratio; counting deactivated rows in one side skews it.
+
+        The 15 T2T rows deactivated on 2026-07-17 must not appear as a coverage
+        hole in a universe the screener never returns them from.
+        """
+        await make_stock(db, symbol="LIVE", sector="Energy")
+        await make_stock(db, symbol="DEAD", sector=None, is_active=False)
+        await db.commit()
+
+        body = (await client.get("/api/v1/screener/fields", headers=auth_headers)).json()
+        by_field = {f["field"]: f for f in body["fields"]}
+        assert body["total_active_stocks"] == 1
+        assert by_field["sector"]["populated"] == 1

@@ -65,6 +65,23 @@ export interface ScreenerResult {
   offset: number
 }
 
+export interface ScreenerFieldInfo {
+  field: string
+  field_type: string
+  allowed_ops: string[]
+  available: boolean
+  note: string
+  /** Active stocks with a non-null value for this field; null when coverage
+   *  isn't meaningful. Far below total_active_stocks = the filter will match
+   *  almost nothing regardless of the market. */
+  populated: number | null
+}
+
+export interface ScreenerFieldsResponse {
+  total_active_stocks: number
+  fields: ScreenerFieldInfo[]
+}
+
 export interface SavedScreen {
   id: number
   user_id: number
@@ -93,6 +110,9 @@ export const stocksApi = {
 
   get: (id: number, token: string) =>
     api.get<Stock>(`/stocks/${id}`, token),
+
+  screenerFields: (token: string) =>
+    api.get<ScreenerFieldsResponse>('/screener/fields', token),
 
   screenerRun: (req: ScreenerRequest, token: string) =>
     api.post<ScreenerResult>('/screener/run', req, token),

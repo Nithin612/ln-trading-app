@@ -1,4 +1,5 @@
 from datetime import datetime
+from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator
 
@@ -37,6 +38,12 @@ class WatchlistItemRead(BaseModel):
     symbol: str
     company_name: str
     added_at: datetime
+    # Last COMPLETED daily close — the reference a live LTP is a change against.
+    # A watchlist without it can only show a bare price, which says nothing about
+    # whether the name is moving. Decimal (money), serialised as a string; None
+    # when the stock has no daily bar yet (fresh listing, or one of the ~268
+    # series-moved names that receive no EOD bars).
+    prev_close: Decimal | None = None
 
 
 class WatchlistRead(BaseModel):

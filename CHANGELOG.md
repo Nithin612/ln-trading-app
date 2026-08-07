@@ -7,6 +7,61 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### v1 surface uplift — watchlist prices, screener honesty, an honest empty state (2026-08-07)
+
+Second slice of "Intraday activation + v1 surface uplift". Three pages that
+worked but under-delivered, each for a different reason.
+
+- **Watchlists showed no prices.** The page rendered symbol + company name and
+  nothing else — the only live surface in the app without quotes, while the
+  backend had been fanning ticks out *per watchlist* since Phase 3. It is now a
+  real table with live LTP, change % and previous close, on the standard live
+  stack: `useLiveQuotes` (rAF-batched), `PriceCell` for the flash, memoised rows
+  so a tick re-renders one row rather than the page, and `formatChange`'s glyph
+  so direction is never carried by colour alone.
+  - `WatchlistItemRead` gains **`prev_close`** — the last **completed** daily
+    close, which is what a live LTP is a change *against*. `is_complete` is the
+    load-bearing word: today's daily bar does not exist until EOD ingestion
+    (~18:40 IST), so during a session this correctly resolves to yesterday's
+    close. Scoring a live price against the bar that same tick is building would
+    compare a price to itself and report every stock as flat.
+  - One `DISTINCT ON` query for the whole list, not a lookup per row — a
+    watchlist is a list, and per-item would be an N+1 on every page load.
+  - Null-safe throughout: a stock with no daily bar (the ~268 series-moved names
+    that receive no EOD bars) renders "—", never a fabricated 0.00%, and a zero
+    previous close cannot divide.
+- **The screener silently returned nothing on sparse columns.** A filter on a
+  mostly-null field matches almost no rows, which reads as *"no stocks match
+  your criteria"* when the truth is *"this data isn't loaded"* — sector sat at
+  59 of 2,333 stocks for months behind exactly that ambiguity. New
+  **`GET /screener/fields`** returns the catalog with a **counted** `populated`
+  per field, and a filter row now says "Only 500 of 2,365 stocks have a sector —
+  the rest cannot match this filter." Counted per request, never hardcoded: the
+  number moves on every reseed. An `available=False` field reports `populated:
+  null` rather than `0`, because "0 of N have this" implies data that merely
+  hasn't loaded when the feature does not exist.
+  - The CSV export **drops the market-cap column** rather than exporting an
+    always-empty one: nothing populates `stocks.market_cap_cr`, so it was a
+    promise the data cannot keep. The screener field itself stays listed and
+    honestly reports `populated: 0`.
+- **The Intraday page blamed the clock for being empty.** Every style showed
+  "Fresh suggestions are generated nightly after EOD (~7:30 PM IST)" — true for
+  the EOD-scheduled styles, false for intraday, whose three profiles are
+  inactive because walk-forward returned **negative risk-adjusted** returns for
+  all of them (pdh_pdl −1.06 Sharpe, orb_15m −0.60, gainer_925 −0.86). An empty
+  table that blames the schedule reads as a broken pipeline; the real reason is
+  a deliberate refusal to suggest trades from a profile that has not earned it,
+  and the page now says so. F&O likewise explains the IV-rank gate rather than
+  citing a nightly run it does not use.
+- Tests: frontend 353 → **364** (watchlist live prices incl. null/zero
+  prev_close and the missing-tick case; screener coverage warning present when
+  sparse, absent at full coverage, and reflecting the live count; the intraday
+  reason shown and the EOD text NOT shown); backend watchlists 10 → **14**
+  (latest completed close, incomplete bar ignored with a canary, null when no
+  bar, no cross-stock smearing) and screener **+5** (auth, measured counts,
+  `available=False` → null, market cap reported empty, inactive rows excluded
+  from both sides of the ratio).
+
 ### Fixed — the stock master had no real company names, and reseeding was broken (2026-08-07)
 
 First slice of "Intraday activation + v1 surface uplift". Went in for sector

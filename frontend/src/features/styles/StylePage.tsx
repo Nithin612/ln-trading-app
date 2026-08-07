@@ -50,6 +50,31 @@ const STYLE_META: Record<ProfileStyle, { label: string; desc: string; icon: Reac
   investment: { label: 'Investment', desc: 'Positional / long-term theses (~30 trading-day validity).',   icon: <Landmark size={18} /> },
 }
 
+/**
+ * Why a style's table is empty, per style.
+ *
+ * "Generated nightly after EOD" was shown for every style — true for the
+ * EOD-scheduled ones, and simply false for intraday, whose three profiles are
+ * inactive because walk-forward returned NEGATIVE risk-adjusted returns for all
+ * of them (pdh_pdl −1.06 Sharpe, orb_15m −0.60, gainer_925 −0.86). An empty
+ * table that blames the clock reads as a broken pipeline; the real reason is a
+ * deliberate refusal to suggest trades from a profile that has not earned it.
+ */
+const EMPTY_REASON: Record<ProfileStyle, string> = {
+  intraday:
+    'No intraday profile has passed validation yet, so none are live. The three '
+    + 'candidates were all negative on risk-adjusted walk-forward returns, and '
+    + 'nothing is activated until forward evidence earns it — an empty table '
+    + 'beats a losing suggestion.',
+  swing:
+    'Fresh suggestions are generated nightly after EOD (~7:30 PM IST on a trading day).',
+  investment:
+    'Fresh suggestions are generated nightly after EOD (~7:30 PM IST on a trading day).',
+  fno:
+    'Option-selling candidates need the IV-rank gate to pass; when volatility is '
+    + 'cheap the engine correctly declines to sell premium.',
+}
+
 /** Must match the rendered row height for the windowing maths to line up. */
 const ROW_HEIGHT = 41
 const TABLE_COLUMNS = 11
@@ -285,7 +310,7 @@ export function StylePage() {
         {!isLoading && !isError && suggestions.length === 0 && (
           <EmptyState
             title={`No ${meta.label} suggestions right now`}
-            description="Fresh suggestions are generated nightly after EOD (~7:30 PM IST on a trading day)."
+            description={EMPTY_REASON[style as ProfileStyle]}
           />
         )}
 

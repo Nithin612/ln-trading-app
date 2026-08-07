@@ -4,7 +4,7 @@
  * slice, the provisional-confidence hot set.
  */
 
-import { useMemo, useState } from 'react'
+import { memo, useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ListChecks, Plus, Trash2, X } from 'lucide-react'
 
@@ -12,11 +12,85 @@ import { PageHeader } from '@/components/layout/PageHeader'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Input } from '@/components/ui/input'
+import { PriceCell } from '@/components/ui/PriceCell'
 import { Skeleton } from '@/components/ui/skeleton'
+import {
+  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table'
 import { useAuth } from '@/hooks/useAuth'
+import { useLiveQuotes } from '@/hooks/useLiveQuotes'
+import { formatChange, formatCurrency } from '@/lib/format'
 import { stocksApi } from '@/lib/api/stocks'
-import { watchlistsApi } from '@/lib/api/watchlists'
+import { watchlistsApi, type WatchlistItem } from '@/lib/api/watchlists'
 import { cn } from '@/lib/utils'
+
+/** Percent move of `ltp` against the last completed close, or null when either
+ *  side is missing. A zero prev_close would divide by zero, so it is excluded. */
+function changePct(ltp: number | undefined, prevClose: string | null): number | null {
+  if (ltp === undefined || prevClose === null) return null
+  const prev = parseFloat(prevClose)
+  if (!Number.isFinite(prev) || prev === 0) return null
+  return ((ltp - prev) / prev) * 100
+}
+
+/**
+ * One watchlist row, memoised.
+ *
+ * `quotes` is component state, so every rAF flush re-renders the page. Without
+ * memoisation each flush re-runs the parse/format work for every row; PriceCell
+ * isolates the flash, not the render. Only rows whose LTP actually moved
+ * re-render. (Same reasoning as StylePage's SuggestionRow.)
+ */
+const WatchlistRow = memo(function WatchlistRow({
+  item,
+  ltp,
+  listName,
+  removing,
+  onRemove,
+}: {
+  item: WatchlistItem
+  ltp: number | undefined
+  listName: string
+  removing: boolean
+  onRemove: () => void
+}) {
+  const pct = changePct(ltp, item.prev_close)
+  return (
+    <TableRow>
+      <TableCell className="font-mono font-bold text-(--color-text)">{item.symbol}</TableCell>
+      <TableCell className="text-(--color-text-muted) text-xs max-w-[18rem] truncate">
+        {item.company_name}
+      </TableCell>
+      <TableCell numeric>
+        <PriceCell value={ltp} format={formatCurrency} />
+      </TableCell>
+      <TableCell
+        numeric
+        style={
+          pct === null
+            ? undefined
+            : { color: pct > 0 ? 'var(--color-profit)' : pct < 0 ? 'var(--color-loss)' : undefined }
+        }
+      >
+        {/* Glyph AND colour — colour alone is not a direction (ui rules). */}
+        {pct === null ? '—' : formatChange(pct)}
+      </TableCell>
+      <TableCell numeric className="text-(--color-text-muted)">
+        {item.prev_close === null ? '—' : formatCurrency(parseFloat(item.prev_close))}
+      </TableCell>
+      <TableCell numeric>
+        <button
+          onClick={onRemove}
+          disabled={removing}
+          aria-label={`Remove ${item.symbol} from ${listName}`}
+          className="p-1 rounded text-(--color-text-muted) hover:text-(--color-loss) hover:bg-(--color-surface-3) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-accent)"
+        >
+          <X size={14} />
+        </button>
+      </TableCell>
+    </TableRow>
+  )
+})
 
 export function WatchlistsPage() {
   const { accessToken } = useAuth()
@@ -100,6 +174,16 @@ export function WatchlistsPage() {
 
   const selected = lists?.find((w) => w.id === selectedId) ?? lists?.[0] ?? null
   const inSelected = new Set(selected?.items.map((i) => i.stock_id))
+
+  // Live LTP for the visible list only. Memoised so the array identity is
+  // stable across renders — useLiveQuotes diffs the symbol SET, and a fresh
+  // array each render is what used to churn the socket subscription.
+  // Must sit above the early returns: hooks cannot run conditionally.
+  const symbols = useMemo(
+    () => (selected?.items ?? []).map((i) => i.symbol),
+    [selected],
+  )
+  const { quotes } = useLiveQuotes(symbols)
 
   if (isLoading) {
     return (
@@ -276,26 +360,32 @@ export function WatchlistsPage() {
                 description="Search above to add stocks."
               />
             ) : (
-              <ul className="divide-y divide-(--color-border)" role="list">
-                {selected.items.map((item) => (
-                  <li key={item.stock_id} className="flex items-center gap-3 px-4 py-2 text-sm">
-                    <span className="font-semibold text-(--color-text) w-28 truncate">
-                      {item.symbol}
-                    </span>
-                    <span className="text-(--color-text-muted) text-xs truncate flex-1">
-                      {item.company_name}
-                    </span>
-                    <button
-                      onClick={() => removeMut.mutate({ id: selected.id, stockId: item.stock_id })}
-                      disabled={removeMut.isPending}
-                      aria-label={`Remove ${item.symbol} from ${selected.name}`}
-                      className="p-1 rounded text-(--color-text-muted) hover:text-(--color-loss) hover:bg-(--color-surface-3) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-accent)"
-                    >
-                      <X size={14} />
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              <Table aria-label={`Stocks in ${selected.name}`}>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Symbol</TableHead>
+                    <TableHead>Company</TableHead>
+                    <TableHead numeric>LTP</TableHead>
+                    <TableHead numeric>Change</TableHead>
+                    <TableHead numeric>Prev close</TableHead>
+                    <TableHead />
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {selected.items.map((item) => (
+                    <WatchlistRow
+                      key={item.stock_id}
+                      item={item}
+                      ltp={quotes[item.symbol]?.ltp}
+                      listName={selected.name}
+                      removing={removeMut.isPending}
+                      onRemove={() =>
+                        removeMut.mutate({ id: selected.id, stockId: item.stock_id })
+                      }
+                    />
+                  ))}
+                </TableBody>
+              </Table>
             )}
           </div>
         )}
