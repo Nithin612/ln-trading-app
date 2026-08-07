@@ -123,12 +123,14 @@ the 400 lines that follow.
 
 **Do these, in this order:**
 
-1. **`/phase-gate` for Phase 3 — nothing left to wait for.** Both criteria are
-   already satisfied on disk: the soak is MET ×2 (`PERFORMANCE.md`) and the
-   shadow week is MET with **14 consecutive clean days 07-20 → 08-06** in
-   `backend/shadow/shadow_week.log`. Do NOT re-run either. (Both of these
-   checkboxes were stale for weeks — the work was done and never read back.
-   If a checkbox here disagrees with an artifact, trust the artifact.)
+1. **`/phase-gate` for Phase 3 — SCHEDULED BY THE USER FOR FRIDAY 2026-08-14.**
+   Nothing left to wait for; both criteria are already satisfied on disk: the
+   soak is MET ×2 (`PERFORMANCE.md`) and the shadow week is MET with **14
+   consecutive clean days 07-20 → 08-06** in `backend/shadow/shadow_week.log`.
+   Do NOT re-run either. (Both of these checkboxes were stale for weeks — the
+   work was done and never read back. If a checkbox here disagrees with an
+   artifact, trust the artifact.) Keep running `scripts/shadow_day.sh` daily in
+   the meantime so the streak is unbroken on the day.
 2. **Phase 6 — outcome tracking + strategy lab v2** is the next *build* phase,
    and the daily analysis says why: the binding constraint on profit is
    **entry/regime selection, not exits** (only ~2 of 20 trades reached +1R over

@@ -328,24 +328,17 @@ def passes_gates(c: SpreadCandidate, rules: SellRules) -> bool:
 
 # ── Orchestration ───────────────────────────────────────────────────────────────
 
-async def _pick_expiry(
+async def in_window_expiries(
     db: AsyncSession, symbol: str, *, as_of: date, rules: SellRules
-) -> tuple[date, date, fa.ChainForward] | None:
-    """(trade_date, expiry, forward) — the latest bhavcopy day, the nearest
-    ELIGIBLE in-window expiry, and that expiry's Black-76 forward.
+) -> tuple[date, list[date]] | None:
+    """(trade_date, in-window option expiries) — the latest bhavcopy day at or
+    before `as_of`, and every option expiry on it inside the rules' DTE window.
 
-    Index options expire WEEKLY but index futures only MONTHLY. This used to
-    take the first in-window expiry unconditionally and then price it with
-    `futures_basis`, which needs an exact expiry match — so a weekly sitting in
-    front of an in-window monthly killed the whole run, returning `[]`, which is
-    INDISTINGUISHABLE from "no candidate cleared the gates". Measured over the
-    42 weekdays 2026-08-06 → 10-02 on the real NIFTY expiry calendar, that
-    dead-end cost 26 of the 33 days the engine should have produced on.
-
-    Walking the window instead of dead-ending on its first entry is the fix.
-    `require_exact_expiry_future` (default True, per the v1 ruling in
-    `phase-04-fo-suggestions.md` §7.6, "weeklies excluded in v1") decides what
-    counts as eligible; see that flag for why the default is not merely caution.
+    Public because the daily report needs to say WHICH expiries were considered
+    when the engine came up empty ("in-window were two weeklies with no future"
+    reads very differently from "nothing cleared the gates"). Sharing this with
+    `_pick_expiry` is deliberate: a report that recomputed the window itself
+    could drift from the engine it is supposed to be auditing.
     """
     day = (
         await db.execute(
@@ -373,7 +366,32 @@ async def _pick_expiry(
         .scalars()
         .all()
     )
-    in_window = [e for e in expiries if rules.dte_min <= (e - day).days <= rules.dte_max]
+    return day, [e for e in expiries if rules.dte_min <= (e - day).days <= rules.dte_max]
+
+
+async def _pick_expiry(
+    db: AsyncSession, symbol: str, *, as_of: date, rules: SellRules
+) -> tuple[date, date, fa.ChainForward] | None:
+    """(trade_date, expiry, forward) — the latest bhavcopy day, the nearest
+    ELIGIBLE in-window expiry, and that expiry's Black-76 forward.
+
+    Index options expire WEEKLY but index futures only MONTHLY. This used to
+    take the first in-window expiry unconditionally and then price it with
+    `futures_basis`, which needs an exact expiry match — so a weekly sitting in
+    front of an in-window monthly killed the whole run, returning `[]`, which is
+    INDISTINGUISHABLE from "no candidate cleared the gates". Measured over the
+    42 weekdays 2026-08-06 → 10-02 on the real NIFTY expiry calendar, that
+    dead-end cost 26 of the 33 days the engine should have produced on.
+
+    Walking the window instead of dead-ending on its first entry is the fix.
+    `require_exact_expiry_future` (default True, per the v1 ruling in
+    `phase-04-fo-suggestions.md` §7.6, "weeklies excluded in v1") decides what
+    counts as eligible; see that flag for why the default is not merely caution.
+    """
+    found = await in_window_expiries(db, symbol, as_of=as_of, rules=rules)
+    if found is None:
+        return None
+    day, in_window = found
     for e in in_window:
         fwd = await fa.forward_for_expiry(db, symbol, e, on_day=day)
         if fwd is None:

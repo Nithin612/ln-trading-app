@@ -41,6 +41,8 @@ from app.models.signal import Signal, SignalOutcome
 from app.models.stock import Stock
 from app.models.trading import Position
 from app.models.user import User
+from app.services import fo_analytics as fa
+from app.services import fo_suggestions as fs
 from app.services.profit_lock_shadow import ShadowComparison, compare_position
 from app.trading.regime import CHOPPY_ER, er_by_stock
 from app.trading.trail_sl import compute_pnl
@@ -278,6 +280,8 @@ class DailyReport:
     open_unrealized_eod: Decimal = Decimal("0")
     given_back_total: Decimal = Decimal("0")
     locked_total: Decimal = Decimal("0")  # Σ sealed-profit floors across open positions
+    # F&O option-selling engine attribution — see build_fo_health for why.
+    fo_health: list[FoUnderlyingHealth] = field(default_factory=list)
 
 
 async def _load_bars(
@@ -500,6 +504,9 @@ async def build_daily_report(
     # semantics but bounded to the report day rather than "today".
     report.realized_today = await _realized_between(db, user_id, day_start, day_end)
     report.trades_today = sum(1 for p in relevant if day_start <= p.opened_at < day_end)
+    # Independent of the equity book — the F&O engine emits suggestions whether
+    # or not anything was traded, and a dark day is exactly what needs recording.
+    report.fo_health = await build_fo_health(db, day=day)
     return report
 
 
@@ -682,6 +689,9 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
 
     # 6. Takeaways ---------------------------------------------------------- #
     out.extend(_render_takeaways(r))
+
+    # 7. F&O engine --------------------------------------------------------- #
+    out.extend(_render_fo_section(r.fo_health))
     return "\n".join(out) + "\n"
 
 
@@ -1105,3 +1115,207 @@ def render_week_markdown(w: WeekSummary) -> str:
     )
     out.append("")
     return "\n".join(out) + "\n"
+
+
+# --------------------------------------------------------------------------- #
+# F&O option-selling engine health                                             #
+# --------------------------------------------------------------------------- #
+#
+# WHY THIS SECTION EXISTS. Two calibration decisions were taken on 2026-08-07
+# (phase-04-fo-suggestions.md §9.3 / §9.7) on the strength of an argument, not a
+# measurement, and both were explicitly left open for review:
+#
+#   1. `require_exact_expiry_future=True` — weeklies excluded. Costs ~9 of every
+#      42 weekdays; the bet is that a weekly's ~1%-of-monthly OI makes those days
+#      not worth having.
+#   2. Stale vol gates warn instead of rejecting.
+#
+# Reviewing either needs a record of what the engine actually did, day by day.
+# The engine returning `[]` was ALREADY the ambiguity that hid a month-long
+# outage, so "no suggestions today" must never again be the only artifact.
+
+
+@dataclass
+class FoUnderlyingHealth:
+    """One allowed underlying's engine outcome for the report day."""
+
+    symbol: str
+    data_day: date | None            # latest F&O bhavcopy at or before the day
+    data_lag_days: int | None        # report day − data day (0 = fresh)
+    candidates: int
+    verdict: str                     # "produced" | "dark" | "no data"
+    reason: str                      # plain-language attribution
+    expiry: date | None = None
+    dte: int | None = None
+    forward_source: str | None = None
+    in_window: list[date] = field(default_factory=list)
+    iv_rank: float | None = None
+    iv_rank_as_of: date | None = None
+    vix_band: str | None = None
+
+    @property
+    def gate_stale_days(self) -> int | None:
+        """How far the vol gate's evidence lags the day being priced."""
+        if self.iv_rank_as_of is None or self.data_day is None:
+            return None
+        return (self.data_day - self.iv_rank_as_of).days
+
+
+async def build_fo_health(
+    db: AsyncSession, *, day: date, rules: fs.SellRules | None = None
+) -> list[FoUnderlyingHealth]:
+    """Per-underlying attribution of what the option-selling engine did.
+
+    Deliberately re-walks the SAME gates in the SAME order as
+    `fs.suggest_option_sells`, calling the engine's own helpers rather than
+    reimplementing them, so this can only report what the engine would do. The
+    candidate count comes from the real entry point.
+    """
+    rules = rules or fs.DEFAULT_SELL_RULES
+    out: list[FoUnderlyingHealth] = []
+
+    for symbol in sorted(rules.allowed_underlyings):
+        found = await fs.in_window_expiries(db, symbol, as_of=day, rules=rules)
+        if found is None:
+            out.append(
+                FoUnderlyingHealth(
+                    symbol=symbol, data_day=None, data_lag_days=None, candidates=0,
+                    verdict="no data", reason="no F&O bhavcopy recorded at or before this day",
+                )
+            )
+            continue
+        data_day, in_window = found
+        h = FoUnderlyingHealth(
+            symbol=symbol,
+            data_day=data_day,
+            data_lag_days=(day - data_day).days,
+            candidates=0,
+            verdict="dark",
+            reason="",
+            in_window=list(in_window),
+        )
+
+        ivr = await fa.iv_rank(db, symbol, as_of=day)
+        if ivr is not None:
+            h.iv_rank, h.iv_rank_as_of = ivr.rank, ivr.as_of
+        vix = await fa.vix_regime(db, as_of=datetime.combine(day, time.max, tzinfo=UTC))
+        if vix is not None:
+            h.vix_band = vix.band
+
+        picked = await fs._pick_expiry(db, symbol, as_of=day, rules=rules)
+        if picked is not None:
+            _, h.expiry, fwd = picked
+            h.dte = (h.expiry - data_day).days
+            h.forward_source = fwd.source
+
+        blocked = _fo_blocked_reason(
+            rules, ivr=ivr, vix=vix, in_window=in_window, picked=picked is not None
+        )
+        if blocked is not None:
+            h.reason = blocked
+        else:
+            cands = await fs.suggest_option_sells(db, symbol, as_of=day, rules=rules)
+            h.candidates = len(cands)
+            if cands:
+                h.verdict = "produced"
+                h.reason = f"{len(cands)} candidate(s) cleared every gate"
+            else:
+                h.reason = (
+                    f"priced {h.expiry} (DTE {h.dte}) but no structure cleared the "
+                    f"reward floor ({rules.min_credit_to_width:.0%} credit/width) "
+                    f"or POP floor ({rules.min_pop:.0%}) — a genuine no-trade"
+                )
+        out.append(h)
+    return out
+
+
+def _fo_blocked_reason(
+    rules: fs.SellRules,
+    *,
+    ivr: fa.IvRank | None,
+    vix: fa.VixRegime | None,
+    in_window: list[date],
+    picked: bool,
+) -> str | None:
+    """Which gate stopped the engine, or None if none did.
+
+    Evaluated in `suggest_option_sells`' OWN order, which matters: the VIX veto
+    fires BEFORE expiry selection, so a vetoed day can still have a perfectly
+    pickable expiry. Attributing off "did we pick an expiry" alone would report
+    a risk-off stand-down as "nothing qualified" — the exact class of
+    misattribution this section exists to prevent.
+    """
+    if ivr is None:
+        return "no IV-rank history — the vol gate cannot be evaluated"
+    if ivr.rank < rules.iv_rank_min:
+        return f"IV-rank {ivr.rank:.0f} below the {rules.iv_rank_min:.0f} sell gate"
+    if rules.skip_high_vix and vix is None:
+        return "VIX regime unknown — hard veto fails CLOSED"
+    if rules.skip_high_vix and vix is not None and vix.band == "high":
+        return "VIX regime HIGH — risk-off veto"
+    if picked:
+        return None
+    if not in_window:
+        return f"no option expiry in the {rules.dte_min}–{rules.dte_max} DTE window"
+    which = ", ".join(e.isoformat() for e in in_window)
+    if rules.require_exact_expiry_future:
+        return (
+            f"no ELIGIBLE expiry — in-window ({which}) but none has a same-expiry "
+            "future, and weeklies are excluded (SellRules.require_exact_expiry_future)"
+        )
+    return f"no in-window expiry could be priced ({which})"
+
+
+def _render_fo_section(rows: list[FoUnderlyingHealth]) -> list[str]:
+    out: list[str] = ["## 7. F&O option-selling engine", ""]
+    if not rows:
+        out.append("_No allowed underlyings configured._")
+        out.append("")
+        return out
+
+    out.append(
+        "> Suggestions only — there is no F&O order path (live trading is Phase 7). "
+        "This section exists to review two open calibration decisions "
+        "(`phase-04-fo-suggestions.md` §9.3 / §9.7); **a dark day is only "
+        "meaningful with its reason.**"
+    )
+    out.append("")
+    out.append("| Underlying | Verdict | Expiry (DTE) | Why |")
+    out.append("|---|---|---|---|")
+    for h in rows:
+        exp = f"{h.expiry} ({h.dte}d)" if h.expiry else "—"
+        mark = {"produced": "✅", "dark": "⚫", "no data": "—"}.get(h.verdict, "?")
+        out.append(f"| {h.symbol} | {mark} {h.verdict} | {exp} | {h.reason} |")
+    out.append("")
+
+    # The two decisions under review, called out explicitly.
+    policy_dark = [
+        h for h in rows if h.verdict == "dark" and "require_exact_expiry_future" in h.reason
+    ]
+    if policy_dark:
+        names = ", ".join(h.symbol for h in policy_dark)
+        out.append(
+            f"- **Monthly-only policy cost you today:** {names} had in-window expiries but "
+            "all were weeklies. This is the §9.3 decision working as designed — "
+            "track how often it lands before deciding whether the flag should flip."
+        )
+    stale = [h for h in rows if (h.gate_stale_days or 0) > 0]
+    if stale:
+        worst = max(stale, key=lambda h: h.gate_stale_days or 0)
+        out.append(
+            f"- **⚠ Vol gate ran on stale evidence:** {worst.symbol}'s IV-rank is from "
+            f"{worst.iv_rank_as_of} against a {worst.data_day} chain "
+            f"({worst.gate_stale_days}d behind). Per §9.7 this warns rather than rejects — "
+            "if it keeps happening, that decision needs revisiting."
+        )
+    lagging = [h for h in rows if (h.data_lag_days or 0) > 0]
+    if lagging:
+        worst = max(lagging, key=lambda h: h.data_lag_days or 0)
+        out.append(
+            f"- **F&O data is {worst.data_lag_days} day(s) behind** (latest bhavcopy "
+            f"{worst.data_day}) — check the EOD beats ran."
+        )
+    if not policy_dark and not stale and not lagging:
+        out.append("- No policy or data-freshness flags today.")
+    out.append("")
+    return out

@@ -9,18 +9,24 @@ D's report.
 
 from __future__ import annotations
 
+from dataclasses import replace
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
+import pytest
+from app.models.fo_data import FoBhavcopy, IndiaVixDaily
 from app.models.market_data import Ohlcv1m
 from app.models.signal import Signal
 from app.models.trading import Position
 from app.services.daily_report import (
+    _render_fo_section,
     build_daily_report,
+    build_fo_health,
     chase_metrics,
     render_markdown,
     tape_excursion,
 )
+from app.services.fo_suggestions import DEFAULT_SELL_RULES
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.helpers import create_test_user, make_stock
@@ -365,3 +371,164 @@ async def test_locked_profit_reported_when_stop_ratcheted_above_entry(db: AsyncS
     assert row.locked_inr == Decimal("1200.00")  # (512 − 500) × 100
     assert report.locked_total == Decimal("1200.00")
     assert "sealed ₹1,200" in render_markdown(report)
+
+
+# ── F&O engine health (the two open calibration decisions) ────────────────────
+#
+# These exist so the §9.3 (weeklies excluded) and §9.7 (stale vol gates warn,
+# not reject) decisions can be reviewed on evidence rather than recollection.
+# The engine returning `[]` was ALREADY the ambiguity that hid a month-long
+# outage — so "dark" must always arrive with its reason attached.
+
+_FO_DAY = date(2026, 8, 3)
+_FO_MONTHLY = date(2026, 9, 28)      # 56 DTE — owns the only FUT row
+_FO_WEEKLY = date(2026, 8, 25)       # 22 DTE — in a 20–45 window, NO future
+_FO_SPOT = 50000.0
+_FO_FUT = 50250.0
+_FO_RATE = 0.065
+
+
+async def _seed_fo(
+    db: AsyncSession, tc: object, *, expiries: list[date], vix: str = "14"
+) -> None:
+    """A BANKNIFTY board with futures ONLY at `_FO_MONTHLY` — the real NSE shape
+    (weekly options, monthly futures). `expiries` chooses which option chains
+    exist, so a test can present only-a-weekly or weekly-then-monthly."""
+    hist_strike = 50300                       # on the chain's 100-point grid
+    for i, iv in enumerate([0.15, 0.17, 0.19, 0.21, 0.24, 0.27, 0.30]):
+        d = _FO_DAY - timedelta(days=7 - i)
+        t = (_FO_MONTHLY - d).days / 365.0
+        px = tc.option_price("call", [(_FO_FUT, float(hist_strike), t, _FO_RATE, 0.0, iv)])[0]  # type: ignore[attr-defined]
+        db.add(FoBhavcopy(trade_date=d, symbol="BANKNIFTY", instrument="FUT",
+                          expiry_date=_FO_MONTHLY, strike=Decimal("0"),
+                          close=Decimal(str(_FO_FUT)),
+                          underlying_close=Decimal(str(_FO_SPOT)), open_interest=1000))
+        db.add(FoBhavcopy(trade_date=d, symbol="BANKNIFTY", instrument="CE",
+                          expiry_date=_FO_MONTHLY, strike=Decimal(str(hist_strike)),
+                          close=Decimal(str(round(px, 2))), open_interest=1000))
+    db.add(FoBhavcopy(trade_date=_FO_DAY, symbol="BANKNIFTY", instrument="FUT",
+                      expiry_date=_FO_MONTHLY, strike=Decimal("0"),
+                      close=Decimal(str(_FO_FUT)),
+                      underlying_close=Decimal(str(_FO_SPOT)), open_interest=1000))
+    strikes = [float(k) for k in range(44000, 56001, 100)]
+    for e in expiries:
+        t = (e - _FO_DAY).days / 365.0
+        calls = tc.option_price("call", [(_FO_FUT, k, t, _FO_RATE, 0.0, 0.30) for k in strikes])  # type: ignore[attr-defined]
+        puts = tc.option_price("put", [(_FO_FUT, k, t, _FO_RATE, 0.0, 0.30) for k in strikes])  # type: ignore[attr-defined]
+        for k, cp, pp in zip(strikes, calls, puts, strict=True):
+            db.add(FoBhavcopy(trade_date=_FO_DAY, symbol="BANKNIFTY", instrument="CE",
+                              expiry_date=e, strike=Decimal(str(int(k))),
+                              close=Decimal(str(round(cp, 2))), open_interest=1000))
+            db.add(FoBhavcopy(trade_date=_FO_DAY, symbol="BANKNIFTY", instrument="PE",
+                              expiry_date=e, strike=Decimal(str(int(k))),
+                              close=Decimal(str(round(pp, 2))), open_interest=1000))
+    # FIVE sessions, not four: `vix_regime` bands "high" on percentile > 75, and
+    # the max of four values sits at exactly 75 — which reads "normal".
+    for i, v in enumerate(["20", "19", "18", "17", vix]):
+        db.add(IndiaVixDaily(trade_date=_FO_DAY - timedelta(days=4 - i), close=Decimal(v)))
+    await db.commit()
+
+
+_ONLY_BANKNIFTY = replace(DEFAULT_SELL_RULES, allowed_underlyings=frozenset({"BANKNIFTY"}))
+
+
+async def test_fo_health_names_the_monthly_only_policy_when_it_goes_dark(
+    db: AsyncSession,
+) -> None:
+    """THE REVIEW HOOK for phase-04 §9.3. Only a weekly is in window, so the
+    monthly-only policy stands the engine down. The report must say THAT — not
+    merely that there were no candidates, which is what hid the original bug."""
+    tc = pytest.importorskip("tradecore")
+    await _seed_fo(db, tc, expiries=[_FO_WEEKLY])
+    rules = replace(_ONLY_BANKNIFTY, dte_min=20, dte_max=30)   # weekly 22 in, monthly 56 out
+
+    rows = await build_fo_health(db, day=_FO_DAY, rules=rules)
+    assert len(rows) == 1
+    h = rows[0]
+    assert h.verdict == "dark" and h.candidates == 0
+    assert h.in_window == [_FO_WEEKLY]
+    assert "require_exact_expiry_future" in h.reason
+    assert "no ELIGIBLE expiry" in h.reason
+
+    md = _render_fo_section(rows)
+    body = "\n".join(md)
+    assert "Monthly-only policy cost you today" in body
+    assert "BANKNIFTY" in body and _FO_WEEKLY.isoformat() in body
+
+
+async def test_fo_health_reports_the_monthly_when_the_walk_reaches_it(
+    db: AsyncSession,
+) -> None:
+    """The other side of the same decision: a weekly in FRONT of an in-window
+    monthly must not stand the engine down — the walk reaches the monthly and
+    the report shows which expiry was actually priced, off an exact future."""
+    tc = pytest.importorskip("tradecore")
+    await _seed_fo(db, tc, expiries=[_FO_WEEKLY, _FO_MONTHLY])
+    rules = replace(_ONLY_BANKNIFTY, dte_min=20, dte_max=60)   # BOTH in window
+
+    h = (await build_fo_health(db, day=_FO_DAY, rules=rules))[0]
+    assert h.expiry == _FO_MONTHLY, "must walk past the weekly to the monthly"
+    assert h.forward_source == "fut_exact"
+    assert h.in_window == [_FO_WEEKLY, _FO_MONTHLY]
+    assert "require_exact_expiry_future" not in h.reason
+    assert "Monthly-only policy cost you today" not in "\n".join(_render_fo_section([h]))
+
+
+async def test_fo_health_distinguishes_a_veto_from_a_no_trade(db: AsyncSession) -> None:
+    """A dark day has several causes and they demand different responses. A
+    risk-off VIX veto must never be reported as 'nothing qualified'."""
+    tc = pytest.importorskip("tradecore")
+    await _seed_fo(db, tc, expiries=[_FO_MONTHLY], vix="45")   # last = max → band "high"
+    rules = replace(_ONLY_BANKNIFTY, dte_min=20, dte_max=60)
+
+    h = (await build_fo_health(db, day=_FO_DAY, rules=rules))[0]
+    assert h.verdict == "dark"
+    assert h.vix_band == "high"
+    assert "risk-off veto" in h.reason
+
+
+async def test_fo_health_flags_a_stale_vol_gate(db: AsyncSession) -> None:
+    """THE REVIEW HOOK for phase-04 §9.7. The vol gate is bounded against
+    look-ahead but not ALIGNED to the priced day, so it can authorise a trade on
+    weeks-old evidence. That was left as a warning rather than a rejection — so
+    the warning has to be visible somewhere the user actually reads."""
+    tc = pytest.importorskip("tradecore")
+    await _seed_fo(db, tc, expiries=[_FO_MONTHLY])
+    rules = replace(_ONLY_BANKNIFTY, dte_min=20, dte_max=60)
+
+    # Ask for a day well after the last recorded bhavcopy: the chain and the
+    # gate both fall back to _FO_DAY, but the *report* day has moved on.
+    later = _FO_DAY + timedelta(days=30)
+    h = (await build_fo_health(db, day=later, rules=rules))[0]
+    assert h.data_day == _FO_DAY
+    assert h.data_lag_days == 30
+    body = "\n".join(_render_fo_section([h]))
+    assert "F&O data is 30 day(s) behind" in body
+
+
+async def test_fo_health_reports_no_data_rather_than_a_silent_row(
+    db: AsyncSession,
+) -> None:
+    """An empty F&O board is a data problem, not a trading answer."""
+    rows = await build_fo_health(db, day=_FO_DAY, rules=_ONLY_BANKNIFTY)
+    assert [h.verdict for h in rows] == ["no data"]
+    assert "no F&O bhavcopy" in rows[0].reason
+
+
+async def test_daily_report_carries_the_fo_section(db: AsyncSession) -> None:
+    """Seam: the F&O attribution reaches the rendered Markdown even on a day
+    with no equity trades — the engine's silence is itself the finding."""
+    tc = pytest.importorskip("tradecore")
+    await _seed_fo(db, tc, expiries=[_FO_WEEKLY])
+    user = await create_test_user(db, email="fohealth@example.com")
+
+    r = await build_daily_report(
+        db, day=_FO_DAY, user_id=user.id, now=datetime(2026, 8, 3, 12, 0, tzinfo=UTC)
+    )
+    assert r.opened == [] and r.closed == []
+    assert [h.symbol for h in r.fo_health] == sorted(DEFAULT_SELL_RULES.allowed_underlyings)
+    md = render_markdown(r)
+    assert "## 7. F&O option-selling engine" in md
+    assert "Suggestions only" in md
+    # BANKNIFTY has a board; the other two indices have none. Both are reported.
+    assert "no F&O bhavcopy" in md

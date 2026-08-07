@@ -282,8 +282,16 @@ require_exact_expiry_future: bool = True   # SellRules
 
 Index futures are monthly, so "has a same-expiry future" *is* the monthly test.
 
-**Open question for the user — a real ruling, not a formality.** Flipping this
-flag to `False` takes the engine from 33/42 to 42/42 producing days. It should
+**RULING 2026-08-07: user accepted the recommendation — the flag stays `True`,
+and its cost is now MEASURED daily rather than argued.** `make analysis` writes
+§7 "F&O option-selling engine" into `docs/analysis/<date>.md`, which names the
+monthly-only policy explicitly on any day it is what stood the engine down. Read
+a run of those before revisiting. First reading (08-05 / 08-07): all three
+indices dark on **IV-rank 15–29 vs the 50 gate** — the vol gate is upstream, so
+this policy is not currently costing anything.
+
+**Why it should still not be flipped casually.** Going `False` takes the engine
+from 33/42 to 42/42 producing days. It should
 not be flipped until there is a **chain-level** liquidity gate to go with it
 (e.g. total chain OI as a fraction of the front monthly's) and a fill model
 calibrated on weekly quotes — otherwise the extra 9 days are exactly the days
@@ -355,7 +363,10 @@ never present itself as one priced off a traded future.
   Live condition, not hypothetical: EOD ingestion missed 2026-08-06 entirely.
   Made **loud** (a warning when `ivr.as_of != day`) rather than fatal, because
   turning staleness into a hard rejection changes gate semantics and is a
-  calibration decision. **Open for a user ruling:** hard-reject on stale gates?
+  calibration decision. **RULING 2026-08-07: user accepted warn-not-reject, on
+  the condition that it is reviewed against real behaviour.** The daily report's
+  §7 surfaces the lag per underlying, so a recurring stale gate becomes visible
+  without reading worker logs. Revisit if it keeps appearing.
 - **Per-leg bid/ask** (§7 follow-up) remains the right fix for the fill model;
   until it lands, `min_slippage = 1.0` should not be assumed conservative on
   anything but a liquid monthly chain.

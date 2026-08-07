@@ -7,6 +7,15 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Daily analysis — §7 F&O option-selling engine (2026-08-07)
+
+- **The daily report had zero F&O coverage**, so the two calibration decisions taken the same day (`docs/phases/phase-04-fo-suggestions.md` §9.3 weeklies-excluded, §9.7 stale-vol-gates-warn) could only be reviewed from recollection. Both were taken on an *argument*, not a measurement — reviewing them needs a day-by-day record. And since the engine returning `[]` was already the ambiguity that hid a month-long outage, "no suggestions today" must never again be the only artifact.
+- `make analysis` now writes **§7** into `docs/analysis/<date>.md`: per allowed underlying, a verdict (produced / dark / no data), the expiry + DTE actually priced, the forward source, and **the reason** — attributed by re-walking the engine's own gates **in the engine's own order** via its own helpers. Plus explicit call-outs when the monthly-only policy is what went dark, when the vol gate ran on stale evidence, and when F&O bhavcopy is behind.
+- Window logic is now shared rather than duplicated: new `fo_suggestions.in_window_expiries` backs both `_pick_expiry` and the report, so a report that audits the engine cannot drift from it. (`_pick_expiry` is otherwise unchanged.)
+- **Gate ORDER turned out to matter, and a test caught it.** The VIX veto fires *before* expiry selection, so a vetoed day can still have a perfectly pickable expiry; attributing off "did we pick an expiry" reported a risk-off stand-down as "nothing qualified" — the exact misattribution the section exists to prevent. `_fo_blocked_reason` now returns `None` only when every gate genuinely passed.
+- **First real reading (2026-08-05 / 08-07): all three indices dark on IV-rank 15–29 against the 50 sell gate.** Vol is cheap and the engine is correctly refusing to sell cheap premium — so *neither* open ruling is currently the binding constraint. It also correctly flagged F&O bhavcopy running 2 days behind.
+- Tests: `tests/test_daily_report.py` 10 → **16** — the monthly-only policy named when it goes dark; the walk reaching the monthly when a weekly leads (no false policy flag); a VIX veto distinguished from a genuine no-trade; the stale-data flag; no-data reported rather than a silent row; and the seam proving §7 reaches the rendered Markdown on a day with no equity trades.
+
 ### v2 Phase 5 — UI overhaul (in progress, started 2026-08-06)
 
 - **Review round + the 60 fps budget MEASURED — slice 5.5 (2026-08-06).** bug-hunter and ui-reviewer run against the phase diff; every finding in new code fixed with a regression test.
