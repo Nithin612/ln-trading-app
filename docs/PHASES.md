@@ -34,18 +34,25 @@ snap refresh, so **no new frontend dependency can be installed** until
 `store-dir` is repointed outside `~/snap/` and one full `pnpm install` runs.
 That is why virtualization is an in-repo hook rather than `@tanstack/react-virtual`.
 
-**Phase 3 — remaining (both LIVE-GATED, need market days):**
+**Phase 3 — ONE item remains. (Corrected 2026-08-07: this checklist used to
+call the soak "UNPROVEN", contradicting both the narrative below and
+`PERFORMANCE.md`. The soak is DONE.)**
 
-- [ ] **Quiet-box full-session soak** → the p99 tick→publish **≤ 50 ms** verdict
-      at full universe. Still UNPROVEN: the 07-10 soak was partial (a load
-      spike on the box starved the consumer). Ritual + caveats: open thread 1
-      below. Known risk: at ~2,049-instrument batches the LTP-write floor
-      (~11 ms) brushes the budget → restate the budget or add unchanged-price
-      SET dedupe, decided on the soak's numbers.
-- [ ] **Clean shadow week** — `scripts/shadow_day.sh <day…>` once per day AFTER
-      the evening EOD beats land (~19:30 IST); zero diffs required. Day one
-      (07-17) already clean; a full week isn't logged yet.
+- [x] **Quiet-box full-session soak — MET ×2 (2026-07-15 + 07-16).** Budget
+      restated to p99 ≤ 50 ms by user ruling on 07-14 and then met on the
+      optimized worker across two full sessions; verdict recorded 07-16
+      (`PERFORMANCE.md` §Budgets, ledger §Fourth soak). **No further soak is
+      needed.**
+- [ ] **Clean shadow week** — the ONLY outstanding Phase-3 item.
+      `scripts/shadow_day.sh <day…>` once per day AFTER the evening EOD beats
+      land (~19:30 IST); zero diffs required. Day one (07-17) already clean.
+      **This does NOT require waiting a calendar week:** a gap catches up in one
+      evening — the EOD catch-up heals the backlog (≤ 21 days), then run the
+      wrapper across the backfilled days in a single sitting.
 - [ ] Then **`/phase-gate`** → Phase 3 closes.
+
+**Not a Phase-3 item:** the 30-day paper clock is the **Phase-7** go-live gate,
+and it only *starts* when the live path runs (slice 3.7).
 
 Everything else in Phase 3 (slices **3.0–3.7**) is DONE and on `main` — live
 worker + Rust LiveEngine, committed/forming layers, record-replay, tick
@@ -81,13 +88,31 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account):** Phase 3 IN PROGRESS —
-**slices 3.0–3.5-core ALL DONE and on `main`** (3.0–3.3 on 2026-07-09,
-3.4 on 2026-07-10, 3.5 core + first-soak ops + publish-path perf fixes
-2026-07-10/11; ledger + all review records: `phases/phase-03-realtime.md`;
-CHANGELOG Unreleased has per-slice detail). Kite subscription ACTIVE.
-Worktree used for 3.5 was merged and REMOVED — everything is linear on
-main; push to origin is manual (user).
+**▶ CONTINUE HERE (next session, any account) — updated 2026-08-07.**
+Phases **0–2, 4 and 5 are CLOSED**; **Phase 3 has exactly one item left**.
+Everything below this line is historical narrative — read the STATE AT A GLANCE
+block at the top of this file first, not the 400 lines that follow.
+
+**Do these, in this order:**
+
+1. **Phase 3 — the clean shadow week** (the only thing standing between you and
+   closing Phase 3). `scripts/shadow_day.sh <day…>` after ~19:30 IST; zero diffs
+   required; day one (07-17) already clean. Backfilled days can be run in ONE
+   sitting — you are not waiting a calendar week. Then `/phase-gate` for Phase 3.
+   The soak is already MET — do NOT re-run it.
+2. **Phase 6 — outcome tracking + strategy lab v2** is the next *build* phase,
+   and the daily analysis says why: the binding constraint on profit is
+   **entry/regime selection, not exits** (only ~2 of 20 trades reached +1R over
+   08-03→06, and open heat has twice touched ~30% of capital). Phase 6 is where
+   expectancy calibration lives.
+3. **One imminent bug is logged, not fixed** —
+   `fo_suggestions._pick_expiry` will start returning an empty candidate list
+   that looks like "no setup qualified" as soon as the current monthly expiry
+   ages past dte 20. Needs a user ruling because `SellRules` were calibrated
+   against the old forward. Detail: `phases/phase-05-ui-overhaul.md` §8.
+
+Kite subscription ACTIVE. Push to origin is MANUAL (user). History on main is
+linear — merge phase branches with `--ff-only`.
 
 **✅ 2026-07-11 (Saturday session): the deferred FULL three-leg gate
 ran GREEN on the perf-fix commit exactly as shipped** — 731 backend /
