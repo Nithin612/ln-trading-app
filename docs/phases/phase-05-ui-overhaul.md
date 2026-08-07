@@ -273,6 +273,37 @@ so changing it is a design-system decision, not a Phase-5 one. Likewise
 `components/ui/drawer.tsx` predates this phase and lacks a Portal and a focus
 trap. Both are listed in §8.
 
+## 6c. Forward accuracy — measured, not assumed
+
+`forward_for_expiry` implies the carry from the nearest future expiring on/after
+the option (`b = ln(F_fut/S)/T_fut`, `F_opt = S·e^(b·T_opt)`). Rather than trust
+the algebra, it was checked against the **real futures curve** — imply carry
+from a far future, predict a *listed* nearer one, compare to what it actually
+traded at (NIFTY 2026-08-05, spot 24,624.65):
+
+| Carry implied from | Predicts | Predicted | Actual | Error |
+|---|---|---:|---:|---:|
+| 2026-09-29 | 2026-08-25 | 24,677.41 | 24,647.70 | **+0.12 %** |
+| 2026-10-27 | 2026-09-29 | 24,815.02 | 24,770.00 | +0.18 % |
+| 2026-10-27 | 2026-08-25 | 24,693.71 | 24,647.70 | +0.19 % |
+
+The implementation always uses the **nearest** future on/after the option, so
+real error sits at or below the top row (~0.12 %, ≈30 NIFTY points). What that
+costs the trader-visible numbers: delta moves by ≈ gamma × ΔF (< 0.01), and ATM
+IV by roughly half a vol point. Immaterial for a display ladder and for a
+0.16Δ ± 0.06 strike band — and far better than the alternative it replaced,
+which was **no Greeks at all** on 9 of 12 expiries.
+
+**Known-better option, deliberately not taken:** put-call parity on the chain
+itself (`F = K + e^{rT}(C − P)` at the ATM strike) needs no futures and is
+exact, but it leans on a single strike's two quotes. Recorded as a Phase-6
+refinement rather than swapped in unreviewed at a gate.
+
+**quant-verifier did NOT complete** on this diff — the run aborted on an account
+spend limit having produced no findings. The empirical check above and the
+hand-verification in §6b stand in its place; a quant-verifier pass on
+`fo_analytics.forward_for_expiry` is still owed and is listed in §8.
+
 ## 7. Exit checklist
 
 - [x] 5.1 live-data infra · 5.2 F&O page · 5.3 style pages v2 · 5.4 Live Signals
@@ -316,6 +347,25 @@ trap. Both are listed in §8.
 - [ ] `/phase-gate`
 
 ## 8. Follow-ups handed forward
+
+- **⚠ IMMINENT, Phase-4 code, NOT fixed here.**
+  `fo_suggestions._pick_expiry` picks the first OPTION expiry whose DTE falls in
+  `[dte_min, dte_max]` **without checking that a same-expiry FUTURE exists**;
+  `suggest_option_sells` then calls `futures_basis`, which requires an exact
+  expiry match and returns `None` otherwise — making the whole engine
+  `return []`. That empty list is **indistinguishable from "no candidate cleared
+  the gates"**, which the docs teach you to read as normal.
+  Checked against real data (latest day 2026-08-05): the first in-window expiry
+  is **2026-08-25, dte 20, which HAS a future — so it works today**. But once
+  that ages past dte 20, the next in-window expiry is **2026-09-01, a weekly
+  with zero futures rows**, and the engine goes silently empty.
+  The fix is small — swap `futures_basis` for the new `forward_for_expiry` — but
+  it was left alone on purpose: `SellRules` were user-calibrated against an
+  exact-expiry-future forward, so changing what the engine prices against is a
+  calibration decision, not a gate-time edit. **Needs a user ruling + a
+  quant-verifier pass.**
+- **quant-verifier on `forward_for_expiry`** — the Phase-5 run aborted on an
+  account spend limit with no findings (see §6c).
 
 - **Daybreak badge contrast (systemic).** `--color-bull` on `--color-profit-bg`
   is 3.32:1 and `--color-bear` on `--color-loss-bg` 3.95:1 in the light theme,
