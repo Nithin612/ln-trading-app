@@ -7,6 +7,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fixed — the stock master had no real company names, and reseeding was broken (2026-08-07)
+
+First slice of "Intraday activation + v1 surface uplift". Went in for sector
+coverage; found two larger defects underneath it.
+
+- **No stock had a correct company name.** `EQUITY_L.csv` carries a
+  `NAME OF COMPANY` column that `fetch_equity_universe` never read, so
+  `company_name` was the ticker itself for **2,274 of 2,333** active stocks —
+  and for the 59 index members it was the **sector**, because the caller indexed
+  a `{symbol: industry}` map as if it held names. ADANIENT was named
+  "Metals & Mining". That string is what the screener, watchlist search, stock
+  detail and CSV export have all been rendering. `company_name` was also missing
+  from the upsert's `DO UPDATE SET`, so a reseed could never repair a name once
+  written — both fixed.
+- **The reseed had silently stopped working.** The upsert conflicts on
+  `(symbol, exchange)`, but `uq_stocks_isin` must hold too; when NSE renames a
+  ticker, the CSV brings the NEW symbol carrying the OLD row's ISIN, so the
+  insert dies on the ISIN constraint and the **entire run rolls back**. Six real
+  renames were blocking it: AMIRCHAND→AEROPLANE, ASHIKA→ASHIKAG,
+  LYPSAGEMS→AURUS, GUJGASLTD→GUJENERGY, MIRCELECTR→ONIDA, VISASTEEL→VISACHROME.
+  New `plan_renames()` resolves them **in place** — a rename is the same company,
+  so the row keeps its id and with it every OHLCV bar, signal and position
+  pointing at it (GUJENERGY kept 738 daily bars, ONIDA 376). Inserting a fresh
+  row would have stranded that history under a ticker NSE no longer publishes.
+  When BOTH tickers already exist, choosing the canonical history is not a seed
+  script's call: that is reported as a collision, the incoming row is written
+  without its ISIN, and nothing is merged. Renames and collisions both print in
+  the run summary — they change what a ticker MEANS, so they are never silent.
+- **Sector source widened to Nifty 500** (`ind_nifty500list.csv`), the widest
+  free flat CSV NSE publishes. Coverage **59 → 500**; market cap stays unpopulated
+  (NSE publishes no free shares-outstanding source, so the screener field remains
+  honestly unavailable). An NSE outage narrows coverage instead of failing the run.
+- Measured after reseed: sector 59 → **500**; `company_name` = ticker 2,274 → **2**;
+  `company_name` = sector 59 → **0**; inactive rows **15 → 15**, so the 2026-07-17
+  T2T deactivation ruling survived untouched (`is_active` is deliberately absent
+  from the update list).
+- Tests: new `tests/test_seed_stocks_renames.py` (15) against a pure
+  `plan_renames()` — all six real renames pinned, new listings and ISIN-less
+  symbols excluded, both-tickers-alive reported rather than merged, and
+  determinism under row-order flips. One of them caught a bug in the first draft:
+  two symbols claiming one ISIN planned two UPDATEs against the same row id, the
+  second silently overwriting the first.
+
 ### Fixed — Journal and Portfolio were unreachable; the Filings page 422'd on its own default (2026-08-07)
 
 Both were caught from a pasted server log, not from the suite. That is the story

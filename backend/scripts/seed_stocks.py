@@ -8,7 +8,12 @@ Data sources (all confirmed accessible, no auth required):
      → Nifty50 constituents + Industry (sector)
   3. archives.nseindia.com/content/indices/ind_niftybanklist.csv
      → BankNifty constituents + Industry
-  4. api.kite.trade/instruments/NFO
+  4. archives.nseindia.com/content/indices/ind_nifty500list.csv
+     → the widest free sector source NSE publishes as a flat CSV. Without it
+       sector coverage is capped at the ~59 names in (2) and (3), which is why
+       the screener's sector filter used to match 2.5% of the universe.
+       Non-fatal: an outage narrows coverage, it does not block a reseed.
+  5. api.kite.trade/instruments/NFO
      → F&O symbols + lot sizes (public, no auth needed)
 
 FinNifty: hard-coded (ind_niftyfinancialserviceslist.csv returns 404 at all
@@ -69,7 +74,14 @@ def _parse_listing_date(raw: str) -> date | None:
 # ---------------------------------------------------------------------------
 
 def fetch_equity_universe() -> dict[str, dict]:
-    """Returns {symbol: {isin, lot_size, listed_on, series}} for all NSE equities."""
+    """Returns {symbol: {isin, company_name, lot_size, listed_on, series}}.
+
+    `NAME OF COMPANY` was present in this CSV all along but never read, which is
+    why every stock's `company_name` was either its own ticker or — for the 59
+    index members — the *sector* string (the caller was indexing a
+    {symbol: industry} map as if it held names). ADANIENT was literally called
+    "Metals & Mining".
+    """
     text = _fetch(f"{_NSE_ARCHIVE}/equities/EQUITY_L.csv")
     rows = _csv_rows(text)
     universe: dict[str, dict] = {}
@@ -80,6 +92,7 @@ def fetch_equity_universe() -> dict[str, dict]:
             continue
         universe[sym] = {
             "isin": row.get("ISIN NUMBER", "").strip() or None,
+            "company_name": row.get("NAME OF COMPANY", "").strip() or None,
             "lot_size": int(row.get("MARKET LOT", "1") or "1"),
             "listed_on": _parse_listing_date(row.get("DATE OF LISTING", "")),
             "series": series,
@@ -88,7 +101,11 @@ def fetch_equity_universe() -> dict[str, dict]:
 
 
 def fetch_index_constituents(csv_path: str) -> dict[str, str]:
-    """Returns {symbol: sector} for an NSE index constituent CSV."""
+    """Returns {symbol: sector} for an NSE index constituent CSV.
+
+    The value is the CSV's `Industry` column — NSE's sector label. It is NOT a
+    company name; callers that need one must use the equity universe.
+    """
     text = _fetch(f"{_NSE_ARCHIVE}/indices/{csv_path}")
     rows = _csv_rows(text)
     return {row["Symbol"]: row.get("Industry", "") for row in rows if row.get("Symbol")}
@@ -116,6 +133,67 @@ def fetch_fno_lot_sizes() -> dict[str, int]:
             except ValueError:
                 pass
     return lots
+
+
+# ---------------------------------------------------------------------------
+# Rename planning (pure — the DB-touching part lives in seed())
+# ---------------------------------------------------------------------------
+
+def plan_renames(
+    equity: dict[str, dict],
+    all_syms: set[str] | frozenset[str],
+    existing_by_isin: dict[str, tuple[int, str]],
+    existing_symbols: set[str] | frozenset[str],
+) -> tuple[list[tuple[str, str, str, int]], list[tuple[str, str, str]]]:
+    """Decide which existing rows are the same company under a NEW ticker.
+
+    Returns `(renames, collisions)` where a rename is
+    `(isin, old_symbol, new_symbol, stock_id)` and a collision is
+    `(isin, existing_symbol, incoming_symbol)`.
+
+    Why this exists: the upsert conflicts on `(symbol, exchange)`, but
+    `uq_stocks_isin` must hold too. When NSE renames a ticker, the CSV brings the
+    NEW symbol carrying the OLD row's ISIN — so the insert dies on the ISIN
+    constraint and the entire reseed rolls back. That is why this script had
+    quietly stopped being re-runnable (AMIRCHAND → AEROPLANE, INE05TO01019).
+
+    A rename is the SAME company, so the row is renamed **in place**: it keeps
+    its id, and with it every OHLCV bar, signal and position pointing at it.
+    Inserting a fresh row would strand all of that under a ticker NSE no longer
+    publishes.
+
+    When BOTH tickers already exist as rows, deciding which history is canonical
+    is not a seed script's call — that is reported as a collision and left alone
+    (the caller then writes the incoming row without its ISIN).
+    """
+    renames: list[tuple[str, str, str, int]] = []
+    collisions: list[tuple[str, str, str]] = []
+    live_symbols = set(existing_symbols)
+    # An ISIN can only be spent once. Without this, two CSV symbols claiming one
+    # ISIN both plan a rename of the SAME row id and the second UPDATE silently
+    # overwrites the first — one row, two names, no error. Caught by test.
+    claimed: set[str] = set()
+
+    # Sorted for determinism: two symbols claiming one ISIN must resolve the
+    # same way on every run, or a reseed becomes order-dependent.
+    for sym in sorted(all_syms):
+        isin = equity.get(sym, {}).get("isin")
+        if not isin:
+            continue
+        owner = existing_by_isin.get(isin)
+        if owner is None:
+            continue
+        stock_id, old_symbol = owner
+        if old_symbol == sym:
+            continue
+        if sym in live_symbols or isin in claimed:
+            collisions.append((isin, old_symbol, sym))
+            continue
+        claimed.add(isin)
+        live_symbols.discard(old_symbol)
+        live_symbols.add(sym)
+        renames.append((isin, old_symbol, sym, stock_id))
+    return renames, collisions
 
 
 # ---------------------------------------------------------------------------
@@ -160,6 +238,17 @@ def seed(dry_run: bool = False) -> None:  # noqa: C901
     banknifty = fetch_index_constituents("ind_niftybanklist.csv")
     print(f"  BankNifty: {len(banknifty)} constituents")
 
+    # Nifty 500 is the widest free sector source NSE publishes as a flat CSV.
+    # Without it, sector coverage is capped at the ~59 names in the two index
+    # files above — which is exactly why the screener's sector filter matched
+    # 2.5% of the universe. Non-fatal: an NSE outage should not block a reseed.
+    try:
+        nifty500 = fetch_index_constituents("ind_nifty500list.csv")
+        print(f"  Nifty500: {len(nifty500)} constituents (sector source)")
+    except Exception as exc:  # noqa: BLE001 - reseed must survive a dead CSV
+        print(f"  Nifty500: UNAVAILABLE ({exc}) — sector coverage stays narrow")
+        nifty500 = {}
+
     fno_lots = fetch_fno_lot_sizes()
     print(f"  F&O: {len(fno_lots)} stocks")
 
@@ -196,14 +285,13 @@ def seed(dry_run: bool = False) -> None:  # noqa: C901
                 index_ids[sym] = result.scalar_one()
 
             # ── Upsert stocks ─────────────────────────────────────────────────
-            # Combine sector from index CSVs; prefer Nifty50 sector if available
+            # Sector from the index CSVs, widest source first so the narrower,
+            # more curated lists win on overlap (Nifty50 last = highest priority).
             sector_map: dict[str, str] = {}
-            for sym, sector in banknifty.items():
-                if sector:
-                    sector_map[sym] = sector
-            for sym, sector in nifty50.items():
-                if sector:
-                    sector_map[sym] = sector
+            for source in (nifty500, banknifty, nifty50):
+                for sym, sector in source.items():
+                    if sector:
+                        sector_map[sym] = sector
 
             inserted = 0
             updated = 0
@@ -213,6 +301,31 @@ def seed(dry_run: bool = False) -> None:  # noqa: C901
                 set(equity.keys()) | set(nifty50.keys())
                 | set(banknifty.keys()) | set(fno_lots.keys())
             )
+
+            # ── Symbol renames, keyed on ISIN (see plan_renames) ─────────────
+            existing_by_isin = {
+                r[0]: (r[1], r[2])
+                for r in (
+                    await session.execute(
+                        text("SELECT isin, id, symbol FROM stocks WHERE isin IS NOT NULL")
+                    )
+                ).fetchall()
+            }
+            existing_symbols = {
+                r[0]
+                for r in (await session.execute(text("SELECT symbol FROM stocks"))).fetchall()
+            }
+            renamed, collided = plan_renames(equity, all_syms, existing_by_isin, existing_symbols)
+            for _isin, _old, new_symbol, stock_id in renamed:
+                await session.execute(
+                    text(
+                        "UPDATE stocks SET symbol = :new, updated_at = now() WHERE id = :sid"
+                    ),
+                    {"new": new_symbol, "sid": stock_id},
+                )
+            if renamed:
+                await session.flush()
+            _collided_symbols = {new for _isin, _old, new in collided}
 
             for sym in all_syms:
                 eq_data = equity.get(sym, {})
@@ -240,6 +353,12 @@ def seed(dry_run: bool = False) -> None:  # noqa: C901
                         )
                         ON CONFLICT (symbol, exchange) DO UPDATE SET
                             isin = COALESCE(EXCLUDED.isin, stocks.isin),
+                            -- Was absent, so a reseed could never repair a name
+                            -- once written. COALESCE keeps the existing value
+                            -- only when NSE has nothing better to offer.
+                            company_name = COALESCE(
+                                EXCLUDED.company_name, stocks.company_name
+                            ),
                             sector = COALESCE(EXCLUDED.sector, stocks.sector),
                             industry = COALESCE(EXCLUDED.industry, stocks.industry),
                             lot_size = EXCLUDED.lot_size,
@@ -253,10 +372,18 @@ def seed(dry_run: bool = False) -> None:  # noqa: C901
                     """),
                     {
                         "symbol": sym,
-                        "isin": eq_data.get("isin"),
-                        "company_name": (
-                            nifty50.get(sym) or banknifty.get(sym) or sym
+                        # An ISIN another live row already owns must not be
+                        # written here, or the reseed dies on uq_stocks_isin and
+                        # rolls back everything. The collision is reported below.
+                        "isin": (
+                            None
+                            if sym in _collided_symbols
+                            else eq_data.get("isin")
                         ),
+                        # The equity master is the ONLY source of a real name.
+                        # The index maps hold {symbol: industry}; reading them
+                        # here is what put a sector in the company_name column.
+                        "company_name": eq_data.get("company_name") or sym,
                         "sector": sector_map.get(sym),
                         "lot_size": lot,
                         "is_fno": is_fno,
@@ -299,6 +426,18 @@ def seed(dry_run: bool = False) -> None:  # noqa: C901
 
             await session.commit()
             print(f"\nDone. Inserted: {inserted}, Updated: {updated}, Skipped: {skipped}")
+            # Renames change what a ticker MEANS, so they are never silent.
+            if renamed:
+                print(f"\nRenamed {len(renamed)} symbol(s) in place (history preserved):")
+                for isin, old, new, _sid in renamed:
+                    print(f"  {old} → {new}   ({isin})")
+            if collided:
+                print(
+                    f"\n{len(collided)} ISIN collision(s) LEFT ALONE — both tickers already"
+                    " exist as rows, so merging them is your call:"
+                )
+                for isin, old, new in collided:
+                    print(f"  {isin}: existing {old} vs incoming {new} (ISIN not written)")
 
         await engine.dispose()
 
