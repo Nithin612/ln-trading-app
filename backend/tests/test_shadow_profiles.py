@@ -21,6 +21,7 @@ from app.schemas.profile import (
     signal_status_for,
 )
 from httpx import AsyncClient
+from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.helpers import create_test_user, get_auth_headers, make_stock
@@ -72,6 +73,7 @@ async def _signal(
         factor_scores={},
         headline="test",
         status=status,
+        is_shadow=(status == "shadow"),
         validity_until=datetime.now(tz=UTC) + timedelta(hours=validity_hours),
         profile_key="pdh_pdl",
     )
@@ -354,3 +356,121 @@ class TestIntradayTaskGuards:
         out = await profile_tasks._run_intraday("intraday_15m")
         assert out["status"] == "skipped"
         assert "session" in str(out["message"])
+
+
+class TestShadowEvidenceNeverLeaksIntoTradeableStats:
+    """quant-verifier CRITICAL, 2026-08-08.
+
+    `/analytics/outcomes` joined signal_outcomes → signals → strategy_profiles
+    and grouped by style with NO shadow filter, so every shadow outcome landed in
+    the intraday hit-rate / entry-rate / avg-return the StylePage renders as
+    "Tracked outcomes". Shadow profiles are precisely the ones that have NOT
+    earned activation, so this dragged the headline numbers toward a strategy
+    nobody trades — corrupting the evidence the shadow layer exists to produce.
+    """
+
+    async def _outcome(self, db: AsyncSession, signal_id: str, status: str) -> None:
+        await db.execute(
+            text(
+                "INSERT INTO signal_outcomes"
+                " (signal_id, stock_id, direction, classification, timeframe,"
+                "  validity_until, status, entry_touched_at)"
+                " SELECT id, stock_id, direction, classification, timeframe,"
+                "        validity_until, :st, now()"
+                " FROM signals WHERE id = :sid"
+            ),
+            {"sid": signal_id, "st": status},
+        )
+
+    async def _profiled_signal(
+        self, db: AsyncSession, symbol: str, status: str
+    ) -> Signal:
+        """A signal attached to a REAL intraday profile row — the analytics
+        aggregate inner-joins strategy_profiles, so an unprofiled signal would
+        pass this test vacuously."""
+        prof = StrategyProfile(
+            key=f"prof_{symbol}",
+            version=1,
+            name=symbol,
+            description="t",
+            style="intraday",
+            timeframe="15m",
+            schedule="intraday_15m",
+            universe_spec={"kind": "symbols", "value": [symbol]},
+            setup_conditions=[],
+            weight_multipliers={},
+            min_confidence=70,
+            risk_template={"kind": "rr", "ratio": "1.5"},
+            validity_spec=None,
+            status="shadow" if status == "shadow" else "active",
+            config_hash=f"h-{symbol}",
+        )
+        db.add(prof)
+        await db.flush()
+
+        stock = await make_stock(db, symbol=symbol)
+        sig = await _signal(db, stock.id, status=status)
+        sig.profile_id = prof.id
+        sig.profile_key = prof.key
+        sig.outcome_pnl_pct = Decimal("-0.500")
+        await db.flush()
+        return sig
+
+    async def test_a_shadow_outcome_is_not_counted(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """Canary: on the pre-fix code this returns an intraday row with 1 loss."""
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        sig = await self._profiled_signal(db, "SHADOWSTAT", status="shadow")
+        await self._outcome(db, str(sig.id), "sl_first")
+        await db.commit()
+
+        body = (await client.get("/api/v1/analytics/outcomes", headers=headers)).json()
+        intraday = [s for s in body["styles"] if s["style"] == "intraday"]
+        # The endpoint emits a row per style regardless; what must be zero are
+        # the COUNTS. On the pre-fix code this row reads total=1, losses=1,
+        # hit_rate=0.0 — a real strategy's scoreboard showing a shadow result.
+        assert len(intraday) == 1
+        row = intraday[0]
+        assert row["total"] == 0, f"shadow outcome leaked: {row}"
+        assert row["losses"] == 0, f"shadow outcome leaked: {row}"
+        assert row["entered"] == 0, f"shadow outcome leaked: {row}"
+        assert row["hit_rate"] is None, f"shadow outcome leaked: {row}"
+        assert row["avg_return_pct"] is None, f"shadow outcome leaked: {row}"
+
+    async def test_a_tradeable_outcome_is_still_counted(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """The filter must not silence real evidence."""
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        sig = await self._profiled_signal(db, "REALSTAT", status="active")
+        await self._outcome(db, str(sig.id), "sl_first")
+        await db.commit()
+
+        body = (await client.get("/api/v1/analytics/outcomes", headers=headers)).json()
+        intraday = [s for s in body["styles"] if s["style"] == "intraday"]
+        assert len(intraday) == 1
+        assert intraday[0]["losses"] == 1
+
+    async def test_provenance_survives_expiry(self, db: AsyncSession) -> None:
+        """The deepest part of the finding.
+
+        `status` is a LIFECYCLE field the sweeper overwrites with 'expired' —
+        and expiry is exactly when an outcome finalises. Had shadow provenance
+        lived only in `status`, a filter on `status <> 'shadow'` would have
+        excluded the handful still live and counted the entire finalised
+        history. Canary: without `is_shadow` this assertion is unanswerable.
+        """
+        from app.tasks.expiry_tasks import sweep_expired
+
+        stock = await make_stock(db, symbol="PROVENANCE")
+        sig = await _signal(db, stock.id, status="shadow", validity_hours=-1)
+        await db.commit()
+
+        await sweep_expired(db, datetime.now(tz=UTC))
+        await db.refresh(sig)
+
+        assert sig.status == "expired"      # lifecycle moved on
+        assert sig.is_shadow is True        # provenance did not

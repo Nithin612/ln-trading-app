@@ -46,7 +46,83 @@ from app.signals.risk_guards import safe_levels
 
 log = logging.getLogger(__name__)
 
+# Timeframes whose decision bar must belong to the CURRENT trading session. A
+# bar from an earlier session means this session's data has not arrived — a run
+# fired before the first bar closed, or a live worker that never started because
+# the daily Kite token was not refreshed.
+_INTRADAY_TF_MINUTES = {"1m": 1, "5m": 5, "15m": 15, "1h": 60}
+
 _IST = ZoneInfo("Asia/Kolkata")
+
+
+def stale_decision_bar_day(timeframe: str, window: pd.DataFrame, now: datetime) -> date | None:
+    """The bar's trading day when it is NOT today's session, else None.
+
+    `_load_window` takes the newest COMPLETE bars with no recency assertion, so
+    a run firing before this session's first bar closes — or on a day when the
+    live worker never started because the daily Kite token was not refreshed —
+    silently scores the PREVIOUS session's closing bar and mints signals at
+    yesterday's price. The setups pass happily on it: a stale close sits far
+    above yesterday's PDH, so pdh_breakout and orb_breakout both fire.
+
+    The invariant is "the decision bar belongs to today's session", NOT "the bar
+    is under N minutes old". An age threshold is a proxy that also depends on
+    what time of day the process runs — wrong for backfills, unstable in tests.
+    Compare IST trading dates instead.
+
+    Daily timeframes are exempt: the EOD path legitimately scores yesterday's
+    completed bar.
+    """
+    if timeframe not in _INTRADAY_TF_MINUTES or window.empty:
+        return None
+    last_bar = window.index[-1].to_pydatetime()
+    if last_bar.tzinfo is None:
+        last_bar = last_bar.replace(tzinfo=UTC)
+    bar_day = last_bar.astimezone(_IST).date()
+    return None if bar_day == now.astimezone(_IST).date() else bar_day
+
+
+def intraday_mint_block(
+    timeframe: str,
+    classification: str,
+    window: pd.DataFrame,
+    now: datetime,
+    validity: datetime,
+) -> str | None:
+    """Why this intraday run must not mint a signal, or None to proceed.
+
+    One gate for the two ways an intraday beat produces a signal that looks
+    valid but is not: scoring data from the wrong session, and minting past the
+    session's own deadline. Returns a human-readable reason so the log line says
+    which.
+    """
+    stale_day = stale_decision_bar_day(timeframe, window, now)
+    if stale_day is not None:
+        return (
+            f"decision bar is from {stale_day}, not today's session"
+            f" ({now.astimezone(_IST).date()})"
+        )
+    if past_intraday_cutoff(classification, now, validity):
+        return "past today's 15:15 IST cutoff"
+    return None
+
+
+def past_intraday_cutoff(classification: str, now: datetime, validity: datetime) -> bool:
+    """True when this intraday signal's deadline was rolled to another day.
+
+    SIGNAL_ENGINE.md §5: an intraday signal is valid "until 3:15 PM IST **same
+    trading day**". `compute_validity_until` rolls the deadline forward a
+    calendar day when minting happens after 09:45 UTC — correct for the nightly
+    EOD caller, which mints ahead of the next session, but wrong for an intraday
+    beat firing at 15:16 IST: that produces a ~24h "intraday" signal spanning the
+    overnight gap (on a Friday, expiring on a Saturday) which also holds the
+    dedup slot into the next session.
+
+    Detecting the roll-forward here keeps `expiry.py` untouched, which the EOD
+    path depends on. Comparing UTC dates is safe: the whole IST session
+    (09:15–15:30 IST = 03:45–10:00 UTC) falls on a single UTC date.
+    """
+    return classification == "intraday" and validity.date() > now.date()
 
 # Same whitelist discipline as the strategy-lab loader — table names only
 # ever come from here.
@@ -306,6 +382,11 @@ async def _process_stock(
 
     now = datetime.now(tz=UTC)
     validity = await _validity_for(db, profile, classification, now)
+
+    block = intraday_mint_block(profile.timeframe, classification, window, now, validity)
+    if block is not None:
+        log.info("profile %s: %s — %s", profile.key, symbol, block)
+        return None
     signal = Signal(
         stock_id=stock_id,
         direction=result.direction,
@@ -330,6 +411,10 @@ async def _process_stock(
         # A shadow profile mints shadow signals: scored, recorded and measured
         # to outcome, but never tradeable — the order path admits 'active' only.
         status=signal_status_for(profile),
+        # Durable provenance. `status` is a lifecycle field the sweeper
+        # overwrites, so it cannot answer "was this evidence tradeable?" once
+        # the signal expires — which is exactly when its outcome finalises.
+        is_shadow=signal_status_for(profile) == "shadow",
         validity_until=validity,
         profile_id=profile.id,
         profile_key=profile.key,

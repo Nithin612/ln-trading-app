@@ -58,6 +58,13 @@ _AGG_SQL = text("""
     JOIN signals s ON s.id = o.signal_id
     JOIN strategy_profiles p ON p.id = s.profile_id
     WHERE s.created_at >= :epoch
+      -- Shadow suggestions come from profiles that have NOT earned activation
+      -- (the intraday trio is negative risk-adjusted on walk-forward). Their
+      -- outcomes are recorded on purpose, but mixing them into the headline
+      -- hit-rate/expectancy would corrupt the very evidence the shadow layer
+      -- exists to produce — and would silently drag the intraday style's
+      -- numbers toward a strategy nobody is trading.
+      AND s.is_shadow IS FALSE
     GROUP BY p.style
 """)
 

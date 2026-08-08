@@ -33,7 +33,7 @@ from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.market_data import Ohlcv1m
@@ -282,6 +282,8 @@ class DailyReport:
     locked_total: Decimal = Decimal("0")  # Σ sealed-profit floors across open positions
     # F&O option-selling engine attribution — see build_fo_health for why.
     fo_health: list[FoUnderlyingHealth] = field(default_factory=list)
+    # Intraday shadow layer — see build_shadow_health for why a silent day matters.
+    shadow_health: list[ShadowProfileHealth] = field(default_factory=list)
 
 
 async def _load_bars(
@@ -507,6 +509,7 @@ async def build_daily_report(
     # Independent of the equity book — the F&O engine emits suggestions whether
     # or not anything was traded, and a dark day is exactly what needs recording.
     report.fo_health = await build_fo_health(db, day=day)
+    report.shadow_health = await build_shadow_health(db, day=day)
     return report
 
 
@@ -692,6 +695,9 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
 
     # 7. F&O engine --------------------------------------------------------- #
     out.extend(_render_fo_section(r.fo_health))
+
+    # 8. Intraday shadow layer ---------------------------------------------- #
+    out.extend(_render_shadow_section(r.shadow_health))
     return "\n".join(out) + "\n"
 
 
@@ -1264,6 +1270,168 @@ def _fo_blocked_reason(
             "future, and weeklies are excluded (SellRules.require_exact_expiry_future)"
         )
     return f"no in-window expiry could be priced ({which})"
+
+
+# ── §8 Intraday shadow layer ────────────────────────────────────────────────
+# Same reasoning as §7, one step earlier in the funnel. The three intraday
+# profiles run in SHADOW: they execute on the real schedule and their
+# suggestions are measured to outcome, but they are never tradeable, because
+# walk-forward returned negative risk-adjusted returns for all three. The whole
+# point is to replace that backtest verdict with forward evidence.
+#
+# Which means a silent layer is a FAILED layer. If the profiles mint nothing —
+# worker down, Kite token not refreshed, decision bars stale, confidence gate
+# never cleared — nobody would notice, and weeks later the "no evidence yet"
+# would be indistinguishable from "evidence says no". A dark day is only
+# meaningful with its reason.
+
+
+@dataclass
+class ShadowProfileHealth:
+    """One shadow profile's outcome for the report day."""
+
+    key: str
+    style: str
+    timeframe: str
+    schedule: str
+    status: str
+    minted: int                      # shadow signals created on the day
+    resolved: int                    # of those, outcomes already terminal
+    wins: int
+    losses: int
+    reason: str | None = None        # why nothing was minted, when minted == 0
+
+
+async def build_shadow_health(
+    db: AsyncSession, *, day: date
+) -> list[ShadowProfileHealth]:
+    """Per-profile shadow activity for `day`, with attribution when it is zero.
+
+    Reads only — this reports what the scheduler did, it never runs a profile.
+    """
+    rows = (
+        await db.execute(
+            text(
+                "SELECT key, style, timeframe, schedule, status"
+                " FROM strategy_profiles"
+                " WHERE status = 'shadow' ORDER BY key"
+            )
+        )
+    ).all()
+    if not rows:
+        return []
+
+    start = datetime.combine(day, time.min, tzinfo=_IST).astimezone(UTC)
+    end = start + timedelta(days=1)
+
+    out: list[ShadowProfileHealth] = []
+    for key, style, timeframe, schedule, status in rows:
+        stats = (
+            await db.execute(
+                text(
+                    "SELECT count(*) AS minted,"
+                    "       count(o.signal_id) FILTER ("
+                    "           WHERE o.status IN ('tp_first','sl_first')) AS resolved,"
+                    "       count(*) FILTER (WHERE o.status = 'tp_first') AS wins,"
+                    "       count(*) FILTER (WHERE o.status = 'sl_first') AS losses"
+                    " FROM signals s"
+                    " LEFT JOIN signal_outcomes o ON o.signal_id = s.id"
+                    " WHERE s.profile_key = :k AND s.is_shadow IS TRUE"
+                    "   AND s.created_at >= :start AND s.created_at < :end"
+                ),
+                {"k": key, "start": start, "end": end},
+            )
+        ).one()
+        minted = int(stats.minted or 0)
+        out.append(
+            ShadowProfileHealth(
+                key=key,
+                style=style,
+                timeframe=timeframe,
+                schedule=schedule,
+                status=status,
+                minted=minted,
+                resolved=int(stats.resolved or 0),
+                wins=int(stats.wins or 0),
+                losses=int(stats.losses or 0),
+                reason=await _shadow_zero_reason(db, timeframe, day) if minted == 0 else None,
+            )
+        )
+    return out
+
+
+async def _shadow_zero_reason(db: AsyncSession, timeframe: str, day: date) -> str:
+    """Why a shadow profile minted nothing — checked in the order it fails.
+
+    Ordering matters for the same reason it did in §7: attributing off the wrong
+    gate turns "the data never arrived" into "nothing qualified", which is the
+    misreading this section exists to prevent.
+    """
+    from app.profiles.pipeline import _TIMEFRAME_TABLE
+    from app.services.market_calendar import is_trading_day
+
+    if not await is_trading_day(db, day):
+        return "not a trading day"
+
+    # Whitelist-sourced identifier, per the raw-SQL rule — never a caller string.
+    table = _TIMEFRAME_TABLE.get(timeframe)
+    if table is None:
+        return f"no bar table for timeframe {timeframe}"
+    start = datetime.combine(day, time.min, tzinfo=_IST).astimezone(UTC)
+    end = start + timedelta(days=1)
+    bars = int(
+        (
+            await db.execute(
+                text(
+                    f"SELECT count(*) FROM {table}"  # noqa: S608 - whitelisted name
+                    " WHERE time >= :start AND time < :end AND is_complete"
+                ),
+                {"start": start, "end": end},
+            )
+        ).scalar_one()
+    )
+    if bars == 0:
+        return (
+            f"NO {timeframe} bars for the day — the live worker produced nothing"
+            " (check the Kite token ritual and the worker process)"
+        )
+    return (
+        f"ran on {bars} {timeframe} bars but nothing cleared the confidence gate"
+        " — the setups did not trigger"
+    )
+
+
+def _render_shadow_section(rows: list[ShadowProfileHealth]) -> list[str]:
+    out: list[str] = ["## 8. Intraday shadow layer", ""]
+    if not rows:
+        out.append("_No profiles are running in shadow._")
+        out.append("")
+        return out
+
+    out.append(
+        "> Shadow profiles run on the real schedule and are measured to outcome, "
+        "but are **never tradeable** — the order path rejects them. They exist to "
+        "replace a negative backtest verdict with forward evidence, so a silent "
+        "day is a failure, not a non-event."
+    )
+    out.append("")
+    out.append("| Profile | TF | Minted | Resolved | W/L | Note |")
+    out.append("|---|---|---|---|---|---|")
+    for r in rows:
+        wl = f"{r.wins}/{r.losses}" if r.resolved else "—"
+        note = r.reason or "—"
+        out.append(
+            f"| `{r.key}` | {r.timeframe} | {r.minted} | {r.resolved} | {wl} | {note} |"
+        )
+    out.append("")
+    total = sum(r.minted for r in rows)
+    if total == 0:
+        out.append(
+            "- **Nothing minted today.** Zero is only meaningful with its reason — "
+            "read the Note column before concluding the strategies are dead."
+        )
+        out.append("")
+    return out
 
 
 def _render_fo_section(rows: list[FoUnderlyingHealth]) -> list[str]:

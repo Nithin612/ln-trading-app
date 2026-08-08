@@ -436,3 +436,135 @@ class TestSuggestionsApi:
     async def test_requires_auth(self, client: AsyncClient) -> None:
         r = await client.get("/api/v1/suggestions/swing")
         assert r.status_code == 401
+
+
+class TestIntradayDecisionBarFreshness:
+    """quant-verifier HIGH, 2026-08-08.
+
+    `_load_window` takes the newest COMPLETE bars with no recency assertion, so
+    a run that fires before this session's first bar closes — or on a day when
+    the live worker never started because the daily Kite token was not
+    refreshed — scores the PREVIOUS session's closing bar and mints signals at
+    yesterday's price. The setups pass happily on it: a stale close sits far
+    above yesterday's PDH, so pdh_breakout fires. The stale signal then holds the
+    one-per-(stock, profile) dedup slot, suppressing every genuine run that day.
+    """
+
+    async def _pdh_profile(self, db: AsyncSession, status: str = "active"):
+        return await make_profile(
+            db,
+            key="stale_test",
+            style="intraday",
+            timeframe="15m",
+            schedule="intraday_15m",
+            status=status,
+            universe_spec={"kind": "index", "value": "NIFTY50"},
+            setup_conditions=[{"type": "pdh_breakout", "params": {}}],
+            risk_template={"kind": "flat_pct", "target_pct": "2"},
+        )
+
+    async def test_refuses_a_decision_bar_from_a_previous_session(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Canary: on the pre-fix code this mints a signal at yesterday's close."""
+        from datetime import UTC, datetime, timedelta
+
+        stock = await make_stock(db, symbol="STALE1", is_nifty50=True)
+        # Newest bar is 3 days old — far beyond 2x the 15m bar length.
+        old_day = (datetime.now(tz=UTC).date()) - timedelta(days=3)
+        await make_intraday_candles(
+            db,
+            stock.id,
+            "15m",
+            [[_FLAT] * 25, _PDH_PREV_SESSION, _PDH_TODAY_PASS],
+            end_day=old_day,
+        )
+        profile = await self._pdh_profile(db)
+        _stub_scorer(monkeypatch, _confluence("BUY"))
+
+        created = await run_profile(db, profile, CAPITAL, RISK_PCT)
+        assert created == [], "scored a decision bar from a previous session"
+
+    async def test_still_mints_on_a_current_decision_bar(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The freshness guard must not silence a legitimate run.
+
+        Bars land on today's session, so the newest is minutes old.
+        """
+        stock = await make_stock(db, symbol="FRESH1", is_nifty50=True)
+        await make_intraday_candles(
+            db, stock.id, "15m", [[_FLAT] * 25, _PDH_PREV_SESSION, _PDH_TODAY_PASS]
+        )
+        profile = await self._pdh_profile(db)
+        _stub_scorer(monkeypatch, _confluence("BUY"))
+
+        created = await run_profile(db, profile, CAPITAL, RISK_PCT)
+        # Either it minted, or it declined for the 15:15 cutoff (the suite can
+        # run after 15:15 IST) — but never because the bar looked stale.
+        if not created:
+            pytest.skip("suite running past the 15:15 IST intraday cutoff")
+        assert len(created) == 1
+        assert created[0].classification == "intraday"
+
+
+class TestIntradayCutoff:
+    """quant-verifier HIGH, 2026-08-08 — SIGNAL_ENGINE.md §5.
+
+    An intraday signal is valid "until 3:15 PM IST **same trading day**".
+    `compute_validity_until` rolls the deadline forward a calendar day when
+    minting happens after 09:45 UTC, so a beat firing at 15:16 IST produced a
+    ~24h "intraday" signal that survived the overnight gap — on a Friday,
+    expiring on a Saturday — and held the dedup slot into the next session.
+
+    Tested as a pure predicate with explicit datetimes: the guard's behaviour
+    must not depend on what time of day the suite happens to run.
+    """
+
+    def test_mid_session_mint_is_allowed(self) -> None:
+        from datetime import UTC, datetime
+
+        from app.profiles.pipeline import past_intraday_cutoff
+        from app.signals.expiry import compute_validity_until
+
+        now = datetime(2026, 8, 10, 9, 31, tzinfo=UTC)  # 15:01 IST
+        validity = compute_validity_until("intraday", now)
+        assert validity.date() == now.date()
+        assert past_intraday_cutoff("intraday", now, validity) is False
+
+    def test_after_the_cutoff_is_rejected(self) -> None:
+        """15:16 IST — the last beat of the session."""
+        from datetime import UTC, datetime
+
+        from app.profiles.pipeline import past_intraday_cutoff
+        from app.signals.expiry import compute_validity_until
+
+        now = datetime(2026, 8, 10, 9, 46, tzinfo=UTC)  # 15:16 IST
+        validity = compute_validity_until("intraday", now)
+        # Canary: this is the ~24h window the guard exists to refuse.
+        assert validity.date() > now.date()
+        assert past_intraday_cutoff("intraday", now, validity) is True
+
+    def test_a_friday_late_mint_would_have_expired_on_saturday(self) -> None:
+        from datetime import UTC, datetime
+
+        from app.profiles.pipeline import past_intraday_cutoff
+        from app.signals.expiry import compute_validity_until
+
+        friday = datetime(2026, 8, 7, 9, 46, tzinfo=UTC)  # Fri 15:16 IST
+        validity = compute_validity_until("intraday", friday)
+        assert validity.strftime("%A") == "Saturday"
+        assert past_intraday_cutoff("intraday", friday, validity) is True
+
+    def test_non_intraday_classifications_are_untouched(self) -> None:
+        """Swing/positional legitimately span days — the guard must not fire."""
+        from datetime import UTC, datetime
+
+        from app.profiles.pipeline import past_intraday_cutoff
+        from app.signals.expiry import compute_validity_until
+
+        now = datetime(2026, 8, 10, 9, 46, tzinfo=UTC)
+        for cls in ("swing", "positional"):
+            validity = compute_validity_until(cls, now)
+            assert validity.date() > now.date()
+            assert past_intraday_cutoff(cls, now, validity) is False

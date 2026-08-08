@@ -85,6 +85,20 @@ class Signal(Base):
     headline: Mapped[str] = mapped_column(Text, nullable=False)
 
     status: Mapped[str] = mapped_column(String(16), nullable=False, default="active")
+    # Durable provenance for the shadow layer, SEPARATE from `status`.
+    #
+    # `status` is a lifecycle field: the sweeper overwrites it with 'expired'
+    # and the supersede policy with 'superseded'. Using it as the shadow marker
+    # meant provenance was destroyed at exactly the moment an outcome finalised
+    # — so every scored shadow signal became indistinguishable from a tradeable
+    # one, and any statistic filtering on `status <> 'shadow'` would still have
+    # counted the whole finalised history. This flag is written once at mint and
+    # never rewritten, so "was this evidence tradeable?" stays answerable
+    # forever. Profile status is not a substitute either: activating a profile
+    # later would retroactively relabel its entire shadow history.
+    is_shadow: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default="false", default=False
+    )
     validity_until: Mapped[datetime] = mapped_column(TZ, nullable=False)
     created_at: Mapped[datetime] = mapped_column(TZ, nullable=False, server_default=func.now())
     expired_at: Mapped[datetime | None] = mapped_column(TZ, nullable=True)

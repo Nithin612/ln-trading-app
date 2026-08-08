@@ -120,12 +120,25 @@ celery_app.conf.beat_schedule = {
     # 15m bars close at :00/:15/:30/:45 past the hour. The task runs one minute
     # LATER so the bar it scores is complete: computing on a forming candle is a
     # look-ahead violation, and the whole point of the committed layer is that it
-    # is not that. IST offsets: 3:45 UTC = 09:15 IST; the crontab window is
-    # coarse (03:00–10:59 UTC) and the task's own `is_market_session` guard is
-    # authoritative, matching the position-monitor pattern.
+    # is not that.
+    #
+    # The window is 04:01–09:46 UTC = 09:31–15:16 IST, and both ends are
+    # deliberate:
+    #   - It does NOT start at 03:46 UTC (09:16 IST). That fire passes the
+    #     session guard but no 15m bar of the day has closed yet (the first
+    #     closes 09:30 IST), so it would score the PREVIOUS session's 15:15 bar
+    #     at yesterday's price — and then hold the one-per-(stock, profile)
+    #     dedup slot for the rest of the day, suppressing every genuine run.
+    #   - 09:46 UTC (15:16 IST) is past the 15:15 IST intraday cutoff, so
+    #     `_process_stock` refuses to mint there (a signal minted after the
+    #     cutoff would roll its deadline to the next calendar day). It is kept
+    #     in the window only so the session's 15:00–15:15 bar is still SCORED
+    #     for evidence; nothing is minted from it.
+    # The task's own `is_market_session` guard remains authoritative — a crontab
+    # cannot express :15-minute precision across an hour range.
     "intraday-15m-suggestions": {
         "task": "app.tasks.profile_tasks.intraday_suggestions",
-        "schedule": crontab(minute="1,16,31,46", hour="3-10", day_of_week="1-5"),
+        "schedule": crontab(minute="1,16,31,46", hour="4-9", day_of_week="1-5"),
         "kwargs": {"schedule": "intraday_15m"},
     },
     # 09:25 IST = 03:55 UTC — the top-gainer screen fires ONCE, on the bar that

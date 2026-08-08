@@ -20,8 +20,10 @@ from app.models.signal import Signal
 from app.models.trading import Position
 from app.services.daily_report import (
     _render_fo_section,
+    _render_shadow_section,
     build_daily_report,
     build_fo_health,
+    build_shadow_health,
     chase_metrics,
     render_markdown,
     tape_excursion,
@@ -532,3 +534,85 @@ async def test_daily_report_carries_the_fo_section(db: AsyncSession) -> None:
     assert "Suggestions only" in md
     # BANKNIFTY has a board; the other two indices have none. Both are reported.
     assert "no F&O bhavcopy" in md
+
+
+# ── §8 intraday shadow layer ────────────────────────────────────────────────
+# Shadow profiles exist to replace a negative BACKTEST verdict with FORWARD
+# evidence, so a silent layer is a failed layer: "no evidence yet" and "evidence
+# says no" must never look the same in the report.
+
+
+async def _shadow_profile(db: AsyncSession, key: str = "pdh_shadow") -> None:
+    from app.models.profile import StrategyProfile
+
+    db.add(
+        StrategyProfile(
+            key=key,
+            version=1,
+            name=key,
+            description="t",
+            style="intraday",
+            timeframe="15m",
+            schedule="intraday_15m",
+            universe_spec={"kind": "symbols", "value": ["X"]},
+            setup_conditions=[],
+            weight_multipliers={},
+            min_confidence=70,
+            risk_template={"kind": "rr", "ratio": "1.5"},
+            validity_spec=None,
+            status="shadow",
+            config_hash=f"h-{key}",
+        )
+    )
+    await db.flush()
+
+
+async def test_shadow_health_empty_when_no_profile_is_in_shadow(
+    db: AsyncSession,
+) -> None:
+    rows = await build_shadow_health(db, day=date(2026, 8, 10))
+    assert rows == []
+    assert "_No profiles are running in shadow._" in "\n".join(
+        _render_shadow_section(rows)
+    )
+
+
+async def test_shadow_health_says_not_a_trading_day(db: AsyncSession) -> None:
+    """A Saturday zero must not read as a strategy failure."""
+    await _shadow_profile(db)
+    await db.commit()
+
+    rows = await build_shadow_health(db, day=date(2026, 8, 8))  # Saturday
+    assert len(rows) == 1
+    assert rows[0].minted == 0
+    assert "not a trading day" in (rows[0].reason or "")
+
+
+async def test_shadow_health_blames_missing_bars_not_the_strategy(
+    db: AsyncSession,
+) -> None:
+    """The failure that would otherwise be invisible.
+
+    No 15m bars on a trading day means the live worker produced nothing —
+    usually the Kite token ritual. Reporting that as "the setups did not
+    trigger" would send the reader off to tune a strategy that never ran.
+    """
+    await _shadow_profile(db)
+    await db.commit()
+
+    rows = await build_shadow_health(db, day=date(2026, 8, 10))  # Monday
+    assert rows[0].minted == 0
+    reason = rows[0].reason or ""
+    assert "NO 15m bars" in reason
+    assert "Kite token" in reason
+
+
+async def test_shadow_section_flags_a_wholly_silent_day(db: AsyncSession) -> None:
+    await _shadow_profile(db)
+    await db.commit()
+
+    rows = await build_shadow_health(db, day=date(2026, 8, 10))
+    md = "\n".join(_render_shadow_section(rows))
+    assert "## 8. Intraday shadow layer" in md
+    assert "never tradeable" in md
+    assert "Nothing minted today" in md

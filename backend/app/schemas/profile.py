@@ -39,7 +39,7 @@ PROFILE_SCHEDULES = ("eod", "intraday_15m", "intraday_5m", "time_0925")
 # `status='shadow'`: recorded and measured to outcome, never tradeable (the
 # order path admits 'active' only) and never on the suggestions table. It is how
 # a profile earns activation on FORWARD evidence instead of a backtest verdict.
-PROFILE_STATUSES = ("active", "shadow", "inactive", "superseded")
+PROFILE_STATUSES: tuple[str, ...] = ("active", "shadow", "inactive", "superseded")
 
 # Statuses whose profiles actually execute on a schedule.
 RUNNABLE_PROFILE_STATUSES = ("active", "shadow")

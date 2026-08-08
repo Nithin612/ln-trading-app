@@ -171,25 +171,28 @@ async def _active_signals(db: Any) -> list[dict[str, Any]]:
     rows = await db.execute(
         text(
             "SELECT id, stock_id, entry_price, stop_loss, take_profit,"
-            " classification, timeframe, direction, status FROM signals"
+            " classification, timeframe, direction, is_shadow FROM signals"
             " WHERE status IN ('active', 'shadow')"
             " AND (validity_until IS NULL OR validity_until > now())"
             " ORDER BY id"
         )
     )
+    # NAMED access, not positional: inserting a column into the SELECT above
+    # would silently re-map every field after it, and the one that would break
+    # is `shadow` — which decides whether a trade button gets drawn.
     return [
         {
             # asyncpg returns a UUID object for the uuid column — normalize
             # to the canonical string form Signal.id uses (str(uuid4())).
-            "id": str(r[0]),
-            "shadow": r[8] == "shadow",
-            "stock_id": r[1],
-            "entry": r[2],
-            "sl": r[3],
-            "tp": r[4],
-            "classification": r[5],
-            "timeframe": r[6],
-            "direction": r[7],
+            "id": str(r.id),
+            "shadow": bool(r.is_shadow),
+            "stock_id": r.stock_id,
+            "entry": r.entry_price,
+            "sl": r.stop_loss,
+            "tp": r.take_profit,
+            "classification": r.classification,
+            "timeframe": r.timeframe,
+            "direction": r.direction,
         }
         for r in rows.fetchall()
     ]
@@ -222,7 +225,12 @@ def _signal_levels(sig: dict[str, Any]) -> tuple[list[LevelDict], LevelMeta]:
         # Rides on every alert this signal emits. Outcome recording consumes
         # these alerts regardless; the live feed uses the flag to keep an
         # untradeable suggestion from appearing next to a Buy button.
-        "shadow": bool(sig.get("shadow", False)),
+        #
+        # FAILS CLOSED, matching signal_status_for: a caller that omits the key
+        # yields shadow=True (no trade button) rather than a tradeable-looking
+        # alert. `.get(..., False)` had the opposite default — the one direction
+        # where being wrong puts a Buy button on an untradeable suggestion.
+        "shadow": sig.get("shadow") is not False,
     }
     levels: list[LevelDict] = [
         {

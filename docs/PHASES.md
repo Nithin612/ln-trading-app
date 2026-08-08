@@ -10,13 +10,66 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-08-06) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-08-08) — read this block first
 
 **v2 Phases 0–2 ✅ done · Phase 3 (realtime) ▶ gate ritual only · Phase 4 ✅ done ·
 Phase 5 ✅ GATED 2026-08-07 · Phases 6–7 not started.**
-Suites: backend **1073**, frontend **344** (was 257), parity 16, walkforward 9,
-replay 19, cargo 86. Gate run 2026-08-07 on
-`worktree-phase5-gate-fo-expiry`.
+Suites: backend **1107**, frontend **370**, parity 16, walkforward 9,
+replay 19, cargo 86.
+
+> **Phase-3 gate is USER-RUN, MANUALLY, on Friday 2026-08-15.** Explicit
+> instruction 2026-08-08 — do not run `/phase-gate` before then. Both exit
+> criteria already have their evidence on disk; nothing is being waited on.
+
+### Interstitial slice: "Intraday activation + v1 surface uplift" (2026-08-07/08)
+
+Agreed as the work to do BEFORE Phase 6, so its noise doesn't land inside the
+phase. Branch `feature/intraday-shadow-v1-uplift`. Plan for Phase 6 itself:
+[`phase-06-plan.md`](phase-06-plan.md) — a proposal awaiting sign-off, not
+started.
+
+1. **Stock master repaired.** NO stock had a correct company name: the equity
+   master's `NAME OF COMPANY` column was never read, so 2,274 of 2,333 carried
+   their own ticker and the 59 index members carried their **sector** (ADANIENT
+   was "Metals & Mining"). The reseed had also silently stopped working — an NSE
+   ticker rename arrives as a new symbol holding the old row's ISIN, dies on
+   `uq_stocks_isin`, and rolls the entire run back; six real renames were
+   blocking it. Renames now resolve **in place** so the row keeps its id and its
+   OHLCV history. Sector coverage **59 → 500**.
+2. **v1 surface uplift.** Watchlists gained live LTP / change % / previous close
+   (they had been the only live surface in the app with no prices, while the
+   backend was already fanning ticks out per watchlist). New `GET
+   /screener/fields` reports **counted** per-field coverage, so a sector filter
+   says "only 500 of 2,365 stocks have a sector" instead of silently returning
+   nothing. The Intraday empty state stopped blaming the EOD clock.
+3. **The intraday shadow layer** — see below.
+
+**Intraday was dark for TWO reasons, only one of which was known.** The three
+profiles were `inactive`, *and* nothing scheduled them either way:
+`nightly_suggestions` ran only the `'eod'` schedule and `on_close_suggestions`
+was still a Phase-3 stub, so the `intraday_15m` / `time_0925` schedules had no
+caller at all. The menu was structurally unable to populate regardless of status.
+
+`status='shadow'` is the third profile state: runs on the real schedule, measured
+to outcome, **never tradeable** (the order path admits `'active'` only, so this
+is enforced by code that already existed). It exists because walk-forward says
+the trio must not be activated — all three are negative risk-adjusted — while
+leaving them off produced no evidence to ever revisit that verdict with.
+
+**quant-verifier returned FAIL on the first cut and was right.** The CRITICAL is
+worth remembering: shadow outcomes were being counted in the tradeable
+hit-rate — and `status` alone could not fix it, because `status` is a lifecycle
+field the sweeper overwrites at exactly the moment an outcome finalises. Hence
+an immutable `signals.is_shadow`. Two scheduling bugs alongside it: the 09:16
+IST beat scored the *previous* session's bar and then held the dedup slot all
+day, and the 15:16 beat minted 24-hour "intraday" signals. Full record in
+CHANGELOG under 2026-08-08.
+
+**First real fire: Monday 2026-08-10.** Signal *production* is still unproven —
+Saturday correctly produced zero. Read **§8 of `docs/analysis/<date>.md`** after
+the first session: it distinguishes "not a trading day" from "no bars, the worker
+never ran" from "ran but nothing cleared the gate". A silent shadow layer is a
+failed layer.
 
 **Phase 5 — GATED 2026-08-07 (see [phase-05](phases/phase-05-ui-overhaul.md) §7
 for the verdict block).** bug-hunter + ui-reviewer run, all findings in new code

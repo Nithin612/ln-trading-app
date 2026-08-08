@@ -7,6 +7,76 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### quant-verifier round on the shadow layer — one CRITICAL, three HIGH (2026-08-08)
+
+The review of `e3003b9` returned **FAIL**, and every finding that mattered was
+real. Recorded in full because the CRITICAL is a design lesson, not a typo.
+
+- **CRITICAL — shadow results were counted as real performance.**
+  `/analytics/outcomes` joins outcomes → signals → profiles and groups by style
+  with no shadow filter, so every shadow outcome landed in the intraday
+  hit-rate/entry-rate/avg-return that StylePage renders as "Tracked outcomes".
+  Shadow profiles are *precisely* the ones that have not earned activation, so
+  this dragged the headline numbers toward a strategy nobody trades — corrupting
+  the evidence the shadow layer exists to produce. Proven by an executed probe
+  returning `total=1, losses=1, hit_rate=0.0` for a single shadow signal.
+- **The deeper half: `status` cannot carry provenance.** `status` is a LIFECYCLE
+  field — the sweeper overwrites it with `'expired'`, and expiry is exactly when
+  an outcome finalises. So filtering `status <> 'shadow'` would have excluded
+  the handful still live and counted the *entire finalised history*. New
+  immutable **`signals.is_shadow`** (migration `b4c5d6e7f8a9`), written once at
+  mint, never rewritten; `analytics.py` filters `is_shadow IS FALSE`.
+  `strategy_profiles.status` was no substitute either — it is mutable, so
+  activating a profile later would retroactively relabel its whole shadow
+  history as tradeable.
+- **HIGH — the 09:16 IST beat scored the PREVIOUS session.** `crontab(hour="3-10")`
+  fired at 03:46 UTC, which passes the session guard but precedes the day's
+  first 15m close (09:30 IST). `_load_window` therefore returned yesterday's
+  15:15 bar, the setups passed on it (a stale close sits far above yesterday's
+  PDH), and the resulting signal took the one-per-(stock, profile) dedup slot —
+  suppressing every genuine run for the rest of the day. Window narrowed to
+  `hour="4-9"` (09:31–15:16 IST) **and** `stale_decision_bar_day()` now rejects
+  any decision bar not from today's session, which also covers the case where
+  the live worker never started because the Kite token wasn't refreshed.
+- **HIGH — the 15:16 IST beat minted 24-hour "intraday" signals.**
+  `compute_validity_until` rolls the deadline forward a calendar day past 09:45
+  UTC (correct for the nightly EOD caller), so a late beat produced a signal
+  spanning the overnight gap — on a Friday, expiring on a **Saturday** — that
+  also held the dedup slot into the next session. `past_intraday_cutoff()`
+  refuses it, leaving `expiry.py` untouched for the EOD path.
+- **MEDIUM — the alert shadow stamp failed OPEN.** `sig.get("shadow", False)`
+  defaulted a missing key to *tradeable*, drawing a Buy button — the one
+  direction where being wrong is dangerous, and the opposite of
+  `signal_status_for`'s fail-closed contract. Now `is not False`.
+- **MEDIUM — positional row access.** `r[8]` for the shadow flag while eight
+  siblings stayed positional: inserting a column anywhere in that SELECT would
+  silently re-map it. Now named access throughout `_active_signals`.
+- Both new guards are pure predicates (`stale_decision_bar_day`,
+  `past_intraday_cutoff`) so they test without clock manipulation. **A first
+  draft used a minutes-based age threshold and passed — only because it was 3am;
+  the same tests would have failed at 10am**, since the fixtures stamp bars with
+  today's date. Replaced with an IST trading-date comparison, which is the actual
+  invariant.
+- Migrations exercised down-twice-and-up for real; the previous commit's
+  "downgrade-exercised" claim had no test behind it, which the review flagged.
+- Tests: `+7` (shadow leak with a real profile row, tradeable evidence still
+  counted, provenance surviving expiry, the stale-bar rejection with its
+  still-mints counterpart, and four pure cutoff cases including the Friday →
+  Saturday one).
+
+### §8 — intraday shadow health in the daily report (2026-08-08)
+
+Same reasoning as §7 F&O engine health, one step earlier in the funnel: the
+shadow layer exists to replace a negative backtest verdict with forward
+evidence, so **a silent layer is a failed layer** — "no evidence yet" and
+"evidence says no" must never look the same. `make analysis` now reports, per
+shadow profile, how many signals it minted, how many resolved, W/L, and when the
+count is zero, WHY — distinguishing "not a trading day" from "NO bars for the
+day, the live worker produced nothing (check the Kite token ritual)" from "ran
+but nothing cleared the confidence gate". Attribution is checked in failure
+order, because blaming the wrong gate is what turns a dead worker into an
+apparent strategy failure.
+
 ### Intraday activation — shadow profiles, and the scheduler that never existed (2026-08-07)
 
 Third slice of "Intraday activation + v1 surface uplift". The Intraday menu had
