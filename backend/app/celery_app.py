@@ -111,4 +111,28 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.profile_tasks.nightly_suggestions",
         "schedule": crontab(hour=13, minute=55, day_of_week="1-5"),
     },
+    # ── Intraday profile schedules ───────────────────────────────────────────
+    # These had NO caller. `nightly_suggestions` only ever ran the 'eod'
+    # schedule, and `on_close_suggestions` was a Phase-3 stub, so the
+    # `intraday_15m` and `time_0925` profiles could never fire no matter what
+    # their status said — the Intraday menu was structurally unable to populate.
+    #
+    # 15m bars close at :00/:15/:30/:45 past the hour. The task runs one minute
+    # LATER so the bar it scores is complete: computing on a forming candle is a
+    # look-ahead violation, and the whole point of the committed layer is that it
+    # is not that. IST offsets: 3:45 UTC = 09:15 IST; the crontab window is
+    # coarse (03:00–10:59 UTC) and the task's own `is_market_session` guard is
+    # authoritative, matching the position-monitor pattern.
+    "intraday-15m-suggestions": {
+        "task": "app.tasks.profile_tasks.intraday_suggestions",
+        "schedule": crontab(minute="1,16,31,46", hour="3-10", day_of_week="1-5"),
+        "kwargs": {"schedule": "intraday_15m"},
+    },
+    # 09:25 IST = 03:55 UTC — the top-gainer screen fires ONCE, on the bar that
+    # closes at 09:25, and the profile is built around that single decision point.
+    "intraday-0925-suggestions": {
+        "task": "app.tasks.profile_tasks.intraday_suggestions",
+        "schedule": crontab(hour=3, minute=56, day_of_week="1-5"),
+        "kwargs": {"schedule": "time_0925"},
+    },
 }

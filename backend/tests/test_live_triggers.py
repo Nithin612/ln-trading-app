@@ -228,6 +228,12 @@ class TestWorkerAlertSeam:
             "source": "entry_zone",
             "style": "swing",
             "signal_id": 7,
+            # Every alert carries the flag so consumers offering a trade action
+            # can drop the untradeable ones. Redis hash fields are strings, so
+            # "0"/"1" and never a bool. Asserted explicitly rather than dropped
+            # from the comparison: a MISSING flag would read as falsy and look
+            # identical to a tradeable alert while meaning something different.
+            "shadow": "0",
         }
         # recording order: the lv line precedes the tick that fired
         state.recorder.flush()

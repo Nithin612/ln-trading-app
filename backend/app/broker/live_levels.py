@@ -161,11 +161,18 @@ async def _active_signals(db: Any) -> list[dict[str, Any]]:
     # ORDER BY id: merged level-list order must be deterministic, or an
     # unchanged stock reports as changed on every Postgres row-order flip
     # (spurious set_levels + recording churn — quant-verifier MEDIUM).
+    #
+    # Shadow signals are tracked HERE and nowhere else that matters: the
+    # entry/SL/TP touch levels are what drive `signal_outcomes`, so excluding
+    # them would leave the shadow layer producing suggestions nobody ever
+    # scores — the exact opposite of why it exists. They are carried with a
+    # `shadow` flag so the alert publisher can keep them out of the tradeable
+    # feed while their outcomes still record.
     rows = await db.execute(
         text(
             "SELECT id, stock_id, entry_price, stop_loss, take_profit,"
-            " classification, timeframe, direction FROM signals"
-            " WHERE status = 'active'"
+            " classification, timeframe, direction, status FROM signals"
+            " WHERE status IN ('active', 'shadow')"
             " AND (validity_until IS NULL OR validity_until > now())"
             " ORDER BY id"
         )
@@ -175,6 +182,7 @@ async def _active_signals(db: Any) -> list[dict[str, Any]]:
             # asyncpg returns a UUID object for the uuid column — normalize
             # to the canonical string form Signal.id uses (str(uuid4())).
             "id": str(r[0]),
+            "shadow": r[8] == "shadow",
             "stock_id": r[1],
             "entry": r[2],
             "sl": r[3],
@@ -211,6 +219,10 @@ def _signal_levels(sig: dict[str, Any]) -> tuple[list[LevelDict], LevelMeta]:
         "source": "signal",
         "style": str(sig["classification"]),
         "signal_id": sig["id"],
+        # Rides on every alert this signal emits. Outcome recording consumes
+        # these alerts regardless; the live feed uses the flag to keep an
+        # untradeable suggestion from appearing next to a Buy button.
+        "shadow": bool(sig.get("shadow", False)),
     }
     levels: list[LevelDict] = [
         {

@@ -337,7 +337,20 @@ const AlertRow = memo(function AlertRow({
           )}
         </div>
       )}
-      {signal && onTrade && (
+      {alert.shadow && (
+        // Shadow profiles run for evidence only; the order path rejects their
+        // signals with 409. Offering a trade action here would be a button that
+        // cannot work, so the row states what it is instead.
+        <div className="flex justify-end mt-1.5">
+          <span
+            className="text-[10px] uppercase tracking-wide text-(--color-text-muted)"
+            title="Shadow profile — recorded and measured to outcome, not tradeable until forward evidence earns activation."
+          >
+            shadow · not tradeable
+          </span>
+        </div>
+      )}
+      {!alert.shadow && signal && onTrade && (
         // Trade the alert's originating signal directly — routes through the
         // paper order path (risk-first sizing from the actual fill + circuit
         // breaker), so an alerted stock that isn't on the dashboard list is

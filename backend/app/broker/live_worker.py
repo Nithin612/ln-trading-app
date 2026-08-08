@@ -531,6 +531,11 @@ class WorkerState:
             }
             if meta.get("signal_id") is not None:
                 fields["signal_id"] = meta["signal_id"]
+            # Shadow alerts still go on the stream — that is how the outcome
+            # ladder records them — but they are STAMPED, so consumers that
+            # offer a trade action can filter them out. Redis stream fields are
+            # strings, so this is "1"/"0", not a bool.
+            fields["shadow"] = "1" if meta.get("shadow") else "0"
             all_fields.append(fields)
         for attempt in (0, 1):
             try:

@@ -34,6 +34,7 @@ from app.models.profile import StrategyProfile
 from app.models.signal import Signal
 from app.profiles import session_context as sctx
 from app.profiles.setups import SetupContext, evaluate_conditions
+from app.schemas.profile import RUNNABLE_PROFILE_STATUSES, signal_status_for
 from app.services import market_calendar
 from app.services.fii_dii_service import get_market_flow_5d, get_stock_block_deal_net_cr
 from app.services.signal_service import score_signal
@@ -206,15 +207,20 @@ async def _validity_for(
 
 
 async def _resolve_existing(
-    db: AsyncSession, stock_id: int, profile_key: str, direction: str
+    db: AsyncSession, stock_id: int, profile_key: str, direction: str, live_status: str
 ) -> str:
-    """Apply the supersede policy. Returns 'skip' | 'insert'."""
+    """Apply the supersede policy. Returns 'skip' | 'insert'.
+
+    Scoped to `live_status` so the two layers never touch each other: a shadow
+    run must not supersede a tradeable signal, and a shadow signal must not
+    block a real one from being minted later. Each layer dedups against its own.
+    """
     existing = (
         await db.execute(
             select(Signal).where(
                 Signal.stock_id == stock_id,
                 Signal.profile_key == profile_key,
-                Signal.status == "active",
+                Signal.status == live_status,
             )
         )
     ).scalar_one_or_none()
@@ -321,7 +327,9 @@ async def _process_stock(
         triggering_patterns=result.triggering_patterns or None,
         triggering_indicators=result.triggering_indicators or None,
         headline=build_headline(symbol, result, entry, stop_loss, take_profit, qty),
-        status="active",
+        # A shadow profile mints shadow signals: scored, recorded and measured
+        # to outcome, but never tradeable — the order path admits 'active' only.
+        status=signal_status_for(profile),
         validity_until=validity,
         profile_id=profile.id,
         profile_key=profile.key,
@@ -332,7 +340,9 @@ async def _process_stock(
     # partial-unique race) must not roll back earlier suggestions.
     try:
         async with db.begin_nested():
-            action = await _resolve_existing(db, stock_id, profile.key, result.direction)
+            action = await _resolve_existing(
+                db, stock_id, profile.key, result.direction, signal.status
+            )
             if action == "skip":
                 return None
             db.add(signal)
@@ -418,12 +428,19 @@ async def run_scheduled_profiles(
     capital: Decimal,
     risk_pct: Decimal,
 ) -> dict[str, int]:
-    """Run every ACTIVE profile on the given schedule key."""
+    """Run every RUNNABLE profile on the given schedule key.
+
+    Runnable = active OR shadow. Shadow profiles execute on exactly the same
+    path and the same schedule as live ones — that is the point: evidence
+    gathered under different machinery is evidence about the machinery. What
+    differs is only the status stamped on the resulting signals, which is what
+    keeps them off the suggestions table and out of the order path.
+    """
     profiles = (
         (
             await db.execute(
                 select(StrategyProfile).where(
-                    StrategyProfile.status == "active",
+                    StrategyProfile.status.in_(RUNNABLE_PROFILE_STATUSES),
                     StrategyProfile.schedule == schedule,
                 )
             )

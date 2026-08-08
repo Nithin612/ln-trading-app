@@ -35,6 +35,27 @@ KNOWN_SETUP_TYPES = {
 PROFILE_STYLES = ("intraday", "swing", "fno", "investment")
 PROFILE_SCHEDULES = ("eod", "intraday_15m", "intraday_5m", "time_0925")
 
+# 'shadow' runs the profile on its real schedule but stamps its signals
+# `status='shadow'`: recorded and measured to outcome, never tradeable (the
+# order path admits 'active' only) and never on the suggestions table. It is how
+# a profile earns activation on FORWARD evidence instead of a backtest verdict.
+PROFILE_STATUSES = ("active", "shadow", "inactive", "superseded")
+
+# Statuses whose profiles actually execute on a schedule.
+RUNNABLE_PROFILE_STATUSES = ("active", "shadow")
+
+# The signal status each runnable profile status mints.
+_SIGNAL_STATUS_BY_PROFILE_STATUS = {"active": "active", "shadow": "shadow"}
+
+
+def signal_status_for(profile: object) -> str:
+    """The `signals.status` a profile's suggestions are written with.
+
+    Defaults to 'shadow' for anything unrecognised: an unknown profile state
+    must fail CLOSED (untradeable), never open.
+    """
+    return _SIGNAL_STATUS_BY_PROFILE_STATUS.get(getattr(profile, "status", ""), "shadow")
+
 
 def _require_decimal(v: str, *, positive: bool = True) -> str:
     try:

@@ -33,9 +33,13 @@ async def sweep_expired(db: AsyncSession, now: datetime) -> int:
 
     from app.models.signal import Signal
 
+    # Shadow signals expire on exactly the same clock. Sweeping only 'active'
+    # would leave them live forever: their outcomes would never finalise, so the
+    # forward evidence the shadow layer exists to produce would never close out,
+    # and each run would pile another undead row onto the same (stock, profile).
     result = await db.execute(
         update(Signal)
-        .where(Signal.status == "active", Signal.validity_until <= now)
+        .where(Signal.status.in_(("active", "shadow")), Signal.validity_until <= now)
         .values(status="expired", expired_at=now)
     )
     await db.commit()

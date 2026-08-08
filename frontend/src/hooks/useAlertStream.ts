@@ -24,6 +24,13 @@ export interface LiveAlert {
   source: string; // pdh | pdl | entry_zone | sl_near | tp_near | sr_* | vburst
   style: string; // market | scalp | intraday | swing | positional
   signalId: string | null;
+  /**
+   * The originating signal is SHADOW — a profile running for evidence only.
+   * Its outcomes are recorded, but it is not tradeable: the order path rejects
+   * a non-active signal with 409, so a Buy button here would be a button that
+   * cannot work. Anything offering a trade action must respect this.
+   */
+  shadow: boolean;
 }
 
 /** Alert frames arrive with all-string values (Redis stream hash). */
@@ -48,6 +55,11 @@ export function parseAlert(raw: unknown): LiveAlert | null {
     source: String(r.source ?? ""),
     style: String(r.style ?? "market"),
     signalId: r.signal_id != null ? String(r.signal_id) : null,
+    // Redis stream fields are strings: "1"/"0", never a JSON bool. Anything
+    // that is not an explicit "1" is treated as tradeable=false only for the
+    // shadow flag itself — i.e. absent means NOT shadow, which is right for
+    // alerts minted before this field existed.
+    shadow: String(r.shadow ?? "0") === "1",
   };
 }
 

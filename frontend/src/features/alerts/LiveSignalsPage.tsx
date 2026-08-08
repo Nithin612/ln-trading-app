@@ -151,7 +151,17 @@ const FeedRow = memo(function FeedRow({
         )}
       </TableCell>
       <TableCell numeric>
-        {signal ? (
+        {/* A shadow alert comes from a profile running for EVIDENCE only. The
+            order path rejects a non-active signal with 409, so a Buy button
+            here would be a button that cannot work — say why instead. */}
+        {alert.shadow ? (
+          <span
+            className="text-(--color-text-muted) text-[0.7rem] uppercase tracking-wide"
+            title="Shadow profile — recorded and measured, not tradeable until forward evidence earns activation."
+          >
+            shadow
+          </span>
+        ) : signal ? (
           <Button
             variant="outline"
             size="xs"

@@ -150,8 +150,14 @@ class TestLevelDirectory:
         assert meta[sl_touch_id]["source"] == "sl_touch"
         assert meta[tp_touch_id]["source"] == "tp_touch"
         assert PDH_ID in by_id and PDL_ID in by_id  # statics preserved
+        # `shadow` rides on every signal alert so the live feed can exclude
+        # untradeable suggestions while their outcomes still record. A tradeable
+        # signal is False here — asserted explicitly rather than dropped from the
+        # comparison, because a missing flag defaulting to falsy would look
+        # identical while meaning something different.
         assert meta[zone_id] == {
             "source": "entry_zone", "style": "swing", "signal_id": signal.id,
+            "shadow": False,
         }
         # ids are a pure function of the signal uuid — stable across calls
         assert signal_level_ids(signal.id) == (

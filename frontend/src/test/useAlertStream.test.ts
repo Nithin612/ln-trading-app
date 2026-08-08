@@ -1,7 +1,7 @@
 import { act, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { useAlertStream } from '@/hooks/useAlertStream'
+import { parseAlert, useAlertStream } from '@/hooks/useAlertStream'
 import { useAuthStore } from '@/store/authStore'
 
 /** Minimal WebSocket double: the hook drives it via the standard events. */
@@ -209,5 +209,34 @@ describe('useAlertStream', () => {
     act(() => vi.advanceTimersByTime(200))
     expect(result.current.alerts).toHaveLength(100)
     expect(result.current.alerts[0].id).toBe('1752212345119-0') // newest kept
+  })
+})
+
+describe('parseAlert — the shadow flag', () => {
+  // Redis stream fields are strings: the frame carries "1"/"0", never a bool.
+  const frame = (o: Record<string, unknown> = {}) => ({
+    id: '1-0', sid: '42', level_id: '1', tag: 'zone_enter',
+    price: '2850.5000', ts: '1752212345', day: '2026-08-06',
+    source: 'entry_zone', style: 'swing', signal_id: 'sig-1',
+    ...o,
+  })
+
+  it('reads "1" as shadow', () => {
+    expect(parseAlert(frame({ shadow: '1' }))?.shadow).toBe(true)
+  })
+
+  it('reads "0" as tradeable', () => {
+    expect(parseAlert(frame({ shadow: '0' }))?.shadow).toBe(false)
+  })
+
+  it('treats a missing flag as tradeable, not shadow', () => {
+    // Alerts minted before the field existed must not all become untradeable.
+    expect(parseAlert(frame())?.shadow).toBe(false)
+  })
+
+  it('does not read the STRING "false" as truthy', () => {
+    // The classic Redis-hash trap: every non-empty string is truthy in JS, so a
+    // bare Boolean(fields.shadow) would make "0" and "false" both mean shadow.
+    expect(parseAlert(frame({ shadow: 'false' }))?.shadow).toBe(false)
   })
 })

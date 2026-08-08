@@ -7,6 +7,76 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Intraday activation — shadow profiles, and the scheduler that never existed (2026-08-07)
+
+Third slice of "Intraday activation + v1 surface uplift". The Intraday menu had
+never produced a single signal, and could not have: the three profiles were
+`inactive`, **and nothing scheduled them either way**.
+
+- **The intraday schedules had no caller.** `nightly_suggestions` only ever ran
+  the `'eod'` schedule; `on_close_suggestions` was still a Phase-3 stub
+  (`return {"status": "stub"}`). So `intraday_15m` and `time_0925` profiles could
+  never fire regardless of status — the menu was structurally unable to
+  populate. New `intraday_suggestions` task + beat entries at **:01/:16/:31/:46**
+  (one minute after each 15m bar closes, so the scored bar is COMPLETE — scoring
+  a forming candle is the look-ahead violation the committed layer exists to
+  avoid) and **03:56 UTC / 09:26 IST** for the single-shot 09:25 screen. The
+  stub's design — one task per stock per candle-close event — was dropped
+  deliberately: the profiles score completed bars and bar boundaries are known
+  in advance, so a beat is the same computation without depending on the tick
+  pipeline being healthy. The task carries its own `is_market_session` guard,
+  authoritative over the necessarily-coarse crontab window (the same split that
+  fixed the position monitor's 08:30 pre-open beat).
+- **Shadow is the third profile state.** Walk-forward says the trio should NOT
+  be activated — all three are negative risk-adjusted (pdh_pdl −1.06 Sharpe,
+  orb_15m −0.60, gainer_925 −0.86 at 32% max drawdown; gainer_925's headline
+  +56.2% is **+0.004% per trade** over 12,935 trades, i.e. noise before costs,
+  and it was already flattered ~2× by a look-ahead fixed in 8c-4). But leaving
+  them off produced no evidence either, so the backtest verdict was never going
+  to be revisited. `status='shadow'` runs a profile on its **real** schedule and
+  measures every suggestion to outcome, while keeping it untradeable.
+  - **Untradeability is enforced by code that already existed:** the order path
+    admits `status == "active"` only, so a shadow signal is rejected there
+    (409, "Signal is shadow, not active") without a new flag anyone must
+    remember. Asserted by a test that posts an order directly at a shadow
+    signal — the UI merely declines to draw a button; this is the seam.
+  - Shadow signals are likewise absent from `/suggestions/{style}` and
+    `/signals/active`, both of which already filtered on `'active'`.
+- **Three gates had to learn about shadow, and each was a real bug if missed:**
+  - The **expiry sweeper** swept `'active'` only — shadow signals would have
+    lived forever, their outcomes never finalising (so the forward evidence
+    never closes out) and every 15-minute run stacking another undead row on the
+    same (stock, profile).
+  - **`live_levels`** tracked `'active'` only — but its entry/SL/TP touch levels
+    are what drive `signal_outcomes`, so excluding shadow would have produced
+    suggestions nobody ever scores, the exact opposite of the point. Shadow
+    signals are now tracked and carry a `shadow` flag through alert metadata.
+  - The **supersede guard** was unscoped: a shadow run could have superseded a
+    live tradeable signal. Each layer now dedups only against its own status,
+    with a canary asserting a shadow run leaves an active signal alone.
+- **Alerts stay on the stream but are stamped.** Shadow alerts must still flow —
+  that is how outcomes record — so `_publish_alerts` marks them `shadow="1"`
+  (Redis hash fields are strings, never bools) and the UI drops the trade
+  affordance for them, showing "shadow · not tradeable" instead of a button that
+  would 409.
+- Migrations (both reversible, downgrade exercised): `strategy_profiles.status`
+  gains `'shadow'`; a partial unique index mirrors
+  `uq_signals_active_per_profile` for the shadow layer (without it the
+  one-live-suggestion-per-(stock, profile) rule simply would not exist in
+  shadow); the three intraday profiles move `inactive → shadow`. `signals.status`
+  needed no DDL — it carries no CHECK constraint.
+- `signal_status_for()` **fails closed**: an unrecognised profile status mints a
+  *shadow* signal, never a tradeable one, so a typo in a status column cannot
+  become live suggestions.
+- Tests: backend **+23** (`test_shadow_profiles.py`) weighted at the safety
+  properties — order-path rejection, absence from both feeds, sweeper expiry,
+  `live_levels` tracking, the two layers not colliding, fail-closed status
+  mapping, and the scheduler picking up shadow profiles on intraday schedules
+  while ignoring `inactive` ones and not bleeding `time_0925` into the 15-minute
+  beat. Frontend **+6**: `parseAlert` string-flag handling (including the
+  classic Redis trap where `"0"` and `"false"` are both truthy), and a shadow
+  alert rendering no trade button while a normal one still does.
+
 ### v1 surface uplift — watchlist prices, screener honesty, an honest empty state (2026-08-07)
 
 Second slice of "Intraday activation + v1 surface uplift". Three pages that

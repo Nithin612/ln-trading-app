@@ -39,7 +39,7 @@ function makeAlert(o: Partial<LiveAlert> = {}): LiveAlert {
   return {
     id: '1752212345678-0', sid: 42, levelId: '1001', tag: 'zone_enter',
     price: '2850.5000', ts: 1752212345, day: '2026-08-06',
-    source: 'entry_zone', style: 'swing', signalId: 'sig-1',
+    source: 'entry_zone', style: 'swing', signalId: 'sig-1', shadow: false,
     ...o,
   }
 }
@@ -137,6 +137,27 @@ describe('LiveSignalsPage', () => {
     await waitFor(() =>
       expect(placeSpy).toHaveBeenCalledWith({ signal_id: 'sig-1', side: 'BUY' }, 'tok'),
     )
+  })
+
+  it('offers no trade button on a shadow alert', async () => {
+    // Shadow profiles run for evidence only. The order path rejects their
+    // signals with 409, so a Buy button would be a button that cannot work.
+    // Canary: without the guard the row renders the same button as a live alert.
+    streamState.alerts = [makeAlert({ shadow: true })]
+    renderPage()
+
+    expect(await screen.findByText(/shadow/i)).toBeInTheDocument()
+    expect(
+      screen.queryByRole('button', { name: /Paper BUY RELIANCE/i }),
+    ).not.toBeInTheDocument()
+  })
+
+  it('still offers the trade button on a normal alert', async () => {
+    streamState.alerts = [makeAlert({ shadow: false })]
+    renderPage()
+    expect(
+      await screen.findByRole('button', { name: /Paper BUY RELIANCE/i }),
+    ).toBeInTheDocument()
   })
 
   it('refuses to trade while the kill switch is engaged', async () => {

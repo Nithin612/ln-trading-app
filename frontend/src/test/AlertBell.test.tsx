@@ -65,6 +65,7 @@ const ALERT: LiveAlert = {
   source: 'pdh',
   style: 'market',
   signalId: null,
+  shadow: false,
 }
 
 function setup() {

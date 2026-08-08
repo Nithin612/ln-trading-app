@@ -42,8 +42,40 @@ async def _run_nightly() -> dict[str, object]:
     return {"status": "ok", "profiles": counts}
 
 
-@celery_app.task(name="app.tasks.profile_tasks.on_close_suggestions", bind=True, max_retries=0)  # type: ignore[untyped-decorator]
-def on_close_suggestions(self: object, stock_id: int, timeframe: str) -> dict[str, object]:  # noqa: ARG001
-    """Phase-3 stub: live candle-close trigger for intraday profiles."""
-    log.debug("on_close_suggestions stub: stock=%s tf=%s (Phase 3)", stock_id, timeframe)
-    return {"status": "stub", "message": "intraday profile triggers arrive with Phase 3"}
+@celery_app.task(name="app.tasks.profile_tasks.intraday_suggestions", bind=True, max_retries=1)  # type: ignore[untyped-decorator]
+def intraday_suggestions(self: object, schedule: str) -> dict[str, object]:  # noqa: ARG001
+    """Run the profiles on an intraday schedule. Beat: see celery_app.
+
+    Replaces the `on_close_suggestions` stub. That stub was written to be driven
+    by live candle-close events, which is a strictly harder problem (one task
+    per stock per bar, fanning out across the universe) for no benefit here: the
+    profiles score a COMPLETED bar, and bar boundaries are known in advance, so
+    a beat one minute after each close is the same computation with a fraction
+    of the machinery and no dependence on the tick pipeline being healthy.
+    """
+    return run_db_task(lambda: _run_intraday(schedule))
+
+
+async def _run_intraday(schedule: str) -> dict[str, object]:
+    from app.db.session import AsyncSessionFactory
+    from app.profiles.pipeline import run_scheduled_profiles
+    from app.services.market_calendar import is_trading_day
+    from app.tasks.signal_tasks import _default_risk_params
+    from app.trading.market_hours import is_market_session
+
+    now_utc = datetime.now(UTC)
+    # Authoritative session guard. The crontab window is deliberately coarse
+    # (it cannot express :15-minute precision across an hour range), so the
+    # exact 09:15–15:30 IST boundary is enforced here — the same split the
+    # position monitor uses after its 08:30 pre-open beat closed positions on a
+    # stale previous-session close.
+    if not is_market_session(now_utc):
+        return {"status": "skipped", "message": "outside market session"}
+
+    async with AsyncSessionFactory() as db:
+        if not await is_trading_day(db, now_utc.astimezone(_IST).date()):
+            return {"status": "skipped", "message": "not a trading day"}
+        capital, risk_pct = _default_risk_params()
+        counts = await run_scheduled_profiles(db, schedule, capital, risk_pct)
+    log.info("intraday suggestions (%s): %s", schedule, counts)
+    return {"status": "ok", "schedule": schedule, "profiles": counts}

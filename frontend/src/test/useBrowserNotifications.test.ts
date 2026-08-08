@@ -8,7 +8,7 @@ function alert(id: string, o: Partial<LiveAlert> = {}): LiveAlert {
   return {
     id, sid: 42, levelId: '1', tag: 'zone_enter', price: '2850.5000',
     ts: 1752212345, day: '2026-08-06', source: 'entry_zone', style: 'swing',
-    signalId: 'sig-1',
+    signalId: 'sig-1', shadow: false,
     ...o,
   }
 }
