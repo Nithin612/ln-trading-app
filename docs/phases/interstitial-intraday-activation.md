@@ -165,22 +165,35 @@ engine health, one step earlier in the funnel.
 
 ## 5. First live session — Monday 2026-08-10
 
-Verified at 10:05 IST by invoking the real task body:
+**Every scheduled beat fired.** From Celery's own result records (Redis db 2):
 
 ```
-intraday_15m: {'status': 'ok', 'profiles': {'pdh_pdl': 0, 'orb_15m': 0}}
-time_0925:    {'status': 'ok', 'profiles': {'gainer_925': 0}}
+09:26:13  SUCCESS  time_0925     {'gainer_925': 0}
+09:31:25  SUCCESS  intraday_15m  {'pdh_pdl': 0, 'orb_15m': 0}
+09:46:25  SUCCESS  intraday_15m  {'pdh_pdl': 0, 'orb_15m': 0}
+10:01:26  SUCCESS  intraday_15m  {'pdh_pdl': 0, 'orb_15m': 0}
+10:16:29  SUCCESS  intraday_15m  {'pdh_pdl': 0, 'orb_15m': 0}
 ```
 
-against healthy data — 6,197 fresh 15m bars, live worker writing 1m bars current
-to 10:01 IST. So the runner works end to end and **zero came from "nothing
-cleared the confidence gate", not from a broken pipeline.**
+Data was healthy throughout — 6,197 fresh 15m bars, live worker writing 1m bars
+current to 10:01 IST — and invoking the task body directly at 10:05 reproduced
+the same result. So the runner works end to end, on schedule, and **the zeros
+come from "nothing cleared the confidence gate", not from a broken pipeline.**
 
-**Ops fact learned the same morning: Celery started at 09:44 IST, so the 09:26
-`gainer_925` beat and the 09:31 15m beat were both missed.** `gainer_925` fires
-exactly once a day; if the worker is not up before 09:26, that profile produces
-nothing at all and its evidence for the day is lost. Start `make worker` before
-09:15.
+The stack was stopped ~09:32 and restarted ~09:46. That window fell entirely
+between two 15m slots (09:31 and 09:46), so nothing was lost — but a restart
+straddling a slot would silently skip it, and beat does not backfill.
+
+**A method correction worth carrying forward.** The first read of this session
+claimed the 09:26 and 09:31 beats had been *missed*, inferred from the Celery
+process's uptime (~1,066 s at 10:02, implying a 09:44 start). That was the
+**restarted** process; the beats had already run before the restart. Process
+uptime is not evidence of when a beat fired. The authoritative record is the
+result backend — and two things make it awkward to read: results carry **no task
+name** unless `result_extended` is enabled, and they live in **Redis db 2**
+(`celery_result_backend`), not db 0. Identify a task by the shape of its return
+payload instead. Beat's own `celerybeat-schedule.db` shelve was no help: it held
+only `__version__`, having been reset on restart.
 
 ## 6. What is still unknown
 

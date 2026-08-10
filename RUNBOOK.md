@@ -61,11 +61,14 @@ Each in its own terminal, left running:
    session-guarded, so off-hours it idles.
    > **Be up before 09:26 — missed beats are not retried.** The intraday shadow
    > profiles run off this beat: the 15m ones at 09:31/09:46/…/15:16 IST, and
-   > **`gainer_925` exactly ONCE, at 09:26**. On 2026-08-10 the worker started at
-   > 09:44, so the 09:26 and 09:31 beats never fired and `gainer_925` produced no
-   > evidence at all for the day. Celery beat does not backfill a missed slot.
-   > Starting "before 09:15" as written above is what makes this safe — 08:00 is
-   > better.
+   > **`gainer_925` exactly ONCE, at 09:26**. Celery beat does not backfill a
+   > missed slot, so a worker started at 09:30 costs `gainer_925` its entire day
+   > of evidence with no error anywhere. Starting "before 09:15" as written above
+   > is what makes this safe.
+   > A restart mid-session is survivable but not free: on 2026-08-10 the stack
+   > was stopped ~09:32 and back by ~09:46, which happened to land entirely
+   > between two 15m slots (09:31 and 09:46), so nothing was lost. A restart
+   > straddling a slot would silently skip it.
 5. **`make backend`** (~08:00) and **`make frontend`** (~08:00) — the API/WS and UI.
 6. **`make live-worker WORKER_ARGS=--gap-fill`** (**08:15–08:30**) — subscribes the
    full equity universe (~2,000 instruments) and **gap-fills** each instrument's

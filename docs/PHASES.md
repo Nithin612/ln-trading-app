@@ -182,21 +182,31 @@ Suites as of 2026-08-10: backend **1120**, frontend **370**. All work through
 **Do these, in this order:**
 
 0. **TODAY'S OPEN QUESTION — did the intraday shadow layer produce anything?**
-   Monday 2026-08-10 was its first live session. Verified at 10:05 IST: the
-   runner works end to end (`{'pdh_pdl': 0, 'orb_15m': 0}`,
-   `{'gainer_925': 0}`, `status: ok`) against healthy data (6,197 fresh 15m bars),
-   so **zero came from "nothing cleared the confidence gate", not a broken
-   pipeline.** Read **§8 of `docs/analysis/2026-08-10.md`** after the evening run
-   for the full day's verdict.
-   **Ops fact learned today: Celery started 09:44 IST, so the 09:26
-   `gainer_925` beat and the 09:31 15m beat were both MISSED.** `gainer_925`
-   fires exactly once a day at 09:26 — if the worker isn't up before then, that
-   profile produces nothing at all and its evidence for the day is lost. Start
-   `make worker` before 09:15.
-   If §8 shows zeros for several sessions running, the question is whether
-   `min_confidence: 70` is simply unreachable for these setups — that is a real
-   finding about the profiles, and it is exactly what the shadow layer was built
-   to surface. Do not "fix" it by lowering the gate without evidence.
+   Monday 2026-08-10 was its first live session. **Every scheduled beat fired**
+   — confirmed from Celery's own result records (Redis db 2), not inferred:
+
+   ```
+   09:26:13  SUCCESS  time_0925     {'gainer_925': 0}
+   09:31:25  SUCCESS  intraday_15m  {'pdh_pdl': 0, 'orb_15m': 0}
+   09:46:25  SUCCESS  intraday_15m  {'pdh_pdl': 0, 'orb_15m': 0}
+   10:01:26  SUCCESS  intraday_15m  {'pdh_pdl': 0, 'orb_15m': 0}
+   10:16:29  SUCCESS  intraday_15m  {'pdh_pdl': 0, 'orb_15m': 0}
+   ```
+
+   Data was healthy throughout (6,197 fresh 15m bars, live worker current), so
+   **the zeros come from "nothing cleared the confidence gate", not from a
+   broken pipeline or a missed schedule.** The stack was stopped ~09:32 and
+   restarted ~09:46; that window fell entirely between two 15m slots, so nothing
+   was lost. Read **§8 of `docs/analysis/2026-08-10.md`** after the evening run
+   for the full day.
+   If §8 shows zeros for several sessions running, the question becomes whether
+   `min_confidence: 70` is simply unreachable for these setups. That is a real
+   finding about the profiles and exactly what the shadow layer was built to
+   surface — **do not "fix" it by lowering the gate without evidence.**
+   *(Method note, because it cost time: Celery results carry no task name unless
+   `result_extended` is on, and they live in Redis **db 2**, not db 0. Identify a
+   task by its return payload shape. Process uptime is NOT evidence of when a
+   beat ran — a restart resets it.)*
 1. **`/phase-gate` for Phase 3 — SCHEDULED BY THE USER, MANUALLY, FOR FRIDAY.**
    Explicit instruction 2026-08-08: **do not run it early.** Nothing is being
    waited on; both criteria are already satisfied on disk — the soak is MET ×2
