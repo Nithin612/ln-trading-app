@@ -24,9 +24,11 @@ replay 19, cargo 86.
 ### Interstitial slice: "Intraday activation + v1 surface uplift" (2026-08-07/08)
 
 Agreed as the work to do BEFORE Phase 6, so its noise doesn't land inside the
-phase. Branch `feature/intraday-shadow-v1-uplift`. Plan for Phase 6 itself:
-[`phase-06-plan.md`](phase-06-plan.md) — a proposal awaiting sign-off, not
-started.
+phase. Merged to main and pushed. **Full report:
+[`phases/interstitial-intraday-activation.md`](phases/interstitial-intraday-activation.md)**
+— read that rather than reconstructing from commits. Plan for Phase 6 itself:
+[`phases/phase-06-plan.md`](phases/phase-06-plan.md) — a proposal awaiting
+sign-off, not started.
 
 1. **Stock master repaired.** NO stock had a correct company name: the equity
    master's `NAME OF COMPANY` column was never read, so 2,274 of 2,333 carried
@@ -168,27 +170,49 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-08-07 (2nd pass).**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-08-10.**
 Phases **0–2, 4 and 5 are CLOSED**; **Phase 3's two exit criteria are both MET
 and only its gate ritual is left**. Everything below this line is historical
 narrative — read the STATE AT A GLANCE block at the top of this file first, not
 the 400 lines that follow.
 
+Suites as of 2026-08-10: backend **1120**, frontend **370**. All work through
+`b795326` is merged to main **and pushed to origin**.
+
 **Do these, in this order:**
 
-1. **`/phase-gate` for Phase 3 — SCHEDULED BY THE USER FOR FRIDAY 2026-08-14.**
-   Nothing left to wait for; both criteria are already satisfied on disk: the
-   soak is MET ×2 (`PERFORMANCE.md`) and the shadow week is MET with **14
-   consecutive clean days 07-20 → 08-06** in `backend/shadow/shadow_week.log`.
-   Do NOT re-run either. (Both of these checkboxes were stale for weeks — the
-   work was done and never read back. If a checkbox here disagrees with an
-   artifact, trust the artifact.) Keep running `scripts/shadow_day.sh` daily in
-   the meantime so the streak is unbroken on the day.
+0. **TODAY'S OPEN QUESTION — did the intraday shadow layer produce anything?**
+   Monday 2026-08-10 was its first live session. Verified at 10:05 IST: the
+   runner works end to end (`{'pdh_pdl': 0, 'orb_15m': 0}`,
+   `{'gainer_925': 0}`, `status: ok`) against healthy data (6,197 fresh 15m bars),
+   so **zero came from "nothing cleared the confidence gate", not a broken
+   pipeline.** Read **§8 of `docs/analysis/2026-08-10.md`** after the evening run
+   for the full day's verdict.
+   **Ops fact learned today: Celery started 09:44 IST, so the 09:26
+   `gainer_925` beat and the 09:31 15m beat were both MISSED.** `gainer_925`
+   fires exactly once a day at 09:26 — if the worker isn't up before then, that
+   profile produces nothing at all and its evidence for the day is lost. Start
+   `make worker` before 09:15.
+   If §8 shows zeros for several sessions running, the question is whether
+   `min_confidence: 70` is simply unreachable for these setups — that is a real
+   finding about the profiles, and it is exactly what the shadow layer was built
+   to surface. Do not "fix" it by lowering the gate without evidence.
+1. **`/phase-gate` for Phase 3 — SCHEDULED BY THE USER, MANUALLY, FOR FRIDAY.**
+   Explicit instruction 2026-08-08: **do not run it early.** Nothing is being
+   waited on; both criteria are already satisfied on disk — the soak is MET ×2
+   (`PERFORMANCE.md`) and the shadow week is MET with **14 consecutive clean days
+   07-20 → 08-06** in `backend/shadow/shadow_week.log`. Do NOT re-run either.
+   (Both checkboxes were stale for weeks — the work was done and never read back.
+   If a checkbox here disagrees with an artifact, trust the artifact.) Keep
+   running `scripts/shadow_day.sh` daily so the streak is unbroken on the day.
 2. **Phase 6 — outcome tracking + strategy lab v2** is the next *build* phase,
    and the daily analysis says why: the binding constraint on profit is
    **entry/regime selection, not exits** (only ~2 of 20 trades reached +1R over
-   08-03→06, and open heat has twice touched ~30% of capital). Phase 6 is where
-   expectancy calibration lives.
+   08-03→06, and open heat has twice touched ~30% of capital). **A plan exists
+   and is awaiting sign-off: `docs/phases/phase-06-plan.md`.** It is deliberately
+   a plan and not code — Phase 6 touches expectancy calibration and the frozen
+   engine, which are user decisions. It ends with three questions; answer those
+   before writing any Phase-6 code.
 3. ~~One imminent bug is logged, not fixed~~ — **FIXED 2026-08-07**, plus a
    CRITICAL look-ahead the owed quant-verifier pass turned up next to it.
    `_pick_expiry` walks the in-window expiries instead of dead-ending on the
@@ -200,10 +224,15 @@ the 400 lines that follow.
    33/42 to 42/42 producing days, but real OI data (§9.3) shows a NIFTY weekly's
    whole chain carries ~1% of the monthly's, so the fill model would overstate
    credit. Don't flip it without a chain-level liquidity gate first.
-4. **Check the EOD self-heal actually caught 2026-08-06.** All EOD tables stop
-   at 08-05 because the worker was down that evening (see the ops note above).
-   `SELECT max(time) FROM ohlcv_1d;` should read 08-06 or later after the next
-   evening beat — if it doesn't, the ≤21-day catch-up needs a look.
+4. ~~Check the EOD self-heal actually caught 2026-08-06.~~ **Partly resolved —
+   re-checked 2026-08-10 10:10 IST.** `ohlcv_1d` and `india_vix_daily` are
+   current to **08-07** (the last trading day), so the ≤21-day catch-up works.
+   But **`fo_bhavcopy` and `fii_dii_daily` still stop at 08-06** — one session
+   behind. Those feed §7 F&O engine health and the §2.7 flow factor, so a
+   persistent lag quietly degrades both. Worth one look at whether the 08-07
+   evening beats for those two ran; the self-heal should absorb it, but verify
+   rather than assume — that is exactly the mistake that let the earlier
+   month-long outage hide.
 
 Kite subscription ACTIVE. Push to origin is MANUAL (user). History on main is
 linear — merge phase branches with `--ff-only`.

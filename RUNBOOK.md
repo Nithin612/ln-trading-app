@@ -59,6 +59,13 @@ Each in its own terminal, left running:
    fill, trail/profit-lock advance, and MFE tracking**. In the evening the same
    process runs EOD ingestion (18:40) and nightly signals (19:15). It is
    session-guarded, so off-hours it idles.
+   > **Be up before 09:26 — missed beats are not retried.** The intraday shadow
+   > profiles run off this beat: the 15m ones at 09:31/09:46/…/15:16 IST, and
+   > **`gainer_925` exactly ONCE, at 09:26**. On 2026-08-10 the worker started at
+   > 09:44, so the 09:26 and 09:31 beats never fired and `gainer_925` produced no
+   > evidence at all for the day. Celery beat does not backfill a missed slot.
+   > Starting "before 09:15" as written above is what makes this safe — 08:00 is
+   > better.
 5. **`make backend`** (~08:00) and **`make frontend`** (~08:00) — the API/WS and UI.
 6. **`make live-worker WORKER_ARGS=--gap-fill`** (**08:15–08:30**) — subscribes the
    full equity universe (~2,000 instruments) and **gap-fills** each instrument's
@@ -191,6 +198,7 @@ make up (A) ─────────────┬────────�
 
 | Fix (when) | Needs running | Where you see it |
 |---|---|---|
+| **Intraday shadow layer (08-10)** | **F** + G | Nothing appears on the Intraday page — that is by design: shadow suggestions are **never tradeable** (the order path rejects them, and the Live Signals row shows "shadow · not tradeable" instead of a Buy button). You read the result in **§8 of `docs/analysis/<date>.md`** after the evening `make analysis`: per profile, how many it minted and — when zero — *why* (not a trading day / no bars, worker or Kite token down / ran but nothing cleared the gate). **A silent day is a failure, not a non-event** — read the reason column before concluding anything about the strategies |
 | **₹ profit ladder — the live paper exit governor (08-06)** | **F** + G | SL ratchets up in ₹ steps: breakeven once peak profit ≥ **₹2,000**, then seals **peak − ₹1,000** once peak ≥ **₹3,000** (giveback widened to `2.0 × ATR` on volatile names). Only when **Profile → Trading Settings → Profit lock** is ON; OFF = the old fixed R-ladder. Knobs: `PROFIT_LOCK_BREAKEVEN_INR` / `_TRAIL_START_INR` / `_GIVEBACK_INR` / `_ATR_K` in `.env`. Report shows **"Profit sealed right now"**; Positions shows the raised SL |
 | **Risk-first sizing from the actual fill (08-06)** | D | Buying above the signal's entry now **shrinks the quantity** (risk stays at your per-trade budget) instead of silently over-risking; a repeat Buy on the same name is capped by the remaining budget and is **rejected** at zero ("already at your per-trade risk"). Report: **Chase / Risk-vs-2%** columns |
 | **Buy/Sell from AlertBell (08-06)** | D + E + G | Each entry-zone alert has a Buy/Sell button — tradable even when the stock isn't on the dashboard list |
