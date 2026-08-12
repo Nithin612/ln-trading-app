@@ -6,7 +6,7 @@ sizing, supersede policy, persistence, API join — runs for real against
 the test database.
 """
 
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
@@ -298,14 +298,21 @@ class TestIntradayContext:
     async def test_pdh_gate_uses_previous_session_high(
         self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
     ) -> None:
+        # Pin the decision clock: 14:00 IST on a fixed decision day — inside the
+        # session, before the 15:15 IST cutoff — so this intraday mint no longer
+        # depends on when the suite runs (the pipeline blocks intraday mints past
+        # 15:15 IST, which is why this test flaked across that boundary).
+        decision_day = date(2026, 8, 11)
+        now = datetime(2026, 8, 11, 8, 30, tzinfo=UTC)  # 14:00 IST
         stock = await make_stock(db, symbol="INTRA1", is_nifty50=True)
         await make_intraday_candles(
-            db, stock.id, "15m", [[_FLAT] * 25, _PDH_PREV_SESSION, _PDH_TODAY_PASS]
+            db, stock.id, "15m", [[_FLAT] * 25, _PDH_PREV_SESSION, _PDH_TODAY_PASS],
+            end_day=decision_day,
         )
         profile = await self._pdh_profile(db)
         _stub_scorer(monkeypatch, _confluence("BUY"))
 
-        created = await run_profile(db, profile, CAPITAL, RISK_PCT)
+        created = await run_profile(db, profile, CAPITAL, RISK_PCT, now=now)
         assert len(created) == 1
         evidence = created[0].setup_trigger["pdh_breakout"]
         assert evidence["passed"] is True

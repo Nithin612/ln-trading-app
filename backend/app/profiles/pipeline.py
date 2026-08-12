@@ -319,10 +319,12 @@ async def _process_stock(
     as_of: date,
     capital: Decimal,
     risk_pct: Decimal,
+    now: datetime,
     cross_section_by_session: dict[date, dict[str, float]] | None = None,
 ) -> Signal | None:
     """One stock through the full profile pipeline. Returns the flushed
-    Signal, or None (no signal / gated / rejected / deduped)."""
+    Signal, or None (no signal / gated / rejected / deduped). `now` is the
+    injected decision clock (the intraday session/cutoff checks key off it)."""
     window = await _load_window(db, stock_id, profile.timeframe)
     if window.empty or len(window) < 50:
         return None
@@ -380,7 +382,6 @@ async def _process_stock(
     if qty == 0:
         return None
 
-    now = datetime.now(tz=UTC)
     validity = await _validity_for(db, profile, classification, now)
 
     block = intraday_mint_block(profile.timeframe, classification, window, now, validity)
@@ -443,14 +444,19 @@ async def run_profile(
     profile: StrategyProfile,
     capital: Decimal,
     risk_pct: Decimal,
+    now: datetime | None = None,
 ) -> list[Signal]:
-    """Run one profile over its universe; persists and returns new Signals."""
+    """Run one profile over its universe; persists and returns new Signals.
+
+    `now` is injectable so tests can pin the intraday session clock (today's-
+    session check + the 15:15 IST cutoff); production passes None → real clock."""
+    now = now or datetime.now(tz=UTC)
     stock_ids, sym_map = await resolve_universe(db, profile.universe_spec)
     if not stock_ids:
         log.warning("profile %s: universe resolved empty", profile.key)
         return []
 
-    as_of = datetime.now(tz=UTC).astimezone(_IST).date()
+    as_of = now.astimezone(_IST).date()
     flows = await get_market_flow_5d(db, as_of)
 
     if profile.timeframe == "1m" and any(
@@ -491,6 +497,7 @@ async def run_profile(
                 as_of,
                 capital,
                 risk_pct,
+                now=now,
                 cross_section_by_session=cross_section_by_session,
             )
         except Exception:
