@@ -646,11 +646,25 @@ recommendation is a Phase-7 design constraint, not a now-fix.
   stubs; data we already ingest, medium lift). Fundamental scans are blocked on
   the fundamentals layer (see Market Context Engine below — every one thresholds
   on `MarketCap`, which has no writer today).
+- **Pair-trading / market-neutral profile candidate** (Varsity Trading Systems —
+  `docs/VARSITY_REVIEW_2026-08-12.md` §1.3) — cointegration-screened
+  (correlation → linear regression → ADF) market-neutral entries. **Regime-agnostic:
+  the one new idea from the 2026-08 external study that directly attacks the
+  choppy-tape problem** where our directional profiles give profit back (LEDGER
+  0–1/5 reaching 1R). A NEW profile inside the confluence framework, shadow-first,
+  §8 backtest required — never a bypass of the ≥70% gate. Highest-value new candidate.
+- **Cross-sectional momentum ranking** (Varsity Trading Systems) — rank the
+  universe by momentum as a sieve/discovery lever, upstream of the gate. Lower
+  priority than pair-trading.
 - **Kronos (post-Phase-6, research-track only)** — an OHLCV foundation-model
   *confidence input* experiment, gated-input-only, measured against the
   Phase-6 outcome baseline; never a direction generator, never in the live
   path. Deferred per the "AI/ML only after the rule engine proves out" policy
   (see external-libs review §4).
+- **FinNifty→BankNifty lead-lag (post-Phase-6, research-track only)** — the
+  masterclass "data hack" that Bank Nifty ≈ 70% CNX Finance; test FinNifty as a
+  leading confluence INPUT for Bank Nifty option signals, §8-gated, never a
+  standalone direction generator. See `docs/TRADING_MASTERCLASS_REVIEW_2026-08-12.md` §3.
 
 **Market Context Engine (named phase after Phase 6 — see auto-memory):**
 - **Proactive pre-event (earnings) blackout** — suppress new signals N trading
@@ -671,7 +685,11 @@ recommendation is a Phase-7 design constraint, not a now-fix.
   the keystone unlock (the existing screener's headline numeric filter *and*
   every fundamental scan threshold on it). Candidate sources: BSE/NSE XBRL
   results (extend `filings_consumer`) vs a paid fundamentals API. Never additive;
-  §8 backtest before any behaviour change.
+  §8 backtest before any behaviour change. **Authoritative computation reference:**
+  Zerodha Varsity Fundamental Analysis + Integrated Financial Modelling
+  (`docs/VARSITY_REVIEW_2026-08-12.md` §1.1) — real ratio analysis + DCF. The
+  masterclass `FV = BookValue × 10` heuristic is REJECTED (arbitrary, not a
+  valuation); its promoter>35% / pledge<10% rules are valid scan thresholds.
 - **Per-stock seasonality flag** — monthly return distribution over the existing
   5y EOD OHLCV (e.g. "seasonally weak in August, n=18") as a soft context
   modifier. **The one piece needing no new data or engine change** — cheap,
@@ -687,7 +705,18 @@ recommendation is a Phase-7 design constraint, not a now-fix.
   LTP. (review P0.2)
 - **Sector-exposure caps + a single total-open-risk (exposure heat) number** —
   simple caps in the RiskEngine gate. **NOT** VaR/ES, **NOT** a rolling
-  correlation matrix. (review P2.2)
+  correlation matrix. (review P2.2) *(Varsity Risk Management M9 teaches Kelly /
+  VaR / correlation-aware portfolio variance — `docs/VARSITY_REVIEW_2026-08-12.md`
+  §1.4; deliberately NOT adopted here — simple caps chosen. Revisit only if simple
+  caps prove insufficient, never as a first build.)*
+- **Defined-risk option-selling profile (Iron Condor) — the ONLY sanctioned form
+  of the masterclass "passive income" short strangle.** Sell ATM CE+PE but BUY
+  protective wings → same theta harvest, BOUNDED max loss (Varsity Option
+  Strategies — `docs/VARSITY_REVIEW_2026-08-12.md` §1.2). The naked short strangle
+  as taught is REJECTED (uncapped tail / gap risk). Requires the live options
+  order path (this phase), paper-first, event-day blackout, the never-disableable
+  daily-loss breaker, and a §8 backtest incl. gap-through-SL. Detail in
+  `docs/TRADING_MASTERCLASS_REVIEW_2026-08-12.md` §4.
 - **Corporate-action adjustment of OPEN positions** through an ex-date
   (entry/SL/TP/qty, so R is preserved). CA quarantine currently covers the
   selection universe only, not held positions. (review P1.5)
