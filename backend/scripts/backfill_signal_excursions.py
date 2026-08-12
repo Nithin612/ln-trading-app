@@ -13,9 +13,14 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import sys
+from pathlib import Path
 
-from app.db.session import AsyncSessionFactory
-from app.services.signal_excursions import compute_outcome_excursions
+# Runnable from any cwd: put backend/ (the `app` package root) on sys.path.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from app.db.session import AsyncSessionFactory  # noqa: E402
+from app.services.signal_excursions import compute_outcome_excursions  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("backfill_signal_excursions")
