@@ -210,6 +210,27 @@ class SignalOutcome(Base):
 
     resolved_at: Mapped[datetime | None] = mapped_column(TZ, nullable=True)
 
+    # Signal-level excursion (Phase 6 slice 6.1) — MFE/MAE over the observation
+    # window, tape-derived (1m), direction-aware, anchored at the signal's
+    # entry_price. Convention: mfe_r ≥ 0 (favourable), mae_r ≤ 0 (adverse
+    # extreme as a negative favourable R). R is Numeric(7,3); the recorder
+    # winsorizes |R| at the ±9999.999 bound (an R that large is a near-zero-risk
+    # artifact, not an edge). WINDOW: tp_first/sl_first truncate at resolution;
+    # expired_* span the full validity window — 6.2 must account for the
+    # differing window when comparing setups. (A rare recorder-outage crash
+    # upgrade expired_open→tp_first/sl_first keeps the wider, untruncated window,
+    # as the excursion is not recomputed — see services/signal_outcomes.)
+    # NULL until computed by
+    # services/signal_excursions; `excursion_computed_at` separates "not yet
+    # computed" from "computed, no tape". Pure observability.
+    mfe_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    mfe_at: Mapped[datetime | None] = mapped_column(TZ, nullable=True)
+    mfe_r: Mapped[Decimal | None] = mapped_column(Numeric(7, 3), nullable=True)
+    mae_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    mae_at: Mapped[datetime | None] = mapped_column(TZ, nullable=True)
+    mae_r: Mapped[Decimal | None] = mapped_column(Numeric(7, 3), nullable=True)
+    excursion_computed_at: Mapped[datetime | None] = mapped_column(TZ, nullable=True)
+
     created_at: Mapped[datetime] = mapped_column(
         TZ, nullable=False, server_default=func.now()
     )

@@ -48,6 +48,7 @@ async def sweep_expired(db: AsyncSession, now: datetime) -> int:
 
 async def _run_sweep() -> dict[str, int]:
     from app.db.session import AsyncSessionFactory
+    from app.services.signal_excursions import compute_outcome_excursions
     from app.services.signal_outcomes import finalize_expired_outcomes
 
     async with AsyncSessionFactory() as db:
@@ -57,10 +58,19 @@ async def _run_sweep() -> dict[str, int]:
         # outcome — expired_untouched / expired_open. Same 5-min beat.
         finalized = await finalize_expired_outcomes(db, now)
         await db.commit()
-    if expired or finalized:
+        # Phase 6 (6.1): fill signal-level MFE/MAE for newly-terminal outcomes
+        # from the 1m tape (bounded per run, drains over the beat, idempotent).
+        excursions = await compute_outcome_excursions(db, now=now)
+    if expired or finalized or excursions:
         log.info(
-            "expiry sweep: %d signals expired, %d outcomes finalized",
+            "expiry sweep: %d signals expired, %d outcomes finalized,"
+            " %d excursions computed",
             expired,
             finalized,
+            excursions,
         )
-    return {"signals_expired": expired, "outcomes_finalized": finalized}
+    return {
+        "signals_expired": expired,
+        "outcomes_finalized": finalized,
+        "excursions_computed": excursions,
+    }

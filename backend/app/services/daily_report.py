@@ -36,13 +36,13 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.market_data import Ohlcv1m
 from app.models.signal import Signal, SignalOutcome
 from app.models.stock import Stock
 from app.models.trading import Position
 from app.models.user import User
 from app.services import fo_analytics as fa
 from app.services import fo_suggestions as fs
+from app.services.excursion import Excursion, load_1m_bars, tape_excursion
 from app.services.profit_lock_shadow import ShadowComparison, compare_position
 from app.trading.regime import CHOPPY_ER, er_by_stock
 from app.trading.trail_sl import compute_pnl
@@ -156,82 +156,12 @@ def chase_metrics(
     )
 
 
-@dataclass(frozen=True)
-class Excursion:
-    """Max favourable / adverse excursion over a tape window, with timing, in R
-    (R = the trade's risk-at-fill, |entry − sig_sl|)."""
-
-    bars: int
-    entry: Decimal
-    risk: Decimal
-    mfe_price: Decimal
-    mfe_time: datetime
-    mfe_r: Decimal
-    mfe_pnl: Decimal
-    mae_price: Decimal
-    mae_time: datetime
-    mae_r: Decimal
-    mae_pnl: Decimal
-    last_close: Decimal
-    last_time: datetime
-    reached_1r: bool
+# `Excursion` moved to `app/services/excursion.py` (shared with the signal-outcome
+# excursion recorder, Phase 6 slice 6.1) — imported above.
 
 
-def tape_excursion(
-    bars: list[tuple[datetime, Decimal, Decimal, Decimal]],
-    *,
-    side: str,
-    entry: Decimal,
-    risk: Decimal,
-    quantity: int,
-) -> Excursion | None:
-    """Compute MFE/MAE + timing over ``bars`` (time, high, low, close).
-
-    ``risk`` is R in price terms (|entry − sig_sl|); mfe_r/mae_r are excursions
-    expressed in that R. Returns None on an empty tape.
-    """
-    if not bars:
-        return None
-    is_long = side.upper() == "LONG"
-    qty = Decimal(quantity)
-
-    mfe_price = bars[0][1] if is_long else bars[0][2]
-    mfe_time = bars[0][0]
-    mae_price = bars[0][2] if is_long else bars[0][1]
-    mae_time = bars[0][0]
-
-    for t, high, low, _close in bars:
-        fav = high if is_long else low
-        adv = low if is_long else high
-        if (is_long and fav > mfe_price) or (not is_long and fav < mfe_price):
-            mfe_price, mfe_time = fav, t
-        if (is_long and adv < mae_price) or (not is_long and adv > mae_price):
-            mae_price, mae_time = adv, t
-
-    def _fav_r(price: Decimal) -> Decimal:
-        move = (price - entry) if is_long else (entry - price)
-        return (move / risk) if risk > 0 else Decimal(0)
-
-    mfe_r = _fav_r(mfe_price)
-    mae_r = _fav_r(mae_price)  # adverse extreme → negative favourable R
-    return Excursion(
-        bars=len(bars),
-        entry=entry,
-        risk=risk,
-        mfe_price=mfe_price,
-        mfe_time=mfe_time,
-        mfe_r=mfe_r.quantize(_Q3),
-        mfe_pnl=compute_pnl(
-            side=side, entry=entry, exit_price=mfe_price, quantity=quantity
-        ).quantize(_Q2),
-        mae_price=mae_price,
-        mae_time=mae_time,
-        mae_r=mae_r.quantize(_Q3),
-        mae_pnl=(qty * (mae_price - entry) if is_long else qty * (entry - mae_price)).quantize(_Q2),
-        last_close=bars[-1][3],
-        last_time=bars[-1][0],
-        reached_1r=mfe_r >= 1,
-    )
+# `tape_excursion` moved to `app/services/excursion.py` (Phase 6 slice 6.1) —
+# imported above; one definition now serves both the report and the recorder.
 
 
 # --------------------------------------------------------------------------- #
@@ -286,22 +216,8 @@ class DailyReport:
     shadow_health: list[ShadowProfileHealth] = field(default_factory=list)
 
 
-async def _load_bars(
-    db: AsyncSession, stock_id: int, start: datetime, end: datetime
-) -> list[tuple[datetime, Decimal, Decimal, Decimal]]:
-    rows = (
-        await db.execute(
-            select(Ohlcv1m.time, Ohlcv1m.high, Ohlcv1m.low, Ohlcv1m.close)
-            .where(
-                Ohlcv1m.stock_id == stock_id,
-                Ohlcv1m.is_complete.is_(True),
-                Ohlcv1m.time >= start,
-                Ohlcv1m.time <= end,
-            )
-            .order_by(Ohlcv1m.time.asc())
-        )
-    ).all()
-    return [(r.time, _d(r.high), _d(r.low), _d(r.close)) for r in rows]
+# `load_1m_bars` (was `_load_bars`) moved to `app/services/excursion.py`
+# (Phase 6 slice 6.1) — imported above.
 
 
 def _why(
@@ -384,7 +300,7 @@ async def _build_trade_row(
         end = min(pos.closed_at, report_end)
     else:
         end = report_end
-    bars = await _load_bars(db, pos.stock_id, pos.opened_at, end)
+    bars = await load_1m_bars(db, pos.stock_id, pos.opened_at, end)
     exc = tape_excursion(
         bars, side=pos.side, entry=_d(pos.avg_entry_price), risk=risk, quantity=pos.quantity
     )
@@ -1031,7 +947,7 @@ async def _week_giveback(db: AsyncSession, *, user_id: int, monday: date, now: d
             p_end = min(pos.closed_at, end_bound)
         else:
             p_end = end_bound
-        bars = await _load_bars(db, pos.stock_id, pos.opened_at, p_end)
+        bars = await load_1m_bars(db, pos.stock_id, pos.opened_at, p_end)
         if not bars:
             continue
         is_long = pos.side.upper() == "LONG"

@@ -7,6 +7,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6): signal-level MFE/MAE excursion recorder — slice 6.1 (2026-08-12)
+
+The prerequisite for entry-quality attribution (6.2). Every *terminal*
+`signal_outcome` now carries max-favourable / max-adverse excursion (price +
+timing + R) over its observation window, so a bad **setup** can be told apart
+from a bad **stop** — first-touch tp/sl ordering alone can't.
+
+- Extracted the excursion math into a shared `app/services/excursion.py`
+  (`Excursion`, `tape_excursion`, `load_1m_bars`) — one source of truth for the
+  daily report (per-position) and the new recorder (per-signal); `daily_report`
+  now imports it (behaviour byte-identical, parity-checked).
+- `app/services/signal_excursions.compute_outcome_excursions`: tape-derived (1m),
+  anchored at the signal's `entry_price`, direction-aware (BUY→LONG / SELL→SHORT).
+  **No look-ahead** — `is_complete` bars only, window `[created_at,
+  min(resolved_at, validity_until)]` (a swept row's `resolved_at` is the sweep
+  time, so it never widens past validity). Idempotent; R winsorized at the
+  ±9999.999 column bound; per-row commit so one row can't poison the batch;
+  ordered by effective window-end so a same-day-deferred row can't starve ready ones.
+- Migration `c5d6e7f8a9b0` (reversible): 7 nullable columns on `signal_outcomes`
+  (mfe/mae price·at·r + `excursion_computed_at`).
+- Wired into the 5-min expiry sweep (after `finalize_expired_outcomes`) + a
+  one-off `scripts/backfill_signal_excursions.py`.
+- **Pure observability** — never feeds scoring/sizing/gating/backtests; the
+  frozen engine is untouched. 11 tests, every canary mutation-verified
+  (direction-map, validity-cap, is_complete filter, same-day defer, poison-pill,
+  effective-end ordering).
+- Reviews: quant-verifier PASS; bug-hunter (starvation / poison-pill / count
+  findings fixed + regression-tested); test-guardian was spend-limited, so its
+  checks were run by hand (all canaries mutation-proven).
+
 ### feat(seasonality): per-stock monthly return-bias context statistic (2026-08-11)
 
 First build off the 2026-08-11 competitor review

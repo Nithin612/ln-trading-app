@@ -84,16 +84,34 @@ touching the engine or the lab. 6.3 is infrastructure. 6.4 is the payoff and
 should not start until the first three are done, because tuning against
 un-attributed outcomes is how you overfit.
 
-## What I need from you before starting
+## Decisions (settled 2026-08-12 — build started)
 
-1. **Confirm the framing** — that Phase 6's job is entry/regime selection, not
-   further exit tuning. If you disagree, the slice order changes completely.
-2. **Sample-size policy.** 6.2 will produce cells with n=3. My default is to
-   compute but refuse to *rank* below n=20, and say so on the page. Tell me if
-   you want a different floor.
-3. **Whether 6.3 is in scope now** or deferred — it is the largest piece and the
-   only one that touches the lab's execution path.
+The three sign-offs are resolved:
+1. **Framing confirmed** — Phase 6 = entry/regime selection (measure → attribute →
+   select), not further exit tuning. Exit/sizing fixes already shipped (FIX_PLAN
+   P0–P3).
+2. **Sample-size floor = n=20** — 6.2 computes every cell but refuses to *rank* any
+   cell below n=20, stated on the page (the StyleStatsHeader precedent).
+3. **6.3 brought forward** — the Rust lab is sequenced right after 6.1, not last:
+   6.2's statistical power lives in the 2y backtest corpus (the paper book is
+   sample-starved), and only the fast lab makes corpus-scale attribution practical.
 
-Nothing here is started. The shadow layer landing on 2026-08-10 will produce the
-first forward evidence 6.4 would eventually consume, so there is no rush to
-begin 6.4 specifically.
+**Resulting sequence:** 6.1 (excursion data) → 6.3 (Rust-lab speed) → 6.2
+(attribution at corpus scale, n≥20 floor; marginal + a few 2-D slices rather than a
+fragmenting full 4-D cross-tab) → 6.4 (shadow→active promotion on forward evidence).
+The external-study candidates (pair-trading / momentum / scan-catalog) enter as
+**6.5** — new shadow profiles / a universe sieve measured by 6.1–6.2 and judged by
+6.4, never a rewrite of this spine (see `docs/VARSITY_REVIEW_2026-08-12.md`).
+
+**6.1 — signal-level MFE/MAE: DONE 2026-08-12.** Shared `app/services/excursion.py`
+(extracted from daily_report) + `app/services/signal_excursions.compute_outcome_excursions`
++ migration `c5d6e7f8a9b0` (7 nullable columns on `signal_outcomes`) + the 5-min
+expiry-sweep hook + `scripts/backfill_signal_excursions.py`. Tape-derived (1m),
+direction-aware, no-look-ahead, window capped at validity, idempotent, R winsorized,
+per-row commit, effective-end ordering. Pure observability; frozen engine untouched.
+11 tests (all canaries mutation-verified); quant-verifier PASS, bug-hunter findings
+fixed, test-guardian run by hand (spend-limited). See CHANGELOG 2026-08-12.
+
+**Next up: 6.3 (Rust-lab speed)** — per the brought-forward sequence, so 6.2 can
+run attribution at corpus scale. 6.2 / 6.4 / 6.5 not started; 6.4 is time-gated by
+the shadow layer's forward evidence (first fire 2026-08-10), so no rush there.
