@@ -637,6 +637,15 @@ recommendation is a Phase-7 design constraint, not a now-fix.
   setups as *candidate factors* for the confluence scorer (never standalone,
   gated ≥70%, §8 backtest required). Idea list only; see
   `docs/EXTERNAL_LIBS_REVIEW_2026-08-02.md`.
+- **MoneyControl scan-catalog harvest** (same effort as PKScreener above) —
+  ~20 named technical + fundamental scans transcribed with formulas in
+  `docs/COMPETITOR_TOOLS_REVIEW_2026-08-11.md` §3, to become `SavedScreen` /
+  `STARTER_SCREENS`. **Discovery/sieve only, upstream of the ≥70% gate — never
+  a signal.** Technical scans need the screener to expose indicator/price fields
+  (today's `rsi_14`/`price_vs_ema50`/`fii_net_5d_cr` are `available=False`
+  stubs; data we already ingest, medium lift). Fundamental scans are blocked on
+  the fundamentals layer (see Market Context Engine below — every one thresholds
+  on `MarketCap`, which has no writer today).
 - **Kronos (post-Phase-6, research-track only)** — an OHLCV foundation-model
   *confidence input* experiment, gated-input-only, measured against the
   Phase-6 outcome baseline; never a direction generator, never in the live
@@ -652,6 +661,21 @@ recommendation is a Phase-7 design constraint, not a now-fix.
   NIFTY is below its 200-DMA or India VIX is high, plus a sector-RS check on
   existing sector metadata. Behaviour-changing → needs a §8 backtest.
   **NOT** a multi-state regime engine. (review P2.1)
+- **Fundamental data layer + quality scores** (from the 2026-08-11 competitor
+  review — `docs/COMPETITOR_TOOLS_REVIEW_2026-08-11.md` §4–5). New
+  `stock_fundamentals` table (ratios + latest statements + quarterly
+  shareholding) feeding a fundamental **gate/modifier** and the four closed-form
+  quality scores (Altman Z / DuPont / Graham / Ohlson — greenfield, no
+  look-ahead). **Blocked on a data-source decision:** NSE publishes no free
+  shares-outstanding feed, so `market_cap_cr` has never been populated — it is
+  the keystone unlock (the existing screener's headline numeric filter *and*
+  every fundamental scan threshold on it). Candidate sources: BSE/NSE XBRL
+  results (extend `filings_consumer`) vs a paid fundamentals API. Never additive;
+  §8 backtest before any behaviour change.
+- **Per-stock seasonality flag** — monthly return distribution over the existing
+  5y EOD OHLCV (e.g. "seasonally weak in August, n=18") as a soft context
+  modifier. **The one piece needing no new data or engine change** — cheap,
+  genuinely new; report n and refuse to rank thin samples.
 
 **Phase 7 (live-trading hardening — opens with the RiskEngine slice):**
 - **Exchange-resident protective stops (Kite GTT / SL-M)** as the primary live

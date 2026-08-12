@@ -12,6 +12,7 @@ from app.api.v1 import (
     market_data,
     portfolio,
     screener,
+    seasonality,
     signals,
     stocks,
     strategy,
@@ -27,6 +28,7 @@ api_router.include_router(auth.router)
 api_router.include_router(users.router)
 api_router.include_router(stocks.router)
 api_router.include_router(screener.router)
+api_router.include_router(seasonality.router)
 api_router.include_router(categories.router)
 api_router.include_router(market_data.router)
 api_router.include_router(calendar.router)

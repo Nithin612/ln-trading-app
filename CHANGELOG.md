@@ -7,6 +7,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(seasonality): per-stock monthly return-bias context statistic (2026-08-11)
+
+First build off the 2026-08-11 competitor review
+(`docs/COMPETITOR_TOOLS_REVIEW_2026-08-11.md` §6). For each stock, the
+per-calendar-month return distribution (n years, % up, average / best / worst)
+is computed **on-read** from the ingested daily OHLCV — no new table, no
+migration (mirrors `fo_analytics`). Surfaced as a "Seasonality" tab on the stock
+detail page.
+
+- Service `app/services/seasonality.py` + `GET /seasonality/{stock_id}`
+  (`app/api/v1/seasonality.py`, schemas `app/schemas/seasonality.py`).
+- **Context / discovery only** — never a confluence factor, never emits a signal
+  (sits nowhere near the ≥70% gate). **No look-ahead:** only completed months
+  strictly before the current IST month are counted (IST, not UTC — the
+  month is bucketed from `ts.astimezone(Asia/Kolkata)`), only `is_complete`
+  candles feed it, and a monthly return is computed only between adjacent
+  calendar months so a data gap can't fabricate one. Sample size (`n`,
+  `years_covered`) is reported honestly and the UI **de-emphasises thin cells
+  per-month**: months with fewer than 5 years of data drop the profit/loss
+  colour (glyph still shows direction), carry a `*` marker, and trip a footnote —
+  so a 1–4 year cell can't read as a reliable edge.
+- Frontend: `SeasonalityPanel` + typed `lib/api/seasonality.ts`, wired as a tab
+  on `StockDetailPage`. Table-shaped loading skeleton, themed `Button` retry
+  (focus-visible ring), and ▲/▼ glyphs on Avg/Best/Worst.
+- Tests: 12 backend (stats math incl. mixed up/down partition, gap handling,
+  current-month exclusion + IST-boundary bucketing canary, incomplete-candle
+  filter, last-trading-day month-end, zero-prior-close guard, auth / 404 /
+  empty), 5 frontend (render, loading skeleton, empty, error, thin-cell flag).
+- Review: quant-verifier PASS (look-ahead / money / isolation verified clean);
+  test-guardian + ui-reviewer findings all fixed (hollow IST canary made real
+  via mutation, untested guards covered, per-cell thin affordance implemented).
+
+### docs: competitor/reference-tool review → screener-scans / fundamentals / seasonality plan (2026-08-11)
+
+Reviewed 66 screenshots (Zerodha Kite+Streak · Tijori · Sensibull · MoneyControl)
+the user captured in `~/zerodha money control/`. New
+`docs/COMPETITOR_TOOLS_REVIEW_2026-08-11.md`: verdict per source, ~20 MoneyControl
+scan formulas transcribed and mapped to our `SavedScreen` seam, the four
+quality-score formulas (Altman Z / DuPont / Graham / Ohlson), and a seasonality
+spec. F&O analytics (PCR/MaxPain/IV-rank/VIX §7) are already ours — confirmation,
+not gap. Fundamentals + quality scores + seasonality are greenfield; only
+seasonality needs no new data. Keystone blocker: `stocks.market_cap_cr` has no
+writer (NSE publishes no free shares-outstanding source) and every fundamental
+scan thresholds on MarketCap — a data-source decision is required first. Backlog
+folded into `docs/PHASES.md` (Phase 6 scan-catalog harvest; Market Context Engine
+fundamentals / quality-scores / seasonality). Docs + memory only; no code change.
+
 ### quant-verifier round on the shadow layer — one CRITICAL, three HIGH (2026-08-08)
 
 The review of `e3003b9` returned **FAIL**, and every finding that mattered was

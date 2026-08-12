@@ -20,6 +20,7 @@ import { TagPicker } from '@/features/categories/TagPicker'
 import { CandlestickChart, type OhlcvBar } from '@/components/charts/CandlestickChart'
 import { useLiveQuotes } from '@/hooks/useLiveQuotes'
 import { formatINR, formatInt } from '@/lib/format'
+import { SeasonalityPanel } from './SeasonalityPanel'
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -206,6 +207,7 @@ export function StockDetailPage() {
           <TabsTrigger value="deals">
             Bulk &amp; Block {dealsData?.total ? `(${dealsData.total})` : ''}
           </TabsTrigger>
+          <TabsTrigger value="seasonality">Seasonality</TabsTrigger>
         </TabsList>
 
         {/* Chart tab */}
@@ -445,6 +447,11 @@ export function StockDetailPage() {
               </table>
             </div>
           )}
+        </TabsContent>
+
+        {/* Seasonality tab */}
+        <TabsContent value="seasonality" className="pt-4">
+          <SeasonalityPanel stockId={stock.id} />
         </TabsContent>
       </Tabs>
     </div>
