@@ -112,6 +112,27 @@ per-row commit, effective-end ordering. Pure observability; frozen engine untouc
 11 tests (all canaries mutation-verified); quant-verifier PASS, bug-hunter findings
 fixed, test-guardian run by hand (spend-limited). See CHANGELOG 2026-08-12.
 
-**Next up: 6.3 (Rust-lab speed)** — per the brought-forward sequence, so 6.2 can
-run attribution at corpus scale. 6.2 / 6.4 / 6.5 not started; 6.4 is time-gated by
-the shadow layer's forward evidence (first fire 2026-08-10), so no rush there.
+**6.2a — entry-quality attribution: DONE 2026-08-12.** `app/services/entry_attribution.py`
+(+ `render_attribution_markdown`) + CLI `scripts/entry_attribution.py` →
+`docs/analysis/attribution-<date>.md`. Per-cell expectancy by confidence · regime
+(ADX) · direction · setup · time-of-day (marginals + confidence×regime 2-D),
+tradeable/shadow split, n<20 no-rank floor, R winsorized ±10R, expectancy derived
+from status+RR (`outcome_pnl_pct` is empty live). **First read (171 tradeable):
+expectancy monotonic in regime — trending +0.20R / transitional −0.01R / choppy
+−0.15R; leakiest ranked cell 70–79 × transitional −0.30R (n=63).** 7 tests,
+canaries mutation-verified. See CHANGELOG 2026-08-12.
+
+**6.3 (interactive Strategy-Lab v2) — DE-PRIORITISED.** Investigating on 2026-08-12
+found the Rust backtest already exists and is parity-pinned (`run_backtest_single`,
+`tests/parity/test_backtest_ext_parity.py`); only `POST /strategy/runs` still calls
+the slow Python engine. So 6.3 was never the blocker for 6.2 we assumed — it's a
+UI/product enhancement (switch the lab API to Rust + job-queue), not a Phase-6
+critical-path item. Do it when the interactive lab matters.
+
+**Next up: 6.2b — attribution at corpus scale.** Run the parity-clean
+`run_backtest_single` over the 2y × Nifty50 corpus in a batch, feed the outcomes
+through the same `entry_attribution` cells. This is where the thin live cells
+(most n<20) get statistical power and the setup/regime dimensions get real teeth.
+Then 6.4 (shadow→active promotion) — still time-gated by the shadow layer's forward
+evidence (first fire 2026-08-10), so no rush there. 6.5 (external-study candidates:
+pair-trading etc.) as new shadow profiles judged by this same attribution.

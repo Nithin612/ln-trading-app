@@ -7,6 +7,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6): entry-quality attribution — slice 6.2a (2026-08-12)
+
+The Phase-6 payoff: a per-cell expectancy table that turns "1 of 15 reached +1R"
+into "which cells are the leak." Read-only over the terminal `signal_outcomes` +
+6.1's MFE/MAE; no engine change; never feeds scoring/sizing/gating/backtests.
+
+- `app/services/entry_attribution.compute_attribution` + `render_attribution_markdown`
+  + CLI `scripts/entry_attribution.py` → `docs/analysis/attribution-<date>.md`.
+- Cells by confidence · regime (ADX) · direction · setup · time-of-day (marginals
+  + a confidence×regime 2-D), tradeable and shadow cohorts separate. Metrics: n,
+  entered, hit_rate, reached_1r_rate (mfe_r≥1), mean MFE/MAE, expectancy_r
+  (mean over decided of +RR / −1R).
+- Honesty affordances: cells with n<20 are computed but flagged **not ranked** (†);
+  R-means are **winsorized at ±10R** (live signals reach RR≈228 on tiny SLs —
+  artifacts, not edge); expectancy is **derived from status+RR** because
+  `outcome_pnl_pct` is unpopulated for the whole live cohort; regime is parsed
+  from the ADX factor's explanation (the factor *score* is a poor discriminator)
+  with a graceful `regime n/a` fallback.
+- **First read (171 tradeable outcomes): expectancy is monotonic in regime** —
+  trending (ADX≥25) +0.20R, transitional −0.01R, choppy (ADX<20) −0.15R; the
+  biggest ranked negative cell is 70–79 confidence × transitional (−0.30R, n=63).
+  The entry-selection leak, quantified.
+- 7 tests, canaries mutation-verified (winsor · n-floor · regime-parse). Reviews
+  inline — quant-verifier/test-guardian subagents are spend-limited. Purely
+  additive (new files only); no existing code touched.
+
 ### feat(phase6): signal-level MFE/MAE excursion recorder — slice 6.1 (2026-08-12)
 
 The prerequisite for entry-quality attribution (6.2). Every *terminal*
