@@ -119,6 +119,12 @@ def trade_to_row(
     if adx is not None and math.isnan(adx):
         adx = None  # ADX warmup — no regime yet
 
+    # trade["factors"] is {name: [weight, score]} — take the score (index 1).
+    factors = {
+        n: float(ws[1])
+        for n, ws in (trade.get("factors") or {}).items()
+        if isinstance(ws, (list, tuple)) and len(ws) >= 2 and isinstance(ws[1], (int, float))
+    }
     return Row(
         status=_status(trade),
         mfe_r=float(exc.mfe_r) if exc is not None else None,
@@ -130,6 +136,7 @@ def trade_to_row(
         setup="(corpus base)",
         created_at=times[fill],
         timeframe="1d",
+        factors=factors,
     )
 
 

@@ -7,6 +7,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6): per-factor attribution — which confluence factors predict edge (2026-08-13)
+
+Extends 6.2 with one table per confluence factor: expectancy when the factor was
+**supportive / against / neutral** to the trade. A factor's raw score is directional,
+so it's aligned to BUY/SELL — a SELL's supportive factors are its bearish ones.
+Factors that rarely fire (< n=20 non-neutral — e.g. DOW_TREND is ≈always 0) are
+skipped rather than shown as one dead cell. Live and corpus share it via
+`attribute_rows` (factors from `factor_scores` live, from the trade's `factors`
+tuples in the corpus). Read-only; no engine change.
+
+- **Corpus finding (816 trades): RSI_DIVERGENCE +0.43R supportive vs +0.02R neutral
+  (Δ+0.41), ADX Δ+0.22, MORNING_STAR Δ+0.21 are the real edge factors; while
+  DARK_CLOUD_COVER −0.40R (Δ−0.47), EVENING_STAR (Δ−0.35), MACD_CROSS (Δ−0.28) and
+  RSI_LEVEL (Δ−0.27) actively HURT** (outcomes worse when they fire) — a direct
+  weight-tuning signal for 6.4.
+- 4 tests (direction-align canary, inclusion threshold, live + corpus factor
+  extraction), canaries mutation-verified.
+
 ### feat(phase6): corpus-scale entry attribution — slice 6.2b (2026-08-13)
 
 The statistical-power half of 6.2: run the parity-clean Rust backtest

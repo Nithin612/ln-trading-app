@@ -77,6 +77,12 @@ def test_rr_zero_risk_is_none() -> None:
     assert r is not None and r.rr is None
 
 
+def test_trade_factors_extracted() -> None:
+    """trade['factors'] {name: [weight, score]} → Row.factors {name: score}."""
+    r = trade_to_row(_trade(factors={"RSI_LEVEL": [10.0, 0.6], "ADX": [5.0, 0.0]}), *_bars())
+    assert r is not None and r.factors == {"RSI_LEVEL": 0.6, "ADX": 0.0}
+
+
 async def test_empty_corpus_returns_zero(db) -> None:
     """No Nifty50 bars (fresh test DB) → total 0, cohort 'corpus', no tradecore call."""
     rep = await compute_corpus_attribution(db)

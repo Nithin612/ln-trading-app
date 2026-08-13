@@ -32,8 +32,11 @@ async def _seed(
     db, stock, *, shadow=False, status="tp_first", confidence=75,
     entry="100", sl="98", tp="106", mfe_r="2.0", mae_r="-0.5",
     adx="ADX=27.2 trending", direction="BUY", timeframe="1d", created_at=CREATED,
+    factors=None,
 ) -> str:
     fs = {"ADX": {"score": 0.6, "weight": 5, "explanation": adx}} if adx else {}
+    for name, score in (factors or {}).items():
+        fs[name] = {"score": score, "weight": 5, "explanation": ""}
     sig = Signal(
         stock_id=stock.id, direction=direction, classification="swing", timeframe=timeframe,
         entry_price=Decimal(entry), stop_loss=Decimal(sl), take_profit=Decimal(tp),
@@ -181,3 +184,31 @@ async def test_rrless_win_dropped_from_expectancy(db) -> None:
     c = _cell(await compute_attribution(db, shadow=False), "Confidence", "70–79")
     assert c.decided == 1
     assert c.expectancy_r is None                          # only decided had no RR → dropped
+
+
+def test_factor_bucket_aligns_by_direction() -> None:
+    """CANARY: a factor's stance is aligned to the TRADE direction — a bullish
+    score supports a BUY but opposes a SELL (else BUY/SELL cohorts mix)."""
+    from app.services.entry_attribution import _factor_bucket
+    assert _factor_bucket("BUY", 0.6) == "supportive"
+    assert _factor_bucket("BUY", -0.6) == "against"
+    assert _factor_bucket("BUY", 0.0) == "neutral"
+    assert _factor_bucket("SELL", -0.6) == "supportive"    # bearish factor supports a short
+    assert _factor_bucket("SELL", 0.6) == "against"
+
+
+async def test_factor_tables_included_only_when_factor_fires(db) -> None:
+    """A factor firing on >= RANK_FLOOR rows gets a 'Factor · X' table; a factor
+    that never fires (DOW_TREND) is skipped, not shown as one dead cell."""
+    s = await make_stock(db, symbol="ATTRFAC")
+    for _ in range(RANK_FLOOR):
+        await _seed(db, s, direction="BUY", factors={"SR_ZONE": 0.9})  # supportive
+    await db.commit()
+
+    rep = await compute_attribution(db, shadow=False)
+    dims = [t.dimension for t in rep.tables]
+    assert "Factor · SR_ZONE" in dims
+    assert "Factor · DOW_TREND" not in dims                # never set → no table
+    fac = next(t for t in rep.tables if t.dimension == "Factor · SR_ZONE")
+    sup = next(c for c in fac.cells if c.key == "supportive")
+    assert sup.n == RANK_FLOOR and sup.ranked is True

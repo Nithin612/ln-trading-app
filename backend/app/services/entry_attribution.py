@@ -96,6 +96,7 @@ class Row:
     setup: str
     created_at: datetime
     timeframe: str
+    factors: dict[str, float] = field(default_factory=dict)  # factor name → raw directional score
 
 
 _SQL = text(
@@ -163,6 +164,39 @@ def _regime_bucket(adx_level: float | None) -> str:
     return "trending (ADX≥25)"
 
 
+_FACTOR_DEADZONE = 0.05
+
+
+def _factor_bucket(direction: str, score: float) -> str:
+    """A factor's stance RELATIVE TO THE TRADE. Factor scores are raw directional
+    (>0 = bullish); a SELL's supportive factors are bearish, so align by
+    direction — "did this factor agree with the trade, and did agreement predict
+    a better outcome?" A near-zero score = the factor didn't weigh in (neutral)."""
+    aligned = score if direction == "BUY" else -score
+    if aligned > _FACTOR_DEADZONE:
+        return "supportive"
+    if aligned < -_FACTOR_DEADZONE:
+        return "against"
+    return "neutral"
+
+
+def _factor_tables(rows: list[Row]) -> list[Table]:
+    """One table per confluence factor that actually fires in the cohort:
+    expectancy when it was supportive / against / neutral to the trade. Factors
+    that rarely fire (< RANK_FLOOR non-neutral rows — e.g. DOW_TREND is ~always 0)
+    can't discriminate, so they're skipped rather than shown as one dead cell."""
+    names = sorted({name for r in rows for name in r.factors})
+    tables: list[Table] = []
+    for name in names:
+        def keyfn(r: Row, _n: str = name) -> str:
+            return _factor_bucket(r.direction, r.factors.get(_n, 0.0))
+
+        if sum(1 for r in rows if keyfn(r) != "neutral") < RANK_FLOOR:
+            continue
+        tables.append(_table(f"Factor · {name}", rows, keyfn))
+    return tables
+
+
 def _cell(key: str, rows: list[Row]) -> Cell:
     n = len(rows)
     entered = sum(1 for r in rows if r.status != "expired_untouched")
@@ -228,7 +262,7 @@ def attribute_rows(rows: list[Row]) -> list[Table]:
             rows,
             lambda r: f"{_confidence_bucket(r.confidence)} · {_regime_bucket(r.adx)}",
         ),
-    ]
+    ] + _factor_tables(rows)
 
 
 async def compute_attribution(
@@ -243,6 +277,11 @@ async def compute_attribution(
         adx_factor = fs.get("ADX")
         adx_expl = adx_factor.get("explanation") if isinstance(adx_factor, dict) else None
         adx = _parse_adx_level(adx_expl)
+        factors = {
+            n: float(v["score"])
+            for n, v in fs.items()
+            if isinstance(v, dict) and isinstance(v.get("score"), (int, float))
+        }
         rows.append(
             Row(
                 status=m["status"],
@@ -255,6 +294,7 @@ async def compute_attribution(
                 setup=m["setup"],
                 created_at=m["created_at"],
                 timeframe=m["timeframe"],
+                factors=factors,
             )
         )
 
