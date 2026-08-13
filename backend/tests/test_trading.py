@@ -84,6 +84,7 @@ async def _make_signal(
     sl: str = "480.0000",
     tp: str = "540.0000",
     qty: int = 100,
+    factor_scores: dict | None = None,
 ) -> Signal:
     now = datetime.now(tz=UTC)
     sig = Signal(
@@ -96,7 +97,8 @@ async def _make_signal(
         take_profit=tp,
         suggested_qty=qty,
         confidence_pct=80,
-        factor_scores={"DOW_TREND": {"weight": 20, "score": 0.8, "explanation": "uptrend"}},
+        factor_scores=factor_scores
+        or {"DOW_TREND": {"weight": 20, "score": 0.8, "explanation": "uptrend"}},
         headline=f"{direction} TEST@{entry}",
         status="active",
         validity_until=now + timedelta(days=5),
@@ -555,6 +557,77 @@ class TestTradingApi:
         assert data["status"] == "filled"
         assert data["mode"] == "paper"
         assert data["side"] == "BUY"
+
+    # ── Regime-eligibility overlay at the order path ────────────────────────
+    _ADX_TRANSITIONAL = {
+        "ADX": {"weight": 5, "score": 0.0,
+                "explanation": "ADX=22.0 moderate (20-25), no strong directional signal"}
+    }
+    _ADX_TRENDING = {
+        "ADX": {"weight": 5, "score": 0.6, "explanation": "ADX=30.0 trending bullish"}
+    }
+
+    async def test_regime_gate_shadow_does_not_block(
+        self, client: AsyncClient, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Default (shadow) mode: a transitional-regime signal still trades — the
+        overlay is inert until it is flipped to active."""
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "regime_gate_mode", "shadow")
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, factor_scores=self._ADX_TRANSITIONAL)
+        await db.commit()
+
+        r = await client.post(
+            "/api/v1/trading/orders",
+            json={"signal_id": signal.id, "side": "BUY"},
+            headers=headers,
+        )
+        assert r.status_code == 201
+
+    async def test_regime_gate_active_blocks_transitional(
+        self, client: AsyncClient, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Active mode: an order on a transitional-ADX signal is rejected 409."""
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "regime_gate_mode", "active")
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, factor_scores=self._ADX_TRANSITIONAL)
+        await db.commit()
+
+        r = await client.post(
+            "/api/v1/trading/orders",
+            json={"signal_id": signal.id, "side": "BUY"},
+            headers=headers,
+        )
+        assert r.status_code == 409
+        assert "regime" in r.json()["detail"].lower()
+
+    async def test_regime_gate_active_allows_trending(
+        self, client: AsyncClient, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Active mode: a trending-ADX signal is eligible and trades normally."""
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "regime_gate_mode", "active")
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, factor_scores=self._ADX_TRENDING)
+        await db.commit()
+
+        r = await client.post(
+            "/api/v1/trading/orders",
+            json={"signal_id": signal.id, "side": "BUY"},
+            headers=headers,
+        )
+        assert r.status_code == 201
 
     async def test_place_order_blocked_by_circuit_breaker(
         self, client: AsyncClient, db: AsyncSession

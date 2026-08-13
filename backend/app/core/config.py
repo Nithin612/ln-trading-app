@@ -1,5 +1,6 @@
 from functools import lru_cache
 from pathlib import Path
+from typing import Literal
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -103,6 +104,15 @@ class Settings(BaseSettings):
     # ── Trading defaults ────────────────────────────────────────────────────
     default_risk_per_trade_pct: float = 2.0
     min_signal_confidence: int = 70
+
+    # Regime-eligibility overlay (app/signals/regime_guard.py). The §8 walk-forward
+    # (docs/analysis/gate-walkforward-*.md) found transitional-ADX (20–25) entries
+    # net-negative and skipping them improves win rate / Sharpe / drawdown OOS.
+    #   off    — no gate.
+    #   shadow — measure what it WOULD suppress; the order path never acts on it (default).
+    #   active — the order path rejects an ineligible signal. Behaviour-changing: flip
+    #            only on forward shadow evidence + explicit sign-off. Fully reversible.
+    regime_gate_mode: Literal["off", "shadow", "active"] = "shadow"
 
     # ── Paper-trading cost model (app/trading/fees.py) ──────────────────────
     # Realized P&L is charged with the Zerodha cash-equity schedule so the

@@ -24,6 +24,7 @@ from app.broker.paper_broker import (
     place_paper_order,
     update_position_pnl,
 )
+from app.core.config import settings
 from app.core.deps import get_current_user, get_db
 from app.models.signal import Signal
 from app.models.stock import Stock
@@ -47,6 +48,7 @@ from app.schemas.trading import (
 )
 from app.services.journal_service import auto_create_journal_entry
 from app.services.profit_lock_shadow import compare_position
+from app.signals import regime_guard
 from app.trading.circuit_breaker import (
     check_circuit_breaker,
     get_daily_realized_pnl,
@@ -135,6 +137,11 @@ async def place_order(
             status_code=status.HTTP_409_CONFLICT,
             detail=f"Signal is {signal.status}, not active",
         )
+
+    # Regime-eligibility overlay (no-op unless regime_gate_mode == "active").
+    gate_reason = regime_guard.order_block_reason(signal, settings.regime_gate_mode)
+    if gate_reason:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=gate_reason)
 
     try:
         order, _pos = await place_paper_order(
