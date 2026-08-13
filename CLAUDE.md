@@ -37,6 +37,11 @@ else.
   entry/regime selection, not exit logic** — only 1 of 15 trades reached +1R
   over 08-03→05, so the exit machinery was correct but had nothing to protect.
   That is what Phase 6 exists to attack (`docs/phases/phase-06-plan.md`).
+  **Phase 6 (6.1+6.2) has since QUANTIFIED that leak** at corpus scale: the
+  70–79 confidence band and the transitional ADX regime are net-negative, and a
+  **regime gate** (skip ADX 20–25) beats a higher confidence gate — the gate
+  experiment nearly doubles captured R. Verdict + numbers live in the PHASES top
+  block; `docs/analysis/attribution-*.md` + `gate-experiment-*.md` are the reports.
 - **Two report sections exist because "the engine produced nothing" was once
   indistinguishable from "the engine is broken":** §7 F&O engine health and §8
   intraday shadow layer. Both attribute a zero to a *reason*. When either shows
