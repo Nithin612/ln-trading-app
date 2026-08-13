@@ -7,6 +7,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6): corpus-scale entry attribution — slice 6.2b (2026-08-13)
+
+The statistical-power half of 6.2: run the parity-clean Rust backtest
+(`tradecore.run_universe`) over the Nifty50 daily corpus and attribute the trades
+through the SAME `entry_attribution` aggregator. **The frozen engine is untouched**
+— the backtest already exists and is parity-pinned (`test_backtest_ext_parity.py`).
+
+- `app/services/corpus_attribution.py`: `load_nifty50_daily` → `run_universe` → per
+  trade reconstruct **regime** (raw ADX level via `tradecore.adx`, len 14, sampled
+  at the decision bar to match the live loader) + **MFE/MAE** (shared
+  `tape_excursion` over fill→exit) + RR + win/loss → `attribute_rows`. CLI
+  `scripts/corpus_attribution.py` → `docs/analysis/attribution-corpus-<date>.md`.
+- **816 trades over the corpus in ~0.6s.** The leak, with real power:
+  confidence **80–89 +0.20R (n=307)** vs **70–79 −0.07R (n=434, the bulk)**;
+  regime trending +0.24R / choppy +0.12R / **transitional −0.10R (n=339)**; leakiest
+  ranked cell **70–79 × transitional −0.14R (n=223)**. Corrects the noisy live read
+  (transitional, not choppy, is the real drag) → raise the confidence gate toward
+  80 / down-weight the 70–79 band.
+- 7 tests (trade→row reconstruction, status/regime/RR/guards, empty corpus),
+  canaries mutation-verified. Reviews: quant-verifier PASS (shared aggregator, its
+  fixes applied), bug-hunter CLEAN (reconstruction / index alignment). Read-only.
+
 ### feat(phase6): entry-quality attribution — slice 6.2a (2026-08-12)
 
 The Phase-6 payoff: a per-cell expectancy table that turns "1 of 15 reached +1R"

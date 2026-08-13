@@ -129,10 +129,25 @@ the slow Python engine. So 6.3 was never the blocker for 6.2 we assumed — it's
 UI/product enhancement (switch the lab API to Rust + job-queue), not a Phase-6
 critical-path item. Do it when the interactive lab matters.
 
-**Next up: 6.2b — attribution at corpus scale.** Run the parity-clean
-`run_backtest_single` over the 2y × Nifty50 corpus in a batch, feed the outcomes
-through the same `entry_attribution` cells. This is where the thin live cells
-(most n<20) get statistical power and the setup/regime dimensions get real teeth.
-Then 6.4 (shadow→active promotion) — still time-gated by the shadow layer's forward
-evidence (first fire 2026-08-10), so no rush there. 6.5 (external-study candidates:
-pair-trading etc.) as new shadow profiles judged by this same attribution.
+**6.2b — attribution at corpus scale: DONE 2026-08-13.** `app/services/corpus_attribution.py`
++ CLI → `docs/analysis/attribution-corpus-<date>.md`. `run_universe` over the Nifty50
+daily corpus (816 trades, ~0.6s) → per trade reconstruct regime (ADX level at the
+decision bar) + MFE/MAE (shared `tape_excursion`) → the shared `attribute_rows`. The
+frozen engine is untouched (the Rust backtest already exists + is parity-pinned).
+**The leak, with power: confidence 80–89 +0.20R (n=307) vs 70–79 −0.07R (n=434); regime
+transitional −0.10R vs trending +0.24R; 70–79 × transitional −0.14R (n=223).** 7 tests;
+quant-verifier PASS, bug-hunter CLEAN. See CHANGELOG 2026-08-13.
+
+**The Phase-6 verdict (6.2): the entry-selection leak is the 70–79 confidence band**
+(the bulk of signals) and the **transitional ADX regime** — both net-negative
+expectancy at corpus scale, while 80–89 confidence and trending are the edge. This
+is the evidence for **raising the confidence gate toward 80 and/or a regime gate**
+(the Market-Context-Engine idea). Any such change is behaviour-changing → §8 backtest
++ user sign-off; the engine stays frozen until then.
+
+**Next: 6.4 (shadow→active promotion)** — feed the shadow cohort's forward evidence
+(and this attribution) into the promotion gate; still time-gated by the shadow
+layer's accrual (first fire 2026-08-10), so no rush. 6.5 (external-study candidates:
+pair-trading etc.) as new shadow profiles judged by this same attribution. A
+confidence-gate / regime-gate experiment (from the 6.2 verdict) is the highest-value
+follow-on and belongs to the Market Context Engine phase.

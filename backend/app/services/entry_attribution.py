@@ -85,7 +85,7 @@ class AttributionReport:
 
 
 @dataclass(frozen=True)
-class _Row:
+class Row:
     status: str
     mfe_r: float | None
     mae_r: float | None
@@ -163,7 +163,7 @@ def _regime_bucket(adx_level: float | None) -> str:
     return "trending (ADX≥25)"
 
 
-def _cell(key: str, rows: list[_Row]) -> Cell:
+def _cell(key: str, rows: list[Row]) -> Cell:
     n = len(rows)
     entered = sum(1 for r in rows if r.status != "expired_untouched")
     decided = [r for r in rows if r.status in ("tp_first", "sl_first")]
@@ -199,8 +199,8 @@ def _cell(key: str, rows: list[_Row]) -> Cell:
     )
 
 
-def _table(dimension: str, rows: list[_Row], keyfn: Callable[[_Row], str]) -> Table:
-    groups: dict[str, list[_Row]] = {}
+def _table(dimension: str, rows: list[Row], keyfn: Callable[[Row], str]) -> Table:
+    groups: dict[str, list[Row]] = {}
     for r in rows:
         groups.setdefault(keyfn(r), []).append(r)
     cells = [_cell(k, grp) for k, grp in groups.items()]
@@ -213,7 +213,7 @@ def _table(dimension: str, rows: list[_Row], keyfn: Callable[[_Row], str]) -> Ta
     return Table(dimension=dimension, cells=cells)
 
 
-def attribute_rows(rows: list[_Row]) -> list[Table]:
+def attribute_rows(rows: list[Row]) -> list[Table]:
     """The pure aggregator: rows → the marginal + 2-D attribution tables. Shared
     by the live loader (compute_attribution) and the corpus loader (6.2b), so a
     signal_outcome and a backtest trade are attributed by identical logic."""
@@ -237,14 +237,14 @@ async def compute_attribution(
     """Attribution over the terminal-outcome cohort for one provenance
     (tradeable = is_shadow False, or shadow). Read-only."""
     raw = (await db.execute(_SQL, {"since": since, "shadow": shadow})).mappings().all()
-    rows: list[_Row] = []
+    rows: list[Row] = []
     for m in raw:
         fs: dict[str, Any] = m["factor_scores"] or {}
         adx_factor = fs.get("ADX")
         adx_expl = adx_factor.get("explanation") if isinstance(adx_factor, dict) else None
         adx = _parse_adx_level(adx_expl)
         rows.append(
-            _Row(
+            Row(
                 status=m["status"],
                 mfe_r=float(m["mfe_r"]) if m["mfe_r"] is not None else None,
                 mae_r=float(m["mae_r"]) if m["mae_r"] is not None else None,
