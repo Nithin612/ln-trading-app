@@ -140,10 +140,18 @@ def trade_to_row(
     )
 
 
-async def corpus_rows(db: AsyncSession, *, min_confidence: int = 70) -> list[Row]:
+async def corpus_rows(
+    db: AsyncSession,
+    *,
+    min_confidence: int = 70,
+    weight_multipliers: dict[str, float] | None = None,
+) -> list[Row]:
     """Attribution Rows from the Nifty50 daily backtest at a given confluence gate.
     Read-only; the engine is the parity-pinned tradecore wheel. Reused by the
-    attribution report and the gate experiment (which varies min_confidence)."""
+    attribution report, the gate experiment (which varies min_confidence), and the
+    6.4 weight-retune experiment (which varies weight_multipliers — group-keyed
+    scaling applied inside the frozen scorer, byte-identical to the frozen path
+    when empty)."""
     import tradecore  # heavy wheel — deferred (absent in some CI envs)
 
     stocks_data = await load_nifty50_daily(db)
@@ -152,7 +160,10 @@ async def corpus_rows(db: AsyncSession, *, min_confidence: int = 70) -> list[Row
         return []
 
     universe = [(sym, o, h, lo, c, v) for sym, _t, o, h, lo, c, v in stocks_data]
-    results = tradecore.run_universe(universe, "1d", _CORPUS_CAPITAL, _CORPUS_RISK, min_confidence)
+    mults = [(k, float(v)) for k, v in (weight_multipliers or {}).items()]
+    results = tradecore.run_universe(
+        universe, "1d", _CORPUS_CAPITAL, _CORPUS_RISK, min_confidence, mults
+    )
 
     by_sym = {sym: (t, h, lo, c) for sym, t, _o, h, lo, c, _v in stocks_data}
     rows: list[Row] = []

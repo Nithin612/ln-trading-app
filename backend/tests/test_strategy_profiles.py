@@ -232,6 +232,29 @@ class TestSeedIntegrity:
         active = {c["key"] for c, _, s in module.SEEDS if s == "active"}
         assert active == {"dc1", "dc2", "rrbo_basic", "rrbo_trailing", "multibagger"}
 
+    def test_retune_shadow_seed_literals_validate_and_hash(self) -> None:
+        """The 6.4 weight-retune A/B seeds — both SHADOW, hashes pinned."""
+        import importlib.util
+        from pathlib import Path
+
+        mig_path = (
+            Path(__file__).resolve().parent.parent
+            / "alembic" / "versions" / "d2e3f4a5b6c7_retune_shadow_profiles.py"
+        )
+        spec = importlib.util.spec_from_file_location("retune_seeds", mig_path)
+        assert spec and spec.loader
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+
+        assert len(module.SEEDS) == 2
+        for config, frozen_hash, status in module.SEEDS:
+            cfg = StrategyProfileConfig(**config)
+            assert compute_config_hash(cfg) == frozen_hash, config["key"]
+            assert status == "shadow"  # never tradeable until promoted
+        by_key = {c["key"]: c for c, _, _ in module.SEEDS}
+        assert by_key["retune_base"]["weight_multipliers"] == {}
+        assert by_key["retune_momentum_x15"]["weight_multipliers"] == {"momentum": 1.5}
+
 
 class TestUniverseService:
     async def test_kinds_resolve(self, db: AsyncSession) -> None:
