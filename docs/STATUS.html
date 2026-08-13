@@ -1,409 +1,597 @@
 <title>Trading Platform Status</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
-  /* ---- Light palette (complete) on bare :root ---- */
+  /* ==========================================================================
+     Tokens — matches docs artifact "Trading Platform — Complete Overview".
+     Light is the base on bare :root; dark is redefined for BOTH the un-stamped
+     system-dark case and the explicit data-theme="dark" case. Never style a
+     component from inside a media/[data-theme] block — tokens only.
+     ========================================================================== */
   :root {
-    --bg:            #eaeef6;
-    --surface:       #ffffff;
-    --surface-2:     #f4f7fc;
-    --border:        #dce3ef;
-    --border-strong: #c2cde0;
-    --text:          #121a28;
-    --muted:         #57647a;
-    --faint:         #8592a6;
-    --accent:        #2563eb;
-    --accent-2:      #1d4ed8;
-    --accent-soft:   rgba(37,99,235,.10);
-    --profit:        #157f3c;
-    --profit-soft:   rgba(21,127,60,.12);
-    --loss:          #cf2230;
-    --loss-soft:     rgba(207,34,48,.12);
-    --warn:          #9a6a00;
-    --warn-soft:     rgba(154,106,0,.13);
-    --shadow:        0 1px 2px rgba(16,24,40,.05), 0 10px 28px rgba(16,24,40,.09);
+    --bg: #f5f8fc;
+    --surface: #ffffff;
+    --surface-2: #eef2f8;
+    --ink: #0f172a;
+    --ink-2: #334155;
+    --muted: #64748b;
+    --border: #e3e9f2;
+    --border-strong: #c9d4e3;
+    --accent: #2563eb;
+    --accent-2: #1d4ed8;
+    --accent-soft: #dbeafe;
+    --good: #15803d; --good-bg: #dcfce7; --good-bd: #bbf7d0;
+    --warn: #b45309; --warn-bg: #fef3c7; --warn-bd: #fde68a;
+    --plan: #475569; --plan-bg: #e6ebf3; --plan-bd: #d3dbe8;
+    --loss: #b91c1c; --loss-bg: #fee2e2; --loss-bd: #fecaca;
+    --shadow: 0 1px 2px rgba(15,23,42,.04), 0 8px 24px rgba(15,23,42,.06);
     --font-sans: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
     --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
   }
-  /* ---- Dark palette: for system-dark (unless explicitly light) AND explicit dark ---- */
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --bg:            #090d15;
-      --surface:       #111826;
-      --surface-2:     #18212f;
-      --border:        #232e42;
-      --border-strong: #35435e;
-      --text:          #e7edf7;
-      --muted:         #8795ab;
-      --faint:         #5c6a82;
-      --accent:        #4c8dff;
-      --accent-2:      #6ba1ff;
-      --accent-soft:   rgba(76,141,255,.15);
-      --profit:        #40b955;
-      --profit-soft:   rgba(64,185,85,.16);
-      --loss:          #f5564b;
-      --loss-soft:     rgba(245,86,75,.16);
-      --warn:          #e6a417;
-      --warn-soft:     rgba(230,164,23,.16);
-      --shadow:        0 1px 2px rgba(0,0,0,.4), 0 14px 34px rgba(0,0,0,.45);
+      --bg: #0a1122; --surface: #101a2e; --surface-2: #18233b;
+      --ink: #e8eefa; --ink-2: #c3d0e4; --muted: #8ea1bd;
+      --border: #22304b; --border-strong: #33456a;
+      --accent: #60a5fa; --accent-2: #93c5fd; --accent-soft: rgba(96,165,250,.14);
+      --good: #4ade80; --good-bg: rgba(34,197,94,.14); --good-bd: rgba(34,197,94,.30);
+      --warn: #fbbf24; --warn-bg: rgba(245,158,11,.14); --warn-bd: rgba(245,158,11,.30);
+      --plan: #9fb0cb; --plan-bg: rgba(148,163,184,.13); --plan-bd: rgba(148,163,184,.26);
+      --loss: #f87171; --loss-bg: rgba(248,113,113,.14); --loss-bd: rgba(248,113,113,.30);
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
     }
   }
   :root[data-theme="dark"] {
-    --bg:            #090d15;
-    --surface:       #111826;
-    --surface-2:     #18212f;
-    --border:        #232e42;
-    --border-strong: #35435e;
-    --text:          #e7edf7;
-    --muted:         #8795ab;
-    --faint:         #5c6a82;
-    --accent:        #4c8dff;
-    --accent-2:      #6ba1ff;
-    --accent-soft:   rgba(76,141,255,.15);
-    --profit:        #40b955;
-    --profit-soft:   rgba(64,185,85,.16);
-    --loss:          #f5564b;
-    --loss-soft:     rgba(245,86,75,.16);
-    --warn:          #e6a417;
-    --warn-soft:     rgba(230,164,23,.16);
-    --shadow:        0 1px 2px rgba(0,0,0,.4), 0 14px 34px rgba(0,0,0,.45);
+    --bg: #0a1122; --surface: #101a2e; --surface-2: #18233b;
+    --ink: #e8eefa; --ink-2: #c3d0e4; --muted: #8ea1bd;
+    --border: #22304b; --border-strong: #33456a;
+    --accent: #60a5fa; --accent-2: #93c5fd; --accent-soft: rgba(96,165,250,.14);
+    --good: #4ade80; --good-bg: rgba(34,197,94,.14); --good-bd: rgba(34,197,94,.30);
+    --warn: #fbbf24; --warn-bg: rgba(245,158,11,.14); --warn-bd: rgba(245,158,11,.30);
+    --plan: #9fb0cb; --plan-bg: rgba(148,163,184,.13); --plan-bd: rgba(148,163,184,.26);
+    --loss: #f87171; --loss-bg: rgba(248,113,113,.14); --loss-bd: rgba(248,113,113,.30);
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
   }
 
   * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
   body {
-    margin: 0;
-    background: var(--bg);
-    color: var(--text);
-    font-family: var(--font-sans);
-    line-height: 1.5;
+    margin: 0; background: var(--bg); color: var(--ink-2);
+    font-family: var(--font-sans); font-size: 16px; line-height: 1.62;
     -webkit-font-smoothing: antialiased;
   }
-  .wrap { max-width: 1000px; margin: 0 auto; padding: 40px 24px 64px; }
 
-  /* Header */
-  .eyebrow {
-    font-family: var(--font-mono);
-    font-size: 12px;
-    letter-spacing: .14em;
-    text-transform: uppercase;
-    color: var(--faint);
-    margin: 0 0 10px;
-  }
-  h1 {
-    font-size: clamp(28px, 4vw, 40px);
-    line-height: 1.08;
-    font-weight: 680;
-    letter-spacing: -0.02em;
-    text-wrap: balance;
-    margin: 0 0 6px;
-  }
-  .subhead { color: var(--muted); font-size: 15px; margin: 0; }
-  .rule { height: 1px; background: var(--border); border: 0; margin: 24px 0; }
+  /* ---- shell ---- */
+  .shell { max-width: 1180px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
+  .layout { display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: clamp(28px, 5vw, 60px); align-items: start; }
+  @media (max-width: 940px) { .layout { grid-template-columns: 1fr; } }
 
-  /* Truth banner */
-  .banner {
-    display: flex; gap: 14px; align-items: flex-start;
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-left: 3px solid var(--accent);
-    border-radius: 12px;
-    padding: 16px 18px;
-    box-shadow: var(--shadow);
-  }
-  .banner .dot { flex: none; width: 9px; height: 9px; border-radius: 50%; background: var(--accent); margin-top: 7px; box-shadow: 0 0 0 4px var(--accent-soft); }
-  .banner p { margin: 0; font-size: 15px; }
-  .banner strong { font-weight: 640; }
+  /* ---- masthead ---- */
+  header.mast { padding: clamp(36px, 6vw, 64px) 0 26px; border-bottom: 1px solid var(--border); }
+  .eyebrow { font-family: var(--font-mono); font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  h1 { font-size: clamp(2rem, 4.2vw, 2.8rem); line-height: 1.07; letter-spacing: -.025em; color: var(--ink); font-weight: 750; margin: .5rem 0 .4rem; text-wrap: balance; max-width: 24ch; }
+  .lede { font-size: clamp(1rem, 1.5vw, 1.14rem); color: var(--ink-2); max-width: 64ch; margin: 0 0 1.3rem; }
+  .metastrip { display: flex; flex-wrap: wrap; gap: 8px; }
+  .metastrip .chip { font-family: var(--font-mono); font-size: .74rem; letter-spacing: .02em; }
 
-  /* Section heads */
-  h2 {
-    font-size: 13px;
-    font-family: var(--font-mono);
-    letter-spacing: .12em;
-    text-transform: uppercase;
-    color: var(--faint);
-    font-weight: 600;
-    margin: 40px 0 16px;
-    display: flex; align-items: center; gap: 10px;
-  }
-  h2::after { content: ""; flex: 1; height: 1px; background: var(--border); }
+  /* ---- chips ---- */
+  .chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--border-strong); background: var(--surface); color: var(--ink-2); font-size: .78rem; font-weight: 500; white-space: nowrap; }
+  .chip.done { color: var(--good); background: var(--good-bg); border-color: var(--good-bd); }
+  .chip.prog { color: var(--warn); background: var(--warn-bg); border-color: var(--warn-bd); }
+  .chip.plan { color: var(--plan); background: var(--plan-bg); border-color: var(--plan-bd); }
+  .chip.accent { color: var(--accent); background: var(--accent-soft); border-color: transparent; }
+  .chip.bad { color: var(--loss); background: var(--loss-bg); border-color: var(--loss-bd); }
+  .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
 
-  /* Phase strip */
-  .phases { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 12px; }
-  .phase {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 11px;
-    padding: 13px 14px;
-    display: flex; flex-direction: column; gap: 8px;
+  /* ---- sidebar nav ---- */
+  nav.toc { position: sticky; top: 20px; font-size: .855rem; }
+  @media (max-width: 940px) {
+    nav.toc { position: static; margin: 24px 0 8px; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
   }
-  .phase .pn { font-family: var(--font-mono); font-size: 11px; color: var(--faint); letter-spacing: .08em; }
-  .phase .nm { font-weight: 600; font-size: 14.5px; line-height: 1.25; }
-  .pill {
-    align-self: flex-start;
-    font-family: var(--font-mono);
-    font-size: 11px; font-weight: 600;
-    padding: 3px 9px; border-radius: 999px;
-    display: inline-flex; align-items: center; gap: 5px;
-    white-space: nowrap;
-  }
-  .pill.done   { color: var(--profit); background: var(--profit-soft); }
-  .pill.active { color: var(--accent); background: var(--accent-soft); }
-  .pill.gate   { color: var(--warn); background: var(--warn-soft); }
-  .pill.todo   { color: var(--faint); background: var(--surface-2); border: 1px solid var(--border); }
-  .phase.is-active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent-soft); }
+  nav.toc .navlabel { font-family: var(--font-mono); font-size: .68rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; padding-left: 12px; }
+  nav.toc ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+  nav.toc a { display: block; text-decoration: none; color: var(--muted); padding: 6px 12px; border-radius: 7px; border-left: 2px solid transparent; line-height: 1.35; }
+  nav.toc a:hover { color: var(--ink); background: var(--surface-2); }
+  nav.toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  @media (max-width: 940px) { nav.toc ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px,1fr)); } nav.toc a { border-left: none; } }
 
-  /* Verdict / spotlight */
-  .card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: 14px;
-    padding: 22px;
-    box-shadow: var(--shadow);
-  }
-  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-  @media (max-width: 720px) { .grid-2 { grid-template-columns: 1fr; } }
-  .lede { font-size: 15.5px; margin: 0 0 16px; }
-  .edge-leak { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 4px; }
-  @media (max-width: 560px) { .edge-leak { grid-template-columns: 1fr; } }
-  .box { border-radius: 11px; padding: 14px 16px; border: 1px solid var(--border); }
-  .box.edge { background: var(--profit-soft); border-color: transparent; }
-  .box.leak { background: var(--loss-soft); border-color: transparent; }
-  .box h3 { margin: 0 0 8px; font-size: 12px; font-family: var(--font-mono); letter-spacing: .08em; text-transform: uppercase; display: flex; align-items: center; gap: 7px; }
-  .box.edge h3 { color: var(--profit); }
-  .box.leak h3 { color: var(--loss); }
-  .box ul { margin: 0; padding-left: 18px; font-size: 14px; }
-  .box li { margin: 4px 0; }
-  .box b { font-family: var(--font-mono); font-weight: 600; }
+  /* ---- content ---- */
+  main { padding-bottom: 72px; min-width: 0; }
+  section.doc { padding: 38px 0; border-bottom: 1px solid var(--border); scroll-margin-top: 16px; }
+  section.doc:last-of-type { border-bottom: none; }
+  .sec-kicker { font-family: var(--font-mono); font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  h2 { font-size: clamp(1.35rem, 2.4vw, 1.72rem); line-height: 1.2; letter-spacing: -.02em; color: var(--ink); font-weight: 700; margin: .3rem 0 .85rem; text-wrap: balance; }
+  h3 { font-size: 1.06rem; color: var(--ink); font-weight: 650; margin: 1.6rem 0 .55rem; letter-spacing: -.01em; }
+  p { max-width: 68ch; margin: 0 0 1rem; }
+  main a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; }
+  main a:hover { border-bottom-color: currentColor; }
+  main a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+  strong { color: var(--ink); font-weight: 650; }
+  ul.body, ol.body { max-width: 68ch; padding-left: 1.15rem; margin: 0 0 1rem; }
+  li { margin: .32rem 0; }
+  code { font-family: var(--font-mono); font-size: .86em; background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: .08em .38em; color: var(--ink); white-space: nowrap; }
+  .pos { color: var(--good); } .neg { color: var(--loss); }
+  .n { font-family: var(--font-mono); font-size: .76em; color: var(--muted); white-space: nowrap; }
 
-  /* Slice checklist */
-  .slices { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 9px; }
-  .slices li { display: flex; gap: 11px; align-items: baseline; font-size: 14.5px; }
-  .slices .mk { font-family: var(--font-mono); font-size: 13px; flex: none; width: 30px; }
-  .mk.ok { color: var(--profit); } .mk.now { color: var(--accent); } .mk.next { color: var(--warn); } .mk.wait { color: var(--faint); }
-  .slices .sl-name { font-weight: 600; }
-  .slices .sl-desc { color: var(--muted); }
+  /* ---- cards / callouts ---- */
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; box-shadow: var(--shadow); margin: 0 0 1rem; }
+  .callout { border-left: 3px solid var(--accent); background: var(--surface); border-radius: 0 12px 12px 0; padding: 15px 20px; margin: 1.1rem 0; box-shadow: var(--shadow); }
+  .callout.warn { border-left-color: var(--warn); }
+  .callout.bad { border-left-color: var(--loss); }
+  .callout.good { border-left-color: var(--good); }
+  .callout .k { font-family: var(--font-mono); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); font-weight: 600; display: block; margin-bottom: 4px; }
+  .callout.warn .k { color: var(--warn); }
+  .callout.bad .k { color: var(--loss); }
+  .callout.good .k { color: var(--good); }
+  .callout p { max-width: 64ch; margin: 0; }
+  .callout p + p { margin-top: .6rem; }
 
-  /* Table */
-  .scroll { overflow-x: auto; border-radius: 12px; border: 1px solid var(--border); }
-  table { border-collapse: collapse; width: 100%; font-size: 14px; min-width: 560px; }
-  thead th {
-    background: var(--surface-2);
-    font-family: var(--font-mono); font-size: 11px; letter-spacing: .05em; text-transform: uppercase;
-    color: var(--muted); font-weight: 600; text-align: right;
-    padding: 11px 14px; border-bottom: 1px solid var(--border); white-space: nowrap;
-  }
-  thead th:first-child { text-align: left; }
-  tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border); text-align: right; font-variant-numeric: tabular-nums; font-family: var(--font-mono); }
-  tbody td:first-child { text-align: left; font-family: var(--font-sans); }
-  tbody tr:last-child td { border-bottom: 0; }
-  tbody tr.win { background: var(--profit-soft); }
-  tbody tr.win td:first-child { font-weight: 640; }
+  /* ---- metric row ---- */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px,1fr)); gap: 12px; margin: 1rem 0 1.2rem; }
+  .metric { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); }
+  .metric .v { font-family: var(--font-mono); font-size: 1.3rem; font-weight: 650; color: var(--ink); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .metric .v.up { color: var(--good); } .metric .v.down { color: var(--loss); } .metric .v.flag { color: var(--warn); }
+  .metric .l { font-size: .77rem; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+
+  /* ---- tables ---- */
+  .tablewrap { overflow-x: auto; margin: 0 0 1.1rem; border: 1px solid var(--border); border-radius: 12px; box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; font-size: .9rem; background: var(--surface); min-width: 520px; }
+  th, td { text-align: left; padding: 10px 14px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  thead th { background: var(--surface-2); color: var(--ink); font-weight: 600; font-size: .76rem; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
+  tbody tr:last-child td { border-bottom: none; }
+  td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.mono { font-family: var(--font-mono); white-space: nowrap; }
+  tbody tr.win td { background: var(--good-bg); }
+  tbody tr.win td:first-child { font-weight: 650; color: var(--ink); }
   tbody tr.base td:first-child { color: var(--accent); }
-  .tag { font-family: var(--font-mono); font-size: 10px; font-weight: 700; letter-spacing: .06em; padding: 2px 6px; border-radius: 5px; margin-left: 8px; vertical-align: middle; }
-  .tag.rec { color: var(--profit); background: var(--profit-soft); }
+  .tag { font-family: var(--font-mono); font-size: .64rem; font-weight: 700; letter-spacing: .06em; padding: 2px 6px; border-radius: 5px; margin-left: 7px; vertical-align: middle; white-space: nowrap; }
+  .tag.rec { color: var(--good); background: var(--good-bg); }
   .tag.cur { color: var(--accent); background: var(--accent-soft); }
-  .pos { color: var(--profit); } .neg { color: var(--loss); }
+  .tag.new { color: var(--warn); background: var(--warn-bg); }
 
-  /* Bar chart */
-  .bars { display: flex; flex-direction: column; gap: 12px; margin-top: 8px; }
-  .bar-row { display: grid; grid-template-columns: 220px 1fr 62px; align-items: center; gap: 12px; }
-  @media (max-width: 620px) { .bar-row { grid-template-columns: 1fr; gap: 3px; } }
-  .bar-lab { font-size: 13px; color: var(--muted); }
-  .bar-track { background: var(--surface-2); border-radius: 6px; height: 24px; position: relative; overflow: hidden; border: 1px solid var(--border); }
-  .bar-fill { height: 100%; border-radius: 5px 0 0 5px; }
-  .bar-fill.win  { background: var(--profit); }
+  /* ---- phase strip ---- */
+  .strip { display: flex; flex-wrap: wrap; gap: 8px; margin: .3rem 0 1.1rem; }
+  .strip .ph { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); min-width: 104px; box-shadow: var(--shadow); }
+  .strip .ph .t { font-size: .82rem; color: var(--ink); font-weight: 600; }
+  .strip .ph .s { font-size: .7rem; font-family: var(--font-mono); }
+  .strip .ph.done { border-top: 3px solid var(--good); }
+  .strip .ph.done .s { color: var(--good); }
+  .strip .ph.prog { border-top: 3px solid var(--warn); }
+  .strip .ph.prog .s { color: var(--warn); }
+  .strip .ph.plan { border-top: 3px solid var(--plan); }
+  .strip .ph.plan .s { color: var(--plan); }
+
+  /* ---- slice checklist ---- */
+  .slices { list-style: none; margin: 0 0 1.2rem; padding: 0; display: flex; flex-direction: column; gap: 9px; max-width: 74ch; }
+  .slices li { display: grid; grid-template-columns: 34px 1fr; gap: 11px; align-items: baseline; font-size: .93rem; }
+  .slices .mk { font-family: var(--font-mono); font-size: .82rem; font-weight: 650; }
+  .mk.ok { color: var(--good); } .mk.now { color: var(--accent); } .mk.next { color: var(--warn); } .mk.wait { color: var(--muted); }
+  .slices .nm { color: var(--ink); font-weight: 650; }
+
+  /* ---- edge / leak boxes ---- */
+  .split { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 0 0 1rem; }
+  @media (max-width: 620px) { .split { grid-template-columns: 1fr; } }
+  .box { border-radius: 12px; padding: 14px 16px; border: 1px solid transparent; }
+  .box.edge { background: var(--good-bg); border-color: var(--good-bd); }
+  .box.leak { background: var(--loss-bg); border-color: var(--loss-bd); }
+  .box h4 { margin: 0 0 8px; font-size: .74rem; font-family: var(--font-mono); letter-spacing: .09em; text-transform: uppercase; }
+  .box.edge h4 { color: var(--good); }
+  .box.leak h4 { color: var(--loss); }
+  .box ul { margin: 0; padding-left: 17px; font-size: .89rem; }
+  .box b { font-family: var(--font-mono); font-weight: 650; }
+
+  /* ---- bars ---- */
+  .bars { display: flex; flex-direction: column; gap: 10px; margin: 1rem 0 .6rem; }
+  .bar-row { display: grid; grid-template-columns: 214px 1fr 58px; align-items: center; gap: 12px; }
+  @media (max-width: 640px) { .bar-row { grid-template-columns: 1fr; gap: 3px; } }
+  .bar-lab { font-size: .84rem; color: var(--muted); }
+  .bar-track { background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; height: 22px; overflow: hidden; }
+  .bar-fill { height: 100%; }
+  .bar-fill.win { background: var(--good); }
   .bar-fill.base { background: var(--accent); }
-  .bar-fill.dim  { background: var(--border-strong); }
-  .bar-val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: 13.5px; font-weight: 600; text-align: right; }
+  .bar-fill.dim { background: var(--border-strong); }
+  .bar-val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .85rem; font-weight: 650; text-align: right; color: var(--ink); }
+  .caption { font-size: .82rem; color: var(--muted); max-width: 70ch; margin: 0 0 .4rem; }
 
-  /* Factor chips */
-  .factors { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  /* ---- factor chips ---- */
+  .factors { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: .4rem; }
   @media (max-width: 620px) { .factors { grid-template-columns: 1fr; } }
-  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
-  .chip { font-family: var(--font-mono); font-size: 12.5px; padding: 5px 10px; border-radius: 8px; display: inline-flex; gap: 7px; align-items: baseline; }
-  .chip.up   { background: var(--profit-soft); color: var(--profit); }
-  .chip.down { background: var(--loss-soft); color: var(--loss); }
-  .chip .d { font-weight: 700; }
+  .fgroup h4 { margin: 0 0 9px; font-size: .74rem; font-family: var(--font-mono); letter-spacing: .09em; text-transform: uppercase; }
+  .fgroup.up h4 { color: var(--good); }
+  .fgroup.down h4 { color: var(--loss); }
+  .fchips { display: flex; flex-direction: column; gap: 6px; }
+  .fchip { font-family: var(--font-mono); font-size: .78rem; padding: 6px 10px; border-radius: 8px; display: flex; justify-content: space-between; gap: 10px; align-items: baseline; }
+  .fchip.up { background: var(--good-bg); color: var(--good); }
+  .fchip.down { background: var(--loss-bg); color: var(--loss); }
+  .fchip .d { font-weight: 700; font-variant-numeric: tabular-nums; }
+  .fchip .n { color: var(--muted); font-size: .72rem; }
 
-  /* Reality checks */
-  .checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
-  .checks li { display: flex; gap: 12px; align-items: flex-start; font-size: 14.5px; }
-  .checks .ic { flex: none; width: 22px; text-align: center; margin-top: 1px; }
-  .checks b { font-weight: 640; }
+  /* ---- next / ranked list ---- */
+  .nexts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
+  .nexts > li { display: grid; grid-template-columns: 34px 1fr; gap: 14px; align-items: start; }
+  .nexts .rk { font-family: var(--font-mono); font-weight: 700; font-size: .92rem; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: var(--plan); background: var(--plan-bg); border: 1px solid var(--plan-bd); }
+  .nexts > li:first-child .rk { color: var(--good); background: var(--good-bg); border-color: var(--good-bd); }
+  .nexts .nx-t { color: var(--ink); font-weight: 650; font-size: 1rem; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+  .nexts .nx-d { color: var(--ink-2); font-size: .91rem; margin-top: 3px; max-width: 68ch; }
 
-  /* What's next */
-  .nexts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 15px; }
-  .nexts li { display: grid; grid-template-columns: 36px 1fr; gap: 14px; align-items: start; }
-  .nexts .rk { font-family: var(--font-mono); font-weight: 700; font-size: 15px; width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; }
-  .nexts li:first-child .rk { color: var(--profit); background: var(--profit-soft); }
-  .nexts li:not(:first-child) .rk { color: var(--faint); background: var(--surface-2); border: 1px solid var(--border); }
-  .nexts .nx-t { font-weight: 640; font-size: 15px; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .nexts .nx-d { color: var(--muted); font-size: 14px; margin-top: 3px; }
-  .nexts code { font-family: var(--font-mono); font-size: 12.5px; }
+  /* ---- checklist rows ---- */
+  .checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
+  .checks li { display: grid; grid-template-columns: 20px 1fr; gap: 12px; align-items: start; font-size: .93rem; max-width: 74ch; }
+  .checks .ic { text-align: center; font-family: var(--font-mono); font-weight: 700; }
+  .ic.warn { color: var(--warn); } .ic.bad { color: var(--loss); } .ic.good { color: var(--good); } .ic.info { color: var(--accent); }
 
-  /* Footer */
-  footer { margin-top: 44px; padding-top: 22px; border-top: 1px solid var(--border); color: var(--muted); font-size: 13.5px; }
-  footer .durable { background: var(--accent-soft); border: 1px solid var(--border); border-radius: 11px; padding: 14px 16px; color: var(--text); margin-bottom: 18px; }
-  footer code { font-family: var(--font-mono); font-size: 12.5px; background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: 1px 6px; }
-  footer .meta { display: flex; flex-wrap: wrap; gap: 6px 20px; margin-top: 4px; }
-  footer .meta span { font-family: var(--font-mono); font-size: 12.5px; }
-  a { color: var(--accent-2); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  footer.foot { color: var(--muted); font-size: .85rem; padding: 26px 0 40px; border-top: 1px solid var(--border); }
+  footer.foot p { max-width: 74ch; }
+  footer.foot .meta { display: flex; flex-wrap: wrap; gap: 6px 20px; margin-top: 10px; font-family: var(--font-mono); font-size: .76rem; }
 </style>
 
-<div class="wrap">
+<div class="shell">
+  <header class="mast">
+    <div class="eyebrow">Project status · mirrored 2026-08-13</div>
+    <h1>Trading Platform — where the build stands</h1>
+    <p class="lede">Personal stock-suggestion &amp; algo-trading platform for NSE/BSE: weighted-confluence signal engine on a Rust compute core, paper execution, outcome tracking. This page is the mirror of the canonical status block in <code>docs/PHASES.md</code> — every number below is traced to a file in the repo.</p>
+    <div class="metastrip">
+      <span class="chip accent"><span class="dot"></span>v2 · Phase 6 in progress</span>
+      <span class="chip prog">Phase 3 gate · Fri 2026-08-15</span>
+      <span class="chip bad">Paper-only — no live order path</span>
+      <span class="chip">1187 backend · 375 frontend tests</span>
+      <span class="chip">main +11 ahead of origin</span>
+    </div>
+  </header>
 
-  <p class="eyebrow">Project status &middot; updated 2026-08-13</p>
-  <h1>Trading Platform</h1>
-  <p class="subhead">v2 upgrade &middot; NSE/BSE weighted-confluence signal engine &middot; Rust compute core</p>
+  <div class="layout">
+    <nav class="toc" aria-label="Contents">
+      <p class="navlabel">On this page</p>
+      <ul>
+        <li><a href="#state">Where we are</a></li>
+        <li><a href="#book">The paper book</a></li>
+        <li><a href="#phase6">Phase 6 — the leak</a></li>
+        <li><a href="#gate">Gate experiment</a></li>
+        <li><a href="#factors">Factor attribution</a></li>
+        <li><a href="#forward">Forward evidence</a></li>
+        <li><a href="#next">What we start next</a></li>
+        <li><a href="#open">Open decisions &amp; risks</a></li>
+        <li><a href="#invariants">Invariants that bind</a></li>
+        <li><a href="#refs">Reference &amp; the deep-dive artifact</a></li>
+      </ul>
+    </nav>
 
-  <hr class="rule">
+    <main>
+      <!-- ================================================================ -->
+      <section class="doc" id="state">
+        <div class="sec-kicker">Status</div>
+        <h2>Where we are</h2>
 
-  <div class="banner">
-    <span class="dot" aria-hidden="true"></span>
-    <p><strong>v1 (phases 0&ndash;11) shipped and tested. v2 phases 0&ndash;5 are closed; Phase&nbsp;6 (outcome tracking + entry selection) is underway; live trading (Phase&nbsp;7) has not started.</strong> The platform is <strong>paper-only</strong> today &mdash; <code>place_order</code> has no live Kite order path. The single source of truth is the top block of <code>docs/PHASES.md</code>; this page mirrors it.</p>
-  </div>
+        <div class="callout">
+          <span class="k">One paragraph</span>
+          <p>v1 (phases 0–11) shipped. <strong>v2 phases 0, 1, 2, 4 and 5 are closed; Phase 3 has both exit criteria met on disk and only its gate ritual left (user-run, Friday 2026-08-15); Phase 6 is underway with 6.1 and 6.2 done.</strong> Phase 6 has already produced its headline finding — the binding constraint on profit is <strong>entry/regime selection, not exit logic</strong> — and quantified it at corpus scale. <strong>Live trading does not exist</strong>: <code>place_order</code> is paper-only, with no Kite order or GTT path. That is Phase 7.</p>
+        </div>
 
-  <h2>v2 phases</h2>
-  <div class="phases">
-    <div class="phase"><span class="pn">PHASE 0</span><span class="nm">Workbench &amp; foundations</span><span class="pill done">✓ done</span></div>
-    <div class="phase"><span class="pn">PHASE 1</span><span class="nm">Rust compute core (parity)</span><span class="pill done">✓ done</span></div>
-    <div class="phase"><span class="pn">PHASE 2</span><span class="nm">Style engines + expectancy</span><span class="pill done">✓ done</span></div>
-    <div class="phase"><span class="pn">PHASE 3</span><span class="nm">Realtime (tick-to-tick)</span><span class="pill gate">◐ gate ritual &middot; Fri 08-15</span></div>
-    <div class="phase"><span class="pn">PHASE 4</span><span class="nm">F&amp;O analytics</span><span class="pill done">✓ done</span></div>
-    <div class="phase"><span class="pn">PHASE 5</span><span class="nm">UI overhaul</span><span class="pill done">✓ gated 08-07</span></div>
-    <div class="phase is-active"><span class="pn">PHASE 6</span><span class="nm">Outcome tracking + entry selection</span><span class="pill active">● in progress</span></div>
-    <div class="phase"><span class="pn">PHASE 7</span><span class="nm">Live-trading hardening (RiskEngine first)</span><span class="pill todo">○ not started</span></div>
-  </div>
+        <div class="strip">
+          <div class="ph done"><span class="t">v1 · 0–11</span><span class="s">shipped</span></div>
+          <div class="ph done"><span class="t">P0 workbench</span><span class="s">done 07-03</span></div>
+          <div class="ph done"><span class="t">P1 Rust core</span><span class="s">done 07-05</span></div>
+          <div class="ph done"><span class="t">P2 profiles</span><span class="s">done 07-07</span></div>
+          <div class="ph prog"><span class="t">P3 realtime</span><span class="s">gate 08-15</span></div>
+          <div class="ph done"><span class="t">P4 F&amp;O</span><span class="s">PASS 08-06</span></div>
+          <div class="ph done"><span class="t">P5 UI</span><span class="s">gated 08-07</span></div>
+          <div class="ph prog"><span class="t">P6 outcomes</span><span class="s">6.1+6.2 done</span></div>
+          <div class="ph plan"><span class="t">MCE context</span><span class="s">named, after P6</span></div>
+          <div class="ph plan"><span class="t">P7 live</span><span class="s">not started</span></div>
+        </div>
 
-  <h2>Phase 6 &mdash; where it stands</h2>
-  <div class="card">
-    <ul class="slices">
-      <li><span class="mk ok">6.1</span><span><span class="sl-name">Signal-level MFE/MAE</span> &mdash; <span class="sl-desc">tape-derived excursions on <code>signal_outcomes</code>. <b class="pos">done</b></span></span></li>
-      <li><span class="mk ok">6.2</span><span><span class="sl-name">Entry-quality attribution</span> &mdash; <span class="sl-desc">live + corpus (parity-clean Rust <code>run_universe</code>) + per-factor. <b class="pos">done</b></span></span></li>
-      <li><span class="mk wait">6.3</span><span><span class="sl-name">Interactive Strategy-Lab v2</span> &mdash; <span class="sl-desc">de-prioritised; the Rust backtest already exists parity-pinned, so this is a UI enhancement, not a blocker.</span></span></li>
-      <li><span class="mk next">6.4</span><span><span class="sl-name">Weight retune + shadow→active promotion</span> &mdash; <span class="sl-desc">the payoff. Retune can start now; promotion is time-gated by shadow forward evidence. <b>next</b></span></span></li>
-      <li><span class="mk wait">6.5</span><span><span class="sl-name">New candidates (pair-trading, market-neutral)</span> &mdash; <span class="sl-desc">not started.</span></span></li>
-    </ul>
+        <h3>Suites — measured, not remembered</h3>
+        <div class="metrics">
+          <div class="metric"><div class="v">1187</div><div class="l">backend pytest collected<br>(1143 + 44 heavy)</div></div>
+          <div class="metric"><div class="v up">375</div><div class="l">frontend Vitest passing<br>41 files, 0 failures</div></div>
+          <div class="metric"><div class="v">16 / 9 / 19</div><div class="l">parity / walk-forward / replay<br>markers in the 44</div></div>
+          <div class="metric"><div class="v">86</div><div class="l">cargo tests<br>engine workspace</div></div>
+        </div>
+        <p class="caption">Both counts measured 2026-08-13, not remembered: backend from <code>pytest --collect-only</code> (the 44 deselected are the <code>parity</code>, <code>walkforward</code> and <code>replay</code> markers), frontend from an actual <code>vitest run</code> — 375 passed, 41 files, no failures. The Phase-6 slices added <code>test_signal_excursions</code>, <code>test_entry_attribution</code>, <code>test_corpus_attribution</code> and <code>test_seasonality</code>; the older “1123 / 370” figures in the phase docs are superseded. <code>make check</code> green is the baseline state.</p>
+      </section>
 
-    <div class="edge-leak">
-      <div class="box edge">
-        <h3>▲ The edge</h3>
-        <ul>
-          <li><b>80&ndash;89</b> confidence &mdash; <b>+0.20R</b></li>
-          <li><b>Trending</b> regime (ADX&nbsp;≥&nbsp;25) &mdash; <b>+0.24R</b></li>
+      <!-- ================================================================ -->
+      <section class="doc" id="book">
+        <div class="sec-kicker">Evidence</div>
+        <h2>The paper book — what the strategy actually did</h2>
+        <p>Eight sessions, 2026-08-03 → 08-12, from <code>docs/analysis/LEDGER.md</code>. Paper mode, capital ₹1,00,000, risk 2%/trade, daily-loss cap ₹3,000, max 5 entries/day. This table is the reason Phase 6 exists.</p>
+
+        <div class="metrics">
+          <div class="metric"><div class="v up">+₹11,869</div><div class="l">realised net, 8 sessions</div></div>
+          <div class="metric"><div class="v down">3 / 40</div><div class="l">entries that reached +1R</div></div>
+          <div class="metric"><div class="v flag">49.6%</div><div class="l">open portfolio heat<br>(was 20.2% on 08-03)</div></div>
+          <div class="metric"><div class="v down">−₹20,492</div><div class="l">peak → EoD give-back<br>on the open book (08-12)</div></div>
+          <div class="metric"><div class="v up">0</div><div class="l">chased entries since<br>the P1 fix landed 08-06</div></div>
+        </div>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th>Session</th><th class="num">Entries</th><th class="num">Exits</th><th class="num">Realised net</th><th class="num">Open MTM</th><th class="num">Given back</th><th class="num">≥1R</th><th class="num">Heat</th></tr>
+            </thead>
+            <tbody>
+              <tr><td class="mono">2026-08-12</td><td class="num">5</td><td class="num">4</td><td class="num neg">−₹1,011</td><td class="num pos">+₹10,627</td><td class="num neg">−₹20,492</td><td class="num">0/5</td><td class="num">49.6%</td></tr>
+              <tr><td class="mono">2026-08-11</td><td class="num">5</td><td class="num">4</td><td class="num pos">+₹7,479</td><td class="num pos">+₹4,509</td><td class="num neg">−₹22,219</td><td class="num">0/5</td><td class="num">47.2%</td></tr>
+              <tr><td class="mono">2026-08-10</td><td class="num">5</td><td class="num">1</td><td class="num pos">+₹2,198</td><td class="num pos">+₹9,097</td><td class="num neg">−₹17,239</td><td class="num">1/5</td><td class="num">45.2%</td></tr>
+              <tr><td class="mono">2026-08-07</td><td class="num">5</td><td class="num">0</td><td class="num">₹0</td><td class="num pos">+₹4,066</td><td class="num neg">−₹11,356</td><td class="num">0/5</td><td class="num">37.3%</td></tr>
+              <tr><td class="mono">2026-08-06</td><td class="num">5</td><td class="num">3</td><td class="num pos">+₹3,016</td><td class="num pos">+₹4,411</td><td class="num neg">−₹6,687</td><td class="num">1/5</td><td class="num">27.5%</td></tr>
+              <tr><td class="mono">2026-08-05</td><td class="num">5</td><td class="num">1</td><td class="num neg">−₹264</td><td class="num pos">+₹2,786</td><td class="num neg">−₹13,155</td><td class="num">0/5</td><td class="num">30.7%</td></tr>
+              <tr><td class="mono">2026-08-04</td><td class="num">5</td><td class="num">3</td><td class="num pos">+₹451</td><td class="num neg">−₹3,334</td><td class="num neg">−₹11,956</td><td class="num">1/5</td><td class="num">21.1%</td></tr>
+              <tr><td class="mono">2026-08-03</td><td class="num">5</td><td class="num">0</td><td class="num">₹0</td><td class="num pos">+₹4,909</td><td class="num neg">−₹5,836</td><td class="num">0/5</td><td class="num">20.2%</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="caption">“Given back” is peak → end-of-day on positions still open, so the same position is re-measured each session — the column is a daily reading, <strong>not</strong> a sum. 24 positions were open at the 08-12 close.</p>
+
+        <div class="callout bad">
+          <span class="k">What the book says</span>
+          <p><strong>The exit machinery is correct but has nothing to protect.</strong> The ₹ profit ladder arms at +₹2,000 and seals peak−₹1,000 above ₹3,000 — yet only 3 of 40 entries ever reached +1R, so most trades faded from a small green back through the original stop. Fixing exits harder cannot fix that; only better entries can.</p>
+          <p><strong>Open heat is the live risk.</strong> It has climbed 20.2% → 49.6% of capital across 24 open positions. The circuit breaker caps <em>daily realised</em> loss and trades/day — it does not cap accumulated open risk. A cross-day portfolio-heat gate is on the watch-list, not built.</p>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <section class="doc" id="phase6">
+        <div class="sec-kicker">Phase 6</div>
+        <h2>Outcome tracking + entry selection — where it stands</h2>
+
+        <ul class="slices">
+          <li><span class="mk ok">6.1</span><span><span class="nm">Signal-level MFE/MAE</span> — tape-derived excursions on <code>signal_outcomes</code>, all signals not just taken trades. <strong class="pos">done</strong></span></li>
+          <li><span class="mk ok">6.2</span><span><span class="nm">Entry-quality attribution</span> — live cohort + corpus cohort via the parity-clean Rust <code>run_universe</code> (816 trades in ~0.6 s) + per-factor attribution. <strong class="pos">done</strong></span></li>
+          <li><span class="mk wait">6.3</span><span><span class="nm">Strategy Lab v2 on the Rust engine</span> — de-prioritised. The Rust backtest already exists parity-pinned, so this is a UI surface, not a blocker for the retune.</span></li>
+          <li><span class="mk next">6.4</span><span><span class="nm">Weight retune + shadow→active promotion</span> — the payoff slice. The retune can start on today's evidence; promotion is time-gated by shadow forward evidence. <strong>queued</strong></span></li>
+          <li><span class="mk wait">—</span><span><span class="nm">Pair-trading / market-neutral candidate</span> — a Phase-6 backlog item (not a numbered slice in the plan): cointegration-screened, regime-agnostic, shadow-first.</span></li>
         </ul>
-      </div>
-      <div class="box leak">
-        <h3>▼ The leak</h3>
-        <ul>
-          <li><b>70&ndash;79</b> confidence (bulk of signals) &mdash; <b>−0.07R</b></li>
-          <li><b>Transitional</b> regime (ADX&nbsp;20&ndash;25) &mdash; <b>−0.10R</b></li>
+
+        <h3>The verdict — where the edge is and where it leaks</h3>
+        <div class="split">
+          <div class="box edge">
+            <h4>▲ The edge</h4>
+            <ul>
+              <li><b>80–89</b> confidence — <b>+0.20R</b> <span class="n">(n=307)</span></li>
+              <li><b>Trending</b> ADX ≥ 25 — <b>+0.24R</b> <span class="n">(n=140)</span></li>
+              <li><b>Choppy</b> ADX &lt; 20 — <b>+0.12R</b> <span class="n">(n=337)</span></li>
+            </ul>
+          </div>
+          <div class="box leak">
+            <h4>▼ The leak</h4>
+            <ul>
+              <li><b>70–79</b> confidence, the bulk — <b>−0.07R</b> <span class="n">(n=434)</span></li>
+              <li><b>Transitional</b> ADX 20–25 — <b>−0.10R</b> <span class="n">(n=339)</span></li>
+              <li><b>70–79 × transitional</b> — <b>−0.23R</b> <span class="n">(n=250)</span></li>
+            </ul>
+          </div>
+        </div>
+
+        <p>Corpus cohort: Nifty50 daily, 816 decided trades since 2023-09-13, expectancy winsorized at ±10R to kill tiny-SL artifacts. The corpus <strong>corrected the noisier live read</strong>, which had blamed the choppy regime — choppy is fine at +0.12R; <strong>transitional is the real drag</strong>.</p>
+
+        <div class="callout warn">
+          <span class="k">The nuance that shapes the fix</span>
+          <p>One cell carries the loss: <strong>70–79 × transitional, n=250 — 31% of the whole corpus, at −0.23R.</strong> But <strong>80–89 × transitional is the single best ranked cell at +0.32R</strong> (n=75), so a blanket “skip transitional” gate throws away good trades along with the leak. That is exactly what the §8 experiment has to settle before anything ships.</p>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <section class="doc" id="gate">
+        <div class="sec-kicker">Experiment</div>
+        <h2>Gate experiment — which lever to pull</h2>
+        <p>Read-only backtest over the same corpus, testing the 6.2 verdict before any engine change. The question: raise the confidence gate, skip the transitional regime, or both? <strong>Skipping the transitional regime while keeping the 70 gate wins — it nearly doubles captured R and triples per-trade expectancy, and it keeps far more trades than a gate-80 bump.</strong></p>
+
+        <div class="tablewrap">
+          <table>
+            <thead>
+              <tr><th>Variant</th><th class="num">Trades</th><th class="num">Decided</th><th class="num">Win %</th><th class="num">Mean expR</th><th class="num">Total-R</th><th class="num">Reach 1R</th></tr>
+            </thead>
+            <tbody>
+              <tr class="base"><td>gate-70 <span class="tag cur">CURRENT</span></td><td class="num">816</td><td class="num">794</td><td class="num">40%</td><td class="num pos">+0.052</td><td class="num pos">+41.2</td><td class="num">44%</td></tr>
+              <tr><td>gate-80</td><td class="num">270</td><td class="num">267</td><td class="num">45%</td><td class="num pos">+0.142</td><td class="num pos">+37.9</td><td class="num">45%</td></tr>
+              <tr class="win"><td>gate-70 + skip transitional <span class="tag rec">RECOMMENDED</span></td><td class="num">477</td><td class="num">467</td><td class="num">43%</td><td class="num pos">+0.158</td><td class="num pos">+73.8</td><td class="num">46%</td></tr>
+              <tr><td>gate-80 + skip transitional</td><td class="num">181</td><td class="num">180</td><td class="num">44%</td><td class="num pos">+0.090</td><td class="num pos">+16.3</td><td class="num">41%</td></tr>
+              <tr><td>skip 70–79 × transitional only <span class="tag new">NOT YET RUN</span></td><td class="num">≈566</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="bars">
+          <div class="bar-row"><span class="bar-lab">gate-70 (current)</span><div class="bar-track"><div class="bar-fill base" style="width:56%"></div></div><span class="bar-val">+41.2</span></div>
+          <div class="bar-row"><span class="bar-lab">gate-80</span><div class="bar-track"><div class="bar-fill dim" style="width:51%"></div></div><span class="bar-val">+37.9</span></div>
+          <div class="bar-row"><span class="bar-lab">gate-70 + skip transitional</span><div class="bar-track"><div class="bar-fill win" style="width:100%"></div></div><span class="bar-val">+73.8</span></div>
+          <div class="bar-row"><span class="bar-lab">gate-80 + skip transitional</span><div class="bar-track"><div class="bar-fill dim" style="width:22%"></div></div><span class="bar-val">+16.3</span></div>
+        </div>
+        <p class="caption">Bars are total captured R — the net-profit proxy. Raising the gate to 80 alone <em>lowers</em> total-R below baseline, so confidence is the wrong lever; doing both over-filters. The <strong>regime gate</strong> is the high-value move.</p>
+
+        <div class="callout">
+          <span class="k">Cheap addition worth making first</span>
+          <p>The four variants are just filtered row-sets in a list — <code>backend/scripts/gate_experiment.py:89</code>. Adding a fifth, <strong>skip only the 70–79 × transitional cell</strong>, is a few lines and answers the nuance above directly: it drops the −0.23R cell (n=250) while keeping the +0.32R one (n=75). Run that before the §8 walk-forward, so the regression tests the sharpest candidate rather than the blunt one. Its ≈566 above is arithmetic — 816 minus that cell — <strong>not</strong> a measured result; every other number in this table came out of the script.</p>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <section class="doc" id="factors">
+        <div class="sec-kicker">Attribution</div>
+        <h2>Which factors predict edge</h2>
+        <p>Per-factor attribution at corpus scale. Δ is expectancy when the factor <em>supports</em> the trade direction minus expectancy when it is neutral — the direct input for the 6.4 weight retune.</p>
+
+        <div class="factors">
+          <div class="fgroup up">
+            <h4>▲ Upweight — predict edge</h4>
+            <div class="fchips">
+              <span class="fchip up">RSI_DIVERGENCE <span><span class="d">Δ +0.41</span> <span class="n">n=63</span></span></span>
+              <span class="fchip up">ADX <span><span class="d">Δ +0.23</span> <span class="n">n=138</span></span></span>
+              <span class="fchip up">MORNING_STAR <span><span class="d">Δ +0.21</span> <span class="n">n=46</span></span></span>
+              <span class="fchip up">PIERCING_PATTERN <span><span class="d">Δ +0.16</span> <span class="n">n=20</span></span></span>
+            </div>
+          </div>
+          <div class="fgroup down">
+            <h4>▼ Downweight — actively hurt</h4>
+            <div class="fchips">
+              <span class="fchip down">DARK_CLOUD_COVER <span><span class="d">Δ −0.48</span> <span class="n">n=41</span></span></span>
+              <span class="fchip down">EVENING_STAR <span><span class="d">Δ −0.35</span> <span class="n">n=49</span></span></span>
+              <span class="fchip down">MACD_CROSS <span><span class="d">Δ −0.28</span> <span class="n">n=134</span></span></span>
+              <span class="fchip down">RSI_LEVEL <span><span class="d">Δ −0.27</span> <span class="n">n=132</span></span></span>
+            </div>
+          </div>
+        </div>
+
+        <div class="callout warn">
+          <span class="k">Read these with their samples</span>
+          <p><strong>MACD_CROSS and RSI_LEVEL are the retune-worthy negatives</strong> — n≈130 each, so the signal is real; DARK_CLOUD_COVER and EVENING_STAR are larger deltas on n≈41–49 and deserve a wider corpus before a big weight cut. <strong>RSI_DIVERGENCE is not a normal cohort</strong>: it hits only 27% of the time yet reaches +1R in 70% of cases, with MFE +3.30R against MAE −2.84R — a wide-stop, wide-swing population. Upweighting it raises variance as well as expectancy.</p>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <section class="doc" id="forward">
+        <div class="sec-kicker">Forward evidence</div>
+        <h2>The two engines that report their own darkness</h2>
+        <p>Both sections exist because “the engine produced nothing” was once indistinguishable from “the engine is broken”. Each attributes a zero to a reason, in §7 and §8 of every <code>docs/analysis/&lt;date&gt;.md</code>.</p>
+
+        <h3>Intraday shadow layer — first three live sessions</h3>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Profile</th><th>TF</th><th class="num">Minted</th><th class="num">Resolved</th><th class="num">W / L</th><th>Note</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">orb_15m</td><td class="mono">15m</td><td class="num">11</td><td class="num">5</td><td class="num">2 / 3</td><td>fires reliably</td></tr>
+              <tr><td class="mono">pdh_pdl</td><td class="mono">15m</td><td class="num">4</td><td class="num">2</td><td class="num">1 / 1</td><td>silent on 08-10</td></tr>
+              <tr><td class="mono">gainer_925</td><td class="mono">5m</td><td class="num">2</td><td class="num">2</td><td class="num">0 / 2</td><td>zero on 2 of 3 days — ran on ~150k 5m bars, nothing cleared the 70 gate</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="caption">Totals 2026-08-10 → 08-12: <strong>17 minted, 9 resolved, 3W–6L</strong>. Far too small to conclude anything — which is the point of running it forward. Shadow signals are <strong>never tradeable</strong>: the order path admits <code>status == 'active'</code> only, and every tradeable statistic filters <code>is_shadow IS FALSE</code> because <code>signals.status</code> is a lifecycle field the sweeper overwrites.</p>
+
+        <h3>F&amp;O option-selling engine — dark, with a reason</h3>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Underlying</th><th>Verdict</th><th class="num">IV-rank</th><th>Why</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">NIFTY</td><td>⚫ dark</td><td class="num">15</td><td>below the 50 sell gate</td></tr>
+              <tr><td class="mono">FINNIFTY</td><td>⚫ dark</td><td class="num">10</td><td>below the 50 sell gate</td></tr>
+              <tr><td class="mono">BANKNIFTY</td><td>⚫ dark</td><td class="num">8</td><td>below the 50 sell gate</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="caption">Suggestions only — there is no F&amp;O order path. Because the engine is dark on IV-rank, <strong>neither open calibration ruling is currently binding</strong>, so the review evidence for them is still accumulating. <code>fo_bhavcopy</code> is one session behind (latest 2026-08-11), which is worth a look rather than an assumption.</p>
+      </section>
+
+      <!-- ================================================================ -->
+      <section class="doc" id="next">
+        <div class="sec-kicker">Decision</div>
+        <h2>What we start next</h2>
+        <p>Ranked by value. <strong>Nothing auto-advances — each starts on your command</strong>, and everything here is behaviour-changing, so it needs the §8 backtest discipline plus sign-off before it touches scoring or gating.</p>
+
+        <ol class="nexts">
+          <li>
+            <span class="rk">1</span>
+            <div>
+              <div class="nx-t">Regime-gate §8 experiment → the gate itself <span class="tag rec">RECOMMENDED</span></div>
+              <div class="nx-d">Add the cell-level variant to <code>gate_experiment.py</code>, promote the winner into a proper §8 walk-forward regression, and if it holds, implement the skip as a Market-Context-Engine slice. This is where a measured finding becomes real P&amp;L — the corpus says it roughly doubles captured R. Not a quick one: engine-adjacent, quant-verifier + §8 + your sign-off.</div>
+            </div>
+          </li>
+          <li>
+            <span class="rk">2</span>
+            <div>
+              <div class="nx-t">6.4 — weight retune + shadow→active promotion</div>
+              <div class="nx-d">Downweight MACD_CROSS and RSI_LEVEL first (largest samples), treat DARK_CLOUD_COVER and EVENING_STAR as candidates pending more data, and wire the promotion gate the shadow layer feeds. The retune can start now; promotion stays time-gated by forward evidence, which today is 9 resolved shadow signals.</div>
+            </div>
+          </li>
+          <li>
+            <span class="rk">3</span>
+            <div>
+              <div class="nx-t">Cross-day portfolio-heat gate</div>
+              <div class="nx-d">Not in any phase plan, and the book argues for it: heat is at 49.6% of capital across 24 open positions while the breaker only caps daily realised loss. An advisory open-risk cap that never weakens the daily-loss breaker. Small, self-contained, and it protects the record that gates go-live.</div>
+            </div>
+          </li>
+          <li>
+            <span class="rk">4</span>
+            <div>
+              <div class="nx-t">Pair-trading / market-neutral candidate</div>
+              <div class="nx-d">Regime-agnostic by construction, so it earns in the tape where the directional profiles give profit back. Cointegration screen (correlation → regression → ADF), a new profile inside the confluence framework, shadow-first — never a bypass of the ≥70% gate.</div>
+            </div>
+          </li>
+        </ol>
+
+        <div class="callout good">
+          <span class="k">Already on the calendar</span>
+          <p><strong>Phase 3's <code>/phase-gate</code> ritual — Friday 2026-08-15, run by you, manually.</strong> Both exit criteria are already satisfied on disk: the quiet-box soak is met twice (<code>PERFORMANCE.md</code>) and the shadow week is met with 14 consecutive clean days, 07-20 → 08-06, in <code>backend/shadow/shadow_week.log</code>. Do not run it early and do not re-run either criterion; keep <code>scripts/shadow_day.sh</code> running daily so the streak is unbroken on the day.</p>
+        </div>
+      </section>
+
+      <!-- ================================================================ -->
+      <section class="doc" id="open">
+        <div class="sec-kicker">Open</div>
+        <h2>Open decisions &amp; risks</h2>
+        <ul class="checks">
+          <li><span class="ic warn">⚠</span><span><strong>Two F&amp;O calibration rulings are under review.</strong> Weeklies stay excluded via <code>SellRules.require_exact_expiry_future</code> — flipping it takes the engine from 33/42 to 42/42 producing days, but a NIFTY weekly chain carries ~1% of the monthly's OI, so the fill model would overstate credit. Needs a chain-level liquidity gate first. Second ruling: stale vol gates warn rather than reject. Review evidence is automatic — read §7 of the daily report, don't reconstruct it.</span></li>
+          <li><span class="ic warn">⚠</span><span><strong>Cross-day open risk is uncapped.</strong> 49.6% of capital at risk across 24 open positions; the circuit breaker is a daily-realised-loss and trades/day cap. Ranked #3 above.</span></li>
+          <li><span class="ic warn">⚠</span><span><strong>Two EOD feeds lag one session.</strong> <code>fo_bhavcopy</code> and <code>fii_dii_daily</code> trail the last trading day, and they feed §7 F&amp;O health plus the flow factor. The ≤21-day self-heal should absorb it — verify that it did rather than assuming, which is the mistake that let an earlier month-long outage hide.</span></li>
+          <li><span class="ic bad">✕</span><span><strong>No new frontend dependency can be installed.</strong> A snap refresh pruned the pnpm store, so <code>pnpm add</code> fails with <code>ERR_PNPM_UNEXPECTED_STORE</code> until <code>store-dir</code> is repointed outside <code>~/snap/</code> and one full <code>pnpm install</code> runs. This is why virtualization is an in-repo hook rather than a library. It also means <code>make check</code> as a single target cannot run inside a git worktree — its ESLint leg shells out to <code>pnpm install</code>.</span></li>
+          <li><span class="ic info">◐</span><span><strong>Local <code>main</code> is 11 commits ahead of <code>origin</code>.</strong> Push is manual and yours; history on main is linear, so phase branches merge <code>--ff-only</code>.</span></li>
+          <li><span class="ic info">◐</span><span><strong>The 30-day paper clock is a Phase-7 gate, not a Phase-3 or Phase-6 one.</strong> It runs daily and was restarted 2026-07-03 by the sizing-bug fix. Phase 6 may well replace it with the honest version — N trades across ≥2 regimes, positive expectancy, bounded drawdown.</span></li>
         </ul>
-      </div>
-    </div>
-    <p class="subhead" style="margin-top:14px">Corpus-scale verdict (Nifty50 daily, ~816 trades). The corpus corrected the noisier live read, which had blamed the choppy regime; <b>transitional</b> is the real drag.</p>
-  </div>
+      </section>
 
-  <h2>Gate experiment &mdash; which lever to pull</h2>
-  <div class="card">
-    <p class="lede">Read-only backtest testing the 6.2 verdict before any engine change. The question: raise the confidence gate, skip the transitional regime, or both? <strong>Skipping the transitional regime (keeping the 70 gate) wins &mdash; it nearly doubles captured R and triples per-trade expectancy while keeping far more trades than a gate-80 bump.</strong></p>
+      <!-- ================================================================ -->
+      <section class="doc" id="invariants">
+        <div class="sec-kicker">Guardrails</div>
+        <h2>Invariants that bind everything above</h2>
+        <ul class="checks">
+          <li><span class="ic bad">✕</span><span><strong>Live trading does not exist.</strong> The order path is paper-only — no Kite order, no GTT. Every “live” recommendation anywhere in the docs is a Phase-7 design constraint, not a description of something running.</span></li>
+          <li><span class="ic bad">✕</span><span><strong>The engine is frozen.</strong> <code>app/analysis/</code>, <code>app/backtest/engine.py</code> and the window canon are bugfix-only, and the committed Rust fixtures are the parity oracle. Every finding on this page — regime gate, weight retune — is behaviour-changing and needs a §8 backtest regression plus explicit sign-off. Nothing here has changed the engine.</span></li>
+          <li><span class="ic info">◐</span><span><strong>Confluence only, ≥70% gate, no look-ahead.</strong> No signal from a single indicator; factors compute on candle N and are valid from N+1; committed signals come only from complete candles, and the tick-level layer is labelled provisional and never enters backtests or P&amp;L.</span></li>
+          <li><span class="ic info">◐</span><span><strong>Reject, never clamp.</strong> A signal whose natural SL exceeds its class cap is rejected, not tightened. Sizing is mandatory on every signal, risk_pct is a whole percent, and paper entries size risk-first from the actual fill so a chased fill shrinks quantity instead of over-risking.</span></li>
+          <li><span class="ic good">✓</span><span><strong>The daily-loss circuit breaker is never disableable.</strong> Not weakened, not configurable-off, not for tests. Any new risk gate is added alongside it.</span></li>
+        </ul>
+      </section>
 
-    <div class="scroll">
-      <table>
-        <thead>
-          <tr><th>Variant</th><th>Trades</th><th>Win %</th><th>Mean expR</th><th>Total-R</th><th>Reach 1R</th></tr>
-        </thead>
-        <tbody>
-          <tr class="base"><td>gate-70 <span class="tag cur">CURRENT</span></td><td>816</td><td>40%</td><td class="pos">+0.052</td><td class="pos">+41.2</td><td>44%</td></tr>
-          <tr><td>gate-80</td><td>270</td><td>45%</td><td class="pos">+0.142</td><td class="pos">+37.9</td><td>45%</td></tr>
-          <tr class="win"><td>gate-70 + skip transitional <span class="tag rec">RECOMMENDED</span></td><td>477</td><td>43%</td><td class="pos">+0.158</td><td class="pos">+73.8</td><td>46%</td></tr>
-          <tr><td>gate-80 + skip transitional</td><td>181</td><td>44%</td><td class="pos">+0.090</td><td class="pos">+16.3</td><td>41%</td></tr>
-        </tbody>
-      </table>
-    </div>
+      <!-- ================================================================ -->
+      <section class="doc" id="refs">
+        <div class="sec-kicker">Reference</div>
+        <h2>Where to read further</h2>
 
-    <div class="bars" style="margin-top:20px" aria-hidden="true">
-      <div class="bar-row"><span class="bar-lab">gate-70 (current)</span><div class="bar-track"><div class="bar-fill base" style="width:51%"></div></div><span class="bar-val">+41.2</span></div>
-      <div class="bar-row"><span class="bar-lab">gate-80</span><div class="bar-track"><div class="bar-fill dim" style="width:47%"></div></div><span class="bar-val">+37.9</span></div>
-      <div class="bar-row"><span class="bar-lab">gate-70 + skip transitional</span><div class="bar-track"><div class="bar-fill win" style="width:92%"></div></div><span class="bar-val">+73.8</span></div>
-      <div class="bar-row"><span class="bar-lab">gate-80 + skip transitional</span><div class="bar-track"><div class="bar-fill dim" style="width:20%"></div></div><span class="bar-val">+16.3</span></div>
-    </div>
-    <p class="subhead" style="margin-top:16px">Bars = total captured R (net-profit proxy). Raising the gate to 80 alone <em>lowers</em> total-R below baseline &mdash; wrong lever. Doing both over-filters. The <b>regime gate</b> is the high-value move.</p>
-  </div>
-
-  <h2>Which factors predict edge</h2>
-  <div class="card">
-    <p class="lede">Per-factor attribution at corpus scale &mdash; Δ = outcome when the factor supports the trade direction vs neutral. Direct input for the 6.4 weight retune.</p>
-    <div class="factors">
-      <div>
-        <h3 style="margin:0;font-size:12px;font-family:var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--profit)">▲ Upweight &mdash; predict edge</h3>
-        <div class="chips">
-          <span class="chip up">RSI_DIVERGENCE <span class="d">+0.43R</span></span>
-          <span class="chip up">ADX <span class="d">Δ+0.22</span></span>
-          <span class="chip up">MORNING_STAR <span class="d">Δ+0.21</span></span>
+        <div class="card">
+          <h3 style="margin-top:0">The deep-dive artifact — already published</h3>
+          <p style="margin-bottom:.6rem"><strong>Trading Platform — Complete Overview</strong> · <a href="https://claude.ai/code/artifact/0d880837-a02a-4f10-99fd-5da511183d22">claude.ai/code/artifact/0d880837…</a> · private to your account, published 2026-08-02.</p>
+          <p style="margin-bottom:.6rem">A 19-section engineering reference — what the system is, the architecture and process model, the end-to-end lifecycle of a trade idea, the signal engine and its 14 factors with a worked POWERGRID example, the Rust core and the parity contract, the realtime committed-vs-forming split, paper trading and risk, the four styles, the data model, the frontend, the adjudicated canon, hard constraints, the workbench, the phase journey, a glossary and the ops commands.</p>
+          <p><strong>Its status content is stale — it was written when Phase 3 was in progress and Phases 4–6 were still planned.</strong> Read it for <em>how the system works</em>, which has not changed; read this page for <em>where the build stands</em>. Neither is canonical: that is the top block of <code>docs/PHASES.md</code>.</p>
         </div>
-      </div>
-      <div>
-        <h3 style="margin:0;font-size:12px;font-family:var(--font-mono);letter-spacing:.08em;text-transform:uppercase;color:var(--loss)">▼ Downweight &mdash; actively hurt</h3>
-        <div class="chips">
-          <span class="chip down">DARK_CLOUD_COVER <span class="d">−0.40R</span></span>
-          <span class="chip down">EVENING_STAR <span class="d">Δ−0.35</span></span>
-          <span class="chip down">MACD_CROSS <span class="d">Δ−0.28</span></span>
-          <span class="chip down">RSI_LEVEL <span class="d">Δ−0.27</span></span>
+
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Document</th><th>What it answers</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">docs/PHASES.md</td><td><strong>Canonical status</strong> — read the top “state at a glance” block, not the 700-line narrative</td></tr>
+              <tr><td class="mono">docs/UPGRADE_PLAN.md</td><td>Why v2 exists and what each phase is for</td></tr>
+              <tr><td class="mono">docs/phases/phase-06-plan.md</td><td>The live Phase-6 tracker: slices, what Phase 6 must not become, settled decisions</td></tr>
+              <tr><td class="mono">docs/analysis/LEDGER.md</td><td>One line per trading day — the paper book above</td></tr>
+              <tr><td class="mono">docs/analysis/attribution-corpus-2026-08-13.md</td><td>Every cell behind the edge/leak and factor numbers</td></tr>
+              <tr><td class="mono">docs/analysis/gate-experiment-2026-08-13.md</td><td>The four-variant lever test</td></tr>
+              <tr><td class="mono">docs/analysis/FIX_PLAN.md</td><td>Paper-behaviour backlog: P0–P3 shipped, watch-list open</td></tr>
+              <tr><td class="mono">docs/SIGNAL_ENGINE.md</td><td>The protected spec — hook-guarded, changes need instruction + §8 regression</td></tr>
+            </tbody>
+          </table>
         </div>
-      </div>
-    </div>
+
+        <h3>Regenerating what's on this page</h3>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Command</th><th>Produces</th></tr></thead>
+            <tbody>
+              <tr><td class="mono">make analysis [DATE=…]</td><td><code>docs/analysis/&lt;date&gt;.md</code> + LEDGER row (§7 F&amp;O health, §8 shadow layer)</td></tr>
+              <tr><td class="mono">uv run python scripts/gate_experiment.py</td><td><code>docs/analysis/gate-experiment-&lt;date&gt;.md</code></td></tr>
+              <tr><td class="mono">uv run python scripts/corpus_attribution.py</td><td><code>docs/analysis/attribution-corpus-&lt;date&gt;.md</code></td></tr>
+              <tr><td class="mono">make check</td><td>The full gate — pytest + ruff + mypy + vitest + eslint + tsc + cargo</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <footer class="foot">
+        <p><strong>This file is the durable copy.</strong> It lives at <code>docs/STATUS.html</code> in the repo — open it directly in any browser (<code>file://…/docs/STATUS.html</code>), no account and no network needed. It is self-contained by design: no CDN, no fonts, no scripts.</p>
+        <div class="meta">
+          <span>canonical status: docs/PHASES.md (top block)</span>
+          <span>mirrored: 2026-08-13</span>
+          <span>local main: +11 vs origin, push is manual</span>
+        </div>
+      </footer>
+    </main>
   </div>
-
-  <h2>What&rsquo;s next</h2>
-  <div class="card">
-    <ol class="nexts">
-      <li>
-        <span class="rk">1</span>
-        <div>
-          <div class="nx-t">Regime-gate §8 experiment → engine change <span class="tag rec">RECOMMENDED</span></div>
-          <div class="nx-d">Promote the gate-experiment finding into a proper §8 walk-forward regression; if it holds, implement the &ldquo;skip transitional ADX (20&ndash;25)&rdquo; gate. Highest value &mdash; where the found edge becomes real P&amp;L. Behaviour-changing → needs the §8 discipline + your sign-off (a Market-Context-Engine slice, not a quick one).</div>
-        </div>
-      </li>
-      <li>
-        <span class="rk">2</span>
-        <div>
-          <div class="nx-t">6.4 &mdash; weight retune + promotion</div>
-          <div class="nx-d">Downweight the factors attribution showed hurt (DARK_CLOUD_COVER / EVENING_STAR / MACD_CROSS / RSI_LEVEL), upweight the edge ones; wire the shadow→active promotion gate. Retune can start now; promotion is time-gated by shadow forward evidence.</div>
-        </div>
-      </li>
-      <li>
-        <span class="rk">3</span>
-        <div>
-          <div class="nx-t">6.5 &mdash; pair-trading (market-neutral)</div>
-          <div class="nx-d">Regime-agnostic &mdash; sidesteps the choppy/transitional tape the directional profiles leak in. A new shadow profile judged by this same attribution.</div>
-        </div>
-      </li>
-    </ol>
-    <p class="subhead" style="margin-top:16px">Nothing auto-advances &mdash; each starts on command. The engine stays frozen until a §8 backtest + sign-off.</p>
-  </div>
-
-  <h2>Reality checks</h2>
-  <div class="card">
-    <ul class="checks">
-      <li><span class="ic" style="color:var(--warn)">⚠</span><span><b>Live trading does not exist.</b> The order path is paper-only; no Kite order/GTT. Every &ldquo;live&rdquo; recommendation in the docs is a Phase-7 constraint, not something running.</span></li>
-      <li><span class="ic" style="color:var(--accent)">◐</span><span><b>Intraday profiles run in SHADOW.</b> Real schedule, measured to outcome, never tradeable (order path admits <code>active</code> only) &mdash; all three returned negative walk-forward. First real fire was Mon 2026-08-10.</span></li>
-      <li><span class="ic" style="color:var(--loss)">✕</span><span><b>The engine is FROZEN.</b> Every finding here (regime gate, weight retune) is behaviour-changing &mdash; it needs a §8 backtest regression + explicit sign-off before it touches scoring/gating. Nothing on this page has changed the engine.</span></li>
-      <li><span class="ic" style="color:var(--profit)">✓</span><span><b><code>make check</code> green is the baseline.</b> Pre-Phase-6: backend 1123, frontend 370, parity 16, walkforward 9, replay 19, cargo 86 &mdash; grown by the 6.1/6.2 suites.</span></li>
-    </ul>
-  </div>
-
-  <footer>
-    <div class="durable">
-      <b>This file is the durable copy.</b> It lives at <code>docs/STATUS.html</code> in the git repo &mdash; open it directly in any browser (<code>file://…/docs/STATUS.html</code>), no account needed. The published artifact is only a hosted <em>view</em>; if it's ever lost, republish from this file. Git is the source of truth.
-    </div>
-    <div>Regenerate the gate experiment: <code>cd backend &amp;&amp; uv run python scripts/gate_experiment.py</code> → <code>docs/analysis/gate-experiment-&lt;date&gt;.md</code></div>
-    <div class="meta">
-      <span>canonical status: docs/PHASES.md (top block)</span>
-      <span>local main: 10 commits ahead of origin — push is manual</span>
-      <span>mirrored: 2026-08-13</span>
-    </div>
-  </footer>
-
 </div>
