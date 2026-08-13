@@ -140,17 +140,16 @@ def trade_to_row(
     )
 
 
-async def compute_corpus_attribution(
-    db: AsyncSession, *, min_confidence: int = 70
-) -> AttributionReport:
-    """Attribution over the Nifty50 daily backtest corpus (Rust run_universe).
-    Read-only; the engine is the parity-pinned tradecore wheel."""
+async def corpus_rows(db: AsyncSession, *, min_confidence: int = 70) -> list[Row]:
+    """Attribution Rows from the Nifty50 daily backtest at a given confluence gate.
+    Read-only; the engine is the parity-pinned tradecore wheel. Reused by the
+    attribution report and the gate experiment (which varies min_confidence)."""
     import tradecore  # heavy wheel — deferred (absent in some CI envs)
 
     stocks_data = await load_nifty50_daily(db)
     if not stocks_data:
-        log.warning("corpus attribution: no Nifty50 daily bars — run scripts/backfill_eod.py")
-        return AttributionReport(cohort="corpus", since=datetime.now(tz=UTC), total=0, tables=[])
+        log.warning("corpus: no Nifty50 daily bars — run scripts/backfill_eod.py")
+        return []
 
     universe = [(sym, o, h, lo, c, v) for sym, _t, o, h, lo, c, v in stocks_data]
     results = tradecore.run_universe(universe, "1d", _CORPUS_CAPITAL, _CORPUS_RISK, min_confidence)
@@ -164,7 +163,14 @@ async def compute_corpus_attribution(
             row = trade_to_row(trade, times, high, low, close, adx_levels)
             if row is not None:
                 rows.append(row)
+    return rows
 
+
+async def compute_corpus_attribution(
+    db: AsyncSession, *, min_confidence: int = 70
+) -> AttributionReport:
+    """Attribution over the Nifty50 daily backtest corpus. Read-only."""
+    rows = await corpus_rows(db, min_confidence=min_confidence)
     since = min((r.created_at for r in rows), default=datetime.now(tz=UTC))
     return AttributionReport(
         cohort="corpus", since=since, total=len(rows), tables=attribute_rows(rows)

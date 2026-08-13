@@ -7,6 +7,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6): gate experiment — the regime gate beats a higher confidence gate (2026-08-13)
+
+Read-only backtest comparison over the Nifty50 corpus (Rust `run_universe`) that
+TESTS the 6.2 verdict before any engine change is even proposed. `scripts/gate_experiment.py`
+→ `docs/analysis/gate-experiment-<date>.md`; refactor: `corpus_rows(db, min_confidence)`
+extracted from `compute_corpus_attribution` so the experiment varies the gate.
+
+**Result — skipping the transitional ADX regime is the high-value lever, not raising
+the confidence gate:**
+
+| variant | trades | win% | mean expR | total-R |
+|---|--:|--:|--:|--:|
+| gate-70 (baseline) | 816 | 40% | +0.052 | +41.2 |
+| gate-80 | 270 | 45% | +0.142 | +37.9 |
+| **gate-70 + skip transitional** | **477** | **43%** | **+0.158** | **+73.8** |
+| gate-80 + skip transitional | 181 | 44% | +0.090 | +16.3 |
+
+Skipping transitional-ADX entries (keeping the 70 gate) **nearly doubles total
+captured R (+73.8 vs +41.2) and triples per-trade expectancy**, while keeping far more
+trades than gate-80. Raising the gate to 80 lifts per-trade quality but cuts volume
+too hard (lower total-R); combining both over-filters. → a **regime gate** (Market
+Context Engine) is the recommended §8 experiment, ahead of a confidence-gate bump.
+Read-only; no engine change.
+
 ### feat(phase6): per-factor attribution — which confluence factors predict edge (2026-08-13)
 
 Extends 6.2 with one table per confluence factor: expectancy when the factor was
