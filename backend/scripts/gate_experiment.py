@@ -29,16 +29,12 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.db.session import AsyncSessionFactory  # noqa: E402
 from app.services.corpus_attribution import corpus_rows  # noqa: E402
-from app.services.entry_attribution import WINSOR_R, Row, _regime_bucket  # noqa: E402
+from app.services.entry_attribution import WINSOR_R, Row, _regime_bucket, realized_r  # noqa: E402
 
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("gate_experiment")
 
 _TRANSITIONAL = "transitional (20–25)"
-
-
-def _winsor(x: float) -> float:
-    return max(-WINSOR_R, min(WINSOR_R, x))
 
 
 @dataclass
@@ -54,11 +50,7 @@ class Agg:
 def _aggregate(rows: list[Row]) -> Agg:
     decided = [r for r in rows if r.status in ("tp_first", "sl_first")]
     wins = sum(1 for r in decided if r.status == "tp_first")
-    exp = [
-        (_winsor(r.rr) if r.status == "tp_first" else -1.0)
-        for r in decided
-        if r.status == "sl_first" or r.rr is not None
-    ]
+    exp = [r for r in (realized_r(d) for d in decided) if r is not None]
     mfes = [r.mfe_r for r in rows if r.mfe_r is not None]
     reached = sum(1 for r in rows if r.mfe_r is not None and r.mfe_r >= 1.0)
     return Agg(

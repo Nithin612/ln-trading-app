@@ -21,7 +21,6 @@ cross-tab, which would shatter the (small) live cohort into empty cells.
 
 from __future__ import annotations
 
-import re
 import statistics
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -34,6 +33,7 @@ from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.services.signal_outcomes import OUTCOME_EPOCH
+from app.signals import regime as regime_mod
 
 _IST = ZoneInfo("Asia/Kolkata")
 
@@ -99,6 +99,20 @@ class Row:
     factors: dict[str, float] = field(default_factory=dict)  # factor name → raw directional score
 
 
+def realized_r(row: Row) -> float | None:
+    """Realized R for one terminal outcome — the shared expectancy / total-R /
+    Sharpe unit. A target hit contributes +winsorized RR (None when RR is
+    undefined: a tiny-SL win we cannot size, dropped not guessed); a stop hit
+    contributes −1R; anything not decided (expired) is None. Used by the
+    attribution cells, the gate experiment, and the §8 walk-forward so a
+    signal_outcome and a backtest trade earn R by identical rules."""
+    if row.status == "tp_first":
+        return _winsor(row.rr) if row.rr is not None else None
+    if row.status == "sl_first":
+        return -1.0
+    return None
+
+
 _SQL = text(
     "SELECT o.status, o.mfe_r, o.mae_r,"
     "       s.entry_price, s.stop_loss, s.take_profit, s.confidence_pct,"
@@ -137,31 +151,11 @@ def _tod_bucket(created: datetime, timeframe: str) -> str:
     return f"{ist.hour:02d}:00–{ist.hour:02d}:59 IST"
 
 
-_ADX_RE = re.compile(r"\bADX=([0-9]+(?:\.[0-9]+)?)")
-
-
-def _parse_adx_level(explanation: object) -> float | None:
-    """Best-effort raw ADX level from the ADX factor's explanation string (e.g.
-    'ADX=27.2 trending'). Observability only, graceful fallback to None — the
-    factor *score* is a poor regime discriminator (mostly ≥0), while the level
-    gives real regime separation. Proper regime (level / ER from the tape) lands
-    in 6.2b; if the explanation wording ever changes, cells fall to 'regime n/a'
-    rather than misreport."""
-    if not isinstance(explanation, str):
-        return None
-    m = _ADX_RE.search(explanation)
-    return float(m.group(1)) if m else None
-
-
-def _regime_bucket(adx_level: float | None) -> str:
-    """Standard ADX regime thresholds."""
-    if adx_level is None:
-        return "regime n/a"
-    if adx_level < 20:
-        return "choppy (ADX<20)"
-    if adx_level < 25:
-        return "transitional (20–25)"
-    return "trending (ADX≥25)"
+# Regime taxonomy is canonical in app/signals/regime.py — the live gate and this
+# measurement must bucket identically. These thin aliases keep the existing
+# call sites (and gate_walkforward's import) stable while there is one source.
+_parse_adx_level = regime_mod.parse_adx_level
+_regime_bucket = regime_mod.adx_regime
 
 
 _FACTOR_DEADZONE = 0.05
@@ -206,16 +200,9 @@ def _cell(key: str, rows: list[Row]) -> Cell:
     maes = [_winsor(r.mae_r) for r in rows if r.mae_r is not None]
     reached = sum(1 for r in rows if r.mfe_r is not None and r.mfe_r >= 1.0)
 
-    # expectancy_r: mean realized R over decided signals. A win contributes +RR
-    # (needs a defined RR — a win with no RR is dropped, not guessed); a loss is
-    # -1R regardless.
-    exp_terms: list[float] = []
-    for r in decided:
-        if r.status == "tp_first":
-            if r.rr is not None:
-                exp_terms.append(_winsor(r.rr))
-        else:  # sl_first
-            exp_terms.append(-1.0)
+    # expectancy_r: mean realized R over decided signals (see realized_r — a win
+    # with no defined RR is dropped, not guessed; a loss is -1R regardless).
+    exp_terms = [r for r in (realized_r(d) for d in decided) if r is not None]
     return Cell(
         key=key,
         n=n,
@@ -265,11 +252,13 @@ def attribute_rows(rows: list[Row]) -> list[Table]:
     ] + _factor_tables(rows)
 
 
-async def compute_attribution(
+async def load_attribution_rows(
     db: AsyncSession, *, shadow: bool = False, since: datetime = OUTCOME_EPOCH
-) -> AttributionReport:
-    """Attribution over the terminal-outcome cohort for one provenance
-    (tradeable = is_shadow False, or shadow). Read-only."""
+) -> list[Row]:
+    """The terminal-outcome cohort for one provenance (tradeable = is_shadow
+    False, or shadow) as attribution Rows. Read-only. Shared by the attribution
+    report and the regime-gate shadow measurement so both see identical live
+    signals bucketed by identical rules."""
     raw = (await db.execute(_SQL, {"since": since, "shadow": shadow})).mappings().all()
     rows: list[Row] = []
     for m in raw:
@@ -297,7 +286,15 @@ async def compute_attribution(
                 factors=factors,
             )
         )
+    return rows
 
+
+async def compute_attribution(
+    db: AsyncSession, *, shadow: bool = False, since: datetime = OUTCOME_EPOCH
+) -> AttributionReport:
+    """Attribution over the terminal-outcome cohort for one provenance
+    (tradeable = is_shadow False, or shadow). Read-only."""
+    rows = await load_attribution_rows(db, shadow=shadow, since=since)
     return AttributionReport(
         cohort="shadow" if shadow else "tradeable",
         since=since,
