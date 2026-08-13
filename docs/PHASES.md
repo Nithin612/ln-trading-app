@@ -10,12 +10,26 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-08-08) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-08-13) — read this block first
 
 **v2 Phases 0–2 ✅ done · Phase 3 (realtime) ▶ gate ritual only · Phase 4 ✅ done ·
-Phase 5 ✅ GATED 2026-08-07 · Phases 6–7 not started.**
-Suites: backend **1107**, frontend **370**, parity 16, walkforward 9,
-replay 19, cargo 86.
+Phase 5 ✅ GATED 2026-08-07 · Phase 6 ▶ IN PROGRESS (6.1 + 6.2 shipped) · Phase 7 not started.**
+Suites grew with the Phase-6 slices (added `test_signal_excursions`,
+`test_entry_attribution`, `test_corpus_attribution`, `test_seasonality`); run
+`make check` for the exact totals. Pre-Phase-6 baseline: backend **1123**
+(non-replay), frontend **370**, parity 16, walkforward 9, replay 19, cargo 86.
+
+**Phase 6 (outcome tracking + entry-selection) — 6.1 + 6.2 DONE (2026-08-13).**
+6.1 = signal-level MFE/MAE on `signal_outcomes`; 6.2 = entry-quality attribution
+(live + corpus via the parity-clean Rust `run_universe`, engine frozen) + per-factor
+attribution. **The verdict — the entry-selection leak: the 70–79 confidence band +
+transitional ADX regime are net-negative; 80–89 + trending are the edge; factor-wise
+RSI_DIVERGENCE/ADX predict edge while DARK_CLOUD_COVER/EVENING_STAR/MACD_CROSS/RSI_LEVEL
+actively hurt.** This is the evidence for a confidence-gate / regime-gate / weight
+retune (behaviour-changing → §8 backtest + sign-off first). Detail + next steps:
+[`phases/phase-06-plan.md`](phases/phase-06-plan.md). Reports:
+`docs/analysis/attribution-<date>.md` + `attribution-corpus-<date>.md`.
+**Local `main` is ~7 commits ahead of origin — push is manual.**
 
 > **Phase-3 gate is USER-RUN, MANUALLY, on Friday 2026-08-15.** Explicit
 > instruction 2026-08-08 — do not run `/phase-gate` before then. Both exit
@@ -26,9 +40,9 @@ replay 19, cargo 86.
 Agreed as the work to do BEFORE Phase 6, so its noise doesn't land inside the
 phase. Merged to main and pushed. **Full report:
 [`phases/interstitial-intraday-activation.md`](phases/interstitial-intraday-activation.md)**
-— read that rather than reconstructing from commits. Plan for Phase 6 itself:
-[`phases/phase-06-plan.md`](phases/phase-06-plan.md) — a proposal awaiting
-sign-off, not started.
+— read that rather than reconstructing from commits. Phase 6 itself is now
+UNDERWAY (6.1 + 6.2 done — see the STATE block above):
+[`phases/phase-06-plan.md`](phases/phase-06-plan.md) is the live tracker.
 
 1. **Stock master repaired.** NO stock had a correct company name: the equity
    master's `NAME OF COMPANY` column was never read, so 2,274 of 2,333 carried
