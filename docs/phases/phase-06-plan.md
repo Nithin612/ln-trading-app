@@ -145,9 +145,25 @@ is the evidence for **raising the confidence gate toward 80 and/or a regime gate
 (the Market-Context-Engine idea). Any such change is behaviour-changing → §8 backtest
 + user sign-off; the engine stays frozen until then.
 
-**Next: 6.4 (shadow→active promotion)** — feed the shadow cohort's forward evidence
-(and this attribution) into the promotion gate; still time-gated by the shadow
-layer's accrual (first fire 2026-08-10), so no rush. 6.5 (external-study candidates:
-pair-trading etc.) as new shadow profiles judged by this same attribution. A
-confidence-gate / regime-gate experiment (from the 6.2 verdict) is the highest-value
-follow-on and belongs to the Market Context Engine phase.
+**Gate experiment — DONE 2026-08-13** (`scripts/gate_experiment.py` →
+`docs/analysis/gate-experiment-<date>.md`). Read-only corpus comparison of the levers:
+**gate-70 + skip-transitional wins on both axes — total-R +73.8 (vs +41.2 baseline,
+~+79%) and mean expectancy +0.158R (vs +0.052), keeping 477 trades (vs 270 at
+gate-80).** Raising the gate to 80 alone *lowers* total-R below baseline; both together
+over-filter. **The regime gate is the high-value lever, not a confidence-gate bump.**
+
+**NEXT — recommended lead first; each starts on user command (nothing auto-advances):**
+
+1. **Regime-gate §8 experiment → engine change.** Promote the gate-experiment finding
+   into a proper §8 walk-forward regression; if it holds, implement the "skip
+   transitional ADX (20–25)" gate. Highest value — where the found edge becomes real
+   P&L. Behaviour-changing → §8 + sign-off; Market-Context-Engine slice, a fresh
+   careful build, not a quick one.
+2. **6.4 — weight retune + promotion.** Downweight the factors attribution showed hurt
+   (DARK_CLOUD_COVER / EVENING_STAR / MACD_CROSS / RSI_LEVEL), upweight the +Δ ones
+   (RSI_DIVERGENCE / ADX / MORNING_STAR); wire the shadow→active promotion gate. Retune
+   can start now; promotion is time-gated by shadow forward evidence (first fire
+   2026-08-10, so no rush).
+3. **6.5 — pair-trading, market-neutral candidate.** Regime-agnostic — sidesteps the
+   choppy/transitional tape our directional profiles leak in. A new shadow profile
+   judged by this same 6.1–6.2 attribution.

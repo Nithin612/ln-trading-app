@@ -42,6 +42,9 @@ else.
   **regime gate** (skip ADX 20–25) beats a higher confidence gate — the gate
   experiment nearly doubles captured R. Verdict + numbers live in the PHASES top
   block; `docs/analysis/attribution-*.md` + `gate-experiment-*.md` are the reports.
+  **Recommended next build = the regime-gate §8 experiment** (behaviour-changing →
+  §8 + sign-off), then 6.4 (weight retune + shadow→active promotion). Nothing
+  auto-advances — the NEXT menu lives in the PHASES top block.
 - **Two report sections exist because "the engine produced nothing" was once
   indistinguishable from "the engine is broken":** §7 F&O engine health and §8
   intraday shadow layer. Both attribute a zero to a *reason*. When either shows

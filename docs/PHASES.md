@@ -25,11 +25,22 @@ Suites grew with the Phase-6 slices (added `test_signal_excursions`,
 attribution. **The verdict — the entry-selection leak: the 70–79 confidence band +
 transitional ADX regime are net-negative; 80–89 + trending are the edge; factor-wise
 RSI_DIVERGENCE/ADX predict edge while DARK_CLOUD_COVER/EVENING_STAR/MACD_CROSS/RSI_LEVEL
-actively hurt.** This is the evidence for a confidence-gate / regime-gate / weight
-retune (behaviour-changing → §8 backtest + sign-off first). Detail + next steps:
+actively hurt.** The **gate experiment** (`scripts/gate_experiment.py`) then tested the
+levers on the corpus: **skipping the transitional ADX regime (keeping the 70 gate)
+nearly doubles captured R (+73.8 vs +41.2 total-R) and triples per-trade expectancy —
+it beats raising the confidence gate to 80.** All behaviour-changing → §8 backtest +
+sign-off first; the engine stays frozen.
+
+**NEXT — recommended lead first; each starts on user command (nothing auto-advances):**
+**(1) Regime-gate §8 experiment** → promote the gate-experiment finding into a §8
+walk-forward regression and, if it holds, implement the "skip transitional ADX" gate
+(Market-Context-Engine slice — highest value); **(2) 6.4** weight retune (downweight
+DARK_CLOUD_COVER/EVENING_STAR/MACD_CROSS/RSI_LEVEL) + shadow→active promotion (time-gated
+by shadow evidence); **(3) 6.5** pair-trading market-neutral candidate. Detail:
 [`phases/phase-06-plan.md`](phases/phase-06-plan.md). Reports:
-`docs/analysis/attribution-<date>.md` + `attribution-corpus-<date>.md`.
-**Local `main` is ~7 commits ahead of origin — push is manual.**
+`docs/analysis/attribution-<date>.md` + `attribution-corpus-<date>.md` +
+`gate-experiment-<date>.md`.
+**Local `main` is ~10 commits ahead of origin — push is manual.**
 
 > **Phase-3 gate is USER-RUN, MANUALLY, on Friday 2026-08-15.** Explicit
 > instruction 2026-08-08 — do not run `/phase-gate` before then. Both exit
