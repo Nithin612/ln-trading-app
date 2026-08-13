@@ -60,9 +60,10 @@ class Cell:
     key: str
     n: int
     entered: int
+    measured: int                   # rows with an MFE computed — the reach1R / mfe denom
     decided: int                    # tp_first + sl_first
     hit_rate: float | None          # wins / decided
-    reached_1r_rate: float | None   # share with mfe_r >= 1 (edge available, exit-independent)
+    reached_1r_rate: float | None   # share of MEASURED rows with mfe_r >= 1 (edge available)
     mean_mfe_r: float | None
     mean_mae_r: float | None
     expectancy_r: float | None      # mean over decided of (+RR / -1R)
@@ -135,7 +136,7 @@ def _tod_bucket(created: datetime, timeframe: str) -> str:
     return f"{ist.hour:02d}:00–{ist.hour:02d}:59 IST"
 
 
-_ADX_RE = re.compile(r"ADX=([0-9]+(?:\.[0-9]+)?)")
+_ADX_RE = re.compile(r"\bADX=([0-9]+(?:\.[0-9]+)?)")
 
 
 def _parse_adx_level(explanation: object) -> float | None:
@@ -185,9 +186,12 @@ def _cell(key: str, rows: list[_Row]) -> Cell:
         key=key,
         n=n,
         entered=entered,
+        measured=len(mfes),
         decided=len(decided),
         hit_rate=(wins / len(decided)) if decided else None,
-        reached_1r_rate=(reached / n) if n else None,
+        # Over MEASURED rows only — a NULL-mfe (tapeless / not-yet-backfilled) row is
+        # unmeasured and must not dilute the rate (quant-verifier MEDIUM 2026-08-13).
+        reached_1r_rate=(reached / len(mfes)) if mfes else None,
         mean_mfe_r=statistics.fmean(mfes) if mfes else None,
         mean_mae_r=statistics.fmean(maes) if maes else None,
         expectancy_r=statistics.fmean(exp_terms) if exp_terms else None,
@@ -207,6 +211,24 @@ def _table(dimension: str, rows: list[_Row], keyfn: Callable[[_Row], str]) -> Ta
 
     cells.sort(key=_sort_key)
     return Table(dimension=dimension, cells=cells)
+
+
+def attribute_rows(rows: list[_Row]) -> list[Table]:
+    """The pure aggregator: rows → the marginal + 2-D attribution tables. Shared
+    by the live loader (compute_attribution) and the corpus loader (6.2b), so a
+    signal_outcome and a backtest trade are attributed by identical logic."""
+    return [
+        _table("Confidence", rows, lambda r: _confidence_bucket(r.confidence)),
+        _table("Regime (ADX)", rows, lambda r: _regime_bucket(r.adx)),
+        _table("Direction", rows, lambda r: r.direction),
+        _table("Setup", rows, lambda r: r.setup),
+        _table("Time of day", rows, lambda r: _tod_bucket(r.created_at, r.timeframe)),
+        _table(
+            "Confidence × Regime",
+            rows,
+            lambda r: f"{_confidence_bucket(r.confidence)} · {_regime_bucket(r.adx)}",
+        ),
+    ]
 
 
 async def compute_attribution(
@@ -236,23 +258,11 @@ async def compute_attribution(
             )
         )
 
-    tables = [
-        _table("Confidence", rows, lambda r: _confidence_bucket(r.confidence)),
-        _table("Regime (ADX)", rows, lambda r: _regime_bucket(r.adx)),
-        _table("Direction", rows, lambda r: r.direction),
-        _table("Setup", rows, lambda r: r.setup),
-        _table("Time of day", rows, lambda r: _tod_bucket(r.created_at, r.timeframe)),
-        _table(
-            "Confidence × Regime",
-            rows,
-            lambda r: f"{_confidence_bucket(r.confidence)} · {_regime_bucket(r.adx)}",
-        ),
-    ]
     return AttributionReport(
         cohort="shadow" if shadow else "tradeable",
         since=since,
         total=len(rows),
-        tables=tables,
+        tables=attribute_rows(rows),
     )
 
 
@@ -278,20 +288,20 @@ def render_attribution_markdown(reports: list[AttributionReport], *, day: date) 
         "",
         f"_Terminal signal outcomes since {since}. Read-only. Expectancy_r = mean over "
         f"decided of (+RR / −1R), winsorized at ±{WINSOR_R:.0f}R (tiny-SL artifacts). "
-        f"reach1R = share whose MFE reached +1R. Cells with n < {RANK_FLOOR} are shown "
-        f"but **not ranked** (†).__",
+        f"reach1R (MFE ≥ +1R), mfe & mae are over `meas` rows (excursion computed), not n. "
+        f"Cells with n < {RANK_FLOOR} are shown but **not ranked** (†).__",
         "",
     ]
     for rep in reports:
         out.append(f"## {rep.cohort.title()} cohort — n={rep.total}")
         for t in rep.tables:
             out.append(f"\n### {t.dimension}")
-            out.append("| Cell | n | entered | hit | reach1R | mfe R | mae R | exp R |")
-            out.append("|---|--:|--:|--:|--:|--:|--:|--:|")
+            out.append("| Cell | n | entered | meas | hit | reach1R | mfe R | mae R | exp R |")
+            out.append("|---|--:|--:|--:|--:|--:|--:|--:|--:|")
             for c in t.cells:
                 mark = "" if c.ranked else " †"
                 out.append(
-                    f"| {c.key}{mark} | {c.n} | {c.entered} | {_pct(c.hit_rate)} | "
+                    f"| {c.key}{mark} | {c.n} | {c.entered} | {c.measured} | {_pct(c.hit_rate)} | "
                     f"{_pct(c.reached_1r_rate)} | {_r(c.mean_mfe_r)} | {_r(c.mean_mae_r)} | "
                     f"{_r(c.expectancy_r)} |"
                 )

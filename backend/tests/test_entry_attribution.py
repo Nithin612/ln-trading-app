@@ -155,3 +155,29 @@ async def test_renderer_marks_unranked_cells(db) -> None:
     assert "### Regime (ADX)" in md and "### Confidence" in md
     assert "†" in md                                   # the unranked marker
     assert "not ranked" in md
+
+
+async def test_reach1r_denominator_is_measured_not_n(db) -> None:
+    """CANARY (quant-verifier MEDIUM): a NULL-mfe (unmeasured) row must not
+    dilute reach1R — the denominator is measured rows, not n."""
+    s = await make_stock(db, symbol="ATTRMEAS")
+    await _seed(db, s, status="tp_first", mfe_r="2.0")     # measured, reached 1R
+    await _seed(db, s, status="tp_first", mfe_r=None)       # unmeasured (no excursion)
+    await db.commit()
+
+    c = _cell(await compute_attribution(db, shadow=False), "Confidence", "70–79")
+    assert c.n == 2 and c.measured == 1
+    assert c.reached_1r_rate == pytest.approx(1.0)         # 1/1 measured, NOT 1/2
+
+
+async def test_rrless_win_dropped_from_expectancy(db) -> None:
+    """A win with undefined RR (entry == sl → risk 0) is counted in `decided`
+    but dropped from expectancy_r, never guessed. Unreachable in production (SL
+    caps reject entry==sl); the branch must still behave."""
+    s = await make_stock(db, symbol="ATTRRRLESS")
+    await _seed(db, s, status="tp_first", entry="100", sl="100", tp="106")  # RR undefined
+    await db.commit()
+
+    c = _cell(await compute_attribution(db, shadow=False), "Confidence", "70–79")
+    assert c.decided == 1
+    assert c.expectancy_r is None                          # only decided had no RR → dropped
