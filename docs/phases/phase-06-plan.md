@@ -152,18 +152,68 @@ is the evidence for **raising the confidence gate toward 80 and/or a regime gate
 gate-80).** Raising the gate to 80 alone *lowers* total-R below baseline; both together
 over-filter. **The regime gate is the high-value lever, not a confidence-gate bump.**
 
+**Regime-gate §8 walk-forward — DONE 2026-08-13** (`app/services/gate_walkforward.py`
++ `scripts/gate_walkforward.py` → `docs/analysis/gate-walkforward-<date>.md`; 14 unit
+tests, quant-verifier PASS). Promotes the gate experiment to §8 grade — it adds the
+three metrics §8 gates a merge on (the experiment omitted them) and answers the
+circularity of scoring a corpus-mined rule on that same corpus. **The finding HOLDS
+out-of-sample:**
+- **§8 metrics all improve** (all moves > ±5% → sign-off): win rate 40→43%, per-trade
+  Sharpe +0.034→+0.097, max drawdown 36.5R→20.4R, total-R +41.2→+73.8.
+- **Consistency:** skip-transitional wins expectancy in **5/5** sequential time folds
+  (2023-09→2026-08); its biggest lift is in the *worst* fold (2025-06→12: −28.3R/−0.170
+  → −2.0R/−0.018).
+- **Anchored walk-forward (OOS):** learn the negative-expectancy regime from each
+  expanding *past* window (every window re-learns "transitional"), apply forward →
+  OOS expectancy **+0.067→+0.142** (Sharpe +0.044→+0.091, maxDD 36.5R→20.4R).
+
+DRY: a shared `realized_r(row)` helper now backs the attribution cells, the gate
+experiment, and this (byte-identical output confirmed). Read-only; frozen engine
+untouched.
+
+**Regime-eligibility overlay — BUILT shadow-first 2026-08-13** (`app/signals/regime_guard.py`
++ `regime.py`; `settings.regime_gate_mode`, default `shadow`; quant-verifier PASS +
+bug-hunter CLEAN). The §8-validated gate, as a DOWNSTREAM overlay that never touches the
+frozen engine (the `risk_guards.py` precedent): it reads a committed signal's own ADX
+regime and, in `active` mode only, rejects a paper order in transitional (20–25). Default
+shadow = measures, never suppresses. `app/services/regime_gate_shadow.py` +
+`scripts/regime_gate_shadow.py` → `regime-gate-shadow-<date>.md` = "measure before gating"
+on the LIVE cohort (first read: suppressed −0.061R, gating lifts live expectancy
+−0.034→−0.016, consistent with the backtest). Design decision (recorded): NOT an engine
+change / no Rust-fixture regen — the frozen engine already emits the ADX level in the
+factor payload, so the gate is a filter on top and the §8 evidence carries over unchanged.
+
 **NEXT — recommended lead first; each starts on user command (nothing auto-advances):**
 
-1. **Regime-gate §8 experiment → engine change.** Promote the gate-experiment finding
-   into a proper §8 walk-forward regression; if it holds, implement the "skip
-   transitional ADX (20–25)" gate. Highest value — where the found edge becomes real
-   P&L. Behaviour-changing → §8 + sign-off; Market-Context-Engine slice, a fresh
-   careful build, not a quick one.
-2. **6.4 — weight retune + promotion.** Downweight the factors attribution showed hurt
-   (DARK_CLOUD_COVER / EVENING_STAR / MACD_CROSS / RSI_LEVEL), upweight the +Δ ones
-   (RSI_DIVERGENCE / ADX / MORNING_STAR); wire the shadow→active promotion gate. Retune
-   can start now; promotion is time-gated by shadow forward evidence (first fire
-   2026-08-10, so no rush).
+1. **Flip the regime gate shadow→active.** The build is done and running in shadow; this
+   is the behaviour-changing step — set `regime_gate_mode="active"` (one reversible
+   setting). **Two preconditions (both documented in-code): explicit user sign-off** on
+   the §8 moves (win rate / Sharpe / drawdown all > ±5%), and **a first-class ADX level on
+   the signal** — the shadow gate recovers regime by parsing the frozen ADX factor's prose,
+   which is fine to measure but must not gate a money path (quant-verifier + bug-hunter
+   2026-08-13: the 0.1-rounding can misbucket a raw-choppy [19.95,20) signal at the edge).
+   Gate the flip on forward shadow evidence (`regime-gate-shadow-<date>.md`) agreeing with
+   the backtest. Highest value — where the edge becomes P&L.
+2. **6.4 — weight retune + promotion. Experiment DONE 2026-08-13** (`app/services/weight_retune.py`
+   + `scripts/weight_retune.py` → `weight-retune-<date>.md`; quant-verifier FAIL→resolved).
+   The 6.2 leak is per-FACTOR but the only weight lever is per-GROUP, and groups mix
+   helping+hurting factors, so a naive "downweight the hurting factors" isn't expressible —
+   the experiment therefore SWEEPS group multipliers (each ×0.5/×1.5) on the corpus, §8
+   metrics + per-fold consistency. **Lead candidate = `momentum ×1.5`** (cross-engine-
+   consistent): expR +0.052→+0.070, total-R +41.2→+50.4, Sharpe +0.034→+0.045, maxDD
+   36.5→32.4R, 4/5 folds (up-weighting momentum *tightens* the confluence). Runners-up
+   `structure ×0.5` / `pattern ×0.5`. **Shadow-promoted DONE 2026-08-14** (migration
+   `d2e3f4a5b6c7`): `retune_momentum_x15` + a `retune_base` control now run as 1d/eod SHADOW
+   profiles over Nifty50 (no setup gate = base engine + multipliers, rr-2 exit both arms so
+   the A/B isolates the entry effect), minting `is_shadow` signals on the nightly path,
+   measured by 6.1/6.2 attribution (bucketed by `profile_key`). Verified end-to-end. **To
+   promote:** once the shadow A/B (`retune_momentum_x15` vs `retune_base` in the daily
+   attribution Setup×shadow table) beats base forward → create an active retune profile on
+   sign-off (best-of-12 = in-sample until the shadow confirms; ~1–2 signals/arm/day, so weeks
+   of accrual). **Separate bug to fix:** the Rust `group_of` vs Python `_factor_group`
+   DOW_TREND disagreement (Rust=structure, Python+spec §2.4=trend) — a frozen-engine bugfix +
+   fixture regen + parity-AXES for all six groups; until then `trend`/`structure` multipliers
+   are engine-specific (‡) and NOT actionable (the momentum candidate is unaffected).
 3. **6.5 — pair-trading, market-neutral candidate.** Regime-agnostic — sidesteps the
    choppy/transitional tape our directional profiles leak in. A new shadow profile
    judged by this same 6.1–6.2 attribution.

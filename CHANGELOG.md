@@ -7,6 +7,124 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6): 6.4 shadow-promote momentum ×1.5 — the retune A/B, forward (2026-08-14)
+
+Turns the 6.4 in-sample corpus finding into FORWARD out-of-sample evidence. Migration
+`d2e3f4a5b6c7` seeds two 1d/eod **shadow** profiles over Nifty50 with no setup gating
+(pure base engine + group weight multipliers): `retune_base` (no multipliers — the
+control) and `retune_momentum_x15` (momentum ×1.5 — the experiment's lead). They run on
+the same nightly `eod` path as the live profiles (`run_scheduled_profiles` runs active OR
+shadow) and mint `is_shadow` signals — measured to outcome by 6.1/6.2 attribution
+(bucketed by `profile_key` under the shadow cohort), never tradeable (the order path
+admits `status=='active'` only). No new code — a data seed on the existing parity-pinned
+profile/shadow machinery; nothing promoted to live.
+
+A/B design: both arms run the SAME pipeline with the SAME exit (rr 2), so the comparison
+isolates the ENTRY selection the momentum weights drive — the forward test of the finding.
+(The exit is a fixed RR, not the corpus experiment's classification-canon TP — the profile
+pipeline has no canon-TP template — so the entry SET matches the experiment but absolute R
+is not directly comparable to the corpus numbers; the momentum-vs-base direction is what
+matters.) Promotion to an active retune stays a separate forward-evidence + sign-off step.
+
+Verified: seed config-hashes pinned (`tests/test_strategy_profiles.py`), end-to-end smoke
+(both arms mint `is_shadow` signals with the right `profile_key`/`status`), 43 profile
+tests green, migration applied to dev. Reversible (downgrade deletes the seeds by key;
+once shadow signals reference a profile the FK correctly blocks deletion).
+
+### feat(phase6): 6.4 weight-retune experiment — group-weight sweep (read-only) (2026-08-13)
+
+The first slice of 6.4 (weight tuning): a coordinate sweep of the six confluence
+weight-groups (each ×0.5 / ×1.5) over the parity-clean Nifty50 daily corpus, scored on
+the §8 metrics + per-fold temporal consistency. `app/services/weight_retune.py` +
+`scripts/weight_retune.py` → `docs/analysis/weight-retune-<date>.md`; `corpus_rows`
+gained a `weight_multipliers` param (group-keyed scaling inside the frozen scorer —
+byte-identical to frozen when empty; the parity-pinned profile mechanism). Read-only;
+nothing promoted.
+
+**Result — `momentum ×1.5` is the lead candidate** (cross-engine-consistent): mean
+expectancy +0.052→+0.070, total-R +41.2→+50.4, Sharpe +0.034→+0.045, maxDD 36.5R→32.4R,
+beats baseline in 4/5 time folds. Runners-up `structure ×0.5` and `pattern ×0.5`.
+Counter to the a-priori (per-factor) guess — *up*weighting momentum *tightens* the
+confluence (742 vs 818 trades) rather than adding noise. Not promoted: a candidate for a
+shadow retune profile, forward-evidence + sign-off gated. Best-of-12 in-sample selection,
+so treat as in-sample until shadow confirms.
+
+**Key structural finding:** the 6.2 leak is per-FACTOR but the only weight lever is
+per-GROUP, and groups mix helping and hurting factors (momentum = RSI_DIVERGENCE +
+MACD_CROSS + RSI_LEVEL; pattern = MORNING_STAR + DARK_CLOUD_COVER + EVENING_STAR) — so
+group tuning is coarse and a null result would argue for per-factor weights.
+
+**Bug surfaced (flagged, not fixed):** the Rust oracle's `group_of` and the Python
+`_factor_group` disagree on `DOW_TREND` (Rust → `structure`, Python + spec §2.4 →
+`trend`), so `trend`/`structure` group multipliers are NOT consistent across engines —
+those rows are marked ‡ and excluded from the actionable lead. Reconciling the taxonomy
+(a frozen-engine bugfix + fixture regen + parity-AXES extension for all six groups) is a
+follow-up. quant-verifier FAIL→resolved (the overclaim of portability, the "OOS" mislabel
+→ "temporal-consistency", and dead code all fixed; the lead is unaffected).
+
+### feat(phase6): regime-eligibility overlay — the §8 gate, shadow-first (2026-08-13)
+
+Acts on the §8-validated finding (below) WITHOUT touching the frozen engine — a
+downstream eligibility overlay, following the `risk_guards.py` precedent
+("analysis/ is frozen, so the guard lives here"). It reads a committed signal's
+own ADX regime and, in `active` mode, rejects a paper order in the transitional
+(20–25) band. **Default `shadow` — it measures, it does not suppress.**
+
+- `app/signals/regime.py` — canonical ADX regime taxonomy (one source of truth;
+  the attribution/§8 code now delegates to it, so gate and measurement can't drift).
+- `app/signals/regime_guard.py` — `SKIP_REGIMES={transitional}`, fail-open
+  (unknown regime → eligible; a suppressing gate must never suppress on uncertainty),
+  and `order_block_reason(signal, mode)` — a strict no-op unless `mode=="active"`.
+- `app/api/v1/trading.py` — the guard call in `place_order`, after the circuit
+  breaker + status checks. Inert in the default config; flipping to `active` is
+  one setting (`settings.regime_gate_mode`) and fully reversible.
+- `app/services/regime_gate_shadow.py` + `scripts/regime_gate_shadow.py` →
+  `docs/analysis/regime-gate-shadow-<date>.md` — "measure before gating": what the
+  gate WOULD do to the LIVE cohort. First read (210 live signals): the suppressed
+  set is net-negative (−0.061 expR) and gating lifts live expectancy −0.034→−0.016
+  — consistent with the backtest; keep accruing before flipping.
+
+quant-verifier PASS + bug-hunter CLEAN. **Preconditions for the shadow→active flip
+(both documented in-code): explicit user sign-off on the §8 metric moves, and a
+first-class ADX level persisted on the signal** (the shadow gate recovers regime by
+parsing the frozen ADX factor's prose — fine for measurement, not for a money-path
+gate). Tests: `test_regime_guard.py` + order-path seam tests in `test_trading.py`.
+
+### feat(phase6): regime-gate §8 walk-forward — the finding holds out-of-sample (2026-08-13)
+
+Promotes the gate experiment into a §8-grade regression. The gate experiment showed
+skip-transitional wins over the *whole* corpus, but (a) omitted the three metrics
+`docs/SIGNAL_ENGINE.md` §8 actually gates a merge-approval on — win rate, Sharpe, max
+drawdown — and (b) scored a rule that was *mined from the same corpus* (circular).
+`app/services/gate_walkforward.py` (pure, unit-tested) + `scripts/gate_walkforward.py`
+→ `docs/analysis/gate-walkforward-<date>.md` close both gaps, read-only over the
+parity-pinned Nifty50 daily backtest at gate-70. DRY: a shared `realized_r(row)` helper
+(the +winsor(RR)/−1R unit) now backs the attribution cells, the gate experiment, and
+this — byte-identical output confirmed.
+
+**§8 metrics — every gated axis improves, all moves > ±5% (⚠ needs sign-off):**
+
+| metric | baseline (all regimes) | proposed (skip transitional) | change |
+|---|--:|--:|--:|
+| win rate | 40% | 43% | +7% ⚠ |
+| Sharpe (per-trade) | +0.034 | +0.097 | +186% ⚠ |
+| max drawdown | 36.5R | 20.4R | −44% ⚠ |
+| total-R | +41.2 | +73.8 | +79% |
+
+**Robustness — it is not one lucky stretch, and it is not circular:**
+- **Consistency:** skip-transitional wins expectancy in **5/5** sequential time folds
+  (2023-09 → 2026-08). Its biggest lift is in the *worst* fold (2025-06→12: baseline
+  −28.3R / −0.170 expR → −2.0R / −0.018).
+- **Anchored walk-forward (out-of-sample):** learning the negative-expectancy regime on
+  each expanding *past* window and applying it forward — every window independently
+  re-learns "transitional" — lifts OOS expectancy **+0.067 → +0.142** (Sharpe +0.044 →
+  +0.091, maxDD 36.5R → 20.4R). The rule is chosen without seeing the fold it is scored on.
+
+Verdict: **HOLDS out-of-sample.** quant-verifier PASS (refactor equivalence proven,
+look-ahead structurally disproven, frozen engine untouched, R-multiples not a money
+path). Read-only — changes nothing. The engine gate itself (skip ADX 20–25) is
+behaviour-changing and stays **unbuilt pending explicit user sign-off** on those §8 moves.
+
 ### feat(phase6): gate experiment — the regime gate beats a higher confidence gate (2026-08-13)
 
 Read-only backtest comparison over the Nifty50 corpus (Rust `run_universe`) that

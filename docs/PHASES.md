@@ -31,16 +31,51 @@ nearly doubles captured R (+73.8 vs +41.2 total-R) and triples per-trade expecta
 it beats raising the confidence gate to 80.** All behaviour-changing → §8 backtest +
 sign-off first; the engine stays frozen.
 
+**The §8 walk-forward then confirmed it (`scripts/gate_walkforward.py` →
+`gate-walkforward-<date>.md`, 2026-08-13). The finding HOLDS out-of-sample:** the three
+metrics §8 gates a merge on all improve — win rate 40→43%, per-trade Sharpe +0.034→+0.097,
+max drawdown 36.5R→20.4R (every move > ±5% ⚠ → needs sign-off) — skip-transitional wins
+expectancy in **5/5** sequential time folds (biggest lift in the *worst* fold), and an
+anchored walk-forward that learns the bad regime only from the *past* and applies it
+forward lifts OOS expectancy **+0.067→+0.142**. quant-verifier PASS; read-only.
+
+**The regime gate is now BUILT as a shadow-first overlay (2026-08-13)** —
+`app/signals/regime_guard.py` + `regime.py`, wired into the paper-order path
+(`settings.regime_gate_mode`, default **shadow**), engine untouched (a downstream
+eligibility filter, the `risk_guards.py` pattern). It MEASURES and does not suppress;
+`scripts/regime_gate_shadow.py` → `regime-gate-shadow-<date>.md` shows what it would do
+to the LIVE cohort (first read: suppressed set −0.061R, gating lifts live expectancy
+−0.034→−0.016 — consistent with the backtest). quant-verifier PASS + bug-hunter CLEAN.
+
+**6.4 weight-retune EXPERIMENT DONE 2026-08-13** (`scripts/weight_retune.py` →
+`weight-retune-<date>.md`; quant-verifier FAIL→resolved). Group-weight coordinate sweep
+(the 6.2 leak is per-factor but the lever is per-group, and groups mix helping+hurting
+factors, so it's measured not theorised): **lead = `momentum ×1.5`** (expR +0.052→+0.070,
+total-R +41.2→+50.4, Sharpe +0.034→+0.045, maxDD 36.5→32.4R, 4/5 folds). Surfaced a bug —
+Rust `group_of` vs Python `_factor_group` disagree on DOW_TREND (structure vs trend), so
+`trend`/`structure` multipliers are engine-specific (‡, not actionable) until reconciled.
+
+**6.4 shadow-promote DONE 2026-08-14** (migration `d2e3f4a5b6c7`): `momentum ×1.5` and a
+`retune_base` control now run as 1d/eod SHADOW profiles over Nifty50 (no setup gate = base
+engine + multipliers), minting `is_shadow` signals on the nightly path — the FORWARD A/B of
+the experiment, measured by 6.1/6.2 attribution (bucketed by `profile_key`), never tradeable.
+Both arms share the rr-2 exit so the A/B isolates the entry effect. Verified end-to-end.
+
 **NEXT — recommended lead first; each starts on user command (nothing auto-advances):**
-**(1) Regime-gate §8 experiment** → promote the gate-experiment finding into a §8
-walk-forward regression and, if it holds, implement the "skip transitional ADX" gate
-(Market-Context-Engine slice — highest value); **(2) 6.4** weight retune (downweight
-DARK_CLOUD_COVER/EVENING_STAR/MACD_CROSS/RSI_LEVEL) + shadow→active promotion (time-gated
-by shadow evidence); **(3) 6.5** pair-trading market-neutral candidate. Detail:
+**(1) Flip the regime gate shadow→active** once forward shadow evidence agrees with the
+backtest. Preconditions (in-code): **user sign-off** on the §8 moves + **a first-class ADX
+level on the signal** (the shadow gate parses the frozen ADX prose — fine to measure, not
+to gate money). One reversible setting; **(2a) promote the momentum ×1.5 retune** once its
+shadow A/B (`retune_momentum_x15` vs `retune_base`, in the daily attribution Setup×shadow
+table) beats base forward — then create an active retune profile on sign-off (nothing to
+build until evidence accrues; ~1–2 signals/arm/day); **(2b) fix the DOW_TREND Rust/Python
+grouping bug** (frozen-engine bugfix + fixture regen + parity-AXES for all 6 groups) so
+`trend`/`structure` retunes become trustworthy; **(3) 6.5** pair-trading market-neutral. Detail:
 [`phases/phase-06-plan.md`](phases/phase-06-plan.md). Reports:
 `docs/analysis/attribution-<date>.md` + `attribution-corpus-<date>.md` +
-`gate-experiment-<date>.md`.
-**Local `main` is ~10 commits ahead of origin — push is manual.**
+`gate-experiment-<date>.md` + `gate-walkforward-<date>.md` + `regime-gate-shadow-<date>.md`
++ `weight-retune-<date>.md`.
+**Local `main` is ~12 commits ahead of origin (+ uncommitted Phase-6 work) — push is manual.**
 
 > **Phase-3 gate is USER-RUN, MANUALLY, on Friday 2026-08-15.** Explicit
 > instruction 2026-08-08 — do not run `/phase-gate` before then. Both exit
