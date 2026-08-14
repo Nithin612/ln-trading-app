@@ -38,10 +38,15 @@ review (memory `external-libs-review-2026-08`). So the math is **numpy-only**:
 - **Hedge ratio** β: OLS via `numpy.linalg.lstsq` (with an intercept). Exact.
 - **Half-life of mean reversion**: fit AR(1) on Δs vs s (Ornstein-Uhlenbeck),
   `half_life = −ln(2)/λ` where λ is the mean-reversion rate. Exact, standard, cheap.
-- **Stationarity**: the **Lo–MacKinlay variance-ratio** test (numpy-simple, well-founded)
-  — VR(q) < 1 ⇒ mean-reverting, VR ≈ 1 ⇒ random walk. Chosen over ADF because a correct
-  ADF needs MacKinnon critical-value tables (error-prone to hand-roll); VR gives an
-  honest, testable mean-reversion signal now.
+- **Stationarity GATE**: the **Dickey-Fuller t-statistic** of the mean-reversion
+  coefficient λ (from the Δs = c + λ·s_{t-1} regression), compared to the standard DF 5%
+  critical value −2.86 (constant case). Plain DF — no lag augmentation. The **Lo–MacKinlay
+  variance ratio** is also computed but is **INFORMATIONAL only** (VR(2) sits near 1 for any
+  pair with a tradeable half-life, so it is a weak discriminator and does NOT gate — the DF
+  t-stat does). *(Corrected 2026-08-14 per quant-verifier: an earlier draft here said VR was
+  the gate; the shipped code gates on the DF t-stat.)* A formal AUGMENTED DF / Johansen with
+  MacKinnon-interpolated critical values is the flagged follow-up (needs statsmodels or a
+  validated numpy ADF).
 - **Follow-up (flagged for discussion):** a formal **Engle-Granger ADF** or **Johansen**
   cointegration test — needs statsmodels, or a numpy ADF validated against known
   MacKinnon CVs. Only worth it if the VR/half-life screen proves too permissive in the

@@ -1,0 +1,225 @@
+"""Pair-trading cointegration / mean-reversion screen (Phase 6.5, slice 6.5a).
+
+Pure numpy — no DB, no clock, no randomness (a DB-loading wrapper lives above it,
+so this core stays unit-testable on synthetic series). The math is indicator-class
+f64 (rules: floats are allowed inside indicator math); money/P&L stays Decimal in
+the layers above. Deps decision: numpy-only, no scipy/statsmodels — see
+phase-06-6.5-pairtrading-plan.md.
+
+Given two aligned close-price series A, B over COMPLETED candles, we fit a hedge
+ratio by OLS, form the spread s = A − (α + β·B), and measure whether/how fast that
+spread mean-reverts:
+
+  - hedge_ratio    — OLS α, β of A on B.
+  - mean_reversion — the Dickey-Fuller regression Δs_t = c + λ·s_{t-1} + ε. λ < 0 is
+                     mean reversion; its t-statistic is the DF test statistic (the
+                     stationarity evidence), and half-life = −ln 2 / λ (OU, in bars).
+  - variance_ratio — Lo-MacKinlay VR(q), reported for information (<1 ⇒ mean-reverting;
+                     at q=2 it is a weak discriminator for slow pairs, so it does NOT
+                     gate — the DF t-stat does).
+  - zscore         — the spread's current standardized distance from its trailing mean,
+                     i.e. the live entry signal (long the cheap leg when z ≤ −z_entry).
+
+Why DF and not a hand-rolled ADF: this is the plain Dickey-Fuller regression (no lag
+augmentation), so its t-stat uses the standard DF critical value −2.86 (5%, constant
+case). A formal AUGMENTED DF/Johansen with MacKinnon interpolation is a documented
+follow-up — only warranted if the shadow evidence shows this admits junk pairs.
+
+No look-ahead: every statistic is computed only from the window handed in (completed
+bars ≤ N); the caller keeps the signal for N+1. Degenerate inputs (too short, zero
+variance, non-finite, no mean reversion) return None rather than a misleading number.
+"""
+
+from __future__ import annotations
+
+import math
+from dataclasses import dataclass
+
+import numpy as np
+import numpy.typing as npt
+
+FloatArray = npt.NDArray[np.float64]
+
+# Minimum completed observations before any statistic is trustworthy. Pair stats on
+# a handful of bars are noise; the caller must not rank below this (the n-floor
+# precedent from 6.2 attribution).
+MIN_OBS = 60
+
+# Screen policy. A pair is a mean-reversion CANDIDATE only if its spread is
+# stationary with statistical evidence (DF t-stat past the 5% critical value) AND it
+# reverts fast enough to trade (half-life within a horizon). Conservative on purpose —
+# the shadow evidence, not this file, sets the final thresholds.
+DF_CRIT_5PCT = -2.86  # Dickey-Fuller 5% critical value, constant (drift) case, large-N
+MAX_HALF_LIFE = 30.0  # bars; slower than this is untradeable drift, not reversion
+MIN_HALF_LIFE = 1.0  # bars; faster is noise/discretization, not a real spread
+
+
+@dataclass(frozen=True)
+class PairStat:
+    """One candidate pair's mean-reversion profile over the observed window. All
+    fields are display/analysis f64; the None-returning screen filters the degenerate
+    cases out before this is built."""
+
+    alpha: float  # OLS intercept  (A ≈ alpha + beta·B)
+    beta: float  # OLS hedge ratio
+    half_life: float  # OU half-life in bars (> 0, finite)
+    df_tstat: float  # DF t-stat of the mean-reversion coefficient (< 0; more neg = stronger)
+    variance_ratio: float  # Lo-MacKinlay VR(2); informational (< 1 ⇒ mean-reverting)
+    zscore: float  # current spread z over the trailing window
+    n: int  # observations used
+    spread_mean: float
+    spread_std: float
+
+
+def _finite_2d(a: FloatArray, b: FloatArray) -> tuple[FloatArray, FloatArray] | None:
+    """Align + drop non-finite rows; None if the arrays disagree in length or go
+    too short after cleaning."""
+    if a.shape != b.shape or a.ndim != 1:
+        return None
+    mask = np.isfinite(a) & np.isfinite(b)
+    a2, b2 = a[mask], b[mask]
+    if a2.size < MIN_OBS:
+        return None
+    return a2, b2
+
+
+def hedge_ratio(a: FloatArray, b: FloatArray) -> tuple[float, float] | None:
+    """OLS α, β of A on B (A ≈ α + β·B). None if B has no variance (β undefined) or
+    the fit is non-finite."""
+    if a.shape != b.shape or a.size < 2:
+        return None
+    if not np.isfinite(b).all() or float(np.var(b)) == 0.0:
+        return None
+    design = np.column_stack([b, np.ones_like(b)])
+    sol, *_ = np.linalg.lstsq(design, a, rcond=None)
+    beta, alpha = float(sol[0]), float(sol[1])
+    if not (math.isfinite(beta) and math.isfinite(alpha)):
+        return None
+    return alpha, beta
+
+
+def mean_reversion(spread: FloatArray) -> tuple[float, float, float] | None:
+    """Dickey-Fuller regression of the spread: Δs_t = c + λ·s_{t-1} + ε. Returns
+    (lambda, t_stat, half_life) where λ < 0 is mean reversion, t_stat is λ/SE(λ) (the
+    DF statistic — the more negative, the stronger the stationarity evidence), and
+    half_life = −ln 2 / λ in bars. None when there is no mean reversion (λ ≥ 0), the
+    regressor has no variance, or the fit is degenerate/non-finite."""
+    s = np.asarray(spread, dtype=float)
+    if s.size < 4 or not np.isfinite(s).all():
+        return None
+    s_lag = s[:-1]
+    delta = s[1:] - s_lag
+    n = s_lag.size
+    if float(np.var(s_lag)) == 0.0:
+        return None
+    x = np.column_stack([s_lag, np.ones_like(s_lag)])  # [s_{t-1}, 1]
+    sol, *_ = np.linalg.lstsq(x, delta, rcond=None)
+    lam = float(sol[0])
+    if not math.isfinite(lam) or lam >= 0.0:
+        return None
+    # Standard error of λ: σ²·(XᵀX)⁻¹[0,0], σ² = RSS/(n−2).
+    resid = delta - x @ sol
+    dof = n - 2
+    if dof <= 0:
+        return None
+    sigma2 = float(resid @ resid) / dof
+    xtx_inv = np.linalg.inv(x.T @ x)
+    var_lam = sigma2 * float(xtx_inv[0, 0])
+    if var_lam <= 0.0 or not math.isfinite(var_lam):
+        return None
+    t_stat = lam / math.sqrt(var_lam)
+    half_life = -math.log(2.0) / lam
+    if not (math.isfinite(t_stat) and math.isfinite(half_life) and half_life > 0.0):
+        return None
+    return lam, t_stat, half_life
+
+
+def variance_ratio(spread: FloatArray, q: int = 2) -> float | None:
+    """Lo-MacKinlay variance ratio VR(q) of the spread, overlapping + unbiased
+    estimator. VR<1 ⇒ negative autocorrelation ⇒ mean-reverting; ≈1 ⇒ random walk;
+    >1 ⇒ trending. Informational (weak at q=2 for slow pairs). None if too short or
+    the 1-period variance is zero."""
+    s = np.asarray(spread, dtype=float)
+    t = s.size
+    if q < 2 or t < q + 1 or not np.isfinite(s).all():
+        return None
+    diffs1 = np.diff(s)
+    mu = float(np.mean(diffs1))
+    var1 = float(np.sum((diffs1 - mu) ** 2)) / (t - 1)
+    if var1 == 0.0:
+        return None
+    diffs_q = s[q:] - s[:-q]
+    m = q * (t - q + 1) * (1.0 - q / t)  # Lo-MacKinlay unbiased normalizer
+    if m <= 0.0:
+        return None
+    var_q = float(np.sum((diffs_q - q * mu) ** 2)) / m
+    vr = var_q / var1
+    return vr if math.isfinite(vr) else None
+
+
+def zscore(spread: FloatArray, lookback: int = 20) -> float | None:
+    """Standardized distance of the CURRENT spread from its trailing-`lookback`
+    history — the bars BEFORE it, so a fresh extreme is measured against established
+    normal rather than distorting its own benchmark (a spread sitting on its own
+    window inflates that window's σ and saturates its z). The live entry signal:
+    long the cheap leg when z ≤ −z_entry. None when the trailing window has no
+    variance or there are fewer than lookback+1 bars."""
+    s = np.asarray(spread, dtype=float)
+    if s.size < lookback + 1 or lookback < 2 or not np.isfinite(s).all():
+        return None
+    window = s[-(lookback + 1) : -1]  # the `lookback` bars before the current
+    mu = float(np.mean(window))
+    sd = float(np.std(window, ddof=1))
+    if sd == 0.0 or not math.isfinite(sd):
+        return None
+    z = (float(s[-1]) - mu) / sd
+    return z if math.isfinite(z) else None
+
+
+def screen_pair(
+    a: FloatArray,
+    b: FloatArray,
+    *,
+    z_lookback: int = 20,
+) -> PairStat | None:
+    """Full profile for one candidate pair, or None when the pair is unusable
+    (misaligned, too short, no hedge fit, no mean reversion, degenerate variance).
+    None is the honest 'not a pair' — never a fabricated number."""
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    cleaned = _finite_2d(a, b)
+    if cleaned is None:
+        return None
+    a2, b2 = cleaned
+    hr = hedge_ratio(a2, b2)
+    if hr is None:
+        return None
+    alpha, beta = hr
+    spread = a2 - (alpha + beta * b2)
+    mr = mean_reversion(spread)
+    if mr is None:
+        return None
+    _lam, t_stat, half_life = mr
+    vr = variance_ratio(spread, q=2)
+    if vr is None:
+        return None
+    z = zscore(spread, lookback=z_lookback)
+    if z is None:
+        return None
+    return PairStat(
+        alpha=alpha,
+        beta=beta,
+        half_life=half_life,
+        df_tstat=t_stat,
+        variance_ratio=vr,
+        zscore=z,
+        n=int(a2.size),
+        spread_mean=float(np.mean(spread)),
+        spread_std=float(np.std(spread, ddof=1)),
+    )
+
+
+def is_candidate(stat: PairStat) -> bool:
+    """Policy gate: statistically-significant stationarity (DF t-stat past the 5%
+    critical value) AND a tradeable reversion horizon (half-life in [MIN, MAX])."""
+    return stat.df_tstat <= DF_CRIT_5PCT and MIN_HALF_LIFE <= stat.half_life <= MAX_HALF_LIFE

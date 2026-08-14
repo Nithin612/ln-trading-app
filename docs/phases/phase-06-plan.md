@@ -247,9 +247,13 @@ use the identical partition; §8/corpus/attribution numbers unchanged. quant-ver
    shadow A/B was seeded *today*, so it has ~zero forward evidence; promoting on the in-sample
    best-of-12 corpus fit is exactly the overfitting trap this phase forbids ("shadow→active only
    on forward evidence"). The two tracks stay consistent only if the retune also waits, reviewed
-   on the SAME ~mid-Sept window. Built instead: a retune A/B readiness monitor (mirrors the
-   regime-gate banner). Revisit ~2026-09-15 — if `retune_momentum_x15` beats `retune_base`
-   forward (expectancy + fold consistency, n ≥ the rank floor), create the active profile then. **No DOW_TREND grouping bug** (investigated + WITHDRAWN 2026-08-14): a
+   on the SAME ~mid-Sept window. **No new monitor built** — the A/B is ALREADY surfaced by the
+   existing 6.1/6.2 attribution (the daily report buckets the shadow cohort by `profile_key`, so
+   `retune_momentum_x15` vs `retune_base` shows up there as they accrue); a dedicated
+   promote-readiness *verdict* (mirroring the regime-gate banner) is a small follow-up worth
+   adding at the mid-Sept review, not now (0 data — the arms were seeded today). Revisit
+   ~2026-09-15 — if `retune_momentum_x15` beats `retune_base` forward (expectancy + fold
+   consistency, n ≥ the rank floor), create the active profile then. **No DOW_TREND grouping bug** (investigated + WITHDRAWN 2026-08-14): a
    *scoring* DOW_TREND is tagged `["structure"]` (analysis/structure/dow.py) and Python
    `_factor_group` checks tags before names → it groups `structure`, matching the Rust engine;
    the `_GROUP_NAMES` "trend" entry is dead code for it (only a score-0/tagless DOW_TREND hits
@@ -264,6 +268,6 @@ use the identical partition; §8/corpus/attribution numbers unchanged. quant-ver
    [`phase-06-6.5-pairtrading-plan.md`](phase-06-6.5-pairtrading-plan.md). **Deps decision:
    numpy-only** — scipy/statsmodels are NOT installed and adding them is a stack change that
    contradicts the "adopt no new deps, stay lean" posture (external-libs review); the
-   cointegration/mean-reversion math is implemented in numpy (OLS hedge ratio, spread, AR(1)
-   half-life, variance-ratio stationarity), with a formal ADF/Johansen upgrade flagged as a
-   follow-up for discussion. Shadow-first, frozen engine untouched (a new overlay/profile).
+   cointegration/mean-reversion math is implemented in numpy (OLS hedge ratio, spread, OU
+   half-life, Dickey-Fuller stationarity t-stat as the gate, Lo-MacKinlay variance ratio as
+   an informational metric), with a formal ADF/Johansen upgrade flagged as a follow-up. Shadow-first, frozen engine untouched (a new overlay/profile).

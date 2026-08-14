@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6): 6.5a pair-trading cointegration/mean-reversion screen (numpy-only) (2026-08-14)
+
+Foundation for Phase 6.5 (market-neutral pair-trading — regime-agnostic, earns in the choppy
+tape the directional book leaks in). `app/services/pair_screen.py`, pure numpy (no
+scipy/statsmodels — the lean-deps decision): OLS hedge ratio; the **Dickey-Fuller stationarity
+t-stat** (the gate, vs the −2.86 5% critical value) + OU half-life from the Δs=c+λ·s_{t-1}
+regression; the Lo-MacKinlay variance ratio (informational); and a trailing-window z-score (the
+entry signal). Every degenerate path returns None, never a fabricated number; no look-ahead
+(stats only on the passed window). **Read-only research screen — mints NO tradeable signal**
+(shadow-first; the frozen single-name engine is untouched). +13 tests (math validated against
+known AR(1) / random-walk properties; an exact-value canary pins the DF standard-error formula).
+quant-verifier PASS-WITH-NOTES (math independently recomputed to ~1e-14; notes addressed —
+design doc reconciled to the DF gate, `adf_tstat`→`df_tstat`). Design + open questions
+(pair-signal schema, formal ADF/Johansen, universe scope):
+`docs/phases/phase-06-6.5-pairtrading-plan.md`. 6.5b (the shadow pair-profile that mints
+signals) deferred — needs the pair-signal data-model decision.
+
 ### chore(phase3): gate closed — Realtime v2 GATED 2026-08-14 (PASS)
 
 Phase 3 (realtime tick-to-tick) formally closed at the user's instruction, Fri 2026-08-14
