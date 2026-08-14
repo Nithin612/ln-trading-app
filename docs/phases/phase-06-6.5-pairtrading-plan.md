@@ -95,3 +95,14 @@ and the spread P&L can be measured hypothetically without an execution path. **T
 
 - **2026-08-14:** design fixed (this doc); deps decision = numpy-only; 6.5a build started.
   6.5b–d designed + deferred for discussion.
+- **2026-08-14:** **6.5a DONE** — `app/services/pair_screen.py` (OLS hedge ratio, DF stationarity
+  t-stat gate + OU half-life, Lo-MacKinlay VR informational, trailing z-score); 13 tests;
+  quant-verifier PASS-WITH-NOTES (math recomputed to ~1e-14; notes addressed — DF-gate doc
+  reconcile, `adf_tstat`→`df_tstat`, exact-value SE canary).
+- **2026-08-14:** **6.5a.2 DONE** — `app/services/pair_universe.py` + `scripts/pair_universe.py`
+  → `docs/analysis/pairs-<date>.md`. Same-sector Nifty50 screen over ~400 trading days, ranked by
+  DF t-stat; pure `align_closes`/`rank_pairs` + thin DB loader; 8 tests incl. a DB planted-pair.
+  **First live run: 12 sensible candidates** (IT/metals/pharma/auto/financials peers;
+  `docs/analysis/pairs-2026-08-14.md`). Empirical confirmation that VR(2)≈1 on real mean-reverting
+  pairs — VR is informational, the DF t-stat gates. Read-only; **6.5b (signal minting) still
+  deferred pending the pair-signal schema decision** (open question #2 above).

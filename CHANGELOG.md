@@ -7,6 +7,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6): 6.5a.2 pair-universe screen — run 6.5a over the live universe (2026-08-14)
+
+`app/services/pair_universe.py` + `scripts/pair_universe.py` → `docs/analysis/pairs-<date>.md`.
+Screens same-sector active-Nifty50 pairs (a prior against data-snooped false cointegration) over
+~400 trading days and ranks by DF t-stat. Read-only, mints nothing. Pure `align_closes` /
+`rank_pairs` (inner-join common trading days → screen → rank) + a thin DB loader; `now` is
+injectable (no hidden clock). **First live run: 12 candidates, all economically sensible** —
+IT-services peers (TCS–WIPRO, INFY–WIPRO, HCLTECH–WIPRO), metals (HINDALCO–JSWSTEEL), pharma
+(DRREDDY–SUNPHARMA, CIPLA–MAXHEALTH), auto (M&M–MARUTI), financials (BAJAJFINSV–ICICIBANK);
+half-lives 10–19 bars, DF t-stats −2.88…−3.96, n=432. The report's VR(2)≈1 on those real
+mean-reverting pairs confirms empirically why VR is informational, not the gate. +8 tests (pure
+align/rank, cross-sector exclusion, untagged skip, a DB planted-pair integration test, render).
+Still read-only research — 6.5b signal-minting deferred (needs the pair-signal schema decision).
+
 ### feat(phase6): 6.5a pair-trading cointegration/mean-reversion screen (numpy-only) (2026-08-14)
 
 Foundation for Phase 6.5 (market-neutral pair-trading — regime-agnostic, earns in the choppy
