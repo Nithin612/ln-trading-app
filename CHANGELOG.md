@@ -7,6 +7,78 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6): regime-gate forward-evidence banner in the daily analysis run (2026-08-14)
+
+`make analysis` (via `daily_analysis._run`) now also writes
+`docs/analysis/regime-gate-shadow-<date>.md` and prints a one-line **Flip readiness** banner,
+so the live forward evidence for the gate flip accrues and surfaces every session instead of
+needing a manual script run. Guarded: a failure prints a visible skip line and never blocks
+the primary daily report.
+
+Readiness bar (`regime_gate_shadow.forward_evidence_ready`): ≥20 resolved suppressed
+(transitional) trades AND the suppressed set net-negative AND gating lifting expectancy over
+baseline (n=20 = the rank floor; the §8 backtest already powered the decision at killed n=223).
+The first run surfaced that the accumulated live cohort since OUTCOME_EPOCH (2026-07-19) is
+ALREADY ✅ READY: 44 decided suppressed trades, all three §8 metrics improve on live (expR
++0.027→+0.089, total-R +2.8→+5.5, maxDD 8.8→4.7R, suppressed −0.061R). Whether that
+(accumulated, out-of-sample vs the 2y backtest corpus but mostly pre-dating the overlay build)
+suffices, or strictly-forward-only evidence is wanted, is a user call. The flip still needs
+explicit §8 sign-off and is NOT done; review checkpoint stored as `FORWARD_EVIDENCE_REVIEW_DATE`
+= 2026-09-15. +4 tests.
+
+### feat(phase6): align the regime-gate shadow measurement onto signals.regime (2026-08-14)
+
+Closes the INFO follow-up from the first-class-ADX change below. The live regime-gate
+shadow (`regime_gate_shadow.measure`) bucketed the kept/killed sets by re-deriving regime
+from the parsed ADX number (`adx_regime(Row.adx)`), while the active gate reads the
+persisted `signals.regime` — so at a band edge the forward evidence could mis-predict what
+the gate would actually suppress. Now the attribution `Row` carries `regime` (selected as
+`s.regime` in the loader, `= m["regime"] or regime_from_factor_scores(fs)` — byte-identical
+to `regime_guard.signal_regime`), and `measure` partitions by it. The shadow now measures
+exactly the set the active gate would suppress.
+
+Read-only and §8-safe: `measure` runs only on the live cohort; the corpus/§8 path
+(`corpus_attribution`, `gate_walkforward`) and the attribution report still bucket via the
+unchanged `adx_regime(raw)` and never read `Row.regime`, so no banked number moves. Live
+shadow and backtest agree except at raw ADX == 25.0 exactly (measure-zero). Backtest/legacy
+rows (`regime=None`) fall back to the raw-level bucket, unchanged.
+
++3 tests (a shadow canary where two adx=30 rows split only under stored-regime bucketing; a
+NULL-regime fallback; a DB seam test that the persisted field — not a re-derivation — flows
+through the loader). quant-verifier PASS-WITH-NOTES (all INFO — no number moved).
+
+### feat(phase6): first-class ADX regime on signals — the gate's active-flip precondition (2026-08-14)
+
+The regime-eligibility overlay (`app/signals/regime_guard.py`) recovered a committed
+signal's ADX regime by parsing the frozen ADX factor's `f"ADX={x:.1f}"` prose on the
+order path. That 0.1-rounding misbucketed a raw-choppy [19.95, 20) signal as 20.0 →
+transitional, which in `active` mode would have wrongly SUPPRESSED it (choppy is not in
+the skip-set). A money-path gate must not hang off prose rounding — the documented
+precondition for flipping the gate shadow→active.
+
+Regime is now a first-class field. `Signal.regime` (migration `e3f4a5b6c7d8`, nullable,
+reversible) is persisted at each of the three signal-commit sites (`signal_service.py`
+×2, `profiles/pipeline.py`), recovered from the frozen factor's DECISION BRANCH
+("…weak trend…" / "…moderate…" / "…trending…") rather than its rounded number — the
+branch reflects the comparison the factor made at full precision before rounding the
+display, so the band-edge misbucket is gone. The gate reads `signal.regime`; legacy NULL
+rows fall back to on-the-fly recovery (fail-open preserved). The frozen engine is
+untouched (`app/analysis/` diff empty) — a downstream filter, the `risk_guards.py`
+pattern.
+
+Branch-recovery agrees with the backtest's raw-number `adx_regime` bucketing everywhere
+except raw ADX == 25.0 exactly — a measure-zero point where the branch calls it
+transitional (the factor's own inclusive "moderate" branch, the conservative direction).
+The §8 / corpus / shadow evidence path is unchanged.
+
++9 tests: two band-edge canaries (both mutation-verified — 19.97→choppy, 24.97→
+transitional), stored-field preference, NULL fallback, and a pipeline seam assertion.
+quant-verifier PASS-WITH-NOTES (one INFO: align the live shadow measurement onto
+`signals.regime` before the flip so forward evidence and enforcement use the identical
+partition — now done in the follow-up above), bug-hunter CLEAN. **Money-path
+behaviour is UNCHANGED until the gate is flipped to `active` (default `shadow` = no-op);
+this only makes the future flip safe.**
+
 ### perf(provisional): score each stock once per cycle, not once per profile (2026-08-14)
 
 The live worker logged `cycle overran the cadence: ~15000 ms > 3000 ms` continuously

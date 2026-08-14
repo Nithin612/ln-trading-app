@@ -19,11 +19,20 @@ Modes (`settings.regime_gate_mode`), default **shadow**:
            is one setting and fully reversible; it is the behaviour-changing step
            that needs explicit sign-off.
 
-**Precondition for the active flip:** regime is currently recovered by parsing
-the frozen ADX factor's explanation ("ADX=X"). That is fine while the gate only
-MEASURES (shadow), but before it gates real orders (active) the numeric ADX level
-should be persisted as a first-class field at signal commit and read here — a
-money-path gate must not hang off prose parsing (quant-verifier 2026-08-13).
+**Active-flip precondition — MET (2026-08-14):** regime is persisted as a
+first-class field (`signals.regime`) at commit and read here, so the money-path
+gate no longer hangs off prose parsing (the quant-verifier 2026-08-13 blocker).
+New signals carry a branch-recovered regime — no 0.1-rounding edge, so the
+raw-choppy [19.95, 20) case is no longer misbucketed as transitional
+(app.signals.regime); legacy rows (NULL) fall back to on-the-fly recovery. What
+remains for the flip is governance, not code: user sign-off on the §8 moves and
+forward shadow evidence agreeing with the backtest.
+
+(Consistency: the live shadow measurement — regime_gate_shadow — buckets by this
+same persisted `signals.regime` (since 2026-08-14), so it measures exactly the
+partition this gate would enforce, with no band-edge divergence. The corpus/§8
+backtest buckets by the precise raw ADX level, which agrees with the branch regime
+except at the measure-zero exact-25.0 point.)
 
 **Fail-open:** a gate that suppresses trades must never suppress on uncertainty,
 so a signal whose regime can't be recovered ("regime n/a") is eligible.
@@ -40,9 +49,11 @@ SKIP_REGIMES: frozenset[str] = frozenset({rg.TRANSITIONAL})
 
 
 def signal_regime(signal: Signal) -> str:
-    """The signal's ADX regime bucket, recovered from its stored factor payload
-    (fail-open to 'regime n/a')."""
-    return rg.regime_from_factor_scores(signal.factor_scores)
+    """The signal's ADX regime bucket. Prefers the first-class `signal.regime`
+    persisted at commit (branch-recovered, no rounding edge); falls back to
+    on-the-fly recovery from the stored factor payload for legacy rows written
+    before the column existed (fail-open to 'regime n/a')."""
+    return signal.regime or rg.regime_from_factor_scores(signal.factor_scores)
 
 
 def is_eligible(signal: Signal, *, skip: frozenset[str] = SKIP_REGIMES) -> bool:

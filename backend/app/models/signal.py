@@ -118,6 +118,15 @@ class Signal(Base):
     # §4 volatility attribution (Phase-1 review carry-over): True when the
     # ATR>3% reduction changed suggested_qty; NULL = unknown (legacy rows).
     volatility_reduced: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    # ADX trend-regime bucket at commit (Phase 6, first-class ADX level). Persisted
+    # so the regime-eligibility overlay (app/signals/regime_guard.py) gates real
+    # orders off a durable field instead of re-parsing the ADX factor's prose on the
+    # money path — the documented precondition for flipping the gate shadow→active.
+    # Recovered from the frozen ADX factor's DECISION BRANCH, not its 0.1-rounded
+    # number, so a raw-choppy [19.95, 20) signal is not misbucketed as transitional
+    # (see app.signals.regime.regime_from_factor_scores). NULL on legacy rows written
+    # before this column existed → the gate falls back to on-the-fly recovery.
+    regime: Mapped[str | None] = mapped_column(String(32), nullable=True)
 
     stock: Mapped["Stock"] = relationship("Stock")  # type: ignore[name-defined]  # noqa: F821
     outcome: Mapped["SignalOutcome | None"] = relationship(

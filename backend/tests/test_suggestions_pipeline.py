@@ -15,6 +15,7 @@ from app.analysis.types import FactorResult
 from app.models.signal import Signal
 from app.profiles import pipeline
 from app.profiles.pipeline import run_profile, run_scheduled_profiles
+from app.signals import regime as rg
 from httpx import AsyncClient
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -153,6 +154,11 @@ class TestRunProfile:
         assert sig.profile_id == profile.id
         assert sig.setup_trigger["factor_score"]["passed"] is True
         assert sig.volatility_reduced is False
+        # Phase 6 (first-class ADX level): the pipeline persists the regime bucket
+        # at commit, consistent with on-the-fly recovery from the same payload —
+        # the money-path gate reads this durable field, not the prose.
+        assert sig.regime == rg.regime_from_factor_scores(sig.factor_scores)
+        assert sig.regime in (rg.CHOPPY, rg.TRANSITIONAL, rg.TRENDING, rg.NA)
         # entry = last close (100), flat 6% template → TP exactly 106
         assert sig.entry_price == Decimal("100")
         assert sig.take_profit == Decimal("106.0000")

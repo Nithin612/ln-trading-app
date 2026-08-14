@@ -10,7 +10,7 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-08-13) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-08-14) — read this block first
 
 **v2 Phases 0–2 ✅ done · Phase 3 (realtime) ▶ gate ritual only · Phase 4 ✅ done ·
 Phase 5 ✅ GATED 2026-08-07 · Phase 6 ▶ IN PROGRESS (6.1 + 6.2 shipped) · Phase 7 not started.**
@@ -62,11 +62,28 @@ engine + multipliers), minting `is_shadow` signals on the nightly path — the F
 the experiment, measured by 6.1/6.2 attribution (bucketed by `profile_key`), never tradeable.
 Both arms share the rr-2 exit so the A/B isolates the entry effect. Verified end-to-end.
 
+**First-class ADX level DONE 2026-08-14** (migration `e3f4a5b6c7d8`): `Signal.regime` is now
+persisted at commit — recovered from the frozen ADX factor's decision BRANCH (not its
+0.1-rounded prose), so the raw-choppy [19.95, 20) edge is no longer misbucketed as
+transitional — and the regime gate reads this durable field instead of parsing prose on the
+money path. This CLEARS the second active-flip precondition (quant-verifier PASS-WITH-NOTES +
+bug-hunter CLEAN; frozen engine untouched, the `risk_guards.py` pattern). Money-path behaviour
+is unchanged until the flip (default `shadow` = no-op); the flip now waits only on user §8
+sign-off + forward shadow agreement. **The one INFO follow-up is DONE too (2026-08-14): the
+live shadow measurement now buckets by the persisted `signals.regime`, so evidence and
+enforcement share one partition** (quant-verifier PASS — no §8/corpus number moved).
+
 **NEXT — recommended lead first; each starts on user command (nothing auto-advances):**
 **(1) Flip the regime gate shadow→active** once forward shadow evidence agrees with the
-backtest. Preconditions (in-code): **user sign-off** on the §8 moves + **a first-class ADX
-level on the signal** (the shadow gate parses the frozen ADX prose — fine to measure, not
-to gate money). One reversible setting; **(2a) promote the momentum ×1.5 retune** once its
+backtest. **The first-class ADX level precondition is now MET (2026-08-14, migration
+`e3f4a5b6c7d8`): `signals.regime` is persisted at commit (branch-recovered, no rounding
+edge) and the gate reads it — quant-verifier PASS + bug-hunter CLEAN.** What remains is
+governance: **user sign-off** on the §8 moves + forward shadow agreement. **Forward evidence now
+surfaces every `make analysis`** (`regime-gate-shadow-<date>.md` + a Flip readiness banner), and
+the accumulated live cohort ALREADY meets the bar (44 suppressed trades, all three §8 metrics
+improve live) — so this effectively waits only on the user's §8 sign-off (accept the accumulated
+cohort vs require strictly-forward evidence is a user call; checkpoint 2026-09-15). One reversible
+setting; **(2a) promote the momentum ×1.5 retune** once its
 shadow A/B (`retune_momentum_x15` vs `retune_base`, in the daily attribution Setup×shadow
 table) beats base forward — then create an active retune profile on sign-off (nothing to
 build until evidence accrues; ~1–2 signals/arm/day); **(3) 6.5** pair-trading market-neutral.
@@ -232,11 +249,17 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-08-10.**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-08-14.**
 Phases **0–2, 4 and 5 are CLOSED**; **Phase 3's two exit criteria are both MET
-and only its gate ritual is left**. Everything below this line is historical
-narrative — read the STATE AT A GLANCE block at the top of this file first, not
-the 400 lines that follow.
+and only its gate ritual is left (user-run, Friday 2026-08-15)**. **Phase 6 is
+UNDERWAY** — 6.1 + 6.2 + the gate experiment + §8 walk-forward + the regime-gate
+overlay + the 6.4 weight-retune experiment + shadow-promote are all DONE, and both
+the regime gate and the `momentum ×1.5` retune now run SHADOW-first (measure-only —
+NOTHING on the money path yet). **The live NEXT menu is the STATE AT A GLANCE block
+at the top of this file**: flip the regime gate shadow→active (on user sign-off + a
+first-class ADX level), promote the retune once its shadow A/B beats base, then 6.5
+pair-trading. Everything below this line is historical narrative — read the top
+block first, not the 400 lines that follow.
 
 Suites as of 2026-08-10: backend **1120**, frontend **370**. All work through
 `b795326` is merged to main **and pushed to origin**.
@@ -277,14 +300,14 @@ Suites as of 2026-08-10: backend **1120**, frontend **370**. All work through
    (Both checkboxes were stale for weeks — the work was done and never read back.
    If a checkbox here disagrees with an artifact, trust the artifact.) Keep
    running `scripts/shadow_day.sh` daily so the streak is unbroken on the day.
-2. **Phase 6 — outcome tracking + strategy lab v2** is the next *build* phase,
-   and the daily analysis says why: the binding constraint on profit is
-   **entry/regime selection, not exits** (only ~2 of 20 trades reached +1R over
-   08-03→06, and open heat has twice touched ~30% of capital). **A plan exists
-   and is awaiting sign-off: `docs/phases/phase-06-plan.md`.** It is deliberately
-   a plan and not code — Phase 6 touches expectancy calibration and the frozen
-   engine, which are user decisions. It ends with three questions; answer those
-   before writing any Phase-6 code.
+2. **Phase 6 — outcome tracking + entry-selection: UNDERWAY, not a plan anymore.**
+   The three sign-off questions were answered 2026-08-12 and the build has run
+   through 6.4 (see the STATE block + `docs/phases/phase-06-plan.md`, the live
+   tracker). The binding-constraint diagnosis held: **entry/regime selection, not
+   exits** — and it is now quantified and fixed shadow-first. What remains is
+   behaviour-changing and user-gated: flip the regime gate shadow→active, promote
+   the `momentum ×1.5` retune once its forward shadow A/B beats base, then 6.5
+   pair-trading. Nothing here auto-advances.
 3. ~~One imminent bug is logged, not fixed~~ — **FIXED 2026-08-07**, plus a
    CRITICAL look-ahead the owed quant-verifier pass turned up next to it.
    `_pick_expiry` walks the in-window expiries instead of dead-ending on the

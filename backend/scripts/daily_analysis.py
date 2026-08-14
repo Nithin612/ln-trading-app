@@ -106,6 +106,22 @@ async def _run(day: date, user_id: int, week_of: date | None, now: datetime) -> 
         _update_ledger(report)
         print(f"wrote {path.relative_to(_REPO_ROOT)}", flush=True)
 
+        # Regime-gate forward evidence (Phase 6): what the shadow overlay WOULD
+        # suppress on the live tradeable cohort, written every session so the flip
+        # decision accrues on live evidence, with a readiness banner (the passive
+        # reminder printed below). Read-only; guarded so it can never block the
+        # primary daily report — a failure prints a visible line, not a silent skip.
+        try:
+            from app.services import regime_gate_shadow as rgs
+
+            shadow = await rgs.compute_regime_gate_shadow(db)
+            spath = _ANALYSIS_DIR / f"regime-gate-shadow-{day.isoformat()}.md"
+            spath.write_text(rgs.render_markdown(shadow, day=day))
+            print(f"wrote {spath.relative_to(_REPO_ROOT)}", flush=True)
+            print(rgs.readiness_line(shadow), flush=True)
+        except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
+            print(f"regime-gate shadow step skipped: {exc!r}", flush=True)
+
         if week_of is not None:
             monday = week_of - timedelta(days=week_of.weekday())
             wk = await build_week_summary(db, monday=monday, user_id=user_id, now=now)

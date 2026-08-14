@@ -39,6 +39,7 @@ from app.services import market_calendar
 from app.services.fii_dii_service import get_market_flow_5d, get_stock_block_deal_net_cr
 from app.services.signal_service import score_signal
 from app.services.universe_service import resolve_universe
+from app.signals import regime as regime_mod
 from app.signals.classifier import classify_signal
 from app.signals.expiry import compute_validity_until
 from app.signals.headline import build_headline
@@ -388,6 +389,14 @@ async def _process_stock(
     if block is not None:
         log.info("profile %s: %s — %s", profile.key, symbol, block)
         return None
+    factor_scores = {
+        f.name: {
+            "weight": f.weight,
+            "score": round(f.score, 4),
+            "explanation": f.explanation,
+        }
+        for f in result.factors
+    }
     signal = Signal(
         stock_id=stock_id,
         direction=result.direction,
@@ -398,14 +407,8 @@ async def _process_stock(
         take_profit=take_profit,
         suggested_qty=qty,
         confidence_pct=result.confidence_pct,
-        factor_scores={
-            f.name: {
-                "weight": f.weight,
-                "score": round(f.score, 4),
-                "explanation": f.explanation,
-            }
-            for f in result.factors
-        },
+        factor_scores=factor_scores,
+        regime=regime_mod.regime_from_factor_scores(factor_scores),
         triggering_patterns=result.triggering_patterns or None,
         triggering_indicators=result.triggering_indicators or None,
         headline=build_headline(symbol, result, entry, stop_loss, take_profit, qty),

@@ -7,7 +7,7 @@ ADX-level regime parse, and the tradeable/shadow cohort split.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -32,7 +32,7 @@ async def _seed(
     db, stock, *, shadow=False, status="tp_first", confidence=75,
     entry="100", sl="98", tp="106", mfe_r="2.0", mae_r="-0.5",
     adx="ADX=27.2 trending", direction="BUY", timeframe="1d", created_at=CREATED,
-    factors=None,
+    factors=None, regime=None,
 ) -> str:
     fs = {"ADX": {"score": 0.6, "weight": 5, "explanation": adx}} if adx else {}
     for name, score in (factors or {}).items():
@@ -40,7 +40,8 @@ async def _seed(
     sig = Signal(
         stock_id=stock.id, direction=direction, classification="swing", timeframe=timeframe,
         entry_price=Decimal(entry), stop_loss=Decimal(sl), take_profit=Decimal(tp),
-        suggested_qty=10, confidence_pct=confidence, factor_scores=fs, headline="attr test",
+        suggested_qty=10, confidence_pct=confidence, factor_scores=fs, regime=regime,
+        headline="attr test",
         status="expired", is_shadow=shadow, validity_until=VALID, created_at=created_at,
     )
     db.add(sig)
@@ -125,6 +126,27 @@ async def test_regime_parsed_from_adx_level(db) -> None:
     assert _cell(rep, "Regime (ADX)", "choppy (ADX<20)").n == 1
     assert _cell(rep, "Regime (ADX)", "transitional (20–25)").n == 1
     assert _cell(rep, "Regime (ADX)", "regime n/a").n == 1
+
+
+async def test_row_regime_comes_from_the_stored_signal_field(db) -> None:
+    """SEAM: `Row.regime` (what the shadow measurement partitions by) is the
+    persisted `signals.regime` — so it matches exactly what the active gate reads,
+    not a re-derivation. Proven with a stored regime that DISAGREES with the payload;
+    and a NULL-regime (legacy) row falls back to on-the-fly recovery. A wrong SQL
+    column or mapping key would silently drop to the fallback and fail the first
+    assertion."""
+    from app.services.entry_attribution import load_attribution_rows
+
+    s = await make_stock(db, symbol="ATTRREG")
+    # stored regime deliberately contradicts the "ADX=22 building" (transitional) payload
+    await _seed(db, s, adx="ADX=22.0 building", regime="trending (ADX≥25)", created_at=CREATED)
+    await _seed(db, s, adx="ADX=22.0 building", regime=None,
+                created_at=CREATED + timedelta(minutes=1))  # legacy → fallback
+    await db.commit()
+
+    rows = sorted(await load_attribution_rows(db, shadow=False), key=lambda r: r.created_at)
+    assert rows[0].regime == "trending (ADX≥25)"       # stored field wins (not re-derived)
+    assert rows[1].regime == "transitional (20–25)"    # NULL → on-the-fly recovery
 
 
 async def test_tradeable_and_shadow_cohorts_are_separate(db) -> None:

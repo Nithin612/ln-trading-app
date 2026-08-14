@@ -19,6 +19,7 @@ from app.models.market_data import OhlcvDaily
 from app.models.signal import Signal
 from app.models.stock import Stock
 from app.services import market_calendar
+from app.signals import regime as regime_mod
 from app.signals.classifier import classify_signal
 from app.signals.expiry import compute_validity_until
 from app.signals.headline import build_headline
@@ -288,6 +289,7 @@ async def generate_signal_for_stock(
         suggested_qty=qty,
         confidence_pct=result.confidence_pct,
         factor_scores=factor_scores,
+        regime=regime_mod.regime_from_factor_scores(factor_scores),
         triggering_patterns=result.triggering_patterns or None,
         triggering_indicators=result.triggering_indicators or None,
         headline=headline,
@@ -470,6 +472,7 @@ async def run_live_signal_generation(
         suggested_qty=qty,
         confidence_pct=score.confidence_pct,
         factor_scores=factor_scores,
+        regime=regime_mod.regime_from_factor_scores(factor_scores),
         triggering_patterns=score.triggering_patterns or None,
         triggering_indicators=score.triggering_indicators or None,
         headline=headline,

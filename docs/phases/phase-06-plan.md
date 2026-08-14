@@ -1,9 +1,14 @@
-# Phase 6 — outcome tracking + strategy lab v2 · PLAN FOR REVIEW
+# Phase 6 — outcome tracking + entry-selection · LIVE TRACKER
 
-**Status: NOT STARTED. This document is a proposal, not a commitment.**
-Written 2026-08-08 while the user was away, deliberately as a plan rather than
-code: Phase 6 touches expectancy calibration and the FROZEN analysis engine,
-which are the user's calls, not an agent's.
+**Status: UNDERWAY (updated 2026-08-14).** Started as a plan-for-review on
+2026-08-08; the three sign-off questions were answered 2026-08-12 and the build
+has since run through 6.1, 6.2, the gate experiment, the §8 walk-forward, the
+regime-gate overlay, and the 6.4 weight-retune experiment + shadow-promote — all
+SHADOW-first (nothing on the money path yet). The proposal history is preserved
+below the "Decisions (settled 2026-08-12)" line; the **DONE markers on each slice
+are the current truth**. What remains is user-gated: flip the regime gate to
+active, promote the retune on forward evidence, then 6.5. Phase 6 still touches
+expectancy calibration and the FROZEN engine — those stay the user's calls.
 
 ---
 
@@ -183,17 +188,41 @@ on the LIVE cohort (first read: suppressed −0.061R, gating lifts live expectan
 change / no Rust-fixture regen — the frozen engine already emits the ADX level in the
 factor payload, so the gate is a filter on top and the §8 evidence carries over unchanged.
 
+**First-class ADX level — DONE 2026-08-14** (migration `e3f4a5b6c7d8`; quant-verifier
+PASS-WITH-NOTES + bug-hunter CLEAN). The second active-flip precondition. `Signal.regime`
+is persisted at commit and `regime_guard.signal_regime` reads it (legacy NULL falls back to
+on-the-fly recovery). Recovered from the frozen ADX factor's DECISION BRANCH — the phrase it
+emits reflects the comparison it made at full precision before the `f"ADX={x:.1f}"` display
+rounds — so the money-path gate no longer hangs off prose parsing and the raw-choppy
+[19.95, 20) / [24.95, 25) band edges are no longer misbucketed. Set at all 3 commit sites;
+frozen engine untouched. Branch-recovery agrees with the backtest's raw-number bucketing
+except at raw ADX == 25.0 exactly (measure-zero; the conservative direction). +9 tests (two
+band-edge canaries mutation-verified). **Shadow-alignment follow-up — ✅ DONE 2026-08-14 (same session):** the live regime-gate
+shadow (`regime_gate_shadow.measure`) now buckets by the persisted `signals.regime` (via
+`Row.regime`, identical to `regime_guard.signal_regime`), so forward evidence and enforcement
+use the identical partition; §8/corpus/attribution numbers unchanged. quant-verifier PASS. +3 tests.
+
 **NEXT — recommended lead first; each starts on user command (nothing auto-advances):**
 
 1. **Flip the regime gate shadow→active.** The build is done and running in shadow; this
    is the behaviour-changing step — set `regime_gate_mode="active"` (one reversible
-   setting). **Two preconditions (both documented in-code): explicit user sign-off** on
-   the §8 moves (win rate / Sharpe / drawdown all > ±5%), and **a first-class ADX level on
-   the signal** — the shadow gate recovers regime by parsing the frozen ADX factor's prose,
-   which is fine to measure but must not gate a money path (quant-verifier + bug-hunter
-   2026-08-13: the 0.1-rounding can misbucket a raw-choppy [19.95,20) signal at the edge).
-   Gate the flip on forward shadow evidence (`regime-gate-shadow-<date>.md`) agreeing with
-   the backtest. Highest value — where the edge becomes P&L.
+   setting). **Precondition — first-class ADX level: ✅ DONE 2026-08-14** (migration
+   `e3f4a5b6c7d8`): `Signal.regime` is persisted at commit, recovered from the frozen ADX
+   factor's DECISION BRANCH (not its 0.1-rounded prose, so the raw-choppy [19.95,20) edge
+   is no longer misbucketed), and the gate reads the durable field (`signal_regime` prefers
+   it; legacy NULL falls back). quant-verifier PASS-WITH-NOTES + bug-hunter CLEAN; frozen
+   engine untouched. **Remaining precondition = governance: explicit user sign-off** on the
+   §8 moves (win rate / Sharpe / drawdown all > ±5%). Gate the flip on forward shadow
+   evidence (`regime-gate-shadow-<date>.md`) agreeing with the backtest. **Follow-up — ✅ DONE
+   2026-08-14:** the live shadow measurement now buckets by the persisted `signals.regime`
+   (identical partition to the gate). **Forward evidence is now surfaced every `make analysis`**
+   (`regime-gate-shadow-<date>.md` + a **Flip readiness** banner; `forward_evidence_ready`, bar =
+   ≥20 resolved suppressed trades + suppressed net-negative + gating lifts expectancy). **First
+   read: ALREADY ✅ READY** — accumulated live cohort since 2026-07-19 has 44 suppressed trades,
+   all three §8 metrics improve on live (expR +0.027→+0.089, total-R +2.8→+5.5, maxDD 8.8→4.7R,
+   suppressed −0.061R). OPEN: accept the accumulated cohort (met now, out-of-sample vs the backtest
+   corpus) vs require strictly-forward-only evidence (~6-10wk) — user's call. Checkpoint 2026-09-15.
+   The flip still needs explicit §8 sign-off. Highest value — where the edge becomes P&L.
 2. **6.4 — weight retune + promotion. Experiment DONE 2026-08-13** (`app/services/weight_retune.py`
    + `scripts/weight_retune.py` → `weight-retune-<date>.md`; quant-verifier FAIL→resolved).
    The 6.2 leak is per-FACTOR but the only weight lever is per-GROUP, and groups mix

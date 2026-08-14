@@ -97,6 +97,12 @@ class Row:
     created_at: datetime
     timeframe: str
     factors: dict[str, float] = field(default_factory=dict)  # factor name → raw directional score
+    # The regime the LIVE gate would enforce on this signal — the persisted
+    # signals.regime (branch-recovered at commit), falling back to on-the-fly
+    # recovery for legacy NULL rows: identical to regime_guard.signal_regime, so
+    # the shadow measurement partitions exactly as the active gate would. None on
+    # backtest/corpus rows, which bucket via the raw `adx` level instead.
+    regime: str | None = None
 
 
 def realized_r(row: Row) -> float | None:
@@ -117,7 +123,7 @@ _SQL = text(
     "SELECT o.status, o.mfe_r, o.mae_r,"
     "       s.entry_price, s.stop_loss, s.take_profit, s.confidence_pct,"
     "       s.factor_scores, s.direction, COALESCE(s.profile_key, '(base)') AS setup,"
-    "       s.created_at, s.timeframe"
+    "       s.created_at, s.timeframe, s.regime"
     "  FROM signal_outcomes o"
     "  JOIN signals s ON s.id = o.signal_id"
     " WHERE s.created_at >= :since"
@@ -284,6 +290,9 @@ async def load_attribution_rows(
                 created_at=m["created_at"],
                 timeframe=m["timeframe"],
                 factors=factors,
+                # Mirror regime_guard.signal_regime exactly: stored field first,
+                # on-the-fly recovery for legacy NULL rows.
+                regime=m["regime"] or regime_mod.regime_from_factor_scores(fs),
             )
         )
     return rows

@@ -10,7 +10,12 @@ from datetime import UTC, datetime, timedelta
 import pytest
 from app.models.signal import Signal
 from app.services.entry_attribution import Row, _regime_bucket
-from app.services.regime_gate_shadow import measure
+from app.services.regime_gate_shadow import (
+    FORWARD_EVIDENCE_REVIEW_DATE,
+    forward_evidence_ready,
+    measure,
+    readiness_line,
+)
 from app.signals import regime as rg
 from app.signals import regime_guard
 
@@ -69,6 +74,56 @@ def test_labels_match_attribution_canon() -> None:
 
 
 # --------------------------------------------------------------------------- #
+# branch recovery (first-class ADX level, Phase 6) — committed signals recover  #
+# regime from the frozen factor's DECISION BRANCH, not the 0.1-rounded number,  #
+# so a band-edge signal is bucketed by the comparison the engine actually made. #
+# --------------------------------------------------------------------------- #
+
+
+def test_regime_from_branch_reads_the_frozen_factor_phrasing() -> None:
+    assert rg.regime_from_branch("ADX=27.2 trending; +DI=30 > -DI=10 bullish") == rg.TRENDING
+    assert (
+        rg.regime_from_branch("ADX=18.0 weak trend (< 20) — requires +5% confidence")
+        == rg.CHOPPY
+    )
+    assert (
+        rg.regime_from_branch("ADX=22.0 moderate (20-25), no strong directional signal")
+        == rg.TRANSITIONAL
+    )
+    # no branch phrase → None, so the caller falls back to the numeric parse
+    assert rg.regime_from_branch("ADX=22.0") is None
+    assert rg.regime_from_branch(None) is None
+
+
+def test_regime_from_factor_scores_fixes_the_20_edge_misbucket() -> None:
+    """CANARY: raw ADX 19.97 rounds to 'ADX=20.0' but the frozen factor took the
+    '<20 weak trend' branch. Branch recovery reads CHOPPY (eligible); the OLD
+    numeric re-bucket of the rounded 20.0 read TRANSITIONAL — wrongly suppressed
+    in ACTIVE mode. Fails on the pre-branch code."""
+    expl = "ADX=20.0 weak trend (< 20) — requires +5% confidence"
+    fs = {"ADX": {"weight": 5, "score": 0.0, "explanation": expl}}
+    assert rg.regime_from_factor_scores(fs) == rg.CHOPPY
+    # the numeric path this replaced would have said transitional:
+    assert rg.adx_regime(rg.parse_adx_level(expl)) == rg.TRANSITIONAL
+
+
+def test_regime_from_factor_scores_fixes_the_25_edge_misbucket() -> None:
+    """CANARY (upper mirror): raw ADX 24.97 rounds to 'ADX=25.0' in the '20-25
+    moderate' branch → branch reads TRANSITIONAL (correctly gated); the OLD numeric
+    re-bucket of 25.0 read TRENDING and let the bad entry through."""
+    expl = "ADX=25.0 moderate (20-25), no strong directional signal"
+    fs = {"ADX": {"weight": 5, "score": 0.0, "explanation": expl}}
+    assert rg.regime_from_factor_scores(fs) == rg.TRANSITIONAL
+    assert rg.adx_regime(rg.parse_adx_level(expl)) == rg.TRENDING
+
+
+def test_regime_from_factor_scores_falls_back_to_numeric_parse() -> None:
+    # a non-standard explanation carrying a number but no branch phrase
+    assert rg.regime_from_factor_scores({"ADX": {"explanation": "ADX=22.5"}}) == rg.TRANSITIONAL
+    assert rg.regime_from_factor_scores({"ADX": {"explanation": "ADX=30.0"}}) == rg.TRENDING
+
+
+# --------------------------------------------------------------------------- #
 # the gate policy                                                             #
 # --------------------------------------------------------------------------- #
 
@@ -98,12 +153,38 @@ def test_order_block_reason_only_active_blocks() -> None:
     assert regime_guard.order_block_reason(_sig(None), "active") is None  # fail-open
 
 
+def test_signal_regime_prefers_the_stored_first_class_field() -> None:
+    """The money-path gate reads signals.regime (persisted at commit), not the
+    factor prose — proven with a signal whose stored field DISAGREES with what its
+    payload would recover. This is the whole point of the first-class field."""
+    sig = _sig("ADX=22 moderate (20-25)")   # payload alone → transitional
+    sig.regime = rg.TRENDING                 # but the durable field says trending
+    assert regime_guard.signal_regime(sig) == rg.TRENDING
+    assert regime_guard.is_eligible(sig) is True                    # trusts the field
+    assert regime_guard.order_block_reason(sig, "active") is None
+
+
+def test_signal_regime_falls_back_when_field_unset() -> None:
+    """Legacy rows (regime column NULL) still gate via on-the-fly recovery."""
+    sig = _sig("ADX=22 moderate (20-25)")
+    assert sig.regime is None
+    assert regime_guard.signal_regime(sig) == rg.TRANSITIONAL
+    assert regime_guard.is_eligible(sig) is False
+
+
 # --------------------------------------------------------------------------- #
 # shadow measurement                                                          #
 # --------------------------------------------------------------------------- #
 
 
-def _row(status: str, adx: float, *, rr: float | None = None, day: int = 0) -> Row:
+def _row(
+    status: str,
+    adx: float,
+    *,
+    rr: float | None = None,
+    day: int = 0,
+    regime: str | None = None,
+) -> Row:
     return Row(
         status=status,
         mfe_r=None,
@@ -116,6 +197,7 @@ def _row(status: str, adx: float, *, rr: float | None = None, day: int = 0) -> R
         created_at=BASE + timedelta(days=day),
         timeframe="1d",
         factors={},
+        regime=regime,
     )
 
 
@@ -142,3 +224,64 @@ def test_measure_empty() -> None:
     res = measure([])
     assert res.baseline.trades == 0
     assert res.killed.trades == 0
+
+
+def test_measure_buckets_by_the_stored_gate_regime_not_the_raw_level() -> None:
+    """CANARY: the shadow must partition by the SAME persisted regime the active
+    gate enforces (`Row.regime` ← signals.regime), not by re-bucketing the parsed
+    ADX number — else forward evidence would mis-predict the gate at a band edge.
+    Both rows have raw adx=30 (→ trending → both KEPT under raw bucketing), but one
+    carries a stored TRANSITIONAL regime; only stored-regime bucketing kills it."""
+    rows = [
+        _row("sl_first", 30.0, regime=rg.TRANSITIONAL, day=0),
+        _row("sl_first", 30.0, regime=rg.TRENDING, day=1),
+    ]
+    res = measure(rows)
+    assert res.gated.trades == 1   # raw-adx bucketing would keep BOTH (fails on old code)
+    assert res.killed.trades == 1  # the stored-TRANSITIONAL row is suppressed
+
+
+def test_measure_falls_back_to_raw_level_when_regime_unset() -> None:
+    """Rows without a stored regime (e.g. backtest rows) still bucket by the raw
+    adx level — preserving prior behaviour and keeping the fallback path live."""
+    res = measure([_row("sl_first", 22.0, day=0)])  # no regime → adx 22 → transitional
+    assert res.killed.trades == 1
+    assert res.gated.trades == 0
+
+
+# --------------------------------------------------------------------------- #
+# forward-evidence readiness (the flip's data gate + the daily reminder)       #
+# --------------------------------------------------------------------------- #
+
+
+def _rows(regime: str, status: str, n: int, *, rr: float | None = None, start_day: int = 0):
+    return [_row(status, 30.0, rr=rr, day=start_day + i, regime=regime) for i in range(n)]
+
+
+def test_forward_evidence_not_ready_below_target_n() -> None:
+    ready, reason = forward_evidence_ready(measure(_rows(rg.TRANSITIONAL, "sl_first", 5)))
+    assert ready is False
+    assert "5/20" in reason
+
+
+def test_forward_evidence_not_ready_when_suppressed_set_is_positive() -> None:
+    # 20 suppressed WINS → the live tape disagrees with the backtest → do NOT flip
+    ready, reason = forward_evidence_ready(measure(_rows(rg.TRANSITIONAL, "tp_first", 20, rr=2.0)))
+    assert ready is False
+    assert "not net-negative" in reason
+
+
+def test_forward_evidence_ready_when_bar_met() -> None:
+    # 20 suppressed losses (net-negative) + kept winners so gating lifts expectancy
+    rows = _rows(rg.TRANSITIONAL, "sl_first", 20) + _rows(
+        rg.TRENDING, "tp_first", 5, rr=2.0, start_day=100
+    )
+    ready, reason = forward_evidence_ready(measure(rows))
+    assert ready is True
+    assert "READY" in reason
+
+
+def test_readiness_line_carries_tag_and_review_date() -> None:
+    line = readiness_line(measure(_rows(rg.TRANSITIONAL, "sl_first", 3)))
+    assert "NOT READY" in line
+    assert FORWARD_EVIDENCE_REVIEW_DATE.isoformat() in line
