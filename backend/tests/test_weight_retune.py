@@ -12,7 +12,6 @@ from app.services.weight_retune import (
     SWEEP_GROUPS,
     ConfigResult,
     RetuneReport,
-    _is_engine_specific,
     bucket_by_bounds,
     evaluate,
     fold_bounds,
@@ -133,30 +132,21 @@ def test_render_no_winner() -> None:
     assert "per-factor weights" in md  # the null-result verdict
 
 
-def test_is_engine_specific_flags_trend_and_structure() -> None:
-    # DOW_TREND is grouped differently by the Rust oracle vs the Python engine.
-    assert _is_engine_specific({"structure": 0.5}) is True
-    assert _is_engine_specific({"trend": 1.5}) is True
-    assert _is_engine_specific({"momentum": 1.5}) is False
-    assert _is_engine_specific({"pattern": 0.5}) is False
-
-
-def test_render_prefers_portable_lead_over_engine_specific_top() -> None:
-    # The top row by total-R is engine-specific (structure), but a portable winner
-    # (momentum) exists → the verdict must name momentum as the actionable lead and
-    # flag the structure row as ‡ not-actionable.
+def test_render_names_the_top_ranked_winner() -> None:
+    # With multiple promotable configs, the verdict names the top-ranked one
+    # (configs arrive sorted by total-R). All groups are cross-engine consistent,
+    # so there is no ‡ engine-specific caveat.
     base = [mkrow("tp_first", rr=1.0, day=0), mkrow("sl_first", day=1)]  # expR 0
-    structure = [mkrow("tp_first", rr=1.0, day=d) for d in range(6)]     # total +6
-    momentum = [mkrow("tp_first", rr=1.0, day=d) for d in range(3)]      # total +3
+    top = [mkrow("tp_first", rr=1.0, day=d) for d in range(6)]           # total +6
+    second = [mkrow("tp_first", rr=1.0, day=d) for d in range(3)]        # total +3
     report = RetuneReport(
         folds=2,
         baseline=ConfigResult("baseline", {}, gate_metrics(base), [0.0, 0.0], 0, 0),
         configs=[  # pre-sorted by total-R desc, as the script emits
-            _cfg("structure ×0.5", structure, [1.0, 1.0], 2, 2, {"structure": 0.5}),
-            _cfg("momentum ×1.5", momentum, [1.0, 1.0], 2, 2, {"momentum": 1.5}),
+            _cfg("structure ×0.5", top, [1.0, 1.0], 2, 2, {"structure": 0.5}),
+            _cfg("momentum ×1.5", second, [1.0, 1.0], 2, 2, {"momentum": 1.5}),
         ],
     )
     md = render_markdown(report, day=BASE.date())
-    assert "momentum ×1.5** leads (cross-engine-consistent)" in md
-    assert "structure ×0.5 ‡" in md
-    assert "not actionable until" in md
+    assert "structure ×0.5** leads" in md
+    assert "‡" not in md

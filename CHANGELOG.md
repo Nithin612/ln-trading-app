@@ -54,13 +54,16 @@ per-GROUP, and groups mix helping and hurting factors (momentum = RSI_DIVERGENCE
 MACD_CROSS + RSI_LEVEL; pattern = MORNING_STAR + DARK_CLOUD_COVER + EVENING_STAR) — so
 group tuning is coarse and a null result would argue for per-factor weights.
 
-**Bug surfaced (flagged, not fixed):** the Rust oracle's `group_of` and the Python
-`_factor_group` disagree on `DOW_TREND` (Rust → `structure`, Python + spec §2.4 →
-`trend`), so `trend`/`structure` group multipliers are NOT consistent across engines —
-those rows are marked ‡ and excluded from the actionable lead. Reconciling the taxonomy
-(a frozen-engine bugfix + fixture regen + parity-AXES extension for all six groups) is a
-follow-up. quant-verifier FAIL→resolved (the overclaim of portability, the "OOS" mislabel
-→ "temporal-consistency", and dead code all fixed; the lead is unaffected).
+quant-verifier FAIL→resolved (an "OOS" mislabel → "temporal-consistency", plus dead code,
+both fixed; the lead is unaffected).
+
+**Correction (2026-08-14):** an earlier revision of this entry flagged a "DOW_TREND
+grouping bug" (Rust `structure` vs Python `trend`). That was a MISREAD. A *scoring*
+DOW_TREND is tagged `["structure"]` (analysis/structure/dow.py) and Python `_factor_group`
+checks tags before names, so it groups `structure` — matching the Rust engine; the
+`_GROUP_NAMES` "trend" entry is dead code for it. All six weight groups are cross-engine
+consistent; there is no bug. An attempted "fix" (→trend) inverted parity and was reverted
+(quant-verifier caught it). Do not change DOW_TREND's group — see `dow-trend-grouping-gotcha`.
 
 ### feat(phase6): regime-eligibility overlay — the §8 gate, shadow-first (2026-08-13)
 

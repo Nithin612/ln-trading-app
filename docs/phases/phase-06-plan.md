@@ -210,10 +210,14 @@ factor payload, so the gate is a filter on top and the §8 evidence carries over
    promote:** once the shadow A/B (`retune_momentum_x15` vs `retune_base` in the daily
    attribution Setup×shadow table) beats base forward → create an active retune profile on
    sign-off (best-of-12 = in-sample until the shadow confirms; ~1–2 signals/arm/day, so weeks
-   of accrual). **Separate bug to fix:** the Rust `group_of` vs Python `_factor_group`
-   DOW_TREND disagreement (Rust=structure, Python+spec §2.4=trend) — a frozen-engine bugfix +
-   fixture regen + parity-AXES for all six groups; until then `trend`/`structure` multipliers
-   are engine-specific (‡) and NOT actionable (the momentum candidate is unaffected).
+   of accrual). **No DOW_TREND grouping bug** (investigated + WITHDRAWN 2026-08-14): a
+   *scoring* DOW_TREND is tagged `["structure"]` (analysis/structure/dow.py) and Python
+   `_factor_group` checks tags before names → it groups `structure`, matching the Rust engine;
+   the `_GROUP_NAMES` "trend" entry is dead code for it (only a score-0/tagless DOW_TREND hits
+   it — immaterial). An earlier "engine-specific" flag came from testing that tagless case; an
+   attempted fix (→trend) INVERTED parity and was reverted (quant-verifier FAIL). All six
+   weight groups are cross-engine consistent. Do NOT change DOW_TREND's group — see
+   `dow-trend-grouping-gotcha` in memory.
 3. **6.5 — pair-trading, market-neutral candidate.** Regime-agnostic — sidesteps the
    choppy/transitional tape our directional profiles leak in. A new shadow profile
    judged by this same 6.1–6.2 attribution.

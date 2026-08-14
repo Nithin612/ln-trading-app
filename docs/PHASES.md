@@ -51,9 +51,10 @@ to the LIVE cohort (first read: suppressed set −0.061R, gating lifts live expe
 `weight-retune-<date>.md`; quant-verifier FAIL→resolved). Group-weight coordinate sweep
 (the 6.2 leak is per-factor but the lever is per-group, and groups mix helping+hurting
 factors, so it's measured not theorised): **lead = `momentum ×1.5`** (expR +0.052→+0.070,
-total-R +41.2→+50.4, Sharpe +0.034→+0.045, maxDD 36.5→32.4R, 4/5 folds). Surfaced a bug —
-Rust `group_of` vs Python `_factor_group` disagree on DOW_TREND (structure vs trend), so
-`trend`/`structure` multipliers are engine-specific (‡, not actionable) until reconciled.
+total-R +41.2→+50.4, Sharpe +0.034→+0.045, maxDD 36.5→32.4R, 4/5 folds). All six weight
+groups are cross-engine consistent (an earlier "DOW_TREND engine-specific" caveat was
+WITHDRAWN 2026-08-14: a *scoring* DOW_TREND is tagged `structure` in both engines — see
+`dow-trend-grouping-gotcha` in memory; do NOT "fix" its group).
 
 **6.4 shadow-promote DONE 2026-08-14** (migration `d2e3f4a5b6c7`): `momentum ×1.5` and a
 `retune_base` control now run as 1d/eod SHADOW profiles over Nifty50 (no setup gate = base
@@ -68,9 +69,10 @@ level on the signal** (the shadow gate parses the frozen ADX prose — fine to m
 to gate money). One reversible setting; **(2a) promote the momentum ×1.5 retune** once its
 shadow A/B (`retune_momentum_x15` vs `retune_base`, in the daily attribution Setup×shadow
 table) beats base forward — then create an active retune profile on sign-off (nothing to
-build until evidence accrues; ~1–2 signals/arm/day); **(2b) fix the DOW_TREND Rust/Python
-grouping bug** (frozen-engine bugfix + fixture regen + parity-AXES for all 6 groups) so
-`trend`/`structure` retunes become trustworthy; **(3) 6.5** pair-trading market-neutral. Detail:
+build until evidence accrues; ~1–2 signals/arm/day); **(3) 6.5** pair-trading market-neutral.
+(An earlier "(2b) fix the DOW_TREND grouping bug" item was investigated 2026-08-14 and
+WITHDRAWN — there is no bug; a scoring DOW_TREND groups `structure` in both engines. An
+attempted fix inverted parity and was reverted; see `dow-trend-grouping-gotcha`.) Detail:
 [`phases/phase-06-plan.md`](phases/phase-06-plan.md). Reports:
 `docs/analysis/attribution-<date>.md` + `attribution-corpus-<date>.md` +
 `gate-experiment-<date>.md` + `gate-walkforward-<date>.md` + `regime-gate-shadow-<date>.md`

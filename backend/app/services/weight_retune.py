@@ -30,16 +30,13 @@ from app.services.gate_walkforward import DEFAULT_FOLDS, GateMetrics, gate_metri
 SWEEP_GROUPS = ["trend", "momentum", "volume", "structure", "pattern", "institutional"]
 SWEEP_MULTS = (0.5, 1.5)
 
-# Groups whose membership DIFFERS between the Rust oracle (which the corpus runs on)
-# and the Python engine: Rust group_of puts DOW_TREND (weight 20) in "structure",
-# the Python _factor_group + spec §2.4 put it in "trend". Scaling these two groups is
-# therefore engine-specific — a Rust-corpus result does not reproduce via a Python-path
-# retune until that taxonomy bug is reconciled. momentum/volume/institutional/pattern agree.
-ENGINE_SPECIFIC_GROUPS = frozenset({"trend", "structure"})
-
-
-def _is_engine_specific(multipliers: dict[str, float]) -> bool:
-    return bool(set(multipliers) & ENGINE_SPECIFIC_GROUPS)
+# All six groups are cross-engine consistent, so a corpus (Rust) sweep reproduces
+# via a Python-path retune. A SCORING DOW_TREND is tagged ["structure"]
+# (analysis/structure/dow.py), and Python _factor_group checks tags before names, so
+# it groups "structure" — matching the Rust engine. (The _GROUP_NAMES "trend" entry is
+# dead code for DOW_TREND; only a non-scoring/score-0 DOW_TREND falls through to it,
+# which is immaterial.) An earlier "engine-specific" caveat here was based on the
+# tagless case and was withdrawn 2026-08-14 — see dow-trend-grouping-gotcha in memory.
 
 
 def sweep_configs() -> list[tuple[str, dict[str, float]]]:
@@ -140,9 +137,8 @@ def _row(c: ConfigResult, base: GateMetrics) -> str:
     m = c.metrics
     me, be = m.mean_exp_r, base.mean_exp_r
     d_exp = None if (me is None or be is None) else me - be
-    label = f"{c.label} ‡" if _is_engine_specific(c.multipliers) else c.label
     return (
-        f"| {label} | {m.trades} | {_pct(m.win_rate)} | {_f(m.sharpe)} | "
+        f"| {c.label} | {m.trades} | {_pct(m.win_rate)} | {_f(m.sharpe)} | "
         f"{_f(m.max_dd_r, '.1f')} | {_f(m.total_r, '+.1f')} | {_f(m.mean_exp_r)} | "
         f"{_f(d_exp)} | {c.folds_beating_baseline}/{c.folds_compared} |"
     )
@@ -166,13 +162,6 @@ def render_markdown(report: RetuneReport, *, day: date) -> str:
         "per-factor signal. A clean win here is actionable; a null result argues for "
         "per-factor weights (a larger, frozen-engine change) rather than group tuning._",
         "",
-        "_‡ Engine-canon caveat: the corpus runs on the RUST engine, whose `group_of` puts "
-        "DOW_TREND (weight 20) in **structure**, while the Python engine + spec §2.4 put it "
-        "in **trend**. The ‡-marked `trend` / `structure` rows are Rust-canon only — they "
-        "scale DOW_TREND differently than a live Python-path retune would, and are NOT "
-        "actionable until that taxonomy bug is reconciled. momentum / volume / institutional "
-        "/ pattern agree across engines (momentum is also cross-language parity-pinned)._",
-        "",
         "| config | trades | win% | Sharpe | maxDD R | total-R | mean expR | Δexp | folds+ |",
         "|---|--:|--:|--:|--:|--:|--:|--:|:-:|",
         _row(report.baseline, b),
@@ -195,13 +184,10 @@ def render_markdown(report: RetuneReport, *, day: date) -> str:
         )
 
     winners = [c for c in report.configs if _promotable(c)]
-    # The actionable lead must also be cross-engine-consistent (engine-specific
-    # ‡ groups don't reproduce via a Python-path retune — see the caveat).
-    portable = [c for c in winners if not _is_engine_specific(c.multipliers)]
-    if portable:
-        lead = portable[0]
+    if winners:
+        lead = winners[0]  # configs arrive ranked by total-R
         verdict = (
-            f"**{lead.label}** leads (cross-engine-consistent): expR "
+            f"**{lead.label}** leads: expR "
             f"{b.mean_exp_r:+.3f}→{lead.metrics.mean_exp_r:+.3f}, total-R "
             f"{b.total_r:+.1f}→{lead.metrics.total_r:+.1f}, beats baseline in "
             f"{lead.folds_beating_baseline}/{lead.folds_compared} folds. Candidate for a "
@@ -209,17 +195,12 @@ def render_markdown(report: RetuneReport, *, day: date) -> str:
             "Best-of-12 selected on the full corpus, so treat even this as in-sample until "
             "forward shadow confirms; `folds+` is the only guard against a lucky pick."
         )
-        if winners and _is_engine_specific(winners[0].multipliers):
-            verdict += (
-                f" (The top raw row **{winners[0].label} ‡** is a ‡ engine-specific group — "
-                "not actionable until the DOW_TREND grouping bug is reconciled.)"
-            )
     else:
         verdict = (
-            "No cross-engine-consistent single-group multiplier beats baseline on total-R AND "
-            "expectancy AND a majority of folds. Group tuning does not cleanly capture the "
-            "per-factor leak → the actionable lever is per-factor weights (a larger, "
-            "frozen-engine change), not group weights. Do not promote a group retune here."
+            "No single-group multiplier beats baseline on total-R AND expectancy AND a "
+            "majority of folds. Group tuning does not cleanly capture the per-factor leak → "
+            "the actionable lever is per-factor weights (a larger, frozen-engine change), not "
+            "group weights. Do not promote a group retune here."
         )
     out += ["## Verdict", "", verdict, ""]
     return "\n".join(out) + "\n"
