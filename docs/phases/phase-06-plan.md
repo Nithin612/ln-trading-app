@@ -204,16 +204,18 @@ use the identical partition; §8/corpus/attribution numbers unchanged. quant-ver
 
 **NEXT — recommended lead first; each starts on user command (nothing auto-advances):**
 
-1. **Flip the regime gate shadow→active.** The build is done and running in shadow; this
-   is the behaviour-changing step — set `regime_gate_mode="active"` (one reversible
-   setting). **Precondition — first-class ADX level: ✅ DONE 2026-08-14** (migration
+1. **Flip the regime gate shadow→active — ✅ DONE 2026-08-14 (user decision, reversible).**
+   Set via `REGIME_GATE_MODE=active` in `.env` + backend/worker restart (`place_order` reads it
+   live); the paper order path now rejects transitional (20–25) entries. Revert = `shadow` +
+   restart. **Precondition — first-class ADX level: ✅ DONE 2026-08-14** (migration
    `e3f4a5b6c7d8`): `Signal.regime` is persisted at commit, recovered from the frozen ADX
    factor's DECISION BRANCH (not its 0.1-rounded prose, so the raw-choppy [19.95,20) edge
    is no longer misbucketed), and the gate reads the durable field (`signal_regime` prefers
    it; legacy NULL falls back). quant-verifier PASS-WITH-NOTES + bug-hunter CLEAN; frozen
-   engine untouched. **Remaining precondition = governance: explicit user sign-off** on the
-   §8 moves (win rate / Sharpe / drawdown all > ±5%). Gate the flip on forward shadow
-   evidence (`regime-gate-shadow-<date>.md`) agreeing with the backtest. **Follow-up — ✅ DONE
+   engine untouched. **Governance precondition — MET 2026-08-14:** the user gave the §8 sign-off
+   (win / Sharpe / drawdown all > ±5%) by choosing to flip, accepting the accumulated cohort's
+   evidence (44 suppressed trades, all 3 §8 metrics improve live). Now monitoring live via the
+   daily shadow banner (`regime-gate-shadow-<date>.md`) — if it diverges (⏳ NOT READY), revert. **Follow-up — ✅ DONE
    2026-08-14:** the live shadow measurement now buckets by the persisted `signals.regime`
    (identical partition to the gate). **Forward evidence is now surfaced every `make analysis`**
    (`regime-gate-shadow-<date>.md` + a **Flip readiness** banner; `forward_evidence_ready`, bar =

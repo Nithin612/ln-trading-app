@@ -7,6 +7,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### ops(phase6): activate the regime-eligibility gate — REGIME_GATE_MODE=active (2026-08-14)
+
+User decision (reversible): flip the §8-validated regime gate from shadow to active via
+`REGIME_GATE_MODE=active` in `.env` + a backend/worker restart. `place_order` reads
+`settings.regime_gate_mode` live, so once restarted the paper order path REJECTS transitional-ADX
+(20–25) entries (fail-open on unknown regime; the daily-loss circuit breaker and sizing are
+unchanged). No code change — the code default stays `shadow`; this is a deployment/config toggle,
+recorded here for traceability. Preconditions were met: the first-class ADX level is built, and the
+accumulated live cohort cleared the forward-evidence bar (44 suppressed trades, all three §8 metrics
+improve live — expR +0.027→+0.089, total-R +2.8→+5.5, maxDD 8.8→4.7R). Monitored by the daily Flip
+readiness banner; revert = `REGIME_GATE_MODE=shadow` + restart. NB: live before/after P&L is a
+confounded, sample-starved comparison — the shadow counterfactual remains the rigorous read.
+
 ### feat(phase6): regime-gate forward-evidence banner in the daily analysis run (2026-08-14)
 
 `make analysis` (via `daily_analysis._run`) now also writes

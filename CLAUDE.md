@@ -45,10 +45,11 @@ else.
   **Phase 6 has since run through 6.4:** the §8 walk-forward validated the regime
   gate out-of-sample, and both the regime gate and the `momentum ×1.5` retune are
   now BUILT and running SHADOW-first (measure-only — nothing on the money path
-  yet). **The next build is the shadow→active flip.** The first-class ADX
-  level it needed is now BUILT (2026-08-14, `signals.regime`) — so the flip waits
-  only on user sign-off on the §8 moves + forward shadow agreement. Then promote
-  the retune on forward evidence, then 6.5 pair-trading. Nothing auto-advances — the NEXT menu
+  yet). **The regime gate is now FLIPPED to active (2026-08-14, user
+  decision, reversible)** — `REGIME_GATE_MODE=active` in `.env` + backend/worker
+  restart; the paper order path now rejects transitional (ADX 20–25) entries,
+  monitored live via the daily Flip readiness banner (revert = `shadow` + restart).
+  Next: promote the momentum ×1.5 retune on forward evidence, then 6.5 pair-trading. Nothing auto-advances — the NEXT menu
   lives in the PHASES top block.
 - **Two report sections exist because "the engine produced nothing" was once
   indistinguishable from "the engine is broken":** §7 F&O engine health and §8

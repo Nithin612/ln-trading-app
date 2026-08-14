@@ -74,16 +74,16 @@ live shadow measurement now buckets by the persisted `signals.regime`, so eviden
 enforcement share one partition** (quant-verifier PASS — no §8/corpus number moved).
 
 **NEXT — recommended lead first; each starts on user command (nothing auto-advances):**
-**(1) Flip the regime gate shadow→active** once forward shadow evidence agrees with the
-backtest. **The first-class ADX level precondition is now MET (2026-08-14, migration
-`e3f4a5b6c7d8`): `signals.regime` is persisted at commit (branch-recovered, no rounding
-edge) and the gate reads it — quant-verifier PASS + bug-hunter CLEAN.** What remains is
-governance: **user sign-off** on the §8 moves + forward shadow agreement. **Forward evidence now
-surfaces every `make analysis`** (`regime-gate-shadow-<date>.md` + a Flip readiness banner), and
-the accumulated live cohort ALREADY meets the bar (44 suppressed trades, all three §8 metrics
-improve live) — so this effectively waits only on the user's §8 sign-off (accept the accumulated
-cohort vs require strictly-forward evidence is a user call; checkpoint 2026-09-15). One reversible
-setting; **(2a) promote the momentum ×1.5 retune** once its
+**(1) Flip the regime gate shadow→active — ✅ DONE 2026-08-14 (user decision, reversible).**
+Both preconditions were met — the first-class ADX level (migration `e3f4a5b6c7d8`; `signals.regime`
+branch-recovered, gate reads it) and the §8 sign-off, which the user gave by choosing to flip — and
+the accumulated live cohort already cleared the forward-evidence bar (44 suppressed trades, all
+three §8 metrics improve live). Applied via `REGIME_GATE_MODE=active` in `.env` + backend/worker
+restart (user-run; `place_order` reads the setting live); the paper order path now REJECTS
+transitional (20–25) entries. **Monitoring live** via the daily Flip readiness banner — now a
+monitor; if it turns ⏳ NOT READY the live tape diverged, reconsider/**revert**
+(`REGIME_GATE_MODE=shadow` + restart). The live before/after P&L is a weak/confounded comparison;
+the shadow counterfactual stays the rigorous read. Review the live impact ~2026-09-15 (keep/revert); **(2a) promote the momentum ×1.5 retune** once its
 shadow A/B (`retune_momentum_x15` vs `retune_base`, in the daily attribution Setup×shadow
 table) beats base forward — then create an active retune profile on sign-off (nothing to
 build until evidence accrues; ~1–2 signals/arm/day); **(3) 6.5** pair-trading market-neutral.
