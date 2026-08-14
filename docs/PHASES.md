@@ -12,8 +12,9 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ## ▶ STATE AT A GLANCE (updated 2026-08-14) — read this block first
 
-**v2 Phases 0–2 ✅ done · Phase 3 (realtime) ▶ gate ritual only · Phase 4 ✅ done ·
-Phase 5 ✅ GATED 2026-08-07 · Phase 6 ▶ IN PROGRESS (6.1 + 6.2 shipped) · Phase 7 not started.**
+**v2 Phases 0–2 ✅ done · Phase 3 (realtime) ✅ GATED 2026-08-14 · Phase 4 ✅ done ·
+Phase 5 ✅ GATED 2026-08-07 · Phase 6 ▶ IN PROGRESS (6.1–6.4 done; regime gate ACTIVE
+2026-08-14; 6.5 pair-trading underway) · Phase 7 not started.**
 Suites grew with the Phase-6 slices (added `test_signal_excursions`,
 `test_entry_attribution`, `test_corpus_attribution`, `test_seasonality`); run
 `make check` for the exact totals. Pre-Phase-6 baseline: backend **1123**
@@ -96,9 +97,11 @@ attempted fix inverted parity and was reverted; see `dow-trend-grouping-gotcha`.
 + `weight-retune-<date>.md`.
 **Local `main` is ~12 commits ahead of origin (+ uncommitted Phase-6 work) — push is manual.**
 
-> **Phase-3 gate is USER-RUN, MANUALLY, on Friday 2026-08-15.** Explicit
-> instruction 2026-08-08 — do not run `/phase-gate` before then. Both exit
-> criteria already have their evidence on disk; nothing is being waited on.
+> **Phase-3 gate — ✅ RUN + PASSED 2026-08-14 (Fri EOD).** See
+> `phases/phase-03-realtime.md` §Gate closure for the verdict block. Full suite green
+> (backend **1246** / frontend **375** / cargo **86**, incl. all 44 parity+walkforward+replay
+> marker tests); regression Δ0 (frozen engine untouched); soak ×2 + 14-day shadow week
+> re-verified. Phase 3 is CLOSED. (The earlier pin said "Friday 2026-08-15" — off by one.)
 
 ### Interstitial slice: "Intraday activation + v1 surface uplift" (2026-08-07/08)
 

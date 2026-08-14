@@ -7,6 +7,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### chore(phase3): gate closed — Realtime v2 GATED 2026-08-14 (PASS)
+
+Phase 3 (realtime tick-to-tick) formally closed at the user's instruction, Fri 2026-08-14
+EOD. Full quality gate **PASS**: static clean (ruff/mypy/eslint/tsc/cargo fmt/clippy); suites
+green — backend **1246 passed / 1 skipped** (incl. all 44 parity+walkforward+replay marker
+tests), frontend **375**, engine **cargo 86**; regression Δ0 (parity + walkforward goldens
+byte-identical, `git diff main -- app/analysis app/backtest/engine.py` empty); reviews clean
+(quant-verifier ×2, bug-hunter). Exit criteria re-verified: quiet-box soak MET ×2 (p99 ≤ 50 ms)
++ 14-day clean shadow week (diffs=0, extended through 08-14). Live-tick smoke deferred
+(market-closed EOD) — the soak + shadow week are the stronger realtime proof. Full verdict:
+`docs/phases/phase-03-realtime.md` §Gate closure.
+
 ### ops(phase6): activate the regime-eligibility gate — REGIME_GATE_MODE=active (2026-08-14)
 
 User decision (reversible): flip the §8-validated regime gate from shadow to active via

@@ -1,0 +1,92 @@
+# Phase 6.5 — Pair-trading (market-neutral) · DESIGN + build tracker
+
+**Status: BUILD STARTED 2026-08-14 (autonomous session, user away).** Shadow-first,
+frozen engine untouched (a NEW overlay/profile — never a change to the confluence
+engine). This doc captures the design, the options weighed, and the decisions, so we
+can discuss the deferred parts later.
+
+## The one-paragraph case
+
+Every profile we run is **directional** — it needs a trend to make money, and the
+6.2 attribution proved it leaks in choppy/transitional tape (the very regime the new
+regime gate now suppresses). A **market-neutral pair trade** is regime-agnostic: it
+earns from the *relative* mean-reversion of two co-moving instruments, not from market
+direction, so it can make money in exactly the sideways tape our directional book
+sits out. Origin: the Zerodha Varsity review named it the standout *new* candidate
+(`docs/VARSITY_REVIEW_2026-08-12.md`; see memory `varsity-review-2026-08`).
+
+## Strategy design
+
+**Pair = two co-moving instruments (A, B).** Fit a hedge ratio β by OLS of A on B on
+completed candles; the **spread** `s = A − β·B` is stationary iff A,B are cointegrated.
+Trade the spread's mean-reversion:
+- **Entry** when the spread's rolling z-score `|z| > z_entry` (e.g. 2.0): long the cheap
+  leg, short the rich leg (dollar-matched → market-neutral).
+- **Exit** when `|z| < z_exit` (e.g. 0.5) — reversion captured.
+- **Stop** when `|z| > z_stop` (e.g. 3.5) — the relationship broke (cointegration lost);
+  cut, don't average down.
+
+**No look-ahead (non-negotiable, `trading-domain` rules):** β, the rolling mean/σ, and z
+are computed on candles ≤ N and the signal is valid from N+1. The screen and the signal
+both compute only on `is_complete` bars.
+
+## Deps decision — numpy-only (2026-08-14)
+
+scipy and statsmodels are **not** installed. Adding them is a stack change that
+contradicts the "adopt no new deps, stay lean" posture established in the external-libs
+review (memory `external-libs-review-2026-08`). So the math is **numpy-only**:
+- **Hedge ratio** β: OLS via `numpy.linalg.lstsq` (with an intercept). Exact.
+- **Half-life of mean reversion**: fit AR(1) on Δs vs s (Ornstein-Uhlenbeck),
+  `half_life = −ln(2)/λ` where λ is the mean-reversion rate. Exact, standard, cheap.
+- **Stationarity**: the **Lo–MacKinlay variance-ratio** test (numpy-simple, well-founded)
+  — VR(q) < 1 ⇒ mean-reverting, VR ≈ 1 ⇒ random walk. Chosen over ADF because a correct
+  ADF needs MacKinnon critical-value tables (error-prone to hand-roll); VR gives an
+  honest, testable mean-reversion signal now.
+- **Follow-up (flagged for discussion):** a formal **Engle-Granger ADF** or **Johansen**
+  cointegration test — needs statsmodels, or a numpy ADF validated against known
+  MacKinnon CVs. Only worth it if the VR/half-life screen proves too permissive in the
+  shadow evidence.
+
+## The India short-leg constraint (why this is naturally shadow-first)
+
+A pair trade shorts one leg. In the Indian **cash** market a short must be covered
+intraday — you cannot hold a cash short overnight. A multi-day pair trade therefore
+needs the short leg in **stock futures** (or SLB borrow). We do not have a futures
+execution path (that's Phase 7, live trading). So pair-trading is **research/shadow only**
+until then — which is fine: it's exactly the shadow-first posture the whole phase uses,
+and the spread P&L can be measured hypothetically without an execution path. **Tradeability
+= a documented Phase-7 dependency**, not a Phase-6 blocker.
+
+## Slicing
+
+- **6.5a — cointegration / mean-reversion SCREEN (offline, numpy, tested).** Given the
+  universe + daily bars, for each candidate pair compute β, spread, half-life, VR, current
+  z; rank and refuse to report pairs below a stationarity/half-life floor (the n<20
+  no-rank precedent). Read-only, like `corpus_attribution`. **← building first (safe,
+  self-contained, the foundation everything else needs).**
+- **6.5b — spread z-score signal + shadow pair-profile.** Mint `is_shadow` pair signals on
+  the nightly path. Needs a way to represent a 2-leg signal (see open questions).
+- **6.5c — spread outcome / P&L tracking + 6.1/6.2 attribution for pairs**, so the shadow
+  evidence is judged by the same machinery as everything else.
+- **6.5d — tradeability (Phase 7):** stock-futures short leg, pair position sizing, borrow.
+
+## Open questions (for our discussion — decisions NOT taken autonomously)
+
+1. **Pair universe scope.** Same-sector pairs only, or all C(n,2) of a liquid set?
+   All-pairs over Nifty50 = 1225 pairs — screening cost is fine offline, but screening that
+   many **invites data-snooped false cointegration** (multiple-testing). Recommendation:
+   restrict to same-sector / economically-linked pairs first (a prior), and validate any
+   surviving pair out-of-sample before it ever mints a shadow signal.
+2. **Signal representation.** The `signals` table is single-instrument. A pair signal is two
+   legs. Options: (a) a new `pair_signals` model; (b) encode the spread as a synthetic
+   instrument; (c) two linked `signals` rows with a shared `pair_id`. Leaning (a) — cleanest,
+   doesn't distort the single-name schema the attribution assumes.
+3. **Formal cointegration** (ADF/Johansen) vs the numpy VR/half-life proxy — revisit if the
+   shadow evidence shows the proxy admits junk pairs.
+4. **Rebalancing β.** β drifts; static vs rolling re-fit (Kalman filter is the sophisticated
+   answer, deferred).
+
+## Build log
+
+- **2026-08-14:** design fixed (this doc); deps decision = numpy-only; 6.5a build started.
+  6.5b–d designed + deferred for discussion.

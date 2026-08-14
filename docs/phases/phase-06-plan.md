@@ -241,7 +241,15 @@ use the identical partition; §8/corpus/attribution numbers unchanged. quant-ver
    promote:** once the shadow A/B (`retune_momentum_x15` vs `retune_base` in the daily
    attribution Setup×shadow table) beats base forward → create an active retune profile on
    sign-off (best-of-12 = in-sample until the shadow confirms; ~1–2 signals/arm/day, so weeks
-   of accrual). **No DOW_TREND grouping bug** (investigated + WITHDRAWN 2026-08-14): a
+   of accrual). **DECISION 2026-08-14 (autonomous — user away, asked whether to promote now
+   given `FORWARD_EVIDENCE_REVIEW_DATE=2026-09-15`): DEFER — do NOT promote now.** As an
+   experienced quant, promoting now would CONTRADICT that discipline, not coexist with it: the
+   shadow A/B was seeded *today*, so it has ~zero forward evidence; promoting on the in-sample
+   best-of-12 corpus fit is exactly the overfitting trap this phase forbids ("shadow→active only
+   on forward evidence"). The two tracks stay consistent only if the retune also waits, reviewed
+   on the SAME ~mid-Sept window. Built instead: a retune A/B readiness monitor (mirrors the
+   regime-gate banner). Revisit ~2026-09-15 — if `retune_momentum_x15` beats `retune_base`
+   forward (expectancy + fold consistency, n ≥ the rank floor), create the active profile then. **No DOW_TREND grouping bug** (investigated + WITHDRAWN 2026-08-14): a
    *scoring* DOW_TREND is tagged `["structure"]` (analysis/structure/dow.py) and Python
    `_factor_group` checks tags before names → it groups `structure`, matching the Rust engine;
    the `_GROUP_NAMES` "trend" entry is dead code for it (only a score-0/tagless DOW_TREND hits
@@ -251,4 +259,11 @@ use the identical partition; §8/corpus/attribution numbers unchanged. quant-ver
    `dow-trend-grouping-gotcha` in memory.
 3. **6.5 — pair-trading, market-neutral candidate.** Regime-agnostic — sidesteps the
    choppy/transitional tape our directional profiles leak in. A new shadow profile
-   judged by this same 6.1–6.2 attribution.
+   judged by this same 6.1–6.2 attribution. **BUILD STARTED 2026-08-14 (autonomous).**
+   Design + slicing + the deps decision live in
+   [`phase-06-6.5-pairtrading-plan.md`](phase-06-6.5-pairtrading-plan.md). **Deps decision:
+   numpy-only** — scipy/statsmodels are NOT installed and adding them is a stack change that
+   contradicts the "adopt no new deps, stay lean" posture (external-libs review); the
+   cointegration/mean-reversion math is implemented in numpy (OLS hedge ratio, spread, AR(1)
+   half-life, variance-ratio stationarity), with a formal ADF/Johansen upgrade flagged as a
+   follow-up for discussion. Shadow-first, frozen engine untouched (a new overlay/profile).

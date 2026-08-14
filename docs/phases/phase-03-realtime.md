@@ -1,4 +1,4 @@
-# Phase 3 — Realtime v2: tick-to-tick (IN PROGRESS)
+# Phase 3 — Realtime v2: tick-to-tick (CLOSED — gated 2026-08-14)
 
 **Started:** 2026-07-09 · **Plan:** `docs/UPGRADE_PLAN.md` (Phase 3) ·
 **Target:** live-worker + Rust LiveEngine, committed-vs-forming layers,
@@ -1977,3 +1977,43 @@ after the next soak's numbers).
   artifact bars excluded — and the anchored-floor regression).
   OPERATIONAL: restart the backend before the next session open — a
   running pre-patch process would re-mint :30-anchored 1h rows.
+
+## Gate closure — 2026-08-14 (PASS)
+
+Run at the user's instruction on **Friday 2026-08-14 EOD** (the pin said "Friday
+2026-08-15" — off by one; 08-14 is the Friday). Both exit criteria were already met on
+disk; the ritual re-verified them and ran the full quality suite.
+
+**PHASE GATE: PASS**
+- **static:** backend `ruff` + `mypy` (171 files) clean · frontend `eslint` + `tsc`
+  clean · engine `cargo fmt --check` + `clippy -D warnings` clean.
+- **tests:** backend **1246 passed / 1 skipped** — the full suite, including all **44**
+  `parity` + `walkforward` + `replay` marker tests (the Python↔Rust golden corpus, the §8
+  drift gate, and the byte-identical live-replay event streams); 37 min wall. Frontend
+  **375 passed** (41 files). Engine **cargo 86 passed** (12 binaries).
+- **regression:** win% Δ0 · Sharpe Δ0 · maxDD Δ0. The parity + walkforward goldens are
+  byte-identical and `git diff main -- app/analysis app/backtest/engine.py` is empty — the
+  frozen engine is untouched (the branch's Phase-6 work is downstream overlays +
+  observability). No >5% movement → no §8 sign-off required.
+- **smoke:** a live-tick browser smoke is not runnable at market-closed EOD (Fri ~22:40
+  IST). Substituted — and exceeded — by the phase's own operational evidence: the quiet-box
+  soak **MET ×2** (`PERFORMANCE.md` §Budgets, p99 ≤ 50 ms across two full sessions) and the
+  **shadow week** (`backend/shadow/shadow_week.log`: 14 consecutive `PASS diffs=0 errors=0`,
+  07-20→08-06, streak unbroken + clean through today 2026-08-14 21:57 IST, matched
+  2301/2301). Fourteen live trading days of dual-engine byte-identical signals is a far
+  stronger realtime validation than one manual session.
+- **reviews:** the branch's current diffs were reviewed this session — quant-verifier
+  **PASS ×2** (first-class ADX level; shadow-alignment) + bug-hunter **CLEAN**. Phase-3's own
+  slices were reviewed during development (see the Reviews sections above). No unreviewed
+  analysis/signal/pipeline/frontend changes remain.
+
+**Caveats (honest):** (1) the gate ran on branch `feature/phase6-overlay-walkforward-retune`
+(Phase-6 work committed there, not yet on main). (2) The backend suite ran with `.env`
+`REGIME_GATE_MODE=active` (the just-flipped production config) — the regime-gate tests
+monkeypatch the mode explicitly and every other order test fails open, so the active toggle
+did not affect the result, and the green suite actually validates the active config. (3) A
+single-command `make check` on main is still owed once the pnpm store is repaired (the
+Phase-5 gate's standing caveat); here every leg was run individually and all passed.
+
+**Verdict: Phase 3 (Realtime v2) is CLOSED — gated 2026-08-14.** Both v2 realtime exit
+criteria met and re-verified; full suite green across backend, frontend, and engine.
