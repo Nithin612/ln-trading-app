@@ -632,6 +632,246 @@ class TestRunCycleEndToEnd:
             expected.direction, expected.confidence_pct)
 
 
+# ── Scoring memo (cycle cost) ─────────────────────────────────────────────────
+
+
+class TestScoringMemo:
+    """A provisional cycle's cost is the frozen engine, not the DB: measured
+    2026-08-14 on the live hot set, `run_all_factors` was 45.7 ms/window and
+    92.6% of a 15 s cycle against a 3 s cadence, because every profile
+    scoring a stock re-ran it from scratch (five 1d profiles → five runs).
+
+    The memo collapses work whose inputs are byte-identical — the frozen
+    scorer is pure, so that answer IS the current answer. These tests pin
+    the other half: it must NEVER collapse work whose inputs differ."""
+
+    async def _stock_with_forming_open(self, db, symbol: str):
+        """119 committed 5m bars + a book holding only the last bar's OPEN
+        tick. Returns (stock, frame, book, base_ts, vol)."""
+        import tradecore
+
+        frame = rollover_marubozu()
+        stock = await make_stock(db, symbol=symbol)
+        await _seed_5m(db, stock.id, frame.iloc[:-1])
+        book = tradecore.LiveBook(
+            int(OPEN_UTC.timestamp()), int(CLOSE_UTC.timestamp()), [1, 5, 15, 60]
+        )
+        book.ensure_instruments([stock.id])
+        last = frame.iloc[-1]
+        base_ts = int(FORMING_T.timestamp())
+        vol = int(last["volume"])
+        book.on_ticks([(stock.id, base_ts + 5, f"{last['open']:.4f}", None, vol - 3)])
+        return stock, frame, book, base_ts, vol
+
+    def _finish_marubozu(self, book, sid: int, frame, base_ts: int) -> None:
+        last = frame.iloc[-1]
+        book.on_ticks([
+            (sid, base_ts + 20, f"{last['high']:.4f}", None, 1),
+            (sid, base_ts + 40, f"{last['low']:.4f}", None, 1),
+            (sid, base_ts + 60, f"{last['close']:.4f}", None, 1),
+        ])
+
+    @pytest.mark.asyncio
+    async def test_profiles_sharing_params_score_once(
+        self, db, sync_redis, alert_stream
+    ) -> None:
+        """Two profiles, same (timeframe, gate, multipliers), same stock:
+        two published rows off ONE engine call and ONE window load."""
+        stock, frame, book, base_ts, _vol = await self._stock_with_forming_open(
+            db, "MEMOSHARE"
+        )
+        self._finish_marubozu(book, stock.id, frame, base_ts)
+        for key, style in (("memo_a", "intraday"), ("memo_b", "fno")):
+            await make_profile(db, key=key, style=style, timeframe="5m",
+                               schedule="intraday_5m", min_confidence=70,
+                               status="active")
+        user = await create_test_user(db, email="memoshare@test.com")
+        wl = Watchlist(user_id=user.id, name="memo")
+        db.add(wl)
+        await db.flush()
+        db.add(WatchlistItem(watchlist_id=wl.id, stock_id=stock.id))
+        await db.commit()
+
+        stats = await run_cycle(db, sync_redis, book, NOW)
+
+        assert stats["pairs_scored"] == 2
+        # On the OLD code both of these were 2: the engine ran per PAIR.
+        assert stats["engine_calls"] == 1
+        assert stats["memo_hits"] == 1
+        assert stats["windows"] == 1
+
+        expected = score_signal(frame, timeframe="5m", min_confidence=70)
+        assert expected is not None
+        seen = []
+        for style in ("intraday", "fno"):
+            row = json.loads(sync_redis.get(LEADERBOARD_KEY.format(style=style)))["rows"][0]
+            seen.append((row["direction"], row["confidence"]))
+        assert seen == [(expected.direction, expected.confidence_pct)] * 2
+
+    @pytest.mark.asyncio
+    async def test_unchanged_inputs_reuse_the_memo(
+        self, db, sync_redis, alert_stream
+    ) -> None:
+        """A second cycle over an unmoved book does no engine work — and
+        publishes exactly what the first cycle did."""
+        stock, frame, book, base_ts, _vol = await self._stock_with_forming_open(
+            db, "MEMOSTILL"
+        )
+        self._finish_marubozu(book, stock.id, frame, base_ts)
+        await make_profile(db, key="memo_still", style="fno", timeframe="5m",
+                           schedule="intraday_5m", min_confidence=70,
+                           status="active")
+        await _seed_signal(db, stock.id, classification="swing",
+                           timeframe="5m", profile_key="memo_still")
+
+        first = await run_cycle(db, sync_redis, book, NOW)
+        row_1 = json.loads(sync_redis.get(LEADERBOARD_KEY.format(style="fno")))["rows"][0]
+        second = await run_cycle(db, sync_redis, book, NOW + timedelta(seconds=3))
+        row_2 = json.loads(sync_redis.get(LEADERBOARD_KEY.format(style="fno")))["rows"][0]
+
+        assert first["engine_calls"] == 1
+        assert second["engine_calls"] == 0
+        assert second["memo_hits"] == 1
+        assert second["pairs_scored"] == first["pairs_scored"] == 1
+        assert (row_2["direction"], row_2["confidence"]) == (
+            row_1["direction"], row_1["confidence"])
+
+    @pytest.mark.asyncio
+    async def test_changed_forming_bar_rescores(
+        self, db, sync_redis, alert_stream
+    ) -> None:
+        """THE canary: the forming bar is what makes a provisional score
+        provisional. A memo that keyed on the stock alone would freeze the
+        preview at the first tick of the bar and never move again."""
+        stock, frame, book, base_ts, _vol = await self._stock_with_forming_open(
+            db, "MEMOMOVE"
+        )
+        await make_profile(db, key="memo_move", style="fno", timeframe="5m",
+                           schedule="intraday_5m", min_confidence=70,
+                           status="active")
+        await _seed_signal(db, stock.id, classification="swing",
+                           timeframe="5m", profile_key="memo_move")
+
+        # Cycle 1: the bar holds only its open tick (flat, no marubozu).
+        await run_cycle(db, sync_redis, book, NOW)
+        row_1 = json.loads(sync_redis.get(LEADERBOARD_KEY.format(style="fno")))["rows"][0]
+
+        # Cycle 2: the bar completes into the big red marubozu.
+        self._finish_marubozu(book, stock.id, frame, base_ts)
+        second = await run_cycle(db, sync_redis, book, NOW + timedelta(seconds=3))
+        row_2 = json.loads(sync_redis.get(LEADERBOARD_KEY.format(style="fno")))["rows"][0]
+
+        assert second["engine_calls"] == 1, "a moved forming bar must rescore"
+        assert second["memo_hits"] == 0
+        expected = score_signal(frame, timeframe="5m", min_confidence=70)
+        assert expected is not None
+        assert (row_2["direction"], row_2["confidence"]) == (
+            expected.direction, expected.confidence_pct)
+        # Canary: a slot keyed without the forming bar would republish row_1.
+        assert (row_1["direction"], row_1["confidence"]) != (
+            row_2["direction"], row_2["confidence"])
+
+    @pytest.mark.asyncio
+    async def test_differing_gate_never_shares_a_slot(
+        self, db, sync_redis, alert_stream
+    ) -> None:
+        """min_confidence is part of the scorer's input, so it is part of
+        the slot: a shared slot would publish one profile's gate verdict
+        under the other profile's name."""
+        stock, frame, book, base_ts, _vol = await self._stock_with_forming_open(
+            db, "MEMOGATE"
+        )
+        self._finish_marubozu(book, stock.id, frame, base_ts)
+        await make_profile(db, key="memo_gate_lo", style="intraday", timeframe="5m",
+                           schedule="intraday_5m", min_confidence=70, status="active")
+        await make_profile(db, key="memo_gate_hi", style="fno", timeframe="5m",
+                           schedule="intraday_5m", min_confidence=95, status="active")
+        user = await create_test_user(db, email="memogate@test.com")
+        wl = Watchlist(user_id=user.id, name="memogate")
+        db.add(wl)
+        await db.flush()
+        db.add(WatchlistItem(watchlist_id=wl.id, stock_id=stock.id))
+        await db.commit()
+
+        stats = await run_cycle(db, sync_redis, book, NOW)
+
+        assert stats["engine_calls"] == 2, "different gates are different work"
+        assert stats["memo_hits"] == 0
+        assert stats["windows"] == 1, "…but they still share one window load"
+        # The 95-gate profile rejects what the 70-gate profile publishes.
+        assert json.loads(
+            sync_redis.get(LEADERBOARD_KEY.format(style="intraday")))["rows"]
+        assert json.loads(sync_redis.get(LEADERBOARD_KEY.format(style="fno")))["rows"] == []
+
+    @pytest.mark.asyncio
+    async def test_shared_window_is_not_mutated_by_scoring(self, db) -> None:
+        """Window dedup rests on the frozen scorer treating its frame as
+        READ-ONLY: with no forming bar the engine is handed the shared
+        object itself, so a factor that ever wrote a column into it would
+        feed the next profile the previous one's leftovers."""
+        frame = rollover_marubozu()
+        stock = await make_stock(db, symbol="MEMOPURE")
+        await _seed_5m(db, stock.id, frame)
+
+        windows: dict[tuple[int, str], pd.DataFrame] = {}
+        kwargs = dict(
+            stock_id=stock.id, timeframe="5m", forming_by_tf={}, agg_5m={},
+            session_day=DAY, flows=(Decimal("0"), Decimal("0")),
+            block_net=Decimal("0"), windows=windows,
+        )
+        first, _ = await score_pair(db, min_confidence=70,
+                                    weight_multipliers=None, **kwargs)
+        cached = windows[(stock.id, "5m")]
+        snapshot = cached.to_numpy(copy=True)
+        columns = list(cached.columns)
+
+        second, _ = await score_pair(db, min_confidence=70,
+                                     weight_multipliers={"momentum": 1.5}, **kwargs)
+
+        assert len(windows) == 1, "the second pair must reuse the loaded window"
+        assert list(cached.columns) == columns
+        assert np.array_equal(cached.to_numpy(), snapshot)
+        assert first is not None and second is not None
+        # Same window, different multipliers → genuinely independent answers.
+        expected = score_signal(frame, timeframe="5m", min_confidence=70)
+        assert expected is not None
+        assert first.confidence_pct == expected.confidence_pct
+
+    @pytest.mark.asyncio
+    async def test_differing_multipliers_never_share_a_slot(
+        self, db, sync_redis, alert_stream
+    ) -> None:
+        """Weight multipliers rescale factor scores before the gate — the
+        6.4 retune ships exactly this shape (base vs momentum ×1.5), so a
+        slot that ignored them would make an A/B compare against itself."""
+        stock, frame, book, base_ts, _vol = await self._stock_with_forming_open(
+            db, "MEMOMULT"
+        )
+        self._finish_marubozu(book, stock.id, frame, base_ts)
+        await make_profile(db, key="memo_mult_base", style="intraday", timeframe="5m",
+                           schedule="intraday_5m", min_confidence=70, status="active")
+        await make_profile(db, key="memo_mult_x15", style="fno", timeframe="5m",
+                           schedule="intraday_5m", min_confidence=70, status="active",
+                           weight_multipliers={"momentum": 1.5})
+        user = await create_test_user(db, email="memomult@test.com")
+        wl = Watchlist(user_id=user.id, name="memomult")
+        db.add(wl)
+        await db.flush()
+        db.add(WatchlistItem(watchlist_id=wl.id, stock_id=stock.id))
+        await db.commit()
+
+        stats = await run_cycle(db, sync_redis, book, NOW)
+
+        assert stats["engine_calls"] == 2
+        assert stats["memo_hits"] == 0
+        scaled = score_signal(frame, timeframe="5m", min_confidence=70,
+                              weight_multipliers={"momentum": 1.5})
+        assert scaled is not None
+        row = json.loads(sync_redis.get(LEADERBOARD_KEY.format(style="fno")))["rows"][0]
+        assert (row["direction"], row["confidence"]) == (
+            scaled.direction, scaled.confidence_pct)
+
+
 # ── Thread lifecycle ──────────────────────────────────────────────────────────
 
 

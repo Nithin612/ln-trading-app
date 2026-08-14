@@ -40,6 +40,16 @@ Window canon per pair:
 Cadence: `live_provisional_refresh_s` between cycle STARTS is the target;
 a cycle that overruns logs loudly and simply starts the next one later —
 the throttle is the wait, never a queue.
+
+Cost: the frozen engine, not the DB — measured 2026-08-14 on the live hot
+set, `run_all_factors` was 45.7 ms/window and 92.6% of a 15 s cycle (window
+loads: 4.4 ms). Pairs sharing (timeframe, gate, multipliers) therefore share
+a memo slot keyed on the exact scorer inputs, and window loads are deduped
+within a cycle: 328 pairs → 159 engine calls, and 0 when nothing moved. The
+memo is an identity check, never a staleness window — see `_Cache.scores`.
+A cycle where every hot stock ticks still costs ~8 s on the Python engine
+(`tradecore` is 266× faster but cannot take FII/DII flows yet), so the
+cadence remains a target the engine cannot always meet.
 """
 
 from __future__ import annotations
@@ -349,11 +359,51 @@ def append_forming(window: Any, bar_time: datetime, bar: dict[str, float | int])
     return pd.concat([completed, forming_row])
 
 
+# Scoring memo identity.
+#   slot   = (stock_id, timeframe, min_confidence, multipliers) — WHAT is
+#            being scored. Every profile sharing these params shares a slot,
+#            which is why the five 1d profiles collapse to one engine call
+#            per stock instead of five.
+#   inputs = the exact values the frozen scorer would receive. Committed
+#            history is immutable during a session, so the window is pinned
+#            by (length, last bar time, last close) rather than hashed.
+_ScoreSlot = tuple[int, str, int, tuple[tuple[str, float], ...]]
+_ScoreInputs = tuple[Any, ...]
+
+
+def _multiplier_key(multipliers: dict[str, float] | None) -> tuple[tuple[str, float], ...]:
+    """Order-independent identity for a profile's weight multipliers —
+    `{}` and None are the same (frozen, unscaled) scorer."""
+    if not multipliers:
+        return ()
+    return tuple(sorted((str(k), float(v)) for k, v in multipliers.items()))
+
+
+def _window_fingerprint(window: Any) -> tuple[int, Any, float]:
+    """Identity of a committed window without hashing 300 rows. Committed
+    bars never change mid-session (the worker runs 9:15–15:35), so length +
+    the last bar's time and close pin the frame."""
+    return (len(window), window.index[-1], float(window["close"].iloc[-1]))
+
+
 @dataclass
 class _Cache:
     universes: dict[int, tuple[float, set[int]]] = field(default_factory=dict)
     flows: tuple[float, tuple[Decimal, Decimal]] | None = None
     block_net: dict[int, tuple[float, Decimal]] = field(default_factory=dict)
+    # One slot per (stock, scoring-params), holding the input fingerprint its
+    # answer came from. A hit means the frozen scorer would be handed
+    # byte-identical inputs — and it is pure (no clock, no randomness, no
+    # I/O), so the memoized answer IS the current answer, not a stale one.
+    # Keyed per SLOT, never per input: a per-input key would mint a new entry
+    # every time a forming bar ticks and grow without bound all session.
+    scores: dict[_ScoreSlot, tuple[_ScoreInputs, Any | None, bool]] = field(
+        default_factory=dict
+    )
+    # Reset each cycle: a slow cycle must be able to say whether it did real
+    # work or repeated itself.
+    hits: int = 0
+    misses: int = 0
 
 
 async def _universe_for(db: Any, profile: Any, cache: _Cache, now_mono: float) -> set[int]:
@@ -405,18 +455,32 @@ async def score_pair(
     session_day: date,
     flows: tuple[Decimal, Decimal],
     block_net: Decimal,
+    cache: _Cache | None = None,
+    windows: dict[tuple[int, str], Any] | None = None,
 ) -> tuple[Any | None, bool]:
     """One (stock, profile-params) pair through the frozen sequence on the
     forming-appended window. Returns (result, had_data): result None with
     had_data=True means below the ADX-adjusted gate — a real statement
     about the setup; had_data=False means the window was unusable
-    (empty/<50 bars/unknown timeframe) and the score says NOTHING."""
+    (empty/<50 bars/unknown timeframe) and the score says NOTHING.
+
+    `windows` (per-cycle) dedups the window LOAD across the profiles that
+    score the same stock; `cache` memoizes the SCORE itself on exact input
+    identity. Both are optional — omitted, this is the original uncached
+    path, which is what the parity/unit tests exercise."""
     from app.profiles.pipeline import _load_window
     from app.services.signal_service import score_signal
 
-    window = await _load_window(db, stock_id, timeframe)
+    window_key = (stock_id, timeframe)
+    if windows is not None and window_key in windows:
+        window = windows[window_key]
+    else:
+        window = await _load_window(db, stock_id, timeframe)
+        if windows is not None:
+            windows[window_key] = window
     if window.empty or len(window) < 50:
         return None, False
+    committed_fp = _window_fingerprint(window)
 
     if timeframe == "1d":
         forming = forming_daily_bar(
@@ -441,6 +505,20 @@ async def score_pair(
         window = append_forming(window, forming[0], forming[1])
 
     fii_net_5d, dii_net_5d = flows
+    slot: _ScoreSlot = (
+        stock_id,
+        timeframe,
+        min_confidence,
+        _multiplier_key(weight_multipliers),
+    )
+    inputs: _ScoreInputs = (committed_fp, forming, fii_net_5d, dii_net_5d, block_net)
+    if cache is not None:
+        memo = cache.scores.get(slot)
+        if memo is not None and memo[0] == inputs:
+            cache.hits += 1
+            return memo[1], memo[2]
+        cache.misses += 1
+
     result = score_signal(
         window,
         timeframe=timeframe,
@@ -450,6 +528,8 @@ async def score_pair(
         dii_net_5d=dii_net_5d,
         stock_block_deal_net_cr=block_net,
     )
+    if cache is not None:
+        cache.scores[slot] = (inputs, result, True)
     return result, True
 
 
@@ -461,6 +541,12 @@ async def run_cycle(
     from app.models.profile import StrategyProfile
 
     cache: _Cache = run_cycle.__dict__.setdefault("_cache", _Cache())
+    cache.hits = 0
+    cache.misses = 0
+    # Window loads are deduped WITHIN a cycle only: across cycles a committed
+    # bar can close, and serving that from a TTL cache would publish a score
+    # built on a window the engine has already moved past.
+    windows: dict[tuple[int, str], Any] = {}
     now_mono = time_mod.monotonic()
     session_day = now_utc.astimezone(_IST).date()
 
@@ -519,6 +605,12 @@ async def run_cycle(
     snapshot = book.forming_snapshot(snapshot_ids) if snapshot_ids else []
     forming_by_tf = forming_bars_by_tf(snapshot)
 
+    # Drop memo slots for stocks that have left the cycle's scope, so the map
+    # tracks the hot set instead of accumulating every stock seen all session.
+    in_scope = set(snapshot_ids)
+    if cache.scores:
+        cache.scores = {k: v for k, v in cache.scores.items() if k[0] in in_scope}
+
     # 1d pairs need today's committed-5m aggregates (one grouped query).
     has_daily_profile = any(p.timeframe == "1d" for p in profiles)
     needs_daily = {sid for sid in hot_ids if has_daily_profile} | {
@@ -556,6 +648,8 @@ async def run_cycle(
                     session_day=session_day,
                     flows=flows,
                     block_net=block,
+                    cache=cache,
+                    windows=windows,
                 )
             except Exception:
                 log.exception(
@@ -603,6 +697,8 @@ async def run_cycle(
                 session_day=session_day,
                 flows=flows,
                 block_net=block,
+                cache=cache,
+                windows=windows,
             )
         except Exception:
             log.exception(
@@ -633,7 +729,17 @@ async def run_cycle(
         )
 
     published = publish_leaderboards(redis, rows, now_utc)
-    return {"hot": len(hot), "pairs_scored": scored, "rows": len(rows), "styles": published}
+    return {
+        "hot": len(hot),
+        "pairs_scored": scored,
+        "rows": len(rows),
+        "styles": published,
+        # engine_calls is the cycle's REAL cost driver; pairs_scored counts
+        # published pairs, which the memo decoupled from work done.
+        "engine_calls": cache.misses,
+        "memo_hits": cache.hits,
+        "windows": len(windows),
+    }
 
 
 def publish_leaderboards(redis: Any, rows: list[dict[str, Any]], now_utc: datetime) -> int:

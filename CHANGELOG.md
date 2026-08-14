@@ -7,6 +7,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### perf(provisional): score each stock once per cycle, not once per profile (2026-08-14)
+
+The live worker logged `cycle overran the cadence: ~15000 ms > 3000 ms` continuously
+through the 2026-08-14 session. Measured on the live hot set: `run_all_factors` is
+**45.7 ms/window and 92.6% of the cycle** — the window LOADS were only 8% (4.4 ms × 328).
+The waste was structural, not algorithmic: all five active profiles are `1d` with
+identical `min_confidence` (70) and no weight multipliers, differing only by universe, so
+the frozen engine ran the *same* computation up to five times per stock and again every
+cycle whether or not anything had moved.
+
+`score_pair` now takes an optional per-cycle window map and a scoring memo on `_Cache`.
+The memo is keyed **per slot** — `(stock_id, timeframe, min_confidence, multipliers)` —
+holding the input fingerprint (committed-window identity, forming bar, flows, block net)
+its answer came from. A hit means the frozen scorer would receive byte-identical inputs,
+and it is pure (no clock, no randomness, no I/O), so the memoized answer IS the current
+answer, not a stale one. Keyed per slot rather than per input so a ticking forming bar
+replaces an entry instead of minting one, and pruned each cycle to the stocks in scope —
+the map tracks the hot set instead of growing all session. Window loads are deduped
+WITHIN a cycle only: across cycles a committed bar can close, and serving that from a TTL
+cache would publish a score built on a window the engine has already moved past.
+
+Measured on the real hot set (328 pairs, 150 hot, Redis stubbed, DB read-only):
+
+| cycle | before | after | engine calls |
+|---|---|---|---|
+| cold  | ~15 000 ms | **9 560 ms** | 328 → **159** |
+| warm (nothing moved) | ~15 000 ms | **897 ms** | **0** |
+
+Cycle stats now report `engine_calls` / `memo_hits` / `windows`, because `pairs_scored`
+no longer tracks work done — an overrun must be able to say whether it was real.
+
+Not a fix for the ceiling: a cycle in which every one of ~160 stocks ticks still costs
+~8 s on the Python engine, so ~45 moving stocks is the most a 3 s cadence can carry.
+`tradecore` scores the same window in **0.17 ms (266×, 25/25 decision agreement)** and
+would put a full cycle at ~56 ms, but `score_signal(impl="rust")` refuses non-zero
+FII/DII flows (live today: +720.12 / +8929.23) — closing that gap needs FlowInputs
+through the PyO3 boundary plus fixture regeneration, i.e. an engine change with sign-off.
+
+Behaviour is unchanged: same frozen sequence entered through `score_signal`, same rows,
+same gate verdicts. +6 tests — profiles sharing params score once; unchanged inputs reuse
+the memo; **a moved forming bar rescores** (the canary: a slot keyed on the stock alone
+would freeze the preview at the bar's first tick); differing gate and differing
+multipliers never share a slot; the shared window is not mutated by scoring.
+
 ### feat(phase6): 6.4 shadow-promote momentum ×1.5 — the retune A/B, forward (2026-08-14)
 
 Turns the 6.4 in-sample corpus finding into FORWARD out-of-sample evidence. Migration
