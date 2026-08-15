@@ -1,11 +1,11 @@
-<title>Trading Platform Status</title>
+<title>Trading Platform Compendium</title>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <style>
   /* ==========================================================================
-     Tokens — matches docs artifact "Trading Platform — Complete Overview".
-     Light is the base on bare :root; dark is redefined for BOTH the un-stamped
-     system-dark case and the explicit data-theme="dark" case. Never style a
-     component from inside a media/[data-theme] block — tokens only.
+     Tokens. Light is the base on bare :root; dark is redefined for BOTH the
+     un-stamped system-dark case (guarded so an explicit light choice wins) and
+     the explicit data-theme="dark" case. Components read tokens only — never a
+     literal inside a media/[data-theme] block.
      ========================================================================== */
   :root {
     --bg: #f5f8fc;
@@ -62,15 +62,15 @@
   }
 
   /* ---- shell ---- */
-  .shell { max-width: 1180px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
-  .layout { display: grid; grid-template-columns: 236px minmax(0, 1fr); gap: clamp(28px, 5vw, 60px); align-items: start; }
+  .shell { max-width: 1200px; margin: 0 auto; padding: 0 clamp(16px, 4vw, 40px); }
+  .layout { display: grid; grid-template-columns: 250px minmax(0, 1fr); gap: clamp(28px, 5vw, 60px); align-items: start; }
   @media (max-width: 940px) { .layout { grid-template-columns: 1fr; } }
 
   /* ---- masthead ---- */
   header.mast { padding: clamp(36px, 6vw, 64px) 0 26px; border-bottom: 1px solid var(--border); }
   .eyebrow { font-family: var(--font-mono); font-size: .72rem; letter-spacing: .16em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
-  h1 { font-size: clamp(2rem, 4.2vw, 2.8rem); line-height: 1.07; letter-spacing: -.025em; color: var(--ink); font-weight: 750; margin: .5rem 0 .4rem; text-wrap: balance; max-width: 24ch; }
-  .lede { font-size: clamp(1rem, 1.5vw, 1.14rem); color: var(--ink-2); max-width: 64ch; margin: 0 0 1.3rem; }
+  h1 { font-size: clamp(2rem, 4.2vw, 2.8rem); line-height: 1.07; letter-spacing: -.025em; color: var(--ink); font-weight: 750; margin: .5rem 0 .4rem; text-wrap: balance; max-width: 22ch; }
+  .lede { font-size: clamp(1rem, 1.5vw, 1.14rem); color: var(--ink-2); max-width: 66ch; margin: 0 0 1.3rem; }
   .metastrip { display: flex; flex-wrap: wrap; gap: 8px; }
   .metastrip .chip { font-family: var(--font-mono); font-size: .74rem; letter-spacing: .02em; }
 
@@ -84,34 +84,44 @@
   .dot { width: 7px; height: 7px; border-radius: 50%; background: currentColor; flex: none; }
 
   /* ---- sidebar nav ---- */
-  nav.toc { position: sticky; top: 20px; font-size: .855rem; }
+  nav.toc { position: sticky; top: 20px; font-size: .84rem; max-height: calc(100vh - 40px); overflow-y: auto; }
   @media (max-width: 940px) {
-    nav.toc { position: static; margin: 24px 0 8px; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
+    nav.toc { position: static; max-height: none; margin: 24px 0 8px; padding: 16px; border: 1px solid var(--border); border-radius: 14px; background: var(--surface); }
   }
   nav.toc .navlabel { font-family: var(--font-mono); font-size: .68rem; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); margin: 0 0 10px; padding-left: 12px; }
-  nav.toc ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
-  nav.toc a { display: block; text-decoration: none; color: var(--muted); padding: 6px 12px; border-radius: 7px; border-left: 2px solid transparent; line-height: 1.35; }
+  nav.toc .tocpart { font-family: var(--font-mono); font-size: .67rem; letter-spacing: .1em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin: 16px 0 5px; padding-left: 12px; }
+  nav.toc .tocpart:first-of-type { margin-top: 4px; }
+  nav.toc ol { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1px; }
+  nav.toc a { display: flex; gap: 9px; text-decoration: none; color: var(--muted); padding: 5px 12px; border-radius: 7px; border-left: 2px solid transparent; line-height: 1.3; transition: color .15s, background .15s, border-color .15s; }
+  nav.toc a .num { font-family: var(--font-mono); font-size: .72rem; opacity: .7; flex: none; width: 1.6em; }
   nav.toc a:hover { color: var(--ink); background: var(--surface-2); }
   nav.toc a:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
-  @media (max-width: 940px) { nav.toc ul { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px,1fr)); } nav.toc a { border-left: none; } }
+  nav.toc a.active { color: var(--accent); border-left-color: var(--accent); background: var(--accent-soft); font-weight: 600; }
+  @media (max-width: 940px) { nav.toc ol { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px,1fr)); } nav.toc a { border-left: none; } }
 
   /* ---- content ---- */
   main { padding-bottom: 72px; min-width: 0; }
-  section.doc { padding: 38px 0; border-bottom: 1px solid var(--border); scroll-margin-top: 16px; }
+  section.doc { padding: 36px 0; border-bottom: 1px solid var(--border); scroll-margin-top: 16px; }
   section.doc:last-of-type { border-bottom: none; }
   .sec-kicker { font-family: var(--font-mono); font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
   h2 { font-size: clamp(1.35rem, 2.4vw, 1.72rem); line-height: 1.2; letter-spacing: -.02em; color: var(--ink); font-weight: 700; margin: .3rem 0 .85rem; text-wrap: balance; }
   h3 { font-size: 1.06rem; color: var(--ink); font-weight: 650; margin: 1.6rem 0 .55rem; letter-spacing: -.01em; }
-  p { max-width: 68ch; margin: 0 0 1rem; }
+  p { max-width: 70ch; margin: 0 0 1rem; }
   main a { color: var(--accent); text-decoration: none; border-bottom: 1px solid transparent; }
   main a:hover { border-bottom-color: currentColor; }
   main a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
   strong { color: var(--ink); font-weight: 650; }
-  ul.body, ol.body { max-width: 68ch; padding-left: 1.15rem; margin: 0 0 1rem; }
+  ul.body, ol.body { max-width: 70ch; padding-left: 1.15rem; margin: 0 0 1rem; }
   li { margin: .32rem 0; }
   code { font-family: var(--font-mono); font-size: .86em; background: var(--surface-2); border: 1px solid var(--border); border-radius: 5px; padding: .08em .38em; color: var(--ink); white-space: nowrap; }
   .pos { color: var(--good); } .neg { color: var(--loss); }
   .n { font-family: var(--font-mono); font-size: .76em; color: var(--muted); white-space: nowrap; }
+
+  /* ---- part divider ---- */
+  .part { padding: 30px 0 6px; border-bottom: 2px solid var(--border-strong); margin-bottom: 4px; scroll-margin-top: 16px; }
+  .part .pd-k { font-family: var(--font-mono); font-size: .74rem; letter-spacing: .18em; text-transform: uppercase; color: var(--accent); font-weight: 600; }
+  .part .pd-t { font-size: clamp(1.5rem, 3vw, 2.05rem); color: var(--ink); font-weight: 750; letter-spacing: -.025em; margin: .25rem 0 .35rem; text-wrap: balance; }
+  .part .pd-d { color: var(--ink-2); font-size: .98rem; max-width: 70ch; margin: 0 0 .3rem; }
 
   /* ---- cards / callouts ---- */
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 14px; padding: 20px 22px; box-shadow: var(--shadow); margin: 0 0 1rem; }
@@ -123,11 +133,11 @@
   .callout.warn .k { color: var(--warn); }
   .callout.bad .k { color: var(--loss); }
   .callout.good .k { color: var(--good); }
-  .callout p { max-width: 64ch; margin: 0; }
+  .callout p { max-width: 66ch; margin: 0; }
   .callout p + p { margin-top: .6rem; }
 
   /* ---- metric row ---- */
-  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(148px,1fr)); gap: 12px; margin: 1rem 0 1.2rem; }
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px,1fr)); gap: 12px; margin: 1rem 0 1.2rem; }
   .metric { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; box-shadow: var(--shadow); }
   .metric .v { font-family: var(--font-mono); font-size: 1.3rem; font-weight: 650; color: var(--ink); letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
   .metric .v.up { color: var(--good); } .metric .v.down { color: var(--loss); } .metric .v.flag { color: var(--warn); }
@@ -140,7 +150,7 @@
   thead th { background: var(--surface-2); color: var(--ink); font-weight: 600; font-size: .76rem; letter-spacing: .04em; text-transform: uppercase; white-space: nowrap; }
   tbody tr:last-child td { border-bottom: none; }
   td.num, th.num { text-align: right; font-family: var(--font-mono); font-variant-numeric: tabular-nums; white-space: nowrap; }
-  td.mono { font-family: var(--font-mono); white-space: nowrap; }
+  td.mono, th.mono { font-family: var(--font-mono); white-space: nowrap; }
   tbody tr.win td { background: var(--good-bg); }
   tbody tr.win td:first-child { font-weight: 650; color: var(--ink); }
   tbody tr.base td:first-child { color: var(--accent); }
@@ -148,10 +158,18 @@
   .tag.rec { color: var(--good); background: var(--good-bg); }
   .tag.cur { color: var(--accent); background: var(--accent-soft); }
   .tag.new { color: var(--warn); background: var(--warn-bg); }
+  .tag.done { color: var(--good); background: var(--good-bg); }
+
+  /* ---- ascii diagram + code blocks ---- */
+  pre.ascii { font-family: var(--font-mono); font-size: .73rem; line-height: 1.45; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 18px; overflow-x: auto; color: var(--ink-2); margin: 0 0 .6rem; }
+  pre.code { font-family: var(--font-mono); font-size: .82rem; line-height: 1.55; background: var(--surface-2); border: 1px solid var(--border); border-radius: 12px; padding: 16px 18px; overflow-x: auto; color: var(--ink); margin: 0 0 1.2rem; }
+  pre.code .cm { color: var(--muted); }
+  pre.code .kw { color: var(--accent-2); }
+  .caption { font-size: .82rem; color: var(--muted); max-width: 72ch; margin: 0 0 1.2rem; }
 
   /* ---- phase strip ---- */
   .strip { display: flex; flex-wrap: wrap; gap: 8px; margin: .3rem 0 1.1rem; }
-  .strip .ph { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); min-width: 104px; box-shadow: var(--shadow); }
+  .strip .ph { display: flex; flex-direction: column; gap: 3px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; background: var(--surface); min-width: 96px; box-shadow: var(--shadow); }
   .strip .ph .t { font-size: .82rem; color: var(--ink); font-weight: 600; }
   .strip .ph .s { font-size: .7rem; font-family: var(--font-mono); }
   .strip .ph.done { border-top: 3px solid var(--good); }
@@ -162,8 +180,8 @@
   .strip .ph.plan .s { color: var(--plan); }
 
   /* ---- slice checklist ---- */
-  .slices { list-style: none; margin: 0 0 1.2rem; padding: 0; display: flex; flex-direction: column; gap: 9px; max-width: 74ch; }
-  .slices li { display: grid; grid-template-columns: 34px 1fr; gap: 11px; align-items: baseline; font-size: .93rem; }
+  .slices { list-style: none; margin: 0 0 1.2rem; padding: 0; display: flex; flex-direction: column; gap: 9px; max-width: 78ch; }
+  .slices li { display: grid; grid-template-columns: 40px 1fr; gap: 11px; align-items: baseline; font-size: .93rem; }
   .slices .mk { font-family: var(--font-mono); font-size: .82rem; font-weight: 650; }
   .mk.ok { color: var(--good); } .mk.now { color: var(--accent); } .mk.next { color: var(--warn); } .mk.wait { color: var(--muted); }
   .slices .nm { color: var(--ink); font-weight: 650; }
@@ -177,12 +195,12 @@
   .box h4 { margin: 0 0 8px; font-size: .74rem; font-family: var(--font-mono); letter-spacing: .09em; text-transform: uppercase; }
   .box.edge h4 { color: var(--good); }
   .box.leak h4 { color: var(--loss); }
-  .box ul { margin: 0; padding-left: 17px; font-size: .89rem; }
+  .box ul { margin: 0; padding-left: 17px; font-size: .89rem; max-width: none; }
   .box b { font-family: var(--font-mono); font-weight: 650; }
 
   /* ---- bars ---- */
   .bars { display: flex; flex-direction: column; gap: 10px; margin: 1rem 0 .6rem; }
-  .bar-row { display: grid; grid-template-columns: 214px 1fr 58px; align-items: center; gap: 12px; }
+  .bar-row { display: grid; grid-template-columns: 220px 1fr 62px; align-items: center; gap: 12px; }
   @media (max-width: 640px) { .bar-row { grid-template-columns: 1fr; gap: 3px; } }
   .bar-lab { font-size: .84rem; color: var(--muted); }
   .bar-track { background: var(--surface-2); border: 1px solid var(--border); border-radius: 6px; height: 22px; overflow: hidden; }
@@ -191,7 +209,6 @@
   .bar-fill.base { background: var(--accent); }
   .bar-fill.dim { background: var(--border-strong); }
   .bar-val { font-family: var(--font-mono); font-variant-numeric: tabular-nums; font-size: .85rem; font-weight: 650; text-align: right; color: var(--ink); }
-  .caption { font-size: .82rem; color: var(--muted); max-width: 70ch; margin: 0 0 .4rem; }
 
   /* ---- factor chips ---- */
   .factors { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: .4rem; }
@@ -206,96 +223,500 @@
   .fchip .d { font-weight: 700; font-variant-numeric: tabular-nums; }
   .fchip .n { color: var(--muted); font-size: .72rem; }
 
-  /* ---- next / ranked list ---- */
+  /* ---- ranked next list ---- */
   .nexts { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 16px; }
   .nexts > li { display: grid; grid-template-columns: 34px 1fr; gap: 14px; align-items: start; }
   .nexts .rk { font-family: var(--font-mono); font-weight: 700; font-size: .92rem; width: 34px; height: 34px; border-radius: 9px; display: grid; place-items: center; color: var(--plan); background: var(--plan-bg); border: 1px solid var(--plan-bd); }
   .nexts > li:first-child .rk { color: var(--good); background: var(--good-bg); border-color: var(--good-bd); }
   .nexts .nx-t { color: var(--ink); font-weight: 650; font-size: 1rem; display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-  .nexts .nx-d { color: var(--ink-2); font-size: .91rem; margin-top: 3px; max-width: 68ch; }
+  .nexts .nx-d { color: var(--ink-2); font-size: .91rem; margin-top: 3px; max-width: 70ch; }
 
   /* ---- checklist rows ---- */
   .checks { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 12px; }
-  .checks li { display: grid; grid-template-columns: 20px 1fr; gap: 12px; align-items: start; font-size: .93rem; max-width: 74ch; }
+  .checks li { display: grid; grid-template-columns: 20px 1fr; gap: 12px; align-items: start; font-size: .93rem; max-width: 78ch; }
   .checks .ic { text-align: center; font-family: var(--font-mono); font-weight: 700; }
   .ic.warn { color: var(--warn); } .ic.bad { color: var(--loss); } .ic.good { color: var(--good); } .ic.info { color: var(--accent); }
 
   footer.foot { color: var(--muted); font-size: .85rem; padding: 26px 0 40px; border-top: 1px solid var(--border); }
-  footer.foot p { max-width: 74ch; }
+  footer.foot p { max-width: 78ch; }
   footer.foot .meta { display: flex; flex-wrap: wrap; gap: 6px 20px; margin-top: 10px; font-family: var(--font-mono); font-size: .76rem; }
 </style>
 
 <div class="shell">
   <header class="mast">
-    <div class="eyebrow">Project status · mirrored 2026-08-13</div>
-    <h1>Trading Platform — where the build stands</h1>
-    <p class="lede">Personal stock-suggestion &amp; algo-trading platform for NSE/BSE: weighted-confluence signal engine on a Rust compute core, paper execution, outcome tracking. This page is the mirror of the canonical status block in <code>docs/PHASES.md</code> — every number below is traced to a file in the repo.</p>
+    <div class="eyebrow">Master reference · the whole project · updated 2026-08-15</div>
+    <h1>Trading Platform Compendium</h1>
+    <p class="lede">The one page for everything: how the system works end to end, every experiment and how the strategy actually behaved, exactly where the build stands, and how the next two phases get built. When a detail slips your mind, it is here — traced to a file in the repo, not remembered.</p>
     <div class="metastrip">
-      <span class="chip accent"><span class="dot"></span>v2 · Phase 6 in progress</span>
-      <span class="chip prog">Phase 3 gate · Fri 2026-08-15</span>
+      <span class="chip accent"><span class="dot"></span>v2 · Phase 6 built (6.1–6.5)</span>
+      <span class="chip done">Phase 3 CLOSED · 08-14</span>
+      <span class="chip done">Regime gate ACTIVE</span>
       <span class="chip bad">Paper-only — no live order path</span>
-      <span class="chip">1187 backend · 375 frontend tests</span>
-      <span class="chip">main +11 ahead of origin</span>
+      <span class="chip">1246 · 375 · 86 tests</span>
+      <span class="chip">main +30 vs origin</span>
     </div>
   </header>
 
   <div class="layout">
     <nav class="toc" aria-label="Contents">
-      <p class="navlabel">On this page</p>
-      <ul>
-        <li><a href="#state">Where we are</a></li>
-        <li><a href="#book">The paper book</a></li>
-        <li><a href="#phase6">Phase 6 — the leak</a></li>
-        <li><a href="#gate">Gate experiment</a></li>
-        <li><a href="#factors">Factor attribution</a></li>
-        <li><a href="#forward">Forward evidence</a></li>
-        <li><a href="#next">What we start next</a></li>
-        <li><a href="#open">Open decisions &amp; risks</a></li>
-        <li><a href="#invariants">Invariants that bind</a></li>
-        <li><a href="#refs">Reference &amp; the deep-dive artifact</a></li>
-      </ul>
+      <p class="navlabel">Contents</p>
+      <div class="tocpart">I · The system, end to end</div>
+      <ol>
+        <li><a href="#s1"><span class="num">01</span><span>What this is</span></a></li>
+        <li><a href="#s2"><span class="num">02</span><span>Two eras: v1 &amp; v2</span></a></li>
+        <li><a href="#s3"><span class="num">03</span><span>System architecture</span></a></li>
+        <li><a href="#s4"><span class="num">04</span><span>End-to-end lifecycle</span></a></li>
+        <li><a href="#s5"><span class="num">05</span><span>The signal engine</span></a></li>
+        <li><a href="#s6"><span class="num">06</span><span>Rust compute core</span></a></li>
+        <li><a href="#s7"><span class="num">07</span><span>Realtime layer</span></a></li>
+        <li><a href="#s8"><span class="num">08</span><span>Paper trading &amp; risk</span></a></li>
+        <li><a href="#s9"><span class="num">09</span><span>Four trading styles</span></a></li>
+        <li><a href="#s10"><span class="num">10</span><span>Data model &amp; contracts</span></a></li>
+        <li><a href="#s11"><span class="num">11</span><span>Frontend</span></a></li>
+        <li><a href="#s12"><span class="num">12</span><span>Tech stack</span></a></li>
+        <li><a href="#s13"><span class="num">13</span><span>Adjudicated canon</span></a></li>
+        <li><a href="#s14"><span class="num">14</span><span>Hard constraints</span></a></li>
+        <li><a href="#s15"><span class="num">15</span><span>Dev workbench</span></a></li>
+      </ol>
+      <div class="tocpart">II · Where the build stands</div>
+      <ol>
+        <li><a href="#s16"><span class="num">16</span><span>Where we are now</span></a></li>
+        <li><a href="#s17"><span class="num">17</span><span>The paper book</span></a></li>
+        <li><a href="#s18"><span class="num">18</span><span>Phase 6 — leak, edge, shipped</span></a></li>
+        <li><a href="#s19"><span class="num">19</span><span>Gate experiment → regime gate</span></a></li>
+        <li><a href="#s20"><span class="num">20</span><span>Factor attribution → retune</span></a></li>
+        <li><a href="#s21"><span class="num">21</span><span>Forward evidence — shadows</span></a></li>
+      </ol>
+      <div class="tocpart">III · What's next</div>
+      <ol>
+        <li><a href="#s22"><span class="num">22</span><span>Market Context Engine</span></a></li>
+        <li><a href="#s23"><span class="num">23</span><span>Phase 7 — live trading</span></a></li>
+        <li><a href="#s24"><span class="num">24</span><span>Open decisions &amp; risks</span></a></li>
+        <li><a href="#s25"><span class="num">25</span><span>Invariants that bind</span></a></li>
+      </ol>
+      <div class="tocpart">IV · Reference</div>
+      <ol>
+        <li><a href="#s26"><span class="num">26</span><span>Glossary</span></a></li>
+        <li><a href="#s27"><span class="num">27</span><span>Commands &amp; daily ops</span></a></li>
+        <li><a href="#s28"><span class="num">28</span><span>Reports &amp; further reading</span></a></li>
+      </ol>
     </nav>
 
     <main>
-      <!-- ================================================================ -->
-      <section class="doc" id="state">
-        <div class="sec-kicker">Status</div>
-        <h2>Where we are</h2>
+      <!-- ======================= PART I ======================= -->
+      <div class="part" id="p1">
+        <div class="pd-k">Part I</div>
+        <div class="pd-t">The system, end to end</div>
+        <p class="pd-d">What the platform is and how every layer fits together — architecture, the signal engine, the Rust core, realtime, data, and the rules that bind them. This part describes <em>how it works</em> and changes only when the system does.</p>
+      </div>
 
-        <div class="callout">
-          <span class="k">One paragraph</span>
-          <p>v1 (phases 0–11) shipped. <strong>v2 phases 0, 1, 2, 4 and 5 are closed; Phase 3 has both exit criteria met on disk and only its gate ritual left (user-run, Friday 2026-08-15); Phase 6 is underway with 6.1 and 6.2 done.</strong> Phase 6 has already produced its headline finding — the binding constraint on profit is <strong>entry/regime selection, not exit logic</strong> — and quantified it at corpus scale. <strong>Live trading does not exist</strong>: <code>place_order</code> is paper-only, with no Kite order or GTT path. That is Phase 7.</p>
-        </div>
-
-        <div class="strip">
-          <div class="ph done"><span class="t">v1 · 0–11</span><span class="s">shipped</span></div>
-          <div class="ph done"><span class="t">P0 workbench</span><span class="s">done 07-03</span></div>
-          <div class="ph done"><span class="t">P1 Rust core</span><span class="s">done 07-05</span></div>
-          <div class="ph done"><span class="t">P2 profiles</span><span class="s">done 07-07</span></div>
-          <div class="ph prog"><span class="t">P3 realtime</span><span class="s">gate 08-15</span></div>
-          <div class="ph done"><span class="t">P4 F&amp;O</span><span class="s">PASS 08-06</span></div>
-          <div class="ph done"><span class="t">P5 UI</span><span class="s">gated 08-07</span></div>
-          <div class="ph prog"><span class="t">P6 outcomes</span><span class="s">6.1+6.2 done</span></div>
-          <div class="ph plan"><span class="t">MCE context</span><span class="s">named, after P6</span></div>
-          <div class="ph plan"><span class="t">P7 live</span><span class="s">not started</span></div>
-        </div>
-
-        <h3>Suites — measured, not remembered</h3>
-        <div class="metrics">
-          <div class="metric"><div class="v">1187</div><div class="l">backend pytest collected<br>(1143 + 44 heavy)</div></div>
-          <div class="metric"><div class="v up">375</div><div class="l">frontend Vitest passing<br>41 files, 0 failures</div></div>
-          <div class="metric"><div class="v">16 / 9 / 19</div><div class="l">parity / walk-forward / replay<br>markers in the 44</div></div>
-          <div class="metric"><div class="v">86</div><div class="l">cargo tests<br>engine workspace</div></div>
-        </div>
-        <p class="caption">Both counts measured 2026-08-13, not remembered: backend from <code>pytest --collect-only</code> (the 44 deselected are the <code>parity</code>, <code>walkforward</code> and <code>replay</code> markers), frontend from an actual <code>vitest run</code> — 375 passed, 41 files, no failures. The Phase-6 slices added <code>test_signal_excursions</code>, <code>test_entry_attribution</code>, <code>test_corpus_attribution</code> and <code>test_seasonality</code>; the older “1123 / 370” figures in the phase docs are superseded. <code>make check</code> green is the baseline state.</p>
+      <section class="doc" id="s1">
+        <div class="sec-kicker">01 · What this is</div>
+        <h2>What this is, in one paragraph</h2>
+        <p>A <strong>personal intelligent stock-suggestion and algo-trading platform for the Indian markets (NSE/BSE)</strong>. It ingests market data — end-of-day and live tick-by-tick — runs every stock through a <strong>weighted confluence signal engine</strong> that only fires when 5–7 independent technical factors agree at the same price level, sizes each idea off a mandatory stop-loss rule, and surfaces the result as an actionable suggestion: entry, stop, target, quantity, and <em>why</em>.</p>
+        <p>Trades execute in <strong>paper mode</strong> today; live order placement is gated behind an explicit opt-in plus a proven profitable paper record. Built solo, for personal use first, with the option to productise later.</p>
+        <div class="callout"><span class="k">Guiding principle</span><p>Profits can't be promised, but <strong>losses are controlled by construction</strong> — mandatory sizing, max-SL rejection, class-correct validity, and a non-disableable circuit breaker.</p></div>
       </section>
 
-      <!-- ================================================================ -->
-      <section class="doc" id="book">
-        <div class="sec-kicker">Evidence</div>
-        <h2>The paper book — what the strategy actually did</h2>
-        <p>Eight sessions, 2026-08-03 → 08-12, from <code>docs/analysis/LEDGER.md</code>. Paper mode, capital ₹1,00,000, risk 2%/trade, daily-loss cap ₹3,000, max 5 entries/day. This table is the reason Phase 6 exists.</p>
+      <section class="doc" id="s2">
+        <div class="sec-kicker">02 · Two eras</div>
+        <h2>The two eras: v1 and the v2 upgrade</h2>
+        <p><strong>v1 (2025 → mid-2026, complete).</strong> Phases 0–11 built the whole vertical: auth, stock master, a 50-filter screener, category tagging, EOD ingestion (OHLCV + FII/DII + bulk/block deals), the 14-factor confluence engine, a dashboard, Kite WebSocket plumbing, paper trading with a circuit breaker, a strategy lab, a journal, and portfolio import. It worked — but a deep adversarial review found the <strong>"live" pipeline had never worked end-to-end</strong> (four integration bugs), position sizing was 100× too small, and the code had quietly drifted from the signal spec. v1 Phase 12 (live trading) was never started.</p>
+        <p><strong>v2 (current — approved 2026-07-03).</strong> Not a rewrite — a foundation <em>repair plus upgrade</em>: a Rust compute core, an honest tick-to-tick realtime layer, four data-driven trading-style engines, F&amp;O capability, a UI overhaul, outcome tracking, then finally live trading. The old v1 Phase 12 became <strong>v2 Phase 7</strong>. Phases 0–5 are closed and Phase 6 is built; the strip below is the whole journey.</p>
+        <div class="strip">
+          <div class="ph done"><span class="t">v1 · 0–11</span><span class="s">shipped</span></div>
+          <div class="ph done"><span class="t">P0 workbench</span><span class="s">done</span></div>
+          <div class="ph done"><span class="t">P1 Rust core</span><span class="s">done</span></div>
+          <div class="ph done"><span class="t">P2 profiles</span><span class="s">done</span></div>
+          <div class="ph done"><span class="t">P3 realtime</span><span class="s">CLOSED 08-14</span></div>
+          <div class="ph done"><span class="t">P4 F&amp;O</span><span class="s">PASS 08-06</span></div>
+          <div class="ph done"><span class="t">P5 UI</span><span class="s">gated 08-07</span></div>
+          <div class="ph prog"><span class="t">P6 outcomes</span><span class="s">built 6.1–6.5</span></div>
+          <div class="ph plan"><span class="t">MCE context</span><span class="s">next build</span></div>
+          <div class="ph plan"><span class="t">P7 live</span><span class="s">not started</span></div>
+        </div>
+      </section>
 
+      <section class="doc" id="s3">
+        <div class="sec-kicker">03 · Architecture</div>
+        <h2>The big picture — system architecture</h2>
+        <p>Five layers, top to bottom: external sources → ingestion → compute → storage → presentation.</p>
+        <pre class="ascii">┌─ External ─────────────────────────────────────────────────────────┐
+│ Kite WS (ticks) · Kite REST (quote / historical / instruments)     │
+│ NSE archives: equity bhavcopy · F&amp;O bhavcopy · indices/VIX ·        │
+│ FII/DII · corporate filings                                        │
+└──────────────┬─────────────────────────────────────────────────────┘
+               ▼
+┌─ Ingestion ────────────────────────────────────────────────────────┐
+│ live-worker (KiteTicker thread → queue → batch loop):              │
+│   candles 1m/5m/15m/1h → Postgres · SET ltp:{sid} + pub/sub → Redis│
+│ Celery beat: EOD bhavcopies · FII/DII · filings · F&amp;O bhavcopy ·    │
+│   India VIX · option-chain snapshots (1-min, needs Kite token)     │
+└──────────────┬─────────────────────────────────────────────────────┘
+               ▼
+┌─ Compute ──────────────────────────────────────────────────────────┐
+│ Rust engine-core (tradecore wheel): 14-factor confluence (≥70%),   │
+│   risk sizer, classifier, Rayon backtest, LiveEngine               │
+│   (forming + committed). Python analysis/ FROZEN at parity.        │
+│ Options math: BS/Black-76 IV, Greeks, IV-rank/PCR/max-pain (P4)    │
+│ Overlays (P6, engine untouched): regime gate · pair screen         │
+└──────────────┬─────────────────────────────────────────────────────┘
+               ▼
+┌─ Storage ──────────────────────────────────────────────────────────┐
+│ Postgres 16 + TimescaleDB (:5433): ohlcv_{1m,5m,15m,1h,1d} +       │
+│   fo_bhavcopy · india_vix_daily · option_chain_snapshots ·         │
+│   signals/outcomes · pair_signals · orders/positions · relational  │
+│ Redis 7 (volatile-lru): ltp:{stock_id} · pub/sub · Streams         │
+└──────────────┬─────────────────────────────────────────────────────┘
+               ▼
+┌─ Presentation ─────────────────────────────────────────────────────┐
+│ FastAPI /api/v1/* (JWT) · /ws/live · React 19 SPA (5-theme UI)     │
+└────────────────────────────────────────────────────────────────────┘</pre>
+        <h3>Process model</h3>
+        <p>Four long-lived processes plus two datastores: <strong>FastAPI</strong> (REST + WS fanout) · <strong>live-worker</strong> (KiteTicker + embedded Rust LiveEngine; restarts daily at token expiry with warmup + gap-fill) · <strong>Celery worker + beat</strong> (EOD ingestion, nightly signals, expiry sweeps, the pair-signal mint) · <strong>Postgres</strong> + <strong>Redis</strong>. The tick hot path is deliberately <em>boring concurrency</em>: ticker thread → <code>queue.Queue</code> → consumer thread → <strong>one PyO3 call per tick batch</strong> → sync redis pipeline. No asyncio in the hot path — two of v1's four live bugs were asyncio/thread impedance.</p>
+      </section>
+
+      <section class="doc" id="s4">
+        <div class="sec-kicker">04 · Lifecycle</div>
+        <h2>End-to-end lifecycle — how a trade idea is born</h2>
+        <p>The journey of a single suggestion, from raw data to a tracked outcome. Two things make it trustworthy: <strong>no look-ahead</strong> (factors compute on candle N, valid from N+1; committed signals only on complete candles) and <strong>idempotency</strong> (one active signal per stock/timeframe/direction).</p>
+        <pre class="ascii">  Market data (Kite ticks + EOD bhavcopy)
+        │
+        ▼
+  Candles 1m / 5m / 15m / 1h / 1d
+        │
+        ▼
+  candle N is_complete? ──no──▶ wait
+        │ yes
+        ▼
+  Run 14 factors on last ≤300 completed candles
+        │
+        ▼
+  Confluence scorer — weighted avg of APPLICABLE factors
+        │
+        ▼
+  confidence ≥ 70%?  (ADX regime adjust) ──no──▶ logged for backtest, hidden from UI
+        │ yes
+        ▼
+  REGIME GATE overlay (P6, ACTIVE) — skip transitional ADX 20–25 ──skip──▶ suppressed + measured
+        │ eligible
+        ▼
+  Classify: scalp / intraday / swing / positional
+        │
+        ▼
+  Compute levels: entry · SL · TP
+        │
+        ▼
+  natural SL ≤ class cap? ──no──▶ REJECT (never tighten the SL)
+        │ yes
+        ▼
+  Size: qty = floor(capital × risk% / |entry − SL|)
+        │
+        ▼
+  Committed Signal — valid from N+1
+        │
+        ▼
+  Paper trade: place order · open position (risk-first from the actual fill)
+        │
+        ▼
+  Trail-SL / profit-lock state machine  +  daily-loss circuit breaker
+        │
+        ▼
+  Outcome recorder: entry-touched · MFE/MAE · TP-first / SL-first / expired
+        │
+        ▼
+  Phase-6 attribution — expectancy tables feed calibration</pre>
+        <p class="caption">The regime-gate step is the one behaviour change Phase 6 shipped to the money path — and it is a downstream <em>overlay</em>, not a change to the frozen engine above it.</p>
+      </section>
+
+      <section class="doc" id="s5">
+        <div class="sec-kicker">05 · Signal engine</div>
+        <h2>The signal engine — our edge</h2>
+        <p><code>docs/SIGNAL_ENGINE.md</code> is the protected spec — the heart of the whole system, hook-guarded, changed only by explicit instruction plus a §8 backtest regression.</p>
+        <h3>The philosophy: confluence, not single indicators</h3>
+        <p>A signal is <strong>multiple independent indicators agreeing at the same price level</strong>. "RSI &lt; 30, buy!" is noise — it is why most retail traders lose. The edge is requiring 5–7 conditions to align; it is the formalisation of the masterclass <strong>Double Confirmation (DC1/DC2)</strong> principle. Every signal carries four parts: direction (BUY/SELL), classification, levels (entry, SL, TP, qty), and justification (which factors fired, their scores, the confidence %).</p>
+        <h3>The 14-factor universe</h3>
+        <p>Each factor returns a score from −1.0 (strongly bearish) to +1.0 (strongly bullish); <code>0.0</code> means "not applicable" and is <strong>excluded from the weight denominator</strong>.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Group</th><th>Factors</th><th>Notes</th></tr></thead>
+          <tbody>
+            <tr><td>Single-candle patterns</td><td>Marubozu, Doji, Hammer, Hanging Man, Shooting Star, Paper Umbrella</td><td>Context-aware — a hammer <em>at support</em> scores; mid-trend it doesn't</td></tr>
+            <tr><td>Multi-candle patterns</td><td>Engulfing, Harami, Piercing/Dark Cloud, Morning/Evening Star</td><td>Star requires a full-body gap (canon G)</td></tr>
+            <tr><td>Indicators</td><td>RSI, RSI divergence, MACD, MACD histogram, EMA cross, price vs EMA, Multibagger EMA, ADX+DI, Bollinger, Volume</td><td>pandas-ta reference, ported to Rust</td></tr>
+            <tr><td>Trend (Dow)</td><td>Higher-highs/higher-lows via pivots (N=3 intraday, N=5 daily)</td><td>The macro context — heaviest weight</td></tr>
+            <tr><td>S/R + Zones</td><td>Tested S/R lines · demand/supply zones · RRBO breakout</td><td>Masterclass Class-6 zones</td></tr>
+            <tr><td>Fibonacci</td><td>Bounces from 0.5 / 0.618 / 0.786 retracements</td><td></td></tr>
+            <tr><td>FII/DII flow</td><td>5-day net-buy/sell thresholds · sector alignment</td><td>Lighter weight; sector-level for most stocks</td></tr>
+          </tbody>
+        </table></div>
+        <h3>The confluence scorer</h3>
+        <pre class="code"><span class="cm"># weighted average of only the factors that actually scored</span>
+total_weighted = sum(f.weight * f.score for f in factors)
+total_weight   = sum(f.weight for f in factors <span class="kw">if</span> f.score != 0)
+normalized     = total_weighted / total_weight        <span class="cm"># -1 .. +1</span>
+confidence_pct = int(abs(normalized) * 100)           <span class="cm"># int() truncation is canon</span>
+<span class="kw">if</span> confidence_pct &lt; 70: <span class="kw">return</span> None            <span class="cm"># the gate</span>
+direction = <span class="kw">"BUY"</span> <span class="kw">if</span> normalized &gt; 0 <span class="kw">else</span> <span class="kw">"SELL"</span></pre>
+        <div class="callout"><span class="k">Weight semantics — canon H</span><p>Every factor carries its own weight independently; the denominator is the sum of weights of factors that <em>actually scored</em>. So <strong>four factors firing decisively beats fourteen firing weakly.</strong> Sharing group weights was measured to loosen the gate badly (~400 extra weak trades) and rejected.</p></div>
+        <p><strong>ADX regime adjustments:</strong> ADX &lt; 20 (weak trend) → require +5% extra confidence; ADX &gt; 40 (strong trend) → threshold drops to 65%. ATR(14) &gt; 3% of price (volatile) → reduce position size 25% (a risk rule, not an alpha rule).</p>
+        <h3>Worked example — real engine output</h3>
+        <div class="card">
+          <p style="margin:0 0 .5rem"><strong>POWERGRID, 1d.</strong> Four factors fired: Bullish Engulfing (+13.50), RSI rising (+6.00), at-support (+8.50), Fib 0.5 bounce (+2.00) = <strong>+30.00 over applicable weight 40</strong> → 0.75 → <strong>75% BUY</strong>.</p>
+          <p style="margin:0"><code>Entry ₹288.20</code> · <code>SL ₹278.40</code> (last swing low, 3.4% — inside the 8% swing cap) · <code>TP ₹305.49</code> (6% RRBO target) · <code>qty 1020</code> at ₹5L capital / 2% risk. Output: <em>"Buy POWERGRID — Bullish Engulfing at support, RSI rising, 75% confidence."</em></p>
+        </div>
+        <h3>Classification, validity, sizing</h3>
+        <ul class="body">
+          <li><strong>Classification</strong> by strongest-contributing timeframe: 1m/5m → scalp · 15m/1h → intraday · 1d → swing · 1d+Multibagger or 1w → positional.</li>
+          <li><strong>Validity:</strong> scalp 30 min · intraday until 3:15 PM IST · swing <strong>5 trading days</strong> · positional <strong>30 trading days</strong>. Trading-day arithmetic uses the NSE holiday calendar — calendar-day math is a bug. An expiry sweeper runs every 5 minutes.</li>
+          <li><strong>Sizing (mandatory):</strong> <code>qty = floor(capital × risk% / |entry − SL|)</code>. <code>risk_pct</code> is a whole percent (2.0 = 2%). <strong>Reject, never clamp</strong>: if the natural SL exceeds the class cap (scalp/intraday 0.5%, swing 8%), the signal is rejected.</li>
+          <li><strong>Trailing stop:</strong> at first target close 50% and move SL to breakeven; at the next 6% target book 25% more and trail again. Per-user, an absolute-₹ profit-lock ladder can replace the fixed trail.</li>
+        </ul>
+      </section>
+
+      <section class="doc" id="s6">
+        <div class="sec-kicker">06 · Rust core</div>
+        <h2>The Rust compute core</h2>
+        <p>The <code>engine/</code> Cargo workspace, added in v2, is the platform's compute heart. Three crates: <strong>engine-core</strong> (pure logic — no I/O, no clocks: indicators, pattern detectors, pivots/Dow/S&amp;R/Fib, the confluence scorer, the risk sizer, the Rayon-parallel backtest, Black-Scholes options math) · <strong>engine-py</strong> (the PyO3/maturin wheel <code>tradecore</code>) · <strong>engine-cli</strong> (native replay/bench binary).</p>
+        <p><strong>Why Rust.</strong> The honest bottleneck was never the tick path (500 instruments ≈ 500–2000 ticks/s is trivial) — it was the <strong>backtest/tuning loop</strong>: the pandas engine recomputed full-window indicators per candle (O(n²)), and weight-grid / walk-forward searches over minute data were infeasible in Python. Reusing the <em>same compiled engine</em> live then eliminates the entire class of live-vs-backtest drift bugs v1 exhibited.</p>
+        <div class="metrics">
+          <div class="metric"><div class="v up">6,180×</div><div class="l">2y × 49 backtest<br>883.8 s → 0.143 s</div></div>
+          <div class="metric"><div class="v up">6,200×</div><div class="l">200-combo grid<br>≈ 50.5 h → ≈ 29 s</div></div>
+          <div class="metric"><div class="v up">~6.5 µs</div><div class="l">single confluence eval<br>was 44.5 ms</div></div>
+        </div>
+        <div class="callout"><span class="k">Parity is sacred — the migration contract</span><p>The Python <code>analysis/</code> code is <strong>frozen</strong> (bugfix-only). Committed golden fixtures generated from it are the oracle. Tolerances are tiered: 1e-9 (EMA family), 1e-6 (Wilder family), and <strong>exact equality on factor scores, confidence integers, and signal decisions</strong>. A live shadow week ran Rust-decides / Python-double-checks with zero decision diffs (14 clean days). Money is <code>i64</code> scaled 1e-4, indicators are f64, "not applicable" is <code>Option::None</code> never a 0.0 sentinel.</p></div>
+      </section>
+
+      <section class="doc" id="s7">
+        <div class="sec-kicker">07 · Realtime</div>
+        <h2>The realtime layer — committed vs forming</h2>
+        <p>Phase 3's core idea: <strong>two deliberately distinct output layers</strong>, separated at the type level so provisional data can never contaminate real decisions.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Layer</th><th>When</th><th>Guarantees</th><th>Transport</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Committed</strong></td><td>Candle-close only</td><td>Spec-exact, no repainting, backtestable, idempotent · at most once per (tf, period)</td><td>In-process Rust (µs)</td></tr>
+            <tr><td><strong>Forming / live</strong></td><td>Tick-to-tick, 2–4 Hz</td><td>Labelled "forming" · <strong>never</strong> enters backtests or P&amp;L</td><td>Redis Streams (durable) + pub/sub (droppable)</td></tr>
+          </tbody>
+        </table></div>
+        <p>The forming layer surfaces entry-zone touches, PDH/PDL and S/R breakout crosses, SL/TP proximity for open positions, volume bursts, provisional confidence on the forming candle, and per-style leaderboard re-ranks.</p>
+        <h3>The tick pipeline</h3>
+        <pre class="code">KiteTicker thread → bounded queue.Queue → consumer thread
+  → ONE tradecore.LiveBook call per tick batch
+  → sync redis pipeline: SET ltp:{stock_id} + PUBLISH ltp/candle + XADD alerts
+Committed candles → blocking writer queue → writer thread → Postgres upsert
+  → Celery trigger fires AFTER the commit</pre>
+        <p><strong>Backpressure:</strong> drop-oldest for LTP-class data, <strong>never</strong> a candle-closing tick. <strong>Session guard in-engine:</strong> ticks before 9:15 / at-or-after 15:30 / with non-positive price are rejected and <em>counted</em>, never minted. <strong>Daily token expiry (~6 AM IST)</strong> is a normal lifecycle event — restart + warmup + gap-fill, not an error loop.</p>
+        <div class="callout"><span class="k">Latency budget — MET</span><p>tick → Redis publish <strong>p99 ≤ 50 ms at full universe (~2,055 instruments)</strong> — met across two full sessions. A <strong>record/replay harness</strong> proves byte-identical event streams across four full-day soak recordings; replay tests run in CI. These two facts are the realtime exit criteria — Phase 3 was gated on them 2026-08-14.</p></div>
+      </section>
+
+      <section class="doc" id="s8">
+        <div class="sec-kicker">08 · Paper &amp; risk</div>
+        <h2>Paper trading, risk, and the road to live</h2>
+        <p><strong>Paper mode is the default and the only path today.</strong> <code>place_order</code> is paper-only — there is no Kite order/GTT path yet (that is Phase 7). The risk machinery that controls losses by construction:</p>
+        <ul class="body">
+          <li><strong>Mandatory position sizing</strong> off SL distance, risk-first from the <em>actual fill</em> so a chased fill shrinks quantity instead of over-risking.</li>
+          <li><strong>Max-SL rejection</strong> — signals whose natural SL exceeds the class cap are rejected, not clamped.</li>
+          <li><strong>Honest fills</strong> — gap-through exits book the <em>gapped</em> market price, not the stop; the fill candle is checked intrabar; SL is checked before TP. Adverse slippage on by default (2 bps); Zerodha round-trip charges modelled so P&amp;L is <strong>net</strong>.</li>
+          <li><strong>The daily-loss circuit breaker</strong> — never disableable, never weakened, never configurable-off.</li>
+          <li><strong>Exit governance (per-user):</strong> a fixed trail-SL ladder, or an absolute-₹ profit-lock ladder (breakeven at +₹2k, seal peak−₹1k above ₹3k, ATR room).</li>
+        </ul>
+        <p><strong>The go-live gate.</strong> Live trading requires explicit opt-in <strong>and</strong> a 30-day profitable paper record, enforced in code. The paper clock restarts whenever the fill model changes (a reset endpoint + <code>users.paper_clock_started_at</code> exist for this). Phase 6/7 will replace "30 calendar days" with "N trades across ≥2 regimes, positive expectancy, bounded drawdown".</p>
+        <div class="callout warn"><span class="k">Honesty note</span><p>No system guarantees profits. The truthful adjudicated baseline on 2023–26 daily data is <strong>negative</strong> — the old flattering +P&amp;L was fill-flattery. Profitability is the job of the Phase-2 profiles (the <code>rrbo</code> swing profile walk-forwards <strong>positive: +41.3% / +1.97 Sharpe</strong>) and Phase-6 selection tuning (the regime gate, now active), measured against reality.</p></div>
+      </section>
+
+      <section class="doc" id="s9">
+        <div class="sec-kicker">09 · Four styles</div>
+        <h2>The four trading styles</h2>
+        <p>One confluence framework, four <strong>data-driven strategy profiles</strong> (versioned rows with their own weights, timeframes, universe, validity, risk templates). New factors always enter <em>through</em> the confluence framework — never as standalone triggers.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Style</th><th>Core setups</th><th>Timeframes</th></tr></thead>
+          <tbody>
+            <tr><td><strong>Intraday</strong></td><td>DC1/DC2 double-confirmation · PDH/PDL breakout · opening-range breakout · 9:25 gainer/loser · 10 AM strategy</td><td class="mono">5m/15m (+1h)</td></tr>
+            <tr><td><strong>Swing</strong></td><td>RRBO (resistance breakout + 1.5× volume) · pullback-to-demand-zone</td><td class="mono">1d (+1h)</td></tr>
+            <tr><td><strong>F&amp;O</strong></td><td>Futures directional (underlying confluence + OI confirmation) · option-selling candidates (IV rank, PCR, max pain, regime gates)</td><td class="mono">per expiry</td></tr>
+            <tr><td><strong>Investment</strong></td><td>Multibagger EMA setup · relative strength vs Nifty · FII/DII + sector alignment</td><td class="mono">1d/1w</td></tr>
+          </tbody>
+        </table></div>
+        <p><strong>F&amp;O data before F&amp;O analytics.</strong> Recorded history is the scarce resource, so two cheap recorders started back in Phase 0 and have accumulated since: F&amp;O bhavcopy ingestion (per-contract close/OI/volume → EOD IV → IV-rank/PCR/max-pain) and 1-minute intraday chain snapshots via <code>kite.quote</code>. India VIX is the interim IV-regime proxy. The analytics landed in Phase 4.</p>
+        <div class="callout"><span class="k">The intraday profiles run in SHADOW</span><p>The three intraday profiles (<code>orb_15m</code>, <code>pdh_pdl</code>, <code>gainer_925</code>) run on the real schedule and are measured to outcome, but are <strong>never tradeable</strong> — walk-forward returned negative risk-adjusted returns for all three, so they mint <code>is_shadow</code> signals for forward evidence only. See §21.</p></div>
+      </section>
+
+      <section class="doc" id="s10">
+        <div class="sec-kicker">10 · Data model</div>
+        <h2>Data model &amp; the load-bearing contracts</h2>
+        <p><strong>Postgres + TimescaleDB (:5433).</strong> Two data shapes in one database: relational (users, signals, orders, positions, journals) and time-series (OHLCV hypertables). Key tables: <code>ohlcv_1m/5m/15m/1h/1d</code> · <code>option_chain_snapshots</code> · <code>fo_bhavcopy</code> · <code>india_vix_daily</code> · <code>signals</code> (with a first-class <code>regime</code> column) + <code>signal_outcomes</code> (tick-level first-touch ladder + MFE/MAE) · <code>pair_signals</code> (P6.5, shadow-only) · <code>orders</code> · <code>positions</code> (with <code>peak_price/peak_pnl</code>, <code>exit_price/exit_reason</code>, trail state) · <code>stocks</code> (with CA-quarantine flags) · <code>strategy_profiles</code> (versioned) · <code>market_calendar</code> (NSE holidays).</p>
+        <div class="callout"><span class="k">Money &amp; time discipline</span><p>Money is always exact: <code>Decimal</code> in Python, <code>Numeric(12,4)</code> in Postgres, <code>i64</code> scaled 1e-4 in Rust. Storage is UTC; market logic is IST (the half-hour offset makes date-boundary bugs easy — all datetimes are tz-aware).</p></div>
+        <h3>Redis contracts — how components talk</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Contract</th><th>Producer</th><th>Consumer</th><th>Shape</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">ltp:{stock_id} KEY</td><td>live-worker</td><td>paper broker SL/TP</td><td>Decimal string, TTL 600s · import <code>LTP_KEY</code></td></tr>
+            <tr><td class="mono">ltp:{token} channel</td><td>live-worker</td><td>/ws/live fanout</td><td>JSON tick</td></tr>
+            <tr><td class="mono">candle:{table}:{sid}</td><td>live-worker</td><td>/ws/live fanout</td><td>candle JSON + is_complete</td></tr>
+            <tr><td class="mono">alerts:live Stream</td><td>live-worker</td><td>outcome recorder + WS</td><td>durable (at-least-once)</td></tr>
+            <tr><td class="mono">WS close 4401</td><td>/ws/live</td><td>frontend</td><td>auth failure — do NOT auto-reconnect</td></tr>
+          </tbody>
+        </table></div>
+        <p>Anything that must not be lost uses Redis <strong>Streams</strong> or the DB — never bare pub/sub. Every cache key gets a TTL (eviction is volatile-lru; TTL-less keys are treated as broker-critical and never evicted).</p>
+      </section>
+
+      <section class="doc" id="s11">
+        <div class="sec-kicker">11 · Frontend</div>
+        <h2>Frontend</h2>
+        <p><strong>React 19 · TypeScript 6 · Vite 8 · Tailwind 4 (token-driven) · Zustand + TanStack Query.</strong> Feature areas under <code>src/features/</code>: dashboard, trading, stocks, screener, strategy, journal, portfolio, analytics, alerts, watchlists, filings, categories, market, broker, golive, styles, profile.</p>
+        <p>The rules that keep money-rendering honest:</p>
+        <ul class="body">
+          <li><strong>Colours are tokens only.</strong> Five themes (slate default, midnight, carbon, ocean, daybreak) switched by <code>data-theme</code>. Profit/loss via <code>--color-profit</code> / <code>--color-loss</code>; direction is always <strong>glyph + colour</strong> (▲/▼), never colour alone.</li>
+          <li><strong>Numbers exclusively through <code>lib/format.ts</code></strong> (Indian grouping, ₹, L/Cr). No <code>toFixed</code>/<code>toLocaleString</code> in features. Numeric columns right-aligned <code>tabular-nums</code>.</li>
+          <li><strong>Tables</strong> (the app is mostly tables): sticky opaque headers, zebra rows, skeleton loading, explicit empty/error states. ≥200 rows or live → TanStack Virtual + memoised rows. Live prices flash via <code>PriceCell</code> (250 ms pulse), never a full-row re-render per tick.</li>
+          <li><strong>Live data</strong> via <code>useLiveQuotes</code> (WebSocket; no auto-reconnect on 4401); tick updates rAF/interval-batched.</li>
+          <li><strong>Auth:</strong> JWT — access 45 min in memory, refresh 7 d httpOnly, rotated each refresh.</li>
+        </ul>
+      </section>
+
+      <section class="doc" id="s12">
+        <div class="sec-kicker">12 · Tech stack</div>
+        <h2>Tech stack &amp; why each piece</h2>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Layer</th><th>Choice</th><th>One-line why</th></tr></thead>
+          <tbody>
+            <tr><td>Backend</td><td class="mono">Python 3.12 · FastAPI · SQLAlchemy 2 async</td><td>Native async for WS fanout; the quant ecosystem is Python</td></tr>
+            <tr><td>Task queue</td><td class="mono">Celery + Redis</td><td>Battle-tested scheduled jobs (EOD, expiry, nightly signals)</td></tr>
+            <tr><td>Compute core</td><td class="mono">Rust → tradecore (PyO3)</td><td>100–1000× faster tuning; one engine for live + backtest</td></tr>
+            <tr><td>Database</td><td class="mono">PostgreSQL 16 + TimescaleDB</td><td>One DB for relational + time-series with cross-joins</td></tr>
+            <tr><td>Cache/bus</td><td class="mono">Redis 7 (volatile-lru)</td><td>Sub-ms LTP, pub/sub fanout, Streams for durable alerts</td></tr>
+            <tr><td>Frontend</td><td class="mono">React 19 · TS 6 · Vite 8 · Tailwind 4</td><td>Largest financial-chart ecosystem; type safety on money</td></tr>
+            <tr><td>Charts</td><td class="mono">TradingView Lightweight · Recharts</td><td>The real candlestick engine; Recharts for dashboards</td></tr>
+            <tr><td>Auth</td><td class="mono">JWT (memory + httpOnly, rotation)</td><td>XSS-safe, short-lived, CSRF-mitigated</td></tr>
+            <tr><td>Broker</td><td class="mono">Zerodha Kite Connect</td><td>Cheapest serious option; 10y history; mature Indian SDK</td></tr>
+            <tr><td>Testing</td><td class="mono">pytest (real PG+Redis) · Vitest · cargo</td><td>Test the seams, not just units</td></tr>
+          </tbody>
+        </table></div>
+        <p>Explicitly <strong>not</strong> picked: GraphQL, MongoDB, microservices, Kubernetes, Kafka (Redis pub/sub is enough at personal scale). Deployment is Docker Compose → optional single VPS; Caddy for auto-HTTPS.</p>
+      </section>
+
+      <section class="doc" id="s13">
+        <div class="sec-kicker">13 · Canon</div>
+        <h2>The adjudicated canon — hard-won decisions</h2>
+        <p>Before generating the Rust oracle, eight spec-drift questions were <strong>measured on 2y × 49 Nifty50 real data</strong> and decided with the user. These are load-bearing — they define correct behaviour.</p>
+        <div class="tablewrap"><table>
+          <thead><tr><th>#</th><th>Decision</th><th>Why</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">A</td><td>Volume counts only <em>with</em> the confluence direction</td><td>+41.6 P&amp;L; it was wrongly dampening bearish setups</td></tr>
+            <tr><td class="mono">B</td><td>RSI ±0.4 bands at &lt;30/&gt;70 removed</td><td>Off-spec; neutral</td></tr>
+            <tr><td class="mono">C</td><td>ONE swing-SL: pivot N=5 for live <em>and</em> backtest</td><td>+44.2; killed live-vs-backtest drift</td></tr>
+            <tr><td class="mono">D</td><td>Committed signals see exactly the last ≤300 completed candles</td><td>99.7% agreement, 0 direction flips vs infinite memory</td></tr>
+            <tr><td class="mono">E</td><td>Honest fills: gap-through at open, fill candle intrabar, SL before TP</td><td>Revealed the old +P&amp;L as fill-flattery (truth: negative)</td></tr>
+            <tr><td class="mono">F</td><td>ATR(14) &gt; 3% of price → qty reduced 25%</td><td>A risk rule: less capital-at-risk for some P&amp;L</td></tr>
+            <tr><td class="mono">G</td><td>Star patterns require a full-body gap (strict)</td><td>78% of old stars were false; corpus flipped to +52.1 P&amp;L</td></tr>
+            <tr><td class="mono">H</td><td>Per-sub-factor weights, not shared group budgets</td><td>Sharing loosened the gate (~400 weak trades)</td></tr>
+          </tbody>
+        </table></div>
+        <p><strong>Standing baseline</strong> (post F+G, pinned corpus): 599 trades · win% 40.1 · totPnL +52.1 · Sharpe +0.13 — the first positive corpus baseline; the Rust engine-cli reproduces the 599 trades exactly in 172 ms.</p>
+        <p><strong>Corporate-action policy:</strong> raw NSE bhavcopy stays canonical and is never auto-adjusted. A discontinuity detector (|open ÷ prev_close − 1| &gt; 20%) quarantines the stock, excluding it from suggestion universes until reviewed. Adjusted and raw sources are never mixed within one indicator window.</p>
+      </section>
+
+      <section class="doc" id="s14">
+        <div class="sec-kicker">14 · Hard constraints</div>
+        <h2>Hard constraints — the non-negotiables</h2>
+        <p>From <code>.claude/rules/trading-domain.md</code> — these override convenience, deadlines, and "just this once":</p>
+        <ol class="body">
+          <li><strong>Confluence only.</strong> No signal from a single indicator, ever. ≥70% gate.</li>
+          <li><strong>No look-ahead.</strong> Compute on N, valid from N+1; committed signals from complete candles only; the tick layer never enters backtests.</li>
+          <li><strong>No repainting.</strong> A committed signal's factors are frozen at commit time.</li>
+          <li><strong>Position sizing mandatory</strong> on every signal; <code>risk_pct</code> is a whole percent.</li>
+          <li><strong>Reject, don't clamp</strong> SLs that exceed the class cap.</li>
+          <li><strong>Validity per classification</strong> using the NSE trading-day calendar.</li>
+          <li><strong>Money = Decimal / Numeric(12,4) / i64·1e-4.</strong> Storage UTC, logic IST, all tz-aware.</li>
+          <li><strong>Paper default; live requires opt-in + 30 profitable paper days.</strong> The circuit breaker is never disableable.</li>
+          <li><strong>Kite discipline:</strong> token expiry is a lifecycle event; all REST goes through the shared throttled client (~3 rps).</li>
+          <li><code>docs/SIGNAL_ENGINE.md</code> is the edge — <strong>protected by a hook</strong>; spec changes require explicit instruction + a §8 backtest regression.</li>
+        </ol>
+      </section>
+
+      <section class="doc" id="s15">
+        <div class="sec-kicker">15 · Workbench</div>
+        <h2>The development workbench</h2>
+        <p>A solo project engineered like a team's, using the Claude Code workbench (<code>.claude/</code>):</p>
+        <ul class="body">
+          <li><strong>Hooks:</strong> auto-format on edit; destructive-command guard; protected-file guard (SIGNAL_ENGINE.md, applied migrations, <code>.env</code> can't be silently edited). <em>If a hook blocks you, it's working.</em></li>
+          <li><strong>Subagents</strong> (strict findings contract): <code>quant-verifier</code> (formula-by-formula vs spec; look-ahead hunting) · <code>bug-hunter</code> (async/thread races, tz, boundaries, leaks) · <code>ui-reviewer</code> (tokens, format.ts, portals) · <code>perf-auditor</code> (per-tick allocations, N+1, hot-path clones) · <code>test-guardian</code> (hollow-assert detection).</li>
+          <li><strong>Rules:</strong> trading-domain · python · typescript · rust · testing · ui.</li>
+          <li><strong>Skills:</strong> <code>/vertical-slice</code> (model → migration → service → API → frontend → tests) · <code>/phase-gate</code> · <code>/signal-audit</code> · <code>/perf-bench</code> · <code>/daily-analysis</code>.</li>
+        </ul>
+        <div class="callout"><span class="k">Definition of done (per feature)</span><p><code>make check</code> green (pytest + ruff + mypy + vitest + eslint + tsc + cargo) · tests shipped with the change · reversible migration · manual smoke · CHANGELOG under Unreleased · relevant subagent review clean · phase report + docs updated when a task or phase item closes.</p></div>
+      </section>
+
+      <!-- ======================= PART II ======================= -->
+      <div class="part" id="p2">
+        <div class="pd-k">Part II</div>
+        <div class="pd-t">Where the build stands</div>
+        <p class="pd-d">The measured present: what the paper book actually did, the Phase-6 finding that entry selection — not exit logic — is the binding constraint on profit, and the experiments and shadow layers that turned that finding into shipped behaviour. Every number here traces to a report under <code>docs/analysis/</code>.</p>
+      </div>
+
+      <section class="doc" id="s16">
+        <div class="sec-kicker">16 · Status</div>
+        <h2>Where we are now</h2>
+        <div class="callout">
+          <span class="k">One paragraph</span>
+          <p>v1 (phases 0–11) shipped. <strong>v2 phases 0–5 are closed</strong> (Phase 3 realtime gated 2026-08-14, Phase 4 F&amp;O 08-06, Phase 5 UI 08-07). <strong>Phase 6 is built end to end</strong> — outcome tracking, the entry-selection attribution, the regime gate (now <strong>ACTIVE</strong> on the paper path), a shadow-promoted weight retune, and a full market-neutral pair-trading loop. Nothing in Phase 6 is left to <em>build</em>; what remains is forward evidence accruing nightly. <strong>Live trading still does not exist</strong>: <code>place_order</code> is paper-only, no Kite order/GTT path — that is Phase 7. The next build phase is the Market Context Engine.</p>
+        </div>
+        <div class="strip">
+          <div class="ph done"><span class="t">P0–P2</span><span class="s">closed</span></div>
+          <div class="ph done"><span class="t">P3 realtime</span><span class="s">CLOSED 08-14</span></div>
+          <div class="ph done"><span class="t">P4 F&amp;O</span><span class="s">PASS 08-06</span></div>
+          <div class="ph done"><span class="t">P5 UI</span><span class="s">gated 08-07</span></div>
+          <div class="ph prog"><span class="t">P6 outcomes</span><span class="s">built · accruing</span></div>
+          <div class="ph plan"><span class="t">MCE</span><span class="s">next build</span></div>
+          <div class="ph plan"><span class="t">P7 live</span><span class="s">not started</span></div>
+        </div>
+        <h3>Suites — measured at the Phase-3 gate (2026-08-14), not remembered</h3>
+        <div class="metrics">
+          <div class="metric"><div class="v up">1246</div><div class="l">backend pytest passed<br>(1 skipped · full suite)</div></div>
+          <div class="metric"><div class="v up">375</div><div class="l">frontend Vitest passing<br>41 files, 0 failures</div></div>
+          <div class="metric"><div class="v">16 / 9 / 19</div><div class="l">parity / walk-forward / replay<br>the 44 heavy markers</div></div>
+          <div class="metric"><div class="v up">86</div><div class="l">cargo tests<br>engine workspace</div></div>
+        </div>
+        <p class="caption">The Phase-3 gate ran the full suite green across backend, frontend, and engine — including the Python↔Rust golden parity corpus, the §8 drift gate, and the byte-identical live-replay streams. The frozen engine was verified untouched (<code>git diff main -- app/analysis app/backtest/engine.py</code> empty); the branch's Phase-6 work is all downstream overlays + observability.</p>
+        <h3>The v2 phase journey</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>#</th><th>Phase</th><th>Status</th><th>Headline</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">0</td><td>Workbench · triage · F&amp;O recorders</td><td><span class="chip done"><span class="dot"></span>done</span></td><td>hooks/agents · 9 defects fixed (dead pipeline, 100× sizing) · recorders live</td></tr>
+            <tr><td class="mono">1</td><td>Rust engine core + parity</td><td><span class="chip done"><span class="dot"></span>done</span></td><td>tradecore wheel · exact parity · backtest 883.8 s → 0.143 s</td></tr>
+            <tr><td class="mono">2</td><td>Strategy profiles (4 styles, offline)</td><td><span class="chip done"><span class="dot"></span>done</span></td><td>versioned profiles + 8 seeds · NSE calendar · rrbo walk-forward +41.3%</td></tr>
+            <tr><td class="mono">3</td><td>Realtime v2 — tick-to-tick</td><td><span class="chip done"><span class="dot"></span>CLOSED 08-14</span></td><td>live-worker + Rust LiveEngine · committed vs forming · replay · soaks + shadow week</td></tr>
+            <tr><td class="mono">4</td><td>F&amp;O analytics</td><td><span class="chip done"><span class="dot"></span>PASS 08-06</span></td><td>chain builder · Rust IV/Greeks · IV-rank/PCR/max-pain · defined-risk option-selling</td></tr>
+            <tr><td class="mono">5</td><td>UI overhaul</td><td><span class="chip done"><span class="dot"></span>gated 08-07</span></td><td>sidebar IA · slate theme · 4 style pages · chain ladder · virtualized</td></tr>
+            <tr><td class="mono">6</td><td>Outcome tracking + entry selection</td><td><span class="chip prog"><span class="dot"></span>built 6.1–6.5</span></td><td>MFE/MAE · attribution · regime gate ACTIVE · retune shadow · pair-trading shadow</td></tr>
+            <tr><td class="mono">—</td><td>Market Context Engine</td><td><span class="chip plan"><span class="dot"></span>next build</span></td><td>news/VIX/PCR/earnings as <em>gates &amp; modifiers</em>, never additive</td></tr>
+            <tr><td class="mono">7</td><td>Live-trading hardening</td><td><span class="chip plan"><span class="dot"></span>planned</span></td><td>RiskEngine single-gate first · Kite orders behind gate · reconciliation · kill switch</td></tr>
+          </tbody>
+        </table></div>
+        <h3>The critical path from here</h3>
+        <pre class="ascii">P0–P5 CLOSED ─▶ P6 BUILT (6.1–6.5, shadow-first)
+                     │
+                     ▼
+   forward evidence accrues nightly:
+     · regime gate LIVE on the paper path
+     · momentum ×1.5 retune  A/B  vs base
+     · pair-trading shadow (df vs adf arms)
+     · review checkpoint ~2026-09-15 (count-gated, not date-gated)
+                     │
+                     ▼
+   Market Context Engine  ── the next BUILD phase (gates/modifiers, ~40% exists)
+                     │
+                     ▼
+   Phase 7 — live-trading hardening  (opens with the RiskEngine single-gate slice)
+                     │
+                     ▼
+   30 profitable paper days + kill-switch tested ─▶ 1-stock live pilot</pre>
+        <p class="caption">Nothing on this path is blocked on an external library or a rewrite — it is disciplined execution of an already-designed plan, one soak-clean phase at a time, with live trading last and guarded by an earned paper record.</p>
+      </section>
+
+      <section class="doc" id="s17">
+        <div class="sec-kicker">17 · Evidence</div>
+        <h2>The paper book — what the strategy actually did</h2>
+        <p>Eight sessions, 2026-08-03 → 08-12, from <code>docs/analysis/LEDGER.md</code>. Paper mode, capital ₹1,00,000, risk 2%/trade, daily-loss cap ₹3,000, max 5 entries/day. This table is the reason Phase 6 exists — and it is the <strong>pre-regime-gate baseline</strong>: it predates the gate going active, so it is the "before" the upcoming books get compared against.</p>
         <div class="metrics">
           <div class="metric"><div class="v up">+₹11,869</div><div class="l">realised net, 8 sessions</div></div>
           <div class="metric"><div class="v down">3 / 40</div><div class="l">entries that reached +1R</div></div>
@@ -303,7 +724,6 @@
           <div class="metric"><div class="v down">−₹20,492</div><div class="l">peak → EoD give-back<br>on the open book (08-12)</div></div>
           <div class="metric"><div class="v up">0</div><div class="l">chased entries since<br>the P1 fix landed 08-06</div></div>
         </div>
-
         <div class="tablewrap">
           <table>
             <thead>
@@ -321,28 +741,25 @@
             </tbody>
           </table>
         </div>
-        <p class="caption">“Given back” is peak → end-of-day on positions still open, so the same position is re-measured each session — the column is a daily reading, <strong>not</strong> a sum. 24 positions were open at the 08-12 close.</p>
-
+        <p class="caption">"Given back" is peak → end-of-day on positions still open, so the same position is re-measured each session — the column is a daily reading, <strong>not</strong> a sum. 24 positions were open at the 08-12 close.</p>
         <div class="callout bad">
           <span class="k">What the book says</span>
-          <p><strong>The exit machinery is correct but has nothing to protect.</strong> The ₹ profit ladder arms at +₹2,000 and seals peak−₹1,000 above ₹3,000 — yet only 3 of 40 entries ever reached +1R, so most trades faded from a small green back through the original stop. Fixing exits harder cannot fix that; only better entries can.</p>
-          <p><strong>Open heat is the live risk.</strong> It has climbed 20.2% → 49.6% of capital across 24 open positions. The circuit breaker caps <em>daily realised</em> loss and trades/day — it does not cap accumulated open risk. A cross-day portfolio-heat gate is on the watch-list, not built.</p>
+          <p><strong>The exit machinery is correct but has nothing to protect.</strong> The ₹ profit ladder arms at +₹2,000 and seals peak−₹1,000 above ₹3,000 — yet only 3 of 40 entries ever reached +1R, so most trades faded from a small green back through the original stop. Fixing exits harder cannot fix that; only better entries can. <strong>That is precisely what the regime gate now attacks.</strong></p>
+          <p><strong>Open heat is the live risk.</strong> It climbed 20.2% → 49.6% of capital across 24 open positions. The circuit breaker caps <em>daily realised</em> loss and trades/day — it does not cap accumulated open risk. A cross-day portfolio-heat gate is on the watch-list (§24), slated for the Phase-7 RiskEngine.</p>
         </div>
       </section>
 
-      <!-- ================================================================ -->
-      <section class="doc" id="phase6">
-        <div class="sec-kicker">Phase 6</div>
-        <h2>Outcome tracking + entry selection — where it stands</h2>
-
+      <section class="doc" id="s18">
+        <div class="sec-kicker">18 · Phase 6</div>
+        <h2>Phase 6 — the leak, the edge, and what shipped</h2>
         <ul class="slices">
           <li><span class="mk ok">6.1</span><span><span class="nm">Signal-level MFE/MAE</span> — tape-derived excursions on <code>signal_outcomes</code>, all signals not just taken trades. <strong class="pos">done</strong></span></li>
           <li><span class="mk ok">6.2</span><span><span class="nm">Entry-quality attribution</span> — live cohort + corpus cohort via the parity-clean Rust <code>run_universe</code> (816 trades in ~0.6 s) + per-factor attribution. <strong class="pos">done</strong></span></li>
-          <li><span class="mk wait">6.3</span><span><span class="nm">Strategy Lab v2 on the Rust engine</span> — de-prioritised. The Rust backtest already exists parity-pinned, so this is a UI surface, not a blocker for the retune.</span></li>
-          <li><span class="mk next">6.4</span><span><span class="nm">Weight retune + shadow→active promotion</span> — the payoff slice. The retune can start on today's evidence; promotion is time-gated by shadow forward evidence. <strong>queued</strong></span></li>
-          <li><span class="mk wait">—</span><span><span class="nm">Pair-trading / market-neutral candidate</span> — a Phase-6 backlog item (not a numbered slice in the plan): cointegration-screened, regime-agnostic, shadow-first.</span></li>
+          <li><span class="mk wait">6.3</span><span><span class="nm">Strategy Lab v2 on the Rust engine</span> — de-prioritised. The Rust backtest already exists parity-pinned, so this is a UI surface, not a blocker.</span></li>
+          <li><span class="mk ok">6.4</span><span><span class="nm">Weight retune + shadow-promote</span> — experiment done (lead: <code>momentum ×1.5</code>); promoted as 1d/eod shadow A/B vs a base control. <strong class="pos">done</strong></span></li>
+          <li><span class="mk ok">6.5</span><span><span class="nm">Pair-trading (market-neutral)</span> — cointegration screen → dual-arm shadow minter → spread-outcome tracker → attribution, all shadow-first. <strong class="pos">done</strong></span></li>
+          <li><span class="mk ok">+</span><span><span class="nm">First-class ADX regime + the regime gate</span> — a durable <code>signals.regime</code> and the eligibility overlay it feeds, now <strong>ACTIVE</strong>. <strong class="pos">shipped</strong></span></li>
         </ul>
-
         <h3>The verdict — where the edge is and where it leaks</h3>
         <div class="split">
           <div class="box edge">
@@ -362,56 +779,51 @@
             </ul>
           </div>
         </div>
-
         <p>Corpus cohort: Nifty50 daily, 816 decided trades since 2023-09-13, expectancy winsorized at ±10R to kill tiny-SL artifacts. The corpus <strong>corrected the noisier live read</strong>, which had blamed the choppy regime — choppy is fine at +0.12R; <strong>transitional is the real drag</strong>.</p>
-
         <div class="callout warn">
-          <span class="k">The nuance that shapes the fix</span>
-          <p>One cell carries the loss: <strong>70–79 × transitional, n=250 — 31% of the whole corpus, at −0.23R.</strong> But <strong>80–89 × transitional is the single best ranked cell at +0.32R</strong> (n=75), so a blanket “skip transitional” gate throws away good trades along with the leak. That is exactly what the §8 experiment has to settle before anything ships.</p>
+          <span class="k">The nuance that shaped the fix</span>
+          <p>One cell carries the loss: <strong>70–79 × transitional, n=250 — 31% of the corpus, at −0.23R.</strong> But <strong>80–89 × transitional is the single best ranked cell at +0.32R</strong> (n=75), so a blanket "skip transitional" gate throws away good trades along with the leak. That is exactly what the §8 walk-forward (§19) had to settle before anything shipped — and it did.</p>
         </div>
       </section>
 
-      <!-- ================================================================ -->
-      <section class="doc" id="gate">
-        <div class="sec-kicker">Experiment</div>
-        <h2>Gate experiment — which lever to pull</h2>
-        <p>Read-only backtest over the same corpus, testing the 6.2 verdict before any engine change. The question: raise the confidence gate, skip the transitional regime, or both? <strong>Skipping the transitional regime while keeping the 70 gate wins — it nearly doubles captured R and triples per-trade expectancy, and it keeps far more trades than a gate-80 bump.</strong></p>
-
+      <section class="doc" id="s19">
+        <div class="sec-kicker">19 · The regime gate</div>
+        <h2>The gate experiment → the regime gate, now ACTIVE</h2>
+        <p>Read-only backtest over the corpus, testing the 6.2 verdict before any change. The question: raise the confidence gate, skip the transitional regime, or both? <strong>Skipping the transitional regime while keeping the 70 gate wins — it nearly doubles captured R and triples per-trade expectancy, and keeps far more trades than a gate-80 bump.</strong></p>
         <div class="tablewrap">
           <table>
             <thead>
               <tr><th>Variant</th><th class="num">Trades</th><th class="num">Decided</th><th class="num">Win %</th><th class="num">Mean expR</th><th class="num">Total-R</th><th class="num">Reach 1R</th></tr>
             </thead>
             <tbody>
-              <tr class="base"><td>gate-70 <span class="tag cur">CURRENT</span></td><td class="num">816</td><td class="num">794</td><td class="num">40%</td><td class="num pos">+0.052</td><td class="num pos">+41.2</td><td class="num">44%</td></tr>
+              <tr class="base"><td>gate-70 <span class="tag cur">WAS CURRENT</span></td><td class="num">816</td><td class="num">794</td><td class="num">40%</td><td class="num pos">+0.052</td><td class="num pos">+41.2</td><td class="num">44%</td></tr>
               <tr><td>gate-80</td><td class="num">270</td><td class="num">267</td><td class="num">45%</td><td class="num pos">+0.142</td><td class="num pos">+37.9</td><td class="num">45%</td></tr>
-              <tr class="win"><td>gate-70 + skip transitional <span class="tag rec">RECOMMENDED</span></td><td class="num">477</td><td class="num">467</td><td class="num">43%</td><td class="num pos">+0.158</td><td class="num pos">+73.8</td><td class="num">46%</td></tr>
+              <tr class="win"><td>gate-70 + skip transitional <span class="tag done">SHIPPED</span></td><td class="num">477</td><td class="num">467</td><td class="num">43%</td><td class="num pos">+0.158</td><td class="num pos">+73.8</td><td class="num">46%</td></tr>
               <tr><td>gate-80 + skip transitional</td><td class="num">181</td><td class="num">180</td><td class="num">44%</td><td class="num pos">+0.090</td><td class="num pos">+16.3</td><td class="num">41%</td></tr>
-              <tr><td>skip 70–79 × transitional only <span class="tag new">NOT YET RUN</span></td><td class="num">≈566</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td><td class="num">—</td></tr>
             </tbody>
           </table>
         </div>
-
         <div class="bars">
-          <div class="bar-row"><span class="bar-lab">gate-70 (current)</span><div class="bar-track"><div class="bar-fill base" style="width:56%"></div></div><span class="bar-val">+41.2</span></div>
+          <div class="bar-row"><span class="bar-lab">gate-70 (was current)</span><div class="bar-track"><div class="bar-fill base" style="width:56%"></div></div><span class="bar-val">+41.2</span></div>
           <div class="bar-row"><span class="bar-lab">gate-80</span><div class="bar-track"><div class="bar-fill dim" style="width:51%"></div></div><span class="bar-val">+37.9</span></div>
           <div class="bar-row"><span class="bar-lab">gate-70 + skip transitional</span><div class="bar-track"><div class="bar-fill win" style="width:100%"></div></div><span class="bar-val">+73.8</span></div>
           <div class="bar-row"><span class="bar-lab">gate-80 + skip transitional</span><div class="bar-track"><div class="bar-fill dim" style="width:22%"></div></div><span class="bar-val">+16.3</span></div>
         </div>
-        <p class="caption">Bars are total captured R — the net-profit proxy. Raising the gate to 80 alone <em>lowers</em> total-R below baseline, so confidence is the wrong lever; doing both over-filters. The <strong>regime gate</strong> is the high-value move.</p>
-
+        <p class="caption">Bars are total captured R — the net-profit proxy. Raising the gate to 80 alone <em>lowers</em> total-R below baseline, so confidence is the wrong lever; doing both over-filters. The regime gate is the high-value move.</p>
+        <div class="callout good">
+          <span class="k">§8 walk-forward — it holds out-of-sample</span>
+          <p>The finding survived the drift gate (<code>gate_walkforward.py</code> → <code>gate-walkforward-2026-08-13.md</code>). The three metrics §8 gates a merge on all improve: <strong>win rate 40→43%</strong>, per-trade <strong>Sharpe +0.034→+0.097</strong>, <strong>max drawdown 36.5R→20.4R</strong> — every move &gt; ±5% so it needed sign-off. Skip-transitional wins expectancy in <strong>5/5 sequential time folds</strong> (biggest lift in the <em>worst</em> fold), and an anchored walk-forward that learns the bad regime only from the <em>past</em> lifts OOS expectancy <strong>+0.067→+0.142</strong>. quant-verifier PASS.</p>
+        </div>
         <div class="callout">
-          <span class="k">Cheap addition worth making first</span>
-          <p>The four variants are just filtered row-sets in a list — <code>backend/scripts/gate_experiment.py:89</code>. Adding a fifth, <strong>skip only the 70–79 × transitional cell</strong>, is a few lines and answers the nuance above directly: it drops the −0.23R cell (n=250) while keeping the +0.32R one (n=75). Run that before the §8 walk-forward, so the regression tests the sharpest candidate rather than the blunt one. Its ≈566 above is arithmetic — 816 minus that cell — <strong>not</strong> a measured result; every other number in this table came out of the script.</p>
+          <span class="k">How it shipped — overlay, not engine change</span>
+          <p>The gate is a downstream <strong>eligibility overlay</strong> (<code>app/signals/regime_guard.py</code> + <code>regime.py</code>, the <code>risk_guards.py</code> pattern), wired into the paper-order path via <code>settings.regime_gate_mode</code> — the frozen engine is untouched, so no Rust-fixture regen. It reads the durable first-class <code>signals.regime</code> (recovered from the ADX factor's decision <em>branch</em>, not its 0.1-rounded prose, so the raw-choppy [19.95, 20) edge isn't misbucketed). Built shadow-first 2026-08-13; <strong>flipped to <code>active</code> 2026-08-14</strong> after both preconditions were met (§8 sign-off + the first-class level). <strong>Fully reversible</strong> — one setting back to <code>shadow</code>. It still measures itself in parallel: on the live cohort the suppressed set is net-negative (−0.061R, n=44) and gating lifts live expectancy +0.027→+0.089 — consistent with the backtest.</p>
         </div>
       </section>
 
-      <!-- ================================================================ -->
-      <section class="doc" id="factors">
-        <div class="sec-kicker">Attribution</div>
-        <h2>Which factors predict edge</h2>
+      <section class="doc" id="s20">
+        <div class="sec-kicker">20 · Attribution &amp; retune</div>
+        <h2>Which factors predict edge → the weight retune</h2>
         <p>Per-factor attribution at corpus scale. Δ is expectancy when the factor <em>supports</em> the trade direction minus expectancy when it is neutral — the direct input for the 6.4 weight retune.</p>
-
         <div class="factors">
           <div class="fgroup up">
             <h4>▲ Upweight — predict edge</h4>
@@ -432,31 +844,61 @@
             </div>
           </div>
         </div>
-
         <div class="callout warn">
           <span class="k">Read these with their samples</span>
-          <p><strong>MACD_CROSS and RSI_LEVEL are the retune-worthy negatives</strong> — n≈130 each, so the signal is real; DARK_CLOUD_COVER and EVENING_STAR are larger deltas on n≈41–49 and deserve a wider corpus before a big weight cut. <strong>RSI_DIVERGENCE is not a normal cohort</strong>: it hits only 27% of the time yet reaches +1R in 70% of cases, with MFE +3.30R against MAE −2.84R — a wide-stop, wide-swing population. Upweighting it raises variance as well as expectancy.</p>
+          <p><strong>MACD_CROSS and RSI_LEVEL are the retune-worthy negatives</strong> — n≈130 each, so the signal is real; DARK_CLOUD_COVER and EVENING_STAR are larger deltas on n≈41–49 and deserve a wider corpus before a big weight cut. <strong>RSI_DIVERGENCE is not a normal cohort</strong>: it hits only 27% of the time yet reaches +1R in 70% of cases (MFE +3.30R vs MAE −2.84R) — a wide-stop, wide-swing population. Upweighting it raises variance as well as expectancy.</p>
+        </div>
+        <div class="callout">
+          <span class="k">6.4 — the retune, promoted to a shadow A/B (not yet active)</span>
+          <p>The lever is per-<em>group</em> while the leak is per-<em>factor</em> (groups mix helping and hurting factors), so the retune was <strong>measured, not theorised</strong>: a group-weight coordinate sweep. The lead is <strong><code>momentum ×1.5</code></strong> — expectancy +0.052→+0.070, total-R +41.2→+50.4, Sharpe +0.034→+0.045, maxDD 36.5→32.4R, winning 4/5 folds. It is <strong>promoted as a forward A/B, not flipped on</strong>: <code>retune_momentum_x15</code> and a <code>retune_base</code> control run as 1d/eod shadow profiles over Nifty50, minting <code>is_shadow</code> signals scored by the same 6.1/6.2 attribution. Promotion to active waits for the shadow arm to beat base forward <strong>plus</strong> sign-off — deliberately, so a single in-sample backtest can't overfit the live book.</p>
         </div>
       </section>
 
-      <!-- ================================================================ -->
-      <section class="doc" id="forward">
-        <div class="sec-kicker">Forward evidence</div>
-        <h2>The two engines that report their own darkness</h2>
-        <p>Both sections exist because “the engine produced nothing” was once indistinguishable from “the engine is broken”. Each attributes a zero to a reason, in §7 and §8 of every <code>docs/analysis/&lt;date&gt;.md</code>.</p>
+      <section class="doc" id="s21">
+        <div class="sec-kicker">21 · Forward evidence</div>
+        <h2>Forward evidence — the shadow layers &amp; F&amp;O</h2>
+        <p>Everything the platform runs but does <em>not</em> yet trade, measured to outcome so a future decision is made on live evidence rather than a backtest. Shadow signals are <strong>never tradeable</strong> — the order path admits <code>status == 'active'</code> only, and every tradeable statistic filters <code>is_shadow IS FALSE</code>.</p>
 
-        <h3>Intraday shadow layer — first three live sessions</h3>
+        <h3>Intraday shadow profiles — first three live sessions</h3>
         <div class="tablewrap">
           <table>
             <thead><tr><th>Profile</th><th>TF</th><th class="num">Minted</th><th class="num">Resolved</th><th class="num">W / L</th><th>Note</th></tr></thead>
             <tbody>
               <tr><td class="mono">orb_15m</td><td class="mono">15m</td><td class="num">11</td><td class="num">5</td><td class="num">2 / 3</td><td>fires reliably</td></tr>
               <tr><td class="mono">pdh_pdl</td><td class="mono">15m</td><td class="num">4</td><td class="num">2</td><td class="num">1 / 1</td><td>silent on 08-10</td></tr>
-              <tr><td class="mono">gainer_925</td><td class="mono">5m</td><td class="num">2</td><td class="num">2</td><td class="num">0 / 2</td><td>zero on 2 of 3 days — ran on ~150k 5m bars, nothing cleared the 70 gate</td></tr>
+              <tr><td class="mono">gainer_925</td><td class="mono">5m</td><td class="num">2</td><td class="num">2</td><td class="num">0 / 2</td><td>zero on 2 of 3 days — nothing cleared the 70 gate</td></tr>
             </tbody>
           </table>
         </div>
-        <p class="caption">Totals 2026-08-10 → 08-12: <strong>17 minted, 9 resolved, 3W–6L</strong>. Far too small to conclude anything — which is the point of running it forward. Shadow signals are <strong>never tradeable</strong>: the order path admits <code>status == 'active'</code> only, and every tradeable statistic filters <code>is_shadow IS FALSE</code> because <code>signals.status</code> is a lifecycle field the sweeper overwrites.</p>
+        <p class="caption">Totals 2026-08-10 → 08-12: <strong>17 minted, 9 resolved, 3W–6L</strong>. Far too small to conclude anything — which is the point of running it forward. Walk-forward returned negative risk-adjusted returns for all three, so they stay shadow until the forward evidence says otherwise.</p>
+
+        <h3>Regime gate — live cohort (measured in parallel with active)</h3>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th>Variant</th><th class="num">Trades</th><th class="num">Decided</th><th class="num">Win %</th><th class="num">Sharpe</th><th class="num">maxDD R</th><th class="num">Total-R</th><th class="num">Mean expR</th></tr></thead>
+            <tbody>
+              <tr class="base"><td>baseline (all live signals)</td><td class="num">220</td><td class="num">106</td><td class="num">37%</td><td class="num pos">+0.015</td><td class="num">8.8</td><td class="num pos">+2.8</td><td class="num pos">+0.027</td></tr>
+              <tr class="win"><td>gated (kept — would trade)</td><td class="num">118</td><td class="num">62</td><td class="num">37%</td><td class="num pos">+0.050</td><td class="num">4.7</td><td class="num pos">+5.5</td><td class="num pos">+0.089</td></tr>
+              <tr><td>killed (suppressed)</td><td class="num">102</td><td class="num">44</td><td class="num">36%</td><td class="num neg">−0.033</td><td class="num">8.4</td><td class="num neg">−2.7</td><td class="num neg">−0.061</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="caption">From <code>regime-gate-shadow-2026-08-14.md</code>. The suppressed set is net-negative (−0.061R, n=44) and gating lifts expectancy +0.027→+0.089 — the live tape agrees with the §8 backtest, which is why the gate was flipped active. It keeps reporting so a disagreement would be loud.</p>
+
+        <h3>Pair-trading — same-sector Nifty50 candidates (df arm)</h3>
+        <div class="tablewrap">
+          <table>
+            <thead><tr><th class="num">#</th><th>Pair</th><th>Sector</th><th class="num">β</th><th class="num">Half-life</th><th class="num">DF t</th><th class="num">z now</th></tr></thead>
+            <tbody>
+              <tr><td class="num">1</td><td class="mono">HINDALCO–JSWSTEEL</td><td>Metals</td><td class="num">1.264</td><td class="num">9.9</td><td class="num pos">−3.96</td><td class="num">+1.27</td></tr>
+              <tr><td class="num">2</td><td class="mono">TCS–WIPRO</td><td>IT</td><td class="num">7.351</td><td class="num">13.1</td><td class="num pos">−3.92</td><td class="num">−0.20</td></tr>
+              <tr><td class="num">3</td><td class="mono">INFY–WIPRO</td><td>IT</td><td class="num">2.850</td><td class="num">13.3</td><td class="num pos">−3.87</td><td class="num">+0.83</td></tr>
+              <tr><td class="num">4</td><td class="mono">CIPLA–MAXHEALTH</td><td>Healthcare</td><td class="num">0.679</td><td class="num">11.8</td><td class="num pos">−3.67</td><td class="num">+1.40</td></tr>
+              <tr><td class="num">8</td><td class="mono">MAXHEALTH–SUNPHARMA</td><td>Healthcare</td><td class="num">−0.179</td><td class="num">18.6</td><td class="num pos">−2.88</td><td class="num flag">−2.31</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="caption">Top of 8 <code>df</code>-method candidates (<code>pairs-2026-08-15.md</code>); gate = DF t ≤ −2.86 AND half-life ∈ [1,30] bars AND notional imbalance ≤ 5×. Only #8 MAXHEALTH–SUNPHARMA sat at an entry extreme (|z| ≥ 2.0) and was minted as a <code>long_spread</code> shadow signal. The A/B: the statsmodels <code>adf</code> arm admits 23 pairs (a superset of the 8), so ADF is a <em>wider net</em>, not a clean upgrade — <code>df</code> stays the conservative default, resolved by forward shadow P&amp;L. <strong>Pairs stay shadow/research until Phase 7</strong>: an overnight short leg needs stock futures (§23).</p>
 
         <h3>F&amp;O option-selling engine — dark, with a reason</h3>
         <div class="tablewrap">
@@ -469,129 +911,267 @@
             </tbody>
           </table>
         </div>
-        <p class="caption">Suggestions only — there is no F&amp;O order path. Because the engine is dark on IV-rank, <strong>neither open calibration ruling is currently binding</strong>, so the review evidence for them is still accumulating. <code>fo_bhavcopy</code> is one session behind (latest 2026-08-11), which is worth a look rather than an assumption.</p>
+        <p class="caption">Suggestions only — there is no F&amp;O order path. Because the engine is dark on IV-rank, <strong>neither open F&amp;O calibration ruling is currently binding</strong> (§24), so their review evidence is still accumulating. Read §7 of the daily report rather than reconstructing it by hand.</p>
       </section>
 
-      <!-- ================================================================ -->
-      <section class="doc" id="next">
-        <div class="sec-kicker">Decision</div>
-        <h2>What we start next</h2>
-        <p>Ranked by value. <strong>Nothing auto-advances — each starts on your command</strong>, and everything here is behaviour-changing, so it needs the §8 backtest discipline plus sign-off before it touches scoring or gating.</p>
+      <!-- ======================= PART III ======================= -->
+      <div class="part" id="p3">
+        <div class="pd-k">Part III</div>
+        <div class="pd-t">What's next</div>
+        <p class="pd-d">The two build phases ahead — the Market Context Engine (the next one) and Phase 7 live trading — plus the open decisions that gate them and the invariants that never move. This is the roadmap; nothing here is running yet.</p>
+      </div>
 
+      <section class="doc" id="s22">
+        <div class="sec-kicker">22 · MCE</div>
+        <h2>The Market Context Engine — how we build it</h2>
+        <p>The next build phase. Everything so far is <strong>bottom-up</strong>: a stock earns a signal on its own chart. The MCE adds <strong>top-down context</strong> — market regime, sector strength, event risk, and (eventually) fundamentals — as a layer that can <em>veto or scale</em> a signal, never invent one.</p>
+        <div class="callout">
+          <span class="k">The one rule that defines it</span>
+          <p>Context enters as <strong>gates and modifiers, never as additive alpha.</strong> News and sentiment carry ~0 reliable <em>directional</em> edge but high <em>veto</em> value — they tell you when <em>not</em> to trade, not what to buy. So the MCE can suppress or downweight a confluence signal; it never adds a point of confidence. It is <strong>not</strong> a multi-state regime engine — one simple, testable gate at a time, each behaviour-changing move through a §8 backtest, shadow-first. The regime gate (§19) is the template: a reversible overlay, measured before it is trusted.</p>
+        </div>
+        <p><strong>~40% already exists</strong> and is reused, not rebuilt: the reactive <code>event_guard</code> (post-filing 60-min suppression), the F&amp;O data stack (India VIX, PCR, max-pain), and the FII/DII flow factor. The build fills the top-down gaps, in this order:</p>
         <ol class="nexts">
           <li>
             <span class="rk">1</span>
             <div>
-              <div class="nx-t">Regime-gate §8 experiment → the gate itself <span class="tag rec">RECOMMENDED</span></div>
-              <div class="nx-d">Add the cell-level variant to <code>gate_experiment.py</code>, promote the winner into a proper §8 walk-forward regression, and if it holds, implement the skip as a Market-Context-Engine slice. This is where a measured finding becomes real P&amp;L — the corpus says it roughly doubles captured R. Not a quick one: engine-adjacent, quant-verifier + §8 + your sign-off.</div>
+              <div class="nx-t">Per-stock seasonality flag <span class="tag rec">START HERE</span></div>
+              <div class="nx-d">Monthly return distribution over the existing 5y EOD OHLCV (e.g. "seasonally weak in August, n=18") as a soft context modifier. <strong>The one piece needing no new data and no engine change</strong> — cheap, genuinely new, and it reports <code>n</code> and refuses to rank thin samples. The natural first slice while the shadow evidence accrues.</div>
             </div>
           </li>
           <li>
             <span class="rk">2</span>
             <div>
-              <div class="nx-t">6.4 — weight retune + shadow→active promotion</div>
-              <div class="nx-d">Downweight MACD_CROSS and RSI_LEVEL first (largest samples), treat DARK_CLOUD_COVER and EVENING_STAR as candidates pending more data, and wire the promotion gate the shadow layer feeds. The retune can start now; promotion stays time-gated by forward evidence, which today is 9 resolved shadow signals.</div>
+              <div class="nx-t">One simple top-down market/sector gate</div>
+              <div class="nx-d">Suppress or downweight longs when NIFTY is below its 200-DMA or India VIX is high, plus a sector-relative-strength check on existing sector metadata. Uses data we already ingest. Behaviour-changing → a §8 backtest and sign-off, exactly like the regime gate. <strong>NOT</strong> a multi-state regime machine — a single gate.</div>
             </div>
           </li>
           <li>
             <span class="rk">3</span>
             <div>
-              <div class="nx-t">Cross-day portfolio-heat gate</div>
-              <div class="nx-d">Not in any phase plan, and the book argues for it: heat is at 49.6% of capital across 24 open positions while the breaker only caps daily realised loss. An advisory open-risk cap that never weakens the daily-loss breaker. Small, self-contained, and it protects the record that gates go-live.</div>
+              <div class="nx-t">Proactive pre-event (earnings) blackout</div>
+              <div class="nx-d">Suppress new signals N trading days before a known results/event date, scaled by class — you don't want a fresh swing entry the day before earnings. Needs a <strong>forward earnings/event-calendar source</strong> (today's <code>event_guard</code> is reactive only), so it's gated on wiring that feed.</div>
             </div>
           </li>
           <li>
             <span class="rk">4</span>
             <div>
-              <div class="nx-t">Pair-trading / market-neutral candidate</div>
-              <div class="nx-d">Regime-agnostic by construction, so it earns in the tape where the directional profiles give profit back. Cointegration screen (correlation → regression → ADF), a new profile inside the confluence framework, shadow-first — never a bypass of the ≥70% gate.</div>
+              <div class="nx-t">Fundamental data layer + quality scores <span class="tag new">BLOCKED</span></div>
+              <div class="nx-d">A new <code>stock_fundamentals</code> table feeding a fundamental gate/modifier and four closed-form quality scores (Altman Z · DuPont · Graham · Ohlson — greenfield, no look-ahead). <strong>Blocked on a data-source decision:</strong> NSE publishes no free shares-outstanding feed, so <code>market_cap_cr</code> has never been populated — the keystone that unlocks both the screener's headline filter and every fundamental threshold. Candidate sources: extend <code>filings_consumer</code> to parse BSE/NSE XBRL results, or a paid fundamentals API. A data decision, not a build task.</div>
             </div>
           </li>
         </ol>
-
-        <div class="callout good">
-          <span class="k">Already on the calendar</span>
-          <p><strong>Phase 3's <code>/phase-gate</code> ritual — Friday 2026-08-15, run by you, manually.</strong> Both exit criteria are already satisfied on disk: the quiet-box soak is met twice (<code>PERFORMANCE.md</code>) and the shadow week is met with 14 consecutive clean days, 07-20 → 08-06, in <code>backend/shadow/shadow_week.log</code>. Do not run it early and do not re-run either criterion; keep <code>scripts/shadow_day.sh</code> running daily so the streak is unbroken on the day.</p>
+        <div class="callout warn">
+          <span class="k">Recommended sequencing &amp; the honest reason</span>
+          <p><strong>Seasonality first</strong> (unblocked, cheap, real), <strong>then the top-down gate</strong> (§8, uses existing VIX/sector data). The earnings blackout waits on an event-calendar feed; the fundamentals layer waits on the <code>market_cap</code> source decision. Don't start the fundamentals layer before that source is chosen — it is a half-built dead-end otherwise. And don't rush any of it: the current shadow tracks (regime gate, retune, pairs) need weeks to return verdicts, and that accrual window <em>is</em> the natural time to build the MCE.</p>
         </div>
       </section>
 
-      <!-- ================================================================ -->
-      <section class="doc" id="open">
-        <div class="sec-kicker">Open</div>
+      <section class="doc" id="s23">
+        <div class="sec-kicker">23 · Phase 7</div>
+        <h2>Phase 7 — live trading, in detail</h2>
+        <p>The last phase, and the only one that places a real order. It opens <strong>defensively</strong> — the risk gate is built and pinned <em>before</em> the order path exists, because the exact class of bug that gave v1 four integration defects was a live-order path bolted on ahead of its safety seam.</p>
+        <div class="callout bad">
+          <span class="k">The gate to even start placing orders</span>
+          <p>Explicit user opt-in <strong>and</strong> a 30-day profitable paper record, enforced in code (Phase 6/7 replaces "30 calendar days" with "N trades across ≥2 regimes, positive expectancy, bounded drawdown"). The daily-loss circuit breaker is never disableable. Deployment is a static-IP VPS with a tested client kill-switch.</p>
+        </div>
+        <h3>The build order</h3>
+        <ol class="nexts">
+          <li>
+            <span class="rk">1</span>
+            <div>
+              <div class="nx-t">RiskEngine single-gate consolidation <span class="tag rec">SLICE 1</span></div>
+              <div class="nx-d">Test-first, equivalence-pinned: consolidate every pre-trade check (sizing, SL cap, circuit breaker, exposure) behind one gate <em>before</em> any live-order path is written. Closes the caller-side circuit-breaker seam. Studied in <code>docs/NAUTILUS_TRADER_ANALYSIS.md</code> §6 — <strong>learned, not vendored</strong> (Nautilus is LGPL).</div>
+            </div>
+          </li>
+          <li>
+            <span class="rk">2</span>
+            <div>
+              <div class="nx-t">Broker adapter + execution engine + reconciliation</div>
+              <div class="nx-d">A <code>BrokerAdapter</code> port over Kite orders, an order state machine (Denied vs Rejected distinguished), and reconciliation of local vs exchange state on restart. <code>mimalloc</code> is a free allocator win worth taking now. The HFT/colocation/FIX layer is explicitly <strong>not</strong> copied — wrong tier for retail Kite.</div>
+            </div>
+          </li>
+          <li>
+            <span class="rk">3</span>
+            <div>
+              <div class="nx-t">Exchange-resident protective stops (Kite GTT / SL-M)</div>
+              <div class="nx-d">The primary live exit lives at the exchange, not in our process — so a crashed worker can't strand a position. The position monitor becomes a supervisor/reconciler, and each trail ratchet becomes a MODIFY of the exchange-side order. Plus a loud <strong>LTP-absence alarm</strong> for any open live position (the paper monitor currently skips silently).</div>
+            </div>
+          </li>
+          <li>
+            <span class="rk">4</span>
+            <div>
+              <div class="nx-t">Sector-exposure caps + a single open-risk (heat) number</div>
+              <div class="nx-d">Simple caps in the RiskEngine gate — this is the answer to the §17 open-heat risk (49.6% of capital uncapped today). <strong>NOT</strong> VaR/ES, <strong>NOT</strong> a rolling correlation matrix; simple caps, revisited only if they prove insufficient.</div>
+            </div>
+          </li>
+          <li>
+            <span class="rk">5</span>
+            <div>
+              <div class="nx-t">Tradeability for the shadow strategies</div>
+              <div class="nx-d">This is where <strong>pair-trading (§21) becomes tradeable</strong> — an overnight short leg needs stock futures (or SLB borrow), which needs this order path. And the <strong>defined-risk Iron Condor</strong> option-selling profile: sell ATM CE+PE but BUY protective wings → the same theta harvest with a <em>bounded</em> max loss. The naked short strangle as taught is rejected (uncapped tail/gap risk). Both paper-first, event-day blackout, §8 incl. gap-through-SL.</div>
+            </div>
+          </li>
+          <li>
+            <span class="rk">6</span>
+            <div>
+              <div class="nx-t">Corporate-action adjustment of open positions</div>
+              <div class="nx-d">Adjust entry/SL/TP/qty through an ex-date so R is preserved. CA quarantine currently covers the selection universe only, not held positions. Fill-model reference: LEAN / Nautilus §4 — a catalog to consult, never a dependency.</div>
+            </div>
+          </li>
+        </ol>
+        <p class="caption">Sequence: RiskEngine gate → broker adapter at paper-parity → 30 profitable paper days with the kill-switch tested → a <strong>1-stock live pilot</strong>. Live trading is the last thing, guarded by the non-disableable breaker and a paper record that had to be earned.</p>
+      </section>
+
+      <section class="doc" id="s24">
+        <div class="sec-kicker">24 · Open</div>
         <h2>Open decisions &amp; risks</h2>
         <ul class="checks">
-          <li><span class="ic warn">⚠</span><span><strong>Two F&amp;O calibration rulings are under review.</strong> Weeklies stay excluded via <code>SellRules.require_exact_expiry_future</code> — flipping it takes the engine from 33/42 to 42/42 producing days, but a NIFTY weekly chain carries ~1% of the monthly's OI, so the fill model would overstate credit. Needs a chain-level liquidity gate first. Second ruling: stale vol gates warn rather than reject. Review evidence is automatic — read §7 of the daily report, don't reconstruct it.</span></li>
-          <li><span class="ic warn">⚠</span><span><strong>Cross-day open risk is uncapped.</strong> 49.6% of capital at risk across 24 open positions; the circuit breaker is a daily-realised-loss and trades/day cap. Ranked #3 above.</span></li>
-          <li><span class="ic warn">⚠</span><span><strong>Two EOD feeds lag one session.</strong> <code>fo_bhavcopy</code> and <code>fii_dii_daily</code> trail the last trading day, and they feed §7 F&amp;O health plus the flow factor. The ≤21-day self-heal should absorb it — verify that it did rather than assuming, which is the mistake that let an earlier month-long outage hide.</span></li>
-          <li><span class="ic bad">✕</span><span><strong>No new frontend dependency can be installed.</strong> A snap refresh pruned the pnpm store, so <code>pnpm add</code> fails with <code>ERR_PNPM_UNEXPECTED_STORE</code> until <code>store-dir</code> is repointed outside <code>~/snap/</code> and one full <code>pnpm install</code> runs. This is why virtualization is an in-repo hook rather than a library. It also means <code>make check</code> as a single target cannot run inside a git worktree — its ESLint leg shells out to <code>pnpm install</code>.</span></li>
-          <li><span class="ic info">◐</span><span><strong>Local <code>main</code> is 11 commits ahead of <code>origin</code>.</strong> Push is manual and yours; history on main is linear, so phase branches merge <code>--ff-only</code>.</span></li>
-          <li><span class="ic info">◐</span><span><strong>The 30-day paper clock is a Phase-7 gate, not a Phase-3 or Phase-6 one.</strong> It runs daily and was restarted 2026-07-03 by the sizing-bug fix. Phase 6 may well replace it with the honest version — N trades across ≥2 regimes, positive expectancy, bounded drawdown.</span></li>
+          <li><span class="ic warn">⚠</span><span><strong>Two F&amp;O calibration rulings are under review.</strong> Weeklies stay excluded (<code>SellRules.require_exact_expiry_future</code>) — flipping it takes the engine from 33/42 to 42/42 producing days, but a NIFTY weekly chain carries ~1% of the monthly's OI, so the fill model would overstate credit; needs a chain-level liquidity gate first. Second: stale vol gates warn rather than reject. The engine is dark on IV-rank today, so neither is currently binding — read §7 of the daily report for the automatic evidence.</span></li>
+          <li><span class="ic bad">✕</span><span><strong><code>market_cap</code> has no writer — the keystone blocker.</strong> NSE publishes no free shares-outstanding feed, so the whole fundamentals layer (MCE slice 4) <em>and</em> the screener's headline numeric filter sit blocked until a source is chosen (XBRL parse vs paid API). This is a data decision, phase-independent, and it gates more than any code task.</span></li>
+          <li><span class="ic warn">⚠</span><span><strong>Cross-day open risk is uncapped.</strong> 49.6% of capital at risk across 24 open positions; the circuit breaker is a daily-realised-loss and trades/day cap only. The fix is the Phase-7 RiskEngine exposure-heat number (§23).</span></li>
+          <li><span class="ic info">◐</span><span><strong>Don't promote the shadow tracks early.</strong> The momentum retune and the pair-trading arms are deliberately gated on <em>forward</em> evidence (review checkpoint ~2026-09-15, count-gated not date-gated) plus sign-off. Promoting on a single in-sample backtest is the overfitting trap the shadow-first discipline exists to prevent.</span></li>
+          <li><span class="ic warn">⚠</span><span><strong>Two EOD feeds lag one session.</strong> <code>fo_bhavcopy</code> and <code>fii_dii_daily</code> trail the last trading day and feed §7 F&amp;O health + the flow factor. The ≤21-day self-heal should absorb it — verify that it did rather than assuming, the mistake that once let a month-long outage hide.</span></li>
+          <li><span class="ic bad">✕</span><span><strong>No new frontend dependency can be installed.</strong> A snap refresh pruned the pnpm store, so <code>pnpm add</code> fails until <code>store-dir</code> is repointed outside <code>~/snap/</code> and one full <code>pnpm install</code> runs. This is why virtualization is an in-repo hook, and why a single-command <code>make check</code> on main is still owed once the store is repaired.</span></li>
+          <li><span class="ic info">◐</span><span><strong>Local <code>main</code> is 30 commits ahead of <code>origin</code>.</strong> Push is manual and yours; history on main is linear, so phase branches merge <code>--ff-only</code>. The Phase-6 branch <code>feature/phase6-overlay-walkforward-retune</code> is not yet on main.</span></li>
+          <li><span class="ic info">◐</span><span><strong>The 30-day paper clock is a Phase-7 gate, not a Phase-3 or Phase-6 one.</strong> It runs daily and was restarted 2026-07-03 by the sizing-bug fix. Phase 6/7 replaces it with the honest version — N trades across ≥2 regimes, positive expectancy, bounded drawdown.</span></li>
         </ul>
       </section>
 
-      <!-- ================================================================ -->
-      <section class="doc" id="invariants">
-        <div class="sec-kicker">Guardrails</div>
+      <section class="doc" id="s25">
+        <div class="sec-kicker">25 · Guardrails</div>
         <h2>Invariants that bind everything above</h2>
         <ul class="checks">
-          <li><span class="ic bad">✕</span><span><strong>Live trading does not exist.</strong> The order path is paper-only — no Kite order, no GTT. Every “live” recommendation anywhere in the docs is a Phase-7 design constraint, not a description of something running.</span></li>
-          <li><span class="ic bad">✕</span><span><strong>The engine is frozen.</strong> <code>app/analysis/</code>, <code>app/backtest/engine.py</code> and the window canon are bugfix-only, and the committed Rust fixtures are the parity oracle. Every finding on this page — regime gate, weight retune — is behaviour-changing and needs a §8 backtest regression plus explicit sign-off. Nothing here has changed the engine.</span></li>
+          <li><span class="ic bad">✕</span><span><strong>Live trading does not exist.</strong> The order path is paper-only — no Kite order, no GTT. Every "live" recommendation anywhere in the docs is a Phase-7 design constraint, not a description of something running.</span></li>
+          <li><span class="ic info">◐</span><span><strong>The engine is frozen; behaviour changes are overlays + §8.</strong> <code>app/analysis/</code>, <code>app/backtest/engine.py</code> and the window canon are bugfix-only, and the committed Rust fixtures are the parity oracle. The <strong>regime gate is the first behaviour change to ship</strong> — and it did so as a reversible downstream overlay, through a §8 walk-forward and sign-off, with the engine untouched. Every future change (the retune, the MCE gates) follows that same path.</span></li>
           <li><span class="ic info">◐</span><span><strong>Confluence only, ≥70% gate, no look-ahead.</strong> No signal from a single indicator; factors compute on candle N and are valid from N+1; committed signals come only from complete candles, and the tick-level layer is labelled provisional and never enters backtests or P&amp;L.</span></li>
-          <li><span class="ic info">◐</span><span><strong>Reject, never clamp.</strong> A signal whose natural SL exceeds its class cap is rejected, not tightened. Sizing is mandatory on every signal, risk_pct is a whole percent, and paper entries size risk-first from the actual fill so a chased fill shrinks quantity instead of over-risking.</span></li>
+          <li><span class="ic info">◐</span><span><strong>Reject, never clamp.</strong> A signal whose natural SL exceeds its class cap is rejected, not tightened. Sizing is mandatory on every signal, <code>risk_pct</code> is a whole percent, and paper entries size risk-first from the actual fill so a chased fill shrinks quantity instead of over-risking.</span></li>
           <li><span class="ic good">✓</span><span><strong>The daily-loss circuit breaker is never disableable.</strong> Not weakened, not configurable-off, not for tests. Any new risk gate is added alongside it.</span></li>
+          <li><span class="ic good">✓</span><span><strong>Shadow means shadow.</strong> A shadow signal is measured to outcome but never tradeable — the order path admits <code>status == 'active'</code> only, and every tradeable statistic filters <code>is_shadow IS FALSE</code>. Provenance lives on the immutable <code>is_shadow</code> flag, never on the sweeper-overwritten <code>status</code>.</span></li>
         </ul>
       </section>
 
-      <!-- ================================================================ -->
-      <section class="doc" id="refs">
-        <div class="sec-kicker">Reference</div>
-        <h2>Where to read further</h2>
+      <!-- ======================= PART IV ======================= -->
+      <div class="part" id="p4">
+        <div class="pd-k">Part IV</div>
+        <div class="pd-t">Reference</div>
+        <p class="pd-d">The lookups: vocabulary, the commands you run daily, and the map of every report and document behind the numbers on this page.</p>
+      </div>
 
-        <div class="card">
-          <h3 style="margin-top:0">The deep-dive artifact — already published</h3>
-          <p style="margin-bottom:.6rem"><strong>Trading Platform — Complete Overview</strong> · <a href="https://claude.ai/code/artifact/0d880837-a02a-4f10-99fd-5da511183d22">claude.ai/code/artifact/0d880837…</a> · private to your account, published 2026-08-02.</p>
-          <p style="margin-bottom:.6rem">A 19-section engineering reference — what the system is, the architecture and process model, the end-to-end lifecycle of a trade idea, the signal engine and its 14 factors with a worked POWERGRID example, the Rust core and the parity contract, the realtime committed-vs-forming split, paper trading and risk, the four styles, the data model, the frontend, the adjudicated canon, hard constraints, the workbench, the phase journey, a glossary and the ops commands.</p>
-          <p><strong>Its status content is stale — it was written when Phase 3 was in progress and Phases 4–6 were still planned.</strong> Read it for <em>how the system works</em>, which has not changed; read this page for <em>where the build stands</em>. Neither is canonical: that is the top block of <code>docs/PHASES.md</code>.</p>
-        </div>
+      <section class="doc" id="s26">
+        <div class="sec-kicker">26 · Glossary</div>
+        <h2>Glossary</h2>
+        <div class="tablewrap"><table>
+          <tbody>
+            <tr><td class="mono">Confluence</td><td>Multiple independent factors agreeing at one price level; the edge and the hardest constraint.</td></tr>
+            <tr><td class="mono">Committed vs forming</td><td>Committed = candle-close, spec-exact, backtestable; forming = tick-level, labelled, never in P&amp;L.</td></tr>
+            <tr><td class="mono">The gate</td><td>The ≥70% confidence threshold (65% in strong-ADX regimes).</td></tr>
+            <tr><td class="mono">Regime gate</td><td>The Phase-6 eligibility overlay that skips the transitional ADX 20–25 regime; ACTIVE on the paper path, reversible via <code>settings.regime_gate_mode</code>.</td></tr>
+            <tr><td class="mono">DC1 / DC2</td><td>Double Confirmation: reversal at a demand/supply zone with a confirming pattern.</td></tr>
+            <tr><td class="mono">RRBO</td><td>Resistance Range BreakOut (swing): break above resistance with a body candle and ≥1.5× volume.</td></tr>
+            <tr><td class="mono">PDH / PDL</td><td>Previous Day High / Low; intraday breakout references.</td></tr>
+            <tr><td class="mono">MFE / MAE</td><td>Maximum Favourable / Adverse Excursion — how far a signal ran in your favour / against you, tape-derived per signal (Phase 6.1).</td></tr>
+            <tr><td class="mono">Expectancy / R</td><td>R = one unit of initial risk (entry − SL). Expectancy = average R per trade; the platform's headline profit proxy.</td></tr>
+            <tr><td class="mono">Shadow / is_shadow</td><td>A signal measured to outcome but never tradeable. Provenance lives on the immutable <code>is_shadow</code> flag, not the sweeper-overwritten <code>status</code>.</td></tr>
+            <tr><td class="mono">Pair-trading</td><td>Market-neutral: trade the mean-reversion of the spread between two co-moving stocks. Screened by cointegration (DF t-stat ≤ −2.86) + half-life; regime-agnostic.</td></tr>
+            <tr><td class="mono">Half-life</td><td>Ornstein-Uhlenbeck mean-reversion speed, −ln(2)/λ, in bars — how long the spread takes to close half its gap. Tradeable window here: 1–30 bars.</td></tr>
+            <tr><td class="mono">MCE</td><td>Market Context Engine — the next build phase: top-down regime/sector/event/fundamental context as gates &amp; modifiers, never additive alpha.</td></tr>
+            <tr><td class="mono">§8</td><td>The SIGNAL_ENGINE.md section governing spec changes: any behaviour-changing move needs a backtest regression; &gt;±5% metric movement needs sign-off.</td></tr>
+            <tr><td class="mono">Parity / goldens</td><td>Committed oracle files from the frozen Python that the Rust engine must reproduce exactly.</td></tr>
+            <tr><td class="mono">The paper clock</td><td>The 30-day profitable-paper counter gating live trading; restarts when the fill model changes.</td></tr>
+            <tr><td class="mono">Soak</td><td>A full market-session run of the live worker to prove stability and latency.</td></tr>
+            <tr><td class="mono">tradecore</td><td>The PyO3 wheel built from the Rust <code>engine/</code> workspace.</td></tr>
+          </tbody>
+        </table></div>
+      </section>
 
-        <div class="tablewrap">
-          <table>
-            <thead><tr><th>Document</th><th>What it answers</th></tr></thead>
-            <tbody>
-              <tr><td class="mono">docs/PHASES.md</td><td><strong>Canonical status</strong> — read the top “state at a glance” block, not the 700-line narrative</td></tr>
-              <tr><td class="mono">docs/UPGRADE_PLAN.md</td><td>Why v2 exists and what each phase is for</td></tr>
-              <tr><td class="mono">docs/phases/phase-06-plan.md</td><td>The live Phase-6 tracker: slices, what Phase 6 must not become, settled decisions</td></tr>
-              <tr><td class="mono">docs/analysis/LEDGER.md</td><td>One line per trading day — the paper book above</td></tr>
-              <tr><td class="mono">docs/analysis/attribution-corpus-2026-08-13.md</td><td>Every cell behind the edge/leak and factor numbers</td></tr>
-              <tr><td class="mono">docs/analysis/gate-experiment-2026-08-13.md</td><td>The four-variant lever test</td></tr>
-              <tr><td class="mono">docs/analysis/FIX_PLAN.md</td><td>Paper-behaviour backlog: P0–P3 shipped, watch-list open</td></tr>
-              <tr><td class="mono">docs/SIGNAL_ENGINE.md</td><td>The protected spec — hook-guarded, changes need instruction + §8 regression</td></tr>
-            </tbody>
-          </table>
-        </div>
+      <section class="doc" id="s27">
+        <div class="sec-kicker">27 · Ops</div>
+        <h2>Commands &amp; daily ops</h2>
+        <pre class="code">make up / down          <span class="cm">postgres + redis (pg on 5433)</span>
+make backend            <span class="cm">uvicorn dev server</span>
+make frontend           <span class="cm">vite dev</span>
+make worker             <span class="cm">celery worker + beat (REQUIRED for EOD + nightly signals + pair mint)</span>
+make live-worker        <span class="cm">supervised live tick worker (WORKER_ARGS=--gap-fill)</span>
+make migrate            <span class="cm">alembic upgrade head  (run on the DEV db, not just the test db)</span>
+make analysis [DATE=…]  <span class="cm">daily report → docs/analysis/&lt;date&gt;.md + LEDGER</span>
+make test / lint / typecheck / check    <span class="cm">check = the full gate</span>
+make engine-build/test/bench/parity     <span class="cm">Rust</span></pre>
+        <p><strong>Daily ritual (Kite subscription active):</strong> the token dies ~6 AM IST; re-login with <code>cd backend &amp;&amp; uv run python scripts/kite_login.py</code>. Start <code>make worker</code> before ~18:30 IST so the evening EOD beats self-heal and generate signals (and the 19:25 IST pair mint runs); run <code>make live-worker WORKER_ARGS=--gap-fill</code> pre-open to heal the intraday hole. The chain-snapshot recorder auto-activates whenever a live token exists.</p>
+        <p><strong>Machine notes (dev box):</strong> i7-1355U, 15 GB RAM — cap <code>RAYON_NUM_THREADS</code> ≤ 6 (thermals); run the test gate as sequential legs to avoid OOM; a snap refresh prunes anything under <code>~/snap/</code> (it has killed the uv venvs and the pnpm store before); <code>git push</code> is manual by design.</p>
+      </section>
 
-        <h3>Regenerating what's on this page</h3>
-        <div class="tablewrap">
-          <table>
-            <thead><tr><th>Command</th><th>Produces</th></tr></thead>
-            <tbody>
-              <tr><td class="mono">make analysis [DATE=…]</td><td><code>docs/analysis/&lt;date&gt;.md</code> + LEDGER row (§7 F&amp;O health, §8 shadow layer)</td></tr>
-              <tr><td class="mono">uv run python scripts/gate_experiment.py</td><td><code>docs/analysis/gate-experiment-&lt;date&gt;.md</code></td></tr>
-              <tr><td class="mono">uv run python scripts/corpus_attribution.py</td><td><code>docs/analysis/attribution-corpus-&lt;date&gt;.md</code></td></tr>
-              <tr><td class="mono">make check</td><td>The full gate — pytest + ruff + mypy + vitest + eslint + tsc + cargo</td></tr>
-            </tbody>
-          </table>
+      <section class="doc" id="s28">
+        <div class="sec-kicker">28 · Reference</div>
+        <h2>Reports &amp; where to read further</h2>
+        <p>Every number on this page came out of one of these. The reports are reproducible read-only artifacts; the docs are the living source of truth.</p>
+        <h3>Generated reports — the evidence</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Report</th><th>What it answers</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">analysis/LEDGER.md</td><td>One line per trading day — the paper book (§17)</td></tr>
+            <tr><td class="mono">analysis/&lt;date&gt;.md</td><td>The daily report — §7 F&amp;O engine health, §8 intraday shadow layer</td></tr>
+            <tr><td class="mono">analysis/attribution-corpus-2026-08-13.md</td><td>Every cell behind the edge/leak + the factor deltas (§18, §20)</td></tr>
+            <tr><td class="mono">analysis/gate-experiment-2026-08-13.md</td><td>The four-variant lever test (§19)</td></tr>
+            <tr><td class="mono">analysis/gate-walkforward-2026-08-13.md</td><td>The §8 out-of-sample confirmation of the regime gate (§19)</td></tr>
+            <tr><td class="mono">analysis/regime-gate-shadow-&lt;date&gt;.md</td><td>What the gate does to the live cohort — flip-readiness (§21)</td></tr>
+            <tr><td class="mono">analysis/weight-retune-2026-08-13.md</td><td>The group-weight sweep behind momentum ×1.5 (§20)</td></tr>
+            <tr><td class="mono">analysis/pairs-2026-08-15.md</td><td>Same-sector cointegration candidates (§21)</td></tr>
+            <tr><td class="mono">analysis/pair-attribution-&lt;date&gt;.md</td><td>The df-vs-adf pair verdict — accrues nightly</td></tr>
+            <tr><td class="mono">analysis/FIX_PLAN.md</td><td>Paper-behaviour backlog: P0–P3 shipped, watch-list open</td></tr>
+          </tbody>
+        </table></div>
+        <h3>Documents — the source of truth</h3>
+        <div class="tablewrap"><table>
+          <thead><tr><th>Document</th><th>What it answers</th></tr></thead>
+          <tbody>
+            <tr><td class="mono">docs/PHASES.md</td><td><strong>Canonical status</strong> — read the top "state at a glance" block, not the long narrative</td></tr>
+            <tr><td class="mono">docs/UPGRADE_PLAN.md</td><td>Why v2 exists and what each phase is for</td></tr>
+            <tr><td class="mono">docs/phases/phase-06-plan.md</td><td>The Phase-6 tracker: slices, what Phase 6 must not become, settled decisions</td></tr>
+            <tr><td class="mono">docs/phases/phase-06-6.5-pairtrading-plan.md</td><td>The pair-trading design + build log (slices 1–4)</td></tr>
+            <tr><td class="mono">docs/SIGNAL_ENGINE.md</td><td>The protected spec — hook-guarded; changes need instruction + §8 regression</td></tr>
+            <tr><td class="mono">docs/NAUTILUS_TRADER_ANALYSIS.md</td><td>The Phase-7 architecture study — adopt/adapt/avoid (learned, not vendored)</td></tr>
+            <tr><td class="mono">docs/COMPETITOR_TOOLS_REVIEW…&nbsp;· VARSITY_REVIEW…</td><td>The external studies feeding the MCE + Phase-7 backlog (fundamentals, Iron Condor, pair-trading)</td></tr>
+          </tbody>
+        </table></div>
+        <div class="callout">
+          <span class="k">A note on this page</span>
+          <p>This Compendium <strong>folds in and supersedes</strong> the former deep-dive artifact "Trading Platform — Complete Overview" (published 2026-08-02), whose status content had gone stale — its "how it works" material is Part I here, now current. Nothing on this page is canonical in the governance sense: the one source of record is the top block of <code>docs/PHASES.md</code>. This is its readable mirror plus the whole-system reference, regenerated from the repo, not from memory.</p>
         </div>
       </section>
 
       <footer class="foot">
-        <p><strong>This file is the durable copy.</strong> It lives at <code>docs/STATUS.html</code> in the repo — open it directly in any browser (<code>file://…/docs/STATUS.html</code>), no account and no network needed. It is self-contained by design: no CDN, no fonts, no scripts.</p>
+        <p><strong>This file is the durable copy.</strong> It lives at <code>docs/STATUS.html</code> in the repo — open it directly in any browser (<code>file://…/docs/STATUS.html</code>), no account and no network needed. Self-contained by design: no CDN, no fonts, no scripts loaded from anywhere. The one canonical status source is still the top block of <code>docs/PHASES.md</code>; this page is its readable mirror plus the whole-system reference.</p>
         <div class="meta">
           <span>canonical status: docs/PHASES.md (top block)</span>
-          <span>mirrored: 2026-08-13</span>
-          <span>local main: +11 vs origin, push is manual</span>
+          <span>updated: 2026-08-15</span>
+          <span>local main: +30 vs origin, push is manual</span>
         </div>
       </footer>
     </main>
   </div>
 </div>
+
+<script>
+  /* scroll-spy: highlight the current section in the sidebar. Self-contained, no deps. */
+  (function () {
+    var links = Array.prototype.slice.call(document.querySelectorAll('nav.toc a'));
+    if (!links.length || !('IntersectionObserver' in window)) return;
+    var map = {};
+    links.forEach(function (a) { map[a.getAttribute('href').slice(1)] = a; });
+    var current = null;
+    var obs = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (!e.isIntersecting) return;
+        var a = map[e.target.id];
+        if (!a) return;
+        if (current) current.classList.remove('active');
+        a.classList.add('active');
+        current = a;
+      });
+    }, { rootMargin: '0px 0px -78% 0px', threshold: 0 });
+    Object.keys(map).forEach(function (id) {
+      var el = document.getElementById(id);
+      if (el) obs.observe(el);
+    });
+  })();
+</script>

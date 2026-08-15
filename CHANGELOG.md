@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(status): rebuild STATUS.html as the all-in-one project Compendium (2026-08-15)
+
+Folded the deep-dive "Complete Overview" artifact (how the system works — 19 sections) INTO
+`docs/STATUS.html` and brought every status section current, so one self-contained page now holds
+the whole project. Four parts: **(I) the system, end to end** (architecture, lifecycle, the signal
+engine + 14 factors + POWERGRID worked example, Rust core + parity, realtime, data model, canon,
+constraints, workbench); **(II) where the build stands** (the paper book, the Phase-6 leak/edge, the
+gate experiment → the regime gate now ACTIVE, factor attribution → the momentum ×1.5 shadow retune,
+and all forward-evidence shadow layers incl. pair-trading + F&O); **(III) what's next** (a detailed
+Market Context Engine build plan with recommended sequencing, and Phase 7 live-trading in detail —
+RiskEngine-gate-first, broker adapter, exchange stops, Iron Condor, pair tradeability); **(IV)
+reference** (glossary, ops, and the full report + doc map). Updated facts: Phase 3 CLOSED
+(1246/375/86), regime gate ACTIVE + reversible, first-class ADX, 6.5 pair-trading loop, main +30.
+Supersedes the stale published deep-dive artifact. Self-contained (no CDN/scripts/fonts),
+theme-aware (light/dark/system), scroll-spy TOC, ASCII diagrams (not mermaid) so it renders offline
+via `file://`. Verified: 28 sections, TOC↔anchors matched, zero external references.
+
 ### feat(phase6): 6.5b slices 3+4 — spread-outcome tracker + pair attribution (2026-08-15)
 
 Completes the market-neutral shadow loop — the "does it work, and which arm" measurement half.
