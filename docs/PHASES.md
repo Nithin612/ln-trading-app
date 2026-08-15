@@ -14,7 +14,7 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 **v2 Phases 0–2 ✅ done · Phase 3 (realtime) ✅ GATED 2026-08-14 · Phase 4 ✅ done ·
 Phase 5 ✅ GATED 2026-08-07 · Phase 6 ▶ IN PROGRESS (6.1–6.4 done; regime gate ACTIVE
-2026-08-14; 6.5 pair-trading underway) · Phase 7 not started.**
+2026-08-14; 6.5 pair-trading BUILT slices 1–4 shadow-first 2026-08-15) · Phase 7 not started.**
 Suites grew with the Phase-6 slices (added `test_signal_excursions`,
 `test_entry_attribution`, `test_corpus_attribution`, `test_seasonality`); run
 `make check` for the exact totals. Pre-Phase-6 baseline: backend **1123**
@@ -87,7 +87,10 @@ monitor; if it turns ⏳ NOT READY the live tape diverged, reconsider/**revert**
 the shadow counterfactual stays the rigorous read. Review the live impact ~2026-09-15 (keep/revert); **(2a) promote the momentum ×1.5 retune** once its
 shadow A/B (`retune_momentum_x15` vs `retune_base`, in the daily attribution Setup×shadow
 table) beats base forward — then create an active retune profile on sign-off (nothing to
-build until evidence accrues; ~1–2 signals/arm/day); **(3) 6.5** pair-trading market-neutral.
+build until evidence accrues; ~1–2 signals/arm/day); **(3) 6.5 pair-trading — ✅ BUILT shadow-first (slices 1–4, 2026-08-15)**: `pair_signals`
+model + dual-arm (df/adf) nightly minter + spread-outcome tracker + attribution — all additive,
+shadow-only, accruing nightly (see `phases/phase-06-6.5-pairtrading-plan.md`). Nothing left to
+build; the attribution report answers df-vs-adf once evidence accrues.
 (An earlier "(2b) fix the DOW_TREND grouping bug" item was investigated 2026-08-14 and
 WITHDRAWN — there is no bug; a scoring DOW_TREND groups `structure` in both engines. An
 attempted fix inverted parity and was reverted; see `dow-trend-grouping-gotcha`.) Detail:
