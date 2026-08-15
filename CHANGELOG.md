@@ -7,6 +7,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6): 6.5b slice 2 — pair-signal shadow minter (df+adf dual arms, nightly) (2026-08-15)
+
+The market-neutral shadow layer goes LIVE. `pair_minter.mint_pair_signals` screens the universe
+under BOTH arms (`df` + `adf` — the A/B) and mints a shadow `PairSignal` for each candidate at an
+entry extreme (entry_z ≤ |z| < |z_stop|): long the cheap leg / short the rich, exit toward z≈0,
+stop at ±3.5. De-duped against open signals. Writes only to `pair_signals` (is_shadow) — never the
+single-name path or an order. Wired nightly via `app.tasks.pair_tasks.mint_pair_signals` (Celery
+beat 13:55 UTC / 19:25 IST, after EOD ingestion; skips holidays) + a CLI. First live run minted 2
+sensible signals (MAXHEALTH–SUNPHARMA, df z=−2.31 + adf z=−2.20, both long_spread). `PairStat`
+gained `spread_last`/`z_sigma` (the frozen entry-time z reference for slice 3); `PairCandidate`
+carries the filtered stock ids so the minter never re-maps symbols. +4 tests. **bug-hunter
+BUGS-FOUND → all fixed:** (MED) reject entries born past their own stop — else a favourable
+reversion books as a stop-loss, corrupting the very A/B this slice measures; (LOW) thread the
+filtered stock ids through the screen (dual-listed-symbol safe); (LOW) guard a sub-tick σ that
+rounds to 0 (a slice-3 div-by-zero). Next: slice 3 = spread-outcome tracker, slice 4 = attribution.
+
 ### feat(phase6): 6.5b slice 1 — pair_signals model + migration (additive shadow table) (2026-08-15)
 
 The Phase-6.5b foundation: a new `pair_signals` table + `PairSignal` model for 2-leg

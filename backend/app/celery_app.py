@@ -29,6 +29,7 @@ celery_app = Celery(
         "app.tasks.expiry_tasks",
         "app.tasks.market_data_tasks",
         "app.tasks.profile_tasks",
+        "app.tasks.pair_tasks",
     ],
 )
 
@@ -50,6 +51,13 @@ celery_app.conf.beat_schedule = {
     "nightly-signal-generation": {
         "task": "app.tasks.signal_tasks.nightly_signal_generation",
         "schedule": crontab(hour=13, minute=45, day_of_week="1-5"),
+    },
+    # Pair-trading shadow minter (Phase 6.5b) — 19:25 IST = 13:55 UTC, AFTER EOD bar
+    # ingestion (18:40 IST) + nightly generation (19:15 IST), so it screens fresh daily
+    # bars. Shadow-only (writes pair_signals, mints no order).
+    "mint-pair-signals": {
+        "task": "app.tasks.pair_tasks.mint_pair_signals",
+        "schedule": crontab(hour=13, minute=55, day_of_week="1-5"),
     },
     # Poll filings every 60 seconds (Celery beat minimum granularity is seconds)
     "poll-filings": {

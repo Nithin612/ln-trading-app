@@ -129,3 +129,11 @@ and the spread P&L can be measured hypothetically without an execution path. **T
   tests. **User confirmed the additive/insulated/shadow model** (schema question resolved: option
   (a) new model). NEXT: slice 2 = the nightly shadow minter (screen → mint df+adf pair signals at
   |z| ≥ entry), then slice 3 = spread-outcome tracker, slice 4 = pair attribution.
+- **2026-08-15:** **6.5b slice 2 DONE** — the dual-arm shadow minter. `pair_minter.mint_pair_signals`
+  + `pair_tasks` (Celery nightly 19:25 IST) + CLI. Screens df+adf, mints shadow PairSignals at
+  entry_z ≤ |z| < |z_stop| (long cheap / short rich). First live run: 2 signals (MAXHEALTH–SUNPHARMA
+  df+adf, long_spread). `PairStat` += spread_last/z_sigma; `PairCandidate` += stock ids (bug-hunter
+  Finding 2). **bug-hunter BUGS-FOUND → all fixed:** entry-past-stop (MED — would book a winning
+  reversion as a stop-loss, corrupting the A/B), dual-listing id-threading (LOW), σ-rounds-to-0
+  guard (LOW). +4 tests. NEXT: slice 3 = spread-outcome tracker (follow z forward to revert/stop),
+  slice 4 = pair attribution.

@@ -20,7 +20,7 @@ phase-06-6.5-pairtrading-plan.md):
 from __future__ import annotations
 
 import itertools
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import UTC, date, datetime, timedelta
 from zoneinfo import ZoneInfo
 
@@ -45,6 +45,11 @@ class PairCandidate:
     symbol_b: str
     sector: str
     stat: ps.PairStat
+    # Resolved by screen_universe from the filtered nifty50 id map (so unambiguous even for a
+    # dual-listed symbol); None on pure rank_pairs output. The minter uses these directly
+    # rather than re-mapping symbols → ids (bug-hunter Finding 2).
+    stock_a_id: int | None = None
+    stock_b_id: int | None = None
 
 
 def align_closes(
@@ -148,7 +153,13 @@ async def screen_universe(
     since = now - timedelta(days=int(lookback_trading_days * 1.6))
     closes_by_id = await load_daily_closes(db, list(id_to_sym), since)
     closes_by_symbol = {id_to_sym[sid]: series for sid, series in closes_by_id.items()}
-    return rank_pairs(closes_by_symbol, sector_of, min_common=min_common, method=method)
+    ranked = rank_pairs(closes_by_symbol, sector_of, min_common=min_common, method=method)
+    # Attach the (filtered, unambiguous) stock ids so callers never re-map symbols → ids.
+    sym_to_id = {sym: sid for sid, sym in id_to_sym.items()}
+    return [
+        replace(c, stock_a_id=sym_to_id.get(c.symbol_a), stock_b_id=sym_to_id.get(c.symbol_b))
+        for c in ranked
+    ]
 
 
 def render_markdown(candidates: list[PairCandidate], *, day: date, method: str = "df") -> str:

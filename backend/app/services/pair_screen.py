@@ -84,6 +84,11 @@ class PairStat:
     method: str = "df"
     adf_stat: float | None = None
     adf_pvalue: float | None = None
+    # Minting/outcome (6.5b): the current spread value + the trailing z-unit (std of the
+    # z_lookback bars before the current bar) — the entry-time reference the outcome tracker
+    # freezes to compute z forward. 0.0 on synthetic/test PairStats.
+    spread_last: float = 0.0
+    z_sigma: float = 0.0
 
 
 def _finite_2d(a: FloatArray, b: FloatArray) -> tuple[FloatArray, FloatArray] | None:
@@ -300,6 +305,7 @@ def screen_pair(
     z = zscore(spread, lookback=z_lookback)
     if z is None:
         return None
+    z_window = spread[-(z_lookback + 1) : -1]  # trailing z-unit reference (entry-time)
     return PairStat(
         alpha=alpha,
         beta=beta,
@@ -313,6 +319,8 @@ def screen_pair(
         method=method,
         adf_stat=adf_stat,
         adf_pvalue=adf_pvalue,
+        spread_last=float(spread[-1]),
+        z_sigma=float(np.std(z_window, ddof=1)),
     )
 
 
