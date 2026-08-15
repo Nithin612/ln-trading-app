@@ -123,3 +123,9 @@ and the spread P&L can be measured hypothetically without an execution path. **T
   by argument.** Report of record `docs/analysis/pairs-2026-08-15.md` (df, 8 pairs). +8 tests
   (ADF sig/insig, Johansen β recovery, adf-gate canary, notional-guard). Net edge over
   numpy-only: a more rigorous *test* available on demand + a tradeability guard — modest, honest.
+- **2026-08-15:** **6.5b slice 1 DONE** — `PairSignal` model (`app/models/pair.py`) + migration
+  `f4a5b6c7d8e9` (`CREATE TABLE pair_signals`). PURELY ADDITIVE + shadow-only; single-name path
+  proven unaffected (`test_signals` green). Both df/adf arms mint here (the df-vs-adf A/B). +2
+  tests. **User confirmed the additive/insulated/shadow model** (schema question resolved: option
+  (a) new model). NEXT: slice 2 = the nightly shadow minter (screen → mint df+adf pair signals at
+  |z| ≥ entry), then slice 3 = spread-outcome tracker, slice 4 = pair attribution.

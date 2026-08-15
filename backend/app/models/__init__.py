@@ -12,6 +12,7 @@ from app.models.market_data import (
     Ohlcv15m,
     OhlcvDaily,
 )
+from app.models.pair import PairSignal
 from app.models.profile import StrategyProfile
 from app.models.signal import Signal, SignalOutcome, SrLevel
 from app.models.stock import Index, IndexConstituent, SavedScreen, Stock
@@ -42,6 +43,7 @@ __all__ = [
     "SrLevel",
     "Signal",
     "SignalOutcome",
+    "PairSignal",
     "StrategyProfile",
     "StrategyRun",
     "BrokerToken",

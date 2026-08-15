@@ -7,6 +7,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6): 6.5b slice 1 — pair_signals model + migration (additive shadow table) (2026-08-15)
+
+The Phase-6.5b foundation: a new `pair_signals` table + `PairSignal` model for 2-leg
+market-neutral pair signals (spread mean-reversion). **PURELY ADDITIVE** — migration
+`f4a5b6c7d8e9` is a `CREATE TABLE` that does not touch the single-name `signals` table, the
+confluence engine, the paper broker, or the live order path; the running worker + paper trading
+are insulated (proven: `test_signals` stays 14/14 green). **Shadow-only** (`is_shadow` default
+true): measured to outcome, never tradeable (no spread order path; an overnight pair short needs
+Phase-7 futures). Both screening arms (df/adf) mint here — the `method` column — so the forward
+spread P&L resolves the df-vs-adf A/B. Fields: hedge (β/α), mean-reversion (half-life, df_tstat,
+adf_pvalue), the trade (direction, entry/exit/stop z, spread_entry/sigma), nullable outcome fields
+(resolved by slice 3). Reversible (drop table); applied to dev + test. +2 tests. Next: the shadow
+minter (slice 2).
+
 ### feat(phase6): 6.5a.3 statsmodels ADF/Johansen A/B + notional guard (2026-08-15)
 
 User approved adding **statsmodels + scipy** ("if it gives an edge"). Added a `method="adf"`
