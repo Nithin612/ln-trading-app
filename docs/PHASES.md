@@ -244,7 +244,7 @@ which is what Phase-6 expectancy calibration is for.
 | 3 | Realtime v2 — tick-to-tick | **▶ in progress** (started 2026-07-09) | [phase-03](phases/phase-03-realtime.md) | live-worker + Rust LiveEngine, committed vs forming layers, record/replay harness, latency budget p99 ≤ 50 ms tick→publish at full universe (restated 2026-07-14; original 10 ms was authored for 200–500 instruments). **Kite subscription required from slice 3.3.** Slice 3.0 (pre-work MEDIUMs) ✅ 2026-07-09 |
 | 4 | F&O analytics | **✅ backend done · phase-gate PASS 2026-08-06** (merged to main; UI = Phase 5) | [phase-04](phases/phase-04-fo-suggestions.md) | 4.1 chain/PCR/max-pain/basis/VIX-regime · 4.2 Rust BS/Black-76 IV+Greeks (`tradecore`) + IV-rank · 4.3 option-selling engine (defined-risk index-only; breakeven-POP; expectancy report-only=VRP; fail-closed VIX veto; user-calibrated `SellRules`). Follow-ups: confluence direction-tilt, event/ban gate (=deferred Market Context Engine), Kite SPAN margin, forward-validation dashboard (P6) · 🧭 **Nautilus doc** §9 — Greeks as a first-class data type; options/accounting (margin) refs |
 | 5 | UI overhaul | **✅ slices 5.1–5.4 done, MERGED to main 2026-08-07** (`make check` green; bug-hunter + ui-reviewer clean; 60 fps MEASURED and MET; visual smoke passed in all 5 themes — only `/phase-gate` remains) | [phase-05](phases/phase-05-ui-overhaul.md) | 5.1 `useLiveQuotes` v2 (rAF-batched; fixed socket-churn, resubscribe-per-render + subscription-leak bugs) + `useVirtualRows` · 5.2 **F&O page** (chain ladder w/ per-leg IV+Greeks via `/fo/chain?greeks=true`, `/fo/underlyings`, `/fo/expiries`, strategy cards, expectancy labelled report-only) · 5.3 style pages v2 (committed-vs-forming, outcome stats w/ small-sample refusal, factor drawer) · 5.4 Live Signals feed + opt-in notifications (bursts coalesce). **IA + slate default were already done in Phase 3.** 🧭 **Nautilus doc** §4.2 — cache-then-publish lets UI subscribe without touching producers |
-| 6 | Outcome tracking + strategy lab v2 | planned | — | per-style hit-rate/expectancy dashboards, factor attribution, Rayon weight tuning + promotion workflow · 🧭 **Nautilus doc** §7 — mimalloc on batch backtest sweeps; §4.3 richer bar aggregations for research |
+| 6 | Outcome tracking + entry-selection | **▶ BUILT 6.1–6.5 shadow-first (2026-08-12→15); regime gate ACTIVE; close ritual pending** — see the STATE block + `phase-06-plan.md` | [phase-06-plan](phases/phase-06-plan.md) | 6.1 MFE/MAE · 6.2 entry attribution (live+corpus) · gate experiment + §8 walk-forward · regime-gate overlay (ACTIVE) · 6.4 weight-retune (shadow) · 6.5 pair-trading (shadow, slices 1–4) · 🧭 **Nautilus doc** §7 — mimalloc on batch backtest sweeps; §4.3 richer bar aggregations for research |
 | 7 | Live-trading hardening | planned | — | Kite orders behind trading_mode + 30-day gate, kill switch, reconciliation, VPS runbook · 🧭 **Nautilus doc** §6 — **SLICE 1 = RiskEngine single-gate** (test-first, equivalence-pinned) → then BrokerAdapter port · order FSM (Denied vs Rejected) · reconciliation |
 
 > **🧭 Nautilus doc pointers** (added 2026-08-01): before starting and at the
@@ -255,22 +255,33 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-08-14.**
-Phases **0–2, 4 and 5 are CLOSED**; **Phase 3's two exit criteria are both MET
-and only its gate ritual is left (user-run, Friday 2026-08-15)**. **Phase 6 is
-UNDERWAY** — 6.1 + 6.2 + the gate experiment + §8 walk-forward + the regime-gate
-overlay + the 6.4 weight-retune experiment + shadow-promote are all DONE, and both
-the regime gate and the `momentum ×1.5` retune now run SHADOW-first (measure-only —
-NOTHING on the money path yet). **The live NEXT menu is the STATE AT A GLANCE block
-at the top of this file**: flip the regime gate shadow→active (on user sign-off + a
-first-class ADX level), promote the retune once its shadow A/B beats base, then 6.5
-pair-trading. Everything below this line is historical narrative — read the top
-block first, not the 400 lines that follow.
+**▶ CONTINUE HERE (next session, any account) — updated 2026-08-15.**
+Phases **0–5 are CLOSED** (Phase 3 gated 2026-08-14, PASS). **Phase 6 is BUILT** — 6.1–6.4 done;
+the **regime gate is ACTIVE** in the paper book (flipped 2026-08-15, reversible via
+`REGIME_GATE_MODE=shadow` + restart); **6.5 pair-trading is fully built shadow-first (slices 1–4)**.
+**The STATE AT A GLANCE block at the top of this file is the live truth** — read it, not the 400
+lines of historical narrative below.
+
+**Nothing in Phase 6 is left to BUILD** — what remains is to let the shadow evidence accrue and
+tune from it (none of it a code task today):
+1. **Regime gate** — already active; monitor the daily `regime-gate-shadow-<date>.md` Flip-readiness
+   banner, keep-vs-revert review ~2026-09-15.
+2. **Momentum ×1.5 retune** — promote once its forward shadow A/B (`retune_momentum_x15` vs
+   `retune_base`) beats base (weeks of accrual + user sign-off).
+3. **Pair-trading (6.5)** — the nightly minter + outcome tracker run themselves;
+   `pair-attribution-<date>.md` answers df-vs-adf once evidence accrues; tune knobs from THAT.
+4. **Phase-6 close ritual** (`/phase-gate` + a `docs/phases/phase-06-*.md` report) when you judge it done.
+
+**Next BUILD phase = the Market Context Engine** (named phase after 6, before Phase-7 live — see the
+Architecture-review backlog below). Post-Phase-6 research/features are phase-mapped there (Nautilus
+runtime → Phase 7; competitor/fundamentals → blocked on a `market_cap` data source; seasonality →
+unblocked + small). Local branch is ahead of origin — push is manual.
 
 Suites as of 2026-08-10: backend **1120**, frontend **370**. All work through
 `b795326` is merged to main **and pushed to origin**.
 
-**Do these, in this order:**
+**Do these — ⚠ HISTORICAL (superseded 2026-08-15; the current next-steps are in the summary above
++ the STATE block). Kept only as a record; do NOT action items 0–2:**
 
 0. **TODAY'S OPEN QUESTION — did the intraday shadow layer produce anything?**
    Monday 2026-08-10 was its first live session. **Every scheduled beat fired**
