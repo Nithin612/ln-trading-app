@@ -69,6 +69,7 @@ def rank_pairs(
     sector_of: dict[str, str | None],
     *,
     min_common: int = ps.MIN_OBS,
+    method: str = "df",
 ) -> list[PairCandidate]:
     """Screen every SAME-SECTOR pair and return the candidates, strongest stationarity
     (most-negative DF t-stat) first. Pure — no DB. A pair is kept only when its aligned
@@ -85,7 +86,7 @@ def rank_pairs(
             )
             if aligned is None:
                 continue
-            stat = ps.screen_pair(aligned[0], aligned[1])
+            stat = ps.screen_pair(aligned[0], aligned[1], method=method)
             if stat is not None and ps.is_candidate(stat):
                 out.append(PairCandidate(symbol_a=sym_a, symbol_b=sym_b, sector=sec, stat=stat))
     out.sort(key=lambda c: c.stat.df_tstat)
@@ -122,6 +123,7 @@ async def screen_universe(
     *,
     lookback_trading_days: int = DEFAULT_LOOKBACK_TRADING_DAYS,
     min_common: int = ps.MIN_OBS,
+    method: str = "df",
     now: datetime | None = None,
 ) -> list[PairCandidate]:
     """Screen same-sector pairs across the active, sector-tagged Nifty50 over the last
@@ -146,29 +148,36 @@ async def screen_universe(
     since = now - timedelta(days=int(lookback_trading_days * 1.6))
     closes_by_id = await load_daily_closes(db, list(id_to_sym), since)
     closes_by_symbol = {id_to_sym[sid]: series for sid, series in closes_by_id.items()}
-    return rank_pairs(closes_by_symbol, sector_of, min_common=min_common)
+    return rank_pairs(closes_by_symbol, sector_of, min_common=min_common, method=method)
 
 
-def render_markdown(candidates: list[PairCandidate], *, day: date) -> str:
+def render_markdown(candidates: list[PairCandidate], *, day: date, method: str = "df") -> str:
     """A dated report of the screened candidate pairs (read-only research artifact)."""
+    gate = (
+        f"ADF p ≤ {ps.ADF_PVALUE_5PCT} (Johansen β)"
+        if method == "adf"
+        else f"DF t-stat ≤ {ps.DF_CRIT_5PCT} (OLS β)"
+    )
     out = [
         f"# Pair-trading candidates (same-sector, Nifty50) — {day}",
         "",
-        "_Read-only screen (`pair_screen` + `pair_universe`). Same-sector pairs whose spread "
-        "is a statistically-significant, tradeable-horizon mean-reversion candidate. Mints NO "
-        "signal — 6.5a research only. Gate: DF t-stat ≤ −2.86 (5% CV) AND half-life ∈ "
-        f"[{ps.MIN_HALF_LIFE:.0f}, {ps.MAX_HALF_LIFE:.0f}] bars. Ranked by DF t-stat._",
+        f"_Read-only screen (`pair_screen` + `pair_universe`), method=`{method}`. Same-sector "
+        "pairs whose spread is a statistically-significant, tradeable-horizon mean-reversion "
+        "candidate. Mints NO signal — 6.5a research only. Gate: "
+        f"{gate} AND half-life ∈ [{ps.MIN_HALF_LIFE:.0f}, {ps.MAX_HALF_LIFE:.0f}] bars AND "
+        f"notional imbalance ≤ {ps.MAX_NOTIONAL_IMBALANCE:.0f}×. Ranked by DF t-stat._",
         "",
-        "| # | pair | sector | β | half-life | DF t-stat | VR(2) | z now | n |",
-        "|--:|---|---|--:|--:|--:|--:|--:|--:|",
+        "| # | pair | sector | β | half-life | DF t | ADF p | VR(2) | z now | n |",
+        "|--:|---|---|--:|--:|--:|--:|--:|--:|--:|",
     ]
     if not candidates:
-        out.append("| — | (no candidates) | — | — | — | — | — | — | — |")
+        out.append("| — | (no candidates) | — | — | — | — | — | — | — | — |")
     for i, c in enumerate(candidates, 1):
         s = c.stat
+        adfp = f"{s.adf_pvalue:.4f}" if s.adf_pvalue is not None else "—"
         out.append(
             f"| {i} | {c.symbol_a}–{c.symbol_b} | {c.sector} | {s.beta:.3f} | "
-            f"{s.half_life:.1f} | {s.df_tstat:.2f} | {s.variance_ratio:.3f} | "
+            f"{s.half_life:.1f} | {s.df_tstat:.2f} | {adfp} | {s.variance_ratio:.3f} | "
             f"{s.zscore:+.2f} | {s.n} |"
         )
     out.append("")

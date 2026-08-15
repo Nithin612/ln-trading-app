@@ -7,6 +7,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6): 6.5a.3 statsmodels ADF/Johansen A/B + notional guard (2026-08-15)
+
+User approved adding **statsmodels + scipy** ("if it gives an edge"). Added a `method="adf"`
+path to `pair_screen` — Augmented DF (`adfuller`, AIC lag selection + MacKinnon p-value, gate
+p ≤ 0.05) + a **Johansen** hedge ratio (`coint_johansen`, order-independent) — alongside the
+numpy `method="df"` default (OLS β + plain DF), plus a **notional-imbalance guard** on both
+(reject leg dollar exposures beyond 5×). **A/B on the live Nifty50 universe (with the guard):
+df = 8 candidates, adf = 23, and df is a clean SUBSET of adf.** So ADF is a *wider net*, not a
+clean upgrade — its extra 15 pairs are unvalidated, and raw-level Johansen produced fragile
+hedge ratios (β ≈ 132) the guard catches. **Decision: `df` stays the conservative default;
+`adf` is an available cross-check; df-vs-adf is resolved by 6.5b FORWARD shadow P&L, not by
+argument.** +8 tests (ADF sig/insig, Johansen β recovery, adf-gate canary, notional guard).
+Report of record: `docs/analysis/pairs-2026-08-15.md` (df, 8 pairs). Net edge over numpy-only:
+a more rigorous test on demand + a tradeability guard — modest and honest, exactly what the A/B
+was meant to reveal.
+
 ### feat(phase6): 6.5a.2 pair-universe screen — run 6.5a over the live universe (2026-08-14)
 
 `app/services/pair_universe.py` + `scripts/pair_universe.py` → `docs/analysis/pairs-<date>.md`.

@@ -30,11 +30,13 @@ Trade the spread's mean-reversion:
 are computed on candles ≤ N and the signal is valid from N+1. The screen and the signal
 both compute only on `is_complete` bars.
 
-## Deps decision — numpy-only (2026-08-14)
+## Deps decision — numpy default + statsmodels ADF cross-check (updated 2026-08-15)
 
-scipy and statsmodels are **not** installed. Adding them is a stack change that
-contradicts the "adopt no new deps, stay lean" posture established in the external-libs
-review (memory `external-libs-review-2026-08`). So the math is **numpy-only**:
+**Started numpy-only** (2026-08-14; scipy/statsmodels omitted to stay lean per the
+external-libs review). **On 2026-08-15 the user approved adding statsmodels+scipy** "if it
+gives an edge" — so the screen now has TWO stationarity paths, and an A/B on the live
+universe answered whether ADF is actually better (see the build log — it is NOT a clean
+upgrade). The math:
 - **Hedge ratio** β: OLS via `numpy.linalg.lstsq` (with an intercept). Exact.
 - **Half-life of mean reversion**: fit AR(1) on Δs vs s (Ornstein-Uhlenbeck),
   `half_life = −ln(2)/λ` where λ is the mean-reversion rate. Exact, standard, cheap.
@@ -43,10 +45,15 @@ review (memory `external-libs-review-2026-08`). So the math is **numpy-only**:
   critical value −2.86 (constant case). Plain DF — no lag augmentation. The **Lo–MacKinlay
   variance ratio** is also computed but is **INFORMATIONAL only** (VR(2) sits near 1 for any
   pair with a tradeable half-life, so it is a weak discriminator and does NOT gate — the DF
-  t-stat does). *(Corrected 2026-08-14 per quant-verifier: an earlier draft here said VR was
-  the gate; the shipped code gates on the DF t-stat.)* A formal AUGMENTED DF / Johansen with
-  MacKinnon-interpolated critical values is the flagged follow-up (needs statsmodels or a
-  validated numpy ADF).
+  t-stat does). *(Corrected 2026-08-14 per quant-verifier: an earlier draft said VR was the
+  gate; the code gates on the DF t-stat.)*
+- **`method="adf"` (2026-08-15, statsmodels):** Augmented DF (`adfuller`, AIC lag selection +
+  MacKinnon p-value; gate p ≤ 0.05) with a **Johansen** hedge ratio (`coint_johansen`,
+  symmetric / order-independent). A more rigorous *test* — but the A/B shows it's a wider net
+  that also admits fragile Johansen βs, so **`df` stays the conservative default**.
+- **Notional guard (both methods):** reject economically-implausible hedge ratios (leg dollar
+  exposures beyond `MAX_NOTIONAL_IMBALANCE` = 5×) — kills the Johansen β≈132-type artifacts and
+  over-imbalanced OLS pairs alike.
 - **Follow-up (flagged for discussion):** a formal **Engle-Granger ADF** or **Johansen**
   cointegration test — needs statsmodels, or a numpy ADF validated against known
   MacKinnon CVs. Only worth it if the VR/half-life screen proves too permissive in the
@@ -106,3 +113,13 @@ and the spread P&L can be measured hypothetically without an execution path. **T
   `docs/analysis/pairs-2026-08-14.md`). Empirical confirmation that VR(2)≈1 on real mean-reverting
   pairs — VR is informational, the DF t-stat gates. Read-only; **6.5b (signal minting) still
   deferred pending the pair-signal schema decision** (open question #2 above).
+- **2026-08-15:** **statsmodels/scipy A/B DONE** (user approved the deps). Added `method="adf"`
+  (Augmented DF + Johansen β) alongside the numpy `method="df"` default, plus a notional-
+  imbalance guard on both. **A/B on the live universe (with the guard): df = 8 candidates, adf =
+  23; df is a clean SUBSET of adf (adf misses none, adds 15).** So ADF is a *wider net*, not a
+  clean upgrade — its extra pairs are unvalidated, and raw-level **Johansen produced fragile
+  hedge ratios (β≈132)** the guard had to catch. **Decision: keep `df` as the conservative
+  default; `adf` is an available cross-check; resolve df-vs-adf by 6.5b FORWARD shadow P&L, not
+  by argument.** Report of record `docs/analysis/pairs-2026-08-15.md` (df, 8 pairs). +8 tests
+  (ADF sig/insig, Johansen β recovery, adf-gate canary, notional-guard). Net edge over
+  numpy-only: a more rigorous *test* available on demand + a tradeability guard — modest, honest.

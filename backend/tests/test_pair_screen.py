@@ -10,6 +10,7 @@ from __future__ import annotations
 import math
 
 import numpy as np
+import pytest
 from app.services import pair_screen as ps
 
 SEED = 20260814
@@ -155,6 +156,16 @@ def test_screen_pair_none_on_degenerate_inputs() -> None:
     assert mism is None
 
 
+def test_screen_pair_rejects_implausible_notional_imbalance() -> None:
+    # Same common trend → cointegrated with β≈1, but a ~₹5000 vs b ~₹50 → 100× leg imbalance.
+    # Statistically a "pair", economically un-hedgeable market-neutral → rejected by the guard.
+    rng = _rng()
+    common = _rwalk(rng, 1000)
+    a = 5000.0 + common + _ar1(rng, 0.9, 1000, 0.5)
+    b = 50.0 + common + _ar1(rng, 0.9, 1000, 0.5)
+    assert ps.screen_pair(a, b) is None
+
+
 def test_is_candidate_gate_thresholds() -> None:
     # CANARY: the gate is exactly (DF t-stat past 5% crit) AND (half-life in [MIN, MAX]).
     def stat(tstat: float, hl: float) -> ps.PairStat:
@@ -174,3 +185,101 @@ def test_is_candidate_gate_thresholds() -> None:
     assert ps.is_candidate(stat(-2.0, 10.0)) is False  # not significant enough
     assert ps.is_candidate(stat(-5.0, ps.MAX_HALF_LIFE + 1)) is False  # reverts too slowly
     assert ps.is_candidate(stat(-5.0, ps.MIN_HALF_LIFE - 0.5)) is False  # reverts implausibly fast
+
+
+# --------------------------------------------------------------------------- #
+# ADF / Johansen path (statsmodels)                                           #
+# --------------------------------------------------------------------------- #
+
+
+def test_stationarity_adf_significant_for_ar1_not_for_random_walk() -> None:
+    mr = ps.stationarity_adf(_ar1(_rng(), 0.9, 1000))
+    assert mr is not None and mr[1] < 0.05  # p-value significant → stationary
+    rw = ps.stationarity_adf(_rwalk(_rng(), 1000))
+    assert rw is not None and rw[1] > 0.05  # unit root → not stationary
+
+
+def test_hedge_ratio_johansen_recovers_beta() -> None:
+    rng = _rng()
+    common = _rwalk(rng, 1000)
+    a = 100.0 + 2.0 * common + _ar1(rng, 0.9, 1000, 0.3)  # a ≈ 2·b + stationary → β≈2
+    b = 50.0 + common + _ar1(rng, 0.9, 1000, 0.3)
+    hr = ps.hedge_ratio_johansen(a, b)
+    assert hr is not None
+    _alpha, beta = hr
+    assert abs(beta - 2.0) < 0.2
+
+
+def test_screen_pair_adf_accepts_cointegration() -> None:
+    rng = _rng()
+    common = _rwalk(rng, 1000)
+    a = 100.0 + common + _ar1(rng, 0.9, 1000, 0.5)
+    b = 50.0 + common + _ar1(rng, 0.9, 1000, 0.5)
+    stat = ps.screen_pair(a, b, method="adf")
+    assert stat is not None
+    assert stat.method == "adf" and stat.adf_pvalue is not None
+    assert stat.adf_pvalue < ps.ADF_PVALUE_5PCT
+    assert ps.is_candidate(stat) is True
+
+
+def test_is_candidate_adf_gates_on_pvalue_not_df_tstat() -> None:
+    # CANARY: on the adf path the gate is the ADF p-value — even a strong df_tstat is ignored.
+    base = dict(
+        alpha=0.0,
+        beta=1.0,
+        half_life=10.0,
+        variance_ratio=0.9,
+        zscore=0.0,
+        n=500,
+        spread_mean=0.0,
+        spread_std=1.0,
+        df_tstat=-9.0,
+    )
+    assert (
+        ps.is_candidate(ps.PairStat(**base, method="adf", adf_stat=-4.0, adf_pvalue=0.01)) is True
+    )
+    assert (
+        ps.is_candidate(ps.PairStat(**base, method="adf", adf_stat=-1.0, adf_pvalue=0.30)) is False
+    )
+    assert ps.is_candidate(ps.PairStat(**base, method="df")) is True  # df path uses df_tstat
+
+
+def test_hedge_ratio_johansen_recovers_negative_beta() -> None:
+    rng = _rng()
+    common = _rwalk(rng, 1000)
+    a = 100.0 - 2.0 * common + _ar1(rng, 0.9, 1000, 0.3)  # a ≈ −2·b + stationary → β≈−2
+    b = 50.0 + common + _ar1(rng, 0.9, 1000, 0.3)
+    hr = ps.hedge_ratio_johansen(a, b)
+    assert hr is not None and abs(hr[1] - (-2.0)) < 0.2
+
+
+def test_screen_pair_adf_rejects_non_pair() -> None:
+    # a stationary on its own; b an unrelated random walk → no real hedge on the adf path either.
+    rng = _rng()
+    a = 7000.0 + _ar1(rng, 0.9, 1000, 5.0)
+    b = 50.0 + _rwalk(rng, 1000)
+    stat = ps.screen_pair(a, b, method="adf")
+    assert stat is None or not ps.is_candidate(stat)
+
+
+def test_screen_pair_raises_on_unknown_method() -> None:
+    with pytest.raises(ValueError, match="unknown method"):
+        ps.screen_pair(np.zeros(100), np.zeros(100), method="bogus")
+
+
+def test_is_candidate_adf_none_pvalue_is_false() -> None:
+    stat = ps.PairStat(
+        alpha=0.0,
+        beta=1.0,
+        half_life=10.0,
+        df_tstat=-9.0,
+        variance_ratio=0.9,
+        zscore=0.0,
+        n=500,
+        spread_mean=0.0,
+        spread_std=1.0,
+        method="adf",
+        adf_stat=None,
+        adf_pvalue=None,
+    )
+    assert ps.is_candidate(stat) is False

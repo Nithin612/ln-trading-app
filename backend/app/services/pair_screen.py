@@ -3,7 +3,8 @@
 Pure numpy — no DB, no clock, no randomness (a DB-loading wrapper lives above it,
 so this core stays unit-testable on synthetic series). The math is indicator-class
 f64 (rules: floats are allowed inside indicator math); money/P&L stays Decimal in
-the layers above. Deps decision: numpy-only, no scipy/statsmodels — see
+the layers above. Two stationarity paths: a zero-dep **numpy plain-DF** path (default)
+and a more-rigorous **statsmodels Augmented-DF + Johansen** path (`method="adf"`) — see
 phase-06-6.5-pairtrading-plan.md.
 
 Given two aligned close-price series A, B over COMPLETED candles, we fit a hedge
@@ -20,10 +21,12 @@ spread mean-reverts:
   - zscore         — the spread's current standardized distance from its trailing mean,
                      i.e. the live entry signal (long the cheap leg when z ≤ −z_entry).
 
-Why DF and not a hand-rolled ADF: this is the plain Dickey-Fuller regression (no lag
-augmentation), so its t-stat uses the standard DF critical value −2.86 (5%, constant
-case). A formal AUGMENTED DF/Johansen with MacKinnon interpolation is a documented
-follow-up — only warranted if the shadow evidence shows this admits junk pairs.
+Two stationarity paths: the numpy plain Dickey-Fuller (no lag augmentation; t-stat vs the
+−2.86 5% CV) is the zero-dep default; `method="adf"` uses statsmodels' Augmented DF (AIC
+lag selection + MacKinnon p-value) with a Johansen hedge ratio — more rigorous, and the
+A/B (`docs/analysis/pairs-*.md`) checks whether it changes the candidate set. The lag
+augmentation absorbs serial correlation the plain-DF t-stat cannot, so the ADF path is
+less prone to false-stationary calls at the borderline.
 
 No look-ahead: every statistic is computed only from the window handed in (completed
 bars ≤ N); the caller keeps the signal for N+1. Degenerate inputs (too short, zero
@@ -49,9 +52,15 @@ MIN_OBS = 60
 # stationary with statistical evidence (DF t-stat past the 5% critical value) AND it
 # reverts fast enough to trade (half-life within a horizon). Conservative on purpose —
 # the shadow evidence, not this file, sets the final thresholds.
-DF_CRIT_5PCT = -2.86  # Dickey-Fuller 5% critical value, constant (drift) case, large-N
+DF_CRIT_5PCT = -2.86  # plain Dickey-Fuller 5% critical value, constant case, large-N (df path)
+ADF_PVALUE_5PCT = 0.05  # Augmented DF (statsmodels) p-value gate (adf path)
 MAX_HALF_LIFE = 30.0  # bars; slower than this is untradeable drift, not reversion
 MIN_HALF_LIFE = 1.0  # bars; faster is noise/discretization, not a real spread
+# Notional plausibility: a dollar-neutral pair trades ~1 unit of A against β units of B, so
+# β·price_B should be within this factor of price_A. A wild imbalance (a fragile cointegrating
+# vector — e.g. Johansen on raw price levels giving β≈132) is not tradeable market-neutral and
+# is rejected, not surfaced as an un-hedgeable "pair". Guards both methods.
+MAX_NOTIONAL_IMBALANCE = 5.0
 
 
 @dataclass(frozen=True)
@@ -69,6 +78,12 @@ class PairStat:
     n: int  # observations used
     spread_mean: float
     spread_std: float
+    # Which stationarity test gated this pair: "df" (numpy plain-DF t-stat + OLS β) or
+    # "adf" (statsmodels Augmented DF p-value + Johansen β). The adf_* fields are populated
+    # only on the adf path; df_tstat is always computed (numpy) for the record / comparison.
+    method: str = "df"
+    adf_stat: float | None = None
+    adf_pvalue: float | None = None
 
 
 def _finite_2d(a: FloatArray, b: FloatArray) -> tuple[FloatArray, FloatArray] | None:
@@ -176,30 +191,109 @@ def zscore(spread: FloatArray, lookback: int = 20) -> float | None:
     return z if math.isfinite(z) else None
 
 
+def stationarity_adf(spread: FloatArray) -> tuple[float, float] | None:
+    """Augmented Dickey-Fuller (statsmodels, AIC lag selection, constant term): returns
+    (adf_stat, p_value). The lag augmentation absorbs serial correlation in the spread's
+    increments that the plain-DF t-stat cannot — fewer false 'stationary' calls at the
+    borderline. None on degenerate input or if statsmodels is unavailable.
+
+    CAVEAT (quant-verifier F1, 2026-08-15): adfuller's p-value uses UNIVARIATE-DF (MacKinnon)
+    critical values, which are anti-conservative for a FITTED spread residual — β estimation
+    consumes degrees of freedom, so the true cointegration CVs are more stringent (à la
+    Engle-Granger). Partly why the adf path is a wider net (23 vs 8). Fine while adf is a
+    non-default cross-check that mints NO signal; **switch to Engle-Granger cointegration CVs
+    (or tighten the gate) before adf ever gates a real signal — a 6.5b precondition.**"""
+    s = np.asarray(spread, dtype=float)
+    if s.size < MIN_OBS or not np.isfinite(s).all() or float(np.var(s)) == 0.0:
+        return None
+    try:
+        from statsmodels.tsa.stattools import adfuller
+
+        stat, pval = adfuller(s, regression="c", autolag="AIC")[:2]
+    except (ImportError, ValueError, np.linalg.LinAlgError):
+        return None
+    if not (math.isfinite(stat) and math.isfinite(pval)):
+        return None
+    return float(stat), float(pval)
+
+
+def hedge_ratio_johansen(a: FloatArray, b: FloatArray) -> tuple[float, float] | None:
+    """Symmetric hedge ratio from the Johansen cointegrating vector (statsmodels) —
+    order-independent and more robust than the two-step OLS β (which differs A-on-B vs
+    B-on-A). Returns (alpha, beta) with alpha = mean of the spread a−β·b (Johansen has no
+    intercept, so we centre the spread). None on failure/degenerate input."""
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    if a.shape != b.shape or a.size < MIN_OBS:
+        return None
+    if not (np.isfinite(a).all() and np.isfinite(b).all()):
+        return None
+    if float(np.var(a)) == 0.0 or float(np.var(b)) == 0.0:
+        return None
+    try:
+        from statsmodels.tsa.vector_ar.vecm import coint_johansen
+
+        evec = coint_johansen(np.column_stack([a, b]), det_order=0, k_ar_diff=1).evec[:, 0]
+    except (ImportError, ValueError, np.linalg.LinAlgError):
+        return None
+    if not np.isfinite(evec).all() or evec[0] == 0.0:
+        return None
+    beta = float(-evec[1] / evec[0])
+    if not math.isfinite(beta):
+        return None
+    alpha = float(np.mean(a - beta * b))  # centre the spread (Johansen has no intercept)
+    return alpha, beta
+
+
+def _notional_plausible(beta: float, a: FloatArray, b: FloatArray) -> bool:
+    """The two legs' dollar exposures are within MAX_NOTIONAL_IMBALANCE× — i.e. a dollar-
+    neutral 1:β trade is actually balanced. Rejects fragile hedge ratios (β from a raw-level
+    Johansen fit can be ≈132) that aren't tradeable market-neutral. Medians for robustness."""
+    med_a, med_b = float(np.median(a)), float(np.median(b))
+    if med_a <= 0.0 or med_b <= 0.0:
+        return False
+    imbalance = abs(beta) * med_b / med_a
+    return 1.0 / MAX_NOTIONAL_IMBALANCE <= imbalance <= MAX_NOTIONAL_IMBALANCE
+
+
 def screen_pair(
     a: FloatArray,
     b: FloatArray,
     *,
+    method: str = "df",
     z_lookback: int = 20,
 ) -> PairStat | None:
     """Full profile for one candidate pair, or None when the pair is unusable
     (misaligned, too short, no hedge fit, no mean reversion, degenerate variance).
-    None is the honest 'not a pair' — never a fabricated number."""
+    `method` picks the hedge ratio + stationarity test: "df" = OLS β + numpy plain-DF
+    t-stat (zero-dep, default); "adf" = Johansen β + statsmodels Augmented-DF p-value
+    (more rigorous). None is the honest 'not a pair' — never a fabricated number."""
+    if method not in ("df", "adf"):
+        raise ValueError(f"unknown method {method!r}; expected 'df' or 'adf'")
     a = np.asarray(a, dtype=float)
     b = np.asarray(b, dtype=float)
     cleaned = _finite_2d(a, b)
     if cleaned is None:
         return None
     a2, b2 = cleaned
-    hr = hedge_ratio(a2, b2)
+    hr = hedge_ratio_johansen(a2, b2) if method == "adf" else hedge_ratio(a2, b2)
     if hr is None:
         return None
     alpha, beta = hr
+    if not _notional_plausible(beta, a2, b2):  # implausible hedge ratio → not market-neutral
+        return None
     spread = a2 - (alpha + beta * b2)
-    mr = mean_reversion(spread)
+    mr = mean_reversion(spread)  # numpy DF t-stat + OU half-life (always — record + horizon)
     if mr is None:
         return None
     _lam, t_stat, half_life = mr
+    adf_stat: float | None = None
+    adf_pvalue: float | None = None
+    if method == "adf":
+        adf = stationarity_adf(spread)
+        if adf is None:
+            return None
+        adf_stat, adf_pvalue = adf
     vr = variance_ratio(spread, q=2)
     if vr is None:
         return None
@@ -216,10 +310,17 @@ def screen_pair(
         n=int(a2.size),
         spread_mean=float(np.mean(spread)),
         spread_std=float(np.std(spread, ddof=1)),
+        method=method,
+        adf_stat=adf_stat,
+        adf_pvalue=adf_pvalue,
     )
 
 
 def is_candidate(stat: PairStat) -> bool:
-    """Policy gate: statistically-significant stationarity (DF t-stat past the 5%
-    critical value) AND a tradeable reversion horizon (half-life in [MIN, MAX])."""
-    return stat.df_tstat <= DF_CRIT_5PCT and MIN_HALF_LIFE <= stat.half_life <= MAX_HALF_LIFE
+    """Policy gate: statistically-significant stationarity AND a tradeable reversion
+    horizon (half-life in [MIN, MAX]). Stationarity uses the ADF p-value on the adf path,
+    else the plain-DF t-stat."""
+    horizon = MIN_HALF_LIFE <= stat.half_life <= MAX_HALF_LIFE
+    if stat.method == "adf":
+        return horizon and stat.adf_pvalue is not None and stat.adf_pvalue <= ADF_PVALUE_5PCT
+    return horizon and stat.df_tstat <= DF_CRIT_5PCT

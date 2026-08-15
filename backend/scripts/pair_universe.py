@@ -29,21 +29,30 @@ async def main() -> None:
     # INFO and below — stdout is then just the ranked candidates + the "wrote …" line.
     logging.disable(logging.INFO)
     async with AsyncSessionFactory() as db:
-        candidates = await pu.screen_universe(db)
+        df = await pu.screen_universe(db, method="df")
+        adf = await pu.screen_universe(db, method="adf")
 
+    df_set = {(c.symbol_a, c.symbol_b) for c in df}
+    adf_set = {(c.symbol_a, c.symbol_b) for c in adf}
     day = datetime.now(tz=UTC).date()
-    print(f"screened same-sector Nifty50 pairs → {len(candidates)} candidate(s)\n")
-    print(f"{'pair':<24}{'sector':<20}{'half-life':>10}{'DF t':>8}{'z now':>8}")
-    for c in candidates[:25]:
+    print(f"df: {len(df)} candidates · adf: {len(adf)} · both: {len(df_set & adf_set)}")
+    print(
+        f"adf-only (wider net, awaits forward validation): {len(adf_set - df_set)} · "
+        f"df-only (adf missed): {len(df_set - adf_set)}\n"
+    )
+    print(f"{'pair':<22}{'sector':<20}{'half-life':>10}{'DF t':>8}{'z now':>8}")
+    for c in df[:25]:
         s = c.stat
         print(
-            f"{c.symbol_a + '-' + c.symbol_b:<24}{(c.sector or '')[:19]:<20}"
+            f"{c.symbol_a + '-' + c.symbol_b:<22}{(c.sector or '')[:19]:<20}"
             f"{s.half_life:>10.1f}{s.df_tstat:>8.2f}{s.zscore:>+8.2f}"
         )
 
+    # The conservative df method is the report of record; adf is the wider-net cross-check
+    # (its extra pairs await forward shadow validation — see phase-06-6.5-pairtrading-plan.md).
     out = Path(__file__).resolve().parents[2] / "docs" / "analysis" / f"pairs-{day}.md"
-    out.write_text(pu.render_markdown(candidates, day=day))
-    log.warning("wrote %s", out)
+    out.write_text(pu.render_markdown(df, day=day, method="df"))
+    log.warning("wrote %s (df method; %d candidates)", out, len(df))
 
 
 if __name__ == "__main__":
