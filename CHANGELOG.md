@@ -7,6 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6): 6.5b slices 3+4 — spread-outcome tracker + pair attribution (2026-08-15)
+
+Completes the market-neutral shadow loop — the "does it work, and which arm" measurement half.
+**Slice 3 (`pair_outcome`):** for each open shadow PairSignal, `resolve_spread` walks the spread's
+z forward from the daily tape (no look-ahead; bars in date order, bounded by the validity date) and
+resolves tp_first (reverts to z_exit) / sl_first (hits z_stop) / expired (validity lapses first),
+writing `outcome_r` in R comparable to the single-name attribution (the ACTUAL crossing z is used,
+so a daily gap through the stop books worse than −1R). The nightly task now resolves opens from the
+fresh tape THEN mints. **Slice 4 (`pair_attribution` + CLI):** resolved-signal expectancy (mean R,
+win%, total R) split by ARM (the df-vs-adf verdict), sector, and half-life; R winsorized ±10; a cell
+n<5 is shown-not-ranked → `pair-attribution-<date>.md`. Read-only, additive, shadow-only.
+
+quant-verifier verified the R-sign convention + frozen-z reference exact at every boundary and caught
+a **HIGH: the resolution loop had no upper bound** → a cross PAST validity booked as a win/loss
+(and calendar-day validity can lapse on a weekend the Mon–Fri tracker skips), biasing the A/B. Fixed
+(bound resolution to the validity date; such cases mark `expired`) + regression test. Finding 2
+(calendar-day validity) documented as an intentional shadow-class choice made safe by the fix.
++13 tests. **6.5b COMPLETE** (slices 1–4): the shadow evidence now accrues nightly and the
+attribution report answers df-vs-adf once it does.
+
 ### feat(phase6): 6.5b slice 2 — pair-signal shadow minter (df+adf dual arms, nightly) (2026-08-15)
 
 The market-neutral shadow layer goes LIVE. `pair_minter.mint_pair_signals` screens the universe

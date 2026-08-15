@@ -137,3 +137,18 @@ and the spread P&L can be measured hypothetically without an execution path. **T
   reversion as a stop-loss, corrupting the A/B), dual-listing id-threading (LOW), σ-rounds-to-0
   guard (LOW). +4 tests. NEXT: slice 3 = spread-outcome tracker (follow z forward to revert/stop),
   slice 4 = pair attribution.
+- **2026-08-15 — KNOB-TUNING DECISION (user-accepted):** do NOT tune the entry/exit/stop z
+  (2.0 / 0 / 3.5), lookback (400d), or same-sector prior now. Same discipline as the regime gate
+  + retune: tune from the SHADOW EVIDENCE (slice-4 attribution), not by argument before there is
+  data. **Flagged for the tuning review:** entry z = 2.0 is fairly permissive for daily pairs;
+  z = 2.5 would give higher-conviction entries — but let the forward spread P&L decide. The knobs
+  are all parameters on `pair_minter`/`pair_screen`, changeable in one place when the evidence says.
+- **2026-08-15 — 6.5b slices 3+4 DONE → 6.5b COMPLETE.** Slice 3 = `pair_outcome` spread-outcome
+  tracker (walk z forward from the tape → tp_first/sl_first/expired, `outcome_r` in single-name R
+  units, gap-through-stop honest, resolution bounded by the validity date); the nightly task now
+  resolves-then-mints. Slice 4 = `pair_attribution` + CLI → `pair-attribution-<date>.md` (expectancy
+  by arm/sector/half-life — the df-vs-adf verdict). quant-verifier FAIL→fixed: **HIGH** (unbounded
+  resolution loop → post-validity crosses mis-booked as tp/sl, corrupting the A/B) fixed +
+  regression-tested; R-sign convention + frozen-z reference verified exact at every boundary. +13
+  tests. **The full 6.5 pair-trading loop is built shadow-first; forward evidence accrues nightly,
+  and the attribution report will answer "do pairs work + which arm" once it does.**

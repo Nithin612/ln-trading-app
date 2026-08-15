@@ -27,6 +27,9 @@ from app.services.pair_universe import screen_universe
 ENTRY_Z = 2.0
 EXIT_Z = 0.0
 STOP_Z = 3.5
+# CALENDAR days (a shadow-class choice, not the single-name trading-day validity). Safe: the
+# outcome tracker bounds resolution to the validity DATE, so a weekend/holiday lapse when the
+# Mon–Fri tracker isn't running is still marked `expired` correctly (quant-verifier Finding 2).
 VALIDITY_DAYS = 30
 
 _METHODS = ("df", "adf")
