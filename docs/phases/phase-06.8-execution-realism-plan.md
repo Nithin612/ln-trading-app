@@ -661,3 +661,21 @@ nothing left to discover about the exchange, only about the order API.
     not crashed on.
   - **Paper clock:** the change makes pre-/post-6.8.2 paper P&L non-comparable. User decision
     2026-08-17: **let today's open positions close first, then reset the clock manually in the UI.**
+  - **Clean slate cut (2026-08-17, done).** Clock reset in UI (`paper_clock_started_at` = 2026-08-17
+    12:00 UTC / 17:30 IST). All **26** open paper positions flattened at today's 15:29 IST close
+    (last complete 1m bar, `reason=manual`, via the real `close_position` path): net realized
+    **+₹7,222.66** (₹2,043.34 charges). Book empty → the new model's clock starts clean tomorrow.
+  - **Agent reviews clean (2026-08-17).** **bug-hunter → CLEAN** (div-by-zero guards, one-pass
+    convergence + conservative invariant on both fresh and averaging branches, no-depth canary
+    byte-identical, Decimal boundaries, JSON/persistence, no frozen-engine reach; re-ran 27+84 green).
+    **quant-verifier → PASS** (all 7 invariant categories: Decimal, no look-ahead, frozen engine
+    untouched, sizing `/100` once, haircut directionality correct on all 4 LONG/SHORT×entry/exit
+    branches, provably ≥ flat via a 200k-case sweep, §9 ₹ delta accurate; re-ran 131 green). Two
+    **INFO** non-defects, both cross-confirmed: (1) the caller-supplied-`quantity` branch doesn't
+    re-reject on an SL-crossing adverse fill — *pre-existing baseline*, off the production
+    (`quantity=None`) path; optional future hardening. (2) entry telemetry records first-pass (larger)
+    qty while the order fills the smaller re-sized qty — intentional/conservative, §9 uses the actual
+    `filled_qty` so the reported ₹ is exact.
+  - **Deployed (2026-08-17).** 6.8.2 fast-forwarded onto the deployed branch
+    `feature/phase6-overlay-walkforward-retune` (now at `af13e0c`) so tomorrow's worker/backend load
+    the spread-aware model. Config-only, no migration. Revert if needed: `git reset --hard 92a1963`.
