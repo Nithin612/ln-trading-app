@@ -23,7 +23,15 @@ capture → spread-aware slippage → circuit-band overlay + open-book-MTM gap +
 F1 `market_cap` spike (pulled forward to de-risk MCE). Frozen engine untouched. **▶ 6.8.1 (order-book
 depth capture) DONE 2026-08-17** — top-of-book cached to `depth:{stock_id}`, wired into the soak-proven
 `live_worker` (folded into the per-batch LTP pipeline, budget untouched); bug-hunter MED + perf-auditor
-HIGH caught + fixed; NEXT = 6.8.2 spread-aware slippage. Full adjudication of the `REAL_WORLD_NSE_BSE`
+HIGH caught + fixed; **live smoke PASSED 15:26 IST (1690 `depth:*` keys off real Kite MODE_FULL ticks,
+TTLs cycling 50–59 s)**. **▶ 6.8.2 (spread-aware slippage) DONE 2026-08-17** — paper fills now priced
+off the real book (`half-spread + k·qty/top_qty` impact, flat bps as a FLOOR so a fill is never
+cheaper than before, fail-open to flat when depth is absent), both entry and exit, + daily-report §9
+"Fill realism" showing the ₹ the flat model was under-charging; 27 tests. **The live book justified
+it emphatically: 82.1% of 1666 books have a half-spread wider than the flat 2 bps** (median spread
+11.85 bps, p90 87, p99 280). **⚠ Paper P&L is non-comparable across this change — the 30-day clock
+needs a manual UI reset once today's open positions close (user decision 2026-08-17).**
+NEXT = 6.8.3 circuit-band overlay. Full adjudication of the `REAL_WORLD_NSE_BSE`
 external review + the sliced build: `phases/phase-06.8-execution-realism-plan.md`.**
 Suites grew with the Phase-6 slices (added `test_signal_excursions`,
 `test_entry_attribution`, `test_corpus_attribution`, `test_seasonality`); run
@@ -286,10 +294,15 @@ tune from it (none of it a code task today):
 **Next BUILD phase = Phase 6.8 (Execution Realism & Exchange-Safety)** — APPROVED 2026-08-17 (user),
 inserted between Phase 6 and the **Market Context Engine** (which stays the phase after 6.8, before
 Phase-7 live). Full adjudication of the `REAL_WORLD_NSE_BSE` external review + the sliced build:
-`phases/phase-06.8-execution-realism-plan.md`. **▶ 6.8.1 (order-book depth capture) DONE 2026-08-17;
-NEXT = 6.8.2 spread-aware slippage**, which consumes 6.8.1's `depth:{stock_id}`. (Lesson from the perf
-review, now in the plan Build log: `live_worker.py` is the live path; `tick_consumer.py` is the dormant
-v1 — a feature wired only into v1 is inert in production.) The F1 spike pulls the `market_cap` data-source decision
+`phases/phase-06.8-execution-realism-plan.md`. **▶ 6.8.1 DONE + live-smoke verified and 6.8.2
+(spread-aware slippage) DONE, both 2026-08-17 — NEXT = 6.8.3 circuit-band eligibility overlay**
+(the plan's "best new idea": a long whose stock hits LOWER circuit has zero buyers, so its stop
+cannot fill at any price). Two open follow-ups from 6.8.2, neither a code task: **(a) reset the
+30-day paper clock in the UI** once today's open positions close — the fill change makes pre-/post
+paper P&L non-comparable; **(b) watch §9 "Fill realism"** in the next few daily reports to see the
+₹ the flat model had been under-charging, and retune `paper_impact_k_bps` from THAT evidence rather
+than pre-data. (Lesson from the perf review, now in the plan Build log: `live_worker.py` is the live
+path; `tick_consumer.py` is the dormant v1 — a feature wired only into v1 is inert in production.) The F1 spike pulls the `market_cap` data-source decision
 forward, which unblocks MCE's fundamentals layer. Post-Phase-6 research/features remain phase-mapped in
 the Architecture-review backlog below (Nautilus runtime → Phase 7; competitor/fundamentals → MCE, now
 unblocked by F1's `market_cap` writer; seasonality → unblocked + small). Local branch is ahead of

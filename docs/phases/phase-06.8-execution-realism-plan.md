@@ -1,6 +1,8 @@
 # Phase 6.8 (PROPOSED) — Execution Realism & Exchange-Safety · adjudication + build tracker
 
-**Status: APPROVED 2026-08-17 (user) — scope LOCKED, nothing built yet.** Decisions taken:
+**Status: APPROVED 2026-08-17 (user) — scope LOCKED. ▶ BUILDING: 6.8.1 ✅ DONE (live-smoke
+verified against real ticks 15:26 IST) · 6.8.2 ✅ DONE · next = 6.8.3 circuit-band overlay.**
+Decisions taken:
 **(1)** a distinct **Phase 6.8** between Phase 6 and MCE; **(2) full scope** — all six
 paper-safe slices + the research track (R1/R2) + the F1 `market_cap` spike, with the
 research/spike items individually go/no-go-gated and R1 (the only frozen-engine change)
@@ -210,8 +212,8 @@ listed are the mandatory ones for the files touched.
 - **§8 backtest?** No — provisional data, never enters scoring/backtests.
 - **Effort.** S. **Dependency.** none. **Build first.**
 
-### 6.8.2 — Spread-aware slippage & impact model (paper-fill honesty)
-*Answers review §2.4, §3.3.7, §7.2(the legitimate core). Frozen engine: untouched.*
+### 6.8.2 — Spread-aware slippage & impact model (paper-fill honesty) — ✅ DONE 2026-08-17
+*Answers review §2.4, §3.3.7, §7.2(the legitimate core). Frozen engine: untouched. See the Build log.*
 
 - **The case.** Flat 2 bps is fine for a Nifty large-cap and a lie for a small-cap
   where the spread is 50–100 bps. Every paper fill on an illiquid name currently
@@ -610,7 +612,52 @@ nothing left to discover about the exchange, only about the order API.
     per-tick set**), so the p99 ≤ 50 ms budget is untouched. Kept the v1 wiring too (parity;
     fail-open). **Remember: `live_worker.py` is the live path, `tick_consumer.py` is dormant
     v1** — a feature wired only into the v1 consumer is inert in production.
-  - **Pending:** a live-session smoke — confirm `depth:{stock_id}` actually populates from real
-    Kite `MODE_FULL` ticks with the live worker running (needs a market session + token). The
-    seams are proven against a real Redis + the execute-faithful pipeline spy + a real
-    `tradecore.LiveBook`, but real-tick population is unverified until the next session.
+  - **✅ Live smoke PASSED 2026-08-17 15:26 IST** (the last pending item, now closed). Probed the
+    dev Redis with the live worker running against real Kite `MODE_FULL` ticks: **1690 `depth:*`
+    keys** alongside 2057 `ltp:*`, TTLs cycling **50–59 s** against the 60 s contract (i.e. actively
+    refreshed, not a one-shot write), payloads carrying real two-sided books with Decimal-string
+    prices and sane sizes, timestamps current to the second. Depth capture works in production.
+
+- **2026-08-17 — the live book, measured (calibrates 6.8.2).** Sampling all **1666** live books at
+  15:26 IST: median spread **11.85 bps**, mean 32.32, p75 **32.79**, p90 **87.02**, p95 132.45,
+  p99 **280.11**, max **518.13**. Crucially, **82.1% (1367/1666) of live books have a half-spread
+  wider than the flat 2 bps** the paper broker was charging — the flat model was under-charging four
+  names in five, by ~3× at the median and ~22× at p90. This is the empirical case for 6.8.2, and it
+  is stronger than the plan assumed. (Also: 0 books had an empty side, so the zero-liquidity branch
+  is defensive rather than common; and the widest observed half-spread, 259 bps, sits well under the
+  500 bps total ceiling, so the safety clamp does not distort real books.)
+
+- **2026-08-17 — 6.8.2 DONE (spread-aware slippage & impact model).** The flat `paper_slippage_bps`
+  is replaced, when 6.8.1's live book is fresh, by a haircut priced off the REAL book:
+  `adverse_bps = clamp(half_spread + impact, floor=paper_slippage_bps, ceiling=paper_slippage_max_bps)`
+  with `impact = min(paper_impact_k_bps × qty/top_qty, paper_impact_cap_bps)`. New in
+  `paper_broker.py`: `FillModel` (the audit trail), `spread_aware_bps`, `simulate_fill`; new knobs
+  `paper_spread_fill_enabled` (kill switch, on), `paper_impact_k_bps` (5.0), `paper_impact_cap_bps`
+  (50.0), `paper_slippage_max_bps` (500.0). Wired into BOTH fill sites — entry
+  (`place_paper_order`) and exit (`close_position`). **27 new tests**; 200 green across the touched
+  modules; ruff + mypy strict clean.
+  - **The flat bps is a FLOOR, by design.** A tick-wide large-cap book must not *undercut* the old
+    2 bps and flatter the paper record — the model can only ever make a fill worse. That also makes
+    the fail-open guarantee exact: no depth ⇒ byte-identical to the pre-6.8.2 fill, asserted by
+    `TestFailOpen::test_absent_depth_is_byte_identical_to_flat` (the canary for this slice).
+  - **Size↔impact is circular and is resolved in one refinement pass.** Sizing is risk-first from
+    the ACTUAL fill, but the impact term needs the size. So: price spread-only → size → re-price
+    with that size's impact → re-size from the final fill. An adverse fill always widens
+    |fill − SL|, so the second size is ≤ the first and the impact charged is ≥ the impact the final
+    size implies — **the residual error is conservative by construction, never in our favour.**
+  - **Relative half-spread, not a literal bid/ask fill.** The reference price is not always the
+    touch (it may be a stop level, a prior close, or an LTP that drifted from a stale book); a
+    relative haircut degrades sanely in all three, "fill at the ask" does not. It stays a *model*,
+    not the book-walking SOR the review's §7.2 proposes and we reject.
+  - **Exits layer on the gap-through-stop worse-of price.** The monitor passes `stop_fill_price` as
+    `exit_price`; the spread is charged from there, because that price is where the market actually
+    printed and crossing the spread from a print is a separate real cost. Deliberate.
+  - **Frozen engine untouched, backtests unaffected** — depth is live-only provisional data and the
+    only callers of these fill paths are `api/v1/trading.py` and `tasks/position_monitor.py`. No
+    Rust-fixture regen, no migration (telemetry rides the existing `orders.broker_payload` JSONB).
+  - **Report surface:** `daily_report.py` gains **§9 Fill realism** — per-fill model/½-spread/impact
+    /total bps and, the number that matters, the **₹ excess over the flat baseline**: how much the
+    old record was overstating the day's edge. Pre-6.8.2 orders carry no telemetry and are skipped,
+    not crashed on.
+  - **Paper clock:** the change makes pre-/post-6.8.2 paper P&L non-comparable. User decision
+    2026-08-17: **let today's open positions close first, then reset the clock manually in the UI.**

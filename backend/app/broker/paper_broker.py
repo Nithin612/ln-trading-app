@@ -5,8 +5,15 @@ Simulates order placement and fills entirely in software:
   - close_position     : create a SELL Order, close Position, record P&L
   - get_current_price  : Redis LTP → latest daily close fallback
   - update_position_pnl: refresh unrealized_pnl on an open position
+
+Fills are priced by `simulate_fill` (Phase 6.8.2): when 6.8.1's live
+`depth:{stock_id}` top-of-book is fresh, the haircut is the REAL half-spread
+plus a size-vs-top-of-book impact term; otherwise it is the flat
+`paper_slippage_bps`. The flat bps is a floor, so the model can only make a
+fill worse — and a missing book fails open to exactly the old behaviour.
 """
 
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
 
@@ -14,6 +21,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.analysis.risk import compute_quantity
+from app.broker.depth import Depth, get_live_depth
 from app.core.config import settings
 from app.models.signal import Signal
 from app.models.trading import Order, Position
@@ -27,19 +35,34 @@ class PaperOrderError(Exception):
     at the account's capital/risk). The API maps this to HTTP 422."""
 
 
+_BPS = Decimal("10000")
+_Q_BPS = Decimal("0.01")
+
+
+def _flat_slippage_bps() -> Decimal:
+    """The configured flat haircut (`paper_slippage_bps`) as Decimal bps."""
+    return Decimal(str(settings.paper_slippage_bps))
+
+
+def _price_after_bps(price: Decimal, order_side: str, bps: Decimal) -> Decimal:
+    """Move `price` adversely by `bps`. A BUY fills higher, a SELL lower — the
+    trader always pays. Zero/negative bps is a no-op."""
+    if bps <= 0:
+        return price
+    factor = bps / _BPS
+    if order_side.upper() == "BUY":
+        return price * (Decimal("1") + factor)
+    return price * (Decimal("1") - factor)
+
+
 def _apply_slippage(price: Decimal, order_side: str) -> Decimal:
     """Adverse slippage on a simulated fill (config `paper_slippage_bps`).
 
     A BUY fills higher, a SELL lower — the trader always pays the spread.
-    Zero bps is a no-op; the configured default is 2 bps.
+    Zero bps is a no-op; the configured default is 2 bps. This is the FLAT
+    model — the fallback whenever live depth is unavailable.
     """
-    bps = Decimal(str(settings.paper_slippage_bps))
-    if bps <= 0:
-        return price
-    factor = bps / Decimal("10000")
-    if order_side.upper() == "BUY":
-        return price * (Decimal("1") + factor)
-    return price * (Decimal("1") - factor)
+    return _price_after_bps(price, order_side, _flat_slippage_bps())
 
 
 def _round_tick(price: Decimal) -> Decimal:
@@ -51,8 +74,144 @@ def _round_tick(price: Decimal) -> Decimal:
     return (steps * tick).quantize(Decimal("0.0001"))
 
 
+@dataclass(frozen=True)
+class FillModel:
+    """How a simulated fill was priced — the audit trail behind `filled_price`.
+
+    Persisted on the order's `broker_payload["fill"]` so the daily report can
+    show what the honest model charged versus the old flat-bps baseline, and so
+    any fill can be re-derived months later from the record alone.
+    """
+
+    model: str  # "spread" (priced off live depth) | "flat" (config bps)
+    reference: Decimal  # raw mark before any haircut
+    fill: Decimal  # after slippage + tick rounding — what actually filled
+    slippage_bps: Decimal  # TOTAL adverse bps applied
+    baseline_bps: Decimal  # what the flat model would have charged
+    half_spread_bps: Decimal
+    impact_bps: Decimal
+    bid: Decimal | None
+    ask: Decimal | None
+    top_qty: int | None  # size resting on the side we take (ask for BUY)
+    quantity: int | None  # order size the impact term was computed for
+
+    @property
+    def excess_bps(self) -> Decimal:
+        """How much MORE than the flat baseline this fill was charged. Never
+        negative — the baseline is a floor in `spread_aware_bps`."""
+        return self.slippage_bps - self.baseline_bps
+
+    def as_payload(self) -> dict[str, object]:
+        """JSON-safe telemetry. Money and bps as strings — a float round-trip
+        through JSON would lose the Decimal exactness the money rules require."""
+        return {
+            "model": self.model,
+            "reference": str(self.reference),
+            "fill": str(self.fill),
+            "slippage_bps": str(self.slippage_bps.quantize(_Q_BPS)),
+            "baseline_bps": str(self.baseline_bps.quantize(_Q_BPS)),
+            "excess_bps": str(self.excess_bps.quantize(_Q_BPS)),
+            "half_spread_bps": str(self.half_spread_bps.quantize(_Q_BPS)),
+            "impact_bps": str(self.impact_bps.quantize(_Q_BPS)),
+            "bid": str(self.bid) if self.bid is not None else None,
+            "ask": str(self.ask) if self.ask is not None else None,
+            "top_qty": self.top_qty,
+            "quantity": self.quantity,
+        }
+
+
+def spread_aware_bps(
+    depth: Depth, order_side: str, quantity: int | None
+) -> tuple[Decimal, Decimal, Decimal]:
+    """Adverse bps implied by a live book: ``(total, half_spread, impact)``.
+
+    ``total = clamp(half_spread + impact, floor=paper_slippage_bps,
+    ceiling=paper_slippage_max_bps)``.
+
+    The flat bps is a FLOOR by design: 2 bps is an adequate model for a liquid
+    large-cap whose book is a tick wide, so a narrow spread must never make the
+    paper record *better* than it is today. The model can only ever charge more.
+
+    Impact is ``k × qty/top_qty`` — a linear model of eating past the touch, not
+    a book-walking simulator (we deliberately reject that). ``top_qty`` is the
+    size resting on the side we TAKE: the ask for a BUY, the bid for a SELL.
+    No visible size there means no liquidity at the touch, so the impact cap is
+    charged rather than nothing.
+    """
+    half_spread = Decimal(str(depth.spread_bps)) / Decimal(2)
+    cap = Decimal(str(settings.paper_impact_cap_bps))
+    impact = Decimal(0)
+    if quantity is not None and quantity > 0:
+        top_qty = depth.ask_qty if order_side.upper() == "BUY" else depth.bid_qty
+        if top_qty <= 0:
+            impact = cap
+        else:
+            k = Decimal(str(settings.paper_impact_k_bps))
+            impact = min(k * Decimal(quantity) / Decimal(top_qty), cap)
+    ceiling = Decimal(str(settings.paper_slippage_max_bps))
+    total = max(_flat_slippage_bps(), min(half_spread + impact, ceiling))
+    return total, half_spread, impact
+
+
+def simulate_fill(
+    base_price: Decimal,
+    order_side: str,
+    *,
+    depth: Depth | None = None,
+    quantity: int | None = None,
+) -> FillModel:
+    """Price a simulated fill, spread-aware when a live book is available.
+
+    Fails OPEN in every direction: no depth, capture disabled, or the model
+    switched off (`paper_spread_fill_enabled`) all fall back to the flat-bps
+    path — byte-identical to the pre-6.8.2 behaviour. A missing microstructure
+    reading must never block or distort a fill.
+
+    The spread is applied RELATIVE to the reference price (half-spread in bps)
+    rather than by filling literally at bid/ask, because the reference is not
+    always the touch: it may be a stop level, a prior close, or an LTP that has
+    drifted from a stale book. A relative haircut degrades sanely in all three;
+    "fill at the ask" does not.
+    """
+    baseline = _flat_slippage_bps()
+    if depth is None or not settings.paper_spread_fill_enabled:
+        fill = _round_tick(_price_after_bps(base_price, order_side, baseline))
+        return FillModel(
+            model="flat",
+            reference=base_price,
+            fill=fill,
+            slippage_bps=baseline,
+            baseline_bps=baseline,
+            half_spread_bps=Decimal(0),
+            impact_bps=Decimal(0),
+            bid=None,
+            ask=None,
+            top_qty=None,
+            quantity=quantity,
+        )
+    total, half_spread, impact = spread_aware_bps(depth, order_side, quantity)
+    fill = _round_tick(_price_after_bps(base_price, order_side, total))
+    return FillModel(
+        model="spread",
+        reference=base_price,
+        fill=fill,
+        slippage_bps=total,
+        baseline_bps=baseline,
+        half_spread_bps=half_spread,
+        impact_bps=impact,
+        bid=depth.bid,
+        ask=depth.ask,
+        top_qty=(depth.ask_qty if order_side.upper() == "BUY" else depth.bid_qty),
+        quantity=quantity,
+    )
+
+
 def _simulated_fill(base_price: Decimal, order_side: str) -> Decimal:
-    """Apply slippage then tick-rounding to a raw reference price."""
+    """Apply the FLAT slippage then tick-rounding to a raw reference price.
+
+    Kept for callers that have no book to price against; the depth-aware path
+    goes through `simulate_fill`.
+    """
     return _round_tick(_apply_slippage(base_price, order_side))
 
 
@@ -159,7 +318,9 @@ async def place_paper_order(
 ) -> tuple[Order, Position]:
     """Place a paper MARKET order and immediately simulate a fill.
 
-    Fill price = current LTP from Redis, or signal's entry_price if unavailable.
+    Fill price = current LTP from Redis (or signal's entry_price if unavailable),
+    haircut by `simulate_fill` — the live half-spread + size impact when 6.8.1's
+    top-of-book is fresh, else the flat `paper_slippage_bps`.
     Opens a new Position (or averages into an existing open one for the stock).
 
     Returns (order, position) — both are already flushed into the session.
@@ -191,7 +352,19 @@ async def place_paper_order(
         base_price = live_ltp
     else:
         base_price = await get_current_price(db, signal.stock_id) or entry
-    fill_price = _simulated_fill(base_price, side)
+
+    # Live top-of-book for the spread-aware fill model (6.8.2). None (no book,
+    # capture off, Redis cold) simply prices the fill on the flat-bps path.
+    depth = await get_live_depth(signal.stock_id)
+    # Size and impact are mutually dependent: sizing is risk-first from the ACTUAL
+    # fill, but the impact term needs the order size. Resolve it in one refinement
+    # pass — price the spread-only fill, size from it, then re-price WITH the
+    # impact that size implies and re-size from the final fill. An adverse fill
+    # always widens |fill − SL|, so the second size is ≤ the first and the impact
+    # we charged is ≥ the impact the final size would imply: the residual error is
+    # conservative by construction, never in our favour.
+    fill = simulate_fill(base_price, side, depth=depth, quantity=None)
+    fill_price = fill.fill
 
     # Existing open position for this stock/user/side (a repeat entry averages in).
     existing_result = await db.execute(
@@ -205,19 +378,32 @@ async def place_paper_order(
     )
     existing = existing_result.scalar_one_or_none()
 
-    if quantity is not None:
-        qty = quantity
-    else:
-        qty = size_for_fill(
+    existing_qty = existing.quantity if existing is not None else 0
+    existing_entry = (
+        Decimal(str(existing.avg_entry_price)) if existing is not None else None
+    )
+
+    def _size(at_fill: Decimal) -> int:
+        return size_for_fill(
             capital=user.capital_inr,
             risk_pct=user.risk_per_trade_pct,
-            fill=fill_price,
+            fill=at_fill,
             stop_loss=stop_loss,
-            existing_qty=existing.quantity if existing is not None else 0,
-            existing_entry=(
-                Decimal(str(existing.avg_entry_price)) if existing is not None else None
-            ),
+            existing_qty=existing_qty,
+            existing_entry=existing_entry,
         )
+
+    if quantity is not None:
+        # Size fixed by the caller, so the impact term is known outright.
+        qty = quantity
+        fill = simulate_fill(base_price, side, depth=depth, quantity=qty)
+        fill_price = fill.fill
+    else:
+        qty = _size(fill_price)
+        if qty > 0 and fill.model == "spread":
+            fill = simulate_fill(base_price, side, depth=depth, quantity=qty)
+            fill_price = fill.fill
+            qty = _size(fill_price)
     if qty <= 0:
         if existing is not None:
             raise PaperOrderError(
@@ -243,7 +429,10 @@ async def place_paper_order(
             "fill": str(fill_price),
             "chase_r": str(chase_r.quantize(Decimal("0.001"))),
             "past_chase_ceiling": bool(chase_r > Decimal("0.33")),
-        }
+        },
+        # How this fill was priced (6.8.2) — the daily report reads it to show
+        # what the honest model charged versus the old flat-bps baseline.
+        "fill": fill.as_payload(),
     }
 
     order = Order(
@@ -311,7 +500,21 @@ async def close_position(
     raw_price = exit_price or await get_current_price(db, position.stock_id)
     if raw_price is None:
         raw_price = position.avg_entry_price  # fallback: flat trade
-    price = _simulated_fill(raw_price, close_side)
+    # The exit is where illiquidity really bites — the whole position crosses the
+    # spread at once. Unlike the entry there is no circularity here: the size is
+    # already known, so the impact term is exact in a single pass.
+    #
+    # Note this LAYERS on the gap-through-stop worse-of price the monitor passes
+    # as `exit_price`: that price is where the market actually printed, and
+    # crossing the spread from a print is a separate, real cost. Deliberately
+    # conservative — a stop guarantees an exit, not a price, and never a free one.
+    exit_fill = simulate_fill(
+        raw_price,
+        close_side,
+        depth=await get_live_depth(position.stock_id),
+        quantity=position.quantity,
+    )
+    price = exit_fill.fill
 
     now = datetime.now(tz=UTC)
     entry = Decimal(str(position.avg_entry_price))
@@ -338,7 +541,7 @@ async def close_position(
             product=product_for_classification(classification),
         )
 
-    payload: dict[str, object] = {"reason": reason}
+    payload: dict[str, object] = {"reason": reason, "fill": exit_fill.as_payload()}
     if breakdown is not None:
         payload["charges"] = breakdown
 

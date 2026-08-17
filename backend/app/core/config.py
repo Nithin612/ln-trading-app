@@ -138,6 +138,31 @@ class Settings(BaseSettings):
     # NSE equity tick size (₹) for rounding simulated fills; 0 disables.
     paper_tick_size: float = 0.05
 
+    # ── Spread-aware fill model (Phase 6.8.2, app/broker/paper_broker.py) ───
+    # The flat bps above is fine for a Nifty large-cap and a LIE for a small-cap
+    # whose spread is 50–100 bps: every paper fill on an illiquid name overstates
+    # our edge, and that record gates live trading. When 6.8.1's `depth:{stock_id}`
+    # top-of-book is fresh, the fill is priced from the REAL book instead:
+    #     adverse_bps = clamp(half-spread + impact, floor=paper_slippage_bps,
+    #                         ceiling=paper_slippage_max_bps)
+    #     impact      = min(paper_impact_k_bps × qty/top_qty, paper_impact_cap_bps)
+    # The flat bps is a FLOOR, so the model can only ever make a fill WORSE —
+    # never better than today. No depth (pre-open, thin name, cache miss, capture
+    # off) ⇒ the flat path, byte-identical to before: it fails OPEN, never blocking
+    # a fill on missing microstructure. Backtests are untouched (they run on candle
+    # data and never read depth) — only live paper fills change.
+    paper_spread_fill_enabled: bool = True
+    # Impact charged when the order size equals the whole visible top-of-book
+    # (qty == top_qty). Scales linearly with qty/top_qty; a model, not a
+    # book-walking simulator.
+    paper_impact_k_bps: float = 5.0
+    # Ceiling on the impact TERM alone — a 1-lot-deep book can't produce an
+    # unbounded haircut. The half-spread is charged in full on top of it.
+    paper_impact_cap_bps: float = 50.0
+    # Hard ceiling on TOTAL adverse bps — a feed glitch that survives the
+    # crossed-book filter must not price a fill absurdly. 500 bps = 5%.
+    paper_slippage_max_bps: float = 500.0
+
     # ── Profit-lock: absolute-rupee ladder (app/trading/profit_lock.py) ─────
     # When a user opts in (users.profit_lock_enabled), the position monitor
     # governs open PAPER exits with a rupee-denominated profit ladder — the

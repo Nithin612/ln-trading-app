@@ -7,6 +7,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6.8): 6.8.2 — spread-aware slippage & impact model (2026-08-17)
+
+Paper fills stop pretending every stock trades like a Nifty large-cap. When 6.8.1's live
+`depth:{stock_id}` book is fresh, the adverse haircut is priced off the REAL book instead of the flat
+`paper_slippage_bps`:
+`clamp(half_spread + impact, floor=paper_slippage_bps, ceiling=paper_slippage_max_bps)`, where
+`impact = min(paper_impact_k_bps × qty/top_qty, paper_impact_cap_bps)` and `top_qty` is the size
+resting on the side we TAKE (ask for a BUY, bid for a SELL). Applied at **both** fill sites — entry
+(`place_paper_order`) and exit (`close_position`).
+
+**Why this matters:** measuring all 1666 live books at 15:26 IST on 2026-08-17 — median spread
+**11.85 bps**, p75 32.79, p90 **87.02**, p99 280.11, max 518.13 — **82.1% (1367/1666) have a
+half-spread wider than the flat 2 bps we were charging.** The flat model was under-charging four
+names in five (~3× at the median, ~22× at p90). The 30-day paper record is the Phase-7 go-live gate,
+so that overstatement was flowing straight into the decision to risk real money.
+
+Design notes: the flat bps is a **FLOOR**, so a tick-wide book can never make a fill *cheaper* than
+before — the model only ever charges more, and "no depth ⇒ byte-identical to the old fill" is exact
+(the slice's canary test). Sizing↔impact is circular (risk-first sizing needs the fill; impact needs
+the size) and is resolved in **one refinement pass** whose residual error is conservative by
+construction. The spread is applied **relative** to the reference price rather than by filling
+literally at bid/ask, because the reference may be a stop level or a drifted LTP — it stays a model,
+not the book-walking SOR we rejected. Exits deliberately layer the spread on top of the
+gap-through-stop worse-of price. New knobs: `paper_spread_fill_enabled` (kill switch, on),
+`paper_impact_k_bps` (5.0), `paper_impact_cap_bps` (50.0), `paper_slippage_max_bps` (500.0).
+
+`daily_report.py` gains **§9 Fill realism**: per-fill model / ½-spread / impact / total bps and the
+**₹ excess over the flat baseline** — how much the old record was overstating the day's edge. Fill
+telemetry rides the existing `orders.broker_payload` JSONB (no migration); pre-6.8.2 orders carry
+none and are skipped, not crashed on.
+
+**Frozen engine untouched and backtests unaffected** — depth is live-only provisional data, and the
+only callers of these fill paths are the trading API and the position monitor. **⚠ Paper P&L is
+non-comparable across this change; the 30-day clock needs a reset.** +27 tests (bps model incl.
+floor/caps/side-correct liquidity, fail-open branches, the entry refinement pass, exits, telemetry
+JSON round-trip, and the §9 surface); 200 green across the touched modules; ruff + mypy strict clean.
+
 ### feat(phase6.8): 6.8.1 — order-book depth capture (2026-08-17)
 
 First slice of the approved **Phase 6.8 (Execution Realism & Exchange-Safety)**. The Kite consumers

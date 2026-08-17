@@ -49,8 +49,19 @@ else.
   decision, reversible)** — `REGIME_GATE_MODE=active` in `.env` + backend/worker
   restart; the paper order path now rejects transitional (ADX 20–25) entries,
   monitored live via the daily Flip readiness banner (revert = `shadow` + restart).
-  Next: promote the momentum ×1.5 retune on forward evidence, then 6.5 pair-trading. Nothing auto-advances — the NEXT menu
-  lives in the PHASES top block.
+  6.5 pair-trading is BUILT shadow-first; promoting the momentum ×1.5 retune still
+  waits on forward evidence. **The active build is now Phase 6.8 (Execution Realism
+  & Exchange-Safety)** — 6.8.1 depth capture and 6.8.2 spread-aware slippage are
+  DONE (2026-08-17), next is 6.8.3 circuit-band overlay
+  (`docs/phases/phase-06.8-execution-realism-plan.md`). Nothing auto-advances —
+  the NEXT menu lives in the PHASES top block.
+- **Paper fills are spread-aware since 6.8.2**: when the live `depth:{stock_id}`
+  book is fresh, the haircut is the real half-spread + a size-vs-top-of-book
+  impact term, floored at `paper_slippage_bps` so a fill is never *cheaper* than
+  the old flat model and fails open to it when depth is absent. This was not
+  cosmetic — **82% of live NSE books have a half-spread wider than the flat 2 bps**.
+  Paper P&L before and after 2026-08-17 is therefore **not comparable**; the
+  30-day clock needs a reset. Backtests are untouched (they never read depth).
 - **Two report sections exist because "the engine produced nothing" was once
   indistinguishable from "the engine is broken":** §7 F&O engine health and §8
   intraday shadow layer. Both attribute a zero to a *reason*. When either shows

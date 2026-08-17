@@ -38,7 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.signal import Signal, SignalOutcome
 from app.models.stock import Stock
-from app.models.trading import Position
+from app.models.trading import Order, Position
 from app.models.user import User
 from app.services import fo_analytics as fa
 from app.services import fo_suggestions as fs
@@ -194,6 +194,31 @@ class TradeRow:
 
 
 @dataclass
+class FillRealismRow:
+    """One paper fill, as priced by the 6.8.2 spread-aware model.
+
+    ``excess_inr`` is the honesty delta: what this fill cost ABOVE the old flat
+    `paper_slippage_bps` baseline. Summed over a day it is the amount by which
+    the pre-6.8.2 paper record was overstating the edge.
+    """
+
+    symbol: str
+    kind: str  # "entry" | "exit"
+    side: str  # BUY | SELL
+    quantity: int
+    model: str  # "spread" (live book) | "flat" (no book — fell open)
+    reference: Decimal  # mark before the haircut
+    fill: Decimal
+    slippage_bps: Decimal
+    baseline_bps: Decimal
+    excess_bps: Decimal
+    half_spread_bps: Decimal
+    impact_bps: Decimal
+    excess_inr: Decimal
+    filled_at: datetime | None
+
+
+@dataclass
 class DailyReport:
     day: date
     generated_at: datetime
@@ -214,6 +239,8 @@ class DailyReport:
     fo_health: list[FoUnderlyingHealth] = field(default_factory=list)
     # Intraday shadow layer — see build_shadow_health for why a silent day matters.
     shadow_health: list[ShadowProfileHealth] = field(default_factory=list)
+    # Spread-aware fill model (6.8.2) — what the honest book charged vs flat bps.
+    fill_realism: list[FillRealismRow] = field(default_factory=list)
 
 
 # `load_1m_bars` (was `_load_bars`) moved to `app/services/excursion.py`
@@ -426,7 +453,84 @@ async def build_daily_report(
     # or not anything was traded, and a dark day is exactly what needs recording.
     report.fo_health = await build_fo_health(db, day=day)
     report.shadow_health = await build_shadow_health(db, day=day)
+    report.fill_realism = await build_fill_realism(
+        db, user_id=user_id, start=day_start, end=day_end
+    )
     return report
+
+
+async def build_fill_realism(
+    db: AsyncSession, *, user_id: int, start: datetime, end: datetime
+) -> list[FillRealismRow]:
+    """Read the 6.8.2 fill-model telemetry off the day's paper orders.
+
+    Purely a read of what was recorded at fill time (`broker_payload["fill"]`),
+    never a re-derivation — the book that priced a fill is long gone by report
+    time, so a recomputation would be fiction. Orders written before 6.8.2 have
+    no `fill` block and are simply skipped.
+    """
+    orders = (
+        (
+            await db.execute(
+                select(Order)
+                .where(
+                    Order.user_id == user_id,
+                    Order.mode == "paper",
+                    Order.status == "filled",
+                    Order.filled_at >= start,
+                    Order.filled_at < end,
+                )
+                .order_by(Order.filled_at.asc())
+            )
+        )
+        .scalars()
+        .all()
+    )
+    if not orders:
+        return []
+    symbols = {
+        s.id: s.symbol
+        for s in (
+            await db.execute(
+                select(Stock).where(Stock.id.in_({o.stock_id for o in orders}))
+            )
+        )
+        .scalars()
+        .all()
+    }
+    rows: list[FillRealismRow] = []
+    for o in orders:
+        payload = o.broker_payload if isinstance(o.broker_payload, dict) else {}
+        fill = payload.get("fill")
+        if not isinstance(fill, dict):
+            continue  # pre-6.8.2 order — no telemetry to report
+        try:
+            reference = _d(fill["reference"])
+            excess_bps = _d(fill["excess_bps"])
+            qty = int(o.filled_qty or o.quantity or 0)
+            rows.append(
+                FillRealismRow(
+                    symbol=symbols.get(o.stock_id, str(o.stock_id)),
+                    kind="entry" if "chase" in payload else "exit",
+                    side=o.side,
+                    quantity=qty,
+                    model=str(fill["model"]),
+                    reference=reference,
+                    fill=_d(fill["fill"]),
+                    slippage_bps=_d(fill["slippage_bps"]),
+                    baseline_bps=_d(fill["baseline_bps"]),
+                    excess_bps=excess_bps,
+                    half_spread_bps=_d(fill["half_spread_bps"]),
+                    impact_bps=_d(fill["impact_bps"]),
+                    excess_inr=(
+                        Decimal(qty) * reference * excess_bps / Decimal("10000")
+                    ).quantize(_Q2),
+                    filled_at=o.filled_at,
+                )
+            )
+        except (KeyError, TypeError, ValueError, ArithmeticError):
+            continue  # a malformed telemetry blob must never break the report
+    return rows
 
 
 async def _realized_between(
@@ -614,7 +718,61 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
 
     # 8. Intraday shadow layer ---------------------------------------------- #
     out.extend(_render_shadow_section(r.shadow_health))
+
+    # 9. Fill realism -------------------------------------------------------- #
+    out.extend(_render_fill_realism_section(r.fill_realism))
     return "\n".join(out) + "\n"
+
+
+def _render_fill_realism_section(rows: list[FillRealismRow]) -> list[str]:
+    """§9 — what the spread-aware fill model (6.8.2) actually charged.
+
+    The number that matters is the **excess over the flat baseline**: it is the
+    amount by which the old flat-2bps paper record was overstating the edge, and
+    that record is what gates live trading.
+    """
+    out: list[str] = ["## 9. Fill realism — spread-aware slippage (6.8.2)", ""]
+    if not rows:
+        out.append(
+            "_No paper fills carrying fill-model telemetry on this day._ "
+            "(Orders placed before 6.8.2 have none; a day with no trades has none.)"
+        )
+        out.append("")
+        return out
+
+    priced = [r for r in rows if r.model == "spread"]
+    total_excess = sum((r.excess_inr for r in rows), Decimal(0))
+    out.append(
+        f"- **{len(priced)} of {len(rows)}** fills were priced off a live order book; "
+        f"the rest fell open to the flat {rows[0].baseline_bps} bps (no fresh depth — "
+        "off-market, thin name, or a cold cache)."
+    )
+    out.append(
+        f"- **Extra cost the honest model charged: {_inr(total_excess)}** — this is how "
+        "much the flat-bps record was overstating the day's edge, not a new loss."
+    )
+    out.append("")
+    out.append(
+        "| Fill | Symbol | Side | Qty | Model | Ref | Fill | ½-spread | Impact | "
+        "Total bps | vs flat | Excess ₹ |"
+    )
+    out.append("|---|---|---|---:|---|---:|---:|---:|---:|---:|---:|---:|")
+    for r in rows:
+        out.append(
+            f"| {r.kind} | {r.symbol} | {r.side} | {r.quantity:,} | {r.model} | "
+            f"{r.reference:,.2f} | {r.fill:,.2f} | {r.half_spread_bps} | "
+            f"{r.impact_bps} | {r.slippage_bps} | +{r.excess_bps} | "
+            f"{_inr(r.excess_inr)} |"
+        )
+    out.append("")
+    out.append(
+        "_Read: `½-spread` is the real half-spread from the book at fill time; "
+        "`Impact` is the size-vs-top-of-book term; the flat bps is a FLOOR, so a "
+        "`spread` fill is never cheaper than a `flat` one. Backtests are unaffected "
+        "— they run on candle data and never read depth._"
+    )
+    out.append("")
+    return out
 
 
 def _render_trade_block(t: TradeRow) -> list[str]:
