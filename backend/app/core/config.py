@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     # active intraday profiles worth regenerating intraday.
     live_signal_dispatch_enabled: bool = False
 
+    # Order-book depth capture (Phase 6.8.1). Extracts top-of-book from the
+    # already-subscribed MODE_FULL ticks into `depth:{stock_id}` (Redis, 60 s
+    # TTL) for the spread-aware paper fill model + liquidity gates. PROVISIONAL
+    # live data — never a candle, never a backtest. Cheap (one Redis SET per
+    # ticked stock); a kill switch, on by default so the data accrues.
+    depth_capture_enabled: bool = True
+
     # ── Live tick triggers (Phase 3, slice 3.5) ─────────────────────────────
     # Alert thresholds only — they gate ALERTS, never signals; signal
     # semantics stay in SIGNAL_ENGINE.md. Zone width mirrors §2.5 proximity.

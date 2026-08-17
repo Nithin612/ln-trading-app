@@ -16,6 +16,7 @@ from zoneinfo import ZoneInfo
 
 import app.broker.live_worker as lw
 import tradecore
+from app.broker.depth import DEPTH_KEY, DEPTH_KEY_TTL_SECONDS, parse_depth
 from app.broker.live_worker import (
     TF_MINUTES,
     LatencyHistogram,
@@ -123,6 +124,94 @@ def _tick(ts_ist_h: int, ts_ist_m: int, price: str, day_vol: int) -> dict:
         "volume_traded": day_vol,
         "exchange_timestamp": aware.astimezone().replace(tzinfo=None),
     }
+
+
+def _full_tick(
+    ts_ist_h: int,
+    ts_ist_m: int,
+    price: str,
+    day_vol: int,
+    bid: float = 100.00,
+    ask: float = 100.50,
+    bid_qty: int = 400,
+    ask_qty: int = 250,
+) -> dict:
+    """A _tick with a MODE_FULL two-sided order book."""
+    t = _tick(ts_ist_h, ts_ist_m, price, day_vol)
+    t["depth"] = {
+        "buy": [{"price": bid, "quantity": bid_qty, "orders": 2}],
+        "sell": [{"price": ask, "quantity": ask_qty, "orders": 3}],
+    }
+    return t
+
+
+class TestDepthCapture:
+    """6.8.1 — top-of-book harvested from MODE_FULL ticks into depth:{stock_id},
+    folded into the SAME per-batch pipeline as LTP (one round trip), on the
+    soak-proven live-worker path."""
+
+    def test_depth_set_folded_into_the_ltp_pipeline(self, tmp_path) -> None:
+        state, spy, _wq = _state(tmp_path)
+        state.process_item(("ticks", [_full_tick(9, 16, "101.55", 1000)]))
+
+        keys = {k for k, _v, _ex in spy.set_calls}
+        assert "ltp:42" in keys
+        depth_set = next((c for c in spy.set_calls if c[0] == DEPTH_KEY.format(stock_id=42)), None)
+        assert depth_set is not None, "depth key must be SET on the live-worker path"
+        key, payload, ex = depth_set
+        assert ex == DEPTH_KEY_TTL_SECONDS
+        d = parse_depth(payload)
+        assert d is not None
+        assert d.bid == Decimal("100.0") and d.ask == Decimal("100.5")
+        assert d.bid_qty == 400 and d.ask_qty == 250
+
+    def test_depthless_tick_sets_only_ltp(self, tmp_path) -> None:
+        """A MODE_LTP / partial tick with no book leaves the ltp: contract
+        exactly as before — no depth key."""
+        state, spy, _wq = _state(tmp_path)
+        state.process_item(("ticks", [_tick(9, 16, "101.55", 1000)]))
+        keys = {k for k, _v, _ex in spy.set_calls}
+        assert "ltp:42" in keys
+        assert DEPTH_KEY.format(stock_id=42) not in keys
+
+    def test_stale_snapshot_echo_does_not_capture_depth(self, tmp_path) -> None:
+        """A snapshot-echo tick older than min_tick_ts is dropped for BOTH the
+        FFI tuple and depth — a stale book must not overwrite fresh depth."""
+        state, spy, _wq = _state(tmp_path)
+        state.min_tick_ts = OPEN_TS + 3600  # accept only ticks past 10:15
+        state.process_item(("ticks", [_full_tick(9, 16, "101.55", 1000)]))  # 09:16 < gate
+        assert state.stats["stale"] == 1
+        keys = {k for k, _v, _ex in spy.set_calls}
+        assert DEPTH_KEY.format(stock_id=42) not in keys
+
+    def test_last_tick_in_batch_wins(self, tmp_path) -> None:
+        """Two ticks for the same stock in one batch → depth reflects the LAST
+        (dict last-wins), matching the pipeline's last-write-wins for the key."""
+        state, spy, _wq = _state(tmp_path)
+        state.process_item(
+            (
+                "ticks",
+                [
+                    _full_tick(9, 16, "101.55", 1000, bid=100.00, ask=100.50),
+                    _full_tick(9, 16, "101.60", 1100, bid=101.00, ask=101.40),
+                ],
+            )
+        )
+        depth_sets = [c for c in spy.set_calls if c[0] == DEPTH_KEY.format(stock_id=42)]
+        assert len(depth_sets) == 1  # one set per stock per batch
+        d = parse_depth(depth_sets[0][1])
+        assert d is not None and d.bid == Decimal("101.0") and d.ask == Decimal("101.4")
+
+    def test_flag_off_skips_depth(self, tmp_path, monkeypatch) -> None:
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "depth_capture_enabled", False)
+        state, spy, _wq = _state(tmp_path)
+        state.process_item(("ticks", [_full_tick(9, 16, "101.55", 1000)]))
+        keys = {k for k, _v, _ex in spy.set_calls}
+        assert "ltp:42" in keys                                   # LTP still set
+        assert DEPTH_KEY.format(stock_id=42) not in keys          # depth suppressed
+        assert state._pending_depth == {}
 
 
 class TestOpenRecorder:

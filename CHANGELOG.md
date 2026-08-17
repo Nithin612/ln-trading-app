@@ -7,6 +7,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6.8): 6.8.1 — order-book depth capture (2026-08-17)
+
+First slice of the approved **Phase 6.8 (Execution Realism & Exchange-Safety)**. The Kite consumers
+already subscribe `MODE_FULL`, so 5-level depth arrives on every tick and was discarded; this captures
+**top-of-book** (best bid/ask + sizes) into a new Redis KEY `depth:{stock_id}` (JSON, prices as
+Decimal-parseable strings, 60 s TTL), mirroring the `ltp:{stock_id}` contract. It is **PROVISIONAL
+live data** — never written to a candle, backtest, or P&L (no-look-ahead) — and its only purpose is to
+make 6.8.2's paper fills spread-aware and to feed liquidity/circuit gates. New `app/broker/depth.py`
+(`Depth` dataclass with `spread`/`mid`/`spread_bps`, `extract_top_of_book`, serialize/parse,
+`write_depth`, `get_live_depth` mirroring `get_live_ltp`); new `depth_capture_enabled` flag (default
+on, a kill switch). Wired into **both** consumers: the dormant v1 `tick_consumer` (isolated
+best-effort) and — the load-bearing correction from the perf review — the **soak-proven
+`live_worker`**, where the depth SET is **folded into the existing per-batch LTP pipeline (one round
+trip, never a per-tick set)** so the p99 ≤ 50 ms budget is untouched. Depth is harvested behind the
+same accept/stale gate as the FFI tuple (a snapshot echo never overwrites fresh depth) and is a
+Redis-only concern (no DB column, no migration).
+
+Reviews: **bug-hunter** found one MEDIUM — `extract_top_of_book` was called outside the fail-open
+try and could raise on a truthy-but-non-list `depth["buy"]` (a dict → `KeyError: 0`), which would
+have dropped the whole tick batch and rolled back earlier candle upserts; fixed by guarding the
+indexing at the source *and* wrapping the call, with a regression test. **perf-auditor** found a HIGH
+correctness issue — the initial wiring lived only in the dormant v1 `tick_consumer`, so depth would
+never populate in production; fixed by wiring the pipelined `live_worker` path (measured: the depth
+CPU is +21% of the tiny per-tick cost, the extra SET is +17% of round-trips only on the non-budgeted
+v1 path, and 0% on the budgeted worker path where it joins the existing pipeline). +26 tests
+(extraction edge cases incl. crossed/one-sided/zero/non-list books, Decimal-exact serialize↔parse,
+the Redis read-back seam + TTL, and consumer/live-worker integration proving a depth-less tick leaves
+the `ltp:` contract byte-identical). `make check` legs green on the changed modules: 184 tests, ruff,
+mypy strict.
+
 ### docs(status): rebuild STATUS.html as the all-in-one project Compendium (2026-08-15)
 
 Folded the deep-dive "Complete Overview" artifact (how the system works — 19 sections) INTO

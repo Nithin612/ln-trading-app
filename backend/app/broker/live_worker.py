@@ -49,6 +49,13 @@ from typing import Any, TextIO
 from zoneinfo import ZoneInfo
 
 from app.broker.candle_aggregator import TIMEFRAME_TABLE
+from app.broker.depth import (
+    DEPTH_KEY,
+    DEPTH_KEY_TTL_SECONDS,
+    Depth,
+    extract_top_of_book,
+    serialize_depth,
+)
 from app.broker.live_levels import LevelDict, LevelDirectory, LevelMeta, build_directory
 from app.broker.tick_consumer import (
     CANDLE_CHANNEL,
@@ -263,6 +270,11 @@ class WorkerState:
     # expire mid-outage and dedupe would then skip the heal for up to
     # _LTP_RESET_S).
     _ltp_cache: dict[int, tuple[str, float]] = field(init=False, default_factory=dict)
+    # Top-of-book per stock for the CURRENT batch: {stock_id: (Depth, ts)}.
+    # Rebuilt every _ffi_batch (last tick per stock wins), drained by
+    # _publish_ltp into the same pipeline. PROVISIONAL/live — a Redis KEY only,
+    # never a candle or a backtest (6.8.1).
+    _pending_depth: dict[int, tuple[Depth, int]] = field(init=False, default_factory=dict)
 
     def __post_init__(self) -> None:
         self._stock_to_token = {v: k for k, v in self.token_map.items()}
@@ -410,6 +422,24 @@ class WorkerState:
                 ),
             )
             queued = True
+        # Order-book depth (6.8.1): fold this batch's top-of-book SETs into the
+        # SAME pipeline — one round trip, never a per-tick set. A Redis KEY only
+        # (provisional; no channel, no candle, no backtest), best-effort like
+        # the LTP key, and NOT deduped (the book moves nearly every tick).
+        for stock_id, (tob, ts) in self._pending_depth.items():
+            token = sid_to_token.get(stock_id)
+            if token is None:
+                continue
+            pipe.set(
+                DEPTH_KEY.format(stock_id=stock_id),
+                serialize_depth(
+                    stock_id, token, tob,
+                    ts=datetime.fromtimestamp(ts, tz=UTC).isoformat(),
+                ),
+                ex=DEPTH_KEY_TTL_SECONDS,
+            )
+            queued = True
+        self._pending_depth = {}
         if not queued:
             return
         try:
@@ -470,7 +500,15 @@ class WorkerState:
         self, ticks: list[dict[str, Any]]
     ) -> list[tuple[int, int, str, int | None, int]]:
         """Kite ticks → FFI tuples, dropping unusable (counted `skipped`)
-        and snapshot-echo stale ticks (counted `stale`)."""
+        and snapshot-echo stale ticks (counted `stale`).
+
+        Also harvests top-of-book from the MODE_FULL ticks into
+        `_pending_depth` (6.8.1), behind the SAME accept/stale gate as the FFI
+        tuple — a stale snapshot echo never overwrites fresh depth; last tick
+        per stock wins; _publish_ltp drains it into the same pipeline. Provisional
+        and best-effort (`extract_top_of_book` never raises)."""
+        capture = settings.depth_capture_enabled
+        depth: dict[int, tuple[Depth, int]] = {}
         batch: list[tuple[int, int, str, int | None, int]] = []
         for tick in ticks:
             ffi = tick_to_ffi(tick, self.token_map)
@@ -481,6 +519,11 @@ class WorkerState:
                 self.stats["stale"] += 1
                 continue
             batch.append(ffi)
+            if capture:
+                tob = extract_top_of_book(tick)
+                if tob is not None:
+                    depth[ffi[0]] = (tob, ffi[1])  # stock_id → (Depth, exchange ts)
+        self._pending_depth = depth
         return batch
 
     def _apply_levels(self, payload: list[tuple[int, list[LevelDict], LevelMeta]]) -> None:

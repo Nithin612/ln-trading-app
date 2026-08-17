@@ -10,11 +10,21 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-08-14) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-08-17) — read this block first
 
 **v2 Phases 0–2 ✅ done · Phase 3 (realtime) ✅ GATED 2026-08-14 · Phase 4 ✅ done ·
 Phase 5 ✅ GATED 2026-08-07 · Phase 6 ▶ IN PROGRESS (6.1–6.4 done; regime gate ACTIVE
 2026-08-14; 6.5 pair-trading BUILT slices 1–4 shadow-first 2026-08-15) · Phase 7 not started.**
+
+**▶ Phase 6.8 (Execution Realism & Exchange-Safety, paper-safe) — APPROVED 2026-08-17 (user) as the
+next BUILD phase, inserted between Phase 6 and the MCE. Scope LOCKED: 6 paper-safe slices (depth
+capture → spread-aware slippage → circuit-band overlay + open-book-MTM gap + CA-adjust open positions
++ silent-outage alarm) + a research track (VWAP/RVOL candidate factors, weekly spread-width gate) + an
+F1 `market_cap` spike (pulled forward to de-risk MCE). Frozen engine untouched. **▶ 6.8.1 (order-book
+depth capture) DONE 2026-08-17** — top-of-book cached to `depth:{stock_id}`, wired into the soak-proven
+`live_worker` (folded into the per-batch LTP pipeline, budget untouched); bug-hunter MED + perf-auditor
+HIGH caught + fixed; NEXT = 6.8.2 spread-aware slippage. Full adjudication of the `REAL_WORLD_NSE_BSE`
+external review + the sliced build: `phases/phase-06.8-execution-realism-plan.md`.**
 Suites grew with the Phase-6 slices (added `test_signal_excursions`,
 `test_entry_attribution`, `test_corpus_attribution`, `test_seasonality`); run
 `make check` for the exact totals. Pre-Phase-6 baseline: backend **1123**
@@ -245,6 +255,7 @@ which is what Phase-6 expectancy calibration is for.
 | 4 | F&O analytics | **✅ backend done · phase-gate PASS 2026-08-06** (merged to main; UI = Phase 5) | [phase-04](phases/phase-04-fo-suggestions.md) | 4.1 chain/PCR/max-pain/basis/VIX-regime · 4.2 Rust BS/Black-76 IV+Greeks (`tradecore`) + IV-rank · 4.3 option-selling engine (defined-risk index-only; breakeven-POP; expectancy report-only=VRP; fail-closed VIX veto; user-calibrated `SellRules`). Follow-ups: confluence direction-tilt, event/ban gate (=deferred Market Context Engine), Kite SPAN margin, forward-validation dashboard (P6) · 🧭 **Nautilus doc** §9 — Greeks as a first-class data type; options/accounting (margin) refs |
 | 5 | UI overhaul | **✅ slices 5.1–5.4 done, MERGED to main 2026-08-07** (`make check` green; bug-hunter + ui-reviewer clean; 60 fps MEASURED and MET; visual smoke passed in all 5 themes — only `/phase-gate` remains) | [phase-05](phases/phase-05-ui-overhaul.md) | 5.1 `useLiveQuotes` v2 (rAF-batched; fixed socket-churn, resubscribe-per-render + subscription-leak bugs) + `useVirtualRows` · 5.2 **F&O page** (chain ladder w/ per-leg IV+Greeks via `/fo/chain?greeks=true`, `/fo/underlyings`, `/fo/expiries`, strategy cards, expectancy labelled report-only) · 5.3 style pages v2 (committed-vs-forming, outcome stats w/ small-sample refusal, factor drawer) · 5.4 Live Signals feed + opt-in notifications (bursts coalesce). **IA + slate default were already done in Phase 3.** 🧭 **Nautilus doc** §4.2 — cache-then-publish lets UI subscribe without touching producers |
 | 6 | Outcome tracking + entry-selection | **▶ BUILT 6.1–6.5 shadow-first (2026-08-12→15); regime gate ACTIVE; close ritual pending** — see the STATE block + `phase-06-plan.md` | [phase-06-plan](phases/phase-06-plan.md) | 6.1 MFE/MAE · 6.2 entry attribution (live+corpus) · gate experiment + §8 walk-forward · regime-gate overlay (ACTIVE) · 6.4 weight-retune (shadow) · 6.5 pair-trading (shadow, slices 1–4) · 🧭 **Nautilus doc** §7 — mimalloc on batch backtest sweeps; §4.3 richer bar aggregations for research |
+| 6.8 | Execution Realism & Exchange-Safety (paper-safe) | **▶ IN PROGRESS — 6.8.1 DONE 2026-08-17** | [phase-06.8-plan](phases/phase-06.8-execution-realism-plan.md) | 6.8.1 ✅ order-book depth capture (`depth:{stock_id}`; both consumers; pipelined on live-worker) · 6.8.2 spread-aware slippage/impact (replaces flat 2bps) · 6.8.3 circuit-band eligibility overlay (shadow→active, regime-gate pattern) · 6.8.4 open-book-MTM carried-position gap · 6.8.5 CA-adjust OPEN paper positions · 6.8.6 silent-feed-outage alarm · research (gated, non-blocking): R1 VWAP/RVOL as confluence factors (§8+oracle regen) + R2 weekly spread-width gate · spike: F1 `market_cap` writer (de-risks MCE keystone) |
 | 7 | Live-trading hardening | planned | — | Kite orders behind trading_mode + 30-day gate, kill switch, reconciliation, VPS runbook · 🧭 **Nautilus doc** §6 — **SLICE 1 = RiskEngine single-gate** (test-first, equivalence-pinned) → then BrokerAdapter port · order FSM (Denied vs Rejected) · reconciliation |
 
 > **🧭 Nautilus doc pointers** (added 2026-08-01): before starting and at the
@@ -255,7 +266,7 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-08-15.**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-08-17.**
 Phases **0–5 are CLOSED** (Phase 3 gated 2026-08-14, PASS). **Phase 6 is BUILT** — 6.1–6.4 done;
 the **regime gate is ACTIVE** in the paper book (flipped 2026-08-15, reversible via
 `REGIME_GATE_MODE=shadow` + restart); **6.5 pair-trading is fully built shadow-first (slices 1–4)**.
@@ -272,10 +283,17 @@ tune from it (none of it a code task today):
    `pair-attribution-<date>.md` answers df-vs-adf once evidence accrues; tune knobs from THAT.
 4. **Phase-6 close ritual** (`/phase-gate` + a `docs/phases/phase-06-*.md` report) when you judge it done.
 
-**Next BUILD phase = the Market Context Engine** (named phase after 6, before Phase-7 live — see the
-Architecture-review backlog below). Post-Phase-6 research/features are phase-mapped there (Nautilus
-runtime → Phase 7; competitor/fundamentals → blocked on a `market_cap` data source; seasonality →
-unblocked + small). Local branch is ahead of origin — push is manual.
+**Next BUILD phase = Phase 6.8 (Execution Realism & Exchange-Safety)** — APPROVED 2026-08-17 (user),
+inserted between Phase 6 and the **Market Context Engine** (which stays the phase after 6.8, before
+Phase-7 live). Full adjudication of the `REAL_WORLD_NSE_BSE` external review + the sliced build:
+`phases/phase-06.8-execution-realism-plan.md`. **▶ 6.8.1 (order-book depth capture) DONE 2026-08-17;
+NEXT = 6.8.2 spread-aware slippage**, which consumes 6.8.1's `depth:{stock_id}`. (Lesson from the perf
+review, now in the plan Build log: `live_worker.py` is the live path; `tick_consumer.py` is the dormant
+v1 — a feature wired only into v1 is inert in production.) The F1 spike pulls the `market_cap` data-source decision
+forward, which unblocks MCE's fundamentals layer. Post-Phase-6 research/features remain phase-mapped in
+the Architecture-review backlog below (Nautilus runtime → Phase 7; competitor/fundamentals → MCE, now
+unblocked by F1's `market_cap` writer; seasonality → unblocked + small). Local branch is ahead of
+origin — push is manual.
 
 Suites as of 2026-08-10: backend **1120**, frontend **370**. All work through
 `b795326` is merged to main **and pushed to origin**.

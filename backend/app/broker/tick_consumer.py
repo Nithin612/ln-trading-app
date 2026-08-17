@@ -30,6 +30,7 @@ from typing import Any
 from kiteconnect import KiteTicker
 
 from app.broker.candle_aggregator import TIMEFRAME_TABLE, AggregatorRegistry
+from app.broker.depth import extract_top_of_book, write_depth
 from app.broker.kite_client import get_active_token
 from app.core.config import settings
 
@@ -235,6 +236,8 @@ class TickConsumer:
         if ltp is None:
             return False
 
+        now_iso = datetime.now(UTC).isoformat()
+
         # Latest-price KEY (read by paper_broker for fills and SL/TP checks) …
         await redis.set(
             LTP_KEY.format(stock_id=stock_id), str(ltp), ex=LTP_KEY_TTL_SECONDS
@@ -245,10 +248,22 @@ class TickConsumer:
                 "instrument_token": instrument_token,
                 "stock_id": stock_id,
                 "ltp": float(ltp),
-                "ts": datetime.now(UTC).isoformat(),
+                "ts": now_iso,
             }
         )
         await redis.publish(LTP_CHANNEL.format(instrument_token=instrument_token), ltp_payload)
+
+        # Order-book depth (6.8.1): cache top-of-book from the MODE_FULL tick for
+        # the paper fill model + liquidity gates. PROVISIONAL/live — never a
+        # candle, never a backtest. Isolated best-effort: a bad book or a Redis
+        # blip here must never cost us the LTP set above or the candle below.
+        if settings.depth_capture_enabled:
+            try:
+                tob = extract_top_of_book(tick)
+                if tob is not None:
+                    await write_depth(redis, stock_id, instrument_token, tob, ts=now_iso)
+            except Exception:
+                log.debug("Depth capture failed (non-fatal) stock_id=%d", stock_id)
 
         # Aggregate into candles
         agg = _registry.get_or_create(stock_id)
