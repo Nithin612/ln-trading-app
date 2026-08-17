@@ -163,6 +163,31 @@ class Settings(BaseSettings):
     # crossed-book filter must not price a fill absurdly. 500 bps = 5%.
     paper_slippage_max_bps: float = 500.0
 
+    # ── Circuit-band eligibility overlay (Phase 6.8.3, app/signals/circuit_guard.py) ──
+    # A long whose stock is pinned near its LOWER circuit has no buyers — its stop
+    # cannot fill at ANY price (software or exchange); a short near the UPPER band is
+    # the mirror. This overlay skips entering a name sitting within
+    # `circuit_proximity_pct` of its ADVERSE band. Downstream eligibility gate — the
+    # frozen confluence engine is untouched (cf. regime_gate_mode). Bands come from
+    # Kite quote() (`lower/upper_circuit_limit`), cached to Redis `circuit:{stock_id}`
+    # by the refresh_circuit_bands task; the order path only READS the cache.
+    #   off    — no gate.
+    #   shadow — measure what it WOULD suppress; the order path never acts on it (default).
+    #   active — the order path rejects an ineligible signal. Behaviour-changing: flip
+    #            only on forward shadow evidence + explicit sign-off. Fully reversible.
+    # FAIL-OPEN: a missing/stale band never blocks an otherwise-valid signal.
+    circuit_gate_mode: Literal["off", "shadow", "active"] = "shadow"
+    # Block when the entry sits within this % of the adverse band. Some bands are
+    # 20%-wide and legitimately tradeable, so gate on PROXIMITY, not band existence.
+    circuit_proximity_pct: float = 1.5
+    # Master switch for the band-refresh task (kite quote() fetch). Off ⇒ the cache
+    # is never populated ⇒ the gate fails open everywhere.
+    circuit_bands_enabled: bool = True
+    # TTL on a cached band (s). Must exceed the refresh cadence so a live band never
+    # expires between refreshes; once the refresher stops, bands go stale and the
+    # gate fails open (by design). Bands are intraday-static, so this is generous.
+    circuit_band_ttl_s: int = 1800
+
     # ── Profit-lock: absolute-rupee ladder (app/trading/profit_lock.py) ─────
     # When a user opts in (users.profit_lock_enabled), the position monitor
     # governs open PAPER exits with a rupee-denominated profit ladder — the

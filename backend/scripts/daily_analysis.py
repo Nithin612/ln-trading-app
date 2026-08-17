@@ -122,6 +122,21 @@ async def _run(day: date, user_id: int, week_of: date | None, now: datetime) -> 
         except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
             print(f"regime-gate shadow step skipped: {exc!r}", flush=True)
 
+        # Circuit-gate forward evidence (Phase 6.8.3): what the circuit overlay
+        # WOULD suppress on the live paper-entry cohort (entries near the adverse
+        # band), with a readiness banner. Same read-only, never-block discipline as
+        # the regime-gate sidecar above.
+        try:
+            from app.services import circuit_gate_shadow as cgs
+
+            cshadow = await cgs.compute_circuit_gate_shadow(db)
+            cpath = _ANALYSIS_DIR / f"circuit-gate-shadow-{day.isoformat()}.md"
+            cpath.write_text(cgs.render_markdown(cshadow, day=day))
+            print(f"wrote {cpath.relative_to(_REPO_ROOT)}", flush=True)
+            print(cgs.readiness_line(cshadow), flush=True)
+        except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
+            print(f"circuit-gate shadow step skipped: {exc!r}", flush=True)
+
         if week_of is not None:
             monday = week_of - timedelta(days=week_of.weekday())
             wk = await build_week_summary(db, monday=monday, user_id=user_id, now=now)

@@ -51,10 +51,17 @@ else.
   monitored live via the daily Flip readiness banner (revert = `shadow` + restart).
   6.5 pair-trading is BUILT shadow-first; promoting the momentum ×1.5 retune still
   waits on forward evidence. **The active build is now Phase 6.8 (Execution Realism
-  & Exchange-Safety)** — 6.8.1 depth capture and 6.8.2 spread-aware slippage are
-  DONE (2026-08-17), next is 6.8.3 circuit-band overlay
-  (`docs/phases/phase-06.8-execution-realism-plan.md`). Nothing auto-advances —
+  & Exchange-Safety)** — 6.8.1 depth capture, 6.8.2 spread-aware slippage, and
+  6.8.3 circuit-band eligibility overlay are DONE (2026-08-17, all reviewed), next
+  is 6.8.4 open-book MTM (`docs/phases/phase-06.8-execution-realism-plan.md`). All
+  6.8 slices build on the Phase-6 branch; **paper day-1 is DEFERRED until the phase
+  is done + user "proceed"; merge to main only after.** Nothing auto-advances —
   the NEXT menu lives in the PHASES top block.
+- **Circuit-band overlay since 6.8.3** (`app/signals/circuit_guard.py`, shadow-first,
+  `circuit_gate_mode`): skips entering a name within `circuit_proximity_pct` (1.5%)
+  of its ADVERSE band (long→lower, short→upper) — an un-exitable trade. Bands from a
+  market-hours task's batched Kite `quote()` → Redis `circuit:{stock_id}`; the order
+  path only READS the cache, fail-open. Frozen engine untouched; `off` = true no-op.
 - **Paper fills are spread-aware since 6.8.2**: when the live `depth:{stock_id}`
   book is fresh, the haircut is the real half-spread + a size-vs-top-of-book
   impact term, floored at `paper_slippage_bps` so a fill is never *cheaper* than

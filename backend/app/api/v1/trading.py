@@ -18,6 +18,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.broker.circuit_bands import get_circuit_band
 from app.broker.paper_broker import (
     PaperOrderError,
     close_position,
@@ -48,7 +49,7 @@ from app.schemas.trading import (
 )
 from app.services.journal_service import auto_create_journal_entry
 from app.services.profit_lock_shadow import compare_position
-from app.signals import regime_guard
+from app.signals import circuit_guard, regime_guard
 from app.trading.circuit_breaker import (
     check_circuit_breaker,
     get_daily_realized_pnl,
@@ -143,6 +144,25 @@ async def place_order(
     if gate_reason:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=gate_reason)
 
+    # Circuit-band eligibility overlay (6.8.3). `off` is a TRUE no-op (no read, no
+    # stamp). Otherwise read the cached band (Redis, sub-ms, fail-open — a missing
+    # band is None ⇒ eligible) and judge proximity to the ADVERSE band (long→lower,
+    # short→upper). The verdict is stamped on the order below for the shadow report;
+    # only ACTIVE mode rejects.
+    circuit_verdict = None
+    if settings.circuit_gate_mode != "off":
+        circuit_verdict = circuit_guard.evaluate(
+            entry=Decimal(str(signal.entry_price)),
+            side=req.side,
+            band=await get_circuit_band(signal.stock_id),
+            proximity_pct=Decimal(str(settings.circuit_proximity_pct)),
+        )
+        circuit_reason = circuit_guard.order_block_reason(
+            circuit_verdict, settings.circuit_gate_mode
+        )
+        if circuit_reason:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=circuit_reason)
+
     try:
         order, _pos = await place_paper_order(
             db, user, signal, side=req.side, quantity=req.quantity
@@ -151,6 +171,14 @@ async def place_order(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
+    # Stamp the circuit verdict on the order (6.8.3) for the shadow report (shadow +
+    # active only; off leaves no footprint). New dict, not in-place, so SQLAlchemy
+    # flags the JSONB column dirty.
+    if circuit_verdict is not None:
+        order.broker_payload = {
+            **(order.broker_payload or {}),
+            "circuit_gate": circuit_verdict.as_payload(),
+        }
     await db.commit()
     await db.refresh(order)
 

@@ -108,5 +108,18 @@ class ThrottledKite:
         )
         return list(data)
 
+    async def quote(self, instruments: list[int | str]) -> dict[str, Any]:
+        """Full market quote for up to 500 instruments in ONE call.
+
+        Kite accepts instrument tokens (ints) or "EXCHANGE:TRADINGSYMBOL"
+        strings and keys the response by the STRING form of what was passed
+        (so a token 12345 comes back under "12345"). Each row carries
+        `last_price`, `ohlc`, `depth`, and — what 6.8.3 needs —
+        `lower_circuit_limit` / `upper_circuit_limit`. One batched call is a
+        single unit of rate budget; callers batch, never loop per instrument.
+        """
+        data = await self._call(self._kc.quote, instruments)
+        return dict(data)
+
 
 __all__ = ["KiteException", "NetworkException", "ThrottledKite", "TokenException"]

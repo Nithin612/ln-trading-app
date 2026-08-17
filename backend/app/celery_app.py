@@ -30,6 +30,7 @@ celery_app = Celery(
         "app.tasks.market_data_tasks",
         "app.tasks.profile_tasks",
         "app.tasks.pair_tasks",
+        "app.tasks.circuit_tasks",
     ],
 )
 
@@ -91,6 +92,20 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.fo_tasks.record_option_chains",
         "schedule": crontab(
             minute="*/1",
+            hour="3-10",
+            day_of_week="1-5",
+        ),
+    },
+    # Circuit-band cache (Phase 6.8.3) — refresh lower/upper circuit limits for
+    # the active universe every 15 min in the market window (bands are intraday-
+    # static; the task re-checks hours/holiday/token and idles otherwise). TTL
+    # (circuit_band_ttl_s=1800) exceeds the cadence, so a live band never expires
+    # between refreshes; when the worker stops, bands go stale and the gate fails
+    # open. First fire 3:45 UTC = 9:15 IST covers the market-open entry burst.
+    "refresh-circuit-bands": {
+        "task": "app.tasks.circuit_tasks.refresh_circuit_bands",
+        "schedule": crontab(
+            minute="*/15",
             hour="3-10",
             day_of_week="1-5",
         ),

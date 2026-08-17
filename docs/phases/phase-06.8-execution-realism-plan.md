@@ -1,7 +1,10 @@
 # Phase 6.8 (PROPOSED) — Execution Realism & Exchange-Safety · adjudication + build tracker
 
 **Status: APPROVED 2026-08-17 (user) — scope LOCKED. ▶ BUILDING: 6.8.1 ✅ DONE (live-smoke
-verified against real ticks 15:26 IST) · 6.8.2 ✅ DONE · next = 6.8.3 circuit-band overlay.**
+verified against real ticks 15:26 IST) · 6.8.2 ✅ DONE · 6.8.3 ✅ BUILT (shadow-first, on the
+Phase-6 branch) · next = 6.8.4 open-book MTM. All 6.8 slices build on
+`feature/phase6-overlay-walkforward-retune`; paper day-1 deferred until the phase is done + user
+"proceed"; merge to main only after.**
 Decisions taken:
 **(1)** a distinct **Phase 6.8** between Phase 6 and MCE; **(2) full scope** — all six
 paper-safe slices + the research track (R1/R2) + the F1 `market_cap` spike, with the
@@ -245,7 +248,7 @@ listed are the mandatory ones for the files touched.
 - **§8 backtest?** No (paper-fill only; document the paper-clock reset).
 - **Effort.** M. **Dependency.** 6.8.1.
 
-### 6.8.3 — Circuit-band eligibility overlay (the best new idea)
+### 6.8.3 — Circuit-band eligibility overlay (the best new idea) — ✅ BUILT 2026-08-17 (shadow-first)
 *Answers review §3.1.2. Frozen engine: untouched (a downstream overlay).*
 
 - **The case.** If a long position's stock hits **lower circuit**, there are zero
@@ -679,3 +682,35 @@ nothing left to discover about the exchange, only about the order API.
   - **Deployed (2026-08-17).** 6.8.2 fast-forwarded onto the deployed branch
     `feature/phase6-overlay-walkforward-retune` (now at `af13e0c`) so tomorrow's worker/backend load
     the spread-aware model. Config-only, no migration. Revert if needed: `git reset --hard 92a1963`.
+
+- **2026-08-17 — 6.8.3 BUILT (circuit-band eligibility overlay), shadow-first.** A long pinned near
+  its LOWER circuit can't be exited (no buyers, stop can't fill at any price); a short near the UPPER
+  band is the mirror. New downstream overlay (frozen engine untouched, the `regime_guard` shape) skips
+  entering a name whose entry sits within `circuit_proximity_pct` (1.5%) of its ADVERSE band —
+  long→lower, short→upper. New: `signals/circuit_guard.py` (pure `evaluate` + `order_block_reason`),
+  `broker/circuit_bands.py` (Redis `circuit:{stock_id}`, TTL 1800s, `parse_quote_band`/`refresh_bands`/
+  `get_circuit_band`), `broker/kite_rest.py::ThrottledKite.quote`, `tasks/circuit_tasks.py`
+  (`refresh_circuit_bands` beat every 15 min in the market window), `services/circuit_gate_shadow.py`
+  (+ `make analysis` sidecar `circuit-gate-shadow-<date>.md` + readiness banner). Knobs
+  `circuit_gate_mode` (default **shadow**) / `circuit_proximity_pct` / `circuit_bands_enabled` /
+  `circuit_band_ttl_s`.
+  - **Band-fetch decision (user, 2026-08-17):** a **dedicated Celery task** caches bands to Redis; the
+    money-path `place_order` does only a sub-ms Redis read + fail-open. Chosen over on-demand fetch (no
+    external I/O on the order path) and over folding into `live_worker` (don't touch the soak-proven
+    live loop). Bands come from a live market-hours `quote()` because they are `prev_close ± band%` and
+    the per-stock band% exists only in Kite `quote()` — not on the `MODE_FULL` tick wire.
+  - **Fail-open everywhere · `off` is a true no-op** (no read, no stamp). Every entry is judged and the
+    verdict stamped on `orders.broker_payload["circuit_gate"]` (no migration); shadow/active only.
+    Evidence accrues once paper trading resumes (deferred), so the sidecar is dormant until then.
+  - **Reviews (2026-08-17).** **bug-hunter → 1 MEDIUM, FIXED** — the shadow outcome-linkage
+    double-counted repeat/average-in entries sharing a `signal_id` (and collapsed reopened positions
+    via dict overwrite), inflating the readiness bar toward a premature flip; fixed by dedup-by-signal
+    + reopen-safe Σ (`_link_blocked_outcomes`/`_load_outcomes_and_symbols`) + 2 regression tests.
+    Everything else CLEAN (order-path fail-open, JSONB stamp persistence, resource lifecycle, batching,
+    Decimal, task edge cases, staleness, guard direction). **quant-verifier → PASS-WITH-NOTES** (3
+    INFO): direction correctness verified all six cases, frozen engine UNTOUCHED, no look-ahead, Decimal
+    clean, overlay lifecycle sound, dedup fix confirmed. Applied #1 (`off` = zero-footprint) + #3
+    (report wording); skipped #2 (`_pos_side` default — fine for schema-validated BUY/SELL, and raising
+    would violate fail-open). **30 tests, mypy strict + ruff clean.**
+  - **NEXT = 6.8.4** continuous open-book MTM (carried-position gap). Tune `circuit_proximity_pct` from
+    the shadow evidence once it accrues, not pre-data.

@@ -7,6 +7,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6.8): 6.8.3 — circuit-band eligibility overlay (2026-08-17)
+
+A long whose stock is pinned near its **lower** circuit has no buyers — its stop cannot fill at any
+price, software or exchange (a structurally un-exitable trade); a short near the **upper** band is the
+mirror. New downstream eligibility overlay skips entering a name whose entry sits within
+`circuit_proximity_pct` (default **1.5%**) of its ADVERSE band. Frozen confluence engine untouched
+(same shape as the regime gate) — and **shadow-first**: `circuit_gate_mode` defaults to `shadow`
+(measure-only), flipped to `active` later on forward evidence + explicit sign-off, fully reversible.
+
+Bands aren't on the `MODE_FULL` tick wire, so a new market-hours Celery task
+(`refresh_circuit_bands`, every 15 min) fetches `lower/upper_circuit_limit` for the active NSE EQ
+universe in one batched `ThrottledKite.quote()` and caches them to Redis `circuit:{stock_id}` (TTL
+`circuit_band_ttl_s`=1800). The order path only **reads** that cache (sub-ms) — no external call on the
+money path. **Fail-open** throughout: no cached band (task not run, market closed, bands disabled) ⇒
+the entry is eligible; a missing band never blocks an otherwise-valid signal.
+
+Every paper entry is judged and the verdict stamped on `orders.broker_payload["circuit_gate"]`
+(no migration). `make analysis` gains a `circuit-gate-shadow-<date>.md` sidecar + readiness banner
+(mirrors the regime-gate one): what the gate would suppress and, for the resolved subset, whether the
+blocked trades were net-losing — the forward evidence for the eventual flip. New:
+`app/signals/circuit_guard.py`, `app/broker/circuit_bands.py`, `app/tasks/circuit_tasks.py`,
+`app/services/circuit_gate_shadow.py`; knobs `circuit_gate_mode` / `circuit_proximity_pct` /
+`circuit_bands_enabled` / `circuit_band_ttl_s`. 27 new tests (guard direction + fail-open, band
+parse/cache round-trip, order-path shadow/active/fail-open, shadow-report aggregation).
+
 ### feat(phase6.8): 6.8.2 — spread-aware slippage & impact model (2026-08-17)
 
 Paper fills stop pretending every stock trades like a Nifty large-cap. When 6.8.1's live
