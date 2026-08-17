@@ -7,6 +7,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6.8): 6.8.4 — continuous open-book MTM (carried-position gap) (2026-08-17)
+
+Pure-reporting slice (`services/daily_report.py` only). The rich per-trade excursion narrative
+(rolling MFE/MAE, chase, timing) was centred on positions opened *that day* — a swing carried for a
+week got an EoD mark + heat line but no rolling write-up, so a position quietly bleeding toward its
+stop over three days wasn't narrated until it closed. Now `DailyReport.carried` collects still-open
+positions opened on a PRIOR day, and §3 renders the full `_render_trade_block` for each (with the open
+DATE), marked to **this day's cutoff** — the excursion is bounded at `min(now, end-of-day)`, so a
+carried hold's rolling MFE on day D can never see D+1's bars (no look-ahead).
+
+The weekly `open_mtm_latest` becomes a per-trading-day series (`WeekSummary.open_mtm_series`): one point
+per trading day (holiday/future-day skipped), each the gross unrealized of all positions open at that
+day's cutoff, marked to the last complete 1m close ≤ cutoff (new `_open_book_mtm` / `_last_1m_close_at`).
+Read-only, temporally bounded — no future-bar leakage. The row-classification loop was extracted to a
+behavior-preserving `_place_row` helper.
+
+Reviews: quant-verifier PASS (no-look-ahead verified on every mark/excursion path; SHORT/LONG mark sign
+correct; `_place_row` byte-identical; frozen engine untouched). test-guardian raised coverage gaps on
+`_open_book_mtm`'s None-mark/closed-boundary branches and the render date — all fixed. **27
+daily-report tests** (7 new: carried rolling MFE + no-look-ahead, weekly per-day series, no-future-bar
+leakage, closed/no-tape boundary, SHORT carried sign, empty-carried header absence, holiday/future skip).
+
 ### feat(phase6.8): 6.8.3 — circuit-band eligibility overlay (2026-08-17)
 
 A long whose stock is pinned near its **lower** circuit has no buyers — its stop cannot fill at any

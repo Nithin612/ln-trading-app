@@ -33,9 +33,10 @@ from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
-from sqlalchemy import select, text
+from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.market_data import Ohlcv1m
 from app.models.signal import Signal, SignalOutcome
 from app.models.stock import Stock
 from app.models.trading import Order, Position
@@ -227,6 +228,10 @@ class DailyReport:
     opened: list[TradeRow] = field(default_factory=list)
     closed: list[TradeRow] = field(default_factory=list)
     still_open: list[TradeRow] = field(default_factory=list)
+    # Carried = still open at day-end AND opened on a PRIOR day (6.8.4). A subset of
+    # `still_open`, surfaced separately so a multi-day hold quietly bleeding toward
+    # its stop gets the rolling MFE/MAE narrative, not just an EoD heat line.
+    carried: list[TradeRow] = field(default_factory=list)
     realized_today: Decimal = Decimal("0")
     trades_today: int = 0
     daily_loss_cap: Decimal = Decimal("0")
@@ -378,6 +383,30 @@ async def _build_trade_row(
     )
 
 
+def _place_row(
+    report: DailyReport, row: TradeRow, *, day_start: datetime, day_end: datetime
+) -> None:
+    """Classify one trade row into the report's buckets (opened/closed/still-open/
+    carried) and fold its open-book contributions into the portfolio totals."""
+    pos = row.position
+    if day_start <= pos.opened_at < day_end:
+        report.opened.append(row)
+    if pos.closed_at is not None and day_start <= pos.closed_at < day_end:
+        report.closed.append(row)
+    if pos.closed_at is None or pos.closed_at >= day_end:
+        report.still_open.append(row)
+        if pos.opened_at < day_start:  # opened on a prior day → carried (6.8.4)
+            report.carried.append(row)
+        if row.eod_unrealized is not None:
+            report.open_unrealized_eod += row.eod_unrealized
+        if row.chase is not None:
+            report.open_risk_total += row.chase.actual_risk_inr
+        if row.locked_inr is not None:
+            report.locked_total += row.locked_inr
+    if row.given_back is not None:
+        report.given_back_total += row.given_back
+
+
 async def build_daily_report(
     db: AsyncSession, *, day: date, user_id: int, now: datetime | None = None
 ) -> DailyReport:
@@ -428,22 +457,7 @@ async def build_daily_report(
             report_end=report_end,
             er_map=er_map,
         )
-        opened_today = day_start <= pos.opened_at < day_end
-        closed_today = pos.closed_at is not None and day_start <= pos.closed_at < day_end
-        if opened_today:
-            report.opened.append(row)
-        if closed_today:
-            report.closed.append(row)
-        if pos.closed_at is None or pos.closed_at >= day_end:
-            report.still_open.append(row)
-            if row.eod_unrealized is not None:
-                report.open_unrealized_eod += row.eod_unrealized
-            if row.chase is not None:
-                report.open_risk_total += row.chase.actual_risk_inr
-            if row.locked_inr is not None:
-                report.locked_total += row.locked_inr
-        if row.given_back is not None:
-            report.given_back_total += row.given_back
+        _place_row(report, row, day_start=day_start, day_end=day_end)
 
     # Realized P&L / trade count for the day (IST) — reuse the breaker helpers'
     # semantics but bounded to the report day rather than "today".
@@ -704,6 +718,15 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
         out.append("_No entries opened on this day._")
         out.append("")
 
+    # Carried positions (6.8.4) — the rolling MFE/MAE narrative for holds opened on
+    # a PRIOR day, marked to THIS day's cutoff (no look-ahead). Without this a swing
+    # bleeding toward its stop over several days is never narrated until it closes.
+    if r.carried:
+        out.append("### Carried positions (opened earlier) — rolling tape to this day's cutoff")
+        out.append("")
+        for t in r.carried:
+            out.extend(_render_trade_block(t, show_date=True))
+
     # 4. Engine performance ------------------------------------------------- #
     out.extend(_render_engine_section(r))
 
@@ -775,15 +798,17 @@ def _render_fill_realism_section(rows: list[FillRealismRow]) -> list[str]:
     return out
 
 
-def _render_trade_block(t: TradeRow) -> list[str]:
+def _render_trade_block(t: TradeRow, *, show_date: bool = False) -> list[str]:
     pos = t.position
     sig = t.signal
     c = t.chase
     exc = t.excursion
     klass = sig.classification if sig else "—"
     conf = f"{sig.confidence_pct}%" if sig else "—"
+    # Carried positions (opened a prior day) show the open DATE, not just the time.
+    opened = _ist_date(pos.opened_at) if show_date else _ist(pos.opened_at)
     out: list[str] = []
-    out.append(f"### {t.symbol} — {pos.side} {klass} {conf}  ·  opened {_ist(pos.opened_at)} IST")
+    out.append(f"### {t.symbol} — {pos.side} {klass} {conf}  ·  opened {opened} IST")
     if sig is not None and c is not None:
         out.append(
             f"- **Plan:** entry {c.sig_entry:,.2f} · SL {c.sig_sl:,.2f} · "
@@ -986,6 +1011,10 @@ class WeekSummary:
     chased: int = 0
     given_back_total: Decimal = Decimal("0")  # counted ONCE per position over the week
     open_mtm_latest: Decimal = Decimal("0")  # open-book mark on the most recent day
+    # Open-book mark-to-market per trading day (6.8.4): (day, gross unrealized of all
+    # positions open at that day's cutoff). A day-by-day series, not latest-only, so a
+    # carried book's heat is visible as it evolves across the week.
+    open_mtm_series: list[tuple[date, Decimal]] = field(default_factory=list)
 
 
 async def _opened_count(db: AsyncSession, user_id: int, start: datetime, end: datetime) -> int:
@@ -1031,6 +1060,55 @@ async def _pnl_for_week(db: AsyncSession, user_id: int, monday: date) -> list[Da
     return days
 
 
+async def _last_1m_close_at(
+    db: AsyncSession, stock_id: int, cutoff: datetime
+) -> Decimal | None:
+    """The mark: last COMPLETE 1m close at or before `cutoff`. Temporally bounded
+    (`time <= cutoff`) so no future bar leaks in — the same discipline as
+    `load_1m_bars`. ``None`` when the tape has no bar for the stock yet."""
+    close = (
+        await db.execute(
+            select(Ohlcv1m.close)
+            .where(
+                Ohlcv1m.stock_id == stock_id,
+                Ohlcv1m.is_complete.is_(True),
+                Ohlcv1m.time <= cutoff,
+            )
+            .order_by(Ohlcv1m.time.desc())
+            .limit(1)
+        )
+    ).scalars().first()
+    return _d(close) if close is not None else None
+
+
+async def _open_book_mtm(db: AsyncSession, user_id: int, cutoff: datetime) -> Decimal:
+    """Gross unrealized P&L of every paper position OPEN at `cutoff`, each marked to
+    the last 1m close ≤ cutoff. 0 when the book is flat. Read-only, no look-ahead —
+    a position that closed after `cutoff` is still treated as open as of `cutoff`."""
+    rows = (
+        await db.execute(
+            select(Position).where(
+                Position.user_id == user_id,
+                Position.mode == "paper",
+                Position.opened_at <= cutoff,
+                or_(Position.closed_at.is_(None), Position.closed_at > cutoff),
+            )
+        )
+    ).scalars().all()
+    total = Decimal("0")
+    for pos in rows:
+        mark = await _last_1m_close_at(db, pos.stock_id, cutoff)
+        if mark is None:
+            continue
+        total += compute_pnl(
+            side=pos.side,
+            entry=_d(pos.avg_entry_price),
+            exit_price=mark,
+            quantity=pos.quantity,
+        )
+    return total.quantize(_Q2)
+
+
 async def build_week_summary(
     db: AsyncSession, *, monday: date, user_id: int, now: datetime | None = None
 ) -> WeekSummary:
@@ -1060,7 +1138,22 @@ async def build_week_summary(
     # Give-back counted ONCE per position over the whole week (summing the daily
     # figures would count a multi-day hold on every day it was open).
     given_back = await _week_giveback(db, user_id=user_id, monday=monday, now=now)
-    open_mtm = reports[-1].open_unrealized_eod if reports else Decimal("0")
+
+    # Open-book MTM series (6.8.4): one point per TRADING day in the week — the
+    # carried book's heat as it evolves, not just the latest day. Each day is marked
+    # to min(day-end, now), so a partial current day marks to now and never past it.
+    from app.services.market_calendar import is_trading_day
+
+    open_mtm_series: list[tuple[date, Decimal]] = []
+    for dp in this_week:
+        day_start, day_end = ist_day_bounds(dp.day)
+        cutoff = min(day_end, now)
+        if cutoff <= day_start:  # a future day in the current week — nothing yet
+            continue
+        if not await is_trading_day(db, dp.day):
+            continue
+        open_mtm_series.append((dp.day, await _open_book_mtm(db, user_id, cutoff)))
+    open_mtm = open_mtm_series[-1][1] if open_mtm_series else Decimal("0")
 
     return WeekSummary(
         monday=monday,
@@ -1074,6 +1167,7 @@ async def build_week_summary(
         chased=chased,
         given_back_total=given_back,
         open_mtm_latest=open_mtm,
+        open_mtm_series=open_mtm_series,
     )
 
 
@@ -1168,9 +1262,15 @@ def render_week_markdown(w: WeekSummary) -> str:
         f"- **Profit given back** (per-position peak → final, once each): "
         f"{_signed_inr(-w.given_back_total)}"
     )
-    out.append(
-        f"- **Open book mark-to-market (most recent day):** {_signed_inr(w.open_mtm_latest)}"
-    )
+    if w.open_mtm_series:
+        series = " · ".join(
+            f"{d.strftime('%a %m-%d')} {_signed_inr(v)}" for d, v in w.open_mtm_series
+        )
+        out.append(f"- **Open book mark-to-market (per trading day):** {series}")
+    else:
+        out.append(
+            f"- **Open book mark-to-market (most recent day):** {_signed_inr(w.open_mtm_latest)}"
+        )
     out.append("")
     out.append("## Read")
     out.append("")

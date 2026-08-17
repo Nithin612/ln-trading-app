@@ -37,7 +37,11 @@ new model starts fresh.** **▶ 6.8.3 (circuit-band eligibility overlay) BUILT s
 short→upper): a long into the lower circuit has no buyers, so its stop can't fill. Bands from a
 market-hours task's batched Kite `quote()` → Redis `circuit:{stock_id}`; the order path only READS the
 cache (fail-open). Reviews: bug-hunter 1 MEDIUM (shadow double-count) FIXED + regression; quant-verifier
-PASS-WITH-NOTES (frozen engine untouched, direction verified). 30 tests. NEXT = 6.8.4 open-book MTM.
+PASS-WITH-NOTES (frozen engine untouched, direction verified). 30 tests. **▶ 6.8.4 (continuous open-book
+MTM) DONE 2026-08-17** — carried holds (opened a prior day, still open) now get the rolling MFE/MAE
+narrative marked to each day's cutoff (no look-ahead), and the weekly open-MTM is a per-trading-day
+series; pure-reporting, frozen engine untouched. Reviews: quant-verifier PASS, test-guardian gaps all
+fixed; 27 daily-report tests. NEXT = 6.8.5 CA-adjust OPEN paper positions.
 **GOVERNANCE (user 2026-08-17): all 6.8 slices build on the Phase-6 branch itself; paper-trading day 1
 is DEFERRED until the phase is done AND the user says proceed; merge to `main` only after.** Full
 adjudication of the `REAL_WORLD_NSE_BSE`
@@ -272,7 +276,7 @@ which is what Phase-6 expectancy calibration is for.
 | 4 | F&O analytics | **✅ backend done · phase-gate PASS 2026-08-06** (merged to main; UI = Phase 5) | [phase-04](phases/phase-04-fo-suggestions.md) | 4.1 chain/PCR/max-pain/basis/VIX-regime · 4.2 Rust BS/Black-76 IV+Greeks (`tradecore`) + IV-rank · 4.3 option-selling engine (defined-risk index-only; breakeven-POP; expectancy report-only=VRP; fail-closed VIX veto; user-calibrated `SellRules`). Follow-ups: confluence direction-tilt, event/ban gate (=deferred Market Context Engine), Kite SPAN margin, forward-validation dashboard (P6) · 🧭 **Nautilus doc** §9 — Greeks as a first-class data type; options/accounting (margin) refs |
 | 5 | UI overhaul | **✅ slices 5.1–5.4 done, MERGED to main 2026-08-07** (`make check` green; bug-hunter + ui-reviewer clean; 60 fps MEASURED and MET; visual smoke passed in all 5 themes — only `/phase-gate` remains) | [phase-05](phases/phase-05-ui-overhaul.md) | 5.1 `useLiveQuotes` v2 (rAF-batched; fixed socket-churn, resubscribe-per-render + subscription-leak bugs) + `useVirtualRows` · 5.2 **F&O page** (chain ladder w/ per-leg IV+Greeks via `/fo/chain?greeks=true`, `/fo/underlyings`, `/fo/expiries`, strategy cards, expectancy labelled report-only) · 5.3 style pages v2 (committed-vs-forming, outcome stats w/ small-sample refusal, factor drawer) · 5.4 Live Signals feed + opt-in notifications (bursts coalesce). **IA + slate default were already done in Phase 3.** 🧭 **Nautilus doc** §4.2 — cache-then-publish lets UI subscribe without touching producers |
 | 6 | Outcome tracking + entry-selection | **▶ BUILT 6.1–6.5 shadow-first (2026-08-12→15); regime gate ACTIVE; close ritual pending** — see the STATE block + `phase-06-plan.md` | [phase-06-plan](phases/phase-06-plan.md) | 6.1 MFE/MAE · 6.2 entry attribution (live+corpus) · gate experiment + §8 walk-forward · regime-gate overlay (ACTIVE) · 6.4 weight-retune (shadow) · 6.5 pair-trading (shadow, slices 1–4) · 🧭 **Nautilus doc** §7 — mimalloc on batch backtest sweeps; §4.3 richer bar aggregations for research |
-| 6.8 | Execution Realism & Exchange-Safety (paper-safe) | **▶ IN PROGRESS — 6.8.1 + 6.8.2 + 6.8.3 DONE + reviewed 2026-08-17** | [phase-06.8-plan](phases/phase-06.8-execution-realism-plan.md) | 6.8.1 ✅ order-book depth capture (`depth:{stock_id}`; both consumers; pipelined on live-worker) · 6.8.2 ✅ spread-aware slippage/impact (replaces flat 2bps) · 6.8.3 ✅ circuit-band eligibility overlay (shadow-first, regime-gate pattern; band-refresh task → Redis `circuit:{stock_id}`) · 6.8.4 open-book-MTM carried-position gap · 6.8.5 CA-adjust OPEN paper positions · 6.8.6 silent-feed-outage alarm · research (gated, non-blocking): R1 VWAP/RVOL as confluence factors (§8+oracle regen) + R2 weekly spread-width gate · spike: F1 `market_cap` writer (de-risks MCE keystone) |
+| 6.8 | Execution Realism & Exchange-Safety (paper-safe) | **▶ IN PROGRESS — 6.8.1–6.8.4 DONE + reviewed 2026-08-17** | [phase-06.8-plan](phases/phase-06.8-execution-realism-plan.md) | 6.8.1 ✅ order-book depth capture (`depth:{stock_id}`; both consumers; pipelined on live-worker) · 6.8.2 ✅ spread-aware slippage/impact (replaces flat 2bps) · 6.8.3 ✅ circuit-band eligibility overlay (shadow-first, regime-gate pattern; band-refresh task → Redis `circuit:{stock_id}`) · 6.8.4 ✅ open-book-MTM carried-position gap (rolling MFE/MAE for carried holds + weekly per-day open-MTM series) · 6.8.5 CA-adjust OPEN paper positions · 6.8.6 silent-feed-outage alarm · research (gated, non-blocking): R1 VWAP/RVOL as confluence factors (§8+oracle regen) + R2 weekly spread-width gate · spike: F1 `market_cap` writer (de-risks MCE keystone) |
 | 7 | Live-trading hardening | planned | — | Kite orders behind trading_mode + 30-day gate, kill switch, reconciliation, VPS runbook · 🧭 **Nautilus doc** §6 — **SLICE 1 = RiskEngine single-gate** (test-first, equivalence-pinned) → then BrokerAdapter port · order FSM (Denied vs Rejected) · reconciliation |
 
 > **🧭 Nautilus doc pointers** (added 2026-08-01): before starting and at the
@@ -306,11 +310,14 @@ Phase-7 live). Full adjudication of the `REAL_WORLD_NSE_BSE` external review + t
 `phases/phase-06.8-execution-realism-plan.md`. **▶ 6.8.1 DONE + live-smoke verified and 6.8.2
 (spread-aware slippage) DONE + agent-reviewed CLEAN (bug-hunter + quant-verifier) + deployed onto
 this Phase-6 branch, all 2026-08-17. ▶ 6.8.3 circuit-band eligibility overlay BUILT shadow-first +
-reviewed (bug-hunter 1 MEDIUM fixed, quant-verifier PASS) 2026-08-17 — NEXT = 6.8.4 open-book MTM**
+reviewed (bug-hunter 1 MEDIUM fixed, quant-verifier PASS) 2026-08-17. ▶ 6.8.4 continuous open-book MTM
+DONE + reviewed (quant-verifier PASS, test-guardian gaps fixed) 2026-08-17 — NEXT = 6.8.5 CA-adjust OPEN
+paper positions**
 (6.8.3 was the plan's "best new idea": a long whose stock hits LOWER circuit has zero buyers, so its
 stop cannot fill at any price; bands cached to Redis by a market-hours task, order path reads only,
 fail-open, shadow-first — evidence accrues via `circuit-gate-shadow-<date>.md` once paper trading
-resumes). **6.8.2 clean-slate cut (2026-08-17, done):** clock reset in the UI + all
+resumes. 6.8.4 gave carried multi-day holds the rolling MFE/MAE narrative + a weekly per-trading-day
+open-MTM series — pure reporting, no look-ahead). **6.8.2 clean-slate cut (2026-08-17, done):** clock reset in the UI + all
 26 open paper positions flattened at the 15:29 IST close (net +₹7,222.66) → book empty. Remaining
 follow-up (not a code task): **watch §9 "Fill realism"** in the daily reports to see the ₹ the flat
 model had been under-charging, and retune `paper_impact_k_bps` from THAT evidence rather than

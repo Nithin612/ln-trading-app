@@ -19,13 +19,16 @@ from app.models.market_data import Ohlcv1m
 from app.models.signal import Signal
 from app.models.trading import Position
 from app.services.daily_report import (
+    _open_book_mtm,
     _render_fo_section,
     _render_shadow_section,
     build_daily_report,
     build_fo_health,
     build_shadow_health,
+    build_week_summary,
     chase_metrics,
     render_markdown,
+    render_week_markdown,
     tape_excursion,
 )
 from app.services.fo_suggestions import DEFAULT_SELL_RULES
@@ -616,3 +619,220 @@ async def test_shadow_section_flags_a_wholly_silent_day(db: AsyncSession) -> Non
     assert "## 8. Intraday shadow layer" in md
     assert "never tradeable" in md
     assert "Nothing minted today" in md
+
+
+# ── 6.8.4 — carried-position rolling MFE/MAE + weekly open-MTM series ──────────
+async def test_carried_position_rolling_mfe_no_lookahead(db: AsyncSession) -> None:
+    """6.8.4: a position opened on a PRIOR day is 'carried' — it gets the rolling
+    MFE/MAE narrative, marked to each day's cutoff with NO future-bar leakage."""
+    user = await create_test_user(db, email="carry@example.com")
+    stock = await make_stock(db, symbol="INFY")
+    opened = datetime(2026, 8, 3, 4, 0, tzinfo=UTC)  # Mon 09:30 IST
+    sig = await _signal(db, stock.id, created=opened, entry="100", sl="95", tp="120")
+    pos = Position(
+        user_id=user.id, stock_id=stock.id, mode="paper", side="LONG", quantity=10,
+        avg_entry_price=Decimal("100"), current_sl=Decimal("95"), current_tp=Decimal("120"),
+        trail_state="none", realized_pnl=Decimal("0"), opened_at=opened, signal_id=sig.id,
+    )
+    db.add(pos)
+    # Mon high 103 · Tue high 106 · Wed high 112 — the peak grows across days.
+    for day_n, row in [
+        (3, (1, "100", "103", "99", "102")),
+        (4, (1, "102", "106", "101", "105")),
+        (5, (1, "105", "112", "104", "110")),
+    ]:
+        _candles(db, stock.id, datetime(2026, 8, day_n, 4, 0, tzinfo=UTC), [row])
+    await db.commit()
+
+    # Tue report (D-1): carried, MFE bounded to Tue cutoff → sees 106, NOT 112.
+    tue = await build_daily_report(
+        db, day=date(2026, 8, 4), user_id=user.id, now=datetime(2026, 8, 4, 10, 0, tzinfo=UTC)
+    )
+    assert not tue.opened  # opened Monday, not today
+    assert len(tue.carried) == 1
+    carried = tue.carried[0]
+    assert carried.symbol == "INFY"
+    assert carried.excursion is not None
+    assert carried.excursion.mfe_price == Decimal("106")  # no look-ahead into Wed's 112
+    assert carried.excursion.mfe_r == Decimal("1.200")
+    md = render_markdown(tue)
+    assert "Carried positions" in md and "INFY" in md
+    # show_date=True must render the OPEN DATE (08-03), not just a time — the whole
+    # point of the multi-day narrative (a regression to time-only `_ist` would pass
+    # "INFY" but drop the date).
+    assert "08-03" in md
+
+    # Wed report (D): the rolling MFE advances to 112.
+    wed = await build_daily_report(
+        db, day=date(2026, 8, 5), user_id=user.id, now=datetime(2026, 8, 5, 10, 0, tzinfo=UTC)
+    )
+    assert len(wed.carried) == 1
+    assert wed.carried[0].excursion is not None
+    assert wed.carried[0].excursion.mfe_price == Decimal("112")
+    assert wed.carried[0].excursion.mfe_r == Decimal("2.400")
+
+
+async def test_weekly_open_mtm_series_per_trading_day(db: AsyncSession) -> None:
+    """6.8.4: the weekly open-book MTM is a per-trading-day series, not latest-only."""
+    user = await create_test_user(db, email="wk@example.com")
+    stock = await make_stock(db, symbol="TCS")
+    opened = datetime(2026, 8, 3, 4, 0, tzinfo=UTC)  # Mon 09:30 IST
+    sig = await _signal(db, stock.id, created=opened, entry="100", sl="95", tp="130")
+    pos = Position(
+        user_id=user.id, stock_id=stock.id, mode="paper", side="LONG", quantity=10,
+        avg_entry_price=Decimal("100"), current_sl=Decimal("95"), current_tp=Decimal("130"),
+        trail_state="none", realized_pnl=Decimal("0"), opened_at=opened, signal_id=sig.id,
+    )
+    db.add(pos)
+    # one close per day: Mon 102 · Tue 104 · Wed 103 · Thu 106 · Fri 110
+    for d, cl in [(3, "102"), (4, "104"), (5, "103"), (6, "106"), (7, "110")]:
+        base = datetime(2026, 8, d, 4, 0, tzinfo=UTC)
+        _candles(db, stock.id, base, [(1, cl, cl, cl, cl)])
+    await db.commit()
+
+    wk = await build_week_summary(
+        db, monday=date(2026, 8, 3), user_id=user.id, now=datetime(2026, 8, 7, 10, 0, tzinfo=UTC)
+    )
+    # one entry per trading day (Mon–Fri; no holidays seeded → all trading days)
+    assert [d for d, _ in wk.open_mtm_series] == [date(2026, 8, i) for i in range(3, 8)]
+    marks = dict(wk.open_mtm_series)
+    assert marks[date(2026, 8, 3)] == Decimal("20.00")  # 10 × (102 − 100)
+    assert marks[date(2026, 8, 5)] == Decimal("30.00")  # 10 × (103 − 100)
+    assert marks[date(2026, 8, 7)] == Decimal("100.00")  # 10 × (110 − 100)
+    assert wk.open_mtm_latest == Decimal("100.00")  # latest = last trading day
+    assert "per trading day" in render_week_markdown(wk)
+
+
+async def test_open_book_mtm_no_future_bar_leakage(db: AsyncSession) -> None:
+    """6.8.4: _open_book_mtm marks to the last close ≤ cutoff — a later bar (even
+    same day) never leaks into the mark."""
+    user = await create_test_user(db, email="leak@example.com")
+    stock = await make_stock(db, symbol="WIPRO")
+    opened = datetime(2026, 8, 3, 4, 0, tzinfo=UTC)
+    pos = Position(
+        user_id=user.id, stock_id=stock.id, mode="paper", side="LONG", quantity=10,
+        avg_entry_price=Decimal("100"), current_sl=Decimal("95"),
+        trail_state="none", realized_pnl=Decimal("0"), opened_at=opened,
+    )
+    db.add(pos)
+    # a bar at +5 min (close 101) and a later spike at +120 min (close 130)
+    _candles(
+        db, stock.id, opened,
+        [(5, "100", "101", "100", "101"), (120, "101", "131", "101", "130")],
+    )
+    await db.commit()
+    cutoff = datetime(2026, 8, 3, 4, 30, tzinfo=UTC)  # before the +120 spike
+    mtm = await _open_book_mtm(db, user.id, cutoff)
+    assert mtm == Decimal("10.00")  # marks to 101, never the future 130
+
+
+async def test_open_book_mtm_excludes_closed_and_skips_no_tape(db: AsyncSession) -> None:
+    """6.8.4 (test-guardian #1): _open_book_mtm marks only positions OPEN at the
+    cutoff, and skips a stock with no tape — the None-mark and closed-boundary
+    branches. (a) open+bar counts, (b) closed BEFORE cutoff excluded, (c) open but
+    no tape skipped, (d) closed AFTER cutoff still counted as open-as-of-cutoff."""
+    user = await create_test_user(db, email="mtm@example.com")
+    opened = datetime(2026, 8, 3, 4, 0, tzinfo=UTC)
+    cutoff = datetime(2026, 8, 3, 4, 30, tzinfo=UTC)
+
+    a = await make_stock(db, symbol="STKA")
+    _candles(db, a.id, opened, [(5, "100", "101", "100", "101")])  # → +10
+    b = await make_stock(db, symbol="STKB")
+    _candles(db, b.id, opened, [(5, "100", "120", "100", "120")])  # closed early → excluded
+    c = await make_stock(db, symbol="STKC")  # no tape at all
+    d = await make_stock(db, symbol="STKD")
+    _candles(db, d.id, opened, [(5, "100", "105", "100", "105")])  # closed later → +50
+
+    def _pos(stock_id: int, closed_at: datetime | None = None) -> Position:
+        return Position(
+            user_id=user.id, stock_id=stock_id, mode="paper", side="LONG", quantity=10,
+            avg_entry_price=Decimal("100"), current_sl=Decimal("95"), trail_state="none",
+            realized_pnl=Decimal("0"), opened_at=opened, closed_at=closed_at,
+        )
+
+    db.add(_pos(a.id))
+    db.add(_pos(b.id, closed_at=datetime(2026, 8, 3, 4, 15, tzinfo=UTC)))  # before cutoff
+    db.add(_pos(c.id))
+    db.add(_pos(d.id, closed_at=datetime(2026, 8, 3, 5, 0, tzinfo=UTC)))  # after cutoff
+    await db.commit()
+
+    # only (a) +10 and (d) +50; (b) excluded (closed early), (c) skipped (no tape)
+    assert await _open_book_mtm(db, user.id, cutoff) == Decimal("60.00")
+
+
+async def test_no_carried_section_when_none_carried(db: AsyncSession) -> None:
+    """6.8.4 (test-guardian #3): the 'Carried positions' header appears only when
+    there ARE carried holds — an opened-today-only report must not emit it empty."""
+    user = await create_test_user(db, email="nocarry@example.com")
+    stock = await make_stock(db, symbol="HDFCBANK")
+    opened = datetime(2026, 8, 5, 4, 0, tzinfo=UTC)  # opened TODAY
+    sig = await _signal(db, stock.id, created=opened, entry="100", sl="95", tp="120")
+    pos = Position(
+        user_id=user.id, stock_id=stock.id, mode="paper", side="LONG", quantity=10,
+        avg_entry_price=Decimal("100"), current_sl=Decimal("95"), current_tp=Decimal("120"),
+        trail_state="none", realized_pnl=Decimal("0"), opened_at=opened, signal_id=sig.id,
+    )
+    db.add(pos)
+    _candles(db, stock.id, opened, [(1, "100", "103", "99", "102")])
+    await db.commit()
+    report = await build_daily_report(
+        db, day=date(2026, 8, 5), user_id=user.id, now=datetime(2026, 8, 5, 10, 0, tzinfo=UTC)
+    )
+    assert report.opened and not report.carried
+    assert "Carried positions" not in render_markdown(report)
+
+
+async def test_carried_short_position_mark_sign(db: AsyncSession) -> None:
+    """6.8.4 (test-guardian #4): a SHORT carried position — a price RISE is adverse
+    (negative mark) and its MFE is the lowest low."""
+    user = await create_test_user(db, email="short@example.com")
+    stock = await make_stock(db, symbol="ADANIENT")
+    opened = datetime(2026, 8, 3, 4, 0, tzinfo=UTC)  # prior day
+    sig = await _signal(
+        db, stock.id, created=opened, entry="100", sl="105", tp="90", direction="SELL"
+    )
+    pos = Position(
+        user_id=user.id, stock_id=stock.id, mode="paper", side="SHORT", quantity=10,
+        avg_entry_price=Decimal("100"), current_sl=Decimal("105"), current_tp=Decimal("90"),
+        trail_state="none", realized_pnl=Decimal("0"), opened_at=opened, signal_id=sig.id,
+    )
+    db.add(pos)
+    # dips to 96 (favourable for a short), then rises to close 104 (adverse)
+    _candles(db, stock.id, opened, [(1, "100", "101", "96", "98")])
+    _candles(db, stock.id, datetime(2026, 8, 4, 4, 0, tzinfo=UTC), [(1, "99", "106", "99", "104")])
+    await db.commit()
+    report = await build_daily_report(
+        db, day=date(2026, 8, 4), user_id=user.id, now=datetime(2026, 8, 4, 10, 0, tzinfo=UTC)
+    )
+    assert len(report.carried) == 1
+    assert report.carried[0].excursion is not None
+    assert report.carried[0].excursion.mfe_price == Decimal("96")  # lowest low best for a short
+    # marked to last close 104 → adverse for a short → 10 × (100 − 104) = −40
+    mtm = await _open_book_mtm(db, user.id, datetime(2026, 8, 4, 10, 0, tzinfo=UTC))
+    assert mtm == Decimal("-40.00")
+
+
+async def test_weekly_series_skips_future_and_holiday(db: AsyncSession) -> None:
+    """6.8.4 (test-guardian #5): the per-day series covers only ELAPSED trading days
+    — a mid-week run stops at 'now', and a seeded holiday is skipped."""
+    from app.models.market_calendar import NseHoliday
+
+    user = await create_test_user(db, email="wkskip@example.com")
+    stock = await make_stock(db, symbol="SBIN")
+    opened = datetime(2026, 8, 3, 4, 0, tzinfo=UTC)  # Mon
+    pos = Position(
+        user_id=user.id, stock_id=stock.id, mode="paper", side="LONG", quantity=10,
+        avg_entry_price=Decimal("100"), current_sl=Decimal("95"), trail_state="none",
+        realized_pnl=Decimal("0"), opened_at=opened,
+    )
+    db.add(pos)
+    for d, cl in [(3, "102"), (4, "104"), (5, "103")]:  # Mon/Tue/Wed bars
+        _candles(db, stock.id, datetime(2026, 8, d, 4, 0, tzinfo=UTC), [(1, cl, cl, cl, cl)])
+    db.add(NseHoliday(holiday_date=date(2026, 8, 4), name="Test Holiday"))  # Tue is a holiday
+    await db.commit()
+
+    # run mid-week Wed 13:30 IST → series = Mon + Wed only (Tue holiday, Thu/Fri future)
+    wk = await build_week_summary(
+        db, monday=date(2026, 8, 3), user_id=user.id, now=datetime(2026, 8, 5, 8, 0, tzinfo=UTC)
+    )
+    assert [d for d, _ in wk.open_mtm_series] == [date(2026, 8, 3), date(2026, 8, 5)]

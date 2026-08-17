@@ -2,7 +2,8 @@
 
 **Status: APPROVED 2026-08-17 (user) — scope LOCKED. ▶ BUILDING: 6.8.1 ✅ DONE (live-smoke
 verified against real ticks 15:26 IST) · 6.8.2 ✅ DONE · 6.8.3 ✅ BUILT (shadow-first, on the
-Phase-6 branch) · next = 6.8.4 open-book MTM. All 6.8 slices build on
+Phase-6 branch) · 6.8.4 ✅ DONE (carried-position rolling MFE/MAE + weekly open-MTM series) · next =
+6.8.5 CA-adjust OPEN paper positions. All 6.8 slices build on
 `feature/phase6-overlay-walkforward-retune`; paper day-1 deferred until the phase is done + user
 "proceed"; merge to main only after.**
 Decisions taken:
@@ -285,7 +286,7 @@ listed are the mandatory ones for the files touched.
   sign-off. Shadow accrual first.
 - **Effort.** M. **Dependency.** none (parallel to 6.8.1).
 
-### 6.8.4 — Continuous open-book MTM — close the carried-position gap
+### 6.8.4 — Continuous open-book MTM — close the carried-position gap — ✅ DONE 2026-08-17
 *Answers review §6.3.2. Frozen engine: untouched (reporting only).*
 
 - **The case.** `make analysis` already marks open positions and reports open heat
@@ -714,3 +715,27 @@ nothing left to discover about the exchange, only about the order API.
     would violate fail-open). **30 tests, mypy strict + ruff clean.**
   - **NEXT = 6.8.4** continuous open-book MTM (carried-position gap). Tune `circuit_proximity_pct` from
     the shadow evidence once it accrues, not pre-data.
+
+- **2026-08-17 — 6.8.4 DONE (continuous open-book MTM), pure reporting.** Closes the actual §6.3.2
+  sliver: the rich per-trade excursion narrative was centred on positions opened *that day*, so a
+  multi-day carried hold got only an EoD mark + heat line, never a rolling MFE/MAE write-up until it
+  closed. Now `DailyReport.carried` (still-open AND opened on a prior day, a subset of `still_open`)
+  gets the full `_render_trade_block` in §3 — with the open DATE (`show_date`) — marked to THIS day's
+  cutoff (`report_end = min(now, end-of-day)`), so a carried hold's rolling MFE on day D can't see D+1
+  bars (no look-ahead). The weekly `open_mtm_latest` becomes a per-trading-day series
+  (`WeekSummary.open_mtm_series`): one point per trading day (holiday + future-day skipped), each the
+  gross unrealized of positions open at that day's cutoff, marked via new `_open_book_mtm` /
+  `_last_1m_close_at` (last complete 1m close ≤ cutoff, `is_complete` only). The classification loop was
+  extracted to a behavior-preserving `_place_row`. `daily_report.py` only; no migration, frozen engine
+  untouched.
+  - **Reviews.** **quant-verifier → PASS-WITH-NOTES** (2 INFO, both intended: `open_mtm_latest` source
+    shifted to the series' last value; an immaterial IST-midnight boundary). No-look-ahead verified on
+    every mark/excursion path; SHORT/LONG mark sign correct; `_place_row` byte-identical; frozen engine
+    untouched. **test-guardian → GAPS-FOUND, all fixed** — the 3 original tests were mutation-verified
+    honest, but `_open_book_mtm`'s None-mark/closed-boundary branches and the carried render's date
+    were uncovered. Added 4 tests (closed/no-tape boundary, SHORT carried sign, empty-carried header
+    absence, holiday/future-day skip) + the `08-03` date assertion. **27 daily-report tests, green;
+    mypy strict + ruff clean.** (test-guardian's mutation run transiently `git checkout`'d the
+    uncommitted file and cleanly re-applied it via `git apply` — working tree verified byte-intact
+    after.)
+  - **NEXT = 6.8.5** CA-adjust OPEN paper positions (today CA is quarantine-only).
