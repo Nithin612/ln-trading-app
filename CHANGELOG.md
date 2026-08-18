@@ -7,6 +7,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6.8): 6.8.5 — CA-adjust of OPEN paper positions (2026-08-18)
+
+CA detection was quarantine-only — it removed a flagged stock from the *selection* universe but did
+NOTHING to a position held through an ex-date. After a 5:1 split, a held position's `avg_entry_price`,
+`qty`, `current_sl`, `current_tp` were all off by 5×, so its P&L and its risk (R) were silently wrong —
+and `position_monitor` seeing the old SL against the ex-adjusted tape could false-stop-out and book a
+fake loss into the 30-day go-live clock.
+
+New `corporate_actions` table (a VERIFIED split/bonus: `action_type`, `ex_date`, `ratio_from:ratio_to`)
++ `position_corporate_actions` idempotency ledger (UNIQUE per position+action). An ex-date Celery worker
+(`apply_corporate_actions`, pre-market 08:15 IST) adjusts every OPEN paper position in the affected
+stock, **preserving R and reward:risk EXACTLY**: entry/peak follow the nominal ex-date price scale;
+SL/TP scale by their entry-relative distance × `old_qty/new_qty`, so `|entry−SL|×qty` is unchanged even
+when a fractional entitlement floors the qty (the dropped fraction is logged). `peak_pnl`/
+`unrealized_pnl` are ₹ amounts invariant under a split — untouched. **Idempotent** and **catch-up**
+(matches `ex_date ≤ today`, commits per position) so a missed pre-market run or a late-entered CA is
+picked up on the next run rather than leaving a position mis-priced.
+
+The ratio comes ONLY from the admin-verified row — never guessed from a price gap or parsed from
+headline text (a wrong ratio silently corrupts a held position). New admin API `POST/GET
+/corporate-actions` (`require_admin`). Auto-population from an NSE CA feed is deferred (a data-source
+decision). New: `models/corporate_action.py`, `services/ca_adjust.py`, `tasks/corporate_action_tasks.py`
++ beat, `api/v1/corporate_actions.py` + schema; reversible migration `a7b8c9d0e1f2`. **14 tests**
+(R-preservation to the paisa incl. short + fractional-entitlement, idempotency, ex-date scope, catch-up,
+admin auth/404/422/409). Run `make migrate`.
+
 ### feat(phase6.8): 6.8.4 — continuous open-book MTM (carried-position gap) (2026-08-17)
 
 Pure-reporting slice (`services/daily_report.py` only). The rich per-trade excursion narrative

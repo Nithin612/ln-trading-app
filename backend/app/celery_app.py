@@ -31,6 +31,7 @@ celery_app = Celery(
         "app.tasks.profile_tasks",
         "app.tasks.pair_tasks",
         "app.tasks.circuit_tasks",
+        "app.tasks.corporate_action_tasks",
     ],
 )
 
@@ -109,6 +110,14 @@ celery_app.conf.beat_schedule = {
             hour="3-10",
             day_of_week="1-5",
         ),
+    },
+    # Corporate-action adjustment of OPEN paper positions (Phase 6.8.5). Pre-market
+    # 08:15 IST = 02:45 UTC, AHEAD of the position monitor's 08:30 IST start, so a
+    # held position is corrected for a split/bonus before the stock trades ex.
+    # Idempotent (ledger) — a re-run is a no-op.
+    "apply-corporate-actions": {
+        "task": "app.tasks.corporate_action_tasks.apply_corporate_actions",
+        "schedule": crontab(hour=2, minute=45, day_of_week="1-5"),
     },
     # Signal expiry sweeper (SIGNAL_ENGINE.md §5: every 5 minutes). Weekday
     # window covers intraday cutoffs through post-close swing expiries;

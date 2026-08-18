@@ -2,8 +2,9 @@
 
 **Status: APPROVED 2026-08-17 (user) — scope LOCKED. ▶ BUILDING: 6.8.1 ✅ DONE (live-smoke
 verified against real ticks 15:26 IST) · 6.8.2 ✅ DONE · 6.8.3 ✅ BUILT (shadow-first, on the
-Phase-6 branch) · 6.8.4 ✅ DONE (carried-position rolling MFE/MAE + weekly open-MTM series) · next =
-6.8.5 CA-adjust OPEN paper positions. All 6.8 slices build on
+Phase-6 branch) · 6.8.4 ✅ DONE (carried-position rolling MFE/MAE + weekly open-MTM series) · 6.8.5 ✅
+DONE (CA-adjust OPEN positions — R-preserving split/bonus, idempotent+catch-up) · next = 6.8.6
+silent-feed-outage alarm. All 6.8 slices build on
 `feature/phase6-overlay-walkforward-retune`; paper day-1 deferred until the phase is done + user
 "proceed"; merge to main only after.**
 Decisions taken:
@@ -311,7 +312,7 @@ listed are the mandatory ones for the files touched.
   weekly series has one entry per trading day; no future-bar leakage.
 - **§8 backtest?** No. **Effort.** S. **Dependency.** none.
 
-### 6.8.5 — Corporate-action adjustment of OPEN paper positions
+### 6.8.5 — Corporate-action adjustment of OPEN paper positions — ✅ DONE 2026-08-18
 *Answers review §3.3.9 (paper half). Frozen engine: untouched.*
 
 - **The case.** CA detection today is **quarantine-only** — it removes a flagged stock
@@ -739,3 +740,33 @@ nothing left to discover about the exchange, only about the order API.
     uncommitted file and cleanly re-applied it via `git apply` — working tree verified byte-intact
     after.)
   - **NEXT = 6.8.5** CA-adjust OPEN paper positions (today CA is quarantine-only).
+
+- **2026-08-18 — 6.8.5 DONE (CA-adjust OPEN paper positions).** CA detection was quarantine-only (drop
+  a flagged stock from selection); a position held through an ex-date kept stale `avg_entry_price`/
+  `qty`/`current_sl`/`current_tp`, so its P&L + R were silently wrong and the monitor could false-stop-
+  out against the ex-adjusted tape (fake loss into the 30-day clock). New structured `corporate_actions`
+  (verified split/bonus: `action_type`, `ex_date`, `ratio_from:ratio_to`) + `position_corporate_actions`
+  idempotency ledger (UNIQUE per position+action). Ex-date Celery worker (`apply_corporate_actions`,
+  pre-market 08:15 IST = 02:45 UTC, ahead of the monitor's 08:30 start) adjusts every OPEN paper position
+  in the stock. New `services/ca_adjust.py`, `tasks/corporate_action_tasks.py` + beat, admin API
+  `POST/GET /corporate-actions` (`require_admin`) + schema; reversible migration `a7b8c9d0e1f2` (run
+  `make migrate` — done on dev).
+  - **Ratio-source decision (user, 2026-08-18): manual / admin-verified.** The ratio comes ONLY from the
+    admin-entered row — never guessed from a price gap or parsed from headline text (a wrong ratio
+    silently corrupts a held position). No structured NSE CA feed exists (the filings feed is headline
+    text, `ca_detector` is a >20% gap heuristic with no ratio), so auto-population is DEFERRED (a
+    data-source decision, like the `market_cap` blocker).
+  - **R preserved EXACTLY.** Entry/peak follow the nominal ex-date price scale (÷factor); SL/TP scale by
+    their entry-relative distance × `old_qty/new_qty`, so `|entry−SL|×qty` (R) and `|TP−entry|×qty`
+    (reward) are unchanged even when a fractional entitlement floors the qty (the dropped fraction is
+    logged — cash-in-lieu not credited in paper). `peak_pnl`/`unrealized_pnl` are ₹ invariants, untouched.
+  - **Reviews.** **quant-verifier → PASS-WITH-NOTES → 1 HIGH FIXED**: the first cut floored qty but
+    scaled prices by the exact nominal ratio, silently dropping R ~1.5% for a non-divisible fractional
+    bonus (e.g. 3:5 on qty 33). Fixed by the distance-scaling above (R now exact for divisible, to a
+    paisa for fractional) + the fractional-entitlement warning; INFO closed-position guard also added.
+    **bug-hunter → BUGS-FOUND → both FIXED**: (1) MED — equality-only ex-date match with no catch-up
+    would leave a missed/late CA un-applied → false stop-out; fixed to `ex_date ≤ today` catch-up. (2)
+    LOW — concurrent-run TOCTOU could raise an unhandled IntegrityError and abort the batch; fixed with
+    per-position commit + IntegrityError-skip (the `gap_fill` pattern). **14 tests, green; mypy strict +
+    ruff clean; migration up→down→up verified; full suite (1402) collects; app boots.**
+  - **NEXT = 6.8.6** silent-feed-outage alarm.

@@ -6,6 +6,7 @@ from app.api.v1 import (
     broker,
     calendar,
     categories,
+    corporate_actions,
     filings,
     fo,
     journal,
@@ -39,6 +40,7 @@ api_router.include_router(filings.router)
 api_router.include_router(fo.router)
 api_router.include_router(broker.router)
 api_router.include_router(trading.router)
+api_router.include_router(corporate_actions.router)
 api_router.include_router(strategy.router)
 api_router.include_router(journal.router)
 api_router.include_router(portfolio.router)

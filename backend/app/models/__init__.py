@@ -1,5 +1,6 @@
 from app.models.broker import BrokerToken, KiteInstrument
 from app.models.category import Category, StockCategory
+from app.models.corporate_action import CorporateAction, PositionCorporateAction
 from app.models.fo_data import FoBhavcopy, IndiaVixDaily, OptionChainSnapshot
 from app.models.journal import JournalEntry
 from app.models.market_calendar import NseHoliday
@@ -50,6 +51,8 @@ __all__ = [
     "KiteInstrument",
     "Order",
     "Position",
+    "CorporateAction",
+    "PositionCorporateAction",
     "JournalEntry",
     "FoBhavcopy",
     "IndiaVixDaily",
