@@ -53,11 +53,13 @@ else.
   waits on forward evidence. **The active build is now Phase 6.8 (Execution Realism
   & Exchange-Safety)** — 6.8.1 depth capture, 6.8.2 spread-aware slippage, and
   6.8.3 circuit-band eligibility overlay, 6.8.4 continuous open-book MTM (rolling
-  MFE/MAE for carried holds + weekly per-day open-MTM series), and 6.8.5 CA-adjust
-  OPEN paper positions (R-preserving split/bonus; admin-verified ratio; ex-date
-  worker, idempotent+catch-up; migration `a7b8c9d0e1f2`) are DONE (through
-  2026-08-18, all reviewed), next is 6.8.6 silent-feed-outage alarm
-  (`docs/phases/phase-06.8-execution-realism-plan.md`). All
+  MFE/MAE for carried holds + weekly per-day open-MTM series), 6.8.5 CA-adjust OPEN
+  paper positions (R-preserving split/bonus; admin-verified ratio; ex-date worker,
+  idempotent+catch-up; migration `a7b8c9d0e1f2`), and 6.8.6 silent-feed-outage alarm
+  (trading-calendar-aware EOD staleness header in the daily report) are DONE (through
+  2026-08-18, all reviewed) — **ALL SIX paper-safe slices complete**. Remaining =
+  the gated, non-blocking research track (R1/R2/F1); next = `/phase-gate` + user
+  "proceed" for paper day-1 (`docs/phases/phase-06.8-execution-realism-plan.md`). All
   6.8 slices build on the Phase-6 branch; **paper day-1 is DEFERRED until the phase
   is done + user "proceed"; merge to main only after.** Nothing auto-advances —
   the NEXT menu lives in the PHASES top block.

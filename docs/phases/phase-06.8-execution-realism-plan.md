@@ -3,8 +3,11 @@
 **Status: APPROVED 2026-08-17 (user) — scope LOCKED. ▶ BUILDING: 6.8.1 ✅ DONE (live-smoke
 verified against real ticks 15:26 IST) · 6.8.2 ✅ DONE · 6.8.3 ✅ BUILT (shadow-first, on the
 Phase-6 branch) · 6.8.4 ✅ DONE (carried-position rolling MFE/MAE + weekly open-MTM series) · 6.8.5 ✅
-DONE (CA-adjust OPEN positions — R-preserving split/bonus, idempotent+catch-up) · next = 6.8.6
-silent-feed-outage alarm. All 6.8 slices build on
+DONE (CA-adjust OPEN positions — R-preserving split/bonus, idempotent+catch-up) · 6.8.6 ✅ DONE
+(silent-feed-outage alarm — trading-calendar-aware EOD staleness header). **All SIX paper-safe slices
+DONE (2026-08-18).** Remaining = the gated, non-blocking research track (R1/R2) + F1 spike — optional,
+do NOT block phase close. Ready for `/phase-gate` + the user's "proceed" for paper day-1. All 6.8
+slices build on
 `feature/phase6-overlay-walkforward-retune`; paper day-1 deferred until the phase is done + user
 "proceed"; merge to main only after.**
 Decisions taken:
@@ -339,7 +342,7 @@ listed are the mandatory ones for the files touched.
 - **§8 backtest?** No (position accounting, not signal generation). **Effort.** M.
   **Dependency.** none.
 
-### 6.8.6 — Silent-feed-outage alarm
+### 6.8.6 — Silent-feed-outage alarm — ✅ DONE 2026-08-18
 *Answers review §2.2 (the reliability half). Frozen engine: untouched.*
 
 - **The case.** The month-long v2-era EOD outage (ingestion frozen 07-02→07-17,
@@ -770,3 +773,29 @@ nothing left to discover about the exchange, only about the order API.
     per-position commit + IntegrityError-skip (the `gap_fill` pattern). **14 tests, green; mypy strict +
     ruff clean; migration up→down→up verified; full suite (1402) collects; app boots.**
   - **NEXT = 6.8.6** silent-feed-outage alarm.
+
+- **2026-08-18 — 6.8.6 DONE (silent-feed-outage alarm), pure reporting — CLOSES the six paper-safe
+  slices.** New `services/feed_health.py::check_feed_staleness`: per EOD feed (`ohlcv_1d`,
+  `fo_bhavcopy`, `fii_dii_daily`), how many TRADING days behind its latest row is vs the last completed
+  EOD cycle (`_expected_latest_trading_day` — today if a trading day past 18:45 IST, else prev trading
+  day; so a weekend/holiday or a pre-EOD morning run raises no false alarm). `daily_report.py` renders a
+  loud "⚠️ FEED STALENESS ALARM" header above §1 when any feed is behind (quiet "Feeds current" line
+  otherwise); a `log.warning` per stale feed makes it loud even without the report. A staleness check,
+  not a metrics stack; notification channel deferred (none exists). No migration, frozen engine
+  untouched.
+  - **Reviews.** **bug-hunter → BUGS-FOUND, both FIXED (LOW):** (1) the days-behind count under-reported
+    by 1 when a feed's latest row fell on a NON-trading date (a holiday seeded after the row) — the
+    unsafe direction; fixed to count trading days STRICTLY AFTER `latest` (`trading_days_between(latest+1,
+    expected)`), robust to a non-trading `latest`. (2) the header uses wall-clock `now`, so it's stamped
+    "as of report generation" to disambiguate a historical `make analysis DATE=…` run. Calendar/IST math,
+    weekend/holiday handling, empty-feed path, UTC-date conversion, read-only, async all confirmed sound.
+    **test-guardian → GAPS-FOUND, all FIXED:** the calendar-awareness core (a stale gap spanning a
+    weekend/holiday) and the daily-report SEAM (build→render) both had surviving mutants — added
+    weekend-gap + holiday-in-gap tests, 2 integration tests through `build_daily_report`→`render_markdown`,
+    the 18:45 cutoff boundary (18:44 vs 18:45), and the log-warning (caplog). **13 tests, green; mypy
+    strict + ruff clean; full suite (1415) collects.**
+  - **▶ Phase status: all SIX paper-safe slices (6.8.1–6.8.6) DONE.** Remaining = the gated, non-blocking
+    research track — R1 (anchored-VWAP/RVOL factors; frozen-engine change, oracle regen + §8, LAST) and
+    R2 (weekly spread-width gate) + the F1 `market_cap` spike. Each is individually go/no-go-gated and
+    must NOT block phase close. **NEXT decision (user):** run `/phase-gate` + "proceed" for paper day-1,
+    OR tackle a gated research item first.

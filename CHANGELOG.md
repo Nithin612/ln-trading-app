@@ -7,6 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6.8): 6.8.6 — silent-feed-outage alarm (2026-08-18)
+
+The month-long v2-era EOD outage (ingestion frozen 07-02→07-17, found by accident) is the cautionary
+tale. EOD tasks self-heal (≤21d) now, but nothing LOUDLY flagged a feed gone stale — we found out by
+reading §7/§8 of the daily report. New `services/feed_health.py`: for each EOD feed (`ohlcv_1d`,
+`fo_bhavcopy`, `fii_dii_daily`), how many **trading** days behind is its latest row vs the last
+completed EOD cycle. Trading-calendar aware — a weekend/holiday is not an outage, and a pre-EOD morning
+run (before 18:45 IST) doesn't yet expect today's row. `daily_report.py` renders a loud, un-missable
+"⚠️ FEED STALENESS ALARM" header above §1 when any feed is behind (a quiet "Feeds current" line
+otherwise), and `check_feed_staleness` logs a `warning` per stale feed so it's loud even without the
+report. A staleness check, not a metrics stack (the review's Prometheus idea is over-engineering for a
+solo platform); a notification channel is deferred (none exists yet).
+
+Reviews: bug-hunter BUGS-FOUND, both fixed — (LOW) the days-behind count under-reported by 1 when a
+feed's latest row fell on a non-trading date (holiday seeded after the row); fixed to count trading
+days strictly after `latest`. (LOW) the header uses wall-clock `now`, so it's stamped "as of report
+generation" to disambiguate historical `make analysis DATE=…` runs. test-guardian GAPS-FOUND, all
+fixed — added weekend/holiday-in-gap calendar-awareness tests, the daily-report seam integration
+(build → render), the 18:45 cutoff boundary, and the log-warning. **13 tests**; no migration.
+
 ### feat(phase6.8): 6.8.5 — CA-adjust of OPEN paper positions (2026-08-18)
 
 CA detection was quarantine-only — it removed a flagged stock from the *selection* universe but did

@@ -44,6 +44,7 @@ from app.models.user import User
 from app.services import fo_analytics as fa
 from app.services import fo_suggestions as fs
 from app.services.excursion import Excursion, load_1m_bars, tape_excursion
+from app.services.feed_health import FeedStatus, check_feed_staleness, render_feed_health
 from app.services.profit_lock_shadow import ShadowComparison, compare_position
 from app.trading.regime import CHOPPY_ER, er_by_stock
 from app.trading.trail_sl import compute_pnl
@@ -246,6 +247,8 @@ class DailyReport:
     shadow_health: list[ShadowProfileHealth] = field(default_factory=list)
     # Spread-aware fill model (6.8.2) — what the honest book charged vs flat bps.
     fill_realism: list[FillRealismRow] = field(default_factory=list)
+    # Silent-feed-outage alarm (6.8.6) — staleness of each EOD feed vs the calendar.
+    feed_health: list[FeedStatus] = field(default_factory=list)
 
 
 # `load_1m_bars` (was `_load_bars`) moved to `app/services/excursion.py`
@@ -470,6 +473,9 @@ async def build_daily_report(
     report.fill_realism = await build_fill_realism(
         db, user_id=user_id, start=day_start, end=day_end
     )
+    # Silent-feed-outage alarm (6.8.6) — independent of trading; a loud header when
+    # any EOD feed is behind the trading calendar.
+    report.feed_health = await check_feed_staleness(db, now=now)
     return report
 
 
@@ -623,6 +629,10 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
             f"seal (peak − {gb_amt}) once peak ≥ {ts} · ATR room ×{settings.profit_lock_atr_k}."
         )
         out.append("")
+
+    # Feed-staleness alarm (6.8.6) — a loud header ABOVE the scorecard when any EOD
+    # feed is behind the trading calendar; a quiet one-liner when all are current.
+    out.extend(render_feed_health(r.feed_health))
 
     # 1. Scorecard ---------------------------------------------------------- #
     out.append("## 1. Scorecard")
