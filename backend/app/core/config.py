@@ -121,6 +121,25 @@ class Settings(BaseSettings):
     #            only on forward shadow evidence + explicit sign-off. Fully reversible.
     regime_gate_mode: Literal["off", "shadow", "active"] = "shadow"
 
+    # ── Entry-quality overlay (Phase 6.8 R-track, app/signals/entry_quality.py) ──
+    # Attacks the entry-side leak the SRTL loss exposed (see
+    # docs/analysis/exit-ladder-research-2026-08-18.md): (1) the confidence math
+    # normalizes by SCORING-factor weight, so a single factor at 0.8 reads 80% —
+    # "80% but one indicator", not real confluence; (2) a stop far tighter than the
+    # stock's volatility guarantees a fast stop-out AND amplifies slippage on the
+    # huge qty risk-first sizing then buys. Downstream eligibility overlay (frozen
+    # engine untouched, the regime_gate pattern), FAIL-OPEN.
+    #   off / shadow (default, measure-only) / active (rejects — flip on evidence).
+    entry_quality_gate_mode: Literal["off", "shadow", "active"] = "shadow"
+    # Reject/flag a signal with fewer than this many SCORING factors (score != 0).
+    # 2 encodes the "never a single indicator" confluence rule the ≥70% gate misses.
+    entry_min_scoring_factors: int = 2
+    # …or where one factor is more than this share of the weighted confluence.
+    entry_max_dominant_factor_share: float = 0.90
+    # Flag a stop tighter than this multiple of ATR (too fragile for the stock's
+    # noise → fast stop-out + slippage amplification). 0 disables the ATR check.
+    entry_min_sl_atr_mult: float = 1.0
+
     # ── Paper-trading cost model (app/trading/fees.py) ──────────────────────
     # Realized P&L is charged with the Zerodha cash-equity schedule so the
     # 30-day paper record reflects live-trading net returns. Rates live in

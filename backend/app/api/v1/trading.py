@@ -49,7 +49,8 @@ from app.schemas.trading import (
 )
 from app.services.journal_service import auto_create_journal_entry
 from app.services.profit_lock_shadow import compare_position
-from app.signals import circuit_guard, regime_guard
+from app.signals import circuit_guard, entry_quality, regime_guard
+from app.trading.atr import atr_timeframe_for, latest_atr
 from app.trading.circuit_breaker import (
     check_circuit_breaker,
     get_daily_realized_pnl,
@@ -116,6 +117,60 @@ async def _validity_by_signal(
     return {r.id: r.validity_until for r in rows}
 
 
+async def _apply_eligibility_overlays(
+    db: AsyncSession, signal: Signal, side: str
+) -> tuple[circuit_guard.CircuitVerdict | None, entry_quality.EntryQualityVerdict | None]:
+    """Run the regime · circuit-band · entry-quality overlays on a committed signal.
+    Raises 409 if any ACTIVE gate rejects; returns (circuit_verdict, eq_verdict) to
+    stamp on the order (None when that gate is off). All fail-open, frozen engine
+    untouched — the downstream-overlay pattern."""
+    # Regime-eligibility overlay (no-op unless regime_gate_mode == "active").
+    gate_reason = regime_guard.order_block_reason(signal, settings.regime_gate_mode)
+    if gate_reason:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=gate_reason)
+
+    # Circuit-band overlay (6.8.3). `off` = a TRUE no-op (no Redis read, no stamp);
+    # else judge proximity to the ADVERSE band (fail-open on a missing band).
+    circuit_verdict = None
+    if settings.circuit_gate_mode != "off":
+        circuit_verdict = circuit_guard.evaluate(
+            entry=Decimal(str(signal.entry_price)),
+            side=side,
+            band=await get_circuit_band(signal.stock_id),
+            proximity_pct=Decimal(str(settings.circuit_proximity_pct)),
+        )
+        circuit_reason = circuit_guard.order_block_reason(
+            circuit_verdict, settings.circuit_gate_mode
+        )
+        if circuit_reason:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=circuit_reason)
+
+    # Entry-quality overlay (6.8 R-track). Flags near-single-factor signals and stops
+    # too tight for the stock's volatility (the SRTL leak). `off` = no-op.
+    eq_verdict = None
+    if settings.entry_quality_gate_mode != "off":
+        eq_atr = await latest_atr(
+            db,
+            signal.stock_id,
+            timeframe=atr_timeframe_for(signal.classification),
+            before=signal.created_at,
+        )
+        eq_verdict = entry_quality.evaluate(
+            entry=Decimal(str(signal.entry_price)),
+            stop_loss=Decimal(str(signal.stop_loss)),
+            factor_scores=signal.factor_scores,
+            atr=eq_atr,
+            min_scoring_factors=settings.entry_min_scoring_factors,
+            max_dominant_share=Decimal(str(settings.entry_max_dominant_factor_share)),
+            min_sl_atr_mult=Decimal(str(settings.entry_min_sl_atr_mult)),
+        )
+        eq_reason = entry_quality.order_block_reason(eq_verdict, settings.entry_quality_gate_mode)
+        if eq_reason:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=eq_reason)
+
+    return circuit_verdict, eq_verdict
+
+
 @router.post("/orders", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
 async def place_order(
     req: PlaceOrderRequest,
@@ -139,29 +194,9 @@ async def place_order(
             detail=f"Signal is {signal.status}, not active",
         )
 
-    # Regime-eligibility overlay (no-op unless regime_gate_mode == "active").
-    gate_reason = regime_guard.order_block_reason(signal, settings.regime_gate_mode)
-    if gate_reason:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=gate_reason)
-
-    # Circuit-band eligibility overlay (6.8.3). `off` is a TRUE no-op (no read, no
-    # stamp). Otherwise read the cached band (Redis, sub-ms, fail-open — a missing
-    # band is None ⇒ eligible) and judge proximity to the ADVERSE band (long→lower,
-    # short→upper). The verdict is stamped on the order below for the shadow report;
-    # only ACTIVE mode rejects.
-    circuit_verdict = None
-    if settings.circuit_gate_mode != "off":
-        circuit_verdict = circuit_guard.evaluate(
-            entry=Decimal(str(signal.entry_price)),
-            side=req.side,
-            band=await get_circuit_band(signal.stock_id),
-            proximity_pct=Decimal(str(settings.circuit_proximity_pct)),
-        )
-        circuit_reason = circuit_guard.order_block_reason(
-            circuit_verdict, settings.circuit_gate_mode
-        )
-        if circuit_reason:
-            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=circuit_reason)
+    # Eligibility overlays (regime · circuit-band · entry-quality) — each a no-op
+    # unless its mode is active; returns verdicts to stamp for the shadow reports.
+    circuit_verdict, eq_verdict = await _apply_eligibility_overlays(db, signal, req.side)
 
     try:
         order, _pos = await place_paper_order(
@@ -171,14 +206,16 @@ async def place_order(
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
-    # Stamp the circuit verdict on the order (6.8.3) for the shadow report (shadow +
-    # active only; off leaves no footprint). New dict, not in-place, so SQLAlchemy
-    # flags the JSONB column dirty.
+    # Stamp the overlay verdicts on the order for the shadow reports (shadow + active
+    # only; off leaves no footprint). New dict, not in-place, so SQLAlchemy flags the
+    # JSONB column dirty.
+    stamps: dict[str, object] = {}
     if circuit_verdict is not None:
-        order.broker_payload = {
-            **(order.broker_payload or {}),
-            "circuit_gate": circuit_verdict.as_payload(),
-        }
+        stamps["circuit_gate"] = circuit_verdict.as_payload()
+    if eq_verdict is not None:
+        stamps["entry_quality"] = eq_verdict.as_payload()
+    if stamps:
+        order.broker_payload = {**(order.broker_payload or {}), **stamps}
     await db.commit()
     await db.refresh(order)
 

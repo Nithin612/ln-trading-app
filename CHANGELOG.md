@@ -7,6 +7,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(phase6.8 R-track): entry-quality overlay — the SRTL-class leak (2026-08-18)
+
+The SRTL paper loss (−₹3,565 in 10 min) and the exit-ladder replay both pointed at the ENTRY, not
+the exit: trades captured only 25–48% of their peak because most *peaked then reversed* — weak
+entries. Two causes the ≥70% confidence gate misses, now caught by a downstream eligibility overlay
+(`app/signals/entry_quality.py`, frozen engine untouched, the `regime_guard`/`circuit_guard` pattern,
+`entry_quality_gate_mode` default **shadow**):
+
+1. **Near-single-factor signals.** The confluence confidence normalizes by the weight of the factors
+   that *scored*, so a single factor at 0.8 reads 80% (SRTL fired on RSI_DIVERGENCE alone). Flag when
+   `< entry_min_scoring_factors` (2) scored, or one factor is `> entry_max_dominant_factor_share`
+   (0.90) of the weighted confluence.
+2. **Stops too tight for volatility.** Flag when `|entry − SL| < entry_min_sl_atr_mult` (1.0) × ATR —
+   a stop tighter than the stock's noise guarantees a fast stop-out and amplifies slippage on the huge
+   qty risk-first sizing then buys.
+
+Both computed on the committed signal (+ ATR as-of `signal.created_at`, no look-ahead); fail-open;
+verdict stamped on the order for the shadow report; only `active` mode rejects. The order-path gates
+(regime · circuit · entry-quality) were extracted to a behaviour-preserving `_apply_eligibility_overlays`
+helper. **Shadow evidence (read-only, on history):** flags 113/440 recent signals (25%) and catches
+SRTL on all three axes; on 30 natural closed trades the flagged set is net −₹709/trade vs the passed
+set −₹314 (50% vs 62% win) — it points at the worse trades. **14 tests**; no migration. Reviews:
+quant-verifier PASS (3 INFO); bug-hunter (order-path wiring).
+
 ### feat(phase6.8): 6.8.6 — silent-feed-outage alarm (2026-08-18)
 
 The month-long v2-era EOD outage (ingestion frozen 07-02→07-17, found by accident) is the cautionary

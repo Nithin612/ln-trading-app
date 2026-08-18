@@ -88,6 +88,16 @@ the live paper governor when `profit_lock_enabled`: breakeven at +₹2,000, seal
 a one-time change. Next: watch the daily report's "profit sealed" + give-back trend
 and adjust `profit_lock_*_inr` / `_atr_k`._
 
+**Retune replay (2026-08-18, `docs/analysis/exit-ladder-research-2026-08-18.md`).** Replayed
+candidate thresholds over 18 natural on-tape trades peaking ≥₹800. Verdicts: a **net-₹100
+floor is REJECTED** (strangles winners, 8/18 lost); a **hard ₹500 seal is a risk dial, not a
+booster** (−16% total P&L, but fewer/smaller blow-ups); the **current ladder makes the most
+total** (lets trends run). **The one supported change: arm the breakeven rung EARLIER — ₹800
+instead of ₹2,000** (`profit_lock_breakeven_inr`), which cut blow-ups 3-vs-5 at little cost.
+Do NOT ship a tight seal off n=18; re-run on 50–100+ trades first. **Entry quality is the
+first-order lever** (peak-capture only 25–48% because trades peak then reverse) — building the
+entry filter before any exit threshold change.
+
 
 **Problem.** The ratchet arms only after +`arm_r`·R (1.0R swing/positional). Below
 that the SL sits at the original signal level, so a sub-1R pop that reverses
