@@ -212,6 +212,8 @@ make up (A) ─────────────┬────────�
 | Anti-chase guardrail (yesterday) | D + E + G | AlertBell: "don't chase > ₹X" / "⚠ chasing +N% past entry" |
 | Emergency-exit health verdict (yesterday) | D + E | Positions: CUT / WATCH badge per open position |
 
+| **Provisional breadth filter + cycle health (08-19)** | **F** | The two constant `live-worker` warnings change: `hot set clipped 466 → 150` should STOP (breadth alerts no longer count as "near-trigger", so watchlist stocks get scored again), and `cycle overran the cadence` stays but is now measurable as a RATE. **After each session run `cd backend && uv run python scripts/provisional_health.py --days 7`** — it reads `provisional:health:{day}` (TTL **7 days**, no file backup, because `make live-worker` writes no log). Protocol + the open cadence decision: `docs/analysis/provisional-health-watch.md`. ⚠ needs the `worktree-provisional-hotset-filter` branch merged first |
+
 Selection + alert fixes are in the API/UI (live with D+E+G). The **exit** fixes
 need **F** (the worker) intraday.
 

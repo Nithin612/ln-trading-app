@@ -799,3 +799,28 @@ nothing left to discover about the exchange, only about the order API.
     R2 (weekly spread-width gate) + the F1 `market_cap` spike. Each is individually go/no-go-gated and
     must NOT block phase close. **NEXT decision (user):** run `/phase-gate` + "proceed" for paper day-1,
     OR tackle a gated research item first.
+
+- **⚠ 2026-08-19 — `/phase-gate` IS CURRENTLY BLOCKED: the branch tip does not pass `make check`.**
+  The R-track entry-quality slice (`845ff5c`) defaults `entry_diversity_gate_mode` to **`"active"`**
+  (`config.py:158`), so `place_order` 409s at `api/v1/trading.py:172` while the order-path fixtures
+  still build thin signals that cannot clear `entry_min_scoring_factors = 2`. **7 failures**, all
+  `409 != 201/422`: `test_circuit_gate.py::TestCircuitGateWiring` (×4),
+  `test_trading.py::TestTradingApi::{test_place_order_creates_position, test_regime_gate_active_allows_trending}`,
+  `test_trading.py::TestSizingAndCosts::test_api_rejects_zero_size_422`. Confirmed PRE-EXISTING by
+  checking out `845ff5c` alone and re-running — not from any later branch. **DECISION PENDING (user):**
+  fix the FIXTURES (recommended — the diversity gate enforces trading-domain constraint #2, "never a
+  single indicator", so a single-factor fixture asserts an impossible state) *or* default the gate to
+  `shadow` like `entry_sl_atr_gate_mode`. Phase close cannot honestly be claimed until this is green.
+
+- **2026-08-19 — unrelated fix parked on a branch (not a 6.8 slice, Phase-3 infrastructure).**
+  `worktree-provisional-hotset-filter` @ `c8f3b50` (parent `845ff5c`, clean fast-forward) fixes the
+  provisional hot-set breadth flood: `_recent_trigger_sids` admitted every `alerts:live` entry as
+  "near-trigger", but vburst/PDH/PDL/S&R carry `style="market"` and covered 1271–1659 distinct stocks
+  per 15-min window against the 150 cap — so the cap went to the lowest stock_ids every cycle and
+  **watchlist stocks were never scored at all**. Near-trigger is now signal-bound only (style-less
+  fails closed); `live_provisional_trigger_market_max` dials breadth back BELOW watchlist. Adds a
+  durable per-day `provisional:health:{day}` key + `scripts/provisional_health.py`, because
+  `make live-worker` writes no log file. Reviews: bug-hunter 5×LOW all fixed, quant-verifier
+  PASS-WITH-NOTES 2 MEDIUM both actioned, plus a fail-open defect mypy strict caught. 50 tests
+  (28 before). **The `cycle overran the cadence` question is OPEN under forward watch —
+  `docs/analysis/provisional-health-watch.md`, which has NO scheduler behind it.**

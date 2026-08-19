@@ -321,7 +321,37 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-08-17.**
+**⚠ TWO OPEN ITEMS AS OF 2026-08-19 — read before anything else.**
+
+**(a) `make check` is RED on this branch tip (`845ff5c`) — 7 pre-existing failures, NOT from the
+provisional work.** `entry_diversity_gate_mode` defaults to **`"active"`** (`config.py:158`) and the
+order path 409s at `api/v1/trading.py:172`, but the order-path fixtures still build thin signals that
+cannot clear `entry_min_scoring_factors = 2`. Verified by checking out `845ff5c` alone and re-running:
+`test_circuit_gate.py::TestCircuitGateWiring` (×4), `test_trading.py::TestTradingApi::test_place_order_creates_position`,
+`::test_regime_gate_active_allows_trending`, `test_trading.py::TestSizingAndCosts::test_api_rejects_zero_size_422`
+— all `409 != 201/422`. **DECISION PENDING (user):** fix the FIXTURES (recommended — the diversity gate
+enforces trading-domain constraint #2 "never a single indicator", so a single-factor fixture asserts an
+impossible state) *or* default the gate to `shadow` like `entry_sl_atr_gate_mode`. Until then the
+project's "green is the baseline" rule is not being met.
+
+**(b) An unmerged fix is waiting on branch `worktree-provisional-hotset-filter` (commit `c8f3b50`,
+parent `845ff5c`).** Clean fast-forward:
+`git merge --ff-only worktree-provisional-hotset-filter` from the repo root. It fixes the provisional
+hot-set breadth flood (`hot set clipped 466 → 150` every cycle, which starved watchlist stocks
+entirely) and adds a durable per-day cycle-health key. Reviews: bug-hunter 5×LOW all fixed,
+quant-verifier PASS-WITH-NOTES 2 MEDIUM both actioned, plus a fail-open defect mypy strict caught that
+both reviewers missed. 50 tests in `test_provisional.py` (28 before), suite otherwise green.
+**Until it is merged the live worker runs the OLD behaviour and the forward watch collects nothing.**
+The open cadence question and its watch protocol live in
+**`docs/analysis/provisional-health-watch.md`** — that watch has NO scheduler behind it.
+
+---
+
+**▶ CONTINUE HERE (next session, any account) — updated 2026-08-19.**
+**FIRST, the two open items in the banner above** (red baseline decision + the unmerged
+`worktree-provisional-hotset-filter` fast-forward). Neither is a Phase-6.8 slice; both block the
+"green baseline" and the provisional forward watch respectively.
+
 Phases **0–5 are CLOSED** (Phase 3 gated 2026-08-14, PASS). **Phase 6 is BUILT** — 6.1–6.4 done;
 the **regime gate is ACTIVE** in the paper book (flipped 2026-08-15, reversible via
 `REGIME_GATE_MODE=shadow` + restart); **6.5 pair-trading is fully built shadow-first (slices 1–4)**.

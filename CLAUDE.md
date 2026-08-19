@@ -76,6 +76,32 @@ else.
   flip-readiness banner. The *context* complement — sector/index relative-strength +
   fundamentals + news as GATES/MODIFIERS (never additive) — is the **MCE**
   (`docs/phases/phase-MCE-market-context-engine.md`), the phase after 6.8.
+- **⚠ `make check` is RED on the Phase-6 tip `845ff5c` (as of 2026-08-19) — 7 pre-existing
+  order-path failures, and a fix for a different bug is sitting UNMERGED.** (1) The R-track's
+  `entry_diversity_gate_mode` defaults to `"active"`, so `place_order` 409s
+  (`api/v1/trading.py:172`) while the order-path fixtures still build thin signals that cannot clear
+  `entry_min_scoring_factors = 2` — 4 in `test_circuit_gate.py`, 3 in `test_trading.py`, all
+  `409 != 201/422`, all reproduced on `845ff5c` WITHOUT any newer commit. Decision pending: fix the
+  fixtures (recommended — the gate enforces constraint #2, so a single-factor fixture asserts an
+  impossible state) or default the gate to `shadow`. (2) Branch
+  `worktree-provisional-hotset-filter` (`c8f3b50`) is a clean fast-forward carrying the provisional
+  hot-set fix below. **Both are the first items in the PHASES top block.**
+- **The provisional hot set no longer admits market BREADTH alerts** (fix 2026-08-19, on the branch
+  above). `_recent_trigger_sids` used to treat EVERY `alerts:live` entry as "near-trigger", but
+  vburst/PDH/PDL/S&R are stamped `style="market"` and carried **1271–1659 distinct stocks in one
+  15-min window** against the 150 hot-set cap — so the cap went to the lowest stock_ids (the same
+  ones every cycle) and **watchlist stocks were never scored at all**. Near-trigger is now
+  SIGNAL-BOUND only; a style-less entry reads as market (**fail closed**);
+  `live_provisional_trigger_market_max` (default 0) dials breadth back as a bounded, recency-ordered
+  discovery tier ranked BELOW watchlist. Cycle health is now durable in
+  `provisional:health:{day}` (7-day TTL, read via `backend/scripts/provisional_health.py`) because
+  **`make live-worker` writes NO log file** — only `make soak` tees one. The `cycle overran the
+  cadence` warning is EXPECTED arithmetic (35.6 ms/window × ~50 calls vs a 3 s cadence) and
+  self-throttles; whether to raise `live_provisional_refresh_s` is an OPEN question under forward
+  watch in **`docs/analysis/provisional-health-watch.md`** (no scheduler behind it — a new session
+  must run the check itself). Two traps recorded there: the heartbeat's `lat_p99` is **not** a p99
+  (the histogram tops out at 100 ms, so it returns `max_ms`), and this thread holds the **GIL** in
+  the consumer's process (1 ms wake loop: p50 1.08 → 6.16 ms).
 - **Circuit-band overlay since 6.8.3** (`app/signals/circuit_guard.py`, shadow-first,
   `circuit_gate_mode`): skips entering a name within `circuit_proximity_pct` (1.5%)
   of its ADVERSE band (long→lower, short→upper) — an un-exitable trade. Bands from a
