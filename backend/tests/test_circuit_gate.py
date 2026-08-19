@@ -196,7 +196,10 @@ async def _make_signal(db: AsyncSession, stock_id: int, direction: str = "BUY") 
         take_profit="540.0000",
         suggested_qty=100,
         confidence_pct=80,
-        factor_scores={"DOW_TREND": {"weight": 20, "score": 0.8, "explanation": "uptrend"}},
+        factor_scores={
+            "DOW_TREND": {"weight": 20, "score": 0.8, "explanation": "uptrend"},
+            "MACD_CROSS": {"weight": 15, "score": 0.6, "explanation": "bull cross"},
+        },  # ≥2 scoring factors — legal confluence (entry-diversity gate is active)
         headline="BUY TEST",
         status="active",
         validity_until=now + timedelta(days=5),

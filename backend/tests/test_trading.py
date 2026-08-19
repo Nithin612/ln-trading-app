@@ -98,7 +98,10 @@ async def _make_signal(
         suggested_qty=qty,
         confidence_pct=80,
         factor_scores=factor_scores
-        or {"DOW_TREND": {"weight": 20, "score": 0.8, "explanation": "uptrend"}},
+        or {  # ≥2 scoring factors — legal confluence (entry-diversity gate is active)
+            "DOW_TREND": {"weight": 20, "score": 0.8, "explanation": "uptrend"},
+            "MACD_CROSS": {"weight": 15, "score": 0.6, "explanation": "bull cross"},
+        },
         headline=f"{direction} TEST@{entry}",
         status="active",
         validity_until=now + timedelta(days=5),
@@ -564,7 +567,10 @@ class TestTradingApi:
                 "explanation": "ADX=22.0 moderate (20-25), no strong directional signal"}
     }
     _ADX_TRENDING = {
-        "ADX": {"weight": 5, "score": 0.6, "explanation": "ADX=30.0 trending bullish"}
+        "ADX": {"weight": 5, "score": 0.6, "explanation": "ADX=30.0 trending bullish"},
+        # 2nd scoring factor so the signal clears the entry-diversity gate; ADX still
+        # drives the (trending) regime the gate under test reads.
+        "DOW_TREND": {"weight": 20, "score": 0.7, "explanation": "uptrend"},
     }
 
     async def test_regime_gate_shadow_does_not_block(
