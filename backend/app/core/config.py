@@ -129,10 +129,16 @@ class Settings(BaseSettings):
     # stock's volatility guarantees a fast stop-out AND amplifies slippage on the
     # huge qty risk-first sizing then buys. Downstream eligibility overlay (frozen
     # engine untouched, the regime_gate pattern), FAIL-OPEN.
-    #   off / shadow (default, measure-only) / active (rejects — flip on evidence).
-    entry_quality_gate_mode: Literal["off", "shadow", "active"] = "shadow"
-    # Reject/flag a signal with fewer than this many SCORING factors (score != 0).
-    # 2 encodes the "never a single indicator" confluence rule the ≥70% gate misses.
+    # Two INDEPENDENTLY-moded checks (off / shadow / active):
+    #  • diversity — enforces "≥2 factors, never a single indicator" (a STATED hard
+    #    rule the strength-only ≥70% gate fails to enforce). ACTIVE by user sign-off
+    #    2026-08-18 (the SRTL loss): a single-factor signal must not enter. Reversible.
+    #  • sl_atr — the stop-too-tight-for-volatility heuristic; a TUNABLE threshold, so
+    #    it stays SHADOW (measure-only) until forward evidence (the entry-quality
+    #    shadow report) justifies a flip.
+    entry_diversity_gate_mode: Literal["off", "shadow", "active"] = "active"
+    entry_sl_atr_gate_mode: Literal["off", "shadow", "active"] = "shadow"
+    # Reject a signal with fewer than this many SCORING factors (score != 0).
     entry_min_scoring_factors: int = 2
     # …or where one factor is more than this share of the weighted confluence.
     entry_max_dominant_factor_share: float = 0.90

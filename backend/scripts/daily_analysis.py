@@ -137,6 +137,21 @@ async def _run(day: date, user_id: int, week_of: date | None, now: datetime) -> 
         except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
             print(f"circuit-gate shadow step skipped: {exc!r}", flush=True)
 
+        # Entry-quality forward evidence (6.8 R-track): what the breadth (diversity,
+        # ACTIVE) + stop-tightness (sl_atr, SHADOW) checks flag on the live signal
+        # cohort, with flagged-vs-passed outcomes + an sl_atr flip-readiness banner.
+        # Same read-only, never-block discipline as the gate sidecars above.
+        try:
+            from app.services import entry_quality_shadow as eqs
+
+            eshadow = await eqs.compute_entry_quality_shadow(db)
+            epath = _ANALYSIS_DIR / f"entry-quality-shadow-{day.isoformat()}.md"
+            epath.write_text(eqs.render_markdown(eshadow, day=day))
+            print(f"wrote {epath.relative_to(_REPO_ROOT)}", flush=True)
+            print(eqs.readiness_line(eshadow), flush=True)
+        except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
+            print(f"entry-quality shadow step skipped: {exc!r}", flush=True)
+
         if week_of is not None:
             monday = week_of - timedelta(days=week_of.weekday())
             wk = await build_week_summary(db, monday=monday, user_id=user_id, now=now)

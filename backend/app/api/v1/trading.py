@@ -145,10 +145,11 @@ async def _apply_eligibility_overlays(
         if circuit_reason:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=circuit_reason)
 
-    # Entry-quality overlay (6.8 R-track). Flags near-single-factor signals and stops
-    # too tight for the stock's volatility (the SRTL leak). `off` = no-op.
+    # Entry-quality overlay (6.8 R-track). Two independently-moded checks: diversity
+    # (active — the "≥2 factors" hard rule, the SRTL leak) + sl_atr (shadow — tunable
+    # stop-tightness). `off`/`off` = no-op. Verdict stamped below for the shadow report.
     eq_verdict = None
-    if settings.entry_quality_gate_mode != "off":
+    if settings.entry_diversity_gate_mode != "off" or settings.entry_sl_atr_gate_mode != "off":
         eq_atr = await latest_atr(
             db,
             signal.stock_id,
@@ -164,7 +165,9 @@ async def _apply_eligibility_overlays(
             max_dominant_share=Decimal(str(settings.entry_max_dominant_factor_share)),
             min_sl_atr_mult=Decimal(str(settings.entry_min_sl_atr_mult)),
         )
-        eq_reason = entry_quality.order_block_reason(eq_verdict, settings.entry_quality_gate_mode)
+        eq_reason = entry_quality.order_block_reason(
+            eq_verdict, settings.entry_diversity_gate_mode, settings.entry_sl_atr_gate_mode
+        )
         if eq_reason:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=eq_reason)
 

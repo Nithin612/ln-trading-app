@@ -10,7 +10,7 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-08-17) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-08-19) — read this block first
 
 **v2 Phases 0–2 ✅ done · Phase 3 (realtime) ✅ GATED 2026-08-14 · Phase 4 ✅ done ·
 Phase 5 ✅ GATED 2026-08-07 · Phase 6 ▶ IN PROGRESS (6.1–6.4 done; regime gate ACTIVE
@@ -56,6 +56,26 @@ all fixed; 13 tests, no migration. **▶ ALL SIX PAPER-SAFE SLICES (6.8.1–6.8.
 the gated, non-blocking research track (R1 VWAP/RVOL factors — frozen-engine change, LAST · R2 weekly
 spread-width gate · F1 `market_cap` spike). **NEXT = `/phase-gate` + user "proceed" for paper day-1**,
 or a gated research item first.
+
+**▶ R-track entry-quality overlay DONE 2026-08-18/19 (SRTL leak → the real leak is ENTRY, not exit).**
+Post-mortem of the SRTL paper loss (BUY at 80% confidence on RSI_DIVERGENCE *alone*, ₹39 micro-cap ×
+2666 qty → −₹3.5k / 1.78R) exposed two gaps the ≥70% gate misses. Built as a downstream eligibility
+overlay (`app/signals/entry_quality.py`, frozen engine untouched, the `regime_guard`/`circuit_guard`
+pattern) with **two independently-moded checks**: (1) **factor-diversity** (`entry_diversity_gate_mode`
+**ACTIVE** — user sign-off, enforces the stated "≥2 factors, never a single indicator" rule; the
+confidence math normalizes by scoring-factor weight, so one 0.8 factor reads 80%) — single-factor
+signals no longer enter; (2) **stop-too-tight** (`entry_sl_atr_gate_mode` **SHADOW** — a tunable
+`|entry−SL| < k·ATR`). A shadow-report sidecar (`app/services/entry_quality_shadow.py` → `make
+analysis` writes `entry-quality-shadow-<date>.md`) accrues flagged-vs-passed outcomes + an sl_atr
+flip-readiness banner. Evidence (dev-DB): diversity-flagged signals that traded netted −₹6,093 (9) vs
+passed +₹3,880 (60). Reviews: quant-verifier PASS + bug-hunter CLEAN; 24 tests, no migration. The
+exit-ladder replay that ran alongside (`docs/analysis/exit-ladder-research-2026-08-18.md`) is PARKED:
+net-₹100/hard-₹500 booking both REJECTED (risk-dial, not booster); the only supported exit change is
+arming breakeven earlier (`profit_lock_breakeven_inr` 2000→~800), deferred until more data.
+**Context layer deferred to the MCE:** sector/index relative-strength + fundamentals + news as
+GATES/MODIFIERS (never additive) — the *top-down* complement to this *breadth* fix, captured in
+[`phases/phase-MCE-market-context-engine.md`](phases/phase-MCE-market-context-engine.md) (each
+§8-backtested on ≥2y before live; the daily report must surface them once built).
 **GOVERNANCE (user 2026-08-17): all 6.8 slices build on the Phase-6 branch itself; paper-trading day 1
 is DEFERRED until the phase is done AND the user says proceed; merge to `main` only after.** Full
 adjudication of the `REAL_WORLD_NSE_BSE`

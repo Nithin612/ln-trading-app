@@ -12,24 +12,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 The SRTL paper loss (−₹3,565 in 10 min) and the exit-ladder replay both pointed at the ENTRY, not
 the exit: trades captured only 25–48% of their peak because most *peaked then reversed* — weak
 entries. Two causes the ≥70% confidence gate misses, now caught by a downstream eligibility overlay
-(`app/signals/entry_quality.py`, frozen engine untouched, the `regime_guard`/`circuit_guard` pattern,
-`entry_quality_gate_mode` default **shadow**):
+(`app/signals/entry_quality.py`, frozen engine untouched, the `regime_guard`/`circuit_guard` pattern),
+as **two independently-moded checks**:
 
-1. **Near-single-factor signals.** The confluence confidence normalizes by the weight of the factors
-   that *scored*, so a single factor at 0.8 reads 80% (SRTL fired on RSI_DIVERGENCE alone). Flag when
-   `< entry_min_scoring_factors` (2) scored, or one factor is `> entry_max_dominant_factor_share`
-   (0.90) of the weighted confluence.
-2. **Stops too tight for volatility.** Flag when `|entry − SL| < entry_min_sl_atr_mult` (1.0) × ATR —
-   a stop tighter than the stock's noise guarantees a fast stop-out and amplifies slippage on the huge
-   qty risk-first sizing then buys.
+1. **Near-single-factor signals (`entry_diversity_gate_mode`, default ACTIVE — user sign-off, the
+   stated "≥2 factors, never a single indicator" hard rule).** The confluence confidence normalizes
+   by the weight of the factors that *scored*, so a single factor at 0.8 reads 80% (SRTL fired on
+   RSI_DIVERGENCE alone). Flag/block when `< entry_min_scoring_factors` (2) scored, or one factor is
+   `> entry_max_dominant_factor_share` (0.90) of the weighted confluence.
+2. **Stops too tight for volatility (`entry_sl_atr_gate_mode`, default SHADOW — a tunable threshold).**
+   Flag when `|entry − SL| < entry_min_sl_atr_mult` (1.0) × ATR — a stop tighter than the stock's
+   noise guarantees a fast stop-out and amplifies slippage on the huge qty risk-first sizing buys.
 
 Both computed on the committed signal (+ ATR as-of `signal.created_at`, no look-ahead); fail-open;
-verdict stamped on the order for the shadow report; only `active` mode rejects. The order-path gates
-(regime · circuit · entry-quality) were extracted to a behaviour-preserving `_apply_eligibility_overlays`
-helper. **Shadow evidence (read-only, on history):** flags 113/440 recent signals (25%) and catches
-SRTL on all three axes; on 30 natural closed trades the flagged set is net −₹709/trade vs the passed
-set −₹314 (50% vs 62% win) — it points at the worse trades. **14 tests**; no migration. Reviews:
-quant-verifier PASS (3 INFO); bug-hunter (order-path wiring).
+verdict stamped on the order. The order-path gates (regime · circuit · entry-quality) were extracted
+to a behaviour-preserving `_apply_eligibility_overlays` helper. A **shadow-report sidecar**
+(`app/services/entry_quality_shadow.py`, written by `make analysis` as `entry-quality-shadow-<date>.md`)
+partitions the live signal cohort by each check and reports flagged-vs-passed outcomes + an sl_atr
+**flip-readiness** banner — the forward evidence to eventually activate sl_atr, gated like the regime
+gate. **Evidence (read-only, on history):** diversity-flagged signals that traded netted −₹6,093 (9
+trades) vs the passed set +₹3,880 (60) — single-factor signals are net-losers, so the active block is
+well-founded; catches SRTL on all axes. **24 tests**; no migration. Reviews of the mode-split +
+sidecar delta: **quant-verifier PASS** (1 INFO — docstring — fixed) + **bug-hunter CLEAN** (no
+behavioural defect; 3 LOW test-coverage gaps — reopen-sum, sl_atr DB partition, sl_atr-active
+wiring — all closed with the 4 added tests).
 
 ### feat(phase6.8): 6.8.6 — silent-feed-outage alarm (2026-08-18)
 

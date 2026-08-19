@@ -63,6 +63,19 @@ else.
   6.8 slices build on the Phase-6 branch; **paper day-1 is DEFERRED until the phase
   is done + user "proceed"; merge to main only after.** Nothing auto-advances —
   the NEXT menu lives in the PHASES top block.
+- **Single-factor entries are BLOCKED since the R-track entry-quality overlay**
+  (`app/signals/entry_quality.py`, frozen engine untouched, overlay pattern). The
+  confluence confidence normalizes by the weight of factors that *scored*, so one 0.8
+  factor reads 80% and passes the ≥70% gate — that is exactly how SRTL entered (BUY on
+  RSI_DIVERGENCE alone, ₹39 micro-cap × 2666 qty → −₹3.5k). Two moded checks:
+  **factor-diversity** (`entry_diversity_gate_mode`, **active** — enforces the "≥2
+  factors, never a single indicator" rule) blocks <2 scoring factors or one factor >90%
+  of the confluence; **stop-too-tight** (`entry_sl_atr_gate_mode`, **shadow** — tunable)
+  flags `|entry−SL| < k·ATR`. A sidecar (`entry_quality_shadow.py` → `make analysis`
+  writes `entry-quality-shadow-<date>.md`) accrues flagged-vs-passed outcomes + an sl_atr
+  flip-readiness banner. The *context* complement — sector/index relative-strength +
+  fundamentals + news as GATES/MODIFIERS (never additive) — is the **MCE**
+  (`docs/phases/phase-MCE-market-context-engine.md`), the phase after 6.8.
 - **Circuit-band overlay since 6.8.3** (`app/signals/circuit_guard.py`, shadow-first,
   `circuit_gate_mode`): skips entering a name within `circuit_proximity_pct` (1.5%)
   of its ADVERSE band (long→lower, short→upper) — an un-exitable trade. Bands from a
