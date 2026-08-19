@@ -1079,7 +1079,20 @@ in the worker):**
   near-trigger stocks (alert-stream entries within
   `live_provisional_trigger_window_s`) + watchlist stocks; bounded by
   `live_provisional_hotset_max` with priority signal > trigger >
-  watchlist; clipping LOGGED, never silent.
+  watchlist; clipping LOGGED, never silent, and counted onto the cycle
+  stats (`HotSetStats`).
+- **Near-trigger = SIGNAL-BOUND only (fixed 2026-08-19).** Admitting every
+  alert made market-BREADTH levels (vburst / PDH / PDL / S&R, stamped
+  `style="market"`) part of the hot set: 1271 distinct stocks in one
+  15-min window on 2026-08-18, which spent the cap on the lowest
+  stock_ids and starved the watchlist clause entirely. Style-less entries
+  read as market (fail closed); `live_provisional_trigger_market_max`
+  (default 0) dials breadth back in, bounded + newest-first.
+- Cycle health is durable: `provisional:health:{day}` (TTL one week) holds
+  cumulative cycles / overrun% / clip% / mean+max elapsed / last hot-set
+  composition per IST session day, re-seeded across a mid-session restart
+  — `make live-worker` writes no log file, so this is the only record.
+  Read it with `backend/scripts/provisional_health.py`.
 - Window canon per pair: `_load_window` (≤300 completed) → drop rows the
   forming bar supersedes → keep ≤299 → append forming. 1d pairs:
   today's forming 1d bar = grouped-SQL session aggregate of today's
@@ -1612,6 +1625,9 @@ Also confirmed: **shadow week COMPLETE** — 6 clean trading days (07-17 +
   never engine events, never in recordings/replay, never in backtests
   or P&L (constraint #3), provisional-labelled end-to-end; hot set per
   style = active-signal stocks + near-trigger stocks + watchlist
+  (AMENDED 2026-08-19 — "near-trigger" narrowed to SIGNAL-BOUND alerts and
+  the market-breadth tier dialled OFF by default; see §Provisional
+  confidence above for why and for `live_provisional_trigger_market_max`)
   stocks (once the model exists); cadence = refresher-clock throttle
   (1–5 s target), full-universe cadence decided by `/perf-bench`
   numbers; confidence integer canon unchanged

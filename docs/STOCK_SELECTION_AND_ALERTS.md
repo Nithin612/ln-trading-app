@@ -519,10 +519,32 @@ even gates candle/LTP *publishes* on whether anyone is actually subscribed.
 
 `app/broker/provisional.py`. A separate worker thread rescoring a **bounded hot
 set** (active-signal stocks + near-trigger stocks + watchlist stocks, capped at
-`live_provisional_hotset_max` = 150, clipping *logged*) through the **same
-frozen scorer** on the same 300-bar window canon **with the forming bar
-appended** — so the provisional score *converges* to the committed score at
-candle close.
+`live_provisional_hotset_max` = 150, clipping *logged* and counted onto the
+cycle stats) through the **same frozen scorer** on the same 300-bar window canon
+**with the forming bar appended** — so the provisional score *converges* to the
+committed score at candle close.
+
+**"Near-trigger" is signal-bound only** (fixed 2026-08-19). The alert stream
+carries market-BREADTH levels too — vburst / PDH / PDL / S&R, stamped
+`style="market"` — and admitting those flooded the cap: measured 2026-08-18 they
+covered **1271 distinct stocks inside one 15-minute window**, so with 117
+active-signal stocks the remaining ~33 slots went to the lowest stock_ids (the
+same ones every cycle) and *watchlist stocks were never scored at all*. Only
+signal-bound alerts (entry-zone / SL / TP, which carry the signal's
+classification as style) now prime the hot set; a style-less entry reads as
+market, i.e. **fails closed**. `live_provisional_trigger_market_max` dials
+breadth back in, bounded and newest-first — as a discovery tier ranked BELOW
+the watchlist and deduped against everything already hot, so the dial can
+never starve the watchlist the way unfiltered breadth did.
+
+**Known trade-off at the default `0`:** the third source then contributes
+almost nothing new — measured 2026-08-19, 38 of 45 signal-bound alert stocks
+already carried an active signal, so the hot set is effectively
+`active signals ∪ watchlist`, ~37 of the 150 slots sit idle, and ~1569 stocks
+that fired a breadth alert are neither signalled nor watchlisted and can
+never appear on a board. That is a deliberate discovery-vs-CPU choice (the
+refresher holds the GIL in the consumer's process), not an oversight — the
+dial is how you buy the discovery back, and it costs cycle time.
 
 - Published as per-style leaderboards (`intraday`, `swing`, `fno`,
   `investment`, `scalp`, `positional`) over `provisional:{style}` channels,
@@ -806,6 +828,9 @@ consume the same fresh data.
 | `live_provisional_enabled` | `true` | leaderboard worker thread on/off |
 | `live_provisional_refresh_s` | `3.0` | leaderboard cycle cadence |
 | `live_provisional_hotset_max` | `150` | bounded rescore hot-set cap |
+| `live_provisional_trigger_window_s` | `900` | "near-trigger" recency window |
+| `live_provisional_trigger_market_max` | `0` | market-level (breadth) discovery stocks admitted, newest-first, ranked below watchlist |
+| `live_provisional_health_ttl_s` | `604_800` | `provisional:health:{day}` cycle-health key TTL (1 week) |
 | `live_provisional_top_n` | `20` | rows per style leaderboard |
 | `live_outcome_recorder_enabled` | `true` | durable entry/SL/TP-touch recorder |
 

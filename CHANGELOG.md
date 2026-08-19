@@ -7,6 +7,78 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### fix(provisional): breadth alerts no longer flood the hot set + per-day cycle health (2026-08-19)
+
+`live-worker` logged two warnings on nearly every provisional cycle — `hot set clipped 466 → 150` and
+`cycle overran the cadence: 4039 ms > 3000 ms`. Both were by-design log lines, but the numbers behind
+the design had drifted, and the first was hiding a real loss of coverage.
+
+**Root cause.** `_recent_trigger_sids` admitted EVERY alert-stream entry as "near-trigger", regardless
+of tag. Measured on the live stream (2026-08-18): `volume_burst` alone carried **1271 distinct stocks**,
+plus PDH/PDL crosses on ~880 more — market-BREADTH breadcrumbs, not near-trigger. Against a 150 cap
+the trigger source alone was ~2.3× the cap, so with 117 active-signal stocks the remaining ~33 slots
+went to the lowest stock_ids (the ordering is `(priority, stock_id)`, so the *same* 33 won every cycle)
+and **watchlist stocks — a documented hot-set source — were never scored at all**.
+
+- **Near-trigger now means SIGNAL-BOUND.** The producer already discriminates: `live_levels` stamps
+  `style="market"` on vburst/PDH/PDL/S&R and the signal's classification on entry-zone/SL/TP alerts.
+  Market-level entries are excluded; a style-less entry reads as market (**fail closed** — failing open
+  would let the flood back silently). `live_provisional_trigger_market_max` (default 0) dials breadth
+  back in as a bounded, recency-ordered **discovery tier ranked BELOW the watchlist** and deduped
+  against everything already hot, so turning the dial on can never re-starve the watchlist.
+  Observability only — the provisional layer is never tradeable.
+- **Known trade-off at the default 0:** the third hot-set source then adds almost nothing new — 38 of 45
+  signal-bound alert stocks already carried an active signal — so the hot set is effectively
+  `active signals ∪ watchlist`, ~37 of 150 slots sit idle, and ~1569 breadth-movers can never reach a
+  board. Deliberate (this thread holds the GIL); the dial is how you buy discovery back, and
+  `scripts/provisional_health.py` now prints the idle-slots-vs-declined-movers line so the cost is
+  visible rather than assumed.
+- **The cadence overrun is arithmetic, not a fault.** Measured here at 35.6 ms per `run_all_factors`
+  window (the module's own figure: 45.7 ms) × ~50 engine calls ≈ 1.8–2.4 s, plus 150 window loads —
+  against a 3.0 s cadence. Overruns never queue (`delay = max(0, cadence − elapsed)`). Left alone
+  pending forward evidence; raising `live_provisional_refresh_s` is the follow-up if it persists.
+- **Cycle health is now durable.** New `provisional:health:{day}` key (TTL one week): cumulative
+  cycles / overrun% / clip% / mean+max elapsed / last-cycle hot-set composition per IST session day,
+  re-seeded across a mid-session worker restart. `make live-worker` writes no log file, so a day's
+  cadence/clip record previously lived only in a terminal and died with it. `HotSetStats` rides the
+  cycle stats so a clip is trendable, not log-only. Read it with `scripts/provisional_health.py`
+  (read-only; also recomputes the hot-set input independently, so a filter that silently stopped
+  working is still visible).
+
+Also noted while measuring, not changed: the provisional thread runs the **Python** frozen engine in
+the consumer's process, so it holds the GIL at ~100% duty cycle all session. A consumer-like 1 ms wake
+loop degrades from p50 1.08 ms / max 2.14 ms (idle) to **p50 6.16 ms / max 33.3 ms** with one scorer
+thread running. The live heartbeat moved the same way (2026-07-16 soak, no provisional thread:
+`lat_p50=7.5`; 2026-08-18: `lat_p50=50`) — though tick volume is also 8× higher, so that shift is not
+attributable to provisional alone. Note `lat_p99` in the heartbeat is **not a p99**: the histogram tops
+out at 100 ms, so `quantile_bound` falls through and returns `max_ms`.
+
+**22 new tests** (50 in `test_provisional.py`, up from 28, all green), no migration, reversible by
+config.
+
+**Reviews.** bug-hunter: BUGS-FOUND, 5 LOW, all in the new monitoring surface, all fixed — (1) the
+restart re-seed ran outside the loop's `try`, so a non-numeric health key raised straight out of the
+NON-JOINED daemon thread and took the provisional layer dark for a whole session (reproduced; now a
+fail-safe `_seed_counters`, and `json.dumps` moved inside the publish guard); (2) both Redis failure
+paths logged at DEBUG while `live_worker` configures the root logger at INFO, so a silently wiped day
+was indistinguishable from a first run (now WARNING + a `seed_failed` flag on the key); (3) the health
+script never printed `as_of`, the staleness signal the key documents; (4) the liveness INFO line was
+throttled on the cumulative counter, delaying it up to 30 cycles after a restart; (5) a test-count
+claim in this entry was wrong. It independently confirmed the 2026-07-19 paging fix survived the C901
+refactor statement-for-statement and that page-boundary ordering is strict.
+quant-verifier: PASS-WITH-NOTES, 2 MEDIUM + INFO — frozen engine untouched (no Rust fixture
+regeneration), the convergence contract intact (scorer region and memo key byte-identical, hot-set
+membership is not a scorer input), zero DB writes so no repainting, money discipline clean. Both
+MEDIUMs actioned: the market dial was deduped only against signal-bound alert sids and trimmed before
+the `is_active` filter, so a slot could be spent on an already-hot or inactive stock (fixed +
+regression tests); and the pinned Phase-3 decision text, which still described near-trigger as an
+unqualified third source, is now amended. Its recommendation to pair a non-zero `market_max` with
+`live_provisional_refresh_s = 5.0` is deliberately NOT taken yet — that is the cadence decision under
+forward measurement. mypy strict then caught a third defect the reviewers missed: the tuple split left
+the alert-read failure path returning a bare `set()`, so the path meant to fail OPEN would have raised
+on unpacking (fixed + regression test).
+
+
 ### feat(phase6.8 R-track): entry-quality overlay — the SRTL-class leak (2026-08-18)
 
 The SRTL paper loss (−₹3,565 in 10 min) and the exit-ladder replay both pointed at the ENTRY, not

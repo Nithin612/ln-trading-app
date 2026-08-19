@@ -29,13 +29,17 @@ import pytest
 import redis as redis_sync
 from app.broker.provisional import (
     ALL_PROVISIONAL_STYLES,
+    HEALTH_KEY,
     LEADERBOARD_CHANNEL,
     LEADERBOARD_KEY,
     _in_session,
+    _seed_counters,
     append_forming,
     forming_daily_bar,
     load_hot_set,
+    publish_cycle_stats,
     publish_leaderboards,
+    read_cycle_stats,
     run_cycle,
     score_pair,
 )
@@ -295,9 +299,10 @@ class TestHotSet:
         await make_stock(db, symbol="HOTCLD")  # cold — must not appear
         signal = await _seed_signal(db, sig_stock.id, profile_key="rrbo")
 
-        sync_redis.xadd(alert_stream, {"sid": trig_stock.id,
+        sync_redis.xadd(alert_stream, {"sid": trig_stock.id, "style": "intraday",
                                        "ts": int(NOW.timestamp()) - 10})
         sync_redis.xadd(alert_stream, {"sid": watch_stock.id,  # too old
+                                       "style": "intraday",
                                        "ts": int(NOW.timestamp()) - 100_000})
 
         user = await create_test_user(db, email="hotset@test.com")
@@ -307,8 +312,10 @@ class TestHotSet:
         db.add(WatchlistItem(watchlist_id=wl.id, stock_id=watch_stock.id))
         await db.commit()
 
-        hot, pairs = await load_hot_set(db, sync_redis, NOW)
+        hot, pairs, hot_stats = await load_hot_set(db, sync_redis, NOW)
 
+        assert (hot_stats.raw, hot_stats.kept, hot_stats.clipped) == (3, 3, 0)
+        assert (hot_stats.signal, hot_stats.trigger, hot_stats.watchlist) == (1, 1, 1)
         assert hot[sig_stock.id].sources == {"signal"}
         assert hot[trig_stock.id].sources == {"trigger"}
         assert hot[watch_stock.id].sources == {"watchlist"}
@@ -329,11 +336,11 @@ class TestHotSet:
         ts = int(NOW.timestamp()) - 5
         # target's ONLY alert lands first (oldest), then a 550-entry burst
         # pushes it beyond the newest-500 window
-        sync_redis.xadd(alert_stream, {"sid": target.id, "ts": ts})
+        sync_redis.xadd(alert_stream, {"sid": target.id, "style": "swing", "ts": ts})
         for _ in range(550):
-            sync_redis.xadd(alert_stream, {"sid": filler.id, "ts": ts})
+            sync_redis.xadd(alert_stream, {"sid": filler.id, "style": "swing", "ts": ts})
 
-        hot, _pairs = await load_hot_set(db, sync_redis, NOW)
+        hot, _pairs, _stats = await load_hot_set(db, sync_redis, NOW)
 
         assert target.id in hot, "in-window entry beyond the newest 500 was dropped"
         assert hot[target.id].sources == {"trigger"}
@@ -347,7 +354,7 @@ class TestHotSet:
         trig_stock = await make_stock(db, symbol="CLPTRG")
         watch_stock = await make_stock(db, symbol="CLPWCH")
         await _seed_signal(db, sig_stock.id)
-        sync_redis.xadd(alert_stream, {"sid": trig_stock.id,
+        sync_redis.xadd(alert_stream, {"sid": trig_stock.id, "style": "intraday",
                                        "ts": int(NOW.timestamp()) - 5})
         user = await create_test_user(db, email="clip@test.com")
         wl = Watchlist(user_id=user.id, name="clip")
@@ -357,10 +364,221 @@ class TestHotSet:
         await db.commit()
 
         with caplog.at_level("WARNING"):
-            hot, _pairs = await load_hot_set(db, sync_redis, NOW)
+            hot, _pairs, hot_stats = await load_hot_set(db, sync_redis, NOW)
 
         assert set(hot) == {sig_stock.id, trig_stock.id}  # watchlist clipped
         assert any("hot set clipped" in r.message for r in caplog.records)
+        # the clip must be TRENDABLE, not log-only (that is what made the
+        # 2026-08-18 flood invisible to everything but a terminal)
+        assert (hot_stats.raw, hot_stats.kept, hot_stats.clipped) == (3, 2, 1)
+        assert hot_stats.watchlist == 0
+
+    # ── breadth-alert flood (root cause of the 2026-08-18 clip storm) ────────
+
+    @pytest.mark.asyncio
+    async def test_market_breadth_alerts_never_reach_the_hot_set(
+        self, db, sync_redis, alert_stream, monkeypatch
+    ) -> None:
+        """REGRESSION 2026-08-18: `_recent_trigger_sids` admitted EVERY alert
+        regardless of tag, so market-breadth levels (vburst on 1271 distinct
+        stocks in a 15-min window, plus PDH/PDL) flooded the hot set. The cap
+        then went to the lowest stock_ids and the watchlist — a documented
+        hot-set source — was never scored at all."""
+        monkeypatch.setattr(settings, "live_provisional_hotset_max", 3)
+        ts = int(NOW.timestamp()) - 5
+        burst = [await make_stock(db, symbol=f"VBRST{i}") for i in range(5)]
+        for st in burst:
+            sync_redis.xadd(alert_stream, {"sid": st.id, "tag": "volume_burst",
+                                           "source": "vburst", "style": "market",
+                                           "ts": ts})
+        watch_stock = await make_stock(db, symbol="WLSURV")
+        user = await create_test_user(db, email="breadth@test.com")
+        wl = Watchlist(user_id=user.id, name="breadth")
+        db.add(wl)
+        await db.flush()
+        db.add(WatchlistItem(watchlist_id=wl.id, stock_id=watch_stock.id))
+        await db.commit()
+
+        hot, _pairs, hot_stats = await load_hot_set(db, sync_redis, NOW)
+
+        # CANARY: on the old code the 5 breadth stocks outranked watchlist
+        # (trigger beats watchlist) and clipped it out at cap=3.
+        assert set(hot) == {watch_stock.id}
+        assert not any(st.id in hot for st in burst)
+        assert (hot_stats.raw, hot_stats.clipped, hot_stats.trigger) == (1, 0, 0)
+
+    @pytest.mark.asyncio
+    async def test_signal_bound_alert_is_still_a_trigger(
+        self, db, sync_redis, alert_stream
+    ) -> None:
+        """The filter is on BREADTH, not on the trigger source itself:
+        entry-zone / SL / TP alerts carry the signal's classification as
+        style and must keep priming the hot set."""
+        ts = int(NOW.timestamp()) - 5
+        zone = await make_stock(db, symbol="ZONEHOT")
+        sync_redis.xadd(alert_stream, {"sid": zone.id, "tag": "zone_enter",
+                                       "source": "entry_zone", "style": "swing",
+                                       "signal_id": str(uuid.uuid4()), "ts": ts})
+
+        hot, _pairs, _stats = await load_hot_set(db, sync_redis, NOW)
+
+        assert hot[zone.id].sources == {"trigger"}
+
+    @pytest.mark.asyncio
+    async def test_style_less_alert_reads_as_market_fail_closed(
+        self, db, sync_redis, alert_stream
+    ) -> None:
+        """An entry with no `style` predates the stamp. The producer's own
+        default is "market" (`live_worker`: meta.get("style", "market")), so
+        it must fail CLOSED — failing open would let the flood back in
+        silently the moment an alert shape changed."""
+        orphan = await make_stock(db, symbol="NOSTYLE")
+        sync_redis.xadd(alert_stream, {"sid": orphan.id,
+                                       "ts": int(NOW.timestamp()) - 5})
+
+        hot, _pairs, _stats = await load_hot_set(db, sync_redis, NOW)
+
+        assert orphan.id not in hot
+
+    @pytest.mark.asyncio
+    async def test_market_max_dials_breadth_back_newest_first(
+        self, db, sync_redis, alert_stream, monkeypatch
+    ) -> None:
+        """The dial back: >0 admits that many market-level stocks, and
+        recency decides which (the stream is read newest-first). Recency is
+        stream-ID order, not the `ts` field."""
+        monkeypatch.setattr(settings, "live_provisional_trigger_market_max", 1)
+        ts = int(NOW.timestamp()) - 5
+        older = await make_stock(db, symbol="MKTOLD")
+        newer = await make_stock(db, symbol="MKTNEW")
+        sync_redis.xadd(alert_stream, {"sid": older.id, "style": "market", "ts": ts})
+        sync_redis.xadd(alert_stream, {"sid": newer.id, "style": "market", "ts": ts})
+
+        hot, _pairs, stats = await load_hot_set(db, sync_redis, NOW)
+
+        assert newer.id in hot, "newest market-level alert was not admitted"
+        assert older.id not in hot, "market admission is not bounded"
+        assert hot[newer.id].sources == {"market"}, "breadth must not read as trigger"
+        assert (stats.market, stats.trigger) == (1, 0)
+
+    @pytest.mark.asyncio
+    async def test_market_recency_survives_a_page_boundary(
+        self, db, sync_redis, alert_stream, monkeypatch
+    ) -> None:
+        """The market tier is ordered by the PAGED read, so page-2 recency
+        needs its own cover: the newest entry must still win after a >500
+        entry burst pushes it off page 1 (quant-verifier INFO 2026-08-19)."""
+        monkeypatch.setattr(settings, "live_provisional_trigger_market_max", 1)
+        ts = int(NOW.timestamp()) - 5
+        newest = await make_stock(db, symbol="MKTPG1")
+        buried = await make_stock(db, symbol="MKTPG2")
+        sync_redis.xadd(alert_stream, {"sid": buried.id, "style": "market", "ts": ts})
+        sync_redis.xadd(alert_stream, {"sid": newest.id, "style": "market", "ts": ts})
+        for _ in range(550):  # burst pushes BOTH beyond the newest 500
+            sync_redis.xadd(alert_stream, {"sid": newest.id, "style": "market", "ts": ts})
+
+        hot, _pairs, _stats = await load_hot_set(db, sync_redis, NOW)
+
+        assert newest.id in hot
+        assert buried.id not in hot, "page-2 ordering lost: the older sid won"
+
+    @pytest.mark.asyncio
+    async def test_a_market_slot_must_buy_new_coverage(
+        self, db, sync_redis, alert_stream, monkeypatch
+    ) -> None:
+        """REGRESSION (quant-verifier MEDIUM 2026-08-19): the market list was
+        deduped only against signal-bound alert sids, so a slot could be spent
+        on a stock the signal/watchlist sources had ALREADY made hot — or on
+        an inactive stock, since is_active was filtered after the trim. Either
+        way the dial silently delivered less than it claimed."""
+        monkeypatch.setattr(settings, "live_provisional_trigger_market_max", 1)
+        ts = int(NOW.timestamp()) - 5
+        signalled = await make_stock(db, symbol="MKTDUPE")
+        fresh = await make_stock(db, symbol="MKTFRESH")
+        await _seed_signal(db, signalled.id)
+        # the ALREADY-HOT stock is newest, so a naive dial spends its only
+        # slot on it and admits nothing new
+        sync_redis.xadd(alert_stream, {"sid": fresh.id, "style": "market", "ts": ts})
+        sync_redis.xadd(alert_stream, {"sid": signalled.id, "style": "market", "ts": ts})
+
+        hot, _pairs, stats = await load_hot_set(db, sync_redis, NOW)
+
+        assert fresh.id in hot, "the slot was wasted on an already-hot stock"
+        assert hot[signalled.id].sources == {"signal"}
+        assert stats.market == 1
+
+    @pytest.mark.asyncio
+    async def test_inactive_stock_never_eats_a_market_slot(
+        self, db, sync_redis, alert_stream, monkeypatch
+    ) -> None:
+        monkeypatch.setattr(settings, "live_provisional_trigger_market_max", 1)
+        ts = int(NOW.timestamp()) - 5
+        dead = await make_stock(db, symbol="MKTDEAD")
+        live = await make_stock(db, symbol="MKTLIVE")
+        dead.is_active = False
+        await db.commit()
+        sync_redis.xadd(alert_stream, {"sid": live.id, "style": "market", "ts": ts})
+        sync_redis.xadd(alert_stream, {"sid": dead.id, "style": "market", "ts": ts})
+
+        hot, _pairs, _stats = await load_hot_set(db, sync_redis, NOW)
+
+        assert live.id in hot, "an inactive stock consumed the only slot"
+        assert dead.id not in hot
+
+    @pytest.mark.asyncio
+    async def test_a_dead_alert_stream_fails_open_not_crashing(
+        self, db, sync_redis, monkeypatch
+    ) -> None:
+        """REGRESSION (mypy strict, 2026-08-19): splitting the alert read into
+        a (signal_bound, market) tuple left the read-failure path returning a
+        bare `set()`, so the very path meant to fail OPEN would instead raise
+        on tuple-unpacking and take the whole cycle down. The hot set must
+        still assemble from the DB sources alone."""
+
+        class DeadStream:
+            def xrevrange(self, *args, **kwargs):
+                raise RuntimeError("redis down")
+
+        monkeypatch.setattr(settings, "live_provisional_trigger_market_max", 5)
+        watch_stock = await make_stock(db, symbol="FAILOPEN")
+        user = await create_test_user(db, email="failopen@test.com")
+        wl = Watchlist(user_id=user.id, name="failopen")
+        db.add(wl)
+        await db.flush()
+        db.add(WatchlistItem(watchlist_id=wl.id, stock_id=watch_stock.id))
+        await db.commit()
+
+        hot, _pairs, stats = await load_hot_set(db, DeadStream(), NOW)
+
+        assert set(hot) == {watch_stock.id}, "a dead stream must not empty the hot set"
+        assert (stats.trigger, stats.market) == (0, 0)
+
+    @pytest.mark.asyncio
+    async def test_market_tier_can_never_clip_the_watchlist(
+        self, db, sync_redis, alert_stream, monkeypatch
+    ) -> None:
+        """The original bug in miniature: breadth admitted at TRIGGER priority
+        outranked the watchlist and starved it. The discovery tier therefore
+        ranks BELOW watchlist — turning the dial on must never cost coverage
+        the user explicitly asked for."""
+        monkeypatch.setattr(settings, "live_provisional_hotset_max", 1)
+        monkeypatch.setattr(settings, "live_provisional_trigger_market_max", 5)
+        ts = int(NOW.timestamp()) - 5
+        watch_stock = await make_stock(db, symbol="WLKEEP")
+        for i in range(3):
+            mkt = await make_stock(db, symbol=f"MKTPUSH{i}")
+            sync_redis.xadd(alert_stream, {"sid": mkt.id, "style": "market", "ts": ts})
+        user = await create_test_user(db, email="mktrank@test.com")
+        wl = Watchlist(user_id=user.id, name="rank")
+        db.add(wl)
+        await db.flush()
+        db.add(WatchlistItem(watchlist_id=wl.id, stock_id=watch_stock.id))
+        await db.commit()
+
+        hot, _pairs, stats = await load_hot_set(db, sync_redis, NOW)
+
+        assert set(hot) == {watch_stock.id}, "breadth outranked the watchlist again"
+        assert (stats.watchlist, stats.market) == (1, 0)
 
 
 # ── Publish ───────────────────────────────────────────────────────────────────
@@ -432,6 +650,161 @@ class TestPublishLeaderboards:
 
 
 # ── score_pair 1d path ────────────────────────────────────────────────────────
+
+
+class TestCycleHealth:
+    """Cycle health has to be readable AFTER the session: `make live-worker`
+    writes no log file (only `make soak` tees one), so a run's cadence/clip
+    record lived only in a terminal. Cumulative + per-day, so the answer is
+    a RATE over a day and it survives a mid-session restart."""
+
+    DAY = "2026-08-19"
+
+    def _publish(self, redis, **over):
+        kwargs = dict(
+            day=self.DAY, now_utc=NOW, cadence_s=3.0, cycles=4, overruns=1,
+            clip_cycles=2, elapsed_ms=4200.0, elapsed_sum_ms=12_000.0,
+            elapsed_max_ms=4200.0, restarts=0, seed_failed=False,
+            stats={"hot": 120, "clipped": 0},
+        )
+        kwargs.update(over)
+        publish_cycle_stats(redis, **kwargs)
+
+    def test_cumulative_rates_and_ttl(self, sync_redis) -> None:
+        self._publish(sync_redis)
+
+        raw = sync_redis.get(HEALTH_KEY.format(day=self.DAY))
+        assert raw is not None, "cycle-health key missing"
+        doc = json.loads(raw)
+        assert (doc["cycles"], doc["overruns"], doc["clip_cycles"]) == (4, 1, 2)
+        assert doc["overrun_pct"] == 25.0
+        assert doc["clip_pct"] == 50.0
+        assert doc["elapsed_mean_ms"] == 3000.0
+        assert doc["elapsed_max_ms"] == 4200.0
+        assert doc["cadence_ms"] == 3000.0
+        assert doc["last"] == {"hot": 120, "clipped": 0}
+        assert (doc["day"], doc["as_of"]) == (self.DAY, NOW.isoformat())
+        # a week: "monitor it for a few days" with no scheduler running
+        ttl = sync_redis.ttl(HEALTH_KEY.format(day=self.DAY))
+        assert 0 < ttl <= settings.live_provisional_health_ttl_s
+        assert settings.live_provisional_health_ttl_s >= 7 * 86_400
+
+    def test_zero_cycles_never_divides_by_zero(self, sync_redis) -> None:
+        self._publish(sync_redis, cycles=0, overruns=0, clip_cycles=2,
+                      elapsed_sum_ms=0.0)
+
+        doc = json.loads(sync_redis.get(HEALTH_KEY.format(day=self.DAY)))
+        assert (doc["overrun_pct"], doc["clip_pct"], doc["elapsed_mean_ms"]) == (
+            0.0, 0.0, 0.0,
+        )
+
+    def test_redis_failure_never_disturbs_the_cycle(self) -> None:
+        class Boom:
+            def set(self, *args, **kwargs):
+                raise RuntimeError("redis down")
+
+        self._publish(Boom())  # must not raise — monitoring is not the job
+
+    def test_restart_resumes_the_days_counters(self, sync_redis) -> None:
+        """The supervisor restarts the worker mid-session (token expiry is a
+        normal lifecycle event). Re-seeding from the day's key is what keeps
+        a restart from zeroing the day's record — and elapsed_sum is
+        reconstructed as mean × n, since only the mean is stored."""
+        self._publish(sync_redis, cycles=4, overruns=1, clip_cycles=2,
+                      elapsed_sum_ms=12_000.0, elapsed_max_ms=4200.0)
+
+        prior = read_cycle_stats(sync_redis, self.DAY)
+
+        assert prior is not None
+        assert (prior["cycles"], prior["overruns"], prior["clip_cycles"]) == (4, 1, 2)
+        assert prior["elapsed_mean_ms"] * prior["cycles"] == 12_000.0
+        assert prior["restarts"] == 0
+
+    def test_read_is_none_when_nothing_recorded_or_junk(self, sync_redis) -> None:
+        assert read_cycle_stats(sync_redis, "1999-01-01") is None
+        sync_redis.set(HEALTH_KEY.format(day="1999-01-02"), "not json")
+        assert read_cycle_stats(sync_redis, "1999-01-02") is None
+        sync_redis.set(HEALTH_KEY.format(day="1999-01-03"), "[1,2]")
+        assert read_cycle_stats(sync_redis, "1999-01-03") is None, "list is not a doc"
+
+    def test_read_failure_is_not_fatal(self) -> None:
+        class Boom:
+            def get(self, *args, **kwargs):
+                raise RuntimeError("redis down")
+
+        assert read_cycle_stats(Boom(), self.DAY) is None
+
+    def test_seed_failure_is_stamped_on_the_key(self, sync_redis) -> None:
+        """A WIPED day must not read as a first run. Without the flag the two
+        are identical — `restarts` re-seeds to 0 as well — and the key exists
+        precisely because there is no log file to cross-check."""
+        self._publish(sync_redis, seed_failed=True)
+
+        doc = json.loads(sync_redis.get(HEALTH_KEY.format(day=self.DAY)))
+        assert doc["seed_failed"] is True
+
+    def test_publish_survives_an_unserialisable_stats_dict(self, sync_redis) -> None:
+        """`json.dumps` now sits INSIDE the guard: the docstring's promise that
+        publishing can never disturb a cycle held only while `run_cycle`
+        returned an all-int dict (bug-hunter LOW 2026-08-19, latent)."""
+        self._publish(sync_redis, stats={"hot": object()})  # must not raise
+
+
+class TestSeedCounters:
+    """Resuming the day's counters must never stop the thread from starting.
+    `run_provisional` is a NON-JOINED daemon thread with no restart path, so
+    an exception here takes the provisional layer dark for the whole session
+    (bug-hunter LOW 2026-08-19, reproduced)."""
+
+    DAY = "2026-08-19"
+
+    def test_resumes_and_counts_the_restart(self, sync_redis) -> None:
+        publish_cycle_stats(
+            sync_redis, day=self.DAY, now_utc=NOW, cadence_s=3.0, cycles=4,
+            overruns=1, clip_cycles=2, elapsed_ms=3000.0, elapsed_sum_ms=12_000.0,
+            elapsed_max_ms=4200.0, restarts=0, seed_failed=False, stats={},
+        )
+
+        cycles, overruns, clips, sum_ms, max_ms, restarts, failed = _seed_counters(
+            sync_redis, self.DAY
+        )
+
+        assert (cycles, overruns, clips) == (4, 1, 2)
+        assert sum_ms == 12_000.0  # mean × n round-trips the sum
+        assert max_ms == 4200.0
+        assert restarts == 1, "a resumed day is a restart"
+        assert failed is False
+
+    def test_absent_key_starts_fresh_without_counting_a_restart(self, sync_redis) -> None:
+        assert _seed_counters(sync_redis, "1999-01-01") == (0, 0, 0, 0.0, 0.0, 0, False)
+
+    def test_non_numeric_counters_never_kill_the_thread(self, sync_redis) -> None:
+        """CANARY: seeding used to run OUTSIDE the loop's try, so a poisoned
+        key (a debugging script writing the same key by hand) raised straight
+        out of the thread — dark all session, traceback only on a terminal
+        `make live-worker` does not tee."""
+        sync_redis.set(
+            HEALTH_KEY.format(day=self.DAY),
+            json.dumps({"cycles": None, "overruns": 0, "elapsed_mean_ms": "x"}),
+        )
+
+        seeded = _seed_counters(sync_redis, self.DAY)
+
+        assert seeded == (0, 0, 0, 0.0, 0.0, 0, True), "poisoned key must fail SAFE"
+
+    def test_junk_payload_starts_fresh(self, sync_redis) -> None:
+        sync_redis.set(HEALTH_KEY.format(day=self.DAY), "not json")
+        assert _seed_counters(sync_redis, self.DAY) == (0, 0, 0, 0.0, 0.0, 0, False)
+
+    def test_read_failure_is_flagged_not_raised(self) -> None:
+        class Boom:
+            def get(self, *args, **kwargs):
+                raise RuntimeError("redis down")
+
+        cycles, _o, _c, _s, _m, restarts, failed = _seed_counters(Boom(), self.DAY)
+
+        assert (cycles, restarts) == (0, 0)
+        assert failed is True, "a Redis blip must be distinguishable from a fresh day"
 
 
 class TestScorePair1d:
