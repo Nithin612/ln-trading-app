@@ -178,3 +178,25 @@ RTL coverage for the AlertBell action (loading/empty/error/primary).
 - **Alert-stream snapshot.** Persist a daily snapshot of `alerts:live` so the
   report's AlertBell recap is the real firings, not just the durable
   reconstruction.
+
+---
+
+## Update 2026-08-18/19 — the entry leak (supersedes the P2 "entry filter first" note)
+
+The P2 note above ("entry filter before any exit threshold change") is now ACTED ON. The 2026-08-18
+SRTL paper loss (single-factor 80%-confidence BUY, ₹39 micro-cap × 2666 qty → −₹3.5k) confirmed the
+binding leak is **ENTRY selection, not exit logic**. Built the **entry-quality overlay**
+(`app/signals/entry_quality.py`, frozen engine untouched) — `entry_diversity_gate_mode=active` now
+**blocks single-factor entries** on the paper order path (the "≥2 factors" rule), plus a shadow
+stop-too-tight check + a `entry-quality-shadow-<date>.md` sidecar. Detail: the R-track section of
+`docs/phases/phase-06.8-execution-realism-plan.md` + `docs/analysis/exit-ladder-research-2026-08-18.md`.
+
+**Exit-side follow-up (deferred, evidence-gated):** the exit-ladder replay showed profit-booking
+floors (net-₹100, hard-₹500) are risk dials, not boosters. The only supported exit change is arming
+breakeven earlier — **`profit_lock_breakeven_inr` 2000 → ~800** — held until more paper data accrues
+(this is the concrete residue of P2's "retune on the tapes"). Unblocking the 30-day paper clock waits
+on the same evidence + the Phase-6.8 gate + user "proceed".
+
+**Deferred to the MCE (the phase after 6.8):** the top-down context the entry engine still lacks —
+sector/index relative-strength + fundamentals + news as GATES/MODIFIERS (never additive). See
+`docs/phases/phase-MCE-market-context-engine.md`.

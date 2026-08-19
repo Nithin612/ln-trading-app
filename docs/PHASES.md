@@ -321,7 +321,7 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-08-17.**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-08-19.**
 Phases **0–5 are CLOSED** (Phase 3 gated 2026-08-14, PASS). **Phase 6 is BUILT** — 6.1–6.4 done;
 the **regime gate is ACTIVE** in the paper book (flipped 2026-08-15, reversible via
 `REGIME_GATE_MODE=shadow` + restart); **6.5 pair-trading is fully built shadow-first (slices 1–4)**.
@@ -350,6 +350,26 @@ paper positions DONE + reviewed (quant-verifier PASS w/ 1 HIGH fixed, bug-hunter
 ▶ 6.8.6 silent-feed-outage alarm DONE + reviewed (bug-hunter 2 LOW fixed, test-guardian gaps fixed)
 2026-08-18. ▶▶ ALL SIX PAPER-SAFE SLICES (6.8.1–6.8.6) DONE — NEXT = `/phase-gate` + the user's
 "proceed" for paper day-1, OR a gated research item (R1/R2/F1) first**
+
+**▶ R-track entry-quality overlay DONE 2026-08-18/19 (commits `965b562` + `845ff5c`) — the SRTL
+paper loss exposed that the real leak is ENTRY, not exit.** A BUY at 80% confidence fired on
+RSI_DIVERGENCE *alone* (₹39 micro-cap × 2666 qty → −₹3.5k / 1.78R) because the confluence
+confidence normalizes by the weight of the factors that *scored*, so one 0.8 factor reads 80% and
+clears the ≥70% gate. Fix = a downstream eligibility overlay (`app/signals/entry_quality.py`, frozen
+engine untouched, the `regime_guard`/`circuit_guard` pattern) with **two independently-moded checks**:
+**(a) factor-diversity — `entry_diversity_gate_mode` ACTIVE (user sign-off)**, enforcing the "≥2
+factors, never a single indicator" rule → single-factor signals now 409 on the paper order path;
+**(b) stop-too-tight — `entry_sl_atr_gate_mode` SHADOW**, a tunable `|entry−SL| < k·ATR`, measured
+only. A shadow sidecar (`app/services/entry_quality_shadow.py` → `make analysis` writes
+`entry-quality-shadow-<date>.md`) accrues flagged-vs-passed outcomes + an sl_atr flip-readiness banner
+(the evidence to eventually activate sl_atr, gated like the regime gate). Reviews: quant-verifier PASS
++ bug-hunter CLEAN; 24 tests, no migration. The exit-ladder replay that ran alongside
+(`docs/analysis/exit-ladder-research-2026-08-18.md`) PARKED profit-booking floors (net-₹100 and hard-₹500
+both rejected — risk dials, not boosters); the only supported exit change is arming breakeven earlier
+(`profit_lock_breakeven_inr` 2000→~800), deferred until more data. **Context complement deferred to the
+MCE** (sector/index relative-strength + fundamentals + news as GATES/MODIFIERS, never additive):
+[`phases/phase-MCE-market-context-engine.md`](phases/phase-MCE-market-context-engine.md) — each
+§8-backtested on ≥2y before live; the daily report must surface each once built.**
 (6.8.3 was the plan's "best new idea": a long whose stock hits LOWER circuit has zero buyers, so its
 stop cannot fill at any price; bands cached to Redis by a market-hours task, order path reads only,
 fail-open, shadow-first — evidence accrues via `circuit-gate-shadow-<date>.md` once paper trading

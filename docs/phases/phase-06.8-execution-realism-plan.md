@@ -5,9 +5,16 @@ verified against real ticks 15:26 IST) · 6.8.2 ✅ DONE · 6.8.3 ✅ BUILT (sha
 Phase-6 branch) · 6.8.4 ✅ DONE (carried-position rolling MFE/MAE + weekly open-MTM series) · 6.8.5 ✅
 DONE (CA-adjust OPEN positions — R-preserving split/bonus, idempotent+catch-up) · 6.8.6 ✅ DONE
 (silent-feed-outage alarm — trading-calendar-aware EOD staleness header). **All SIX paper-safe slices
-DONE (2026-08-18).** Remaining = the gated, non-blocking research track (R1/R2) + F1 spike — optional,
-do NOT block phase close. Ready for `/phase-gate` + the user's "proceed" for paper day-1. All 6.8
-slices build on
+DONE (2026-08-18).** **▶ PLUS an R-track entry-quality overlay ✅ DONE 2026-08-18/19 (commits
+`965b562` + `845ff5c`)** — not one of the original six; it emerged from the SRTL paper loss (single-factor
+80%-confidence BUY on a ₹39 micro-cap → −₹3.5k). `app/signals/entry_quality.py` (frozen engine
+untouched, overlay pattern) blocks single-factor entries via `entry_diversity_gate_mode=active` (user
+sign-off — the "≥2 factors" rule) + a shadow `entry_sl_atr_gate_mode` stop-too-tight check, with a
+`entry_quality_shadow.py` sidecar (`entry-quality-shadow-<date>.md` + flip banner). quant-verifier PASS
++ bug-hunter CLEAN, 24 tests, no migration. See §R-track below + `phase-MCE-market-context-engine.md`
+for the deferred context layer. Remaining = the gated, non-blocking research track (R1/R2) + F1 spike —
+optional, do NOT block phase close. Ready for `/phase-gate` + the user's "proceed" for paper day-1. All
+6.8 slices build on
 `feature/phase6-overlay-walkforward-retune`; paper day-1 deferred until the phase is done + user
 "proceed"; merge to main only after.**
 Decisions taken:
@@ -365,6 +372,53 @@ listed are the mandatory ones for the files touched.
 - **Tests.** feed 3 trading days stale ⇒ alarm; weekend gap ⇒ no alarm; all-current ⇒
   quiet.
 - **§8 backtest?** No. **Effort.** S. **Dependency.** none.
+
+---
+
+### R-track slice — entry-quality overlay ✅ DONE 2026-08-18/19 (added after scope-lock)
+
+*Not in the original six; added after the SRTL paper loss surfaced the true leak.* On 2026-08-18 a
+paper BUY of SRTL was minted at **80% confidence on a single scoring factor** (RSI_DIVERGENCE 0.8),
+a ₹39 micro-cap sized to **2666 qty**, and lost **−₹3,564 (1.78R)** on a gap-through-stop. Root cause:
+the confluence confidence is `int(abs(Σ weighted / Σ weight[score≠0]) × 100)` — it **normalizes by the
+weight of the factors that scored**, so one 0.8 factor reads 80% and clears the ≥70% gate with **no
+breadth requirement**. The ≥70% gate is a *depth* test, not a *breadth* test; nothing enforced hard
+constraint #2's "never a single indicator" at order time.
+
+- **What we built.** `app/signals/entry_quality.py` — a downstream eligibility overlay (frozen engine
+  untouched, the `regime_guard`/`circuit_guard` pattern; fail-open), wired into `place_order` via the
+  behaviour-preserving `_apply_eligibility_overlays` helper. **Two independently-moded checks:**
+  1. **factor-diversity** (`entry_diversity_gate_mode`, default **active** — user sign-off, enforcing
+     the "≥2 factors, never a single indicator" hard rule): flag/block `< entry_min_scoring_factors`
+     (2) scoring factors, or one factor `> entry_max_dominant_factor_share` (0.90) of the confluence.
+  2. **stop-too-tight** (`entry_sl_atr_gate_mode`, default **shadow** — tunable): flag `|entry−SL| <
+     entry_min_sl_atr_mult` (1.0) × ATR (ATR as-of `signal.created_at`, no look-ahead; ATR absent →
+     skipped, fail-open). The low-price-huge-qty amplification reduces to SL-distance-vs-ATR (qty cancels).
+  `order_block_reason(verdict, diversity_mode, sl_atr_mode)` rejects (409) only on a check that is BOTH
+  flagged AND `active`. Verdict stamped on `order.broker_payload` for the shadow report.
+- **Shadow sidecar.** `app/services/entry_quality_shadow.py` → `make analysis` writes
+  `entry-quality-shadow-<date>.md`: partitions the tradeable signal cohort by each check, links realized
+  outcomes (reopen-safe SUM per signal), and gates an sl_atr flip on forward evidence (≥20 resolved
+  flagged, net-negative, worse than passed) with a flip-readiness banner — the same discipline as the
+  regime gate. This is how sl_atr earns its eventual active flip.
+- **Why sl_atr is shadow, not active.** Only the diversity rule has explicit user sign-off (it *is* the
+  stated hard rule). The ATR-multiple threshold is a tunable and needs forward evidence before it gates
+  the money path — exactly what the sidecar accrues.
+- **Evidence (read-only, dev-DB).** Diversity-flagged signals that actually traded netted **−₹6,093 (9
+  resolved)** vs the passed set **+₹3,880 (60)** — single-factor signals are net-losers, so the active
+  block is well-founded; the overlay catches SRTL on all axes.
+- **Reviews.** quant-verifier PASS (1 INFO — docstring — fixed); bug-hunter CLEAN (no behavioural
+  defect; 3 LOW test-coverage gaps closed). **24 tests**, ruff+mypy clean, **no migration**.
+- **Exit-ladder replay (parked alongside).** `docs/analysis/exit-ladder-research-2026-08-18.md`: on 18
+  natural on-tape trades, net-₹100 and hard-₹500 profit-booking floors are **risk dials, not boosters**
+  (both reduce total P&L); the current ladder captures the most. Only supported change = arm breakeven
+  earlier (`profit_lock_breakeven_inr` 2000→~800), deferred until more data. Exit tuning + unblocking the
+  30-day clock wait on that evidence.
+- **Context complement → the MCE.** The overlay is the *breadth* fix ("single factor is not an entry").
+  The *top-down* context — sector/index relative-strength + fundamentals + news as GATES/MODIFIERS
+  (never additive) — is deferred to the Market Context Engine (`phase-MCE-market-context-engine.md`),
+  the phase after 6.8; each §8-backtested on ≥2y before live, and the daily report must surface each
+  per entry once built.
 
 ---
 
