@@ -50,7 +50,10 @@ else.
   restart; the paper order path now rejects transitional (ADX 20–25) entries,
   monitored live via the daily Flip readiness banner (revert = `shadow` + restart).
   6.5 pair-trading is BUILT shadow-first; promoting the momentum ×1.5 retune still
-  waits on forward evidence. **The active build is now Phase 6.8 (Execution Realism
+  waits on forward evidence. **✅ Phase 6 GATED + CLOSED 2026-08-20** (build-complete;
+  three forward-evidence loops — regime keep/revert review ~09-15, momentum-retune
+  promotion, pair df-vs-adf — continue post-close, none blocking; close report in
+  `docs/phases/phase-06-plan.md`). **The active build is now Phase 6.8 (Execution Realism
   & Exchange-Safety)** — 6.8.1 depth capture, 6.8.2 spread-aware slippage, and
   6.8.3 circuit-band eligibility overlay, 6.8.4 continuous open-book MTM (rolling
   MFE/MAE for carried holds + weekly per-day open-MTM series), 6.8.5 CA-adjust OPEN

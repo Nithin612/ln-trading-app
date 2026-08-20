@@ -13,8 +13,9 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 ## ▶ STATE AT A GLANCE (updated 2026-08-20) — read this block first
 
 **v2 Phases 0–2 ✅ done · Phase 3 (realtime) ✅ GATED 2026-08-14 · Phase 4 ✅ done ·
-Phase 5 ✅ GATED 2026-08-07 · Phase 6 ▶ IN PROGRESS (6.1–6.4 done; regime gate ACTIVE
-2026-08-14; 6.5 pair-trading BUILT slices 1–4 shadow-first 2026-08-15) · Phase 7 not started.**
+Phase 5 ✅ GATED 2026-08-07 · Phase 6 ✅ GATED + CLOSED 2026-08-20 (6.1–6.5 built shadow-first; regime
+gate ACTIVE 2026-08-14; 3 forward-evidence loops continue post-close) · Phase 6.8 ✅ GATED + CLOSED
+2026-08-20 (merged to main, pushed) · Phase 7 not started.**
 
 **▶ Phase 6.8 (Execution Realism & Exchange-Safety, paper-safe) — APPROVED 2026-08-17 (user) as the
 next BUILD phase, inserted between Phase 6 and the MCE. Scope LOCKED: 6 paper-safe slices (depth
@@ -313,7 +314,7 @@ which is what Phase-6 expectancy calibration is for.
 | 3 | Realtime v2 — tick-to-tick | **▶ in progress** (started 2026-07-09) | [phase-03](phases/phase-03-realtime.md) | live-worker + Rust LiveEngine, committed vs forming layers, record/replay harness, latency budget p99 ≤ 50 ms tick→publish at full universe (restated 2026-07-14; original 10 ms was authored for 200–500 instruments). **Kite subscription required from slice 3.3.** Slice 3.0 (pre-work MEDIUMs) ✅ 2026-07-09 |
 | 4 | F&O analytics | **✅ backend done · phase-gate PASS 2026-08-06** (merged to main; UI = Phase 5) | [phase-04](phases/phase-04-fo-suggestions.md) | 4.1 chain/PCR/max-pain/basis/VIX-regime · 4.2 Rust BS/Black-76 IV+Greeks (`tradecore`) + IV-rank · 4.3 option-selling engine (defined-risk index-only; breakeven-POP; expectancy report-only=VRP; fail-closed VIX veto; user-calibrated `SellRules`). Follow-ups: confluence direction-tilt, event/ban gate (=deferred Market Context Engine), Kite SPAN margin, forward-validation dashboard (P6) · 🧭 **Nautilus doc** §9 — Greeks as a first-class data type; options/accounting (margin) refs |
 | 5 | UI overhaul | **✅ slices 5.1–5.4 done, MERGED to main 2026-08-07** (`make check` green; bug-hunter + ui-reviewer clean; 60 fps MEASURED and MET; visual smoke passed in all 5 themes — only `/phase-gate` remains) | [phase-05](phases/phase-05-ui-overhaul.md) | 5.1 `useLiveQuotes` v2 (rAF-batched; fixed socket-churn, resubscribe-per-render + subscription-leak bugs) + `useVirtualRows` · 5.2 **F&O page** (chain ladder w/ per-leg IV+Greeks via `/fo/chain?greeks=true`, `/fo/underlyings`, `/fo/expiries`, strategy cards, expectancy labelled report-only) · 5.3 style pages v2 (committed-vs-forming, outcome stats w/ small-sample refusal, factor drawer) · 5.4 Live Signals feed + opt-in notifications (bursts coalesce). **IA + slate default were already done in Phase 3.** 🧭 **Nautilus doc** §4.2 — cache-then-publish lets UI subscribe without touching producers |
-| 6 | Outcome tracking + entry-selection | **▶ BUILT 6.1–6.5 shadow-first (2026-08-12→15); regime gate ACTIVE; close ritual pending** — see the STATE block + `phase-06-plan.md` | [phase-06-plan](phases/phase-06-plan.md) | 6.1 MFE/MAE · 6.2 entry attribution (live+corpus) · gate experiment + §8 walk-forward · regime-gate overlay (ACTIVE) · 6.4 weight-retune (shadow) · 6.5 pair-trading (shadow, slices 1–4) · 🧭 **Nautilus doc** §7 — mimalloc on batch backtest sweeps; §4.3 richer bar aggregations for research |
+| 6 | Outcome tracking + entry-selection | **✅ GATE PASSED + CLOSED 2026-08-20 — 6.1–6.5 built shadow-first; regime gate ACTIVE; code on `main` (pushed); 3 forward-evidence loops continue post-close (regime keep/revert ~09-15 · momentum-retune promote · pair df/adf)** — close report in `phase-06-plan.md` | [phase-06-plan](phases/phase-06-plan.md) | 6.1 MFE/MAE · 6.2 entry attribution (live+corpus) · gate experiment + §8 walk-forward · regime-gate overlay (ACTIVE) · 6.4 weight-retune (shadow) · 6.5 pair-trading (shadow, slices 1–4) · 🧭 **Nautilus doc** §7 — mimalloc on batch backtest sweeps; §4.3 richer bar aggregations for research |
 | 6.8 | Execution Realism & Exchange-Safety (paper-safe) | **✅ GATE PASSED 2026-08-20 — CLOSED + merged to `main` (ff, awaiting push); all six slices done + reviewed; research track (R1/R2/F1) optional/gated; paper day-1 deferred until user "proceed"** | [phase-06.8-plan](phases/phase-06.8-execution-realism-plan.md) | 6.8.1 ✅ order-book depth capture (`depth:{stock_id}`; both consumers; pipelined on live-worker) · 6.8.2 ✅ spread-aware slippage/impact (replaces flat 2bps) · 6.8.3 ✅ circuit-band eligibility overlay (shadow-first, regime-gate pattern; band-refresh task → Redis `circuit:{stock_id}`) · 6.8.4 ✅ open-book-MTM carried-position gap (rolling MFE/MAE for carried holds + weekly per-day open-MTM series) · 6.8.5 ✅ CA-adjust OPEN paper positions (R-preserving split/bonus; admin-verified ratio; ex-date worker, idempotent+catch-up; migration `a7b8c9d0e1f2`) · 6.8.6 ✅ silent-feed-outage alarm (trading-calendar-aware EOD staleness header) · research (gated, non-blocking): R1 VWAP/RVOL as confluence factors (§8+oracle regen) + R2 weekly spread-width gate · spike: F1 `market_cap` writer (de-risks MCE keystone) |
 | 7 | Live-trading hardening | planned | — | Kite orders behind trading_mode + 30-day gate, kill switch, reconciliation, VPS runbook · 🧭 **Nautilus doc** §6 — **SLICE 1 = RiskEngine single-gate** (test-first, equivalence-pinned) → then BrokerAdapter port · order FSM (Denied vs Rejected) · reconciliation |
 
@@ -352,21 +353,25 @@ section. Full sliced plan in
 [`phases/phase-MCE-market-context-engine.md`](phases/phase-MCE-market-context-engine.md)
 ("Sliced plan (started 2026-08-20)").
 
-Phases **0–5 are CLOSED** (Phase 3 gated 2026-08-14, PASS). **Phase 6 is BUILT** — 6.1–6.4 done;
-the **regime gate is ACTIVE** in the paper book (flipped 2026-08-15, reversible via
-`REGIME_GATE_MODE=shadow` + restart); **6.5 pair-trading is fully built shadow-first (slices 1–4)**.
-**The STATE AT A GLANCE block at the top of this file is the live truth** — read it, not the 400
-lines of historical narrative below.
+Phases **0–5 CLOSED** · **Phase 6 ✅ GATED + CLOSED 2026-08-20** · **Phase 6.8 ✅ GATED + CLOSED +
+merged to `main` (pushed) 2026-08-20**. The regime gate is **ACTIVE** in the paper book (flipped
+2026-08-14, reversible via `REGIME_GATE_MODE=shadow` + restart). **The STATE AT A GLANCE block at the
+top of this file is the live truth** — read it, not the historical narrative below.
 
-**Nothing in Phase 6 is left to BUILD** — what remains is to let the shadow evidence accrue and
-tune from it (none of it a code task today):
-1. **Regime gate** — already active; monitor the daily `regime-gate-shadow-<date>.md` Flip-readiness
-   banner, keep-vs-revert review ~2026-09-15.
+**Phase 6 & 6.8 are done and on `main`.** What remains from Phase 6 are three forward-evidence loops
+that continue POST-close (none a code task, none blocking — carried in the phase-06 close report):
+1. **Regime gate** — active; monitor the daily `regime-gate-shadow-<date>.md` Flip-readiness banner,
+   keep-vs-revert review ~2026-09-15 (first live read had the suppressed set NOT net-negative — watch it).
 2. **Momentum ×1.5 retune** — promote once its forward shadow A/B (`retune_momentum_x15` vs
    `retune_base`) beats base (weeks of accrual + user sign-off).
 3. **Pair-trading (6.5)** — the nightly minter + outcome tracker run themselves;
    `pair-attribution-<date>.md` answers df-vs-adf once evidence accrues; tune knobs from THAT.
-4. **Phase-6 close ritual** (`/phase-gate` + a `docs/phases/phase-06-*.md` report) when you judge it done.
+
+**▶ NEXT BUILD = the Market Context Engine (MCE).** Slice 1 (`sector_rs.py`, off/unwired) is on `main`;
+**slice 2 = index-OHLC ingestion from Kite (Option B, decided 2026-08-20)** → benchmark provider →
+shadow-wire `sector_rs`; then slice 3 = shadow sidecar + daily-report context section. Also open (any
+time, non-blocking): paper day-1 for the 6.8 execution-realism stack (deferred until the user says
+"proceed" — the merge did NOT start the clock), and the gated 6.8 research track (R1/R2/F1).
 
 **Next BUILD phase = Phase 6.8 (Execution Realism & Exchange-Safety)** — APPROVED 2026-08-17 (user),
 inserted between Phase 6 and the **Market Context Engine** (which stays the phase after 6.8, before

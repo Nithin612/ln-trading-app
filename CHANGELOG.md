@@ -7,6 +7,18 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### milestone: Phase 6 + Phase 6.8 GATED + CLOSED (2026-08-20)
+
+Both phases passed `/phase-gate` and are on `main` (pushed). One full `make check` on the merged tree
+(worker stopped for a quiescent dev DB) certifies both — the code tree was byte-identical across the two
+gates: **backend 1477 · parity 16 · walkforward 9 (§8 drift gate — frozen engine untouched) · replay 19
+· frontend 375 · cargo ok**; static clean; `make analysis` smoke green. **Phase 6** (outcome tracking +
+entry-selection) closes build-complete with three forward-evidence loops continuing post-close (regime
+keep/revert review ~09-15 · momentum-retune promotion · pair df-vs-adf) — none blocking. **Phase 6.8**
+(execution realism) closes with paper day-1 still deferred until the user says "proceed" (the merge did
+not start the clock). Close reports: `docs/phases/phase-06-plan.md` and
+`docs/phases/phase-06.8-execution-realism-plan.md`.
+
 ### feat(MCE slice 1): sector/index relative-strength overlay module (2026-08-20)
 
 First slice of the Market Context Engine (`docs/phases/phase-MCE-market-context-engine.md`) — the

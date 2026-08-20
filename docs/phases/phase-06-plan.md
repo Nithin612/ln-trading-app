@@ -1,14 +1,15 @@
 # Phase 6 — outcome tracking + entry-selection · LIVE TRACKER
 
-**Status: UNDERWAY (updated 2026-08-14).** Started as a plan-for-review on
-2026-08-08; the three sign-off questions were answered 2026-08-12 and the build
-has since run through 6.1, 6.2, the gate experiment, the §8 walk-forward, the
-regime-gate overlay, and the 6.4 weight-retune experiment + shadow-promote — all
-SHADOW-first (nothing on the money path yet). The proposal history is preserved
-below the "Decisions (settled 2026-08-12)" line; the **DONE markers on each slice
-are the current truth**. What remains is user-gated: flip the regime gate to
-active, promote the retune on forward evidence, then 6.5. Phase 6 still touches
-expectancy calibration and the FROZEN engine — those stay the user's calls.
+**Status: ✅ GATE PASSED + CLOSED 2026-08-20** (`/phase-gate` — static clean; suites carried from the
+same-day 6.8 gate on the byte-identical code tree: backend 1477 · parity 16 · walkforward 9 · replay 19
+· frontend 375 · cargo ok; §8 drift gate green = frozen engine untouched; smoke green). See the "Phase
+gate — CLOSE REPORT (2026-08-20)" section at the end. Code already on `main` (merged with the 6.8 gate,
+pushed). **Build ran 6.1 · 6.2 · gate experiment · §8 walk-forward · regime-gate overlay (FLIPPED ACTIVE
+2026-08-14) · 6.4 weight-retune experiment + shadow-promote · 6.5 pair-trading (shadow-first); 6.3
+de-prioritised.** The DONE markers on each slice are the current truth. Three forward-evidence loops
+continue POST-close, none blocking (regime keep/revert review ~2026-09-15 · momentum-retune promotion ·
+pair df-vs-adf) — see the close report. Phase 6 kept the FROZEN engine untouched throughout (every lever
+is a downstream overlay or a shadow profile).
 
 ---
 
@@ -271,3 +272,41 @@ use the identical partition; §8/corpus/attribution numbers unchanged. quant-ver
    cointegration/mean-reversion math is implemented in numpy (OLS hedge ratio, spread, OU
    half-life, Dickey-Fuller stationarity t-stat as the gate, Lo-MacKinlay variance ratio as
    an informational metric), with a formal ADF/Johansen upgrade flagged as a follow-up. Shadow-first, frozen engine untouched (a new overlay/profile).
+
+---
+
+## Phase gate — CLOSE REPORT (2026-08-20)
+
+Run via `/phase-gate`. Phase 6 is **BUILD-COMPLETE**; the remaining items are forward-evidence
+loops (not code), so — exactly as Phase 6.8 was gated with paper day-1 deferred — Phase 6 closes now
+with those loops carried as explicit, non-blocking follow-ups.
+
+**Goal & why.** Attack the binding constraint on profit — *entry/regime selection*, not exit logic
+(only 1 of 15 trades reached +1R over 08-03→05; the exit machinery was correct but had nothing to
+protect). Build the measurement to prove where the leak is, then act on it without touching the frozen
+engine. The one-paragraph case + "what this must NOT become" are at the top of this doc.
+
+**What was built (all DONE, file paths in the slice sections above).**
+- **6.1** signal-level MFE/MAE (`app/services/excursion.py`, `signal_outcomes`).
+- **6.2a/b** entry-quality attribution live + at corpus scale (`entry_attribution.py`, `corpus_attribution.py` via the parity-clean Rust `run_universe`, engine frozen) + per-factor attribution.
+- **Gate experiment** (`scripts/gate_experiment.py`) + **§8 walk-forward** (`gate_walkforward.py`) — the verdict: the 70–79 confidence band + transitional ADX regime are net-negative; skip-transitional beats raising the confidence gate; holds OOS 5/5 folds.
+- **Regime-gate overlay** (`app/signals/regime_guard.py` + `regime.py`, the `risk_guards` pattern, engine untouched) — **FLIPPED ACTIVE 2026-08-14** (`REGIME_GATE_MODE=active`, reversible); **first-class `Signal.regime`** persisted at commit (migration `e3f4a5b6c7d8`); the live shadow measures the same partition it enforces.
+- **6.4 weight-retune** experiment (`weight_retune.py`) + **shadow-promote** (migration `d2e3f4a5b6c7`): `momentum ×1.5` and a `retune_base` control run as SHADOW profiles (forward A/B), never tradeable.
+- **6.5 pair-trading** (market-neutral, regime-agnostic; `phase-06-6.5-pairtrading-plan.md`): screen+universe + `pair_signals` dual-arm (df/adf) nightly minter + outcome tracker + attribution, numpy-only, **shadow-first**.
+- **6.3** interactive Strategy-Lab v2 — **DE-PRIORITISED** (the corpus attribution didn't need it; documented, not a gap).
+
+**Results (`/phase-gate`, 2026-08-20).**
+- Static: backend ruff + mypy (192 files) clean · frontend eslint + tsc clean (fresh run).
+- Suites: **carried from the Phase 6.8 gate run earlier today — the code tree is byte-identical since** (`git diff --stat 68f3040..HEAD` = docs only), so that green suite certifies this exact code: backend **1477** · parity **16** · walkforward **9** · replay **19** · frontend **375** · cargo **ok**. (Worker was stopped for that run; dev DB quiescent.) No code changed since, so no re-run was warranted; a fresh full `make check` is available on request.
+- Regression: the frozen confluence/backtest engine was untouched by every Phase-6 slice (all overlays / shadow profiles / read-only attribution), and **walkforward 9 + parity 16 passed** — the §8 drift gate is green, so no metric moved.
+- Reviews (per slice, per this doc + memory): 6.1/6.2 quant-verifier PASS · gate-experiment + §8 walk-forward quant-verifier PASS · regime gate quant-verifier PASS + bug-hunter CLEAN · first-class ADX quant-verifier PASS-WITH-NOTES + bug-hunter CLEAN · 6.4 quant-verifier FAIL→resolved · 6.5 built shadow-first (reviewed on its slices).
+- Smoke: `make analysis DATE=2026-08-19` (run for the 6.8 gate) exercised the Phase-6 report surfaces — regime-gate-shadow sidecar + entry attribution generated cleanly.
+
+**Decisions taken.** Regime gate ACTIVE (user, 2026-08-14, reversible). Sample-size floor n=20 before ranking any attribution cell. numpy-only for 6.5 (no scipy/statsmodels — stay lean). Engine stays FROZEN; every Phase-6 lever is a downstream overlay or a shadow profile.
+
+**Deferred — forward-evidence loops (NOT code; the phase closes without them).**
+1. **Regime gate keep/revert review ~2026-09-15** — monitor the daily `regime-gate-shadow` Flip-readiness banner; revert to `shadow` if it turns NOT READY. (First live read had the suppressed set NOT net-negative — watch it.)
+2. **Momentum ×1.5 retune promotion** — promote only when its forward shadow A/B (`retune_momentum_x15` vs `retune_base`) beats base over weeks + user sign-off.
+3. **Pair-trading (6.5) df-vs-adf** — the nightly minter + outcome tracker run themselves; `pair-attribution-<date>.md` answers it once evidence accrues; short-leg needs futures (Phase 7).
+
+**VERDICT: PASS — Phase 6 CLOSED 2026-08-20.** Code already on `main` (merged with the 6.8 gate); this close is the documentation + gate certification. The three loops above continue post-close, none blocking.
