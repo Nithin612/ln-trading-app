@@ -338,15 +338,16 @@ which is what Phase-6 expectancy calibration is for.
 2. **Red baseline — RESOLVED** (`e32fd48`), re-verified 2026-08-20: order-path set = **138 passed,
    exit 0**.
 
-**▶ MCE IN PROGRESS — slices 1 + 2 + 3 built 2026-08-20** (details + NEXT in the CONTINUE HERE block
-below). Slice 1 = `app/signals/sector_rs.py` (pure RS overlay); slice 2 = index price store
+**▶ MCE IN PROGRESS — slices 1 + 2 + 3 + 4 built 2026-08-20** (details + NEXT in the CONTINUE HERE
+block below). Slice 1 = `app/signals/sector_rs.py` (pure RS overlay); slice 2 = index price store
 (`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) + benchmark provider + order-path wiring; slice 3 = the
-shadow sidecar (`sector_rs_shadow.py` → `sector-rs-shadow-<date>.md` + per-entry context + flip
-banner) + the flip to **mode `shadow`** (measures + stamps, never blocks).
+sector-RS shadow sidecar + flip to **mode `shadow`**; **slice 4 = the market-regime gate (200-DMA +
+VIX, `market_regime.py` + `market_regime_shadow.py` + `scripts/backfill_indices.py`), mode shadow** —
+the top of the top-down funnel above sector-RS.
 **Benchmark source = Option B (real index OHLC), realized via the NSE indices bhavcopy CSV that
 `vix_service` already downloads — NO Kite dependency** (that one CSV carries every NSE index;
 tokenless + testable + self-healing via the EOD catch-up). All slices agent-reviewed (quant-verifier
-PASS ×3 + bug-hunter, findings actioned). Full sliced plan in
+PASS ×4 + bug-hunter ×2, findings actioned). Full sliced plan in
 [`phases/phase-MCE-market-context-engine.md`](phases/phase-MCE-market-context-engine.md)
 ("Sliced plan (started 2026-08-20)").
 
@@ -364,27 +365,27 @@ that continue POST-close (none a code task, none blocking — carried in the pha
 3. **Pair-trading (6.5)** — the nightly minter + outcome tracker run themselves;
    `pair-attribution-<date>.md` answers df-vs-adf once evidence accrues; tune knobs from THAT.
 
-**▶ MCE IN PROGRESS — slices 1 + 2 + 3 DONE 2026-08-20.** Slice 1 = `sector_rs.py` (pure overlay);
-slice 2 = index price store (`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) fed from the NSE indices
-bhavcopy CSV (Option B, no Kite dependency) + benchmark provider + order-path wiring; **slice 3 = the
-shadow sidecar** (`app/services/sector_rs_shadow.py` → `sector-rs-shadow-<date>.md`, recomputes the
-RS verdict over the tradeable cohort, would-block/eligible/no-data partition + per-entry context table
-+ flip banner, wired into `make analysis`) **+ the flip to mode `shadow`** (`sector_rs_gate_mode`,
-default now shadow — measures + stamps, never blocks). quant-verifier PASS ×3 + bug-hunter (1 MED + 1
-LOW, fixed); 18 tests, order-path regression green (138). **⚠ committed on the branch — push pending
-(1 ahead of origin at this line's writing; see below).**
-**▶ NEXT = let the forward evidence accrue.** The sidecar shows what the gate WOULD suppress, but the
-would-block/eligible buckets stay empty until **`index_ohlcv_1d` is backfilled** — run `make worker`
-(the EOD catch-up self-heals index OHLC ≤21d, like the other feeds). Then, once ≥20 resolved
-would-block trades accrue and are net-negative + worse than eligible, a shadow→active flip is on the
-table (R-track: §8-on-≥2y + explicit sign-off; reversible via `sector_rs_gate_mode=shadow`).
-**Slices 4/5/6 DECIDED 2026-08-20 (user), not built yet:** **slice 4 = 200-DMA + VIX market-regime
-gate** (the next build — the only remaining candidate both buildable AND §8-validatable now:
-`ohlcv_1d` has 3y; VIX shadow-only until `india_vix_daily` is backfilled; overlay-lane, shadow-first,
-mirrors slices 1-3; default = broad-market 200-DMA as a modifier); **slice 5 = fundamentals quality
-gate, data source DECIDED = NSE/BSE XBRL** (`market_cap_cr` 0/2365 — blocked until the XBRL writer;
-static junk/quality GATE, never §8-able); **slice 6 = news veto** (extend `event_guard`). Details in
-the phase-MCE doc's sliced plan. Also open (any time, non-blocking): paper day-1 for the 6.8 stack
+**▶ MCE IN PROGRESS — slices 1 + 2 + 3 + 4 DONE 2026-08-20 (all mode `shadow`/off — no money-path
+change).** Slice 1 = `sector_rs.py` (pure RS overlay); slice 2 = index price store (`index_ohlcv_1d`,
+migration `b8c9d0e1f2a3`) fed from the NSE indices bhavcopy CSV (Option B, no Kite dep) + benchmark
+provider + order-path wiring; slice 3 = the sector-RS shadow sidecar + flip to `shadow`; **slice 4 =
+the market-regime gate (200-DMA + VIX)** — `app/signals/market_regime.py` (pure overlay: 200-DMA trend
+gate symmetric long/short; VIX informational-only, never gates) + `benchmark.load_market_regime_context`
+(market-wide, as-of anchored) + order-path wiring (savepoint fail-open) + `market_regime_shadow.py`
+sidecar + **`scripts/backfill_indices.py`** (deep index+VIX backfill, one download feeds both feeds,
+per-day isolation) + `settings.market_regime_*` (mode `shadow`). Reviews across the slices:
+quant-verifier PASS ×4 + bug-hunter ×2 (all findings fixed w/ regression tests). 22 slice-4 tests;
+order-path regression green (191).
+**▶ NEXT = run the deep index backfill, then let evidence accrue.** BOTH the sector-RS (needs ~21
+sessions) and the market-regime 200-DMA (needs ~200 sessions + ~2y for §8) are INERT until index
+history is deep enough. The EOD catch-up only heals ≤21d — so run
+**`cd backend && uv run python scripts/backfill_indices.py 2023-07-01 <today>`** once to seed depth
+(idempotent, resumable, ~2y of NSE index+VIX). The nightly `make worker` keeps it current after. Then
+the sidecars' would-block/eligible buckets populate; a shadow→active flip on any gate needs the R-track
+(§8-on-≥2y + sign-off; reversible via the `*_gate_mode` setting).
+**Slices 5/6 (decided, not built):** **slice 5 = fundamentals quality gate, source = NSE/BSE XBRL**
+(`market_cap_cr` 0/2365 — blocked until the XBRL writer; static junk/quality GATE, never §8-able);
+**slice 6 = news veto** (extend `event_guard`). Also open (non-blocking): paper day-1 for the 6.8 stack
 (deferred until the user says "proceed" — no clock started), and the gated 6.8 research track (R1/R2/F1).
 
 **Next BUILD phase = Phase 6.8 (Execution Realism & Exchange-Safety)** — APPROVED 2026-08-17 (user),
@@ -400,7 +401,7 @@ paper positions DONE + reviewed (quant-verifier PASS w/ 1 HIGH fixed, bug-hunter
 2026-08-18. ▶▶ ALL SIX PAPER-SAFE SLICES (6.8.1–6.8.6) DONE. ✅ **PHASE 6.8 GATE PASSED + CLOSED
 2026-08-20 — merged to `main` (fast-forward), awaiting the user's `git push`** (gate: backend 1477 ·
 parity 16 · walkforward 9 · replay 19 · frontend 375 · cargo ok; smoke green). Paper day-1 still
-deferred until the user says "proceed". NEXT after push = MCE slice 2 (index-OHLC ingestion, Option B).**
+deferred until the user says "proceed". MCE now IN PROGRESS — slices 1–4 built (see the MCE block in CONTINUE HERE).**
 
 **▶ R-track entry-quality overlay DONE 2026-08-18/19 (commits `965b562` + `845ff5c`) — the SRTL
 paper loss exposed that the real leak is ENTRY, not exit.** A BUY at 80% confidence fired on

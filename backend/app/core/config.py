@@ -256,6 +256,27 @@ class Settings(BaseSettings):
     # long only on strict under-performance (a short only on strict out-performance).
     sector_rs_min_excess_pct: float = 0.0
 
+    # ── Market-regime overlay (MCE slice 4, app/signals/market_regime.py) ──────────────
+    # The broadest top-down filter (above sector-RS): is the MARKET itself risk-on/off? A
+    # LONG into a broad market below its N-DMA — or a SHORT into one above — is fighting the
+    # tape. Trend from the broad-market index (`market_regime_market_symbol`) in
+    # index_ohlcv_1d; VIX from india_vix_daily is an INFORMATIONAL companion (reported,
+    # never blocks — VIX history is too shallow to §8-validate). Frozen engine untouched (a
+    # downstream overlay). FAIL-OPEN: history shorter than the DMA period never blocks.
+    #   off    — TRUE no-op.
+    #   shadow — measure + stamp, never act (default; the 200-DMA needs a deep index
+    #            backfill before it has data — until then it fails open everywhere).
+    #   active — reject an ineligible signal. Behaviour-changing → forward evidence +
+    #            §8-on-≥2y + explicit sign-off first. Fully reversible.
+    market_regime_gate_mode: Literal["off", "shadow", "active"] = "shadow"
+    market_regime_market_symbol: str = "NIFTY50"
+    market_regime_dma_period: int = 200
+    # Buffer band around the DMA (a long isn't flagged for sitting a hair below it). % of
+    # the DMA; 0.0 = flag on any cross.
+    market_regime_dma_buffer_pct: float = 0.0
+    # India-VIX "elevated" threshold — INFORMATIONAL only (stamped/reported, never blocks).
+    market_regime_vix_threshold: float = 20.0
+
     # ── Profit-lock: absolute-rupee ladder (app/trading/profit_lock.py) ─────
     # When a user opts in (users.profit_lock_enabled), the position monitor
     # governs open PAPER exits with a rupee-denominated profit ladder — the

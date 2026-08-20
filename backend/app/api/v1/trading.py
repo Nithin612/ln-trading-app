@@ -49,10 +49,10 @@ from app.schemas.trading import (
     TradeHistoryResponse,
     UpdateSlRequest,
 )
-from app.services.benchmark import load_rs_context
+from app.services.benchmark import load_market_regime_context, load_rs_context
 from app.services.journal_service import auto_create_journal_entry
 from app.services.profit_lock_shadow import compare_position
-from app.signals import circuit_guard, entry_quality, regime_guard, sector_rs
+from app.signals import circuit_guard, entry_quality, market_regime, regime_guard, sector_rs
 from app.trading.atr import atr_timeframe_for, latest_atr
 from app.trading.circuit_breaker import (
     check_circuit_breaker,
@@ -122,17 +122,18 @@ async def _validity_by_signal(
     return {r.id: r.validity_until for r in rows}
 
 
-async def _apply_eligibility_overlays(
+async def _apply_eligibility_overlays(  # noqa: C901 — linear sequence of independent overlays
     db: AsyncSession, signal: Signal, side: str
 ) -> tuple[
     circuit_guard.CircuitVerdict | None,
     entry_quality.EntryQualityVerdict | None,
     sector_rs.RelativeStrengthVerdict | None,
+    market_regime.RegimeVerdict | None,
 ]:
-    """Run the regime · circuit-band · entry-quality · sector-RS overlays on a committed
-    signal. Raises 409 if any ACTIVE gate rejects; returns (circuit, eq, rs) verdicts to
-    stamp on the order (None when that gate is off). All fail-open, frozen engine
-    untouched — the downstream-overlay pattern."""
+    """Run the regime · circuit-band · entry-quality · sector-RS · market-regime overlays
+    on a committed signal. Raises 409 if any ACTIVE gate rejects; returns (circuit, eq, rs,
+    mkt) verdicts to stamp on the order (None when that gate is off). All fail-open, frozen
+    engine untouched — the downstream-overlay pattern."""
     # Regime-eligibility overlay (no-op unless regime_gate_mode == "active").
     gate_reason = regime_guard.order_block_reason(signal, settings.regime_gate_mode)
     if gate_reason:
@@ -216,7 +217,40 @@ async def _apply_eligibility_overlays(
         if rs_reason:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=rs_reason)
 
-    return circuit_verdict, eq_verdict, rs_verdict
+    # Market-regime overlay (MCE slice 4). Market-WIDE: the broad-market 200-DMA trend
+    # (+ VIX, informational). `off` = TRUE no-op. Same savepoint fail-open discipline as
+    # sector-RS: a DB fault in the regime read must never suppress a trade.
+    mkt_verdict = None
+    if settings.market_regime_gate_mode != "off":
+        mkt_ctx = None
+        try:
+            async with db.begin_nested():
+                mkt_ctx = await load_market_regime_context(
+                    db,
+                    market_symbol=settings.market_regime_market_symbol,
+                    dma_period=settings.market_regime_dma_period,
+                    as_of=signal.created_at,
+                )
+        except SQLAlchemyError:
+            log.exception(
+                "market-regime context load failed; failing open for stock_id=%s",
+                signal.stock_id,
+            )
+            mkt_ctx = None
+        mkt_verdict = market_regime.evaluate(
+            side=side,
+            market_closes=mkt_ctx.market_closes if mkt_ctx else [],
+            dma_period=settings.market_regime_dma_period,
+            buffer_pct=Decimal(str(settings.market_regime_dma_buffer_pct)),
+            vix=mkt_ctx.vix if mkt_ctx else None,
+            vix_threshold=Decimal(str(settings.market_regime_vix_threshold)),
+            market_symbol=settings.market_regime_market_symbol,
+        )
+        mkt_reason = market_regime.order_block_reason(mkt_verdict, settings.market_regime_gate_mode)
+        if mkt_reason:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=mkt_reason)
+
+    return circuit_verdict, eq_verdict, rs_verdict, mkt_verdict
 
 
 @router.post("/orders", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
@@ -244,7 +278,7 @@ async def place_order(
 
     # Eligibility overlays (regime · circuit-band · entry-quality) — each a no-op
     # unless its mode is active; returns verdicts to stamp for the shadow reports.
-    circuit_verdict, eq_verdict, rs_verdict = await _apply_eligibility_overlays(
+    circuit_verdict, eq_verdict, rs_verdict, mkt_verdict = await _apply_eligibility_overlays(
         db, signal, req.side
     )
 
@@ -266,6 +300,8 @@ async def place_order(
         stamps["entry_quality"] = eq_verdict.as_payload()
     if rs_verdict is not None:
         stamps["sector_rs"] = rs_verdict.as_payload()
+    if mkt_verdict is not None:
+        stamps["market_regime"] = mkt_verdict.as_payload()
     if stamps:
         order.broker_payload = {**(order.broker_payload or {}), **stamps}
     await db.commit()

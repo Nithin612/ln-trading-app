@@ -28,8 +28,8 @@ from app.services import fii_dii_service
 from app.services.bhavcopy_service import ingest_bhavcopy_date
 from app.services.ca_detector import scan_for_discontinuities
 from app.services.fo_bhavcopy_service import ingest_fo_bhavcopy_date
-from app.services.market_calendar import trading_days_between
 from app.services.index_ohlcv_service import ingest_index_ohlcv_date
+from app.services.market_calendar import trading_days_between
 from app.services.vix_service import ingest_vix_date
 
 log = logging.getLogger(__name__)

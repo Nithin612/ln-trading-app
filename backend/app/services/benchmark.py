@@ -111,3 +111,80 @@ async def load_rs_context(
         stock_closes=[Decimal(str(r.stock_close)) for r in rows],
         benchmark_closes=[Decimal(str(r.bench_close)) for r in rows],
     )
+
+
+# ── Market-regime context (MCE slice 4) ─────────────────────────────────────
+# Market-WIDE (stock-independent), unlike the per-stock RS context above: the broad
+# market's own trend + the VIX level. Fixed table names (python rules).
+_MARKET_CLOSES_SQL = """
+    SELECT close
+    FROM index_ohlcv_1d
+    WHERE index_id = :index_id
+      {as_of}
+    ORDER BY trade_date DESC
+    LIMIT :n
+"""
+_VIX_LATEST_SQL = """
+    SELECT close
+    FROM india_vix_daily
+    WHERE close IS NOT NULL
+      {as_of}
+    ORDER BY trade_date DESC
+    LIMIT 1
+"""
+
+
+@dataclass(frozen=True)
+class MarketRegimeContext:
+    """The broad market's own recent closes (chronological, most-recent last — for the
+    N-DMA) and the latest VIX. Both anchored to the signal's decision date (no
+    look-ahead). Stock-independent — the same for every signal on a given day."""
+
+    market_symbol: str
+    market_closes: list[Decimal]
+    vix: Decimal | None
+
+
+async def load_market_regime_context(
+    db: AsyncSession,
+    *,
+    market_symbol: str = _MARKET,
+    dma_period: int = 200,
+    as_of: datetime | None = None,
+) -> MarketRegimeContext:
+    """The broad-market index's last `dma_period` daily closes + the latest VIX, both
+    as-of `as_of` (the signal's `created_at`, so the regime is the one knowable at commit
+    — no look-ahead). A daily bar is dated at UTC-midnight of its trade date, so the
+    as-of filter is `trade_date <= as_of::date(UTC)` (mirrors the timestamp anchoring the
+    RS provider uses). Missing index / no rows → empty closes (the overlay fails open)."""
+    index_id = (
+        await db.execute(select(Index.id).where(Index.symbol == market_symbol))
+    ).scalar_one_or_none()
+
+    params: dict[str, object] = {"n": dma_period}
+    as_of_clause = ""
+    if as_of is not None:
+        as_of_clause = "AND trade_date <= :as_of_date"
+        params["as_of_date"] = as_of.date()
+
+    closes: list[Decimal] = []
+    if index_id is not None:
+        params["index_id"] = index_id
+        rows = (
+            await db.execute(text(_MARKET_CLOSES_SQL.format(as_of=as_of_clause)), params)
+        ).all()
+        closes = [Decimal(str(r.close)) for r in reversed(rows)]  # DESC → chronological
+    else:
+        log.warning("market-regime index %s not in the indices registry", market_symbol)
+
+    vix_params: dict[str, object] = {}
+    vix_clause = ""
+    if as_of is not None:
+        vix_clause = "AND trade_date <= :as_of_date"
+        vix_params["as_of_date"] = as_of.date()
+    vix_close = (
+        await db.execute(text(_VIX_LATEST_SQL.format(as_of=vix_clause)), vix_params)
+    ).scalar_one_or_none()
+    vix = Decimal(str(vix_close)) if vix_close is not None else None
+
+    return MarketRegimeContext(market_symbol=market_symbol, market_closes=closes, vix=vix)

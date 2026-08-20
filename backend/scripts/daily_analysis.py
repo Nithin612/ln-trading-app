@@ -168,6 +168,21 @@ async def _run(day: date, user_id: int, week_of: date | None, now: datetime) -> 
         except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
             print(f"sector-RS shadow step skipped: {exc!r}", flush=True)
 
+        # Market-regime forward evidence (MCE slice 4): what the broad-market 200-DMA gate
+        # WOULD suppress on the live cohort (fresh longs into a down-trending market / shorts
+        # into an up-trending one), with a per-entry context table (+ VIX) and a flip banner.
+        # Same read-only, never-block discipline as the gate sidecars above.
+        try:
+            from app.services import market_regime_shadow as mrs
+
+            mshadow = await mrs.compute_market_regime_shadow(db)
+            mpath = _ANALYSIS_DIR / f"market-regime-shadow-{day.isoformat()}.md"
+            mpath.write_text(mrs.render_markdown(mshadow, day=day))
+            print(f"wrote {mpath.relative_to(_REPO_ROOT)}", flush=True)
+            print(mrs.readiness_line(mshadow), flush=True)
+        except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
+            print(f"market-regime shadow step skipped: {exc!r}", flush=True)
+
         if week_of is not None:
             monday = week_of - timedelta(days=week_of.weekday())
             wk = await build_week_summary(db, monday=monday, user_id=user_id, now=now)

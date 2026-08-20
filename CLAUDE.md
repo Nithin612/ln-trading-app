@@ -82,19 +82,20 @@ else.
   flip-readiness banner. The *context* complement — sector/index relative-strength +
   fundamentals + news as GATES/MODIFIERS (never additive) — is the **MCE**
   (`docs/phases/phase-MCE-market-context-engine.md`), the phase after 6.8.
-- **MCE is IN PROGRESS — slices 1 + 2 + 3 built 2026-08-20, gate now `shadow` (measures + stamps,
-  never blocks).** Slice 1 = `app/signals/sector_rs.py` (pure RS overlay). Slice 2 = index price
-  store (`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) + `app/services/benchmark.py` (membership map
-  Bank⊃Fin⊃NIFTY50 + date-aligned closes anchored to `signal.created_at`) + `sector_rs` wired into
-  the paper order path (fail-open in a savepoint). Slice 3 = `app/services/sector_rs_shadow.py` (the
-  forward-evidence sidecar → `sector-rs-shadow-<date>.md` with a per-entry context table + flip
-  banner, wired into `make analysis`) + the flip `off`→`shadow` (`settings.sector_rs_gate_mode`).
-  **Benchmark source = Option B (real index OHLC), realized via the NSE indices bhavcopy CSV that
-  `vix_service` already downloads — NO Kite dependency**; ingestion self-heals through the EOD
-  catch-up. Indices live in the existing `indices` registry (NOT the tradeable universe).
-  quant-verifier PASS ×3 + bug-hunter (findings fixed). **NEXT = accrue forward evidence** — run
-  `make worker` so the catch-up backfills `index_ohlcv_1d`; a shadow→active flip later needs the
-  R-track ceremony (§8-on-≥2y + sign-off). Slice 4+ = fundamentals + news veto. Plan in the phase-MCE doc.
+- **MCE is IN PROGRESS — slices 1 + 2 + 3 + 4 built 2026-08-20, all mode `shadow`/off (no money-path
+  change).** Slice 1 = `app/signals/sector_rs.py` (pure RS overlay); slice 2 = index price store
+  (`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) + `app/services/benchmark.py` (Bank⊃Fin⊃NIFTY50 map +
+  date-aligned closes anchored to `signal.created_at`) + order-path wiring; slice 3 = the sector-RS
+  shadow sidecar + flip to shadow; **slice 4 = the market-regime gate (200-DMA + VIX):
+  `app/signals/market_regime.py` (200-DMA trend, symmetric long/short; VIX informational-only, never
+  gates) + `benchmark.load_market_regime_context` (market-wide, as-of anchored) + `market_regime_shadow.py`
+  sidecar + `scripts/backfill_indices.py` (deep index+VIX backfill)**. All in the frozen-engine-untouched
+  overlay pattern; each wired with a `begin_nested` savepoint fail-open. **Benchmark source = Option B
+  (real index OHLC) via the NSE indices bhavcopy CSV `vix_service` already downloads — NO Kite dep.**
+  quant-verifier PASS ×4 + bug-hunter ×2 (findings fixed). **NEXT = run the deep backfill**
+  (`scripts/backfill_indices.py 2023-07-01 <today>`) so the 200-DMA + RS get real history (the ≤21d
+  EOD catch-up can't reach 200 sessions); then accrue evidence — a shadow→active flip needs the R-track
+  (§8-on-≥2y + sign-off). Slice 5 = fundamentals (source = NSE/BSE XBRL); slice 6 = news veto. Plan in the phase-MCE doc.
 - **The provisional breadth-flood fix is MERGED on the Phase-6 branch (`c1b4752`,
   cherry-picked 2026-08-20 — the source branch had diverged so `--ff-only` was impossible).**
   `live-worker`'s hot set no longer floods with breadth alerts (near-trigger = signal-bound

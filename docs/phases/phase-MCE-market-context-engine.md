@@ -1,14 +1,15 @@
 # Market Context Engine (MCE) — design capture
 
-**Status: IN PROGRESS — slices 1 + 2 + 3 built 2026-08-20.** Slice 1 = the pure RS overlay
-(`sector_rs.py`); slice 2 = index price store (`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) +
-benchmark provider + order-path wiring; slice 3 = the shadow sidecar (`sector_rs_shadow.py` →
-`sector-rs-shadow-<date>.md` with a per-entry context table + flip-readiness banner) + the flip to
-**mode `shadow`** (measures + stamps, never blocks). All agent-reviewed (quant-verifier PASS ×3 +
-bug-hunter, findings actioned). **NEXT = let forward evidence accrue** (needs `index_ohlcv_1d`
-backfilled — next `make worker` self-heals it); a shadow→active flip later needs the R-track
-ceremony (§8-on-≥2y + sign-off). Slice 4+ = the other MCE components (fundamentals, news veto). The
-named phase **after Phase 6.8, before Phase-7 (live)**. This doc captures the *entry-context* design agreed 2026-08-18 (the SRTL /
+**Status: IN PROGRESS — slices 1 + 2 + 3 + 4 built 2026-08-20 (all mode `shadow`/off — no
+money-path change).** Slice 1 = the pure RS overlay (`sector_rs.py`); slice 2 = index price store
+(`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) + benchmark provider + order-path wiring; slice 3 =
+the sector-RS shadow sidecar + flip to shadow; **slice 4 = the market-regime gate (200-DMA + VIX,
+`market_regime.py` + sidecar + `scripts/backfill_indices.py`), mode shadow** — the top of the
+top-down funnel above sector-RS. All agent-reviewed (quant-verifier PASS ×4 + bug-hunter ×2,
+findings actioned). **NEXT: run the deep index backfill** (`scripts/backfill_indices.py`) so the
+200-DMA + RS get real history, then let forward evidence accrue; shadow→active flips need the
+R-track (§8-on-≥2y + sign-off). **Slice 5 = fundamentals (source DECIDED = NSE/BSE XBRL); slice 6
+= news veto.** The named phase **after Phase 6.8, before Phase-7 (live)**. This doc captures the *entry-context* design agreed 2026-08-18 (the SRTL /
 entry-selection discussion). Full prior context: the `market_context_engine_deferred` memory
 + `docs/Market_Context_Engine_Spec.docx` (spec on disk). **The sliced plan is now at the
 bottom of this doc ("Sliced plan (started 2026-08-20)"), including one OPEN decision the
@@ -161,16 +162,27 @@ Slice 2 is now unblocked.
   §8-on-≥2y + sign-off).** Evidence starts accruing once `index_ohlcv_1d` backfills (next
   `make worker` self-heals it ≤21d); on the smoke it correctly showed all 414 cohort signals as
   "no benchmark data (still backfilling)".
-- **Slice 4 — market-regime gate (200-DMA + VIX). DECIDED 2026-08-20 as the next build; not
-  built yet.** The top of the top-down funnel above sector-RS: soften/skip fresh longs when the
-  broad market is risk-off. Chosen because it is the ONLY remaining candidate both **buildable
-  now AND §8-validatable now** — `ohlcv_1d` has 3y of daily history (2023-07→), so the 200-DMA
-  part can go the full R-track (build→shadow→§8-on-2y→active). Data grounded 2026-08-20:
-  `ohlcv_1d` 3y; NIFTY 50 in `index_ohlcv_1d`; `india_vix_daily` only **36 days** so VIX rides as
-  a **shadow-only companion** until `india_vix_daily` is backfilled from the NSE indices archive
-  (mechanically the same as slice 2 — a one-off backfill, no new source). Overlay-lane, shadow-first,
-  reuses the slice-1/2/3 pattern. **Default semantics (adjustable):** broad-market Nifty-50 200-DMA
-  as a MODIFIER (not a hard block), VIX shadow-only.
+- **Slice 4 — market-regime gate (200-DMA + VIX). DONE 2026-08-20.** The top of the top-down
+  funnel above sector-RS: block fresh longs when the broad market is below its 200-DMA (shorts
+  the mirror). Chosen because it is the ONLY remaining candidate both buildable AND §8-validatable
+  now (`ohlcv_1d` = 3y). Built: `app/signals/market_regime.py` (pure overlay — 200-DMA trend gate,
+  symmetric long/short, buffer band; VIX **informational-only**, reported/stamped, never gates —
+  history too shallow to §8) · `benchmark.load_market_regime_context` (market-WIDE: last N NIFTY 50
+  closes + latest VIX, anchored to `signal.created_at`, no look-ahead) · wired into the order path
+  (`_apply_eligibility_overlays`, a `begin_nested` savepoint fail-open like sector-RS) ·
+  `app/services/market_regime_shadow.py` (forward-evidence sidecar → `market-regime-shadow-<date>.md`
+  + per-entry context table, wired into `make analysis`; context memoized per as-of date) ·
+  `settings.market_regime_*` (mode default **shadow**, `dma_period` 200, buffer 0, vix_threshold 20)
+  · **`scripts/backfill_indices.py`** — deep index+VIX backfill (one CSV download per session feeds
+  BOTH feeds; per-day httpx isolation → resumable). 22 tests. **quant-verifier PASS-WITH-NOTES**
+  (200-DMA math + symmetry correct, look-ahead prevented, VIX never gates, fail-open every branch;
+  3 INFO, 1 cosmetic actioned). **bug-hunter** — the two-savepoint interplay confirmed SOUND; 1
+  MEDIUM (backfill lacked per-day error isolation → whole run aborts on one NSE blip) FIXED +
+  regression test; 1 LOW (sidecar N+1) FIXED (per-date memoization). **No money-path change** —
+  shadow measures + stamps, never blocks. **The 200-DMA has NO data until the deep backfill runs**
+  (`scripts/backfill_indices.py 2023-07-01 <today>`); the smoke correctly showed all 414 cohort
+  signals as "no market data (< 200-DMA history)". A shadow→active flip needs the R-track
+  (§8-on-≥2y + sign-off).
 - **Slice 5 — fundamentals quality gate.** Highest strategic value (junk/quality filter — the
   SRTL-class protection) but a DATA project: `market_cap_cr` is **0 of 2365 populated** (verified
   2026-08-20), no fundamentals table. **Data source DECIDED 2026-08-20 (user) = NSE/BSE XBRL** (the

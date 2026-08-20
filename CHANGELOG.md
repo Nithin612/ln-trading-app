@@ -7,6 +7,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(MCE slice 4): market-regime (200-DMA + VIX) overlay + shadow sidecar + deep index backfill (2026-08-20)
+
+The broadest top-down filter, above sector-RS: block a fresh long when the broad market (NIFTY 50) is
+below its 200-DMA (a short the mirror). Same overlay-lane / shadow-first / fail-open pattern as the
+prior slices; frozen confluence engine untouched. Chosen as slice 4 because it's the only remaining
+MCE candidate both buildable AND §8-validatable now (3y of daily history).
+
+- `app/signals/market_regime.py` — pure overlay: 200-DMA trend gate (symmetric long/short + buffer
+  band); **India VIX is informational only** (reported/stamped, never gates — history too shallow to
+  §8-validate).
+- `app/services/benchmark.py::load_market_regime_context` — market-WIDE context (last N NIFTY 50
+  closes + latest VIX), anchored to `signal.created_at` (no look-ahead).
+- Wired into `_apply_eligibility_overlays` with a `begin_nested` savepoint so a DB fault fails open;
+  `settings.market_regime_*` (mode default **shadow**, dma_period 200, buffer 0, vix_threshold 20).
+- `app/services/market_regime_shadow.py` — forward-evidence sidecar → `market-regime-shadow-<date>.md`
+  (would-block / with-regime / no-data partition + per-entry context table + flip banner), wired into
+  `make analysis`; context memoized per as-of date.
+- `scripts/backfill_indices.py` — deep index + VIX backfill from the NSE indices archive; ONE download
+  per session feeds both feeds, per-day error isolation (resumable), idempotent. Needed because the
+  200-DMA wants ~200 sessions and §8 ~2 years — the ≤21d EOD catch-up can't reach that depth.
+
+`22 tests`, ruff/mypy clean, order-path regression green (191). **quant-verifier PASS-WITH-NOTES**
+(look-ahead prevented, 200-DMA math + symmetry correct, VIX never gates, fail-open every branch; one
+cosmetic INFO actioned). **bug-hunter**: the two-savepoint interplay (sector-RS + market-regime in one
+request) confirmed sound; 1 MEDIUM (backfill lacked per-day error isolation) FIXED + regression test;
+1 LOW (sidecar N+1) FIXED via per-date memoization. No money-path change (shadow never blocks). The
+200-DMA is inert until `scripts/backfill_indices.py` seeds history; a shadow→active flip needs the
+R-track (§8-on-≥2y + sign-off).
+
 ### feat(MCE slice 3): sector-RS shadow sidecar + per-entry context + flip off→shadow (2026-08-20)
 
 The forward-evidence half of the sector-RS overlay, mirroring `regime_gate_shadow` /
