@@ -54,8 +54,12 @@ when a feed falls behind (weekend/holiday/pre-EOD aware — no false alarms); tu
 07-02→07-17 outage failure mode into a loud one. Reviews: bug-hunter 2 LOW fixed, test-guardian gaps
 all fixed; 13 tests, no migration. **▶ ALL SIX PAPER-SAFE SLICES (6.8.1–6.8.6) DONE.** Remaining =
 the gated, non-blocking research track (R1 VWAP/RVOL factors — frozen-engine change, LAST · R2 weekly
-spread-width gate · F1 `market_cap` spike). **NEXT = `/phase-gate` + user "proceed" for paper day-1**,
-or a gated research item first.
+spread-width gate · F1 `market_cap` spike). **✅ PHASE 6.8 GATE PASSED 2026-08-20** (`/phase-gate`,
+worker stopped for a quiescent dev DB: backend 1477 · parity 16 · walkforward 9 · replay 19 · frontend
+375 · cargo ok; §8 drift gate clean = frozen engine untouched; `make analysis` smoke green incl. the
+6.8.6 feed-staleness alarm firing) — **PHASE CLOSED, merged to `main` fast-forward, awaiting the user's
+`git push`.** Paper day-1 stays deferred until the user says "proceed". Close report: the phase-06.8
+doc's "Phase gate — CLOSE REPORT (2026-08-20)" section.
 
 **▶ R-track entry-quality overlay DONE 2026-08-18/19 (SRTL leak → the real leak is ENTRY, not exit).**
 Post-mortem of the SRTL paper loss (BUY at 80% confidence on RSI_DIVERGENCE *alone*, ₹39 micro-cap ×
@@ -310,7 +314,7 @@ which is what Phase-6 expectancy calibration is for.
 | 4 | F&O analytics | **✅ backend done · phase-gate PASS 2026-08-06** (merged to main; UI = Phase 5) | [phase-04](phases/phase-04-fo-suggestions.md) | 4.1 chain/PCR/max-pain/basis/VIX-regime · 4.2 Rust BS/Black-76 IV+Greeks (`tradecore`) + IV-rank · 4.3 option-selling engine (defined-risk index-only; breakeven-POP; expectancy report-only=VRP; fail-closed VIX veto; user-calibrated `SellRules`). Follow-ups: confluence direction-tilt, event/ban gate (=deferred Market Context Engine), Kite SPAN margin, forward-validation dashboard (P6) · 🧭 **Nautilus doc** §9 — Greeks as a first-class data type; options/accounting (margin) refs |
 | 5 | UI overhaul | **✅ slices 5.1–5.4 done, MERGED to main 2026-08-07** (`make check` green; bug-hunter + ui-reviewer clean; 60 fps MEASURED and MET; visual smoke passed in all 5 themes — only `/phase-gate` remains) | [phase-05](phases/phase-05-ui-overhaul.md) | 5.1 `useLiveQuotes` v2 (rAF-batched; fixed socket-churn, resubscribe-per-render + subscription-leak bugs) + `useVirtualRows` · 5.2 **F&O page** (chain ladder w/ per-leg IV+Greeks via `/fo/chain?greeks=true`, `/fo/underlyings`, `/fo/expiries`, strategy cards, expectancy labelled report-only) · 5.3 style pages v2 (committed-vs-forming, outcome stats w/ small-sample refusal, factor drawer) · 5.4 Live Signals feed + opt-in notifications (bursts coalesce). **IA + slate default were already done in Phase 3.** 🧭 **Nautilus doc** §4.2 — cache-then-publish lets UI subscribe without touching producers |
 | 6 | Outcome tracking + entry-selection | **▶ BUILT 6.1–6.5 shadow-first (2026-08-12→15); regime gate ACTIVE; close ritual pending** — see the STATE block + `phase-06-plan.md` | [phase-06-plan](phases/phase-06-plan.md) | 6.1 MFE/MAE · 6.2 entry attribution (live+corpus) · gate experiment + §8 walk-forward · regime-gate overlay (ACTIVE) · 6.4 weight-retune (shadow) · 6.5 pair-trading (shadow, slices 1–4) · 🧭 **Nautilus doc** §7 — mimalloc on batch backtest sweeps; §4.3 richer bar aggregations for research |
-| 6.8 | Execution Realism & Exchange-Safety (paper-safe) | **▶ ALL SIX PAPER-SAFE SLICES DONE + reviewed (through 2026-08-18); research track (R1/R2/F1) optional/gated; ready for `/phase-gate` + user "proceed"** | [phase-06.8-plan](phases/phase-06.8-execution-realism-plan.md) | 6.8.1 ✅ order-book depth capture (`depth:{stock_id}`; both consumers; pipelined on live-worker) · 6.8.2 ✅ spread-aware slippage/impact (replaces flat 2bps) · 6.8.3 ✅ circuit-band eligibility overlay (shadow-first, regime-gate pattern; band-refresh task → Redis `circuit:{stock_id}`) · 6.8.4 ✅ open-book-MTM carried-position gap (rolling MFE/MAE for carried holds + weekly per-day open-MTM series) · 6.8.5 ✅ CA-adjust OPEN paper positions (R-preserving split/bonus; admin-verified ratio; ex-date worker, idempotent+catch-up; migration `a7b8c9d0e1f2`) · 6.8.6 ✅ silent-feed-outage alarm (trading-calendar-aware EOD staleness header) · research (gated, non-blocking): R1 VWAP/RVOL as confluence factors (§8+oracle regen) + R2 weekly spread-width gate · spike: F1 `market_cap` writer (de-risks MCE keystone) |
+| 6.8 | Execution Realism & Exchange-Safety (paper-safe) | **✅ GATE PASSED 2026-08-20 — CLOSED + merged to `main` (ff, awaiting push); all six slices done + reviewed; research track (R1/R2/F1) optional/gated; paper day-1 deferred until user "proceed"** | [phase-06.8-plan](phases/phase-06.8-execution-realism-plan.md) | 6.8.1 ✅ order-book depth capture (`depth:{stock_id}`; both consumers; pipelined on live-worker) · 6.8.2 ✅ spread-aware slippage/impact (replaces flat 2bps) · 6.8.3 ✅ circuit-band eligibility overlay (shadow-first, regime-gate pattern; band-refresh task → Redis `circuit:{stock_id}`) · 6.8.4 ✅ open-book-MTM carried-position gap (rolling MFE/MAE for carried holds + weekly per-day open-MTM series) · 6.8.5 ✅ CA-adjust OPEN paper positions (R-preserving split/bonus; admin-verified ratio; ex-date worker, idempotent+catch-up; migration `a7b8c9d0e1f2`) · 6.8.6 ✅ silent-feed-outage alarm (trading-calendar-aware EOD staleness header) · research (gated, non-blocking): R1 VWAP/RVOL as confluence factors (§8+oracle regen) + R2 weekly spread-width gate · spike: F1 `market_cap` writer (de-risks MCE keystone) |
 | 7 | Live-trading hardening | planned | — | Kite orders behind trading_mode + 30-day gate, kill switch, reconciliation, VPS runbook · 🧭 **Nautilus doc** §6 — **SLICE 1 = RiskEngine single-gate** (test-first, equivalence-pinned) → then BrokerAdapter port · order FSM (Denied vs Rejected) · reconciliation |
 
 > **🧭 Nautilus doc pointers** (added 2026-08-01): before starting and at the
@@ -374,8 +378,10 @@ reviewed (bug-hunter 1 MEDIUM fixed, quant-verifier PASS) 2026-08-17. ▶ 6.8.4 
 DONE + reviewed (quant-verifier PASS, test-guardian gaps fixed) 2026-08-17. ▶ 6.8.5 CA-adjust OPEN
 paper positions DONE + reviewed (quant-verifier PASS w/ 1 HIGH fixed, bug-hunter 2 fixed) 2026-08-18.
 ▶ 6.8.6 silent-feed-outage alarm DONE + reviewed (bug-hunter 2 LOW fixed, test-guardian gaps fixed)
-2026-08-18. ▶▶ ALL SIX PAPER-SAFE SLICES (6.8.1–6.8.6) DONE — NEXT = `/phase-gate` + the user's
-"proceed" for paper day-1, OR a gated research item (R1/R2/F1) first**
+2026-08-18. ▶▶ ALL SIX PAPER-SAFE SLICES (6.8.1–6.8.6) DONE. ✅ **PHASE 6.8 GATE PASSED + CLOSED
+2026-08-20 — merged to `main` (fast-forward), awaiting the user's `git push`** (gate: backend 1477 ·
+parity 16 · walkforward 9 · replay 19 · frontend 375 · cargo ok; smoke green). Paper day-1 still
+deferred until the user says "proceed". NEXT after push = MCE slice 2 (index-OHLC ingestion, Option B).**
 
 **▶ R-track entry-quality overlay DONE 2026-08-18/19 (commits `965b562` + `845ff5c`) — the SRTL
 paper loss exposed that the real leak is ENTRY, not exit.** A BUY at 80% confidence fired on

@@ -1,6 +1,9 @@
 # Phase 6.8 (PROPOSED) — Execution Realism & Exchange-Safety · adjudication + build tracker
 
-**Status: APPROVED 2026-08-17 (user) — scope LOCKED. ▶ BUILDING: 6.8.1 ✅ DONE (live-smoke
+**Status: ✅ GATE PASSED 2026-08-20 (`/phase-gate`, worker stopped for a quiescent dev DB; backend
+1477 · parity 16 · walkforward 9 · replay 19 · frontend 375 · cargo ok; smoke green) — PHASE CLOSED,
+merged to `main` fast-forward, awaiting the user's `git push`. See the "Phase gate — CLOSE REPORT
+(2026-08-20)" section at the end. (Approved 2026-08-17, scope LOCKED.)** Slices: 6.8.1 ✅ DONE (live-smoke
 verified against real ticks 15:26 IST) · 6.8.2 ✅ DONE · 6.8.3 ✅ BUILT (shadow-first, on the
 Phase-6 branch) · 6.8.4 ✅ DONE (carried-position rolling MFE/MAE + weekly open-MTM series) · 6.8.5 ✅
 DONE (CA-adjust OPEN positions — R-preserving split/bonus, idempotent+catch-up) · 6.8.6 ✅ DONE
@@ -853,3 +856,40 @@ nothing left to discover about the exchange, only about the order API.
     R2 (weekly spread-width gate) + the F1 `market_cap` spike. Each is individually go/no-go-gated and
     must NOT block phase close. **NEXT decision (user):** run `/phase-gate` + "proceed" for paper day-1,
     OR tackle a gated research item first.
+
+---
+
+## Phase gate — CLOSE REPORT (2026-08-20)
+
+Run via the `/phase-gate` ritual, worker stopped for a quiescent dev DB (user decision), scope =
+**close Phase 6.8** (Phase 6 stays BUILT; its formal report is deferred).
+
+**Goal & why.** Make paper trading model the real exchange microstructure it had been ignoring
+(spread/impact, circuit un-exitability, carried-position MTM, corporate actions, feed outages), so the
+30-day paper clock measures a realistic book before any live cutover (Phase 7). Rationale + the external
+`REAL_WORLD_NSE_BSE` review adjudication: §1–§4 above.
+
+**What shipped (file paths in each slice section above).** Six paper-safe slices, frozen engine
+untouched throughout (all are downstream overlays / reporting):
+1. 6.8.1 order-book depth capture → `depth:{stock_id}`, wired into `live_worker`.
+2. 6.8.2 spread-aware slippage (real half-spread + impact, flat bps a floor) — 82.1% of 1666 books wider than the flat 2 bps.
+3. 6.8.3 circuit-band eligibility overlay (`circuit_guard.py`, shadow-first).
+4. 6.8.4 continuous open-book MTM for carried positions (rolling MFE/MAE, no look-ahead).
+5. 6.8.5 CA-adjust of OPEN paper positions (R-preserving split/bonus; migration `a7b8c9d0e1f2`).
+6. 6.8.6 silent-feed-outage alarm (trading-calendar-aware EOD staleness header).
+Plus the post-scope-lock **R-track entry-quality overlay** (`entry_quality.py`; single-factor block
+ACTIVE) and **MCE slice 1** (`sector_rs.py`, off/unwired) rode this branch; the **provisional
+breadth-flood fix** was cherry-picked in (`c1b4752`).
+
+**Results (`make check`, exit 0, worker stopped for a quiescent dev DB, 2026-08-20).**
+- Static: backend ruff + mypy (192 files) clean · frontend eslint + tsc clean · cargo fmt + clippy clean.
+- Suites: backend pytest **1477 passed** (41 min) · **parity 16** · **walkforward 9** · **replay 19** · frontend vitest **375 passed** (41 files) · cargo test **all ok (0 failed)**. Zero failures anywhere.
+- Regression: every 6.8 slice is an order-path/reporting overlay the frozen confluence/backtest engine never calls, so no §8 metric can move — and `make check` proves it directly: **walkforward (the §8 drift gate) 9 passed** and **parity 16 passed** (Python↔Rust decisions identical). No metric drift, no user-approval trigger.
+- Reviews (each slice, per the build log): 6.8.1 bug-hunter MED + perf-auditor HIGH fixed · 6.8.2 bug-hunter + quant-verifier CLEAN · 6.8.3 bug-hunter 1 MED fixed + quant-verifier PASS · 6.8.4 quant-verifier PASS + test-guardian fixed · 6.8.5 quant-verifier 1 HIGH fixed + bug-hunter 2 fixed · 6.8.6 bug-hunter 2 LOW + test-guardian fixed · R-track quant-verifier PASS + bug-hunter CLEAN · MCE slice 1 quant-verifier PASS-WITH-NOTES (2 MED actioned) · provisional cherry-pick reviewed on its source branch (bug-hunter 5 LOW + quant-verifier 2 MED + a mypy-caught defect, all fixed; code identical post-cherry-pick).
+- Smoke: `make analysis DATE=2026-08-19` — exit 0, generated `2026-08-19.md` + the circuit-gate / regime-gate / entry-quality shadow sidecars, and the **6.8.6 feed-staleness alarm correctly fired** ("F&O bhavcopy 1 trading day behind") — the execution-realism + alarm stack running end-to-end on real dev data.
+
+**Decisions taken.** Scope locked to six paper-safe slices (§10); paper day-1 deferred until user "proceed"; merge to main authorised now (user, 2026-08-20). MCE benchmark source = Option B (ingest real Kite index OHLC).
+
+**Deferred.** Research track R1 (VWAP/RVOL factors — frozen-engine change, oracle regen + §8, LAST) · R2 (weekly spread-width gate) · F1 `market_cap` spike · everything in §6 (Market Context Engine) and §7 (Phase-7 live hardening). Phase 6's own formal close report (regime gate / pair-trading / retune — all shadow) is deferred, not part of this gate.
+
+**VERDICT: PASS** — merged to `main` (fast-forward) 2026-08-20; awaiting the user's `git push`.
