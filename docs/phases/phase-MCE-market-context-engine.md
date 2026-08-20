@@ -161,9 +161,30 @@ Slice 2 is now unblocked.
   §8-on-≥2y + sign-off).** Evidence starts accruing once `index_ohlcv_1d` backfills (next
   `make worker` self-heals it ≤21d); on the smoke it correctly showed all 414 cohort signals as
   "no benchmark data (still backfilling)".
-- **Slice 4+ — the other MCE components** (fundamentals gate — blocked on `market_cap`/F1;
-  news/sentiment veto extending `event_guard`; 200-DMA/VIX regime; earnings blackout;
-  seasonality), each its own overlay slice.
+- **Slice 4 — market-regime gate (200-DMA + VIX). DECIDED 2026-08-20 as the next build; not
+  built yet.** The top of the top-down funnel above sector-RS: soften/skip fresh longs when the
+  broad market is risk-off. Chosen because it is the ONLY remaining candidate both **buildable
+  now AND §8-validatable now** — `ohlcv_1d` has 3y of daily history (2023-07→), so the 200-DMA
+  part can go the full R-track (build→shadow→§8-on-2y→active). Data grounded 2026-08-20:
+  `ohlcv_1d` 3y; NIFTY 50 in `index_ohlcv_1d`; `india_vix_daily` only **36 days** so VIX rides as
+  a **shadow-only companion** until `india_vix_daily` is backfilled from the NSE indices archive
+  (mechanically the same as slice 2 — a one-off backfill, no new source). Overlay-lane, shadow-first,
+  reuses the slice-1/2/3 pattern. **Default semantics (adjustable):** broad-market Nifty-50 200-DMA
+  as a MODIFIER (not a hard block), VIX shadow-only.
+- **Slice 5 — fundamentals quality gate.** Highest strategic value (junk/quality filter — the
+  SRTL-class protection) but a DATA project: `market_cap_cr` is **0 of 2365 populated** (verified
+  2026-08-20), no fundamentals table. **Data source DECIDED 2026-08-20 (user) = NSE/BSE XBRL** (the
+  F1 "real path": authoritative, free, no ToS/privacy risk, unlocks the full fundamentals set by
+  extending `filings_consumer` — chosen over the yfinance MVP, which would leak ticker lookups to an
+  external service). Step 1 = the XBRL fundamentals writer (starting with `market_cap_cr`); step 2 =
+  a static quality/junk GATE (exclude illiquid ₹-micro-caps / poor quality). Can only ever be a GATE
+  (no historical fundamentals to §8-validate).
+- **Slice 6 — news/sentiment veto.** Extend `event_guard` (today: a flat 60-min suppress at
+  signal-generation around `HIGH_IMPACT_TYPES`) to an earnings-blackout window + rating-DOWNGRADE
+  veto + severity/decay. Veto-value only (~0 directional alpha), shallow history (`corporate_filings`
+  ~1 month) so not §8-validatable — a protective add, lower bar.
+- **Seasonality — already a read-only statistic** (`app/services/seasonality.py::monthly_seasonality`).
+  Surface it as informational context; do NOT gate on it (thin statistical basis).
 
 Flip to `active` for any gate = R-track ceremony: forward shadow evidence + §8-on-≥2y +
 explicit sign-off. Never a silent flip.

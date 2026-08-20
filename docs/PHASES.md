@@ -377,10 +377,15 @@ LOW, fixed); 18 tests, order-path regression green (138). **⚠ committed on the
 would-block/eligible buckets stay empty until **`index_ohlcv_1d` is backfilled** — run `make worker`
 (the EOD catch-up self-heals index OHLC ≤21d, like the other feeds). Then, once ≥20 resolved
 would-block trades accrue and are net-negative + worse than eligible, a shadow→active flip is on the
-table (R-track: §8-on-≥2y + explicit sign-off; reversible via `sector_rs_gate_mode=shadow`). Slice 4+
-= the other MCE components (fundamentals gate — blocked on `market_cap`/F1; news/sentiment veto). Also
-open (any time, non-blocking): paper day-1 for the 6.8 stack (deferred until the user says "proceed" —
-no clock started), and the gated 6.8 research track (R1/R2/F1).
+table (R-track: §8-on-≥2y + explicit sign-off; reversible via `sector_rs_gate_mode=shadow`).
+**Slices 4/5/6 DECIDED 2026-08-20 (user), not built yet:** **slice 4 = 200-DMA + VIX market-regime
+gate** (the next build — the only remaining candidate both buildable AND §8-validatable now:
+`ohlcv_1d` has 3y; VIX shadow-only until `india_vix_daily` is backfilled; overlay-lane, shadow-first,
+mirrors slices 1-3; default = broad-market 200-DMA as a modifier); **slice 5 = fundamentals quality
+gate, data source DECIDED = NSE/BSE XBRL** (`market_cap_cr` 0/2365 — blocked until the XBRL writer;
+static junk/quality GATE, never §8-able); **slice 6 = news veto** (extend `event_guard`). Details in
+the phase-MCE doc's sliced plan. Also open (any time, non-blocking): paper day-1 for the 6.8 stack
+(deferred until the user says "proceed" — no clock started), and the gated 6.8 research track (R1/R2/F1).
 
 **Next BUILD phase = Phase 6.8 (Execution Realism & Exchange-Safety)** — APPROVED 2026-08-17 (user),
 inserted between Phase 6 and the **Market Context Engine** (which stays the phase after 6.8, before
