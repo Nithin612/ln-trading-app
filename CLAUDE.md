@@ -57,12 +57,15 @@ else.
   paper positions (R-preserving split/bonus; admin-verified ratio; ex-date worker,
   idempotent+catch-up; migration `a7b8c9d0e1f2`), and 6.8.6 silent-feed-outage alarm
   (trading-calendar-aware EOD staleness header in the daily report) are DONE (through
-  2026-08-18, all reviewed) — **ALL SIX paper-safe slices complete**. Remaining =
-  the gated, non-blocking research track (R1/R2/F1); next = `/phase-gate` + user
-  "proceed" for paper day-1 (`docs/phases/phase-06.8-execution-realism-plan.md`). All
-  6.8 slices build on the Phase-6 branch; **paper day-1 is DEFERRED until the phase
-  is done + user "proceed"; merge to main only after.** Nothing auto-advances —
-  the NEXT menu lives in the PHASES top block.
+  2026-08-18, all reviewed) — **ALL SIX paper-safe slices complete**. **✅ PHASE 6.8
+  GATE PASSED + CLOSED 2026-08-20** (`/phase-gate`, worker stopped for a quiescent dev
+  DB: backend 1477 · parity 16 · walkforward 9 · replay 19 · frontend 375 · cargo ok;
+  §8 drift gate clean = frozen engine untouched; `make analysis` smoke green) — **the
+  Phase-6 branch was merged to `main` (fast-forward); push is manual and PENDING the
+  user.** Remaining = the gated, non-blocking research track (R1/R2/F1). **paper day-1
+  is STILL DEFERRED until the user explicitly says "proceed"** — the merge does not
+  start the paper clock. Nothing auto-advances — the NEXT menu lives in the PHASES top
+  block (next after push = MCE slice 2, index-OHLC ingestion).
 - **Single-factor entries are BLOCKED since the R-track entry-quality overlay**
   (`app/signals/entry_quality.py`, frozen engine untouched, overlay pattern). The
   confluence confidence normalizes by the weight of factors that *scored*, so one 0.8
