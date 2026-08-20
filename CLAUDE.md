@@ -82,17 +82,19 @@ else.
   flip-readiness banner. The *context* complement — sector/index relative-strength +
   fundamentals + news as GATES/MODIFIERS (never additive) — is the **MCE**
   (`docs/phases/phase-MCE-market-context-engine.md`), the phase after 6.8.
-- **MCE is IN PROGRESS — slices 1 + 2 built 2026-08-20 (mode `off`, no money-path change yet).**
-  Slice 1 = `app/signals/sector_rs.py` (pure RS overlay). Slice 2 = the index price store
-  (`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) + `app/services/benchmark.py` (membership mapping
+- **MCE is IN PROGRESS — slices 1 + 2 + 3 built 2026-08-20, gate now `shadow` (measures + stamps,
+  never blocks).** Slice 1 = `app/signals/sector_rs.py` (pure RS overlay). Slice 2 = index price
+  store (`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) + `app/services/benchmark.py` (membership map
   Bank⊃Fin⊃NIFTY50 + date-aligned closes anchored to `signal.created_at`) + `sector_rs` wired into
-  the paper order path (`settings.sector_rs_gate_mode`, default `off`; fail-open in a savepoint).
+  the paper order path (fail-open in a savepoint). Slice 3 = `app/services/sector_rs_shadow.py` (the
+  forward-evidence sidecar → `sector-rs-shadow-<date>.md` with a per-entry context table + flip
+  banner, wired into `make analysis`) + the flip `off`→`shadow` (`settings.sector_rs_gate_mode`).
   **Benchmark source = Option B (real index OHLC), realized via the NSE indices bhavcopy CSV that
-  `vix_service` already downloads — NO Kite dependency** (that CSV has every NSE index); ingestion
-  self-heals through the EOD catch-up. Indices live in the existing `indices` registry (NOT the
-  tradeable stock universe). quant-verifier PASS-WITH-NOTES + bug-hunter (1 MED fail-open + 1 LOW,
-  fixed). **NEXT = slice 3** (shadow sidecar `sector-rs-shadow-<date>.md` + daily-report context
-  section), then flip `off`→`shadow`. Sliced plan in the phase-MCE doc.
+  `vix_service` already downloads — NO Kite dependency**; ingestion self-heals through the EOD
+  catch-up. Indices live in the existing `indices` registry (NOT the tradeable universe).
+  quant-verifier PASS ×3 + bug-hunter (findings fixed). **NEXT = accrue forward evidence** — run
+  `make worker` so the catch-up backfills `index_ohlcv_1d`; a shadow→active flip later needs the
+  R-track ceremony (§8-on-≥2y + sign-off). Slice 4+ = fundamentals + news veto. Plan in the phase-MCE doc.
 - **The provisional breadth-flood fix is MERGED on the Phase-6 branch (`c1b4752`,
   cherry-picked 2026-08-20 — the source branch had diverged so `--ff-only` was impossible).**
   `live-worker`'s hot set no longer floods with breadth alerts (near-trigger = signal-bound

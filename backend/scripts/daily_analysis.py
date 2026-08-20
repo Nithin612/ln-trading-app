@@ -152,6 +152,22 @@ async def _run(day: date, user_id: int, week_of: date | None, now: datetime) -> 
         except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
             print(f"entry-quality shadow step skipped: {exc!r}", flush=True)
 
+        # Sector/index relative-strength forward evidence (MCE slice 3): what the RS
+        # overlay WOULD suppress on the live signal cohort (stocks under-performing their
+        # benchmark index), with a per-entry context table + a flip-readiness banner —
+        # the MCE requirement to never trade blind to sector leadership. Same read-only,
+        # never-block discipline as the gate sidecars above.
+        try:
+            from app.services import sector_rs_shadow as srs
+
+            rshadow = await srs.compute_sector_rs_shadow(db)
+            rpath = _ANALYSIS_DIR / f"sector-rs-shadow-{day.isoformat()}.md"
+            rpath.write_text(srs.render_markdown(rshadow, day=day))
+            print(f"wrote {rpath.relative_to(_REPO_ROOT)}", flush=True)
+            print(srs.readiness_line(rshadow), flush=True)
+        except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
+            print(f"sector-RS shadow step skipped: {exc!r}", flush=True)
+
         if week_of is not None:
             monday = week_of - timedelta(days=week_of.weekday())
             wk = await build_week_summary(db, monday=monday, user_id=user_id, now=now)

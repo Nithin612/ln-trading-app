@@ -240,14 +240,15 @@ class Settings(BaseSettings):
     # app/services/benchmark.py; the order path only READS them. Frozen engine untouched
     # (a downstream overlay, cf. regime_gate_mode). Reuses eval_relative_strength's
     # definition (excess = stock_ret − bench_ret).
-    #   off    — TRUE no-op: no query, no stamp (default; slice 2 ships wired-but-dormant
-    #            until index_ohlcv_1d has backfilled and the slice-3 shadow sidecar reads
-    #            the stamps).
-    #   shadow — measure + stamp the verdict; the order path never acts on it.
+    #   off    — TRUE no-op: no query, no stamp.
+    #   shadow — measure + stamp the verdict; the order path never acts on it (default —
+    #            slice 3 flipped it here to start accruing forward evidence; the sector-RS
+    #            shadow sidecar recomputes the verdict per signal regardless, so evidence
+    #            accrues once index_ohlcv_1d has backfilled).
     #   active — reject an ineligible signal. Behaviour-changing → forward shadow evidence
     #            + §8-on-≥2y + explicit sign-off first. Fully reversible.
-    # FAIL-OPEN: no benchmark data / too-short history never blocks a signal.
-    sector_rs_gate_mode: Literal["off", "shadow", "active"] = "off"
+    # FAIL-OPEN: no benchmark data / too-short history / any DB fault never blocks a signal.
+    sector_rs_gate_mode: Literal["off", "shadow", "active"] = "shadow"
     # Lookback in trading sessions for the excess-return comparison (matches
     # eval_relative_strength's default).
     sector_rs_lookback: int = 20

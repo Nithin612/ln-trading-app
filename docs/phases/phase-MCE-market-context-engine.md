@@ -1,11 +1,14 @@
 # Market Context Engine (MCE) — design capture
 
-**Status: IN PROGRESS — slices 1 + 2 built 2026-08-20.** Slice 1 = the pure RS overlay
+**Status: IN PROGRESS — slices 1 + 2 + 3 built 2026-08-20.** Slice 1 = the pure RS overlay
 (`sector_rs.py`); slice 2 = index price store (`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) +
-benchmark provider + order-path wiring, **mode `off` (wired-but-dormant, no money-path change
-until flipped)**. Both agent-reviewed (quant-verifier + bug-hunter, findings actioned). NEXT =
-slice 3 (shadow sidecar + daily-report context section) — then a shadow→active flip needs the
-R-track ceremony. The named phase **after Phase 6.8, before Phase-7 (live)**. This doc captures the *entry-context* design agreed 2026-08-18 (the SRTL /
+benchmark provider + order-path wiring; slice 3 = the shadow sidecar (`sector_rs_shadow.py` →
+`sector-rs-shadow-<date>.md` with a per-entry context table + flip-readiness banner) + the flip to
+**mode `shadow`** (measures + stamps, never blocks). All agent-reviewed (quant-verifier PASS ×3 +
+bug-hunter, findings actioned). **NEXT = let forward evidence accrue** (needs `index_ohlcv_1d`
+backfilled — next `make worker` self-heals it); a shadow→active flip later needs the R-track
+ceremony (§8-on-≥2y + sign-off). Slice 4+ = the other MCE components (fundamentals, news veto). The
+named phase **after Phase 6.8, before Phase-7 (live)**. This doc captures the *entry-context* design agreed 2026-08-18 (the SRTL /
 entry-selection discussion). Full prior context: the `market_context_engine_deferred` memory
 + `docs/Market_Context_Engine_Spec.docx` (spec on disk). **The sliced plan is now at the
 bottom of this doc ("Sliced plan (started 2026-08-20)"), including one OPEN decision the
@@ -142,10 +145,22 @@ Slice 2 is now unblocked.
   order frequency, unlike the tick path); a Redis-cache front (the `circuit_bands` shape) is a
   possible optimization only if order volume ever makes it matter. Per-sector index mapping
   (NIFTY IT/AUTO/…) deferred — data can accrue by adding registry rows.
-- **Slice 3 — shadow sidecar + daily-report section.** `sector-rs-shadow-<date>.md` + a
-  flip-readiness banner, mirroring `regime_gate_shadow` / `entry_quality_shadow`, and the §69
-  REQUIREMENT: `daily_report.py` must SHOW each entry's sector/index RS. Accrues forward
-  evidence before any flip.
+- **Slice 3 — shadow sidecar + per-entry context + flip off→shadow. DONE 2026-08-20.**
+  `app/services/sector_rs_shadow.py` recomputes the RS verdict over the tradeable cohort
+  (`is_shadow` FALSE, since OUTCOME_EPOCH), anchored to each signal's `created_at` (no
+  look-ahead), partitioned **would-block / eligible / no-benchmark-data** with resolved
+  outcomes + a flip-readiness banner, mirroring `regime_gate_shadow` / `entry_quality_shadow`;
+  written by `make analysis` as `sector-rs-shadow-<date>.md` (wired into `daily_analysis.py`).
+  It carries a **per-entry table** (each committed signal's benchmark + excess% + RS verdict +
+  outcome) — the §69 REQUIREMENT to SHOW context, so we never trade blind to sector leadership.
+  **Gate flipped `off`→`shadow`** (`sector_rs_gate_mode` default) — measures + stamps, never
+  blocks. quant-verifier PASS (no look-ahead, buckets correct, flip-bar conservative; 2 INFO — a
+  label made side-neutral, a `p.avg None` edge left identical to the reviewed sibling). 18 tests
+  in `test_index_ohlcv.py` (2 new for the sidecar). **The would-block set net-negative AND worse
+  than eligible, over ≥20 resolved, is the evidence for a later shadow→active flip (R-track:
+  §8-on-≥2y + sign-off).** Evidence starts accruing once `index_ohlcv_1d` backfills (next
+  `make worker` self-heals it ≤21d); on the smoke it correctly showed all 414 cohort signals as
+  "no benchmark data (still backfilling)".
 - **Slice 4+ — the other MCE components** (fundamentals gate — blocked on `market_cap`/F1;
   news/sentiment veto extending `event_guard`; 200-DMA/VIX regime; earnings blackout;
   seasonality), each its own overlay slice.

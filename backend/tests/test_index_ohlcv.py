@@ -15,7 +15,9 @@ from app.core.config import settings
 from app.models.market_data import OhlcvDaily
 from app.models.signal import Signal
 from app.models.stock import Index, IndexOhlcvDaily
+from app.models.trading import Position
 from app.services import benchmark
+from app.services import sector_rs_shadow as srs
 from app.services.index_ohlcv_service import ingest_index_ohlcv_date, parse_index_rows
 from httpx import AsyncClient
 from sqlalchemy import select
@@ -217,12 +219,64 @@ async def _make_signal(db: AsyncSession, stock_id: int) -> Signal:
         },  # ≥2 scoring factors — legal confluence (entry-diversity gate is active)
         headline="BUY TEST",
         status="active",
+        is_shadow=False,
         validity_until=now + timedelta(days=5),
         created_at=now,
     )
     db.add(sig)
     await db.flush()
     return sig
+
+
+async def _seed_index_series(
+    db: AsyncSession, index_id: int, closes: list[str], *, start: date = date(2026, 3, 2)
+) -> None:
+    for i, c in enumerate(closes):
+        d = start + timedelta(days=i)
+        db.add(IndexOhlcvDaily(index_id=index_id, trade_date=d, close=D(c)))
+    await db.flush()
+
+
+async def _seed_stock_series(
+    db: AsyncSession, stock_id: int, closes: list[str], *, start: date = date(2026, 3, 2)
+) -> None:
+    for i, c in enumerate(closes):
+        d = start + timedelta(days=i)
+        db.add(
+            OhlcvDaily(
+                time=datetime(d.year, d.month, d.day, 10, 0, tzinfo=UTC),
+                stock_id=stock_id,
+                open=D(c),
+                high=D(c),
+                low=D(c),
+                close=D(c),
+                volume=1,
+                is_complete=True,
+            )
+        )
+    await db.flush()
+
+
+async def _closed_pos(
+    db: AsyncSession, user_id: int, stock_id: int, signal_id: str, realized: str
+) -> None:
+    now = datetime.now(tz=UTC)
+    db.add(
+        Position(
+            user_id=user_id,
+            stock_id=stock_id,
+            signal_id=signal_id,
+            mode="paper",
+            side="LONG",
+            quantity=100,
+            avg_entry_price=D("100"),
+            realized_pnl=D(realized),
+            trail_state="none",
+            opened_at=now,
+            closed_at=now,
+        )
+    )
+    await db.flush()
 
 
 async def _order(client: AsyncClient, headers: dict[str, str], signal_id: int) -> int:
@@ -319,3 +373,48 @@ class TestSectorRsWiring:
         sig = await _make_signal(db, stock.id)
         await db.commit()
         assert await _order(client, headers, sig.id) == 201
+
+
+# ── Shadow sidecar (slice 3): forward-evidence measurement + per-entry context ──
+class TestSectorRsShadow:
+    async def test_partitions_blocked_passed_no_data_with_outcome(self, db: AsyncSession) -> None:
+        user = await create_test_user(db)
+        ids = await _seed_indices(db)
+        # One NIFTY 50 series (+5% over 21 sessions), stocks judged against it.
+        await _seed_index_series(
+            db, ids["NIFTY50"], [str(round(100 + 0.25 * i, 4)) for i in range(21)]
+        )
+        under = await make_stock(db, symbol="UNDER")  # flat vs +5% → would-block
+        await _seed_stock_series(db, under.id, ["100.0000"] * 21)
+        over = await make_stock(db, symbol="OVER")  # +30% vs +5% → eligible
+        await _seed_stock_series(db, over.id, [str(round(100 + 1.5 * i, 4)) for i in range(21)])
+        nodata = await make_stock(db, symbol="NODATA")  # no bars → no benchmark data
+
+        su = await _make_signal(db, under.id)
+        await _make_signal(db, over.id)
+        await _make_signal(db, nodata.id)
+        await _closed_pos(db, user.id, under.id, su.id, "-500")  # blocked + resolved (losing)
+        await db.commit()
+
+        r = await srs.compute_sector_rs_shadow(db)
+        assert r.n_signals == 3
+        assert r.blocked.n == 1 and r.passed.n == 1 and r.no_data.n == 1
+        assert r.blocked.resolved == 1 and r.blocked.net == D("-500")
+        assert r.passed.resolved == 0  # the out-performer has no closed position
+        assert len(r.detail) == 2  # under + over assessable; nodata excluded
+        ready, reason = srs.rs_flip_ready(r)
+        assert ready is False and "keep accruing" in reason  # 1 < 20 resolved
+
+    async def test_render_markdown_shows_per_entry_context(self, db: AsyncSession) -> None:
+        ids = await _seed_indices(db)
+        await _seed_index_series(
+            db, ids["NIFTY50"], [str(round(100 + 0.25 * i, 4)) for i in range(21)]
+        )
+        stock = await make_stock(db, symbol="ACME")
+        await _seed_stock_series(db, stock.id, ["100.0000"] * 21)
+        await _make_signal(db, stock.id)
+        await db.commit()
+        md = srs.render_markdown(await srs.compute_sector_rs_shadow(db), day=date(2026, 8, 20))
+        assert "Sector/index relative-strength shadow" in md
+        assert "Per-entry context" in md
+        assert "ACME" in md and "NIFTY50" in md

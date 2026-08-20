@@ -7,6 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(MCE slice 3): sector-RS shadow sidecar + per-entry context + flip off→shadow (2026-08-20)
+
+The forward-evidence half of the sector-RS overlay, mirroring `regime_gate_shadow` /
+`entry_quality_shadow`. `app/services/sector_rs_shadow.py` recomputes the RS verdict over the
+tradeable signal cohort (`is_shadow` FALSE, since OUTCOME_EPOCH), each signal judged on benchmark
+closes aligned to its own `created_at` (no look-ahead), partitioned **would-block / eligible /
+no-benchmark-data** with resolved paper outcomes + a flip-readiness banner. Written by `make
+analysis` as `sector-rs-shadow-<date>.md` (wired into `daily_analysis.py`), and it carries a
+**per-entry table** — each committed signal's benchmark, excess-vs-benchmark %, RS verdict, and
+outcome — the MCE's standing requirement to surface context so we never trade blind to sector
+leadership.
+
+The gate default is **flipped `off`→`shadow`** (`sector_rs_gate_mode`): the order path now computes
++ stamps the RS verdict but never blocks (fail-open). `18 tests`, ruff/mypy clean, order-path
+regression green (138). **quant-verifier PASS** (no look-ahead, buckets correct — an unassessable
+signal never biases the eligible set, flip-bar conservative; 2 INFO — a label made side-neutral, a
+`p.avg None` edge left identical to the reviewed sibling). Evidence accrues once `index_ohlcv_1d`
+backfills (next `make worker` self-heals it ≤21d); a later shadow→active flip needs the R-track
+ceremony (§8-on-≥2y + sign-off).
+
 ### feat(MCE slice 2): index price store + benchmark provider + sector-RS wiring (2026-08-20)
 
 The keystone the relative-strength overlay needed — a real index price series — plus the wiring
