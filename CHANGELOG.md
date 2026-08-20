@@ -7,6 +7,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(MCE slice 1): sector/index relative-strength overlay module (2026-08-20)
+
+First slice of the Market Context Engine (`docs/phases/phase-MCE-market-context-engine.md`) — the
+*top-down* context the tradeable confluence engine lacks. `app/signals/sector_rs.py`: a downstream
+eligibility overlay (NOT an additive confluence factor — that would dilute the ≥70% gate), the same
+pure/moded/fail-open shape as `circuit_guard` / `regime_guard` / `entry_quality`. It reuses the
+platform's own relative-strength definition (`profiles/setups.eval_relative_strength`: excess =
+stock_return − benchmark_return over `lookback`; BUY wants out-performance, SELL under-performance) and
+is agnostic to where the benchmark close series comes from. Modes off/shadow/active, **default off** —
+the module is UNWIRED (no order-path call, no config key yet), so it changes no behaviour. `16 tests`
+(values + both sides + every fail-open branch + all modes), ruff/mypy clean. **quant-verifier
+PASS-WITH-NOTES** — formula matches the `eval_relative_strength` reference term-for-term; two MEDIUM
+notes actioned in-slice: a gap/None element in the series now fails open (previously would raise), and
+the caller alignment contract (session-aligned, completed candle N, no look-ahead) is documented for
+the wiring slice to enforce; SELL-boundary + `bench_then==0` tests added. No migration.
+
+Recorded a **premise correction** in the MCE plan: there is no index price series in the DB (only the
+`is_nifty50`/`is_banknifty`/`is_finnifty` membership flags) and the RS benchmark input is unwired
+everywhere, so the benchmark must be built — an OPEN decision (synthesize from constituents vs ingest
+real Kite index OHLC) that blocks slice 2 (benchmark builder + cache + order-path shadow wiring).
+
 ### feat(phase6.8 R-track): entry-quality overlay — the SRTL-class leak (2026-08-18)
 
 The SRTL paper loss (−₹3,565 in 10 min) and the exit-ladder replay both pointed at the ENTRY, not

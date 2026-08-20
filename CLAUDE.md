@@ -76,6 +76,15 @@ else.
   flip-readiness banner. The *context* complement — sector/index relative-strength +
   fundamentals + news as GATES/MODIFIERS (never additive) — is the **MCE**
   (`docs/phases/phase-MCE-market-context-engine.md`), the phase after 6.8.
+- **MCE is now STARTED (slice 1, 2026-08-20).** `app/signals/sector_rs.py` — the
+  sector/index relative-strength overlay (pure, moded off/shadow/active default **off**,
+  fail-open, reuses `eval_relative_strength`'s definition), built shadow-first and
+  **UNWIRED** (no order-path call, no config key) so it changes nothing yet. **Premise
+  correction verified against the live DB:** there is NO index price series (only the
+  `is_nifty50/banknifty/finnifty` membership flags) and the RS benchmark input is unwired
+  everywhere — so the benchmark must be BUILT. Slice 2 is **BLOCKED on one decision: the
+  benchmark source** — synthesize an equal-weight basket from constituents vs ingest real
+  Kite index OHLC (recommended). Sliced plan + fork in the phase-MCE doc.
 - **Circuit-band overlay since 6.8.3** (`app/signals/circuit_guard.py`, shadow-first,
   `circuit_gate_mode`): skips entering a name within `circuit_proximity_pct` (1.5%)
   of its ADVERSE band (long→lower, short→upper) — an un-exitable trade. Bands from a

@@ -10,7 +10,7 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-08-19) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-08-20) — read this block first
 
 **v2 Phases 0–2 ✅ done · Phase 3 (realtime) ✅ GATED 2026-08-14 · Phase 4 ✅ done ·
 Phase 5 ✅ GATED 2026-08-07 · Phase 6 ▶ IN PROGRESS (6.1–6.4 done; regime gate ACTIVE
@@ -321,7 +321,33 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-08-19.**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-08-20.**
+
+**⚠ TWO OPEN ITEMS from the 2026-08-19 two-session handover — read before anything else:**
+1. **The provisional breadth-flood fix is committed but UNMERGED and the `--ff-only` merge Session 1
+   asked for is now IMPOSSIBLE.** Branch `worktree-provisional-hotset-filter` (`8359bd1` docs → `c8f3b50`
+   fix) and this branch (`feature/phase6-overlay-walkforward-retune`) have **diverged from their common
+   base `845ff5c`** — this branch added `e32fd48`/`bdc7238`/`519568e`, the provisional branch added
+   `c8f3b50`/`8359bd1`. So `git merge --ff-only worktree-provisional-hotset-filter` will REFUSE. To land
+   the breadth fix, either rebase the provisional branch onto this tip then ff, or do a real merge
+   commit — a user decision (the live worker still runs the OLD flooding behaviour until it lands). See
+   the `provisional_hotset_breadth_flood` memory.
+2. **Red baseline is RESOLVED** on this branch (`e32fd48`) — independently re-verified 2026-08-20: the
+   exact order-path set (`test_trading` + `test_circuit_gate` + `test_entry_quality{,_shadow}`) = **138
+   passed, exit 0**. Not an open item any more; noted so the next session doesn't re-chase it.
+
+**▶ MCE STARTED 2026-08-20 — slice 1 (RS overlay module) built, shadow-first & UNWIRED (no money-path
+change).** `app/signals/sector_rs.py` (pure, moded off/shadow/active default **off**, fail-open; reuses
+`eval_relative_strength`'s definition) + `tests/test_sector_rs.py` (16, ruff/mypy clean,
+quant-verifier PASS-WITH-NOTES — 2 MEDIUM actioned in-slice: gap/None fails open, caller
+alignment contract documented for the wiring slice). **⚠ BLOCKING DECISION for slice 2 — the benchmark source:** there is NO index price series in the
+DB (only membership flags) and the RS benchmark input is unwired everywhere, so RS needs a benchmark
+that doesn't exist yet — **(A)** synthesize an equal-weight basket from the constituents we already have,
+or **(B)** ingest real index OHLC from Kite (recommended; strictly better). The full sliced plan +
+this fork are in [`phases/phase-MCE-market-context-engine.md`](phases/phase-MCE-market-context-engine.md)
+("Sliced plan (started 2026-08-20)"). Slice 2 (benchmark builder + cache + order-path shadow wiring) is
+BLOCKED on the user's A/B pick.
+
 Phases **0–5 are CLOSED** (Phase 3 gated 2026-08-14, PASS). **Phase 6 is BUILT** — 6.1–6.4 done;
 the **regime gate is ACTIVE** in the paper book (flipped 2026-08-15, reversible via
 `REGIME_GATE_MODE=shadow` + restart); **6.5 pair-trading is fully built shadow-first (slices 1–4)**.
