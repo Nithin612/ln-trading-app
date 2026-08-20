@@ -91,8 +91,9 @@ before it goes active. This bullet is the reminder to wire that in — do not sk
 Component 1 (sector/index relative-strength), overlay lane, sequenced so the risk lands
 in the right order. Each slice is shadow-first, frozen engine untouched, fully reversible.
 
-**⚠ OPEN DECISION — the benchmark source (blocks slice 2, the user's call).** RS needs a
-benchmark close series that does not exist yet. Two options:
+**✅ DECIDED 2026-08-20 — the benchmark source = Option B (ingest real Kite index OHLC).** The
+user's call: build the actual top-down series rather than a synthesized proxy. RS needs a
+benchmark close series that does not exist yet. The two options that were on the table:
 - **A — synthesize from constituents we already have.** Build an equal-weight daily-return
   index from the membership-flagged baskets (Nifty50 = 50 stocks; BankNifty = 14; FinNifty
   = 25) and per-sector baskets (the ~500 sectored stocks). No new data, buildable today, but
@@ -104,8 +105,9 @@ benchmark close series that does not exist yet. Two options:
   top-down series the user's Bank-Nifty-leadership idea wants), at the cost of a new
   instrument set + EOD pull + storage. Arguably the right long-term answer.
 
-Recommendation: **B for the market/sector indices that Kite publishes, A as the fallback
-for any sector with no published index.** Not started — needs the user's pick.
+**Decision (2026-08-20): B** — ingest the real Kite index OHLC for the market/sector indices
+Kite publishes; A stays only as a possible fallback for any sector with no published index.
+Slice 2 is now unblocked.
 
 - **Slice 1 — RS overlay module. DONE 2026-08-20.** `app/signals/sector_rs.py` — pure,
   moded (off/shadow/active, default **off**), fail-open; reuses `eval_relative_strength`'s

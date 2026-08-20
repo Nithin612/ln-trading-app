@@ -84,7 +84,16 @@ else.
   `is_nifty50/banknifty/finnifty` membership flags) and the RS benchmark input is unwired
   everywhere — so the benchmark must be BUILT. Slice 2 is **BLOCKED on one decision: the
   benchmark source** — synthesize an equal-weight basket from constituents vs ingest real
-  Kite index OHLC (recommended). Sliced plan + fork in the phase-MCE doc.
+  Kite index OHLC (**decided 2026-08-20: ingest real Kite index OHLC — Option B**). Sliced
+  plan + fork in the phase-MCE doc.
+- **The provisional breadth-flood fix is MERGED on the Phase-6 branch (`c1b4752`,
+  cherry-picked 2026-08-20 — the source branch had diverged so `--ff-only` was impossible).**
+  `live-worker`'s hot set no longer floods with breadth alerts (near-trigger = signal-bound
+  only, so watchlist stocks get scored again); cycle health is durable in
+  `provisional:health:{day}` (7-day TTL). ⚠ The forward watch has NO scheduler — run `cd
+  backend && uv run python scripts/provisional_health.py --days 7` yourself each session
+  (protocol: `docs/analysis/provisional-health-watch.md`). The running `make live-worker`
+  picks up the fix on its next restart. See the `provisional-hotset-breadth-flood` memory.
 - **Circuit-band overlay since 6.8.3** (`app/signals/circuit_guard.py`, shadow-first,
   `circuit_gate_mode`): skips entering a name within `circuit_proximity_pct` (1.5%)
   of its ADVERSE band (long→lower, short→upper) — an un-exitable trade. Bands from a
