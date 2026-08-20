@@ -23,7 +23,15 @@ Semantics (provisional-labelled END TO END):
   - Hot set = active-signal stocks + near-trigger stocks (alert stream,
     recent window) + watchlist stocks — bounded by
     `live_provisional_hotset_max` with priority signal > trigger >
-    watchlist; clipping is LOGGED, never silent.
+    watchlist; clipping is LOGGED, never silent, and counted onto the
+    cycle stats. "Near-trigger" means SIGNAL-BOUND alerts only: breadth
+    levels (vburst / PDH / PDL / S&R, stamped style="market") carried 1271
+    distinct stocks in one 15-min window on 2026-08-18 and flooded the cap
+    out from under the watchlist, so they are excluded unless
+    `live_provisional_trigger_market_max` dials them back in — as a
+    bounded, recency-ordered discovery tier ranked BELOW the watchlist,
+    deduped against everything already hot, so the dial can never starve
+    the watchlist the way unfiltered breadth did.
 
 Window canon per pair:
   - intraday timeframes: last ≤300 completed bars from the profile's table;
@@ -49,7 +57,19 @@ within a cycle: 328 pairs → 159 engine calls, and 0 when nothing moved. The
 memo is an identity check, never a staleness window — see `_Cache.scores`.
 A cycle where every hot stock ticks still costs ~8 s on the Python engine
 (`tradecore` is 266× faster but cannot take FII/DII flows yet), so the
-cadence remains a target the engine cannot always meet.
+cadence remains a target the engine cannot always meet. Re-measured
+2026-08-19: 35.6 ms/window steady on a 300-bar 5m window, so the ~50
+engine calls of a live cycle are 1.8-2.4 s against a 3 s cadence — live
+cycles ran 3.1-4.2 s. Overruns are therefore EXPECTED, not a fault; they
+self-throttle (`delay = max(0, cadence - elapsed)`) and never queue. Watch
+the RATE in `provisional:health:{day}` before touching the cadence.
+
+Cost the docstring cannot show: this thread runs the PYTHON engine inside
+the consumer's process, so it holds the GIL for most of every cycle. A
+consumer-like 1 ms wake loop measured p50 1.08 ms / max 2.14 ms idle vs
+p50 6.16 ms / max 33.3 ms with one scorer thread running (2026-08-19).
+Moving the refresher to its own PROCESS is the durable fix if the tick
+path ever needs that headroom back.
 """
 
 from __future__ import annotations
@@ -81,6 +101,9 @@ _RUN_UNTIL = time(15, 35)
 # Redis surface (every key gets a TTL — rules/trading-domain.md).
 LEADERBOARD_KEY = "provisional:leaderboard:{style}"
 LEADERBOARD_CHANNEL = "provisional:{style}"
+# Cycle-health surface, one key per IST session day (monitoring only —
+# nothing reads it on the hot path).
+HEALTH_KEY = "provisional:health:{day}"
 
 # Every style a leaderboard can publish under: the four profile styles +
 # the legacy signal classifications (an active signal with no bound
@@ -124,7 +147,24 @@ def _money_f(raw: int) -> float:
 @dataclass
 class HotStock:
     symbol: str
-    sources: set[str] = field(default_factory=set)  # signal | trigger | watchlist
+    # signal | trigger | watchlist | market  (see the rank map in load_hot_set)
+    sources: set[str] = field(default_factory=set)
+
+
+@dataclass
+class HotSetStats:
+    """Per-cycle hot-set accounting. The clip used to exist ONLY as a log
+    line, so "did the cap stop biting?" could not be answered from a run
+    started without a log file — these ride the cycle stats instead.
+    Source counts describe the KEPT set (what actually got scored)."""
+
+    raw: int = 0
+    kept: int = 0
+    clipped: int = 0
+    signal: int = 0
+    trigger: int = 0
+    watchlist: int = 0
+    market: int = 0
 
 
 @dataclass
@@ -139,47 +179,117 @@ class SignalPair:
     symbol: str  # carried so a clipped-from-hot-set pair still names itself
 
 
-def _recent_trigger_sids(redis: Any, now_utc: datetime) -> set[int]:
-    """Stock ids with a tick-trigger alert inside the recency window. The
+def _alert_entries_since(redis: Any, cutoff: int) -> list[Any]:
+    """Alert-stream entries newest-first, paged until they age past the
+    cutoff. The stream is capped (maxlen), and ONE capped call silently
+    shrank the recency window during an open-auction burst (bug-hunter LOW
+    2026-07-19) — hence paging. Bounded by maxlen (10k) ≤ 20 pages."""
+    entries: list[Any] = []
+    last_id = "+"
+    while True:
+        page = redis.xrevrange(settings.live_alert_stream, max=last_id, count=500)
+        entries.extend(page)
+        if len(page) < 500:
+            break
+        try:
+            oldest_ts = int(page[-1][1].get("ts", 0))
+        except (TypeError, ValueError):
+            oldest_ts = 0
+        if oldest_ts < cutoff:
+            break
+        last_id = "(" + page[-1][0]  # exclusive continuation
+    return entries
+
+
+def _recent_alert_sids(redis: Any, now_utc: datetime) -> tuple[set[int], list[int]]:
+    """`(signal-bound sids, market-level sids newest-first)` inside the
     stream is at-least-once and capped (maxlen) — page newest-first until
     entries age past the cutoff: one capped call silently shrinks the
     window during an open-auction alert burst (bug-hunter LOW 2026-07-19).
-    Bounded by maxlen (10k) ≤ 20 pages worst case."""
+    Bounded by maxlen (10k) ≤ 20 pages worst case.
+
+    "Near-trigger" is SIGNAL-BOUND only. The producer stamps style="market"
+    on breadth levels (vburst / PDH / PDL / S&R) and the signal's
+    classification on signal-bound ones (`live_levels` meta), and breadth is
+    not a near-trigger: measured 2026-08-18, market-level alerts carried
+    1271 distinct stocks inside one 15-min window against a 150 hot-set cap,
+    so the cap went to the lowest stock_ids and watchlist stocks never
+    scored.
+
+    The two tiers are returned SEPARATELY because they are admitted
+    differently: signal-bound sids are near-triggers, while market-level
+    sids are a bounded, recency-ordered discovery tier that `load_hot_set`
+    admits below the watchlist (`live_provisional_trigger_market_max`).
+    Recency here is stream-ID (XADD arrival) order, not the `ts` field —
+    `_publish_alerts` XADDs one pipeline per tick batch, so the two agree
+    in practice."""
     cutoff = int(now_utc.timestamp()) - settings.live_provisional_trigger_window_s
-    entries: list[Any] = []
     try:
-        last_id = "+"
-        while True:
-            page = redis.xrevrange(settings.live_alert_stream, max=last_id, count=500)
-            entries.extend(page)
-            if len(page) < 500:
-                break
-            try:
-                oldest_ts = int(page[-1][1].get("ts", 0))
-            except (TypeError, ValueError):
-                oldest_ts = 0
-            if oldest_ts < cutoff:
-                break
-            last_id = "(" + page[-1][0]  # exclusive continuation
+        entries = _alert_entries_since(redis, cutoff)
     except Exception:
         log.exception("provisional: alert-stream read failed; skipping triggers")
-        return set()
+        return set(), []  # fail open: no triggers, no breadth — never a crash
+    # `entries` is newest-first (xrevrange pages, extended in order), so
+    # market-level encounter order IS recency order.
     sids: set[int] = set()
+    market: list[int] = []
+    seen_market: set[int] = set()
     for _entry_id, fields in entries:
         try:
-            if int(fields.get("ts", 0)) >= cutoff:
-                sids.add(int(fields["sid"]))
+            if int(fields.get("ts", 0)) < cutoff:
+                continue
+            sid = int(fields["sid"])
         except (KeyError, TypeError, ValueError):
             # one malformed stream entry skips ITSELF, never the cycle
             continue
-    return sids
+        # A style-less entry predates the stamp, so it reads as market:
+        # fail CLOSED, because failing open lets the flood back silently.
+        if str(fields.get("style", "market")) == "market":
+            if sid not in seen_market:
+                seen_market.add(sid)
+                market.append(sid)
+            continue
+        sids.add(sid)
+    return sids, market
+
+
+def admit_market_tier(
+    hot: dict[int, HotStock],
+    market_ordered: list[int],
+    active_symbols: dict[int, str],
+    market_max: int,
+) -> int:
+    """Admit up to `market_max` market-level (breadth) stocks, newest-first,
+    returning how many were admitted. Mutates `hot`.
+
+    Runs LAST, after every other source, and two rules make it safe:
+      - a slot must buy coverage nothing else already has (`sid in hot` skips,
+        and inactive stocks skip) — otherwise the dial silently delivers less
+        than it claims (quant-verifier MEDIUM 2026-08-19);
+      - the "market" source ranks BELOW "watchlist" in the clip, because
+        admitting breadth at trigger priority is exactly what starved the
+        watchlist before the filter existed.
+    """
+    if market_max <= 0:
+        return 0
+    admitted = 0
+    for sid in market_ordered:  # newest-first
+        if admitted >= market_max:
+            break
+        if sid in hot or sid not in active_symbols:
+            continue
+        hot[sid] = HotStock(symbol=active_symbols[sid])
+        hot[sid].sources.add("market")
+        admitted += 1
+    return admitted
 
 
 async def load_hot_set(
     db: Any, redis: Any, now_utc: datetime
-) -> tuple[dict[int, HotStock], list[SignalPair]]:
+) -> tuple[dict[int, HotStock], list[SignalPair], HotSetStats]:
     """Assemble the bounded hot set. Priority when clipping:
-    signal > trigger > watchlist (clipping is logged, never silent)."""
+    signal > trigger > watchlist (clipping is logged, never silent, and
+    counted onto the returned HotSetStats)."""
     hot: dict[int, HotStock] = {}
     pairs: list[SignalPair] = []
 
@@ -189,6 +299,10 @@ async def load_hot_set(
                 "SELECT s.id, s.stock_id, s.profile_key, s.timeframe,"
                 " s.classification, st.symbol"
                 " FROM signals s JOIN stocks st ON st.id = s.stock_id"
+                # status='active' only: is_shadow signals carry
+                # status='shadow', so no shadow row can reach a leaderboard.
+                # If that ever changes, stamp `shadow` on the row the way
+                # live_worker._publish_alerts stamps it on alerts.
                 " WHERE s.status = 'active'"
                 " AND (s.validity_until IS NULL OR s.validity_until > now())"
                 " ORDER BY s.id"
@@ -208,16 +322,26 @@ async def load_hot_set(
             )
         )
 
-    trigger_sids = _recent_trigger_sids(redis, now_utc)
-    if trigger_sids:
+    signal_bound, market_ordered = _recent_alert_sids(redis, now_utc)
+    market_max = settings.live_provisional_trigger_market_max
+    # ONE query for both tiers. The is_active filter has to run BEFORE the
+    # market trim, or an inactive row silently eats a slot (quant-verifier
+    # MEDIUM 2026-08-19).
+    lookup = set(signal_bound)
+    if market_max > 0:
+        lookup |= set(market_ordered)
+    active_symbols: dict[int, str] = {}
+    if lookup:
         rows = (
             await db.execute(
                 text("SELECT id, symbol FROM stocks WHERE id = ANY(:sids) AND is_active"),
-                {"sids": sorted(trigger_sids)},
+                {"sids": sorted(lookup)},
             )
         ).fetchall()
-        for r in rows:
-            hot.setdefault(r.id, HotStock(symbol=r.symbol)).sources.add("trigger")
+        active_symbols = {r.id: str(r.symbol) for r in rows}
+    for sid in sorted(signal_bound):
+        if sid in active_symbols:
+            hot.setdefault(sid, HotStock(symbol=active_symbols[sid])).sources.add("trigger")
 
     rows = (
         await db.execute(
@@ -231,9 +355,13 @@ async def load_hot_set(
     for r in rows:
         hot.setdefault(r.stock_id, HotStock(symbol=r.symbol)).sources.add("watchlist")
 
+    # Market-level discovery tier LAST — see `admit_market_tier`.
+    admit_market_tier(hot, market_ordered, active_symbols, market_max)
+
     cap = settings.live_provisional_hotset_max
+    raw = len(hot)
     if len(hot) > cap:
-        rank = {"signal": 0, "trigger": 1, "watchlist": 2}
+        rank = {"signal": 0, "trigger": 1, "watchlist": 2, "market": 3}
         ordered = sorted(
             hot.items(), key=lambda kv: (min(rank[s] for s in kv[1].sources), kv[0])
         )
@@ -246,7 +374,13 @@ async def load_hot_set(
             len(dropped),
             [sid for sid, _ in dropped[:10]],
         )
-    return hot, pairs
+    stats = HotSetStats(raw=raw, kept=len(hot), clipped=raw - len(hot))
+    for entry in hot.values():
+        stats.signal += "signal" in entry.sources
+        stats.trigger += "trigger" in entry.sources
+        stats.watchlist += "watchlist" in entry.sources
+        stats.market += "market" in entry.sources
+    return hot, pairs, stats
 
 
 def forming_bars_by_tf(
@@ -550,7 +684,7 @@ async def run_cycle(
     now_mono = time_mod.monotonic()
     session_day = now_utc.astimezone(_IST).date()
 
-    hot, signal_pairs = await load_hot_set(db, redis, now_utc)
+    hot, signal_pairs, hot_stats = await load_hot_set(db, redis, now_utc)
     profiles = (
         (
             await db.execute(
@@ -731,6 +865,12 @@ async def run_cycle(
     published = publish_leaderboards(redis, rows, now_utc)
     return {
         "hot": len(hot),
+        "hot_raw": hot_stats.raw,
+        "clipped": hot_stats.clipped,
+        "src_signal": hot_stats.signal,
+        "src_trigger": hot_stats.trigger,
+        "src_watchlist": hot_stats.watchlist,
+        "src_market": hot_stats.market,
         "pairs_scored": scored,
         "rows": len(rows),
         "styles": published,
@@ -791,6 +931,138 @@ def publish_leaderboards(redis: Any, rows: list[dict[str, Any]], now_utc: dateti
     return published
 
 
+# Sentinel: Redis itself failed, as opposed to "no key for that day". A
+# restart cannot otherwise tell a WIPED day from a first run (bug-hunter LOW
+# 2026-08-19) — and the whole point of this key is that there is no log to
+# cross-check against.
+_READ_FAILED = object()
+
+
+def _health_raw(redis: Any, day: str) -> Any:
+    """Raw payload · None if absent · `_READ_FAILED` if the read raised.
+    WARNING, not DEBUG: `live_worker.main` configures the root logger at
+    INFO, so a DEBUG line here is invisible exactly when it matters."""
+    try:
+        return redis.get(HEALTH_KEY.format(day=day))
+    except Exception:
+        log.warning(
+            "provisional: cycle-stats read failed — the day's counters restart "
+            "from zero",
+            exc_info=True,
+        )
+        return _READ_FAILED
+
+
+def read_cycle_stats(redis: Any, day: str) -> dict[str, Any] | None:
+    """The day's counters as already recorded, or None. The supervisor
+    restarts the worker mid-session (token expiry is a normal lifecycle
+    event), and a restart must not zero the day's record — the thread seeds
+    from this."""
+    raw = _health_raw(redis, day)
+    if raw is _READ_FAILED or not raw:
+        return None
+    try:
+        doc = json.loads(raw)
+    except ValueError:
+        log.warning("provisional: cycle-stats key unparseable; starting fresh")
+        return None
+    return doc if isinstance(doc, dict) else None
+
+
+def _seed_counters(redis: Any, day: str) -> tuple[int, int, int, float, float, int, bool]:
+    """Resume the day's counters: (cycles, overruns, clip_cycles, sum_ms,
+    max_ms, restarts, seed_failed).
+
+    Monitoring must NEVER stop the thread from starting. The key is a plain
+    JSON doc a debugging script can overwrite, so a non-numeric counter
+    would otherwise raise straight out of `run_provisional` — and it is a
+    non-joined daemon thread with no restart path, so the provisional layer
+    would go dark for the whole session with only a `threading.excepthook`
+    traceback on a terminal `make live-worker` does not tee (bug-hunter LOW
+    2026-08-19, reproduced)."""
+    raw = _health_raw(redis, day)
+    read_failed = raw is _READ_FAILED
+    prior: dict[str, Any] = {}
+    if not read_failed and raw:
+        try:
+            doc = json.loads(raw)
+        except ValueError:
+            log.warning("provisional: cycle-stats key unparseable; starting fresh")
+            doc = None
+        if isinstance(doc, dict):
+            prior = doc
+    try:
+        cycles = int(prior.get("cycles", 0))
+        overruns = int(prior.get("overruns", 0))
+        clip_cycles = int(prior.get("clip_cycles", 0))
+        # mean × n reconstructs the sum the previous run never stored
+        elapsed_sum_ms = float(prior.get("elapsed_mean_ms", 0.0)) * cycles
+        elapsed_max_ms = float(prior.get("elapsed_max_ms", 0.0))
+        restarts = int(prior.get("restarts", 0)) + (1 if prior else 0)
+    except (TypeError, ValueError):
+        log.warning(
+            "provisional: cycle-stats counters are non-numeric; starting fresh"
+        )
+        return 0, 0, 0, 0.0, 0.0, 0, True
+    return cycles, overruns, clip_cycles, elapsed_sum_ms, elapsed_max_ms, restarts, read_failed
+
+
+def publish_cycle_stats(
+    redis: Any,
+    *,
+    day: str,
+    now_utc: datetime,
+    cadence_s: float,
+    cycles: int,
+    overruns: int,
+    clip_cycles: int,
+    elapsed_ms: float,
+    elapsed_sum_ms: float,
+    elapsed_max_ms: float,
+    restarts: int,
+    seed_failed: bool,
+    stats: dict[str, Any],
+) -> None:
+    """Publish cycle health to `provisional:health:{day}` (TTL'd SET, never
+    a pub/sub — a monitor that misses the message must still be able to read
+    it). CUMULATIVE counters, because the question a log line cannot answer
+    is a RATE: what fraction of the day's cycles overran or clipped. A
+    MISSING key = the thread never cycled that day; a stale `as_of` = it
+    stopped. Failure here can never disturb a cycle."""
+    try:
+        payload = json.dumps(
+            {
+                "day": day,
+                "as_of": now_utc.isoformat(),
+                "restarts": restarts,
+                # true = this run could not seed the day's prior counters
+                # (Redis read failed OR the key held non-numeric counters),
+                # so everything below undercounts the day
+                "seed_failed": seed_failed,
+                "cadence_ms": round(cadence_s * 1000.0, 1),
+                "cycles": cycles,
+                "overruns": overruns,
+                "overrun_pct": round(100.0 * overruns / cycles, 1) if cycles else 0.0,
+                "clip_cycles": clip_cycles,
+                "clip_pct": round(100.0 * clip_cycles / cycles, 1) if cycles else 0.0,
+                "elapsed_ms": round(elapsed_ms, 1),
+                "elapsed_mean_ms": round(elapsed_sum_ms / cycles, 1) if cycles else 0.0,
+                "elapsed_max_ms": round(elapsed_max_ms, 1),
+                "last": stats,
+            },
+            separators=(",", ":"),
+        )
+        redis.set(
+            HEALTH_KEY.format(day=day),
+            payload,
+            ex=settings.live_provisional_health_ttl_s,
+        )
+    except Exception:
+        # WARNING, not DEBUG: a persistent SET failure makes the health
+        # report read "the worker did not run", which is a false conclusion.
+        log.warning("provisional: cycle-stats publish failed", exc_info=True)
+
+
 def run_provisional(book: Any, stop: threading.Event) -> None:
     """Provisional refresher thread: own event loop + own engine + own
     redis client (the run_refresher pattern — pooled connections never
@@ -808,7 +1080,22 @@ def run_provisional(book: Any, stop: threading.Event) -> None:
             return await run_cycle(db, redis, book, datetime.now(tz=UTC))
 
     cadence = float(settings.live_provisional_refresh_s)
-    cycles = 0
+    # One process = one session day (`_run_until_done` bounds it), so the day
+    # is resolved once; a restart resumes the SAME key's counters.
+    day = datetime.now(tz=UTC).astimezone(_IST).date().isoformat()
+    (
+        cycles,
+        overruns,
+        clip_cycles,
+        elapsed_sum_ms,
+        elapsed_max_ms,
+        restarts,
+        seed_failed,
+    ) = _seed_counters(redis, day)
+    # `cycles` is CUMULATIVE across restarts, so it cannot throttle this
+    # process's own log line — after a restart seeded at 4000 the first
+    # liveness line would wait up to 30 cycles (bug-hunter LOW 2026-08-19).
+    ran = 0
     delay = cadence
     try:
         # `delay` = cadence minus the last cycle's duration, so the target
@@ -828,6 +1115,29 @@ def run_provisional(book: Any, stop: threading.Event) -> None:
             elapsed_s = time_mod.monotonic() - started
             delay = max(0.0, cadence - elapsed_s)
             cycles += 1
+            ran += 1
+            elapsed_ms = elapsed_s * 1000.0
+            elapsed_sum_ms += elapsed_ms
+            elapsed_max_ms = max(elapsed_max_ms, elapsed_ms)
+            if elapsed_s > cadence:
+                overruns += 1
+            if stats.get("clipped"):
+                clip_cycles += 1
+            publish_cycle_stats(
+                redis,
+                day=day,
+                now_utc=datetime.now(tz=UTC),
+                cadence_s=cadence,
+                cycles=cycles,
+                overruns=overruns,
+                clip_cycles=clip_cycles,
+                elapsed_ms=elapsed_ms,
+                elapsed_sum_ms=elapsed_sum_ms,
+                elapsed_max_ms=elapsed_max_ms,
+                restarts=restarts,
+                seed_failed=seed_failed,
+                stats=stats,
+            )
             if elapsed_s > cadence:
                 log.warning(
                     "provisional: cycle overran the cadence: %.0f ms > %.0f ms (%s)",
@@ -835,7 +1145,7 @@ def run_provisional(book: Any, stop: threading.Event) -> None:
                     cadence * 1000.0,
                     stats,
                 )
-            elif cycles % 30 == 1:
+            elif ran % 30 == 1:
                 log.info("provisional: cycle %.0f ms %s", elapsed_s * 1000.0, stats)
     finally:
         loop_holder.run_until_complete(engine.dispose())

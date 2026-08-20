@@ -58,8 +58,27 @@ class Settings(BaseSettings):
     live_provisional_refresh_s: float = 3.0  # cycle-START cadence (pinned 1–5 s)
     live_provisional_hotset_max: int = 150   # hot-set cap; clipping is logged
     live_provisional_trigger_window_s: int = 900  # "near-trigger" recency window
+    # Market-level alerts (vburst / PDH / PDL / S&R — stamped style="market")
+    # are BREADTH breadcrumbs, not near-trigger: measured 2026-08-18 they
+    # carried 1271 distinct stocks inside one 15-min window and flooded the
+    # 150 hot-set cap, so the cap was spent on the lowest stock_ids and
+    # watchlist stocks were never scored at all. 0 = signal-bound triggers
+    # only; >0 admits that many market-level stocks newest-first, deduped
+    # against everything already hot and ranked BELOW the watchlist so the
+    # dial can never starve it. NOTE at 0 the third hot-set source adds
+    # ~nothing new (measured 2026-08-19: 38 of 45 signal-bound alert stocks
+    # already carried an active signal), so ~1569 breadth-movers are
+    # unscoreable and ~37 of 150 slots sit idle — a discovery/cost
+    # trade-off, not an oversight (quant-verifier MEDIUM 2026-08-19).
+    live_provisional_trigger_market_max: int = 0
     live_provisional_top_n: int = 20         # rows per style leaderboard
     live_provisional_key_ttl_s: int = 60     # leaderboard SET key TTL
+    # Cycle-health key TTL. One key PER SESSION DAY, kept a week: the
+    # thread's log is otherwise the only record of cadence/clip health, and
+    # `make live-worker` writes no log file at all (only `make soak` tees
+    # one), so a day's evidence used to vanish with the terminal. A week
+    # spans "monitor it for a few days" without any scheduler running.
+    live_provisional_health_ttl_s: int = 604_800
 
     # ── Signal-outcome recorder (Phase 3, slice 3.6) ─────────────────────
     # Durable alerts-stream consumer persisting first entry/SL/TP touches
