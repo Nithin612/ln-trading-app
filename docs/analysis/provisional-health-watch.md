@@ -76,11 +76,12 @@ Baseline to compare against (pre-fix, 2026-08-18): `hot_raw` ~466 clipped to
 | Session day | cycles | overrun% | clip% | mean ms | max ms | hot_raw / clipped | src sig/trig/wl/mkt | Notes |
 |---|---|---|---|---|---|---|---|---|
 | 2026-08-18 (pre-fix) | — | ~100 | ~100 | 3100–4200 | 5047¹ | 466 / 316 | 117/~33/0/n-a | Baseline, from terminal logs only |
+| **2026-08-20 (FIX LIVE, day 1)** | **624** | **9.6** | **0.0** | **2075** | **6339** | **106 / 0** | **103/18/3/0** | **First live session on the merged fix (`c1b4752`). CLIP RESOLVED — cap no longer binds; watchlist scored (wl=3); breadth excluded (mkt=0/597 admitted, ~30 idle slots). Worker stopped ~13:11 for the phase gate, restarted 14:20, clean session-over shutdown 15:40.** |
 | _(fill in)_ | | | | | | | | |
 
 ¹ Not a real p99 — see the trap below.
 
-**Verdict after ≥3 session days:** _(pending)_
+**Verdict after ≥3 session days:** _(1/3 recorded — day 1 clean: clip 0%, overrun 9.6% self-throttling)_
 
 ---
 
@@ -89,6 +90,10 @@ Baseline to compare against (pre-fix, 2026-08-18): `hot_raw` ~466 clipped to
 1. **Cadence (option 2).** Raise `live_provisional_refresh_s` 3.0 → 5.0?
    Decide from `overrun%`, not from the single-day snapshot. **User asked to be
    TOLD whether it is required — do not change it unilaterally.**
+   → **Day-1 evidence (2026-08-20): NOT required.** overrun=9.6% (well under the
+   20% "Option 2 warranted" threshold) and mean cycle 2075 ms < 3000 ms cadence;
+   the health script's own verdict was "OPTION 2 OPTIONAL". Keep accruing to ≥3
+   days before calling it final, but on day 1 no cadence change is needed.
 2. **Breadth discovery tier.** `live_provisional_trigger_market_max` is **0**,
    so the third hot-set source now adds almost nothing: measured 2026-08-19,
    **38 of 45** signal-bound alert stocks already carried an active signal, so
