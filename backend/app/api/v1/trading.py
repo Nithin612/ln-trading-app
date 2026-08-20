@@ -9,6 +9,7 @@ GET  /trading/daily-pnl            — today's P&L + circuit breaker status
 GET  /trading/shadow-compare       — profit-lock shadow comparator (read-only)
 """
 
+import logging
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated
@@ -16,6 +17,7 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.broker.circuit_bands import get_circuit_band
@@ -47,9 +49,10 @@ from app.schemas.trading import (
     TradeHistoryResponse,
     UpdateSlRequest,
 )
+from app.services.benchmark import load_rs_context
 from app.services.journal_service import auto_create_journal_entry
 from app.services.profit_lock_shadow import compare_position
-from app.signals import circuit_guard, entry_quality, regime_guard
+from app.signals import circuit_guard, entry_quality, regime_guard, sector_rs
 from app.trading.atr import atr_timeframe_for, latest_atr
 from app.trading.circuit_breaker import (
     check_circuit_breaker,
@@ -60,6 +63,8 @@ from app.trading.position_health import PositionHealth, assess_position_health
 from app.trading.regime import er_by_stock
 
 router = APIRouter(prefix="/trading", tags=["trading"])
+
+log = logging.getLogger(__name__)
 
 _IST = ZoneInfo("Asia/Kolkata")
 
@@ -119,9 +124,13 @@ async def _validity_by_signal(
 
 async def _apply_eligibility_overlays(
     db: AsyncSession, signal: Signal, side: str
-) -> tuple[circuit_guard.CircuitVerdict | None, entry_quality.EntryQualityVerdict | None]:
-    """Run the regime · circuit-band · entry-quality overlays on a committed signal.
-    Raises 409 if any ACTIVE gate rejects; returns (circuit_verdict, eq_verdict) to
+) -> tuple[
+    circuit_guard.CircuitVerdict | None,
+    entry_quality.EntryQualityVerdict | None,
+    sector_rs.RelativeStrengthVerdict | None,
+]:
+    """Run the regime · circuit-band · entry-quality · sector-RS overlays on a committed
+    signal. Raises 409 if any ACTIVE gate rejects; returns (circuit, eq, rs) verdicts to
     stamp on the order (None when that gate is off). All fail-open, frozen engine
     untouched — the downstream-overlay pattern."""
     # Regime-eligibility overlay (no-op unless regime_gate_mode == "active").
@@ -171,7 +180,43 @@ async def _apply_eligibility_overlays(
         if eq_reason:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=eq_reason)
 
-    return circuit_verdict, eq_verdict
+    # Sector/index relative-strength overlay (MCE slice 2). `off` = a TRUE no-op (no DB
+    # query, no stamp). Benchmark closes are aligned to the stock's own sessions by the
+    # provider, so the pure overlay cannot look ahead; a missing benchmark fails open.
+    rs_verdict = None
+    if settings.sector_rs_gate_mode != "off":
+        # Fail open on ANY DB fault (unmigrated table, JOIN timeout, transient): a
+        # benchmark lookup must never suppress a trade, and shadow is behaviour-neutral.
+        # The read runs in a SAVEPOINT so a failure rolls back only the nested block and
+        # leaves the session usable for place_paper_order below (cf. get_circuit_band's
+        # except→None fail-open).
+        ctx = None
+        try:
+            async with db.begin_nested():
+                ctx = await load_rs_context(
+                    db,
+                    signal.stock_id,
+                    lookback=settings.sector_rs_lookback,
+                    as_of=signal.created_at,
+                )
+        except SQLAlchemyError:
+            log.exception(
+                "sector-RS context load failed; failing open for stock_id=%s", signal.stock_id
+            )
+            ctx = None
+        rs_verdict = sector_rs.evaluate(
+            stock_closes=ctx.stock_closes if ctx else [],
+            benchmark_closes=ctx.benchmark_closes if ctx else None,
+            side=side,
+            lookback=settings.sector_rs_lookback,
+            min_excess_pct=Decimal(str(settings.sector_rs_min_excess_pct)),
+            benchmark_label=ctx.benchmark_symbol if ctx else None,
+        )
+        rs_reason = sector_rs.order_block_reason(rs_verdict, settings.sector_rs_gate_mode)
+        if rs_reason:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=rs_reason)
+
+    return circuit_verdict, eq_verdict, rs_verdict
 
 
 @router.post("/orders", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
@@ -199,7 +244,9 @@ async def place_order(
 
     # Eligibility overlays (regime · circuit-band · entry-quality) — each a no-op
     # unless its mode is active; returns verdicts to stamp for the shadow reports.
-    circuit_verdict, eq_verdict = await _apply_eligibility_overlays(db, signal, req.side)
+    circuit_verdict, eq_verdict, rs_verdict = await _apply_eligibility_overlays(
+        db, signal, req.side
+    )
 
     try:
         order, _pos = await place_paper_order(
@@ -217,6 +264,8 @@ async def place_order(
         stamps["circuit_gate"] = circuit_verdict.as_payload()
     if eq_verdict is not None:
         stamps["entry_quality"] = eq_verdict.as_payload()
+    if rs_verdict is not None:
+        stamps["sector_rs"] = rs_verdict.as_payload()
     if stamps:
         order.broker_payload = {**(order.broker_payload or {}), **stamps}
     await db.commit()

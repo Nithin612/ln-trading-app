@@ -338,18 +338,13 @@ which is what Phase-6 expectancy calibration is for.
 2. **Red baseline — RESOLVED** (`e32fd48`), re-verified 2026-08-20: order-path set = **138 passed,
    exit 0**.
 
-**▶ MCE STARTED 2026-08-20 — slice 1 (RS overlay module) built, shadow-first & UNWIRED (no money-path
-change).** `app/signals/sector_rs.py` (pure, moded off/shadow/active default **off**, fail-open; reuses
-`eval_relative_strength`'s definition) + `tests/test_sector_rs.py` (16, ruff/mypy clean,
-quant-verifier PASS-WITH-NOTES — 2 MEDIUM actioned in-slice: gap/None fails open, caller
-alignment contract documented for the wiring slice). **Benchmark source DECIDED 2026-08-20 = Option
-B: ingest real index OHLC from Kite** (`NSE:NIFTY 50` / `NSE:NIFTY BANK` / `NSE:NIFTY FIN SERVICE` +
-sector indices via the shared throttled Kite client) — the honest top-down series, strictly better
-than a synthesized constituent basket. (There is no index price series in the DB today, only the
-membership flags, and the RS benchmark input is unwired everywhere — that is why the ingestion is
-slice 2.) **Slice 2** = index-instrument EOD ingestion → a benchmark provider → order-path SHADOW
-wiring + `settings.sector_rs_gate_mode`; **slice 3** = the shadow sidecar + the daily-report context
-section. Full sliced plan in
+**▶ MCE IN PROGRESS — slices 1 + 2 built 2026-08-20** (details + NEXT in the CONTINUE HERE block
+below). Slice 1 = `app/signals/sector_rs.py` (pure RS overlay); slice 2 = index price store
+(`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) + benchmark provider + order-path wiring, mode `off`.
+**Benchmark source = Option B (real index OHLC), realized via the NSE indices bhavcopy CSV that
+`vix_service` already downloads — NO Kite dependency** (that one CSV carries every NSE index;
+tokenless + testable + self-healing via the EOD catch-up). Both slices agent-reviewed (quant-verifier
+PASS-WITH-NOTES + bug-hunter, findings actioned). Full sliced plan in
 [`phases/phase-MCE-market-context-engine.md`](phases/phase-MCE-market-context-engine.md)
 ("Sliced plan (started 2026-08-20)").
 
@@ -367,11 +362,16 @@ that continue POST-close (none a code task, none blocking — carried in the pha
 3. **Pair-trading (6.5)** — the nightly minter + outcome tracker run themselves;
    `pair-attribution-<date>.md` answers df-vs-adf once evidence accrues; tune knobs from THAT.
 
-**▶ NEXT BUILD = the Market Context Engine (MCE).** Slice 1 (`sector_rs.py`, off/unwired) is on `main`;
-**slice 2 = index-OHLC ingestion from Kite (Option B, decided 2026-08-20)** → benchmark provider →
-shadow-wire `sector_rs`; then slice 3 = shadow sidecar + daily-report context section. Also open (any
-time, non-blocking): paper day-1 for the 6.8 execution-realism stack (deferred until the user says
-"proceed" — the merge did NOT start the clock), and the gated 6.8 research track (R1/R2/F1).
+**▶ MCE IN PROGRESS — slices 1 + 2 DONE 2026-08-20.** Slice 1 = `sector_rs.py` (pure overlay);
+**slice 2 DONE = index price store (`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) fed from the NSE
+indices bhavcopy CSV (Option B, no Kite dependency) + benchmark provider + order-path wiring, mode
+`off`** (wired-but-dormant, no money-path change; quant-verifier PASS-WITH-NOTES + bug-hunter 1 MED +
+1 LOW fixed; 16 tests). **⚠ NOT yet committed/pushed at this line's writing — see the commit + your
+push.** **▶ NEXT = MCE slice 3** = the shadow sidecar (`sector-rs-shadow-<date>.md` + flip-readiness
+banner, mirroring `regime_gate_shadow`) + the daily-report context section (the §69 REQUIREMENT), then
+flip `off`→`shadow` to start accruing forward evidence (a shadow→active flip later needs the R-track
+ceremony). Also open (any time, non-blocking): paper day-1 for the 6.8 stack (deferred until the user
+says "proceed" — no clock started), and the gated 6.8 research track (R1/R2/F1).
 
 **Next BUILD phase = Phase 6.8 (Execution Realism & Exchange-Safety)** — APPROVED 2026-08-17 (user),
 inserted between Phase 6 and the **Market Context Engine** (which stays the phase after 6.8, before

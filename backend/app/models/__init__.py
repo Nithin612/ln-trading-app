@@ -16,7 +16,7 @@ from app.models.market_data import (
 from app.models.pair import PairSignal
 from app.models.profile import StrategyProfile
 from app.models.signal import Signal, SignalOutcome, SrLevel
-from app.models.stock import Index, IndexConstituent, SavedScreen, Stock
+from app.models.stock import Index, IndexConstituent, IndexOhlcvDaily, SavedScreen, Stock
 from app.models.strategy import StrategyRun
 from app.models.trading import Order, Position
 from app.models.user import User, UserSession
@@ -30,6 +30,7 @@ __all__ = [
     "Stock",
     "Index",
     "IndexConstituent",
+    "IndexOhlcvDaily",
     "SavedScreen",
     "Category",
     "StockCategory",

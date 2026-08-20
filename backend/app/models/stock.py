@@ -120,6 +120,34 @@ class IndexConstituent(Base):
         return f"<IndexConstituent index_id={self.index_id} stock_id={self.stock_id}>"
 
 
+class IndexOhlcvDaily(Base):
+    """Daily EOD OHLC for a market/sector index (MCE slice 2).
+
+    The missing keystone for relative-strength context: the tradeable engine had no
+    index price series (`indices` held only the registry + membership). Fed from the
+    NSE indices bhavcopy CSV (the same `ind_close_all_*.csv` the India-VIX recorder
+    already downloads — every NSE index sits in that one file), so no Kite dependency.
+    Keyed on the existing `indices` registry; a plain table (a handful of indices ×
+    daily bars), mirroring `india_vix_daily`."""
+
+    __tablename__ = "index_ohlcv_1d"
+
+    index_id: Mapped[int] = mapped_column(
+        BigInteger,
+        ForeignKey("indices.id", ondelete="CASCADE"),
+        primary_key=True,
+        nullable=False,
+    )
+    trade_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    open: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    high: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    low: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    close: Mapped[Decimal] = mapped_column(Numeric(12, 4), nullable=False)
+
+    def __repr__(self) -> str:
+        return f"<IndexOhlcvDaily index_id={self.index_id} {self.trade_date} close={self.close}>"
+
+
 class SavedScreen(Base):
     __tablename__ = "saved_screens"
 

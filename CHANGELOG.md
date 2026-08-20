@@ -7,6 +7,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(MCE slice 2): index price store + benchmark provider + sector-RS wiring (2026-08-20)
+
+The keystone the relative-strength overlay needed — a real index price series — plus the wiring
+that puts `sector_rs` on the paper order path (mode `off` by default, so no behaviour change yet).
+
+- **Data (Option B, no Kite dependency):** index EOD OHLC comes from the NSE indices bhavcopy CSV
+  that `vix_service` already downloads (every NSE index is in that one file). New `index_ohlcv_1d`
+  table (migration `b8c9d0e1f2a3`, reversible) FK'd to the existing `indices` registry, so indices
+  stay OUT of the tradeable stock universe. `app/services/index_ohlcv_service.py` parses the CSV
+  (keyed on the registry, idempotent upsert) and is wired into the EOD catch-up (`catchup_fo_eod`),
+  so it self-heals ≤21d like the other feeds.
+- **Provider:** `app/services/benchmark.py` maps a stock to its most specific benchmark index
+  (Bank-Nifty ⊃ Fin-Nifty ⊃ NIFTY 50 via membership flags) and returns the stock's and that index's
+  daily closes **aligned on common trading days**, anchored to the signal's decision time — closing
+  the slice-1 alignment note, no look-ahead.
+- **Wiring:** `sector_rs` runs in `_apply_eligibility_overlays` and stamps a verdict on the order;
+  `settings.sector_rs_gate_mode` (off/shadow/active, **default off**), `sector_rs_lookback` (20),
+  `sector_rs_min_excess_pct` (0.0). The benchmark read runs in a `begin_nested` savepoint and fails
+  OPEN on any DB fault — a benchmark lookup can never suppress a trade.
+- `16 tests` (CSV parse · idempotent ingest · provider mapping/alignment/gap-drop/as-of · wiring
+  off/shadow/active-block/active-allow/fail-open-no-data/fail-open-on-DB-error), ruff/mypy clean.
+  **quant-verifier PASS-WITH-NOTES** (look-ahead truly prevented) + **bug-hunter** 1 MEDIUM
+  (fail-open on exception) + 1 LOW (docstring), both fixed. Per-sector index mapping deferred; slice
+  3 = the shadow sidecar + daily-report context section.
+
 ### milestone: Phase 6 + Phase 6.8 GATED + CLOSED (2026-08-20)
 
 Both phases passed `/phase-gate` and are on `main` (pushed). One full `make check` on the merged tree

@@ -29,6 +29,7 @@ from app.services.bhavcopy_service import ingest_bhavcopy_date
 from app.services.ca_detector import scan_for_discontinuities
 from app.services.fo_bhavcopy_service import ingest_fo_bhavcopy_date
 from app.services.market_calendar import trading_days_between
+from app.services.index_ohlcv_service import ingest_index_ohlcv_date
 from app.services.vix_service import ingest_vix_date
 
 log = logging.getLogger(__name__)
@@ -51,6 +52,9 @@ _PRESENT_DATES_SQL = {
     "fo_bhavcopy": ("SELECT DISTINCT trade_date FROM fo_bhavcopy WHERE trade_date >= :start"),
     "india_vix_daily": (
         "SELECT DISTINCT trade_date FROM india_vix_daily WHERE trade_date >= :start"
+    ),
+    "index_ohlcv_1d": (
+        "SELECT DISTINCT trade_date FROM index_ohlcv_1d WHERE trade_date >= :start"
     ),
     "fii_dii_daily": ("SELECT DISTINCT trade_date FROM fii_dii_daily WHERE trade_date >= :start"),
 }
@@ -139,11 +143,12 @@ async def catchup_equities_eod(
 async def catchup_fo_eod(
     db: AsyncSession, today: date, lookback_days: int = LOOKBACK_DAYS
 ) -> dict[str, object]:
-    """Heal fo_bhavcopy and india_vix_daily independently up to `today`."""
+    """Heal fo_bhavcopy, india_vix_daily and index_ohlcv_1d independently up to `today`."""
     payload: dict[str, object] = {}
     for table, ingest_one in (
         ("fo_bhavcopy", ingest_fo_bhavcopy_date),
         ("india_vix_daily", ingest_vix_date),
+        ("index_ohlcv_1d", ingest_index_ohlcv_date),
     ):
         sessions = await missing_sessions(db, table, today, lookback_days)
         ingested: list[str] = []

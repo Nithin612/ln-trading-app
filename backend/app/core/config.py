@@ -232,6 +232,29 @@ class Settings(BaseSettings):
     # gate fails open (by design). Bands are intraday-static, so this is generous.
     circuit_band_ttl_s: int = 1800
 
+    # ── Sector/index relative-strength overlay (MCE slice 2, app/signals/sector_rs.py) ──
+    # The top-down context the confluence engine lacks: a long is out of context when
+    # the stock is UNDER-performing its benchmark index over `sector_rs_lookback`
+    # sessions (a short is the mirror). Benchmark = the most specific membership index
+    # (Bank-Nifty ⊃ Fin-Nifty ⊃ NIFTY 50), closes from index_ohlcv_1d via
+    # app/services/benchmark.py; the order path only READS them. Frozen engine untouched
+    # (a downstream overlay, cf. regime_gate_mode). Reuses eval_relative_strength's
+    # definition (excess = stock_ret − bench_ret).
+    #   off    — TRUE no-op: no query, no stamp (default; slice 2 ships wired-but-dormant
+    #            until index_ohlcv_1d has backfilled and the slice-3 shadow sidecar reads
+    #            the stamps).
+    #   shadow — measure + stamp the verdict; the order path never acts on it.
+    #   active — reject an ineligible signal. Behaviour-changing → forward shadow evidence
+    #            + §8-on-≥2y + explicit sign-off first. Fully reversible.
+    # FAIL-OPEN: no benchmark data / too-short history never blocks a signal.
+    sector_rs_gate_mode: Literal["off", "shadow", "active"] = "off"
+    # Lookback in trading sessions for the excess-return comparison (matches
+    # eval_relative_strength's default).
+    sector_rs_lookback: int = 20
+    # A long passes when excess ≥ this %, a short when excess ≤ −this %. 0.0 = block a
+    # long only on strict under-performance (a short only on strict out-performance).
+    sector_rs_min_excess_pct: float = 0.0
+
     # ── Profit-lock: absolute-rupee ladder (app/trading/profit_lock.py) ─────
     # When a user opts in (users.profit_lock_enabled), the position monitor
     # governs open PAPER exits with a rupee-denominated profit ladder — the

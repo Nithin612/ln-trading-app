@@ -1,8 +1,11 @@
 # Market Context Engine (MCE) — design capture
 
-**Status: IN PROGRESS — slice 1 (RS overlay module) built 2026-08-20, shadow-first &
-UNWIRED (mode `off`, no money-path change).** The named phase **after Phase 6.8, before
-Phase-7 (live)**. This doc captures the *entry-context* design agreed 2026-08-18 (the SRTL /
+**Status: IN PROGRESS — slices 1 + 2 built 2026-08-20.** Slice 1 = the pure RS overlay
+(`sector_rs.py`); slice 2 = index price store (`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) +
+benchmark provider + order-path wiring, **mode `off` (wired-but-dormant, no money-path change
+until flipped)**. Both agent-reviewed (quant-verifier + bug-hunter, findings actioned). NEXT =
+slice 3 (shadow sidecar + daily-report context section) — then a shadow→active flip needs the
+R-track ceremony. The named phase **after Phase 6.8, before Phase-7 (live)**. This doc captures the *entry-context* design agreed 2026-08-18 (the SRTL /
 entry-selection discussion). Full prior context: the `market_context_engine_deferred` memory
 + `docs/Market_Context_Engine_Spec.docx` (spec on disk). **The sliced plan is now at the
 bottom of this doc ("Sliced plan (started 2026-08-20)"), including one OPEN decision the
@@ -120,11 +123,25 @@ Slice 2 is now unblocked.
   gap/None element now fails open (was: would raise), and the caller alignment contract
   (session-aligned, completed candle N, no look-ahead) is documented for slice 2 to enforce;
   SELL-boundary + `bench_then==0` tests added.
-- **Slice 2 — benchmark builder + cache (BLOCKED on the source decision).** Once A/B is
-  chosen: a benchmark-series provider (a market-hours/nightly Celery task → Redis cache, the
-  `circuit_bands` shape, so the order path READS a cache and never runs a cross-sectional
-  query synchronously). Then wire `sector_rs` into the order path in **shadow** mode + add
-  `settings.sector_rs_gate_mode`. bug-hunter review here (this is the money-path touch).
+- **Slice 2 — index price store + benchmark provider + order-path wiring. DONE 2026-08-20.**
+  Source = **Option B** (the NSE indices bhavcopy CSV `vix_service` already downloads — every
+  NSE index sits in that one file, so **no Kite token/historical API**; tokenless + testable +
+  self-healing via the EOD catch-up). Built: `index_ohlcv_1d` table (migration `b8c9d0e1f2a3`,
+  reversible; FK'd to the existing `indices` registry — indices stay OUT of the tradeable
+  universe) · `app/services/index_ohlcv_service.py` (CSV parse keyed on the registry + idempotent
+  upsert, wired into `eod_catchup.catchup_fo_eod`) · `app/services/benchmark.py` (membership
+  mapping Bank ⊃ Fin ⊃ NIFTY 50 + **date-aligned** stock/benchmark closes, anchored to
+  `signal.created_at` — no look-ahead) · `sector_rs` wired into the paper order path
+  (`settings.sector_rs_gate_mode`, **default `off`** — wired-but-dormant until data backfills +
+  the slice-3 sidecar reads the stamps; fail-OPEN in a savepoint so a DB fault never suppresses).
+  16 tests. **quant-verifier PASS-WITH-NOTES** (look-ahead/alignment truly prevented — closes the
+  slice-1 #4 note; anchored to commit time in-slice). **bug-hunter BUGS-FOUND** → 1 MEDIUM
+  (RS path wasn't fail-open on a DB exception — fixed with a `begin_nested` savepoint + regression
+  test) + 1 LOW (docstring over-promised catch-up backfill for a newly-added index — corrected).
+  NOTE: the query runs synchronously on the order path (2 indexed reads/order — fine at
+  order frequency, unlike the tick path); a Redis-cache front (the `circuit_bands` shape) is a
+  possible optimization only if order volume ever makes it matter. Per-sector index mapping
+  (NIFTY IT/AUTO/…) deferred — data can accrue by adding registry rows.
 - **Slice 3 — shadow sidecar + daily-report section.** `sector-rs-shadow-<date>.md` + a
   flip-readiness banner, mirroring `regime_gate_shadow` / `entry_quality_shadow`, and the §69
   REQUIREMENT: `daily_report.py` must SHOW each entry's sector/index RS. Accrues forward

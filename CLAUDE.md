@@ -82,16 +82,17 @@ else.
   flip-readiness banner. The *context* complement — sector/index relative-strength +
   fundamentals + news as GATES/MODIFIERS (never additive) — is the **MCE**
   (`docs/phases/phase-MCE-market-context-engine.md`), the phase after 6.8.
-- **MCE is now STARTED (slice 1, 2026-08-20).** `app/signals/sector_rs.py` — the
-  sector/index relative-strength overlay (pure, moded off/shadow/active default **off**,
-  fail-open, reuses `eval_relative_strength`'s definition), built shadow-first and
-  **UNWIRED** (no order-path call, no config key) so it changes nothing yet. **Premise
-  correction verified against the live DB:** there is NO index price series (only the
-  `is_nifty50/banknifty/finnifty` membership flags) and the RS benchmark input is unwired
-  everywhere — so the benchmark must be BUILT. Slice 2 is **BLOCKED on one decision: the
-  benchmark source** — synthesize an equal-weight basket from constituents vs ingest real
-  Kite index OHLC (**decided 2026-08-20: ingest real Kite index OHLC — Option B**). Sliced
-  plan + fork in the phase-MCE doc.
+- **MCE is IN PROGRESS — slices 1 + 2 built 2026-08-20 (mode `off`, no money-path change yet).**
+  Slice 1 = `app/signals/sector_rs.py` (pure RS overlay). Slice 2 = the index price store
+  (`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) + `app/services/benchmark.py` (membership mapping
+  Bank⊃Fin⊃NIFTY50 + date-aligned closes anchored to `signal.created_at`) + `sector_rs` wired into
+  the paper order path (`settings.sector_rs_gate_mode`, default `off`; fail-open in a savepoint).
+  **Benchmark source = Option B (real index OHLC), realized via the NSE indices bhavcopy CSV that
+  `vix_service` already downloads — NO Kite dependency** (that CSV has every NSE index); ingestion
+  self-heals through the EOD catch-up. Indices live in the existing `indices` registry (NOT the
+  tradeable stock universe). quant-verifier PASS-WITH-NOTES + bug-hunter (1 MED fail-open + 1 LOW,
+  fixed). **NEXT = slice 3** (shadow sidecar `sector-rs-shadow-<date>.md` + daily-report context
+  section), then flip `off`→`shadow`. Sliced plan in the phase-MCE doc.
 - **The provisional breadth-flood fix is MERGED on the Phase-6 branch (`c1b4752`,
   cherry-picked 2026-08-20 — the source branch had diverged so `--ff-only` was impossible).**
   `live-worker`'s hot set no longer floods with breadth alerts (near-trigger = signal-bound
