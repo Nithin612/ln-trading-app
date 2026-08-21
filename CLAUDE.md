@@ -92,9 +92,14 @@ else.
   ohlcv_1d (real data now, no backfill). All order-path overlays fail-open in a `begin_nested`
   savepoint; the verdict stamps live in an `_overlay_stamps` helper. **Index source = Option B (real
   index OHLC via the NSE indices CSV `vix_service` already downloads — NO Kite dep.)** quant-verifier
-  PASS ×5 + bug-hunter ×3 (findings fixed). ⚠ **5a's early forward evidence is AGAINST "illiquid =
-  worse"** (illiquid set net-positive vs liquid net-negative over the cohort) — flip-bar correctly
-  NOT READY; do not flip on the SRTL anecdote. **NEXT = run the deep backfill**
+  PASS ×5 + bug-hunter ×3 (findings fixed). ⚠ **5a DEEP-DIVE (2026-08-21) verdict: DON'T flip the
+  liquidity gate active.** Illiquid set net-*positive*, liquid net-*negative*, robust across floors +
+  median + win-rate; and **SRTL is the sole illiquid+diversity-flagged trade — the ACTIVE diversity
+  gate already catches it**, so liquidity is redundant for that archetype AND would cut a net-winning
+  set. **DECISION (user): keep 5a shadow; reframe liquidity later as a position-sizing / slippage
+  MODIFIER (execution-realism), not an entry P&L gate.** The finding also QUESTIONS 5b (a market-cap
+  *size* floor may be no better — cross-tab a cheap proxy before paying the XBRL-scraper cost).
+  **NEXT = run the deep backfill**
   (`scripts/backfill_indices.py 2023-07-01 <today>`) so the 200-DMA + sector-RS get history; then
   **slice 5b = the XBRL market_cap writer** (greenfield scraper) + a market-cap floor on the junk gate;
   slice 6 = news veto. Shadow→active flips need the R-track (§8-on-≥2y + sign-off). Plan in the phase-MCE doc.

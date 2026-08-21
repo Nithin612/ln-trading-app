@@ -374,9 +374,13 @@ to exit: median daily traded value ₹=close×volume < floor, side-independent) 
 (₹1cr/day floor). All order-path overlays fail-open in a savepoint; the 5 verdict stamps live in an
 `_overlay_stamps` helper. Reviews across the slices: quant-verifier PASS ×5 + bug-hunter ×3 (all
 findings fixed w/ regression tests). 18 slice-5a tests; order-path regression green (188).
-**⚠ 5a forward-evidence finding** (2026-08-19 cohort smoke): illiquid set net **+₹119 avg** (14
-resolved) vs liquid **−₹71 avg** (55 resolved) — the tape so far *contradicts* "illiquid = worse", flip-bar
-correctly NOT READY; do NOT flip on the SRTL anecdote, and revisit the ₹1cr / per-class floor.
+**⚠ 5a DEEP-DIVE VERDICT (2026-08-21): DON'T flip the liquidity gate; reframe it as a sizing/slippage
+MODIFIER later (user decision).** Illiquid set net-positive vs liquid net-negative, robust across floors
+₹50L→₹5cr + median + win-rate; and **SRTL is the ONLY illiquid+diversity-flagged trade — the ACTIVE
+diversity gate already catches it**, so liquidity is redundant for the SRTL archetype AND would cut a
+net-winning set. Realized P&L over a benign sample can't measure liquidity's real value (tail/exitability
+risk), so it belongs as an execution-realism modifier, not an entry P&L gate. Keeps shadow (measuring).
+This also QUESTIONS 5b (a market-cap size floor may be no better — cross-tab a proxy before the XBRL build).
 **▶ NEXT = run the deep index backfill, then let evidence accrue.** BOTH the sector-RS (needs ~21
 sessions) and the market-regime 200-DMA (needs ~200 sessions + ~2y for §8) are INERT until index
 history is deep enough. The EOD catch-up only heals ≤21d — so run
@@ -384,10 +388,12 @@ history is deep enough. The EOD catch-up only heals ≤21d — so run
 (idempotent, resumable, ~2y of NSE index+VIX). The nightly `make worker` keeps it current after. Then
 the sidecars' would-block/eligible buckets populate; a shadow→active flip on any gate needs the R-track
 (§8-on-≥2y + sign-off; reversible via the `*_gate_mode` setting).
-**Slice 5b + 6 (decided, not built):** **slice 5b = XBRL `market_cap` writer** — a greenfield NSE/BSE
-scraper (no XBRL/shares-outstanding code exists; `filings_consumer` polls only announcement JSON),
-populates `market_cap_cr` (0/2365) → then a market-cap floor joins the liquidity gate; **slice 6 = news
-veto** (extend `event_guard`). Also open (non-blocking): paper day-1 for the 6.8 stack (deferred until
+**Slice 5b + 6 (not built):** **slice 5b = XBRL `market_cap` writer** — a greenfield NSE/BSE scraper
+(no XBRL/shares-outstanding code exists; `filings_consumer` polls only announcement JSON), populates
+`market_cap_cr` (0/2365). **⚠ QUESTIONED by the 5a finding** — a market-cap *size* floor may gate no
+better than liquidity; cross-tab a cheap proxy before paying the scraper cost (XBRL may still proceed
+for quality-scores value, but not as a junk gate on current evidence). **Slice 6 = news veto** (extend
+`event_guard`). Also open (non-blocking): paper day-1 for the 6.8 stack (deferred until
 the user says "proceed" — no clock started), and the gated 6.8 research track (R1/R2/F1).
 
 **Next BUILD phase = Phase 6.8 (Execution Realism & Exchange-Safety)** — APPROVED 2026-08-17 (user),

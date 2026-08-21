@@ -200,16 +200,29 @@ Slice 2 is now unblocked.
     across classifications — make it per-class before flipping active; a `dataclasses.replace` cleanup
     actioned). bug-hunter CLEAN (three-savepoint interplay reproduced sound with real PG errors; the
     `_overlay_stamps` refactor behaviour-identical). **Works on REAL data now** (ohlcv_1d, no backfill).
-    **⚠ FORWARD-EVIDENCE FINDING (2026-08-19 smoke, 414-signal cohort):** illiquid set (131 sigs, 14
-    resolved) is net **+₹1,667 (avg +₹119)** while the liquid set (283, 55 resolved) is net **−₹3,879
-    (avg −₹71)** — i.e. the live tape so far *contradicts* "illiquid = worse". Flip-bar correctly holds
-    NOT READY (14<20 + illiquid not net-negative). Do NOT flip active on the SRTL anecdote; let it accrue
-    and let the §8 + evidence decide (and revisit the ₹1cr floor / per-class floors).
-  - **Slice 5b — XBRL market_cap writer [pending].** The decided NSE/BSE XBRL path — a **greenfield
-    external scraper** (no XBRL/shares-outstanding code exists; `filings_consumer` polls only
-    *announcement* JSON). Get `market_cap_cr` populated (0/2365 today) → shares-outstanding × price;
-    then add a market-cap floor to the gate. Needs the live source in hand (a real spike, ToS-grey
-    like the existing feed). Static GATE (no historical fundamentals to §8).
+    **⚠ DEEP-DIVE FINDING + DECISION (2026-08-21, 70 resolved of the 414-signal cohort).** The
+    illiquid (below-floor) set is net-**positive** and the liquid set net-**negative**, and it is
+    ROBUST — holds across floors ₹50L→₹5cr (illiquid avg +₹106→+₹194, liquid −₹89→−₹216) and on the
+    MEDIAN + win-rate, not one outlier. Cross-tab vs the ACTIVE entry-diversity gate is decisive:
+    **SRTL is the ONLY illiquid+diversity-flagged trade (−₹3,565) — the diversity gate ALREADY catches
+    it; strip it and the other 13 illiquid trades are +₹402 avg.** The worst losers are LIQUID names
+    (PNCINFRA −6,800 @ ₹8.9cr/day, SANOFI −5,000, SPARC −4,022) a liquidity gate can't help.
+    **DECISION (user, 2026-08-21): keep 5a in SHADOW — do NOT flip active** (it would cut a net-winning
+    set, and it's redundant with diversity for the SRTL archetype). Realized P&L over a benign ~5-week
+    sample cannot measure liquidity's real value — **tail/exitability RISK** (which shows up in a crash,
+    not a calm uptrend where thin small-caps outrun) — so **reframe liquidity later as a position-sizing
+    / slippage-realism MODIFIER (execution-realism, 6.8-adjacent), NOT an entry P&L gate.** The overlay
+    stays as-is (shadow, measuring); the reframe is a future item.
+  - **Slice 5b — XBRL market_cap writer [pending, now QUESTIONED by the 5a finding].** The decided
+    NSE/BSE XBRL path — a **greenfield external scraper** (no XBRL/shares-outstanding code exists;
+    `filings_consumer` polls only *announcement* JSON). Get `market_cap_cr` populated (0/2365 today) →
+    shares-outstanding × price; then a market-cap floor on the gate. **⚠ The 5a finding raises the bar:
+    if liquidity (the exitability proxy) doesn't gate returns and diversity already catches SRTL, a
+    market-cap *size* floor — even more correlated with these small-caps — may be no better. Before
+    paying 5b's scraper cost, cross-tab a cheap market_cap proxy the same way (does a size gate beat
+    liquidity?).** Note: XBRL still has value beyond this gate (unlocks quality scores later), so 5b may
+    proceed on that basis — but not as a junk gate on the current evidence. Static GATE (no historical
+    fundamentals to §8). Needs the live source in hand (a real spike, ToS-grey like the existing feed).
 - **Slice 6 — news/sentiment veto.** Extend `event_guard` (today: a flat 60-min suppress at
   signal-generation around `HIGH_IMPACT_TYPES`) to an earnings-blackout window + rating-DOWNGRADE
   veto + severity/decay. Veto-value only (~0 directional alpha), shallow history (`corporate_filings`
