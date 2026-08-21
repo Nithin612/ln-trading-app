@@ -293,6 +293,20 @@ class Settings(BaseSettings):
     # evidence before flipping active.
     liquidity_min_traded_value_inr: float = 10_000_000.0
 
+    # ── Anti-chase eligibility overlay (app/signals/chase_guard.py) ─────────
+    # Blocks an order when the LIVE price has run more than `chase_max_r` × the trade's risk
+    # (|entry − SL| = 1R) PAST the signal's entry — the server-side backstop to the AlertBell
+    # guardrail. Reads the Redis LTP at order time; fail-open when no live price (off-market)
+    # or a zero-risk signal. Frozen engine untouched (a downstream overlay).
+    #   off    — TRUE no-op (no LTP read, no stamp).
+    #   shadow — measure + stamp, never act (default).
+    #   active — reject a chasing order. Behaviour-changing → forward evidence + sign-off first.
+    #            Fully reversible.
+    chase_gate_mode: Literal["off", "shadow", "active"] = "shadow"
+    # Ceiling in R past entry. 0.33 from the chase_r-vs-outcome measurement (2026-08-21): trades
+    # with chase_r ≤ 0.33 were net-positive; the only two past it were both losers.
+    chase_max_r: float = 0.33
+
     # ── Profit-lock: absolute-rupee ladder (app/trading/profit_lock.py) ─────
     # When a user opts in (users.profit_lock_enabled), the position monitor
     # governs open PAPER exits with a rupee-denominated profit ladder — the

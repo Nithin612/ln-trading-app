@@ -186,6 +186,25 @@ Slice 2 is now unblocked.
   (`scripts/backfill_indices.py 2023-07-01 <today>`); the smoke correctly showed all 414 cohort
   signals as "no market data (< 200-DMA history)". A shadow→active flip needs the R-track
   (§8-on-≥2y + sign-off).
+  - **⚠ REFINEMENT HYPOTHESIS (2026-08-21, two-window autopsy) — then REFUTED at scale (same day).**
+    The n=4 autopsy suggested adding a **slope/breadth term** (below-200-DMA + *strong* breadth = good;
+    + *weak* = bad). The **3y regime study (`scripts/regime_study.py`, 575 sessions) REFUTED that
+    direction**: below-200-DMA + WEAK breadth had the BEST fwd-20 (+1.33% vs below+strong +0.21%) —
+    mean-reversion, the opposite of the autopsy. **A block-bootstrap (in the study) then showed the
+    signal is NOT statistically established** (P(weak>strong)=83%, short of significance; non-overlap
+    n=2 strong + flips sign; the +1.33% rests on ~2 overlapping episodes, 3y = one bull cycle). **⇒ DO
+    NOT add a breadth term to this gate in EITHER direction from this study** — the naive "prefer strong
+    breadth" is unsupported, and the mean-reversion reading isn't significant either. Revisit only with
+    more data (re-run the study) + a fresh block-bootstrap. The 200-DMA level gate stays shadow
+    meanwhile. Study report + robustness: `docs/analysis/regime-study-*.md`.
+- **Sibling overlay — anti-chase gate. DONE 2026-08-21 (mode `shadow`), NOT part of the MCE context
+  family but built in the same overlay lane during the MCE window.** The entry-*timing* complement to
+  the entry-*quality* overlay: `app/signals/chase_guard.py` blocks when the live LTP has run > 0.33R past
+  the signal's entry (the reward:risk is materially gone), the 6th order-path overlay, fail-open, stamps
+  `broker_payload["chase_gate"]`; sidecar `app/services/chase_shadow.py` → `chase-shadow-<date>.md`. Plus
+  an AlertBell surfacing (SL/TP/R:R, confidence, age, validity). Full record in CHANGELOG + the PHASES
+  CONTINUE-HERE anti-chase block; evidence: chase_r ≤ 0.33 → +₹275 avg/62% win vs the 2 past-ceiling
+  trades both losers. quant-verifier PASS-WITH-NOTES + bug-hunter CLEAN.
 - **Slice 5 — junk filter. SPLIT 2026-08-21 (user) into 5a liquidity [DONE] + 5b XBRL market_cap
   [pending].** Grounding it revealed the SRTL disaster was an *exitability* (liquidity) failure, not
   a *size* one — and liquidity is computable from data we already have, while the decided XBRL path is

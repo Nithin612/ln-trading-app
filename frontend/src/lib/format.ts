@@ -65,6 +65,14 @@ export const formatIstDateTime = (iso: string) => {
  */
 export const formatGreek = (n: number, dp = 4) => n.toFixed(dp)
 
+/**
+ * Reward:risk (and similar unit-less ratios) as "N.N" — one decimal, no
+ * grouping, no unit. Callers append ":1" when they mean a ratio-to-one.
+ * Lives here so feature code never reaches for `toFixed` (.claude/rules/ui.md).
+ * Non-finite (0-risk trade) → "—".
+ */
+export const formatRatio = (n: number) => (Number.isFinite(n) ? n.toFixed(1) : "—")
+
 /** "▲ +2.34%" / "▼ -1.12%" / "— 0.00%" — directional glyph included */
 export const formatChange = (n: number) => {
   const epsilon = 0.005

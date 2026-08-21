@@ -10,7 +10,7 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-08-20) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-08-21) — read this block first
 
 **v2 Phases 0–2 ✅ done · Phase 3 (realtime) ✅ GATED 2026-08-14 · Phase 4 ✅ done ·
 Phase 5 ✅ GATED 2026-08-07 · Phase 6 ✅ GATED + CLOSED 2026-08-20 (6.1–6.5 built shadow-first; regime
@@ -326,7 +326,7 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-08-20.**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-08-21.**
 
 **Handover items from the 2026-08-19 two-session split — now RESOLVED:**
 1. **Provisional breadth-flood fix — MERGED 2026-08-20 (`c1b4752`).** The `--ff-only` Session 1 asked for
@@ -337,6 +337,53 @@ which is what Phase-6 expectancy calibration is for.
    watch still has NO scheduler — run `scripts/provisional_health.py --days 7` each session.
 2. **Red baseline — RESOLVED** (`e32fd48`), re-verified 2026-08-20: order-path set = **138 passed,
    exit 0**.
+
+**▶ ANTI-CHASE work DONE 2026-08-21 (two slices, shadow-first — the SRTL/weak-entry leak's timing half).**
+Motivated by a chase_r-vs-outcome measurement (39 resolved paper trades): **chase_r ≤ 0.33 → +₹275 avg /
+62% win over 37 trades; the only 2 past 0.33R (incl. SRTL) were both losers, −₹3,074 avg.** Two slices:
+(1) **Entry-context surfacing on BOTH AlertBell + the Live Signals page** (frontend-only) — each entry
+alert now shows SL/TP/**R:R**, confidence, **signal age**, the **validity window** (`Nd left` / `till
+HH:MM` IST + `⚠ stale` ≥80% elapsed + `choppy`), and a **"best by <date>"** trade-window (the
+80%-elapsed mark — directly flags the stale-entry / ~day-25-of-30 leak); Live Signals also **defaults to
+Entry-only**; `AlertBell 38 + LiveSignals 17 tests`, ui-reviewer PASS-WITH-NOTES ×2. **Both surfaces are
+still the ephemeral `useAlertStream` feed** (session, 100-cap, trigger-price snapshots, no dedup) — the
+proposed NEXT step is to repurpose Live Signals into a persistent, **live-priced**, deduped,
+lifecycle-aware signals *list* (keep-until-resolved + a top-5 conviction ranking), backed by the signals
+API (which already dedupes into `sources_count` + carries `status`/`validity_until`/`near_expiry`).
+(2) **Anti-chase eligibility gate** (`app/signals/chase_guard.py`, the 6th order-path
+overlay, mode **shadow**) — blocks when the LIVE LTP has run > `chase_max_r` (0.33) × 1R past entry;
+direction-aware, fail-open on no-price/zero-risk; stamps `broker_payload["chase_gate"]` (distinct from
+the broker's post-fill `chase`); sidecar `chase_shadow.py` → `chase-shadow-<date>.md` (chased/near-entry/
+no-data + flip banner) in `make analysis`. `test_chase_gate.py 17 tests`, order-path regression 156 green,
+**quant-verifier PASS-WITH-NOTES + bug-hunter CLEAN** (findings applied: 4dp chase_r stamp, deterministic
+`ORDER BY placed_at`). Flip readiness **NOT READY** (2/20 chased resolved) — accrues; flip needs sign-off.
+Two-window autopsy (04–12 vs 13–21 Aug) confirmed the recent "losing streak" is **n=4 + a down-drifting
+tape** (NIFTY 1 up/7 down days), NOT degraded selection — finding: a market-regime **slope/breadth** term
+(not the 200-DMA level, below in both windows) is what separates the good window; fold into MCE slice 4.
+
+**▶ USER PLAN 2026-08-21: build items (a)→(b)→(c) IN ORDER, each after user verification. (a) DONE.**
+**(a) make-analysis diagnostics — ✅ DONE 2026-08-21:** `signal_age_report.py` (→ `signal-age-<date>.md`,
+how far into a signal's validity we ENTERED + P&L by age bucket) + `market_regime_report.py` (→
+`market-regime-<date>.md`, NIFTY vs 200-DMA AND 20-DMA + breadth + VIX, flags level-vs-breadth disagree),
+both read-only, wired into `daily_analysis.py`; 8 tests; quant-verifier PASS-WITH-NOTES (1 HIGH fixed —
+cohort re-keyed on `Position.opened_at`, not `Signal.created_at`). **EVIDENCE: the entry-age edge is
+monotonic — 20–40% elapsed = +₹7,182/67% win (sweet spot); EVERY band past 40% is net-negative. Trade
+fresh (≤40% of validity), not stale.** **(b) persistent Live-Signals list — ✅ DONE 2026-08-21:** new `OpportunitiesTable.tsx` stacked above the
+alert feed on the Live Signals page — sourced from `/signals/active` (deduped + keep-until-resolved),
+**live-priced** (`useLiveQuotes`/`PriceCell`, chase recomputes on the LIVE tick), ranked by a v1
+`conviction.ts` score (confidence − age-decay [folds in item-(a)'s ≤40% finding] − choppy), top-5 ★, rest
+by recency+confidence. 12 tests; full FE suite 401; ui-reviewer PASS-WITH-NOTES. **(c) 3y regime study
+→ playbook — ✅ DONE 2026-08-21:** `scripts/regime_study.py` + `app/services/regime_study.py` →
+`docs/analysis/regime-study-<date>.md` (575 sessions, NIFTY/Bank/Fin + VIX). **HEADLINE: the two-window
+hypothesis is REFUTED — below-200-DMA + WEAK breadth had the BEST fwd-20 (+1.33% vs below+strong +0.21%);
+textbook mean-reversion.** quant-verifier PASS-WITH-NOTES: math correct (1e-9 forward-return match, no
+look-ahead). **Block-bootstrap (added) verdict: the edge is NOT statistically established** —
+P(weak>strong)=83% (short of significance), non-overlap subsample too small (2 strong pts) + flips sign;
+the naive +1.33% rests on ~2 overlapping episodes. 6 tests. **⇒ MCE slice-4 must NOT add a breadth term
+in EITHER direction from this.** FII/DII flow = DATA GAP (recorder only 36 sessions; no historical API —
+backfill needs a new source). **All three user items (a/b/c) DONE + verified.** **Weekend add-ons:
+block-bootstrap hardening of (c) + a CAS (Closing-Auction-Session) analysis/plan doc
+(`docs/CAS_CLOSING_AUCTION_ANALYSIS_2026-08-21.md`) — plan only, no code.**
 
 **▶ MCE IN PROGRESS — slices 1–4 built 2026-08-20 + slice 5a built 2026-08-21** (details + NEXT in
 the CONTINUE HERE block below). Slice 1 = `sector_rs.py` (RS overlay); slice 2 = index price store

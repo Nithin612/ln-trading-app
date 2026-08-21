@@ -20,15 +20,19 @@ import { Popover } from '@/components/ui/popover'
 import { EmptyState } from '@/components/ui/empty-state'
 import { SimpleSelect } from '@/components/ui/simple-select'
 import { Checkbox } from '@/components/ui/checkbox'
-import { formatCurrency, formatPct } from '@/lib/format'
+import { formatCurrency, formatPct, formatRatio } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
   ALERT_STYLES,
   SOURCE_LABEL,
   TAG_META,
   TONE_CLASS,
+  bestByLabel,
   chaseGuidance,
   formatAlertTime,
+  signalAgeLabel,
+  tradePlan,
+  validityLabel,
 } from './alertPresentation'
 import { ENTRY_SOURCE, useAlertContext } from './useAlertContext'
 
@@ -283,6 +287,7 @@ const AlertRow = memo(function AlertRow({
 }) {
   const meta = TAG_META[alert.tag]
   const chase = signal ? chaseGuidance(signal, Number(alert.price)) : null
+  const plan = signal ? tradePlan(signal) : null
   return (
     <li className="px-3 py-2 text-xs hover:bg-(--color-surface-3)">
       <div className="flex items-baseline justify-between gap-2">
@@ -335,6 +340,48 @@ const AlertRow = memo(function AlertRow({
               don&apos;t chase {chase.isBuy ? '>' : '<'} {formatCurrency(chase.limit)}
             </span>
           )}
+        </div>
+      )}
+      {signal && plan && (
+        // The trade plan the alert doesn't otherwise show: stop, target, and
+        // the reward:risk the signal was committed at, plus confidence. SL/TP
+        // carry loss/profit colour AND a text label (never colour alone,
+        // UI_GUIDELINES §colours); numbers via lib/format.
+        <div className="flex items-center justify-between gap-2 mt-1 text-[10px]">
+          <span className="flex items-center gap-2 min-w-0 font-mono tabular-nums text-(--color-text-muted)">
+            <span>
+              SL <span className="text-(--color-loss)">{formatCurrency(plan.sl)}</span>
+            </span>
+            <span>
+              TP <span className="text-(--color-profit)">{formatCurrency(plan.tp)}</span>
+            </span>
+            {plan.rr !== null && <span>R:R {formatRatio(plan.rr)}</span>}
+          </span>
+          <span className="text-(--color-text-muted) flex-shrink-0">
+            conf {signal.confidence_pct}%
+          </span>
+        </div>
+      )}
+      {signal && (
+        // "When generated / when to consider" — age since commit on the left,
+        // remaining runway on the right; a stale (≥80% elapsed) or choppy-regime
+        // signal is flagged in warning tone so a late, low-runway entry is
+        // visible before the click.
+        <div className="flex items-center justify-between gap-2 mt-0.5 text-[10px] text-(--color-text-muted)">
+          <span className="flex items-center gap-1 min-w-0 truncate">
+            <span aria-hidden="true">⏱</span>
+            <span>signal {signalAgeLabel(signal.created_at)}</span>
+            {bestByLabel(signal) && <span className="text-(--color-text)">· {bestByLabel(signal)}</span>}
+          </span>
+          <span className="flex items-center gap-1.5 flex-shrink-0">
+            <span className="font-mono tabular-nums">{validityLabel(signal)}</span>
+            {signal.near_expiry && (
+              <span className="text-(--color-warning)">
+                <span aria-hidden="true">⚠</span> stale
+              </span>
+            )}
+            {signal.choppy && <span className="text-(--color-warning)">choppy</span>}
+          </span>
         </div>
       )}
       {alert.shadow && (

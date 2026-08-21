@@ -7,6 +7,188 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### research(regime study): 3-year market-regime backtest → regime playbook (2026-08-21)
+
+Item 3 of the anti-chase/regime arc. A read-only study (`scripts/regime_study.py` + pure core
+`app/services/regime_study.py` → `docs/analysis/regime-study-<date>.md`) over 575 classified sessions
+(NIFTY50 + Bank/Fin Nifty + VIX, 2024-04 → 2026-08). Each day is put in a level×breadth quadrant
+as-of that day (reusing the reviewed `summarize_regime` — no classifier look-ahead), then the forward
+5/10/20-session return that followed is measured; plus below-200-DMA drawdown episodes, index/cap
+dispersion, and a data-driven playbook.
+
+- **HEADLINE — the two-window hypothesis is REFUTED at scale.** Over 3y, **below-200-DMA + WEAK
+  breadth had the BEST forward-20 return (+1.33%), beating below + STRONG breadth (+0.21%)** — the
+  opposite of what the n=4 autopsy suggested (textbook mean-reversion). **But a block-bootstrap
+  (added this pass) shows the "edge" is NOT statistically established:** the fwd-20 windows overlap
+  heavily (the naive +1.33% rests on ~2 drawdown episodes, one still open); the moving-block bootstrap
+  puts **P(below-weak > below-strong) at only 83%** (short of significance) and the non-overlapping
+  subsample is too small (just 2 independent below-strong points) and **flips sign**. So the
+  breadth→forward-return signal is **noise on this sample — don't build on it.** **Implication: do NOT
+  add a breadth term to MCE slice 4 in EITHER direction from this — the naive "prefer strong breadth"
+  is unsupported, and the mean-reversion reading isn't significant either.** Vindicates
+  measure-before-rule, twice over.
+- **Critical caveat (in the report):** 3y = one bull cycle where every dip recovered, so the playbook
+  is really "buy oversold dips" — a bull-market prior that would be dangerous in a structural bear
+  (falling knife). We can't distinguish bull-vs-bear meta-regime from 3y. And we're **currently in the
+  deepest/longest episode** (below 200-DMA since 2026-02-27, −11.3%, still below) — exactly the
+  "bull dip or regime change?" question the study can't resolve.
+- **Dispersion:** BankNifty/FinNifty amplify the mean-reversion (~2–2.8% vs NIFTY 1.33% from oversold).
+- **FII/DII money-flow: DATA GAP** — the recorder holds only 36 sessions (since 2026-07-17); the
+  flow-causation angle needs a backfill (follow-up). News/fundamental causation remains unmeasurable
+  (no history) — the study measures price/breadth/VIX behaviour + recovery, not *why*.
+
+`test_regime_study.py 6 tests` (forward-return alignment, quadrant classification, episode detection,
+dispersion, + block-bootstrap direction/determinism); ruff + mypy clean. **quant-verifier
+PASS-WITH-NOTES** — math verified correct (forward returns match the raw series to 1e-9, no look-ahead,
+no quadrant inversion, dispersion date-aligned); fixes applied: honest fwd-k sample size in labels
+(`fwd_n`), a loud warning if the multi-index date-axis drops NIFTY sessions, and a **`robustness()`
+block-bootstrap + non-overlapping subsample** (the reviewer's TODO) that quantifies the fragility in
+the report — verdict: **direction not statistically established.**
+
+### research(CAS): NSE Closing-Auction-Session analysis + execution plan (2026-08-21)
+
+`docs/CAS_CLOSING_AUCTION_ANALYSIS_2026-08-21.md` — a grounded analysis of NSE's new CAS (3:15–3:35 PM
+auction close, F&O-underlying stocks, from 3 Aug 2026; F&O now closes 3:40) with a staged, paper-first,
+evidence-first plan. Key: the institutional "predict-the-auction" game is closed to us (no imbalance
+feed, no latency), but the literature's **overnight reversal of the closing-auction move** (~14% in
+US/EU studies) fits our near-close→next-day style and is testable from data we can capture. Confound
+flagged: the recent "recovery into the close" could be CAS OR the current oversold regime (the same
+study above) — must be measured, not eyeballed. Plan: Stage 0 feed-feasibility spike → Stage 1 capture
+(3:15 price, official close, CAS move, next-day return) → Stage 2 study the overnight reversal
+(read-only) → Stage 3 fold as a feature only if a robust edge survives. No code shipped (plan only).
+
+### feat(Live Signals): persistent, live-priced, ranked "Opportunities" list (2026-08-21)
+
+Item 2 of the anti-chase/entry-quality UX arc. The Live Signals menu was an ephemeral tick-alert
+feed (session-only, 100-capped, trigger-price snapshots — why alerts "vanished" and the price was
+frozen). This adds a durable **Opportunities** list stacked above that feed (the feed + desktop
+notifications stay, unchanged):
+
+- NEW `features/alerts/OpportunitiesTable.tsx` — sourced from `GET /signals/active` (server-side
+  **deduped** into `sources_count`, only `active` + non-expired = intrinsic **keep-until-resolved**),
+  **live-priced** via `useLiveQuotes` → `PriceCell`, refetched every 60s. The anti-chase guardrail
+  now recomputes against the **LIVE** price (unlike the frozen feed). Columns: rank (top-N ★), symbol
+  (+dedup ×N), direction, live price, live entry-discipline, Plan (SL/TP/R:R/conf), Window
+  (age · best-by · validity · stale/choppy), Trade. Loading (Skeleton) / empty / error+retry states.
+- NEW `features/alerts/conviction.ts` — pure v1 conviction ranking: `confidence − age-decay − choppy
+  + small multi-factor bonus`. **The age-decay term folds in item 1's evidence** (edge lives ≤40%
+  elapsed, decays past it). Top-N starred; the rest ordered by recency → confidence → factor count
+  (the user's stated rule). Not a probability — a heuristic; MCE slices become future terms.
+- `alertPresentation.ts` — new pure `pctElapsed` helper.
+- `LiveSignalsPage.tsx` — renders the Opportunities list above the existing feed; subtitle updated.
+
+`conviction 5 + OpportunitiesTable 7 tests` (+ feed tests updated for the stacked query); full
+frontend suite **401 passed**, tsc + eslint clean. **ui-reviewer PASS-WITH-NOTES** — token-clean,
+theme-safe across all 6 themes, all loading/empty/error states + a11y covered; one LOW applied (loading
+now uses a column-structured `SkeletonTable` per §4.8); the rest are pre-existing (raw `<button>` chips
+in the feed/bell, page §9.1 scaffold) outside this diff. Note: the Dashboard already lists active signals
+live — this is the focused, ranked, decision-first view in the menu the user works from; plumbing is
+reused, the ranked/entry-context view is new.
+
+### feat(make analysis): signal-age-at-entry + market-regime (level-vs-breadth) diagnostics (2026-08-21)
+
+Two read-only daily-report sidecars, motivated by the two-window autopsy + the user's day-25
+stale-entry observation. Never gate/size/trade.
+
+- `app/services/signal_age_report.py` → `signal-age-<date>.md`: per resolved paper trade, how far
+  into the signal's validity window we ENTERED (`%elapsed = (entry − commit)/(validity − commit)`),
+  bucketed, with P&L. **Real-data smoke proves the stale-entry leak: the edge lives ≤40% elapsed
+  (20–40% band +₹7,182 / 67% win over 15) and flips net-negative past 40% (40–60% −₹4,058, 60–80%
+  −₹4,390, 80–100% −₹2,610).** Cohort keyed on the TRADE (`opened_at`), not signal commit.
+- `app/services/market_regime_report.py` → `market-regime-<date>.md`: NIFTY vs its 200-DMA AND its
+  20-DMA + breadth (% up-days over last 10) + VIX, flagging when the LEVEL and BREADTH disagree (the
+  Window-A/B tape a level-only regime gate would miss). Pure `summarize_regime` + a DB wrapper.
+- Both wired into `scripts/daily_analysis.py` (each in its own try/except — never blocks the report)
+  with a stdout summary line.
+
+`test_analysis_diagnostics.py 8 tests`; ruff + mypy clean. **quant-verifier PASS-WITH-NOTES** — one
+**HIGH fixed**: signal_age wrongly filtered signals by `created_at >= OUTCOME_EPOCH` (a shadow-report
+floor), silently dropping the exact archetype (an old signal traded stale); now keyed on `opened_at`,
+with a regression test. Follow-up noted (not this diff): `benchmark._MARKET_CLOSES_SQL` lacks an
+`is_complete` filter — benign (the index store writes completed EOD bars), verify the writer later.
+Report stays at 20% age bands: a one-off finer-bin dig (10%/5%) showed n=78 is too small to trust
+individual bins (only the 0–5%-elapsed "enter promptly" sub-signal looked robust, +₹9,232/90%/n=10) —
+recheck ~2026-09-20 when n grows.
+
+### feat(Live Signals): entry-context columns + default Entry-only + "best by" window (2026-08-21)
+
+Extends the AlertBell entry-context surfacing (below) to the full-width **Live Signals** page and
+adds a trade-window suggestion to both surfaces. Frontend-only.
+
+- **Live Signals default filter → "Entry signals only"** (was "All alerts") — the actionable
+  buy/sell triggers first; level crosses / volume bursts are opt-in.
+- **Two new columns** on the Live Signals feed, mirroring the bell: **Plan** (`SL · TP · R:R ·
+  conf%`, SL loss-coloured / TP profit-coloured) and **Window** (`signal <age> · best by <date>`
+  + `Nd left`/`till HH:MM` + `⚠ stale`/`choppy`).
+- **`bestByLabel`** (new shared pure helper) — "best by 25 Jul" / "best by 14:03", the end of the
+  useful window (the 80%-elapsed mark, `NEAR_EXPIRY_FRACTION`), shown on both the bell and Live
+  Signals. Directly targets the stale-entry leak (a positional signal traded on ~day 25 of 30 now
+  reads `⚠ stale` and shows it is past best-by).
+
+`AlertBell 38 + LiveSignalsPage 17 = 55 tests`, tsc + eslint clean. **ui-reviewer PASS-WITH-NOTES**
+(token-clean, theme-safe across all 5 themes incl. daybreak warning contrast; redundant scroll
+wrapper removed; the raw `{conf}%` note left as-is — `formatPct` would force noisy 2-dp on an
+integer, and it matches `SignalDetailModal`/`DashboardPage`). Note: both surfaces are still the
+ephemeral `useAlertStream` feed (session, 100-cap, trigger-price snapshots) — a persistent,
+live-priced, deduped signals *list* (keep-until-resolved + top-5 ranking) is the proposed next step.
+
+### feat(anti-chase gate): server-side eligibility overlay — block orders chasing past entry (2026-08-21)
+
+The server-side backstop to the AlertBell guardrail, and the second half of the anti-chase work
+(the first being the AlertBell surfacing below). Blocks an order when the LIVE price has run more
+than `chase_max_r` × the trade's risk (`|entry − SL|` = 1R) PAST the signal's entry — the point
+where the reward:risk you were shown is materially gone. Motivated by the chase_r-vs-outcome
+measurement (2026-08-21, 39 resolved trades): chase_r ≤ 0.33 → **+₹275 avg / 62% win** over 37
+trades; the only 2 past 0.33R (incl. SRTL) were **both losers, −₹3,074 avg**. Same overlay-lane /
+shadow-first / fail-open pattern as the MCE gates; frozen engine untouched; mode `shadow`.
+
+- `app/signals/chase_guard.py` — pure overlay: signed `chase_r` (R past entry, direction-aware),
+  `blocked` when `chase_r > chase_max_r`. Fail-open (`assessable=False`) on no live price
+  (off-market) or a zero-risk signal; a negative chase (filled *better* than entry) never blocks.
+- Wired into `_apply_eligibility_overlays` as the 6th overlay (last — a pre-fill execution check,
+  distinct from the upstream selection gates). Reads the Redis LTP via `get_live_ltp` (the same
+  reference the broker fills near); no DB savepoint needed (that read fails to None on its own).
+  Verdict stamped as `broker_payload["chase_gate"]` — distinct from the broker's post-fill
+  `chase` telemetry.
+- `app/services/chase_shadow.py` — forward-evidence sidecar → `chase-shadow-<date>.md` (chased /
+  near-entry / no-data partition + per-entry table + flip-readiness banner), wired into
+  `make analysis`. Reads the gate's own stamp when present, else the broker's fill-based `chase_r`
+  as the historical proxy.
+- `chase_gate_mode` (off/shadow/active, default shadow) + `chase_max_r` (0.33) in config.
+
+`test_chase_gate.py 17 tests` (pure both-sides/negative/fail-open/boundary + order-path
+off/shadow/active/fail-open + sidecar partition). ruff + mypy clean; order-path regression green
+(156 passed). **quant-verifier PASS-WITH-NOTES** + **bug-hunter CLEAN** (no CRITICAL/HIGH/MEDIUM;
+no look-ahead, no float-money, no connection leak, tuple-arity consistent, fail-open can't 500);
+two LOW notes applied — chase_r stamped at 4dp so the sidecar's would-block recompute is faithful
+at the ceiling, and `_chase_by_signal` now `ORDER BY placed_at` so a repeat/average-in entry's
+chase is deterministic. Real-data smoke: chased −₹3,074 avg / 0% win vs near-entry +₹241 / 61%
+(38 assessable resolved), flip-readiness NOT READY (2/20). Shadow→active flip needs forward
+evidence + sign-off.
+
+### feat(AlertBell): surface trade-plan context per entry alert — SL/TP/R:R, confidence, age, validity (2026-08-21)
+
+Direct answer to a live pain point: the bell was traded blind — no way to tell at a glance whether you
+were at the signal's entry or chasing, when it was generated, or how long it stays valid. AlertBell
+already carried the anti-chase guardrail (ideal entry + don't-chase ceiling); this adds the rest of the
+plan, all from the committed signal (no backend change, no live-data dependency):
+
+- **Trade-plan line** — `SL · TP · R:R` (SL loss-coloured, TP profit-coloured, each with a text label)
+  + `conf N%`.
+- **Timing line** — `⏱ signal <age>` (time since the confluence engine committed it) + validity runway
+  (`Nd left` for multi-day plans, `till HH:MM` IST for intraday), with `⚠ stale` when ≥80% of the
+  validity window has elapsed and `choppy` when the daily regime is low-efficiency.
+- `features/alerts/alertPresentation.ts` — pure helpers `tradePlan` (reward:risk), `signalAgeLabel`,
+  `validityLabel`.
+- `lib/format.ts` — reusable `formatRatio` (keeps `toFixed` out of feature code).
+
+Frontend-only. `AlertBell 35 tests` (2 new component + 7 new pure), `tsc` + eslint clean.
+**ui-reviewer PASS-WITH-NOTES** (token-clean, number-safe, a11y-correct; two optional notes applied —
+SL/TP via `text-(--color-loss/profit)` classes, `min-w-0` overflow guard). Motivated by the
+chase_r-vs-outcome measurement (chase_r ≤ 0.33 → +₹275 avg / 62% win over 37 trades; the only 2 trades
+past 0.33R were both losers). Deferred: recomputing the chase % against the live LTP (needs a per-alert
+quote subscription — a separate slice).
+
 ### feat(MCE slice 5a): liquidity junk gate + shadow sidecar (2026-08-21)
 
 The junk filter's core, and the direct fix for the SRTL archetype (a BUY on a ₹39 micro-cap that blew

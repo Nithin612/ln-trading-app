@@ -92,7 +92,9 @@ def _update_ledger(r: DailyReport) -> None:
     ledger.write_text("\n".join([*_LEDGER_HEADER, *ordered, ""]))
 
 
-async def _run(day: date, user_id: int, week_of: date | None, now: datetime) -> int:
+async def _run(  # noqa: C901 — a linear sequence of independent, each-try/except report steps
+    day: date, user_id: int, week_of: date | None, now: datetime
+) -> int:
     # The app engine enables echo at import and re-arms it on lazy connect, so a
     # per-logger level doesn't stick. This is a read-only CLI, so disable INFO
     # and below globally — stdout is then just the "wrote …" lines.
@@ -197,6 +199,46 @@ async def _run(day: date, user_id: int, week_of: date | None, now: datetime) -> 
             print(lqs.readiness_line(lshadow), flush=True)
         except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
             print(f"liquidity shadow step skipped: {exc!r}", flush=True)
+
+        # Anti-chase forward evidence: what the anti-chase gate WOULD suppress on the live cohort
+        # (orders that filled too far past entry — chase_r above the ceiling), with a per-entry
+        # table + flip-readiness banner. Same read-only, never-block discipline.
+        try:
+            from app.services import chase_shadow as chs
+
+            ch_shadow = await chs.compute_chase_shadow(db)
+            ch_path = _ANALYSIS_DIR / f"chase-shadow-{day.isoformat()}.md"
+            ch_path.write_text(chs.render_markdown(ch_shadow, day=day))
+            print(f"wrote {ch_path.relative_to(_REPO_ROOT)}", flush=True)
+            print(chs.readiness_line(ch_shadow), flush=True)
+        except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
+            print(f"anti-chase shadow step skipped: {exc!r}", flush=True)
+
+        # Signal-age-at-entry diagnostic: how far into each signal's validity window we entered
+        # (the stale ~day-25-of-30 leak) + P&L by age bucket. Read-only, never blocks.
+        try:
+            from app.services import signal_age_report as sar
+
+            age_rep = await sar.compute_signal_age(db)
+            age_path = _ANALYSIS_DIR / f"signal-age-{day.isoformat()}.md"
+            age_path.write_text(sar.render_markdown(age_rep, day=day))
+            print(f"wrote {age_path.relative_to(_REPO_ROOT)}", flush=True)
+            print(sar.summary_line(age_rep), flush=True)
+        except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
+            print(f"signal-age step skipped: {exc!r}", flush=True)
+
+        # Market-regime diagnostic: NIFTY vs 200-DMA AND 20-DMA + breadth + VIX, flagging when the
+        # level and the breadth disagree (the two-window-autopsy finding). Read-only.
+        try:
+            from app.services import market_regime_report as mrr
+
+            regime = await mrr.compute_market_regime(db, as_of=now)
+            regime_path = _ANALYSIS_DIR / f"market-regime-{day.isoformat()}.md"
+            regime_path.write_text(mrr.render_markdown(regime, day=day))
+            print(f"wrote {regime_path.relative_to(_REPO_ROOT)}", flush=True)
+            print(mrr.summary_line(regime), flush=True)
+        except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
+            print(f"market-regime step skipped: {exc!r}", flush=True)
 
         if week_of is not None:
             monday = week_of - timedelta(days=week_of.weekday())

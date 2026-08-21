@@ -3,7 +3,13 @@ import { fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { AlertBell } from '@/features/alerts/AlertBell'
-import { chaseGuidance } from '@/features/alerts/alertPresentation'
+import {
+  bestByLabel,
+  chaseGuidance,
+  signalAgeLabel,
+  tradePlan,
+  validityLabel,
+} from '@/features/alerts/alertPresentation'
 import type { LiveAlert } from '@/hooks/useAlertStream'
 import type { Stock } from '@/lib/api/stocks'
 
@@ -277,6 +283,38 @@ describe('AlertBell', () => {
     expect(vi.mocked(signalsApi.getById)).not.toHaveBeenCalled()
   })
 
+  // ── Trade-plan context (SL/TP/RR · confidence · age · validity) ─────────────
+  it('surfaces the plan an alert otherwise hides: SL, TP, R:R, confidence', async () => {
+    // makeSignal defaults: entry 100, SL 96, TP 112 → R:R = 12/4 = 3.0, conf 78%.
+    stream.alerts = [{ ...ENTRY_ALERT, id: 'e', price: '100.5000', signalId: 'sig-1' }]
+    vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
+    vi.mocked(signalsApi.getById).mockResolvedValue(makeSignal())
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    await waitFor(() => expect(screen.getByText('₹96.00')).toBeInTheDocument()) // SL
+    expect(screen.getByText('₹112.00')).toBeInTheDocument() // TP
+    expect(screen.getByText(/R:R 3\.0/)).toBeInTheDocument()
+    expect(screen.getByText(/conf 78%/)).toBeInTheDocument()
+    expect(screen.getByText(/signal .*ago/)).toBeInTheDocument() // when generated
+    expect(screen.getByText(/4d left/)).toBeInTheDocument() // when to consider
+    expect(screen.queryByText(/stale/)).not.toBeInTheDocument()
+  })
+
+  it('flags a stale (near-expiry) / choppy signal and shows the intraday cut-off time', async () => {
+    // days_valid_remaining < 1 → the validity shows the IST cut-off, not "Nd left".
+    // validity_until 10:00Z = 15:30 IST.
+    stream.alerts = [{ ...ENTRY_ALERT, id: 'e', price: '100.5000', signalId: 'sig-1' }]
+    vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
+    vi.mocked(signalsApi.getById).mockResolvedValue(
+      makeSignal({ near_expiry: true, choppy: true, days_valid_remaining: 0.2 }),
+    )
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    await waitFor(() => expect(screen.getByText(/stale/)).toBeInTheDocument())
+    expect(screen.getByText('choppy')).toBeInTheDocument()
+    expect(screen.getByText(/till 15:30/)).toBeInTheDocument()
+  })
+
   // ── Trade from the bell (P3) ────────────────────────────────────────────────
   it('places a paper BUY from an entry alert’s signal', async () => {
     stream.alerts = [{ ...ENTRY_ALERT, id: 'e', price: '100.5000', signalId: 'sig-1' }]
@@ -370,6 +408,78 @@ describe('AlertBell', () => {
     it('returns null when risk is zero or inputs are non-finite', () => {
       expect(chaseGuidance(makeSignal({ stop_loss: '100.0000' }), 100)).toBeNull()
       expect(chaseGuidance(makeSignal({ entry_price: 'nan' }), 100)).toBeNull()
+    })
+  })
+
+  describe('tradePlan (pure)', () => {
+    it('computes reward:risk from entry/SL/TP', () => {
+      const p = tradePlan(makeSignal()) // 100 / 96 / 112 → 12/4
+      expect(p).not.toBeNull()
+      expect(p?.sl).toBe(96)
+      expect(p?.tp).toBe(112)
+      expect(p?.rr).toBeCloseTo(3, 6)
+    })
+
+    it('null reward:risk when risk is zero, null plan when inputs non-finite', () => {
+      expect(tradePlan(makeSignal({ stop_loss: '100.0000' }))?.rr).toBeNull()
+      expect(tradePlan(makeSignal({ take_profit: 'nan' }))).toBeNull()
+    })
+  })
+
+  describe('signalAgeLabel (pure)', () => {
+    const t0 = new Date('2026-07-16T05:00:00+00:00').getTime()
+    it('buckets elapsed time into just-now / minutes / hours / days', () => {
+      expect(signalAgeLabel('2026-07-16T05:00:00+00:00', t0 + 30_000)).toBe('just now')
+      expect(signalAgeLabel('2026-07-16T05:00:00+00:00', t0 + 5 * 60_000)).toBe('5m ago')
+      expect(signalAgeLabel('2026-07-16T05:00:00+00:00', t0 + 3 * 3_600_000)).toBe('3h ago')
+      expect(signalAgeLabel('2026-07-16T05:00:00+00:00', t0 + 2 * 86_400_000)).toBe('2d ago')
+    })
+    it('returns empty for an unparseable timestamp', () => {
+      expect(signalAgeLabel('nonsense')).toBe('')
+    })
+  })
+
+  describe('validityLabel (pure)', () => {
+    it('shows trading-days left for a multi-day plan', () => {
+      expect(validityLabel(makeSignal({ days_valid_remaining: 4 }))).toBe('4d left')
+    })
+    it('shows the IST cut-off time when under a day of runway remains', () => {
+      // 10:00Z → 15:30 IST
+      expect(
+        validityLabel(
+          makeSignal({ days_valid_remaining: 0.3, validity_until: '2026-07-23T10:00:00+00:00' }),
+        ),
+      ).toBe('till 15:30')
+    })
+    it('degrades to expires-today when the deadline is unparseable', () => {
+      expect(validityLabel(makeSignal({ days_valid_remaining: 0, validity_until: 'x' }))).toBe(
+        'expires today',
+      )
+    })
+  })
+
+  describe('bestByLabel (pure)', () => {
+    it('marks the 80%-elapsed date for a multi-day plan', () => {
+      // created 01 Jul → until 31 Jul (30d span); 80% = +24d → 25 Jul.
+      const s = makeSignal({
+        created_at: '2026-07-01T00:00:00+05:30',
+        validity_until: '2026-07-31T00:00:00+05:30',
+      })
+      expect(bestByLabel(s)).toBe('best by 25 Jul')
+    })
+    it('marks an IST time for an intraday plan (span < 1 day)', () => {
+      // created 09:15 → until 15:15 (6h span); 80% = +4h48m → 14:03 IST.
+      const s = makeSignal({
+        created_at: '2026-07-01T03:45:00Z', // 09:15 IST
+        validity_until: '2026-07-01T09:45:00Z', // 15:15 IST
+      })
+      expect(bestByLabel(s)).toBe('best by 14:03')
+    })
+    it('returns empty when timestamps are missing or degenerate', () => {
+      expect(bestByLabel(makeSignal({ created_at: '', validity_until: '' }))).toBe('')
+      expect(
+        bestByLabel(makeSignal({ created_at: '2026-07-31T00:00:00Z', validity_until: '2026-07-01T00:00:00Z' })),
+      ).toBe('')
     })
   })
 

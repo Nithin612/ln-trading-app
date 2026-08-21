@@ -84,6 +84,9 @@ beforeEach(() => {
     { id: 42, symbol: 'RELIANCE' } as never,
   )
   vi.spyOn(signalsApiModule.signalsApi, 'getById').mockResolvedValue(makeSignal())
+  // The stacked OpportunitiesTable fetches active signals; empty keeps its section quiet so
+  // these feed tests are unaffected (its own coverage is in OpportunitiesTable.test.tsx).
+  vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({ total: 0, signals: [] })
 })
 
 afterEach(() => {
@@ -170,18 +173,49 @@ describe('LiveSignalsPage', () => {
     expect(placeSpy).not.toHaveBeenCalled()
   })
 
-  it('filters to entry signals only, client-side', async () => {
+  it('defaults to entry signals only; switching to All reveals the rest', async () => {
     streamState.alerts = [
       makeAlert({ id: 'a1', source: 'entry_zone', tag: 'zone_enter' }),
       makeAlert({ id: 'a2', source: 'pdh', tag: 'cross_up', signalId: null }),
     ]
     renderPage()
-    await waitFor(() => expect(screen.getByText('2 alerts this session')).toBeInTheDocument())
-
-    await userEvent.click(screen.getByRole('combobox', { name: /Alert type/i }))
-    await userEvent.click(await screen.findByRole('option', { name: /Entry signals only/i }))
+    // Default = entry-only → only the entry_zone alert is shown (user request 2026-08-21).
     await waitFor(() => expect(screen.getByText('1 alert this session')).toBeInTheDocument())
     expect(screen.queryByText('Crossed above')).not.toBeInTheDocument()
+
+    await userEvent.click(screen.getByRole('combobox', { name: /Alert type/i }))
+    await userEvent.click(await screen.findByRole('option', { name: /All alerts/i }))
+    await waitFor(() => expect(screen.getByText('2 alerts this session')).toBeInTheDocument())
+    expect(screen.getByText('Crossed above')).toBeInTheDocument()
+  })
+
+  it('surfaces the trade plan column: SL, TP, R:R and confidence', async () => {
+    // entry 2850, SL 2800, TP 2950 → R:R = 100/50 = 2.0, conf 82%.
+    streamState.alerts = [makeAlert()]
+    renderPage()
+    const feed = within(await screen.findByRole('table', { name: /live alert feed/i }))
+    await waitFor(() => expect(feed.getByText('₹2,800.00')).toBeInTheDocument()) // SL
+    expect(feed.getByText('₹2,950.00')).toBeInTheDocument() // TP
+    expect(feed.getByText(/R:R 2\.0/)).toBeInTheDocument()
+    expect(feed.getByText(/· 82%/)).toBeInTheDocument()
+  })
+
+  it('flags a stale, choppy near-expiry signal in the window column with a best-by date', async () => {
+    vi.spyOn(signalsApiModule.signalsApi, 'getById').mockResolvedValue(
+      makeSignal({
+        created_at: '2026-07-01T00:00:00Z',
+        validity_until: '2026-08-01T00:00:00Z',
+        near_expiry: true,
+        days_valid_remaining: 2,
+        choppy: true,
+      }),
+    )
+    streamState.alerts = [makeAlert()]
+    renderPage()
+    await waitFor(() => expect(screen.getByText(/stale/i)).toBeInTheDocument())
+    expect(screen.getByText('choppy')).toBeInTheDocument()
+    expect(screen.getByText(/best by/i)).toBeInTheDocument()
+    expect(screen.getByText(/2d left/)).toBeInTheDocument()
   })
 
   it('scopes styles server-side (the filter belongs on the socket)', async () => {

@@ -82,6 +82,14 @@ else.
   flip-readiness banner. The *context* complement — sector/index relative-strength +
   fundamentals + news as GATES/MODIFIERS (never additive) — is the **MCE**
   (`docs/phases/phase-MCE-market-context-engine.md`), the phase after 6.8.
+- **Anti-chase overlay since 2026-08-21** (`app/signals/chase_guard.py`, shadow-first,
+  `chase_gate_mode`, the 6th order-path overlay): the entry-*timing* complement — blocks when
+  the live LTP (read via `get_live_ltp`) has run > `chase_max_r` (0.33) × 1R past the signal's
+  entry (reward:risk gone; risk and reward move OPPOSITE on a chase). Direction-aware, fail-open
+  on no-price/zero-risk, stamps `broker_payload["chase_gate"]` (distinct from the broker's
+  post-fill `chase`). Sidecar `chase_shadow.py` → `chase-shadow-<date>.md`. Evidence: chase_r ≤
+  0.33 → +₹275 avg/62% win (37 trades), the 2 past 0.33R both losers. AlertBell also now surfaces
+  SL/TP/R:R + confidence + signal age + validity window per entry alert (frontend-only).
 - **MCE is IN PROGRESS — slices 1–4 built 2026-08-20 + slice 5a built 2026-08-21, all mode
   `shadow`/off (no money-path change).** Slice 1 = `sector_rs.py` (RS overlay); slice 2 = index price
   store (`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) + `benchmark.py` + wiring; slice 3 = sector-RS

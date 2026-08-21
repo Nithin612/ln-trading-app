@@ -45,6 +45,101 @@ export function chaseGuidance(signal: SignalOut, triggerPrice: number): ChaseInf
   };
 }
 
+// ── Trade-plan context (surfaced alongside the anti-chase guardrail) ─────────
+// Everything below is derived from the committed signal alone — no live data,
+// no backend change. It answers the three things a user can't judge from a bare
+// alert: what the plan is (SL/TP/reward:risk), when it was generated, and how
+// long it stays valid ("when only to consider").
+
+export interface TradePlan {
+  sl: number;
+  tp: number;
+  rr: number | null; // reward:risk = |tp − entry| / |entry − sl|; null if risk ≤ 0
+}
+
+export function tradePlan(signal: SignalOut): TradePlan | null {
+  const entry = Number(signal.entry_price);
+  const sl = Number(signal.stop_loss);
+  const tp = Number(signal.take_profit);
+  if (![entry, sl, tp].every(Number.isFinite)) return null;
+  const risk = Math.abs(entry - sl);
+  return { sl, tp, rr: risk > 0 ? Math.abs(tp - entry) / risk : null };
+}
+
+/**
+ * "just now" / "5m ago" / "3h ago" / "2d ago" — how long since the confluence
+ * engine committed this signal. `now` is injectable for deterministic tests.
+ */
+export function signalAgeLabel(createdAtIso: string, now: number = Date.now()): string {
+  const t = new Date(createdAtIso).getTime();
+  if (!Number.isFinite(t)) return "";
+  const mins = Math.floor((now - t) / 60_000);
+  if (mins < 1) return "just now";
+  if (mins < 60) return `${mins}m ago`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h ago`;
+  return `${Math.floor(hrs / 24)}d ago`;
+}
+
+const IST_HHMM = new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata",
+  hour: "2-digit",
+  minute: "2-digit",
+  hour12: false,
+});
+
+/**
+ * "when only to consider" — how much runway is left before the signal expires.
+ * Intraday plans (validity same-session) show the IST cut-off time ("till
+ * 15:15"); multi-day plans (swing/positional) show trading-days remaining
+ * ("4d left"), both server-computed on `days_valid_remaining`.
+ */
+export function validityLabel(signal: SignalOut): string {
+  const days = signal.days_valid_remaining;
+  if (Number.isFinite(days) && days >= 1) return `${Math.floor(days)}d left`;
+  const until = new Date(signal.validity_until);
+  if (Number.isNaN(until.getTime())) return "expires today";
+  return `till ${IST_HHMM.format(until)}`;
+}
+
+// The signal is "stale" once ≥80% of its validity window has elapsed (mirrors the backend
+// `near_expiry` flag). So the useful trade window is entry → that 80% mark; past it the edge
+// has decayed (a positional signal traded on ~day 25 of 30 is exactly this failure).
+export const NEAR_EXPIRY_FRACTION = 0.8;
+
+const IST_DAYMON = new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata",
+  day: "2-digit",
+  month: "short",
+});
+
+/**
+ * How far into its validity window a signal is, as a percent (0 = just committed, 100 = at
+ * expiry, >100 = lapsed). `null` when timestamps are unparseable/degenerate. The signal-age
+ * evidence shows the edge lives ≤40% elapsed and decays past it, so this feeds conviction ranking.
+ */
+export function pctElapsed(signal: SignalOut, now: number = Date.now()): number | null {
+  const created = new Date(signal.created_at).getTime();
+  const until = new Date(signal.validity_until).getTime();
+  if (!Number.isFinite(created) || !Number.isFinite(until) || until <= created) return null;
+  return ((now - created) / (until - created)) * 100;
+}
+
+/**
+ * "best by 12 Aug" / "best by 14:30" — the end of the useful trade window (the 80%-elapsed
+ * mark), after which the signal weakens. Date for multi-day plans, IST time for intraday.
+ * "" when the timestamps are unparseable or degenerate.
+ */
+export function bestByLabel(signal: SignalOut): string {
+  const created = new Date(signal.created_at).getTime();
+  const until = new Date(signal.validity_until).getTime();
+  if (!Number.isFinite(created) || !Number.isFinite(until) || until <= created) return "";
+  const span = until - created;
+  const bestBy = new Date(created + NEAR_EXPIRY_FRACTION * span);
+  const label = span > 24 * 60 * 60 * 1000 ? IST_DAYMON.format(bestBy) : IST_HHMM.format(bestBy);
+  return `best by ${label}`;
+}
+
 export interface TagMeta {
   label: string;
   glyph: string;

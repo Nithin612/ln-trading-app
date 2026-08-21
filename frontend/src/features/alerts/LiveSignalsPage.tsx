@@ -38,12 +38,14 @@ import { SimpleSelect } from '@/components/ui/simple-select'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { formatCurrency, formatPct } from '@/lib/format'
+import { formatCurrency, formatPct, formatRatio } from '@/lib/format'
 import { cn } from '@/lib/utils'
 import {
-  ALERT_STYLES, SOURCE_LABEL, TAG_META, TONE_CLASS, chaseGuidance, formatAlertTime,
+  ALERT_STYLES, SOURCE_LABEL, TAG_META, TONE_CLASS, bestByLabel, chaseGuidance,
+  formatAlertTime, signalAgeLabel, tradePlan, validityLabel,
 } from './alertPresentation'
 import { ENTRY_SOURCE, useAlertContext } from './useAlertContext'
+import { OpportunitiesTable } from './OpportunitiesTable'
 
 /** Client-side source lenses over whatever the server is streaming. */
 const SOURCE_FILTERS = [
@@ -89,6 +91,7 @@ const FeedRow = memo(function FeedRow({
 }) {
   const meta = TAG_META[alert.tag]
   const chase = signal ? chaseGuidance(signal, Number(alert.price)) : null
+  const plan = signal ? tradePlan(signal) : null
 
   return (
     <TableRow>
@@ -150,6 +153,53 @@ const FeedRow = memo(function FeedRow({
           <span className="text-(--color-text-muted) text-xs">—</span>
         )}
       </TableCell>
+      <TableCell className="text-xs">
+        {/* The plan the alert doesn't otherwise show: stop, target, reward:risk, confidence.
+            SL loss-coloured, TP profit-coloured, each labelled (never colour alone). */}
+        {plan ? (
+          <span className="flex items-center gap-2 font-mono tabular-nums">
+            <span>
+              SL <span className="text-(--color-loss)">{formatCurrency(plan.sl)}</span>
+            </span>
+            <span>
+              TP <span className="text-(--color-profit)">{formatCurrency(plan.tp)}</span>
+            </span>
+            {plan.rr !== null && (
+              <span className="text-(--color-text-muted)">R:R {formatRatio(plan.rr)}</span>
+            )}
+            {signal && (
+              <span className="text-(--color-text-muted)">· {signal.confidence_pct}%</span>
+            )}
+          </span>
+        ) : (
+          <span className="text-(--color-text-muted)">—</span>
+        )}
+      </TableCell>
+      <TableCell className="text-xs text-(--color-text-muted)">
+        {/* When generated + the useful window ("best by") + remaining validity; stale/choppy
+            flagged in warning tone so a late, low-runway entry is visible before the click. */}
+        {signal ? (
+          <span className="flex flex-col leading-tight">
+            <span>
+              signal {signalAgeLabel(signal.created_at)}
+              {bestByLabel(signal) && (
+                <span className="text-(--color-text)"> · {bestByLabel(signal)}</span>
+              )}
+            </span>
+            <span className="flex items-center gap-1.5">
+              <span className="font-mono tabular-nums">{validityLabel(signal)}</span>
+              {signal.near_expiry && (
+                <span className="text-(--color-warning)">
+                  <span aria-hidden="true">⚠</span> stale
+                </span>
+              )}
+              {signal.choppy && <span className="text-(--color-warning)">choppy</span>}
+            </span>
+          </span>
+        ) : (
+          <span>—</span>
+        )}
+      </TableCell>
       <TableCell numeric>
         {/* A shadow alert comes from a profile running for EVIDENCE only. The
             order path rejects a non-active signal with 409, so a Buy button
@@ -193,7 +243,9 @@ export function LiveSignalsPage() {
   const qc = useQueryClient()
   const halted = useTradingHaltStore((s) => s.halted)
 
-  const [sourceFilter, setSourceFilter] = useState('all')
+  // Default to entry signals only — the actionable buy/sell triggers; level crosses and
+  // volume bursts are context the user opts into (user request 2026-08-21).
+  const [sourceFilter, setSourceFilter] = useState('entry')
   const [tradingSignalId, setTradingSignalId] = useState<string | null>(null)
 
   const visible = useMemo(
@@ -254,8 +306,16 @@ export function LiveSignalsPage() {
     <div className="flex flex-col gap-4">
       <PageHeader
         title="Live signals"
-        subtitle="Every tick-trigger alert as it fires. Observability layer — alerts report a level touch, they never create or gate a signal."
+        subtitle="Ranked, live-priced opportunities up top — deduped active signals that stay until they hit target/stop or expire. The raw tick-trigger alert feed (ephemeral, trigger-price snapshots) is below."
       />
+
+      {/* The durable, live-priced, ranked list of what's tradeable now (user request 2026-08-21). */}
+      <OpportunitiesTable />
+
+      <div className="text-xs font-semibold uppercase tracking-wide text-(--color-text-muted) pt-1">
+        Alert feed
+        <span className="font-normal normal-case"> · raw tick triggers as they fire (ephemeral)</span>
+      </div>
 
       <div className="flex flex-wrap items-center gap-3 p-3 rounded-lg bg-(--color-surface-2) border border-(--color-border)">
         <span className="flex items-center gap-1.5 text-xs">
@@ -393,6 +453,8 @@ export function LiveSignalsPage() {
                 <TableHead>Style</TableHead>
                 <TableHead numeric>Price</TableHead>
                 <TableHead>Entry discipline</TableHead>
+                <TableHead>Plan</TableHead>
+                <TableHead>Window</TableHead>
                 <TableHead numeric>Trade</TableHead>
               </TableRow>
             </TableHeader>

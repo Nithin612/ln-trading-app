@@ -24,6 +24,7 @@ from app.broker.circuit_bands import get_circuit_band
 from app.broker.paper_broker import (
     PaperOrderError,
     close_position,
+    get_live_ltp,
     place_paper_order,
     update_position_pnl,
 )
@@ -54,6 +55,7 @@ from app.services.journal_service import auto_create_journal_entry
 from app.services.liquidity import load_traded_values
 from app.services.profit_lock_shadow import compare_position
 from app.signals import (
+    chase_guard,
     circuit_guard,
     entry_quality,
     liquidity_guard,
@@ -138,11 +140,12 @@ async def _apply_eligibility_overlays(  # noqa: C901 — linear sequence of inde
     sector_rs.RelativeStrengthVerdict | None,
     market_regime.RegimeVerdict | None,
     liquidity_guard.LiquidityVerdict | None,
+    chase_guard.ChaseVerdict | None,
 ]:
-    """Run the regime · circuit-band · entry-quality · sector-RS · market-regime · liquidity
-    overlays on a committed signal. Raises 409 if any ACTIVE gate rejects; returns (circuit,
-    eq, rs, mkt, liq) verdicts to stamp on the order (None when that gate is off). All
-    fail-open, frozen engine untouched — the downstream-overlay pattern."""
+    """Run the regime · circuit-band · entry-quality · sector-RS · market-regime · liquidity ·
+    anti-chase overlays on a committed signal. Raises 409 if any ACTIVE gate rejects; returns
+    (circuit, eq, rs, mkt, liq, chase) verdicts to stamp on the order (None when that gate is
+    off). All fail-open, frozen engine untouched — the downstream-overlay pattern."""
     # Regime-eligibility overlay (no-op unless regime_gate_mode == "active").
     gate_reason = regime_guard.order_block_reason(signal, settings.regime_gate_mode)
     if gate_reason:
@@ -288,7 +291,25 @@ async def _apply_eligibility_overlays(  # noqa: C901 — linear sequence of inde
         if liq_reason:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=liq_reason)
 
-    return circuit_verdict, eq_verdict, rs_verdict, mkt_verdict, liq_verdict
+    # Anti-chase overlay. `off` = a TRUE no-op (no LTP read, no stamp); else judge how far the
+    # LIVE price (Redis LTP, the same reference the broker fills near) has run past the signal's
+    # entry. get_live_ltp does its own Redis + fail-to-None, so no DB savepoint is needed; a
+    # missing price (off-market) fails open (assessable=False). Runs last — a pre-fill execution
+    # check, distinct from the upstream selection gates.
+    chase_verdict = None
+    if settings.chase_gate_mode != "off":
+        chase_verdict = chase_guard.evaluate(
+            entry=Decimal(str(signal.entry_price)),
+            stop_loss=Decimal(str(signal.stop_loss)),
+            market_price=await get_live_ltp(signal.stock_id),
+            side=side,
+            max_chase_r=Decimal(str(settings.chase_max_r)),
+        )
+        chase_reason = chase_guard.order_block_reason(chase_verdict, settings.chase_gate_mode)
+        if chase_reason:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=chase_reason)
+
+    return circuit_verdict, eq_verdict, rs_verdict, mkt_verdict, liq_verdict, chase_verdict
 
 
 def _overlay_stamps(
@@ -297,9 +318,11 @@ def _overlay_stamps(
     rs_verdict: sector_rs.RelativeStrengthVerdict | None,
     mkt_verdict: market_regime.RegimeVerdict | None,
     liq_verdict: liquidity_guard.LiquidityVerdict | None,
+    chase_verdict: chase_guard.ChaseVerdict | None,
 ) -> dict[str, object]:
     """The eligibility-overlay verdicts as order-payload stamps — only the gates that ran
-    (a `None` verdict = that gate was off, so no footprint)."""
+    (a `None` verdict = that gate was off, so no footprint). ``chase_gate`` is the pre-fill
+    anti-chase read; distinct from the broker's post-fill ``chase`` telemetry key."""
     stamps: dict[str, object] = {}
     for key, verdict in (
         ("circuit_gate", circuit_verdict),
@@ -307,6 +330,7 @@ def _overlay_stamps(
         ("sector_rs", rs_verdict),
         ("market_regime", mkt_verdict),
         ("liquidity", liq_verdict),
+        ("chase_gate", chase_verdict),
     ):
         if verdict is not None:
             stamps[key] = verdict.as_payload()
@@ -344,6 +368,7 @@ async def place_order(
         rs_verdict,
         mkt_verdict,
         liq_verdict,
+        chase_verdict,
     ) = await _apply_eligibility_overlays(db, signal, req.side)
 
     try:
@@ -357,7 +382,9 @@ async def place_order(
     # Stamp the overlay verdicts on the order for the shadow reports (shadow + active
     # only; off leaves no footprint). New dict, not in-place, so SQLAlchemy flags the
     # JSONB column dirty.
-    stamps = _overlay_stamps(circuit_verdict, eq_verdict, rs_verdict, mkt_verdict, liq_verdict)
+    stamps = _overlay_stamps(
+        circuit_verdict, eq_verdict, rs_verdict, mkt_verdict, liq_verdict, chase_verdict
+    )
     if stamps:
         order.broker_payload = {**(order.broker_payload or {}), **stamps}
     await db.commit()
