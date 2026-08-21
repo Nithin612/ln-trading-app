@@ -51,8 +51,16 @@ from app.schemas.trading import (
 )
 from app.services.benchmark import load_market_regime_context, load_rs_context
 from app.services.journal_service import auto_create_journal_entry
+from app.services.liquidity import load_traded_values
 from app.services.profit_lock_shadow import compare_position
-from app.signals import circuit_guard, entry_quality, market_regime, regime_guard, sector_rs
+from app.signals import (
+    circuit_guard,
+    entry_quality,
+    liquidity_guard,
+    market_regime,
+    regime_guard,
+    sector_rs,
+)
 from app.trading.atr import atr_timeframe_for, latest_atr
 from app.trading.circuit_breaker import (
     check_circuit_breaker,
@@ -129,11 +137,12 @@ async def _apply_eligibility_overlays(  # noqa: C901 — linear sequence of inde
     entry_quality.EntryQualityVerdict | None,
     sector_rs.RelativeStrengthVerdict | None,
     market_regime.RegimeVerdict | None,
+    liquidity_guard.LiquidityVerdict | None,
 ]:
-    """Run the regime · circuit-band · entry-quality · sector-RS · market-regime overlays
-    on a committed signal. Raises 409 if any ACTIVE gate rejects; returns (circuit, eq, rs,
-    mkt) verdicts to stamp on the order (None when that gate is off). All fail-open, frozen
-    engine untouched — the downstream-overlay pattern."""
+    """Run the regime · circuit-band · entry-quality · sector-RS · market-regime · liquidity
+    overlays on a committed signal. Raises 409 if any ACTIVE gate rejects; returns (circuit,
+    eq, rs, mkt, liq) verdicts to stamp on the order (None when that gate is off). All
+    fail-open, frozen engine untouched — the downstream-overlay pattern."""
     # Regime-eligibility overlay (no-op unless regime_gate_mode == "active").
     gate_reason = regime_guard.order_block_reason(signal, settings.regime_gate_mode)
     if gate_reason:
@@ -250,7 +259,58 @@ async def _apply_eligibility_overlays(  # noqa: C901 — linear sequence of inde
         if mkt_reason:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=mkt_reason)
 
-    return circuit_verdict, eq_verdict, rs_verdict, mkt_verdict
+    # Liquidity overlay (MCE slice 5a). `off` = TRUE no-op. Median daily traded value from
+    # ohlcv_1d; side-independent (illiquidity traps a long and a short alike). Same savepoint
+    # fail-open discipline — a DB fault in the liquidity read must never suppress a trade.
+    liq_verdict = None
+    if settings.liquidity_gate_mode != "off":
+        liq_values: list[Decimal] = []
+        try:
+            async with db.begin_nested():
+                liq_values = await load_traded_values(
+                    db,
+                    signal.stock_id,
+                    lookback=settings.liquidity_lookback,
+                    as_of=signal.created_at,
+                )
+        except SQLAlchemyError:
+            log.exception(
+                "liquidity context load failed; failing open for stock_id=%s", signal.stock_id
+            )
+            liq_values = []
+        liq_verdict = liquidity_guard.evaluate(
+            traded_values=liq_values,
+            side=side,
+            lookback=settings.liquidity_lookback,
+            min_traded_value=Decimal(str(settings.liquidity_min_traded_value_inr)),
+        )
+        liq_reason = liquidity_guard.order_block_reason(liq_verdict, settings.liquidity_gate_mode)
+        if liq_reason:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=liq_reason)
+
+    return circuit_verdict, eq_verdict, rs_verdict, mkt_verdict, liq_verdict
+
+
+def _overlay_stamps(
+    circuit_verdict: circuit_guard.CircuitVerdict | None,
+    eq_verdict: entry_quality.EntryQualityVerdict | None,
+    rs_verdict: sector_rs.RelativeStrengthVerdict | None,
+    mkt_verdict: market_regime.RegimeVerdict | None,
+    liq_verdict: liquidity_guard.LiquidityVerdict | None,
+) -> dict[str, object]:
+    """The eligibility-overlay verdicts as order-payload stamps — only the gates that ran
+    (a `None` verdict = that gate was off, so no footprint)."""
+    stamps: dict[str, object] = {}
+    for key, verdict in (
+        ("circuit_gate", circuit_verdict),
+        ("entry_quality", eq_verdict),
+        ("sector_rs", rs_verdict),
+        ("market_regime", mkt_verdict),
+        ("liquidity", liq_verdict),
+    ):
+        if verdict is not None:
+            stamps[key] = verdict.as_payload()
+    return stamps
 
 
 @router.post("/orders", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
@@ -278,9 +338,13 @@ async def place_order(
 
     # Eligibility overlays (regime · circuit-band · entry-quality) — each a no-op
     # unless its mode is active; returns verdicts to stamp for the shadow reports.
-    circuit_verdict, eq_verdict, rs_verdict, mkt_verdict = await _apply_eligibility_overlays(
-        db, signal, req.side
-    )
+    (
+        circuit_verdict,
+        eq_verdict,
+        rs_verdict,
+        mkt_verdict,
+        liq_verdict,
+    ) = await _apply_eligibility_overlays(db, signal, req.side)
 
     try:
         order, _pos = await place_paper_order(
@@ -293,15 +357,7 @@ async def place_order(
     # Stamp the overlay verdicts on the order for the shadow reports (shadow + active
     # only; off leaves no footprint). New dict, not in-place, so SQLAlchemy flags the
     # JSONB column dirty.
-    stamps: dict[str, object] = {}
-    if circuit_verdict is not None:
-        stamps["circuit_gate"] = circuit_verdict.as_payload()
-    if eq_verdict is not None:
-        stamps["entry_quality"] = eq_verdict.as_payload()
-    if rs_verdict is not None:
-        stamps["sector_rs"] = rs_verdict.as_payload()
-    if mkt_verdict is not None:
-        stamps["market_regime"] = mkt_verdict.as_payload()
+    stamps = _overlay_stamps(circuit_verdict, eq_verdict, rs_verdict, mkt_verdict, liq_verdict)
     if stamps:
         order.broker_payload = {**(order.broker_payload or {}), **stamps}
     await db.commit()

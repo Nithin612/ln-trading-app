@@ -1,15 +1,18 @@
 # Market Context Engine (MCE) — design capture
 
-**Status: IN PROGRESS — slices 1 + 2 + 3 + 4 built 2026-08-20 (all mode `shadow`/off — no
-money-path change).** Slice 1 = the pure RS overlay (`sector_rs.py`); slice 2 = index price store
+**Status: IN PROGRESS — slices 1–4 built 2026-08-20 + slice 5a (liquidity gate) built 2026-08-21;
+all mode `shadow`/off — no money-path change.** Slice 1 = the pure RS overlay (`sector_rs.py`); slice 2 = index price store
 (`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) + benchmark provider + order-path wiring; slice 3 =
 the sector-RS shadow sidecar + flip to shadow; **slice 4 = the market-regime gate (200-DMA + VIX,
 `market_regime.py` + sidecar + `scripts/backfill_indices.py`), mode shadow** — the top of the
-top-down funnel above sector-RS. All agent-reviewed (quant-verifier PASS ×4 + bug-hunter ×2,
-findings actioned). **NEXT: run the deep index backfill** (`scripts/backfill_indices.py`) so the
-200-DMA + RS get real history, then let forward evidence accrue; shadow→active flips need the
-R-track (§8-on-≥2y + sign-off). **Slice 5 = fundamentals (source DECIDED = NSE/BSE XBRL); slice 6
-= news veto.** The named phase **after Phase 6.8, before Phase-7 (live)**. This doc captures the *entry-context* design agreed 2026-08-18 (the SRTL /
+top-down funnel above sector-RS; **slice 5a = the liquidity junk gate (`liquidity_guard.py`), mode
+shadow** — blocks entries too illiquid to exit (the SRTL archetype), from ohlcv_1d (real data now).
+All agent-reviewed (quant-verifier PASS ×5 + bug-hunter ×3, findings actioned). **NEXT: (1) run the
+deep index backfill** (`scripts/backfill_indices.py`) so the 200-DMA + sector-RS get real history;
+**(2) slice 5b = the XBRL market_cap writer** (greenfield scraper) then a market-cap floor on the
+junk gate; **slice 6 = news veto.** Shadow→active flips need the R-track (§8-on-≥2y + sign-off) — and
+5a's early evidence is *against* the illiquid-is-worse thesis, so hold. The named phase **after Phase
+6.8, before Phase-7 (live)**. This doc captures the *entry-context* design agreed 2026-08-18 (the SRTL /
 entry-selection discussion). Full prior context: the `market_context_engine_deferred` memory
 + `docs/Market_Context_Engine_Spec.docx` (spec on disk). **The sliced plan is now at the
 bottom of this doc ("Sliced plan (started 2026-08-20)"), including one OPEN decision the
@@ -183,14 +186,30 @@ Slice 2 is now unblocked.
   (`scripts/backfill_indices.py 2023-07-01 <today>`); the smoke correctly showed all 414 cohort
   signals as "no market data (< 200-DMA history)". A shadow→active flip needs the R-track
   (§8-on-≥2y + sign-off).
-- **Slice 5 — fundamentals quality gate.** Highest strategic value (junk/quality filter — the
-  SRTL-class protection) but a DATA project: `market_cap_cr` is **0 of 2365 populated** (verified
-  2026-08-20), no fundamentals table. **Data source DECIDED 2026-08-20 (user) = NSE/BSE XBRL** (the
-  F1 "real path": authoritative, free, no ToS/privacy risk, unlocks the full fundamentals set by
-  extending `filings_consumer` — chosen over the yfinance MVP, which would leak ticker lookups to an
-  external service). Step 1 = the XBRL fundamentals writer (starting with `market_cap_cr`); step 2 =
-  a static quality/junk GATE (exclude illiquid ₹-micro-caps / poor quality). Can only ever be a GATE
-  (no historical fundamentals to §8-validate).
+- **Slice 5 — junk filter. SPLIT 2026-08-21 (user) into 5a liquidity [DONE] + 5b XBRL market_cap
+  [pending].** Grounding it revealed the SRTL disaster was an *exitability* (liquidity) failure, not
+  a *size* one — and liquidity is computable from data we already have, while the decided XBRL path is
+  a greenfield external scraper. So:
+  - **Slice 5a — liquidity gate. DONE 2026-08-21 (mode `shadow`).** `app/signals/liquidity_guard.py`
+    (pure overlay: **median** daily traded value ₹=close×volume over `lookback` sessions vs a floor;
+    **side-independent** — illiquidity traps a long and a short alike) + `app/services/liquidity.py`
+    (`load_traded_values`, as-of anchored, no look-ahead) + order-path wiring (savepoint fail-open) +
+    `app/services/liquidity_shadow.py` sidecar (→ `liquidity-shadow-<date>.md`, illiquid/liquid/no-data
+    + per-entry table) + `settings.liquidity_*` (floor ₹1cr/day default). 18 tests. quant-verifier
+    PASS-WITH-NOTES (median/floor/side-independence/look-ahead/fail-open all correct; INFO: flat floor
+    across classifications — make it per-class before flipping active; a `dataclasses.replace` cleanup
+    actioned). bug-hunter CLEAN (three-savepoint interplay reproduced sound with real PG errors; the
+    `_overlay_stamps` refactor behaviour-identical). **Works on REAL data now** (ohlcv_1d, no backfill).
+    **⚠ FORWARD-EVIDENCE FINDING (2026-08-19 smoke, 414-signal cohort):** illiquid set (131 sigs, 14
+    resolved) is net **+₹1,667 (avg +₹119)** while the liquid set (283, 55 resolved) is net **−₹3,879
+    (avg −₹71)** — i.e. the live tape so far *contradicts* "illiquid = worse". Flip-bar correctly holds
+    NOT READY (14<20 + illiquid not net-negative). Do NOT flip active on the SRTL anecdote; let it accrue
+    and let the §8 + evidence decide (and revisit the ₹1cr floor / per-class floors).
+  - **Slice 5b — XBRL market_cap writer [pending].** The decided NSE/BSE XBRL path — a **greenfield
+    external scraper** (no XBRL/shares-outstanding code exists; `filings_consumer` polls only
+    *announcement* JSON). Get `market_cap_cr` populated (0/2365 today) → shares-outstanding × price;
+    then add a market-cap floor to the gate. Needs the live source in hand (a real spike, ToS-grey
+    like the existing feed). Static GATE (no historical fundamentals to §8).
 - **Slice 6 — news/sentiment veto.** Extend `event_guard` (today: a flat 60-min suppress at
   signal-generation around `HIGH_IMPACT_TYPES`) to an earnings-blackout window + rating-DOWNGRADE
   veto + severity/decay. Veto-value only (~0 directional alpha), shallow history (`corporate_filings`

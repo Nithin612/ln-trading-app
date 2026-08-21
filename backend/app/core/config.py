@@ -277,6 +277,22 @@ class Settings(BaseSettings):
     # India-VIX "elevated" threshold — INFORMATIONAL only (stamped/reported, never blocks).
     market_regime_vix_threshold: float = 20.0
 
+    # ── Liquidity overlay (MCE slice 5a, app/signals/liquidity_guard.py) ───────────────
+    # The junk filter's core: block an entry into a name too illiquid to exit (the SRTL
+    # archetype — a ₹39 micro-cap with no buyers for the stop). Metric = the MEDIAN daily
+    # traded value (₹ = close × volume) over `liquidity_lookback` sessions from ohlcv_1d,
+    # side-INDEPENDENT (illiquidity traps a long and a short alike). Frozen engine untouched
+    # (a downstream overlay). FAIL-OPEN: history thinner than the lookback never blocks.
+    #   off    — TRUE no-op.
+    #   shadow — measure + stamp, never act (default).
+    #   active — reject an ineligible signal. Behaviour-changing → forward evidence +
+    #            §8-on-≥2y + explicit sign-off first. Fully reversible.
+    liquidity_gate_mode: Literal["off", "shadow", "active"] = "shadow"
+    liquidity_lookback: int = 20
+    # Median-daily-traded-value floor in ₹ (default ₹1 crore/day). Tune from the shadow
+    # evidence before flipping active.
+    liquidity_min_traded_value_inr: float = 10_000_000.0
+
     # ── Profit-lock: absolute-rupee ladder (app/trading/profit_lock.py) ─────
     # When a user opts in (users.profit_lock_enabled), the position monitor
     # governs open PAPER exits with a rupee-denominated profit ladder — the

@@ -338,16 +338,14 @@ which is what Phase-6 expectancy calibration is for.
 2. **Red baseline — RESOLVED** (`e32fd48`), re-verified 2026-08-20: order-path set = **138 passed,
    exit 0**.
 
-**▶ MCE IN PROGRESS — slices 1 + 2 + 3 + 4 built 2026-08-20** (details + NEXT in the CONTINUE HERE
-block below). Slice 1 = `app/signals/sector_rs.py` (pure RS overlay); slice 2 = index price store
-(`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) + benchmark provider + order-path wiring; slice 3 = the
-sector-RS shadow sidecar + flip to **mode `shadow`**; **slice 4 = the market-regime gate (200-DMA +
-VIX, `market_regime.py` + `market_regime_shadow.py` + `scripts/backfill_indices.py`), mode shadow** —
-the top of the top-down funnel above sector-RS.
-**Benchmark source = Option B (real index OHLC), realized via the NSE indices bhavcopy CSV that
-`vix_service` already downloads — NO Kite dependency** (that one CSV carries every NSE index;
-tokenless + testable + self-healing via the EOD catch-up). All slices agent-reviewed (quant-verifier
-PASS ×4 + bug-hunter ×2, findings actioned). Full sliced plan in
+**▶ MCE IN PROGRESS — slices 1–4 built 2026-08-20 + slice 5a built 2026-08-21** (details + NEXT in
+the CONTINUE HERE block below). Slice 1 = `sector_rs.py` (RS overlay); slice 2 = index price store
+(`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) + benchmark provider + wiring; slice 3 = sector-RS shadow
+sidecar + flip to `shadow`; slice 4 = the market-regime gate (200-DMA + VIX) + `scripts/backfill_indices.py`;
+**slice 5a = the liquidity junk gate (`liquidity_guard.py`), mode shadow** — blocks entries too illiquid
+to exit (the SRTL archetype), from ohlcv_1d (real data now). **Index benchmark source = Option B (real
+index OHLC via the NSE indices CSV `vix_service` already downloads — NO Kite dep).** All slices
+agent-reviewed (quant-verifier PASS ×5 + bug-hunter ×3, findings actioned). Full sliced plan in
 [`phases/phase-MCE-market-context-engine.md`](phases/phase-MCE-market-context-engine.md)
 ("Sliced plan (started 2026-08-20)").
 
@@ -365,17 +363,20 @@ that continue POST-close (none a code task, none blocking — carried in the pha
 3. **Pair-trading (6.5)** — the nightly minter + outcome tracker run themselves;
    `pair-attribution-<date>.md` answers df-vs-adf once evidence accrues; tune knobs from THAT.
 
-**▶ MCE IN PROGRESS — slices 1 + 2 + 3 + 4 DONE 2026-08-20 (all mode `shadow`/off — no money-path
-change).** Slice 1 = `sector_rs.py` (pure RS overlay); slice 2 = index price store (`index_ohlcv_1d`,
-migration `b8c9d0e1f2a3`) fed from the NSE indices bhavcopy CSV (Option B, no Kite dep) + benchmark
-provider + order-path wiring; slice 3 = the sector-RS shadow sidecar + flip to `shadow`; **slice 4 =
-the market-regime gate (200-DMA + VIX)** — `app/signals/market_regime.py` (pure overlay: 200-DMA trend
-gate symmetric long/short; VIX informational-only, never gates) + `benchmark.load_market_regime_context`
-(market-wide, as-of anchored) + order-path wiring (savepoint fail-open) + `market_regime_shadow.py`
-sidecar + **`scripts/backfill_indices.py`** (deep index+VIX backfill, one download feeds both feeds,
-per-day isolation) + `settings.market_regime_*` (mode `shadow`). Reviews across the slices:
-quant-verifier PASS ×4 + bug-hunter ×2 (all findings fixed w/ regression tests). 22 slice-4 tests;
-order-path regression green (191).
+**▶ MCE IN PROGRESS — slices 1–4 DONE 2026-08-20 + slice 5a DONE 2026-08-21 (all mode `shadow`/off —
+no money-path change).** Slice 1 = `sector_rs.py` (RS overlay); slice 2 = index price store
+(`index_ohlcv_1d`, migration `b8c9d0e1f2a3`) fed from the NSE indices CSV (Option B, no Kite dep) +
+benchmark provider + wiring; slice 3 = sector-RS shadow sidecar + flip to `shadow`; slice 4 = the
+market-regime gate (200-DMA + VIX, `market_regime.py` + sidecar + `scripts/backfill_indices.py`);
+**slice 5a = the liquidity junk gate** — `app/signals/liquidity_guard.py` (block entries too illiquid
+to exit: median daily traded value ₹=close×volume < floor, side-independent) + `app/services/liquidity.py`
++ order-path wiring (savepoint fail-open) + `liquidity_shadow.py` sidecar + `settings.liquidity_*`
+(₹1cr/day floor). All order-path overlays fail-open in a savepoint; the 5 verdict stamps live in an
+`_overlay_stamps` helper. Reviews across the slices: quant-verifier PASS ×5 + bug-hunter ×3 (all
+findings fixed w/ regression tests). 18 slice-5a tests; order-path regression green (188).
+**⚠ 5a forward-evidence finding** (2026-08-19 cohort smoke): illiquid set net **+₹119 avg** (14
+resolved) vs liquid **−₹71 avg** (55 resolved) — the tape so far *contradicts* "illiquid = worse", flip-bar
+correctly NOT READY; do NOT flip on the SRTL anecdote, and revisit the ₹1cr / per-class floor.
 **▶ NEXT = run the deep index backfill, then let evidence accrue.** BOTH the sector-RS (needs ~21
 sessions) and the market-regime 200-DMA (needs ~200 sessions + ~2y for §8) are INERT until index
 history is deep enough. The EOD catch-up only heals ≤21d — so run
@@ -383,10 +384,11 @@ history is deep enough. The EOD catch-up only heals ≤21d — so run
 (idempotent, resumable, ~2y of NSE index+VIX). The nightly `make worker` keeps it current after. Then
 the sidecars' would-block/eligible buckets populate; a shadow→active flip on any gate needs the R-track
 (§8-on-≥2y + sign-off; reversible via the `*_gate_mode` setting).
-**Slices 5/6 (decided, not built):** **slice 5 = fundamentals quality gate, source = NSE/BSE XBRL**
-(`market_cap_cr` 0/2365 — blocked until the XBRL writer; static junk/quality GATE, never §8-able);
-**slice 6 = news veto** (extend `event_guard`). Also open (non-blocking): paper day-1 for the 6.8 stack
-(deferred until the user says "proceed" — no clock started), and the gated 6.8 research track (R1/R2/F1).
+**Slice 5b + 6 (decided, not built):** **slice 5b = XBRL `market_cap` writer** — a greenfield NSE/BSE
+scraper (no XBRL/shares-outstanding code exists; `filings_consumer` polls only announcement JSON),
+populates `market_cap_cr` (0/2365) → then a market-cap floor joins the liquidity gate; **slice 6 = news
+veto** (extend `event_guard`). Also open (non-blocking): paper day-1 for the 6.8 stack (deferred until
+the user says "proceed" — no clock started), and the gated 6.8 research track (R1/R2/F1).
 
 **Next BUILD phase = Phase 6.8 (Execution Realism & Exchange-Safety)** — APPROVED 2026-08-17 (user),
 inserted between Phase 6 and the **Market Context Engine** (which stays the phase after 6.8, before

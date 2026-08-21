@@ -7,6 +7,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(MCE slice 5a): liquidity junk gate + shadow sidecar (2026-08-21)
+
+The junk filter's core, and the direct fix for the SRTL archetype (a BUY on a ₹39 micro-cap that blew
+up because it was **un-exitable — illiquid**, not merely small). Slice 5 was split: 5a = liquidity
+(buildable now from `ohlcv_1d`, no new data); 5b = the XBRL market_cap writer (greenfield scraper, its
+own spike). Same overlay-lane / shadow-first / fail-open pattern; frozen engine untouched; mode `shadow`.
+
+- `app/signals/liquidity_guard.py` — pure overlay: block when the **median** daily traded value
+  (₹ = close × volume) over `liquidity_lookback` sessions is below `liquidity_min_traded_value_inr`
+  (default ₹1 crore/day). Median (not mean) so one block-deal spike can't fake liquidity.
+  **Side-independent** — illiquidity traps a long and a short alike.
+- `app/services/liquidity.py::load_traded_values` — the close×volume series, anchored to
+  `signal.created_at` (no look-ahead).
+- Wired into `_apply_eligibility_overlays` behind a `begin_nested` savepoint (DB fault → fail open);
+  the 5 verdict stamps were extracted to a `_overlay_stamps` helper (place_order simplified).
+- `app/services/liquidity_shadow.py` — forward-evidence sidecar → `liquidity-shadow-<date>.md`
+  (illiquid / liquid / no-data + per-entry table + flip banner), wired into `make analysis`.
+
+`18 tests`, ruff/mypy clean, order-path regression green (188). **quant-verifier PASS-WITH-NOTES**
+(median/floor/side-independence/look-ahead/fail-open all correct; INFO: make the floor per-class before
+flipping active). **bug-hunter CLEAN** (three sequential savepoints in one order confirmed sound with
+real Postgres errors; the stamp refactor behaviour-identical). Runs on real data now (no backfill).
+**Forward-evidence finding:** over the 414-signal cohort the illiquid set is so far net-*positive*
+(+₹119 avg, 14 resolved) and the liquid set net-*negative* (−₹71 avg, 55 resolved) — the live tape
+does not yet support "illiquid = worse"; the flip-bar correctly holds NOT READY. A shadow→active flip
+needs the R-track (§8-on-≥2y + sign-off).
+
 ### feat(MCE slice 4): market-regime (200-DMA + VIX) overlay + shadow sidecar + deep index backfill (2026-08-20)
 
 The broadest top-down filter, above sector-RS: block a fresh long when the broad market (NIFTY 50) is

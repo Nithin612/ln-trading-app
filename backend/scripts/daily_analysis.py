@@ -183,6 +183,21 @@ async def _run(day: date, user_id: int, week_of: date | None, now: datetime) -> 
         except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
             print(f"market-regime shadow step skipped: {exc!r}", flush=True)
 
+        # Liquidity forward evidence (MCE slice 5a): what the liquidity overlay WOULD suppress
+        # on the live cohort (entries into names too illiquid to exit — the SRTL archetype),
+        # with a per-entry table + a flip-readiness banner. Same read-only, never-block
+        # discipline as the gate sidecars above.
+        try:
+            from app.services import liquidity_shadow as lqs
+
+            lshadow = await lqs.compute_liquidity_shadow(db)
+            lpath = _ANALYSIS_DIR / f"liquidity-shadow-{day.isoformat()}.md"
+            lpath.write_text(lqs.render_markdown(lshadow, day=day))
+            print(f"wrote {lpath.relative_to(_REPO_ROOT)}", flush=True)
+            print(lqs.readiness_line(lshadow), flush=True)
+        except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
+            print(f"liquidity shadow step skipped: {exc!r}", flush=True)
+
         if week_of is not None:
             monday = week_of - timedelta(days=week_of.weekday())
             wk = await build_week_summary(db, monday=monday, user_id=user_id, now=now)
