@@ -55,7 +55,14 @@ US/EU studies) fits our near-close→next-day style and is testable from data we
 flagged: the recent "recovery into the close" could be CAS OR the current oversold regime (the same
 study above) — must be measured, not eyeballed. Plan: Stage 0 feed-feasibility spike → Stage 1 capture
 (3:15 price, official close, CAS move, next-day return) → Stage 2 study the overnight reversal
-(read-only) → Stage 3 fold as a feature only if a robust edge survives. No code shipped (plan only).
+(read-only) → Stage 3 fold as a feature only if a robust edge survives.
+- **Feed decision (2026-08-22): Kite, not a commercial vendor.** Kite's WebSocket `MODE_FULL` struct
+  has no imbalance field → CAS indicative-close/imbalance can only come from REST `/quote`; Global
+  Datafeeds (true-TBT/FIX vendor) is overkill for our paper/low-frequency use.
+- **`scripts/cas_probe.py`** (shipped) — a read-only Stage-0 probe: polls `kite_rest.quote()` across the
+  3:15–3:35 window, dumps raw JSON to `docs/analysis/cas-probe-<date>.jsonl`, flags any non-documented /
+  `imbalance`-named key (the CAS fields aren't in Kite's static docs). Run live Mon 2026-08-25; dry-run
+  `--once` verified (graceful no-token exit). No order path.
 
 ### feat(Live Signals): persistent, live-priced, ranked "Opportunities" list (2026-08-21)
 

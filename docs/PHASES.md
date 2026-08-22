@@ -10,7 +10,7 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-08-21) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-08-22) — read this block first
 
 **v2 Phases 0–2 ✅ done · Phase 3 (realtime) ✅ GATED 2026-08-14 · Phase 4 ✅ done ·
 Phase 5 ✅ GATED 2026-08-07 · Phase 6 ✅ GATED + CLOSED 2026-08-20 (6.1–6.5 built shadow-first; regime
@@ -326,7 +326,21 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-08-21.**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-08-22.**
+
+**★ MONDAY 2026-08-25 FIRST TASK — CAS Stage-0 live probe (market-hours only, 3:15–3:35 IST).** The
+weekend arc is committed (`fd29930`, unpushed). The live-market thing that could only be done Monday:
+confirm where Kite surfaces the new Closing-Auction-Session indicative-close + imbalance. RESOLVED in
+code that the **WebSocket has no imbalance field → it's REST `/quote` only**; the probe just needs to
+capture the raw field names live. **Run during 3:15–3:35 IST (after `scripts/kite_login.py`):**
+`cd backend && uv run python scripts/cas_probe.py` → writes `docs/analysis/cas-probe-<date>.jsonl` +
+prints `⚑ NEW` lines for any auction field. Then analyse the JSONL (grep `imbalance`/`indicative`) and,
+if the fields are there, productionize into a market-hours Celery task (Stage 1 capture) + study the
+overnight reversal (Stage 2). Full context + why: `docs/CAS_CLOSING_AUCTION_ANALYSIS_2026-08-21.md`.
+Also pending (non-urgent): push `fd29930`; commit today's `docs/analysis/*-2026-08-21.md` daily
+artifacts via the normal daily flow. **Decided 2026-08-22: use Kite (already integrated, exposes CAS
+via /quote), NOT a commercial vendor (Global Datafeeds) — overkill for our paper/low-frequency use.**
+
 
 **Handover items from the 2026-08-19 two-session split — now RESOLVED:**
 1. **Provisional breadth-flood fix — MERGED 2026-08-20 (`c1b4752`).** The `--ff-only` Session 1 asked for

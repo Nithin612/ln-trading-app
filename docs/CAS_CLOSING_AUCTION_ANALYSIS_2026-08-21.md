@@ -76,13 +76,33 @@ CAS by eye — that's the exact n=4 trap the regime study just warned against.**
 
 ## 5. Execution plan (staged, paper-first, evidence-first)
 
-### Stage 0 — Feasibility spike (do FIRST, cheap)
-- Confirm the exact CAS micro-schedule + covered universe from the **NSE SOP circular** (not blogs).
-- **Determine what our data feed actually exposes:** does Kite (WebSocket/quote) surface any CAS field
-  (indicative equilibrium price, cumulative buy/sell qty, imbalance) during 3:15–3:35, or only the final
-  official close? **This gates everything.** Likely answer: only the close — which rules out any
-  imbalance strategy and points us squarely at Stage 1–2.
+### Stage 0 — Feasibility spike (do FIRST, cheap) — MECHANISM RESOLVED 2026-08-22
+- **Feed question answered (as far as the code + docs allow):** Kite's **WebSocket ticker (`MODE_FULL`,
+  what `live_worker`/`tick_consumer` consume) has a fixed binary struct — LTP/OHLC/volume/5-level depth/
+  OI/timestamps — with NO imbalance field.** So the **Total Imbalance Quantity cannot come from the
+  WebSocket**; it can only be on the **REST `/quote`** (forum evidence says the indicative close +
+  imbalance are broadcast there during the pre-open/CAS window, even though Kite's *static* /quote docs
+  don't list them — the docs lag the Aug-2026 rollout). **⇒ our capture path is REST `/quote` polling
+  during 3:15–3:35, the exact pattern we already run for 6.8.3 circuit bands** (`kite_rest.quote()` →
+  a market-hours task). No commercial vendor (Global Datafeeds etc.) needed — decided 2026-08-22.
+- **The remaining unknown is only the exact field name/location**, which the static docs don't give.
+  So the probe **dumps the RAW `/quote` JSON** during CAS and flags any key beyond the documented set.
+- **Run the probe LIVE on the next trading day (Mon 2026-08-25) during 3:15–3:35 IST** (market-closed
+  weekends can't test it) — with an active Kite admin token (`scripts/kite_login.py` first):
+
+  ```
+  cd backend && uv run python scripts/cas_probe.py            # polls liquid F&O names to 15:36 IST
+  ```
+
+  It appends every raw `/quote` poll to `docs/analysis/cas-probe-<date>.jsonl` and prints `⚑ NEW` lines
+  whenever a non-documented / `imbalance`/`indicative`-named key appears. **Share that JSONL** →
+  we read exactly where (and whether) Kite surfaces the indicative close + imbalance, then design
+  Stage-1 capture accordingly. (Runs from ANY session/account — it's a script, not tied to a chat;
+  a dry `--once` off-hours just confirms auth/plumbing.)
 - Mark Category-I stocks (we already know `is_fno`) — CAS applies to them.
+- **If the fields prove out:** productionize the probe into a market-hours Celery beat task (the
+  circuit-band task pattern) so the worker auto-captures CAS every day regardless of session — that
+  becomes Stage 1.
 
 ### Stage 1 — Capture (forward, from existing feeds; no new vendor)
 For each Category-I stock, per day, record: **3:15 LTP** (last continuous price), **official close**,
