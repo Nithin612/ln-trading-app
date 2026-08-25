@@ -7,6 +7,51 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### research(horizon): stop-width vs recovery study + full `docs/STATUS.html` rebuild (2026-08-25)
+
+Answers a desk observation — *"some names failed for the day and then recovered over the next
+sessions, like the swing/positional trades they were labelled as"*. Read-only; no code on any path.
+
+- **`docs/analysis/horizon-recovery-2026-08-25.md`** — the study. **The observation is real:** 11 of
+  the 16 stop-out losers with forward daily bars traded back through their own entry price, median
+  **1 trading day**. But **"just hold" is far worse** (NDRAUTO −₹54,701, PNCINFRA −₹77,464) — the
+  recovery is a transient bounce, not the thesis paying.
+- **The split that explains it — stop width ÷ average daily range.** Below 1.0×: **8/8 recovered**,
+  realised expectancy **−1.45R**. At/above 1.0×: 3/8 recovered, −1.17R. *A stop narrower than one
+  average session's range is not a stop; ordinary noise reaches it, so the exit carries no
+  information.* Tight stops also **overshoot the intended −1R** (−1.70R under 0.25×, −1.43R at
+  0.5–1.0×) because the honest 6.8.2 fill cost is a roughly fixed price amount and therefore a bigger
+  fraction of a narrow stop.
+- **Method correction worth recording:** the first counterfactual held qty constant and "showed"
+  wider stops were catastrophic (−₹59,834 → −₹122,500). That was a **sizing artifact** — risk-first
+  sizing means a wider stop buys a smaller position. Redone in **R** over all 82 closed trades
+  (winners included): planned SL −0.05R → 1.0×range +0.08R → **1.5×range +0.11R** → 2.0× +0.04R, with
+  the entire gain inside the tight-stop group (−0.87R → −0.11R) and no cost to the wide group.
+- **This independently reproduces the already-built `sl_atr` shadow gate at its exact `1.0 × ATR`
+  threshold**, from a different yardstick (daily range) and unit (R), and agrees with the sidecar's
+  own live numbers. **It still stays shadow** — readiness is 12/20 resolved and a flip needs sign-off.
+- **Horizon half:** ≥1R on the entry day is **12%** for both classes, but **within their own horizon
+  swing 36% / positional 54%** (median best excursion 0.85R / 1.29R), with +1R typically arriving on
+  **d+3** for positionals. The daily report's "0/5 reached ≥1R" is an entry-day statistic being read
+  as a verdict. Within-horizon race: positional 46% reach +1R first vs 42% stopped first; for stops
+  inside the noise band the stop wins 43% of the time.
+- **Actions:** make the report's ≥1R line horizon-aware, and surface `sl_atr_mult` (already stamped on
+  every order) at entry. **REJECTED:** widening stops on the money path (retrospective, daily-bar,
+  straddles a fill-model change — and *reject, don't clamp* says don't take the trade instead), and
+  holding through stops.
+- **`docs/STATUS.html` rebuilt** — current through Phase 6.8, MCE slices 1–5a, the anti-chase gate,
+  CAS, and the above. 29 sections across four parts; new sections for the multi-factor rule (§6, with
+  the real AYE single-factor signal worked through), the seven eligibility gates (§7, with a real
+  seven-stamp order payload), the horizon finding (§18), reports/journal (§22) and the CAS watch
+  (§23). **Four charts, pre-rendered as static SVG** — no charting library, no CDN, no runtime JS for
+  the marks; each carries an `aria-label`, per-mark `<title>` hover and a table view. Categorical
+  palette validated against this page's own light and dark surfaces (all six checks pass both modes);
+  the profit/loss pair is knowingly CVD-weak (ΔE 4.2 deutan) so every P&L mark carries a ▲/▼ glyph and
+  a signed label per the project's own UI law. Adds a **Full/Overview detail toggle** (hides code and
+  file paths for presenting) and a **light/dark/auto theme toggle**, both persisted with guarded
+  `localStorage`. Verified by rendering: fixed a shattered worked-example step list (anonymous grid
+  items), a clipped chart annotation, an axis-label collision, and scatter label overlaps.
+
 ### feat(CAS slice 1): daily Closing-Auction-Session capture (2026-08-25)
 
 Stage 1 of the CAS work — now that Stage 0 confirmed Kite `/quote` exposes the auction fields, this

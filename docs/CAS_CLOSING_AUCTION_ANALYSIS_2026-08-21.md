@@ -137,7 +137,26 @@ the **CAS move = (close − 3:15)/3:15**, next-day **open** and **first-hour / f
 already have the tick LTP + EOD close + the `live_worker`/depth plumbing — this is a small capture
 add, not a new data source. Store in a new daily table (shadow/observability, never a trade trigger).
 
-### Stage 2 — Study (read-only, like the regime study)
+### Stage 2 — Study (read-only, like the regime study) — ⏳ BLOCKED ON DATA · WATCH MODE to 2026-09-04
+
+> **▶ WATCH MODE, set 2026-08-25 (user's plan).** Stage 1 shipped on 2026-08-25 *after* that day's
+> auction window, so **`cas_daily` held 0 rows** that night. **First capture = Wed 2026-08-26**; let it
+> accrue through **Fri 2026-09-04** (8 sessions: 26–28 and 31 Aug, 1–4 Sep — no NSE holidays in the
+> window), then run the study below. No money-path build this week.
+>
+> **The one operational risk.** The capture is a **Celery-beat task, not a daemon of its own**, so
+> `make worker` must be up across **15:15–15:33 IST every day** and the Kite token must be fresh.
+> **A missed auction window cannot be back-filled — that day is gone.** So check the row count each
+> morning; if Thursday shows nothing for Wednesday, the worker was down:
+>
+> ```
+> docker exec -i tp_postgres psql -U tpuser -d trading_platform \
+>   -c "SELECT trade_date, count(*) FROM cas_daily GROUP BY 1 ORDER BY 1;"
+> ```
+>
+> (`docker compose` reports "postgres is not running" from inside a git worktree — address the
+> container by name as above.) Surfaced for the desk in `docs/STATUS.html` §23 + its watch banner.
+
 - **Does the CAS move reverse overnight on NSE?** Regress next-day return on the CAS move; bucket by CAS-move
   size + direction; measure the reversal fraction (the literature's ~14% is the prior to test).
 - **Control for the regime** (oversold-bounce) and for size/liquidity — is any "recovery into close" CAS,

@@ -10,7 +10,37 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-08-22) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-08-25) — read this block first
+
+**▶ NOW IN WATCH MODE until Fri 2026-09-04 — no money-path build this week.** CAS Stage 1
+(`cas_daily`) landed 2026-08-25 and must ACCRUE before Stage 2 can run; `cas_daily` holds **0 rows**
+tonight (expected — the code landed after today's 15:15–15:33 auction window). **First capture =
+Wed 2026-08-26; `make worker` must be up across 15:15–15:33 IST daily and an auction window cannot
+be back-filled.** Check the row count each morning:
+`docker exec -i tp_postgres psql -U tpuser -d trading_platform -c "SELECT trade_date, count(*) FROM cas_daily GROUP BY 1 ORDER BY 1;"`
+
+**▶ NEW FINDING 2026-08-25 — the HORIZON / stop-width study** (`docs/analysis/horizon-recovery-2026-08-25.md`).
+From a desk observation that stopped-out names "failed for the day then recovered". Confirmed and
+explained: **11 of 16 stop-out losers with forward bars traded back through their entry, median 1
+trading day** — but "just hold" is far worse (NDRAUTO −₹54,701), so the bounce is transient. The split
+is **stop width ÷ average daily range**: below 1.0× → **8/8 recovered, −1.45R realised**; at/above 1.0×
+→ 3/8 recovered, −1.17R. Tight stops also **overshoot the intended −1R** (−1.70R under 0.25×) because
+the honest 6.8.2 fill cost is a fixed price amount. Risk-normalised replay (R, not ₹ — the first pass
+held qty constant and was a **sizing artifact**) over all 82 closed trades: planned SL −0.05R →
+1.5×range **+0.11R**, with the entire gain inside the tight-stop group. **This independently reproduces
+the already-built `sl_atr` shadow gate at its exact 1.0× threshold from a different yardstick** — but
+readiness is still 12/20 so it STAYS shadow. Second half: **we grade multi-day trades on a one-day
+clock** — ≥1R on the entry day = 12% for both classes, but **within their own horizon swing 36% /
+positional 54%**, median +1R on **d+3** for positionals. Actions: (a) make the daily report's "reached
+≥1R" horizon-aware, (b) surface `sl_atr_mult` at entry (already stamped on every order); REJECTED:
+widening stops on the money path, and holding through stops.
+
+**▶ `docs/STATUS.html` REBUILT 2026-08-25** — the readable mirror of this block, now current through
+6.8 + MCE 5a + CAS + the horizon finding. 29 sections, four pre-rendered SVG charts (no JS charting,
+no CDN), a Full/Overview detail toggle for presenting, a light/dark/auto theme toggle, and a table
+view under every chart. Self-contained: open `docs/STATUS.html` in any browser.
+
+## ▶ (previous stamp: 2026-08-22)
 
 **v2 Phases 0–2 ✅ done · Phase 3 (realtime) ✅ GATED 2026-08-14 · Phase 4 ✅ done ·
 Phase 5 ✅ GATED 2026-08-07 · Phase 6 ✅ GATED + CLOSED 2026-08-20 (6.1–6.5 built shadow-first; regime
@@ -326,7 +356,24 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-08-22.**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-08-25.**
+
+**▶ THIS WEEK IS A WATCH, NOT A BUILD (to Fri 2026-09-04).** The only daily obligation is: worker up
+across 15:15–15:33 IST, then check `cas_daily`'s row count each morning (query in the STATE block
+above). A missed session is unrecoverable. Nothing else is queued on the money path. Optional
+low-risk work while waiting, in preference order:
+1. **Run the deep index backfill once** — `scripts/backfill_indices.py 2023-07-01 <today>`. It
+   unblocks MCE slices 3 + 4, which are currently INERT (sector-RS needs ~21 sessions, the 200-DMA
+   ~200; catch-up only reaches back 21 days). Their present "blocked" stamps are computed on
+   insufficient history and should not be weighted.
+2. **The two reporting changes from the horizon finding** (§ STATE block) — make the daily report's
+   "reached ≥1R" horizon-aware, and add `sl_atr_mult` as a column in §2 of the report + on the
+   Opportunities list. Both are read-only/UI; neither touches the order path.
+3. **Push the branch** (still manual, still pending).
+
+**▶ 2026-08-25 also produced:** `docs/analysis/horizon-recovery-2026-08-25.md` (the horizon +
+stop-width study — read its §6/§7 before acting on it; it is retrospective, not a walk-forward) and
+a full rebuild of `docs/STATUS.html`.
 
 **▶ CAS Stage-0 CONFIRMED + Stage-1 DONE 2026-08-25 — next = Stage 2 (study).** Stage 0 (probe) proved
 Kite `/quote` carries `indicative_close_price` + `total_imbalance_qty` (+ reference/limit bands) — no

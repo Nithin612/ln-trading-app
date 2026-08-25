@@ -142,6 +142,33 @@ else.
   the promotion path. **Any tradeable statistic must filter `is_shadow IS
   FALSE`** — `signals.status` is a lifecycle field the sweeper overwrites, so it
   cannot carry provenance.
+- **NOW IN WATCH MODE to Fri 2026-09-04 — no money-path build this week.** CAS Stage 1 (`cas_daily`)
+  landed 2026-08-25 and must ACCRUE before Stage 2 (the overnight-reversal study) can run. The table
+  held **0 rows** on 08-25 (code landed after that day's window); **first capture Wed 2026-08-26**.
+  The capture is a Celery-beat task, so **`make worker` must be up across 15:15–15:33 IST daily and a
+  missed auction window CANNOT be back-filled** — check the row count each morning. Optional low-risk
+  work while waiting: the deep index backfill (`scripts/backfill_indices.py 2023-07-01 <today>`, which
+  unblocks the INERT MCE slices 3+4), then the two reporting changes below.
+- **The HORIZON / stop-width finding (2026-08-25, `docs/analysis/horizon-recovery-2026-08-25.md`)** —
+  from the desk observation that stopped-out names "failed for the day then recovered". **11 of 16
+  stop-out losers traded back through their entry, median 1 trading day** — but "just hold" is far
+  worse (−₹54,701 on one name), so the bounce is transient. The split is **stop width ÷ average daily
+  range**: <1.0× → 8/8 recovered at −1.45R realised; ≥1.0× → 3/8 at −1.17R. Tight stops also
+  **overshoot −1R** (−1.70R under 0.25×) because the honest 6.8.2 fill cost is a fixed price amount.
+  ⚠ **Measure stop-width counterfactuals in R, never ₹** — risk-first sizing means a wider stop buys a
+  smaller position, so a constant-qty replay tests bet size, not stop placement (that error inverted
+  the first pass). Risk-normalised over all 82 closed trades: planned SL −0.05R → 1.5×range +0.11R,
+  gain entirely inside the tight-stop group. **This independently reproduces the `sl_atr` shadow gate
+  at its exact 1.0× threshold — it still STAYS shadow (12/20 readiness).** Second half: **we grade
+  multi-day trades on a one-day clock** — ≥1R on the entry day is 12% for both classes, but within
+  their own horizon **swing 36% / positional 54%**, +1R typically on **d+3**. ⇒ two safe reporting
+  changes (horizon-aware ≥1R line; surface the already-stamped `sl_atr_mult` at entry). **REJECTED:
+  widening stops on the money path** (retrospective, daily-bar; and *reject, don't clamp* means don't
+  take the trade) **and holding through stops.**
+- **`docs/STATUS.html` is the readable mirror of the PHASES top block** — rebuilt 2026-08-25, current
+  through 6.8 + MCE 5a + CAS + the horizon finding. Self-contained (no CDN, no charting library; four
+  pre-rendered SVG charts), with a Full/Overview detail toggle for presenting and a light/dark/auto
+  theme toggle. Keep it in sync when status moves; it is NOT canonical — PHASES.md is.
 - **Machine quirk that has bitten three times:** a snap refresh prunes anything
   living under `~/snap/`. It has already destroyed the uv venvs and the pnpm
   store (`pnpm add` still fails with `ERR_PNPM_UNEXPECTED_STORE` — repoint
