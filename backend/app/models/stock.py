@@ -148,6 +148,39 @@ class IndexOhlcvDaily(Base):
         return f"<IndexOhlcvDaily index_id={self.index_id} {self.trade_date} close={self.close}>"
 
 
+class CasDaily(Base):
+    """Closing-Auction-Session daily capture (CAS Stage 1) — one row per (stock, trade_date).
+
+    Captured from Kite /quote during 3:15–3:35 IST by the market-hours task (cas_tasks.py):
+    the pre-auction (3:15) price, the exchange reference price, the evolving indicative close, the
+    final official/auction close, and the total imbalance quantity. Observability/research ONLY — it
+    feeds the CAS overnight-reversal study (Stage 2) and never gates, sizes, or trades. `ohlc.close`
+    from Kite is the PRIOR day's close mid-session, so the true close is `official_close` (the last
+    price after the auction executes ~15:29), NOT ohlc.close."""
+
+    __tablename__ = "cas_daily"
+
+    stock_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("stocks.id", ondelete="CASCADE"), primary_key=True, nullable=False
+    )
+    trade_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    pre_auction_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    reference_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    indicative_close: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    official_close: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    total_imbalance_qty: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    polls: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<CasDaily stock_id={self.stock_id} {self.trade_date} "
+            f"pre={self.pre_auction_price} close={self.official_close}>"
+        )
+
+
 class SavedScreen(Base):
     __tablename__ = "saved_screens"
 

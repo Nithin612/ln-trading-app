@@ -32,6 +32,7 @@ celery_app = Celery(
         "app.tasks.pair_tasks",
         "app.tasks.circuit_tasks",
         "app.tasks.corporate_action_tasks",
+        "app.tasks.cas_tasks",
     ],
 )
 
@@ -86,6 +87,13 @@ celery_app.conf.beat_schedule = {
     "fo-eod-ingestion": {
         "task": "app.tasks.fo_tasks.fo_eod_ingestion",
         "schedule": crontab(hour=13, minute=15, day_of_week="1-5"),
+    },
+    # CAS (Closing Auction Session) capture (Stage 1) — every minute over 09:00–10:59 UTC
+    # (14:30–16:29 IST, a superset); the task self-guards to the exact CAS window 15:15–15:33 IST
+    # (= 09:45–10:03 UTC, which a single crontab can't express). Research-only; no order path.
+    "capture-cas-window": {
+        "task": "app.tasks.cas_tasks.capture_cas_window",
+        "schedule": crontab(minute="*/1", hour="9,10", day_of_week="1-5"),
     },
     # Option-chain snapshots every minute in the market window (task itself
     # re-checks 9:15–15:30 IST and idles without a Kite token)

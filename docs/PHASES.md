@@ -328,18 +328,20 @@ which is what Phase-6 expectancy calibration is for.
 
 **▶ CONTINUE HERE (next session, any account) — updated 2026-08-22.**
 
-**▶ CAS Stage-0 ✅ CONFIRMED LIVE 2026-08-25 — next = Stage 1 (auto-capture).** The probe caught the
-live auction: Kite `/quote` carries `indicative_close_price` + `total_imbalance_qty` (+ reference/limit
-bands) — no vendor needed. Timing: fields populate ~15:21, auction EXECUTES ~15:29; gotcha: `ohlc.close`
-= prior day's close (true close = last_price/indicative after 15:29). Sample: RELIANCE +0.33%, HDFCBANK
-+0.48% CAS move. `scripts/cas_probe.py` now idles→captures 15:10–15:33 (launch anytime after
-`kite_login`). **NEXT: Stage 1 — productionize the capture as a market-hours Celery beat task (the
-circuit-band task pattern) + a shadow table keyed (date, stock) with 3:15 price / official close / CAS
-move / next-day return, so it accrues daily across the F&O universe; then Stage 2 = study the overnight
-reversal (read-only, control for the oversold regime, block-bootstrap).** NEVER an intraday predictor.
-Doc: `docs/CAS_CLOSING_AUCTION_ANALYSIS_2026-08-21.md`; memory [[cas_closing_auction]]. Also pending
-(non-urgent): push `fd29930` + `27b9e28` + the new CAS-probe commit; commit daily `docs/analysis/*.md`
-via the normal flow (raw `cas-probe-*.jsonl` are large — keep local, don't commit).
+**▶ CAS Stage-0 CONFIRMED + Stage-1 DONE 2026-08-25 — next = Stage 2 (study).** Stage 0 (probe) proved
+Kite `/quote` carries `indicative_close_price` + `total_imbalance_qty` (+ reference/limit bands) — no
+vendor. Timing: populate ~15:21, EXECUTE ~15:29; gotcha: `ohlc.close` = prior day's close (true close =
+last_price/indicative after 15:29). **Stage 1 (auto-capture) BUILT + reviewed:** `cas_daily` table
+(migration `c9d0e1f2a3b4`, applied to dev) + `app/services/cas_capture.py` + `app/tasks/cas_tasks.py`
+(market-hours Celery beat task, self-guards to 15:15–15:33 IST, F&O universe, upsert freezes the 3:15
+price + KEEPS LAST NON-ZERO imbalance) — runs daily whenever `make worker` is up. 8 tests; bug-hunter
+BUGS-FOUND→HIGH fixed (latest-imbalance was storing the post-match 0, destroying the predictor). **NEXT:
+Stage 2 — once `cas_daily` accrues (~weeks), study the overnight reversal (next-day return from
+`ohlcv_1d` vs the CAS move; read-only, control for the oversold regime, block-bootstrap like the regime
+study).** NEVER an intraday predictor. Doc: `docs/CAS_CLOSING_AUCTION_ANALYSIS_2026-08-21.md`; memory
+[[cas_closing_auction]]. Pending (non-urgent): push the branch (`fd29930`, `27b9e28`, `f74518b`, + the
+new CAS-probe-window + CAS-Stage-1 commits); daily `docs/analysis/*.md` via the normal flow (raw
+`cas-probe-*.jsonl` large — keep local).
 
 
 **Handover items from the 2026-08-19 two-session split — now RESOLVED:**

@@ -122,7 +122,16 @@ _Original plan (2026-08-22), now largely satisfied:_
   circuit-band task pattern) so the worker auto-captures CAS every day regardless of session — that
   becomes Stage 1.
 
-### Stage 1 — Capture (forward, from existing feeds; no new vendor)
+### Stage 1 — Capture — ✅ DONE 2026-08-25
+Built: `cas_daily` table (migration `c9d0e1f2a3b4`) + `app/services/cas_capture.py` +
+`app/tasks/cas_tasks.py` — a market-hours Celery beat task (self-guards to 15:15–15:33 IST, F&O
+universe) that upserts one row per (stock, trade_date): `pre_auction_price` (frozen on the first poll),
+`reference_price`, `indicative_close`, `official_close` (→ clearing price), `total_imbalance_qty`. Runs
+daily whenever `make worker` is up. **bug-hunter HIGH fixed:** the imbalance keeps its **last non-zero**
+value (a matched auction's final poll is 0, which was clobbering the real mid-auction imbalance — the
+predictor). Next-day return is NOT stored — computed at study time from `ohlcv_1d`. 8 tests.
+
+_Original plan:_
 For each Category-I stock, per day, record: **3:15 LTP** (last continuous price), **official close**,
 the **CAS move = (close − 3:15)/3:15**, next-day **open** and **first-hour / full-day return**. We
 already have the tick LTP + EOD close + the `live_worker`/depth plumbing — this is a small capture

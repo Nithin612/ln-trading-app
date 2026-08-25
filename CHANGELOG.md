@@ -7,6 +7,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(CAS slice 1): daily Closing-Auction-Session capture (2026-08-25)
+
+Stage 1 of the CAS work — now that Stage 0 confirmed Kite `/quote` exposes the auction fields, this
+records them daily, hands-off, across the F&O universe so the overnight-reversal study (Stage 2) can
+accrue data. Research/observability only — the order path never reads it.
+
+- **`cas_daily` table** (migration `c9d0e1f2a3b4`, reversible): one row per (stock, trade_date) —
+  `pre_auction_price` (3:15, frozen on first capture), `reference_price`, `indicative_close`,
+  `official_close` (converges to the clearing price), `total_imbalance_qty`, `polls`, `captured_at`.
+- **`app/services/cas_capture.py`** — `parse_cas` (pulls `indicative_close_price` /
+  `total_imbalance_qty` / `reference_limit_price` from a /quote row) + `capture_cas` (batched
+  `kite.quote()` over the F&O universe → Postgres upsert; **freezes `pre_auction_price` on the first
+  poll, converges the rest**; fail-open per batch).
+- **`app/tasks/cas_tasks.py`** — a market-hours Celery beat task (`capture_cas_window`, every minute
+  over the UTC superset) that **self-guards to 15:15–15:33 IST**, skips holidays / missing token,
+  builds the `is_active`+`is_fno` universe, and calls `capture_cas`. Same pattern as the 6.8.3
+  circuit-band task. `cas_capture_enabled` flag (default on; self-skips without a Kite token).
+
+`test_cas_capture.py 8 tests` (parse edge cases + upsert pre-auction-freeze/converge/idempotency +
+window-guard bounds + the imbalance regression below); ruff + mypy clean; migration applied to dev.
+**bug-hunter BUGS-FOUND → HIGH fixed:** the upsert took the *latest* `total_imbalance_qty`, but a
+matched auction's final poll reports **0** residual imbalance — so every row was storing 0, silently
+destroying the Stage-2 predictor (verified by replaying the real 53 HDFCBANK polls: peak −245,638,
+stored 0). Fixed to **keep the last NON-ZERO imbalance** (post-match 0 can't clobber it); everything
+else verified sound (pre-auction freeze, polls increment, batch fail-open, session/commit, tz guard).
+**Next: Stage 2 — study the overnight reversal (read-only, control for the oversold regime,
+block-bootstrap) once days accrue.**
+
 ### research(regime study): 3-year market-regime backtest → regime playbook (2026-08-21)
 
 Item 3 of the anti-chase/regime arc. A read-only study (`scripts/regime_study.py` + pure core

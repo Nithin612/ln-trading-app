@@ -227,6 +227,10 @@ class Settings(BaseSettings):
     # Master switch for the band-refresh task (kite quote() fetch). Off ⇒ the cache
     # is never populated ⇒ the gate fails open everywhere.
     circuit_bands_enabled: bool = True
+    # CAS (Closing Auction Session) capture (Stage 1). Master switch for the market-hours task that
+    # records the auction close + imbalance for the F&O universe into `cas_daily` (research only —
+    # never gates/sizes/trades). Self-skips without a Kite admin token; off ⇒ no capture.
+    cas_capture_enabled: bool = True
     # TTL on a cached band (s). Must exceed the refresh cadence so a live band never
     # expires between refreshes; once the refresher stops, bands go stale and the
     # gate fails open (by design). Bands are intraday-static, so this is generous.
