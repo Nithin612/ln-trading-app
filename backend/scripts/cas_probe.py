@@ -1,19 +1,19 @@
 """CAS probe — capture Kite REST /quote during the Closing Auction Session to find where (if
 anywhere) the exchange's indicative close + total imbalance quantity surface for us.
 
-    uv run python scripts/cas_probe.py            # defaults: liquid F&O names, until 15:36 IST
+    uv run python scripts/cas_probe.py            # launch ANY time after kite_login; idles to 15:10
     uv run python scripts/cas_probe.py --once     # single snapshot now (dry-run / auth check)
-    uv run python scripts/cas_probe.py --symbols NSE:RELIANCE,NSE:HDFCBANK --interval 20
+    uv run python scripts/cas_probe.py --from 15:10 --until 15:33 --interval 15
 
-WHY: CAS is new (Aug 2026) and its fields are NOT in Kite's static /quote docs; the WebSocket ticker
-(MODE_FULL) has a fixed binary struct with no imbalance field, so the imbalance can only come from
-REST /quote. This polls /quote every `interval` s across the CAS window (3:15-3:35 IST), appends the
-FULL raw JSON per poll to docs/analysis/cas-probe-<date>.jsonl, and prints any key NOT in the
-documented set — where an indicative-close / imbalance field would appear. Read-only; no order path;
-safe any time (off-hours just captures ordinary quotes as a dry-run).
-
-Run it Monday during 3:15-3:35 IST with an active Kite admin token (scripts/kite_login.py first),
-then share docs/analysis/cas-probe-<date>.jsonl.
+CONFIRMED 2026-08-25: Kite /quote exposes indicative_close_price + total_imbalance_qty (+ reference/
+limit-protection prices) — NOT documented, and NOT on the WebSocket MODE_FULL struct, so REST /quote
+is the only path. The auction populates ~15:21 and EXECUTES ~15:29 (last jumps to the clearing
+price, imbalance→0); ohlc.close is the PRIOR day's close during the session — the true close is
+last_price / indicative_close_price after ~15:29. Idles until `--from` (15:10), then polls /quote
+`interval` s to `--until` (15:33), appending the FULL raw JSON per poll to
+docs/analysis/cas-probe-<date>.jsonl and printing any non-documented / imbalance-named key.
+Read-only; no order path. Launch any time after scripts/kite_login.py and leave it — it captures
+only the window.
 """
 
 from __future__ import annotations
@@ -82,7 +82,29 @@ async def _snapshot(kite: object, symbols: list[str], out_path: Path) -> None:
         print(f"  {ist}  {sym:16} last={lp} close={close}{note}", flush=True)
 
 
-async def _run(symbols: list[str], interval: int, until_ist: time, once: bool) -> int:
+def _now_ist() -> datetime:
+    return datetime.now(UTC).astimezone(_IST)
+
+
+async def _idle_until(from_ist: time) -> None:
+    """Sleep (cheaply) until `from_ist` IST so the probe can be launched any time after
+    kite_login and left alone — it captures only the CAS window, not the whole day."""
+    start = _now_ist()
+    if start.timetz().replace(tzinfo=None) >= from_ist:
+        return
+    print(f"idling until {from_ist.strftime('%H:%M')} IST (launched {start.strftime('%H:%M:%S')}) "
+          "— no polling until then", flush=True)
+    beats = 0
+    while _now_ist().timetz().replace(tzinfo=None) < from_ist:
+        await asyncio.sleep(30)
+        beats += 1
+        if beats % 20 == 0:  # heartbeat every ~10 min so it doesn't look hung
+            print(f"  …waiting ({_now_ist().strftime('%H:%M:%S')} IST)", flush=True)
+
+
+async def _run(
+    symbols: list[str], interval: int, from_ist: time, until_ist: time, once: bool
+) -> int:
     from app.broker.kite_rest import ThrottledKite
     from app.services.chain_recorder import get_any_active_admin_token
 
@@ -96,8 +118,12 @@ async def _run(symbols: list[str], interval: int, until_ist: time, once: bool) -
     _OUT_DIR.mkdir(parents=True, exist_ok=True)
     day = datetime.now(UTC).astimezone(_IST).date()
     out_path = _OUT_DIR / f"cas-probe-{day.isoformat()}.jsonl"
+
+    if not once:
+        await _idle_until(from_ist)  # capture only the CAS window
     print(f"CAS probe → {out_path.relative_to(_REPO_ROOT)} | symbols={symbols} "
-          f"| until {until_ist.strftime('%H:%M')} IST | every {interval}s", flush=True)
+          f"| {from_ist.strftime('%H:%M')}–{until_ist.strftime('%H:%M')} IST | every {interval}s",
+          flush=True)
 
     polls = 0
     while True:
@@ -122,13 +148,19 @@ def main() -> None:
     ap = argparse.ArgumentParser(description="Probe Kite /quote for CAS indicative/imbalance")
     ap.add_argument("--symbols", type=str, default=",".join(_DEFAULT_SYMBOLS),
                     help="comma list of EXCHANGE:SYMBOL (default: liquid F&O names)")
-    ap.add_argument("--interval", type=int, default=20, help="seconds between polls (default 20)")
-    ap.add_argument("--until", type=str, default="15:36", help="stop at this IST HH:MM")
+    ap.add_argument("--interval", type=int, default=15, help="seconds between polls (default 15)")
+    ap.add_argument("--from", dest="from_", type=str, default="15:10",
+                    help="idle until this IST HH:MM, then start polling (default 15:10)")
+    ap.add_argument("--until", type=str, default="15:33",
+                    help="stop at this IST HH:MM (auction executes ~15:29; default 15:33)")
     ap.add_argument("--once", action="store_true", help="single snapshot now (dry-run)")
     args = ap.parse_args()
     symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
-    hh, mm = (int(x) for x in args.until.split(":"))
-    raise SystemExit(asyncio.run(_run(symbols, args.interval, time(hh, mm), args.once)))
+    fh, fm = (int(x) for x in args.from_.split(":"))
+    uh, um = (int(x) for x in args.until.split(":"))
+    raise SystemExit(
+        asyncio.run(_run(symbols, args.interval, time(fh, fm), time(uh, um), args.once))
+    )
 
 
 if __name__ == "__main__":

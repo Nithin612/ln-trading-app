@@ -59,10 +59,13 @@ study above) — must be measured, not eyeballed. Plan: Stage 0 feed-feasibility
 - **Feed decision (2026-08-22): Kite, not a commercial vendor.** Kite's WebSocket `MODE_FULL` struct
   has no imbalance field → CAS indicative-close/imbalance can only come from REST `/quote`; Global
   Datafeeds (true-TBT/FIX vendor) is overkill for our paper/low-frequency use.
-- **`scripts/cas_probe.py`** (shipped) — a read-only Stage-0 probe: polls `kite_rest.quote()` across the
-  3:15–3:35 window, dumps raw JSON to `docs/analysis/cas-probe-<date>.jsonl`, flags any non-documented /
-  `imbalance`-named key (the CAS fields aren't in Kite's static docs). Run live Mon 2026-08-25; dry-run
-  `--once` verified (graceful no-token exit). No order path.
+- **`scripts/cas_probe.py`** (shipped) — a read-only Stage-0 probe: polls `kite_rest.quote()`, dumps raw
+  JSON to `docs/analysis/cas-probe-<date>.jsonl`, flags any non-documented / `imbalance`-named key.
+  **✅ CONFIRMED LIVE 2026-08-25:** Kite `/quote` exposes `indicative_close_price` + `total_imbalance_qty`
+  (+ reference/limit bands) — no vendor needed. Learned the auction executes ~15:29 and `ohlc.close` is
+  the prior day's close mid-session. Probe now **idles until 15:10 then captures only 15:10–15:33**
+  (fixes the manual-timing failures). No order path. NEXT = Stage 1 (auto-capture Celery task + shadow
+  table).
 
 ### feat(Live Signals): persistent, live-priced, ranked "Opportunities" list (2026-08-21)
 

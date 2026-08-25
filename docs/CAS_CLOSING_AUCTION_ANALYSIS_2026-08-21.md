@@ -76,7 +76,25 @@ CAS by eye — that's the exact n=4 trap the regime study just warned against.**
 
 ## 5. Execution plan (staged, paper-first, evidence-first)
 
-### Stage 0 — Feasibility spike (do FIRST, cheap) — MECHANISM RESOLVED 2026-08-22
+### Stage 0 — ✅ CONFIRMED LIVE 2026-08-25
+
+**The probe ran through the live CAS window on 2026-08-25 and it works.** Kite `/quote` carries, on every
+quote, five non-documented fields — **`indicative_close_price`**, **`total_imbalance_qty`**,
+`reference_limit_price`, `high_limit_price_protection`, `low_limit_price_protection`. So we capture the
+auction from our existing Kite feed — **no Global Datafeeds.** Learned:
+- **Micro-timing:** `indicative_close_price` + `total_imbalance_qty` are **0 until ~15:21**, then
+  populate/swing 15:21→15:28, and the auction **EXECUTES ~15:29** (`last_price` jumps to the clearing
+  price, imbalance → 0, static after). So sample **15:15–15:32**; the useful signal is 15:21–15:29.
+- **Data gotcha:** `ohlc.close` is the **PRIOR day's** close during the session — the true close is
+  `last_price` / `indicative_close_price` after ~15:29, NOT `ohlc.close`.
+- **Sample (08-25):** RELIANCE 1312.7 (15:15) → auction close **1317** (+0.33%); HDFCBANK 724 → **727.5**
+  (+0.48%). Both closed UP in the auction. Imbalance sign convention still TBD (RELIANCE showed negative
+  imbalance yet closed higher — confirm over more days).
+- **Run it right:** launch `scripts/cas_probe.py` any time after `kite_login`; it now **idles until 15:10
+  then captures only 15:10–15:33** (fixes the "killed it before 3:15 / 4 MB all-day file" problem from the
+  first two runs). Raw dumps: `docs/analysis/cas-probe-<date>.jsonl` (kept local — large, not committed).
+
+_Original plan (2026-08-22), now largely satisfied:_
 - **Feed question answered (as far as the code + docs allow):** Kite's **WebSocket ticker (`MODE_FULL`,
   what `live_worker`/`tick_consumer` consume) has a fixed binary struct — LTP/OHLC/volume/5-level depth/
   OI/timestamps — with NO imbalance field.** So the **Total Imbalance Quantity cannot come from the

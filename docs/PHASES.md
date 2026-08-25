@@ -328,18 +328,18 @@ which is what Phase-6 expectancy calibration is for.
 
 **▶ CONTINUE HERE (next session, any account) — updated 2026-08-22.**
 
-**★ MONDAY 2026-08-25 FIRST TASK — CAS Stage-0 live probe (market-hours only, 3:15–3:35 IST).** The
-weekend arc is committed (`fd29930`, unpushed). The live-market thing that could only be done Monday:
-confirm where Kite surfaces the new Closing-Auction-Session indicative-close + imbalance. RESOLVED in
-code that the **WebSocket has no imbalance field → it's REST `/quote` only**; the probe just needs to
-capture the raw field names live. **Run during 3:15–3:35 IST (after `scripts/kite_login.py`):**
-`cd backend && uv run python scripts/cas_probe.py` → writes `docs/analysis/cas-probe-<date>.jsonl` +
-prints `⚑ NEW` lines for any auction field. Then analyse the JSONL (grep `imbalance`/`indicative`) and,
-if the fields are there, productionize into a market-hours Celery task (Stage 1 capture) + study the
-overnight reversal (Stage 2). Full context + why: `docs/CAS_CLOSING_AUCTION_ANALYSIS_2026-08-21.md`.
-Also pending (non-urgent): push `fd29930`; commit today's `docs/analysis/*-2026-08-21.md` daily
-artifacts via the normal daily flow. **Decided 2026-08-22: use Kite (already integrated, exposes CAS
-via /quote), NOT a commercial vendor (Global Datafeeds) — overkill for our paper/low-frequency use.**
+**▶ CAS Stage-0 ✅ CONFIRMED LIVE 2026-08-25 — next = Stage 1 (auto-capture).** The probe caught the
+live auction: Kite `/quote` carries `indicative_close_price` + `total_imbalance_qty` (+ reference/limit
+bands) — no vendor needed. Timing: fields populate ~15:21, auction EXECUTES ~15:29; gotcha: `ohlc.close`
+= prior day's close (true close = last_price/indicative after 15:29). Sample: RELIANCE +0.33%, HDFCBANK
++0.48% CAS move. `scripts/cas_probe.py` now idles→captures 15:10–15:33 (launch anytime after
+`kite_login`). **NEXT: Stage 1 — productionize the capture as a market-hours Celery beat task (the
+circuit-band task pattern) + a shadow table keyed (date, stock) with 3:15 price / official close / CAS
+move / next-day return, so it accrues daily across the F&O universe; then Stage 2 = study the overnight
+reversal (read-only, control for the oversold regime, block-bootstrap).** NEVER an intraday predictor.
+Doc: `docs/CAS_CLOSING_AUCTION_ANALYSIS_2026-08-21.md`; memory [[cas_closing_auction]]. Also pending
+(non-urgent): push `fd29930` + `27b9e28` + the new CAS-probe commit; commit daily `docs/analysis/*.md`
+via the normal flow (raw `cas-probe-*.jsonl` are large — keep local, don't commit).
 
 
 **Handover items from the 2026-08-19 two-session split — now RESOLVED:**
