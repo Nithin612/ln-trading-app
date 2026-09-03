@@ -7,6 +7,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 7 Stock-market-prediction-and-screener — leaked scaler, missing baseline, disabled guard (2026-09-03)
+
+[sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener),
+MIT, ~3.9k LOC, **2022-04 → 2023-01, unmaintained**. A Streamlit multi-page app (fundamentals,
+indicators, "screener", pattern recognition, next-day forecasting) plus a notebook that selects
+the forecasting model. A competent student portfolio piece — and the ninth repo in the log,
+repeating three established failure modes in unusually clean form.
+
+**Model selection rests on two errors.** (1) *Leaked scaler*: the notebook defines
+`train = dataset[0:990]` / `valid = dataset[990:]` and then calls
+`scaler.fit_transform(dataset)` on the **whole series**, so the validation window's min/max are
+baked into the normalisation the LSTM trains under. (2) *No persistence baseline*: for a
+next-day **price** predictor the only benchmark that matters is "tomorrow = today", and it is
+absent from the comparison table. A large cap in the low thousands at ~1.5% daily vol has a
+persistence RMSE near ₹40–50; the selected LSTM scores **117.49** — plausibly two to three times
+worse than predicting no change, while comfortably beating the three other elaborate models it
+was measured against. (Order-of-magnitude estimate; the exact split isn't published. The point
+is the omission, not the constant.)
+
+**A guard that cannot return false — the third instance across nine repos.**
+`is_consolidating` returns the **strings** `'YES'`/`'NO'`; `is_breaking_out` uses it in a boolean
+context, and both strings are truthy (verified). The consolidation precondition is therefore
+always satisfied and `is_breaking_out` degrades to a plain 15-day-high check with its defining
+filter silently disabled.
+
+**UI confirms:** the "Screener" page takes a single-ticker `selectbox` and screens nothing; and
+every indicator is cast `.astype('int64')` **before** `round(..., 2)`, so RSI 67.83 renders as
+`67.00` and MACD values between −5 and +5 truncate to 0 — fake precision with the signal
+destroyed. Exactly why `lib/format.ts` is the single formatting path in our rules.
+
+**Taken:** nothing adoptable. One pointer — a compact consolidation primitive (`min_close >
+max_close × (1 − pct/100)` over N candles) for the already-queued **Minervini trend-template
+shadow test**, with the obvious upgrades: return a real boolean, measure the range in ATRs
+rather than raw percent, require a minimum base length.
+
+Synthesis restructured to nine repos with a promoted lesson: **"a guard that cannot return
+false" is now the single most repeated defect in the log (3 of 9)** — `generalization_gap ≡ 0`,
+`risk_approved` always true, and now a truthy-string predicate. Three root causes, one symptom.
+**The test is mechanical: for every guard, name the input that makes it fail; if you cannot, it
+is not a guard** — our own `unassessed` tripwire failed exactly this. Lesson 1 sharpened to its
+operational form: **when a repo picks a winner, look first at what it did not compare against.**
+
+
 ### docs(research): repos 6A–6C — a reference implementation, a mock demo, and a fabricated exit date (2026-09-03)
 
 **6A [Mirzabaig313/PaperTrade-India](https://github.com/Mirzabaig313/PaperTrade-India)** —

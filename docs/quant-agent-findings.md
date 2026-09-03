@@ -38,6 +38,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 6A | [Mirzabaig313/PaperTrade-India](https://github.com/Mirzabaig313/PaperTrade-India) | 2026-09-03 | ⭐ **A reference implementation, not a cautionary tale.** 24.8k LOC, 543 tests, MIT — a standalone NSE/BSE paper broker: statutory fees, T+1, bands, bracket/OCO, corporate actions, L2 book. **Makes no performance claim** (it is infrastructure). **Read `orders/` + `docs/FEES.md` before Phase 7; take A21 now.** |
 | 6B | [artist-hks/SentimentStock](https://github.com/artist-hks/SentimentStock) | 2026-09-03 | **A synthetic-data UI demo** — "Hinglish NLP" and "LSTM-style predictions" are `Math.sin(seed)`. No LICENSE (despite the badge). **Harvest 1 UI idea** (U19, the lag-correlation chart). |
 | 6C | [madhusudhan-nikhil/InvestmentPrediction](https://github.com/madhusudhan-nikhil/InvestmentPrediction) | 2026-09-03 | Real FastAPI+React app for Indian retail. **HRP portfolio construction is a genuine pointer**; its **"probable exit date" is arithmetic on the user's own input** — and doesn't even depend on the target price. No LICENSE. **Harvest A24 as a standing rule.** |
+| 7 | [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener) | 2026-09-03 | Unmaintained 2022–23 student project (MIT). **Picks its LSTM on a scaler fit over the full series and with no persistence baseline** — the winner is plausibly worse than "no change". Its breakout filter is **disabled by a truthy-string bug**. **Adopt nothing**; one pointer for the Minervini trend-template test. |
 
 ---
 
@@ -1572,6 +1573,158 @@ a scenario view over the paper book would be a legitimate future use of it.
 
 ---
 
+# 7. Stock-market-prediction-and-screener — `sumittttttt/Stock-market-prediction-and-screener`
+
+Reviewed 2026-09-03. MIT (real LICENSE), 38 commits, **2022-04 → 2023-01** — a student/portfolio
+project, three years old and unmaintained. ~3,900 LOC: a Streamlit multi-page app (fundamentals,
+technical indicators, "screener", pattern recognition, next-day forecasting) plus a
+`model_comparison.ipynb` that picks the forecasting model.
+
+Judged for what it is, this is a competent student portfolio piece. But it is the **ninth** repo in
+this log, and it repeats — in unusually clean, teachable form — three failure modes the previous
+eight already established. That is its value here.
+
+## 7.1 The model comparison: leakage, and the missing baseline
+
+The README's headline table selects LSTM for the webapp:
+
+| Model | Large cap | Mid cap | Small cap |
+|---|--:|--:|--:|
+| Moving Average | 971.40 | 234.64 | 23.10 |
+| kNN | 1174.90 | 232.54 | 23.02 |
+| Linear Regression | 680.51 | 400.30 | 24.51 |
+| **LSTM** | **117.49** | **24.47** | **2.88** |
+
+> *"We can clearly see LSTM has the very low error… So we will use LSTM model in our webapp."*
+
+**Problem 1 — the scaler is fit on the full series, including the validation window.** From
+`model_comparison.ipynb`, cell 16, in this order:
+
+```python
+dataset = tcs_lstm.values
+train   = dataset[0:990,:]
+valid   = dataset[990:,:]          # split defined…
+
+scaler      = MinMaxScaler(feature_range=(0, 1))
+scaled_data = scaler.fit_transform(dataset)   # …then fit on the WHOLE thing
+```
+
+The min and max of the future test window are baked into the normalisation the model trains
+under. For a strongly trending decade of TCS closes, knowing the global maximum is a
+substantial hint, and it mechanically prevents the model from predicting outside the realised
+range. Textbook leakage — our constraint #3, in its ML form.
+
+**Problem 2 — and the more interesting one — there is no naive baseline.** For a *next-day
+price* predictor the only benchmark that matters is persistence: "tomorrow's close = today's
+close." It is absent from the table.
+
+The omission is not cosmetic. A large-cap Indian stock trading in the low thousands with ~1.5%
+daily volatility has a persistence RMSE of roughly **₹40–50**. The chosen LSTM scores
+**117.49**. On that arithmetic the winning model is around **two to three times worse than
+predicting no change at all** — while comfortably beating the three other models it was
+compared against. *(Order-of-magnitude estimate: I do not have their exact split, so treat the
+ratio as indicative rather than exact. The point stands regardless of the constant — the
+comparison that would settle it is the one the table omits.)*
+
+This is the cleanest instance in the whole log of synthesis lesson 1: **the elaborate model is
+benchmarked only against other elaborate models, and the trivial baseline that would beat them
+all is never run.** It is the same shape as AgentQuant's buy-and-hold and QuantHarness's
+logistic regression — except here the baseline is so simple it is a single line of pandas.
+
+Underneath it sits the standard trap: an LSTM fed raw price levels learns an approximate
+identity function, so RMSE *on levels* looks impressive and says nothing about directional
+skill. Evaluating on **returns**, against persistence, is what would have revealed that.
+
+## 7.2 A guard that can never fail — the third instance in this log
+
+`functions.py`:
+
+```python
+def is_consolidating(df, percentage=10):
+    ...
+    if min_close > (max_close * threshold):
+        return 'YES'
+    return 'NO'                       # ← returns STRINGS
+
+def is_breaking_out(df, percentage=10):
+    last_close = df[-1:]['Close'].values[0]
+    if is_consolidating(df[:-1], percentage=percentage):   # ← used as a boolean
+        recent_closes = df[-16:-1]
+        if last_close > recent_closes['Close'].max():
+            return 'YES'
+    return 'NO'
+```
+
+Both `'YES'` and `'NO'` are non-empty strings, so both are truthy — verified:
+
+```
+bool('YES') = True
+bool('NO')  = True
+=> the consolidation precondition is ALWAYS satisfied
+```
+
+`is_breaking_out` therefore degrades to a plain 15-day-high check with its defining filter
+silently disabled. A breakout *from consolidation* and a breakout *from anything* are very
+different signals, and the page reports the latter as the former.
+
+This is the third variant of the same defect class across nine repos — **a guard that cannot
+return false**: AgentQuant's `generalization_gap = max(avg − best, 0) ≡ 0`, ai-quant-agents'
+`risk_approved = "risk" not in decision.lower()`, and now a string-returning predicate used in
+a boolean context. Three different root causes, one symptom. **The generalisable test is
+mechanical: for every guard, ask what input makes it fail, and if you cannot name one, it is
+not a guard.** Worth adding to `.claude/rules/testing.md` alongside the §1.7 rule — our own
+`unassessed` tripwire failed exactly this test.
+
+## 7.3 The "screener" does not screen, and every number on it is truncated
+
+Two UI findings, both *confirms* rather than takes:
+
+**It is not a screener.** `pages/03_Screener.py` opens with `st.selectbox('Enter or Choose
+stock', symbol)` — a **single** ticker — then renders indicators for it. A screener filters
+many instruments by criteria; this filters nothing. Our own `ScreenerPage` is a real
+multi-stock filter (12 fields), so nothing to take — but the mislabelling is a reminder that a
+feature name is a promise.
+
+**Every indicator is silently truncated to an integer.** The page does, repeatedly:
+
+```python
+rsi_df_tail  = round(rsi_df['RSI'].iloc[-1:].astype('int64'), 2)
+macd_df_tail = round(macd_df['macd'].iloc[-1:].astype('int64'), 2)
+```
+
+The `astype('int64')` happens **before** the `round(..., 2)`, so RSI 67.83 renders as `67.00` —
+fake precision, two decimal places of guaranteed zeros. For MACD it is worse: MACD commonly
+sits between −5 and +5, so integer truncation destroys the signal outright (0.83 → 0). This is
+precisely why `lib/format.ts` is the single formatting path in our rules, and why "prices to 2
+decimals" is a display rule rather than a casting rule.
+
+## 7.4 The one thing worth taking
+
+**A small, clean consolidation primitive.** Stripped of the truthiness bug, `is_consolidating`
+is a decent compact base-detector: over the last *N* candles, the stock is consolidating if
+`min_close > max_close × (1 − pct/100)` — i.e. the whole recent range fits inside a `pct`% band.
+No look-ahead, no parameters beyond window and width, trivially testable.
+
+That is relevant to a research item we already have queued: the **Minervini trend-template
+shadow test** (from the e-book review, still unbuilt). Base/consolidation detection is a core
+Minervini criterion, and this is a serviceable starting definition — with the obvious upgrades
+of returning a real boolean, measuring the range in ATRs rather than raw percent, and
+requiring a minimum base length. **Noted as a pointer for that item rather than a new queue
+entry**, since the trend-template test is where it would land.
+
+## 7.5 Verdict
+
+**Adopt no code.** A three-year-old unmaintained student project whose model selection rests on
+a leaked scaler and a missing baseline, and whose flagship screening primitive has its filter
+disabled by a truthiness bug.
+
+Its value is entirely as confirmation. Nine repos in, the pattern is stable enough to state as
+a prior: **when a repo picks a model, check what it did *not* compare against; when it ships a
+guard, ask what makes the guard fail.** Both questions took under five minutes here and both
+returned findings.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -1672,7 +1825,7 @@ reading as a signal source.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Five of eight advertise numbers or fields their own code cannot produce — and the
+0. **Six of nine advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -1696,24 +1849,36 @@ lessons is worth more than any one of them:
    **the claims that fail audit are almost always the performance claims**, and the repos
    that make none are the ones worth reading. Recompute every headline number before quoting
    it — and treat a repo that declines to claim as a positive signal, not a gap.
-1. **A simple baseline matches the elaborate system.** Buy-and-hold beat AgentQuant's agent
-   (+102.4% vs +0.7%); logistic regression matches QuantHarness's four-agent GPT-4o vision
-   pipeline on 7 of 8 assets; QuantAgents-NSE's four agents beat the Nifty by 0.5pp at
-   Sharpe 0.237 — and two of those four were wired to nothing, so the number came from two. **Neither repo leads with this, and both ship the data that
+1. **A simple baseline matches the elaborate system — and is almost never run.** Buy-and-hold
+   beat AgentQuant's agent (+102.4% vs +0.7%); logistic regression matches QuantHarness's
+   four-agent GPT-4o vision pipeline on 7 of 8 assets; QuantAgents-NSE's four agents beat the
+   Nifty by 0.5pp at Sharpe 0.237 — and two of those four were wired to nothing, so the number
+   came from two. Repo 7 is the purest case: it selects an LSTM over three other models on RMSE
+   and **never runs persistence** ("tomorrow = today"), the one baseline that would plausibly
+   have beaten all four. **The operational rule: when a repo picks a winner, look first at what
+   it did not compare against.** **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **Dead code advertised as a feature shows up in three of eight.** AgentQuant fits an HMM
+2. **A guard that cannot return false shows up in three of nine — and it is the single most
+   repeated defect in this log.** AgentQuant's `generalization_gap = max(avg − best, 0)` is
+   identically zero; ai-quant-agents' `risk_approved = "risk" not in decision.lower()` where
+   `decision ∈ {BUY,HOLD,SELL}` is always true; repo 7's `is_breaking_out` calls a predicate
+   that returns the strings `'YES'`/`'NO'`, both truthy, so its consolidation filter never
+   applies. Three different root causes, one symptom. **The test is mechanical: for every
+   guard, name the input that makes it fail — if you cannot, it is not a guard.** Our own
+   `unassessed` tripwire failed exactly this (3 of 8 modes passed).
+3. **Dead code advertised as a feature shows up in three of nine.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
    the README describes the feature and the code disconnects it** — so "does this code path
    affect the output?" is a faster audit than reading the logic, and `grep` answers it.
-3. **The guard that matters is the one that is structural.** AgentQuant's generalization
+4. **The guard that matters is the one that is structural.** AgentQuant's generalization
    gap was a metric that could only return zero; QuantHarness's look-ahead holdout is a
    commented-out line beside the live path. Both are documented safety nets with nothing
    that fails when they lapse — the same finding our own bug-hunter round produced when it
    showed the `unassessed` tripwire was imaginary (3 of 8 modes passed).
-4. **Published work stops where the hard part starts — with two exceptions.** None of the
+5. **Published work stops where the hard part starts — with two exceptions.** None of the
    first three has position sizing, risk limits, or a portfolio. QuantHarness is titled "for High-Frequency Trading"
    and models no position at all; ai-quant-agents leaves `suggested_action` empty. The
    runtime plumbing we have deferred to Phase 7 is not the boring part of this field — it
@@ -1721,24 +1886,24 @@ lessons is worth more than any one of them:
    the only two with a real broker/order lifecycle. quant-agent needed two audits finding 82
    defects — one leaving positions naked overnight — to get there; PaperTrade-India needed
    543 tests. Nobody arrives at this cheaply.
-5. **"Confidence" is repeatedly a share, not a probability.** ai-quant-agents divides the
+6. **"Confidence" is repeatedly a share, not a probability.** ai-quant-agents divides the
    modal vote by the total and calls it confidence; agents sharing a model and prompt are
    not independent estimators, so their agreement is correlated by construction. Our own
    confluence normalises by the weight of factors that *scored*, which is the same shape of
    error and is how SRTL entered on a single indicator. **U17 (show the distribution, not
    the scalar) is the fix, and it generalises.**
-6. **The two failure modes are opposite, and ours is the safer one.** Repos 1–3 have
+7. **The two failure modes are opposite, and ours is the safer one.** Repos 1–3 have
    validation theatre with no production system. Repo 4 has a production system with no
    validation. We have real validation and no production system yet — and of the three
    states, only ours makes the missing half safe to build. An unvalidated system that runs
    flawlessly is still unvalidated; it just loses money with better uptime.
-7. **The repos worth reading are the ones with nothing to sell.** Across eight, the two that
+8. **The repos worth reading are the ones with nothing to sell.** Across nine, the two that
    survive audit cleanly (quant-agent, PaperTrade-India) are both *infrastructure* — a
    personal trading harness and a broker simulator. The ones that fail are all selling a
    result: an evolved harness, a beaten benchmark, an agent consensus, a probable exit date.
    **The presence of a headline performance number is, empirically, the best available
    predictor that a repo's claims will not survive contact with its own source.**
-8. **Two independent projects hitting the same bug makes it near-certain for us.** Bracket
+9. **Two independent projects hitting the same bug makes it near-certain for us.** Bracket
    sibling quantity on partial fill was found the hard way by repo 4 *and* factored as a named
    function in 6A. That is the strongest signal in this document about what Phase 7 will
    actually cost — stronger than either repo alone, and the reason A22 is queued before we
