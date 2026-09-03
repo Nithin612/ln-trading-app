@@ -52,6 +52,42 @@ three shared guards with their measured values, and the deflated-Sharpe block. A
 without its numbers cannot be re-judged later — and both reverted gates were caught
 precisely because someone went back to the numbers.
 
+**Completeness contract (`test_sidecar_readiness_contract.py`).** I reported the evidence
+block as landing on "every readiness banner". It was **four of seven** — and the worst
+omission was `entry_quality_shadow`, the one carrying `sl_atr`, the gate closest to a
+decision: it aggregated its rows into Buckets and discarded them, so it *could not* run the
+guards (aggregates are not recoverable into rows after the fact). A second audit then found
+`circuit_gate_shadow` had the evidence block but **not the veto**, so its banner could still
+print READY without the guards running. Both slipped through because nothing checked the set.
+- All seven are now wired (`entry_quality_shadow` keeps a `SignalQuality` detail row;
+  `circuit_gate_shadow` runs the veto on its blocked-only rows, where `side_proxy`/`win_rate`
+  degrade to "not assessable" and `tail` does the work).
+- The new test **auto-discovers** `app/services/*_shadow.py`, so a sidecar added later is
+  covered without anyone remembering a list, and asserts each one that prints a readiness
+  verdict calls **both** `fr.veto` and `evidence_lines`. Exemptions must carry a written
+  reason (>80 chars) and are checked for staleness — `regime_gate_shadow` is the one
+  exemption: it holds only aggregate `GateMetrics` and already prints a richer record
+  (3 variants × 8 §8 metrics).
+- It includes a "guard the guard" case (discovery must find ≥7 modules, or every other
+  assertion would vacuously pass), and **I verified it fails when wiring is removed** —
+  deleting `fr.veto` from one sidecar reproduces exactly the error message it should.
+
+**And the contract immediately paid for itself on `sl_atr`** — the first gate whose evidence
+is structurally sound:
+
+| set | signals | resolved | mean | median | trimmed mean | win% |
+|---|--:|--:|--:|--:|--:|--:|
+| would-BLOCK | 123 | 17 | −₹1,118 | **−₹2,221** | −₹545 | 41% |
+| eligible (kept) | 423 | 74 | +₹17 | +₹44 | +₹406 | 51% |
+
+All three guards **pass**, and note the median is *worse* than the mean — the exact inverse
+of market-regime, i.e. its losses are broad rather than tail-driven. **Yet it still fails the
+deflated-Sharpe bar** (eligible Sharpe +0.009 vs a +0.221 benchmark). That contrast is the
+most useful thing the two instruments produced together: **`sl_atr` correctly identifies a
+genuinely bad cohort, and removing it still does not leave a book with measurable
+risk-adjusted edge.** Concretely — it will likely hit 20/20 shortly and pass every
+qualitative guard, and that alone will not justify a flip.
+
 It immediately showed something the ₹ means had hidden: **market-regime's would-block
 trimmed mean is +₹200**, from a −₹302 mean. Trimming the worst 10% does not merely weaken
 that gate's case, it *reverses the sign*. The eligible set's trimmed mean is +₹346 — both

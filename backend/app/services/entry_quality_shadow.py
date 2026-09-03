@@ -24,6 +24,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.config import settings
 from app.models.signal import Signal
 from app.models.trading import Position
+from app.services import flip_readiness as fr
 from app.services.signal_outcomes import OUTCOME_EPOCH
 from app.signals import entry_quality as eq
 from app.trading.atr import atr_timeframe_for, latest_atr
@@ -57,6 +58,23 @@ class Bucket:
 
 
 @dataclass(frozen=True)
+class SignalQuality:
+    """One signal and what each check said about it.
+
+    Added 2026-09-03: the compute loop already had the side, both verdicts and the realized
+    P&L in hand and DISCARDED them into Buckets — which meant this sidecar, the one carrying
+    `sl_atr` (the gate closest to a decision), could not run the shared readiness guards or
+    print an evidence-of-record block. Aggregates are not recoverable into rows after the
+    fact, so the rows are kept."""
+
+    symbol: str
+    side: str
+    div_blocked: bool
+    sl_blocked: bool
+    realized: Decimal | None
+
+
+@dataclass(frozen=True)
 class EntryQualityShadow:
     since: datetime
     n_signals: int
@@ -64,6 +82,7 @@ class EntryQualityShadow:
     div_passed: Bucket
     sl_flagged: Bucket  # sl_atr check fired
     sl_passed: Bucket
+    detail: list[SignalQuality] = field(default_factory=list)
 
 
 async def _realized_by_signal(db: AsyncSession, signal_ids: list[str]) -> dict[str, Decimal]:
@@ -98,6 +117,7 @@ async def compute_entry_quality_shadow(
     realized = await _realized_by_signal(db, [s.id for s in sigs])
 
     div_f, div_p, sl_f, sl_p = Bucket(), Bucket(), Bucket(), Bucket()
+    detail: list[SignalQuality] = []
     for s in sigs:
         atr = await latest_atr(
             db, s.stock_id, timeframe=atr_timeframe_for(s.classification), before=s.created_at
@@ -114,14 +134,28 @@ async def compute_entry_quality_shadow(
         r = realized.get(s.id)
         (div_f if v.diversity_blocked else div_p).add(r)
         (sl_f if v.sl_blocked else sl_p).add(r)
+        detail.append(
+            SignalQuality(
+                symbol="", side=s.direction,
+                div_blocked=v.diversity_blocked, sl_blocked=v.sl_blocked, realized=r,
+            )
+        )
 
     return EntryQualityShadow(
         since=since, n_signals=len(sigs),
         div_flagged=div_f, div_passed=div_p, sl_flagged=sl_f, sl_passed=sl_p,
+        detail=detail,
     )
 
 
 def sl_flip_ready(r: EntryQualityShadow) -> tuple[bool, str]:
+    # Shared veto first — see app/services/flip_readiness.py. This banner decides the
+    # `sl_atr` rung, so the partition is sl_blocked, not diversity.
+    _veto = fr.veto(
+        [fr.Row(side=d.side, blocked=d.sl_blocked, realized=d.realized) for d in r.detail]
+    )
+    if _veto is not None:
+        return False, f"VETOED by a shared readiness guard — {_veto}"
     """Is there enough forward evidence to flip the sl_atr check active? Bar (all):
     ≥ N resolved flagged trades, the flagged set net-losing, AND worse than the
     passed set. Advice for the human sign-off — never flips anything."""
@@ -189,4 +223,8 @@ def render_markdown(
         "'never a single indicator' rule, so its flagged set no longer trades live._",
         "",
     ]
+    out += fr.evidence_lines(
+        [fr.Row(side=d.side, blocked=d.sl_blocked, realized=d.realized) for d in r.detail],
+        label="entry-quality sl_atr rung",
+    )
     return "\n".join(out) + "\n"

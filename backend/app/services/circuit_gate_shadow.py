@@ -26,6 +26,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.stock import Stock
 from app.models.trading import Order, Position
+from app.services import flip_readiness as fr
 from app.services.signal_outcomes import OUTCOME_EPOCH
 from app.signals.eligibility import mode_banner
 
@@ -181,6 +182,15 @@ def forward_evidence_ready(r: CircuitGateShadow) -> tuple[bool, str]:
     Bar (both): ≥ FORWARD_EVIDENCE_TARGET_N resolved blocked trades AND that
     blocked set net-losing (blocking them would have helped). Never flips
     anything — advice for the human sign-off, which is a separate required step."""
+    # Shared veto first (app/services/flip_readiness.py). This sidecar records only the
+    # BLOCKED side, so `side_proxy` and `win_rate` degrade to "not assessable" and the
+    # `tail` guard does the work — which is the guard that matters for a small blocked
+    # cohort, since one outlier could otherwise carry the whole net-losing verdict.
+    _veto = fr.veto(
+        [fr.Row(side=d.side, blocked=True, realized=d.realized_pnl) for d in r.blocked]
+    )
+    if _veto is not None:
+        return False, f"VETOED by a shared readiness guard — {_veto}"
     n = r.blocked_resolved
     if n < FORWARD_EVIDENCE_TARGET_N:
         return False, f"{n}/{FORWARD_EVIDENCE_TARGET_N} resolved blocked trades — keep accruing"
@@ -254,4 +264,8 @@ def render_markdown(r: CircuitGateShadow, *, day: date, mode: str) -> str:
         "reversible via `circuit_gate_mode=shadow`).",
         "",
     ]
+    out += fr.evidence_lines(
+        [fr.Row(side=d.side, blocked=True, realized=d.realized_pnl) for d in r.blocked],
+        label="circuit-band gate",
+    )
     return "\n".join(out) + "\n"
