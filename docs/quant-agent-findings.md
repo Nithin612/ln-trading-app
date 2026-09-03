@@ -34,7 +34,10 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 2 | [Y-Research-SBU/QuantHarness](https://github.com/Y-Research-SBU/QuantHarness) | 2026-09-03 | **Adopt no code, reject the trading thesis — harvest 5 architecture ideas.** A real paper with real baselines, honestly reported; but it beats logistic regression on **1 of 8 assets**, and its forced-trade design is the opposite of our whole thesis. |
 | 3 | [demandai/ai-quant-agents](https://github.com/demandai/ai-quant-agents) | 2026-09-03 | **Not a quant system — a 236-line marketing SDK for a closed paid API.** No algorithm to review; `risk_approved` is hardcoded true. **Harvest 3 UI + 1 protocol idea.** ⭐ Its real value: it names its upstream, **[TradingAgents](https://github.com/TauricResearch/TradingAgents)** — review that instead. |
 | 4 | [yebof/quant-agent](https://github.com/yebof/quant-agent) | 2026-09-03 | ⭐ **The best-engineered repo here, and the only one whose claims survived audit.** 63k LOC, 1,344 tests, live-capable via Alpaca, **zero performance claims**. Ahead of us on production discipline; **has no backtest or validation at all**. **Harvest 7 architecture ideas — A11 (session notifier) is the most actionable item in this whole document.** |
-| 5 | [PreethamSanji/QuantAgents-NSE](https://github.com/PreethamSanji/QuantAgents-NSE) | 2026-09-03 | **The only NSE repo — and its claim fails on six counts**, incl. **look-ahead (fills on the signal bar's close)**, a hindsight-picked survivor universe, and **2 of its 4 agents wired to nothing**. Result is +0.5pp CAGR at Sharpe 0.237. No LICENSE. **Harvest 2 ingredients for the MCE news veto.** |
+| 5 | [PreethamSanji/QuantAgents-NSE](https://github.com/PreethamSanji/QuantAgents-NSE) | 2026-09-03 | **The only NSE agent repo — and its claim fails on six counts**, incl. **look-ahead (fills on the signal bar's close)**, a hindsight-picked survivor universe, and **2 of its 4 agents wired to nothing**. Result is +0.5pp CAGR at Sharpe 0.237. No LICENSE. **Harvest 2 ingredients for the MCE news veto.** |
+| 6A | [Mirzabaig313/PaperTrade-India](https://github.com/Mirzabaig313/PaperTrade-India) | 2026-09-03 | ⭐ **A reference implementation, not a cautionary tale.** 24.8k LOC, 543 tests, MIT — a standalone NSE/BSE paper broker: statutory fees, T+1, bands, bracket/OCO, corporate actions, L2 book. **Makes no performance claim** (it is infrastructure). **Read `orders/` + `docs/FEES.md` before Phase 7; take A21 now.** |
+| 6B | [artist-hks/SentimentStock](https://github.com/artist-hks/SentimentStock) | 2026-09-03 | **A synthetic-data UI demo** — "Hinglish NLP" and "LSTM-style predictions" are `Math.sin(seed)`. No LICENSE (despite the badge). **Harvest 1 UI idea** (U19, the lag-correlation chart). |
+| 6C | [madhusudhan-nikhil/InvestmentPrediction](https://github.com/madhusudhan-nikhil/InvestmentPrediction) | 2026-09-03 | Real FastAPI+React app for Indian retail. **HRP portfolio construction is a genuine pointer**; its **"probable exit date" is arithmetic on the user's own input** — and doesn't even depend on the target price. No LICENSE. **Harvest A24 as a standing rule.** |
 
 ---
 
@@ -1287,12 +1290,19 @@ the stated justification is about the regime filter, and the regime filter is de
 (finding 3).
 
 **6. No spread, no slippage, no impact.** Commission is modelled — 0.1% on each leg, so ~0.2%
-round trip, which is actually *conservative* against real NSE delivery costs (~0.12–0.13%
-round trip at a zero-brokerage discount broker: STT 0.1% on the sell, stamp duty 0.015% on
-the buy, exchange and SEBI charges, GST). Credit where due — repos 1–3 modelled less. But
-there is no bid-ask spread and no impact at all, and our own 6.8.2 measurement found **82% of
-live NSE books have a half-spread wider than a flat 2 bps.** Trading at the untouched close
-is free money the backtest does not pay for.
+round trip, which is roughly the right magnitude for real NSE delivery (**STT is 0.1% on
+*both* legs for delivery**, plus 0.015% stamp duty on the buy, exchange and SEBI charges, GST
+on brokerage + exchange, and a flat DP charge per sell ⇒ ~0.22% round trip at a zero-brokerage
+discount broker; our own `app/trading/fees.py` encodes exactly this). Credit where due —
+repos 1–3 modelled less. But there is **no bid-ask spread and no impact at all**, and our
+6.8.2 measurement found **82% of live NSE books have a half-spread wider than a flat 2 bps.**
+Trading at the untouched close is free money the backtest does not pay for.
+
+> *Correction, added while reviewing repo 6 (which ships a full statutory fee table): an
+> earlier draft of this section said real round-trip delivery cost was ~0.12–0.13% on the
+> grounds that STT applies only to the sell leg. That is wrong — **delivery STT is 0.1% on
+> both legs** (intraday is 0.025%, sell-side only). So repo 5's 0.2% is accurate rather than
+> conservative, and only the missing spread stands as a cost understatement.*
 
 **And after all six, the result is nothing:** CAGR 8.9% against the Nifty's 8.4% — a **0.5
 percentage point** gap — at a Sharpe of **0.237**. For scale, repo 1's committed data has
@@ -1383,6 +1393,185 @@ the two.
 
 ---
 
+# 6. Three repos reviewed together
+
+Reviewed 2026-09-03. Depth here is proportionate: **6A is substantial and directly overlaps
+our paper broker**, 6B is a synthetic-data UI demo, 6C is a real app with one good idea and
+one bad one.
+
+---
+
+## 6A. PaperTrade-India — `Mirzabaig313/PaperTrade-India`
+
+`0f9c1b2`-era, MIT (real LICENSE), **~24,800 LOC · 543 tests**, first commit 2026-05-16.
+A pip-installable **simulated NSE/BSE broker** — the same job as our `paper_broker`, built as
+a standalone library. **The most directly overlapping repo in this entire log.**
+
+Its framing is correct and matches our experience: *"No Indian broker offers a programmatic
+paper-trading API"* — Kite, Upstox, Angel One, Dhan, Fyers all ❌. That is exactly why we
+built our own.
+
+**What it has that is worth studying:** a date-versioned Indian statutory fee engine, T+1
+settlement with deliverable-quantity enforcement, `ProductType.INTRADAY` with 15:15
+auto-square-off, tick/lot/price-band snapping and rejection, market/limit/`STOP_MARKET`/
+`STOP_LIMIT`/`BRACKET` with OCO, a synthetic L2 book with queue-position tracking and
+Almgren-style impact, latency and random-rejection simulation, corporate actions
+(`splits`/`bonus`/`dividends`/`rights`), a double-entry cash ledger, and a pluggable
+`MarketDataProvider` layer with per-provider circuit breakers and median aggregation across
+sources.
+
+That list is essentially our 6.8 slate plus Phase 7's order FSM, in one library.
+
+### The fee table — and a correction to §5
+
+`docs/FEES.md` is the clearest statement of Indian equity costs I have seen in any of these
+repos, and checking it against our `app/trading/fees.py` showed **I made an error in §5.2**:
+I wrote that real round-trip delivery cost is ~0.12–0.13% because STT applies only to the
+sell leg. **Wrong — delivery STT is 0.1% on *both* legs** (intraday is 0.025%, sell-side
+only). Real round trip is ~0.22%. §5 now carries the correction inline.
+
+Our own model already encodes this correctly, so nothing in our P&L is affected — the error
+was mine in the review, not ours in the code. Worth stating plainly because it changed a
+judgement: repo 5's 0.2% commission was *accurate*, not conservative.
+
+### Three findings for us
+
+**★ A21 — our fills are spread-aware but our marks are not.** They use **mark-to-bid**
+valuation for unrealized P&L: a long is worth what you could actually sell it for, not the
+last traded price. We mark differently — `_open_book_mtm` values every open position at *"the
+last 1m close ≤ cutoff"*:
+
+```python
+"""Gross unrealized P&L of every paper position OPEN at `cutoff`, each marked to
+the last 1m close ≤ cutoff. ..."""
+```
+
+Since 6.8.2 our **fills** pay the real half-spread, but our **marks** still use the last
+trade. That is an internal inconsistency in the same system: we charge the spread on the way
+in and out, then value the book as if we could exit at the untouched last price. With our own
+finding that **82% of NSE books have a half-spread wider than 2 bps**, across a ~25-position
+book, the reported open-book MTM is systematically optimistic by roughly a half-spread per
+position. **We already capture the depth (6.8.1) needed to fix it** — mark longs to bid,
+shorts to ask, fall back to last when depth is stale, exactly as the fill model already does.
+Cheap, and it makes the two halves consistent.
+
+**A22 — `rebalance_bracket_sibling_qty`.** Their order module has this as a first-class named
+function, alongside `cancel_bracket_siblings`. When one leg of a bracket partially fills, the
+sibling's quantity must be reduced to match or you are left protecting the wrong size. **Repo
+4 described this same failure as the partial-fill mode "that took several iterations to fully
+pin down."** Two independent projects hitting it makes it a near-certainty for Phase 7 — and
+here it is already factored as a function with tests around it. Read both before building our
+order FSM.
+
+**A23 — date-versioned fee schedules.** Theirs are *"configurable per broker and date-versioned
+for mid-year statutory changes."* Ours is designed for this — the docstring says costs are
+*"versioned by effective date"* and a comment notes a *"future effective-dated registry can
+replace this constant"* — but today it is a single constant set. Not a defect (the code is
+honest about it), but a real gap the moment a backtest spans a rate change, and Indian STT
+rates do change mid-year. Low effort, and it stops a historical backtest silently using
+today's rates.
+
+**Verdict:** the one repo in this log I would consider a *reference implementation* rather
+than a cautionary tale. It makes no performance claims (there is no strategy — it is
+infrastructure), which is the second repo after quant-agent to pass that test. Adopt no code
+(we have our own, further along on depth-aware fills), but **read `orders/`, `execution/` and
+`docs/FEES.md` before Phase 7.**
+
+---
+
+## 6B. SentimentStock — `artist-hks/SentimentStock`
+
+7 commits, **no LICENSE file** (despite an MIT badge linking to one), React 18 + Vite +
+Tailwind + Recharts — the same frontend stack as ours.
+
+**It is a synthetic-data demo, and the README's headline claim does not hold.** It advertises
+*"Hinglish NLP sentiment analysis"* and *"LSTM-style stock predictions"*. There is no NLP and
+no model: `src/data/generateData.js` produces deterministic pseudo-random series from
+`Math.sin(seed) * 10000`, keyed by a hash of the symbol. "LSTM-*style*" is carrying the
+sentence. To its credit the README says plainly *"No API keys. No backend"* — so the demo
+nature is disclosed even if the capability framing is not.
+
+Judged as what it is — a portfolio UI piece — there is one idea worth taking.
+
+**U19 — the lag-correlation chart.** A bar chart of correlation against lag in hours, with a
+`ReferenceLine` at zero and per-bar colour, answering *"at what delay does this signal best
+line up with price?"*
+
+We have a live question shaped exactly like this and no visual for it. Our own analysis found
+that **we grade multi-day trades on a one-day clock** — entry-day ≥1R is 12%, against 36% for
+swing and 54% for positional in-horizon, with +1R typically arriving on d+3. That is a
+lag/horizon finding discovered in prose. A horizon-correlation bar chart is its natural
+rendering, and it generalises to every shadow overlay we run: *at what horizon does this gate
+actually separate winners from losers?* Cheap in Recharts, which we already use.
+
+**CONFIRMS:** `sentimentToLabel` and `sentimentToShortLabel` bucket the same 0–1 score at
+different thresholds (`< 0.25` vs `< 0.3` for the bearish boundary), so the same number can
+read "Bearish" in one component and "Slightly Bearish" in another. This is precisely why
+`lib/format.ts` is the single formatting path in our rules.
+
+---
+
+## 6C. InvestmentPrediction ("BharatiQuant") — `madhusudhan-nikhil/InvestmentPrediction`
+
+52 commits, active (last 2026-09-01), **no LICENSE file**. FastAPI backend + React frontend,
+NSE universe, four tabs: portfolio diagnostic/optimisation, target-profit & sell-date
+predictor, a macro shock simulator (oil, VIX, FII/DII, RBI rates), and a ticker-universe
+manager. The closest thing here to a *consumer product* aimed at Indian retail investors.
+
+**The good idea: Hierarchical Risk Parity for portfolio construction.** HRP is López de
+Prado's method — the same source our reading review already flagged for purged CV and the
+deflated Sharpe. It builds allocations from a hierarchical clustering of the correlation
+matrix instead of inverting it, which is genuinely more robust than mean-variance on noisy
+estimates. **This is a real answer to a real gap of ours:** our portfolio heat sits at 45.3%
+with no cap and no correlation-aware sizing, and the Varsity review already listed
+"correlation-aware heat" as a target. HRP is a defensible way to get there. *(Noted as a
+pointer, not a queue item — it belongs to whatever eventually builds portfolio construction,
+and it needs the same evidence bar as anything else.)*
+
+**The bad idea, and it is instructive: the "probable exit date".** The engine reports a
+specific calendar date on which you can expect to sell at your target. The computation:
+
+```python
+mu_daily     = ((1 + exp_ret/100) ** (1/365) - 1) * momentum_mult   # category fudge 0.70–1.45
+avg_drift    = ((1 + 0.13) ** (1/365) - 1)                          # 13% baseline
+speed_factor = avg_drift / mu_daily
+est_days     = holding_days_target * speed_factor
+exit_date    = today + timedelta(days=est_days)
+```
+
+Three problems, in increasing order of seriousness:
+
+1. **Zero volatility.** Time-to-target is a *first-passage* problem for a stochastic process
+   — it has a distribution, not a value. This is a smooth compounded drift path with no
+   variance anywhere, yet the output is labelled *"probable"*.
+2. **`momentum_mult` is a hardcoded category fudge** (Category C ×1.45, Category D ×0.70)
+   applied directly to the drift, with no derivation.
+3. **The target return does not enter the date calculation at all.** `target_return_pct` sets
+   `target_price`, but `est_days` depends only on `holding_days_target` and the ratio of
+   expected returns. **Ask for a 5% target and a 50% target on the same stock with the same
+   horizon and you get the same exit date.** The date is independent of the target it is
+   presented as the date for.
+
+So the "probable exit date" is the user's own requested horizon, scaled by how the stock's
+expected return compares to 13%. It is arithmetic on the input, rendered as a prediction with
+a specific date.
+
+**A24 — never render a precise figure without its uncertainty.** A calendar date is read as a
+confidence signal; precision without an interval is a claim you have not earned. This is the
+same failure as repo 3's vote-share-labelled-"confidence" and repo 1's placeholder-as-metric,
+and it is worth a standing rule because **we are exposed to it in a specific way**: the stated
+goal of 2–3%/day is exactly the kind of desired return that invites a system to convert a wish
+into a confident timeline. Our position is already on record — prove expectancy forward, size
+small, measure monthly and yearly *with variance*. This repo is what the alternative looks
+like when it is built.
+
+**Also worth noting:** their macro simulator (shock oil/VIX/FII-DII/RBI and see the portfolio
+response) is a *scenario* tool rather than a prediction tool, and that framing is the honest
+one — "what would happen if" makes no claim about likelihood. We have FII/DII data already;
+a scenario view over the paper book would be a legitimate future use of it.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -1426,6 +1615,7 @@ touches the money path, and all of it obeys `.claude/rules/ui.md` (tokens, `form
 | **U15** | **Named-evidence line on the signal detail view** — the factors that scored, in plain language ("MACD bullish crossover · RSI divergence · volume spike"), beside U10's arithmetic; plus an explicit forecast-horizon label | signal detail view | ~half day on top of U10 | *(repo 2)* The human-readable half of U10. "RSI_DIVERGENCE" alone in an evidence list reads as thin instantly, in a way "78%" never does — which is exactly the SRTL failure. |
 
 | **U17** | **Confidence as a distribution bar, not a scalar** — one stacked bar showing which factors voted and how strongly, with the verdict beside it (zero-value segments collapsed) | signal detail view | ~half day on top of U10 | *(repo 3)* Completes the trio: **U10** the arithmetic, **U15** the named evidence, **U17** the shape of the vote. A 78% scalar hides whether it came from four factors agreeing or one factor carrying everything — which is exactly the SRTL failure. |
+| U19 | **Horizon/lag correlation chart** — correlation vs lag, zero reference line, per-bar colour | analytics surfaces; each shadow-overlay sidecar | ~half day | *(repo 6B)* We found in prose that **we grade multi-day trades on a one-day clock** (entry-day ≥1R 12% vs swing 36% / positional 54%, +1R typically on d+3). This is that finding's natural rendering, and it generalises: *at what horizon does this gate actually separate winners from losers?* Recharts, which we already use. |
 | U16 | **Phase/participant stage-tracker strip** for multi-stage runs | wherever a long job is surfaced | ~half day | *(repo 3)* The visual form of A9; ~40px shows every phase, its participants and what has completed. Fits `make analysis` and walk-forward runs. |
 | U18 | **Streaming log with phase tags + explicit per-entry expansion** | sidecar/report output | ~half day | *(repo 3)* Summary inline, detail on demand. Our sidecar output is currently all-or-nothing markdown. |
 
@@ -1451,6 +1641,10 @@ from repo 1.
 | A16 | **Order-protection lifecycle as a state machine + durable repair queue** | Phase 7 BrokerAdapter / order FSM | Phase 7 | *(repo 4)* Not actionable pre-live, but the best available map of what Phase 7 must handle — five failure branches, each found the hard way, incl. reprotect-on-actual-fill and a drain queue so a mid-flight crash cannot leave a position naked overnight. **Read before Phase 7 starts.** |
 | A17 | **Provider failover semantics + pinned cost table** | any LLM research loop | ~half day | *(repo 4)* Single-shot fallback on non-retryable failure (never on truncation), and model prices pinned so a cache refresh cannot overwrite them with stale values. |
 | **A18** | **India news sourcing for the MCE news veto** — Google News RSS with `hl=en-IN&gl=IN&ceid=IN:en` + **FinBERT** (`ProsusAI/finbert`); **not** HTML-scraping MoneyControl/ET | MCE slice 6 (unbuilt) | ~1–2 days | *(repo 5)* The only worked example of Indian financial-news ingestion in this log, and it lands on a slice we have not built. RSS is stable and ToS-clean where scraping is neither (they ship three HTML-debug scripts — the evidence it kept breaking); FinBERT is local, cheap and reproducible, which a §8-validatable veto requires. |
+| **A21** | **★ Mark-to-bid, so marks match fills** — value longs at bid / shorts at ask using the depth we already capture, falling back to last when stale | `_open_book_mtm` in `app/services/daily_report.py`, and any unrealized-P&L surface | ~half day | *(repo 6A)* **An internal inconsistency in our own system**: since 6.8.2 our *fills* pay the real half-spread, but our *marks* still use the last 1m close. With 82% of NSE books wider than 2 bps and a ~25-position book, reported open-book MTM is systematically optimistic. The data is already there. |
+| A22 | **Bracket sibling-quantity rebalance on partial fill** | Phase 7 order FSM | Phase 7 | *(repos 6A + 4)* Two independent projects hit this same failure — 6A factors it as a named function with tests; repo 4 called it the partial-fill mode "that took several iterations to fully pin down". Near-certain for us. |
+| A23 | **Date-versioned fee schedule** (effective-dated registry) | `app/trading/fees.py` | ~half day | *(repo 6A)* Ours is *designed* for this — the docstring says "versioned by effective date" — but is a single constant set today. Indian STT rates change mid-year; a backtest spanning a change silently uses today's rates. |
+| **A24** | **Never render a precise figure without its uncertainty** — no bare point estimate for a date, a target, or a "confidence" | standing rule; `.claude/rules/ui.md` + any predictive surface | ~1 hour to write down | *(repo 6C)* Their "probable exit date" is a calendar date with no volatility term that **does not even depend on the target price it is the date for**. A precise number reads as a confidence signal. Same failure as repo 3's vote-share-as-confidence and repo 1's placeholder-as-metric — and we are specifically exposed, because a 2–3%/day goal invites converting a wish into a timeline. |
 | A19 | **Normalise components before summing into a composite risk scalar** | any future composite score | — | *(repo 5)* Their Equation 3 sums beta (~1), inverse liquidity (unbounded), sector concentration (0–1) and annualised vol (~0.2–0.5) at equal weights, then thresholds at 0.75 — whichever term is largest dominates, so the weights are decorative. |
 | A20 | **A signed risk penalty that scales confidence, rather than a boolean gate** | overlay design | — | *(repo 5)* Their risk agent always enters synthesis with a negative sign and caps confidence at 60% on alert. Our overlays are on/off switches; **a modifier is closer to what the reverted regime gate should have been.** |
 | A1 | **Two-tier model routing** (cheap extract pass / strong judge pass) for the research loop | daily-analysis + review-calendar tooling | ~half day when that work starts | Never in the money path. Applies the moment an LLM step enters the research loop. |
@@ -1478,7 +1672,7 @@ reading as a signal source.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Four of five advertise numbers or fields their own code cannot produce — and the
+0. **Five of eight advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -1490,8 +1684,13 @@ lessons is worth more than any one of them:
    bar's close, over a hindsight-picked survivor universe, **with two of its four agents
    assigned to variables that are never read**.
 
-   **quant-agent breaks the streak, and the way it breaks it is the lesson: it makes no
-   performance claim at all.** Its only numeric claim (874 tests) *understates* reality
+   SentimentStock adds a fifth: *"Hinglish NLP sentiment analysis"* and *"LSTM-style stock
+   predictions"* over a `Math.sin(seed)` generator.
+
+   **Two repos break the streak, and how they break it is the lesson: neither makes a
+   performance claim at all.** quant-agent (repo 4) is a live trading system; PaperTrade-India
+   (6A) is broker infrastructure. Both are among the best-engineered here, and both simply
+   have nothing to claim — one declines to, the other has no strategy to claim for. Its only numeric claim (874 tests) *understates* reality
    (1,344), and both architectural claims I tested — Python-computed R/R, schema-enforced
    CoT — are true. So the rule is not "public repos lie"; it is narrower and more useful:
    **the claims that fail audit are almost always the performance claims**, and the repos
@@ -1503,7 +1702,7 @@ lessons is worth more than any one of them:
    Sharpe 0.237 — and two of those four were wired to nothing, so the number came from two. **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **Dead code advertised as a feature shows up in three of five.** AgentQuant fits an HMM
+2. **Dead code advertised as a feature shows up in three of eight.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
@@ -1514,13 +1713,14 @@ lessons is worth more than any one of them:
    commented-out line beside the live path. Both are documented safety nets with nothing
    that fails when they lapse — the same finding our own bug-hunter round produced when it
    showed the `unassessed` tripwire was imaginary (3 of 8 modes passed).
-4. **Published work stops where the hard part starts — with one exception.** None of the
+4. **Published work stops where the hard part starts — with two exceptions.** None of the
    first three has position sizing, risk limits, or a portfolio. QuantHarness is titled "for High-Frequency Trading"
    and models no position at all; ai-quant-agents leaves `suggested_action` empty. The
    runtime plumbing we have deferred to Phase 7 is not the boring part of this field — it
-   is the part almost nobody does. **quant-agent is the exception that proves it**: it is the
-   only one of the four with a real broker lifecycle, and it needed two audits finding 82
-   defects — one of them leaving positions naked overnight — to get there.
+   is the part almost nobody does. **quant-agent and PaperTrade-India are the exceptions that prove it**:
+   the only two with a real broker/order lifecycle. quant-agent needed two audits finding 82
+   defects — one leaving positions naked overnight — to get there; PaperTrade-India needed
+   543 tests. Nobody arrives at this cheaply.
 5. **"Confidence" is repeatedly a share, not a probability.** ai-quant-agents divides the
    modal vote by the total and calls it confidence; agents sharing a model and prompt are
    not independent estimators, so their agreement is correlated by construction. Our own
@@ -1532,3 +1732,14 @@ lessons is worth more than any one of them:
    validation. We have real validation and no production system yet — and of the three
    states, only ours makes the missing half safe to build. An unvalidated system that runs
    flawlessly is still unvalidated; it just loses money with better uptime.
+7. **The repos worth reading are the ones with nothing to sell.** Across eight, the two that
+   survive audit cleanly (quant-agent, PaperTrade-India) are both *infrastructure* — a
+   personal trading harness and a broker simulator. The ones that fail are all selling a
+   result: an evolved harness, a beaten benchmark, an agent consensus, a probable exit date.
+   **The presence of a headline performance number is, empirically, the best available
+   predictor that a repo's claims will not survive contact with its own source.**
+8. **Two independent projects hitting the same bug makes it near-certain for us.** Bracket
+   sibling quantity on partial fill was found the hard way by repo 4 *and* factored as a named
+   function in 6A. That is the strongest signal in this document about what Phase 7 will
+   actually cost — stronger than either repo alone, and the reason A22 is queued before we
+   have written a line of it.

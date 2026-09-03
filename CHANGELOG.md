@@ -7,6 +7,62 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repos 6A–6C — a reference implementation, a mock demo, and a fabricated exit date (2026-09-03)
+
+**6A [Mirzabaig313/PaperTrade-India](https://github.com/Mirzabaig313/PaperTrade-India)** —
+MIT, **~24.8k LOC · 543 tests**, a standalone pip-installable **NSE/BSE paper broker**: the
+same job as our `paper_broker`. Date-versioned statutory fee engine, T+1 settlement with
+deliverable-qty enforcement, 15:15 intraday square-off, tick/lot/band snapping, bracket/OCO,
+synthetic L2 book with queue position + Almgren impact, corporate actions, double-entry ledger,
+pluggable data providers with per-provider circuit breakers. **Makes no performance claim** (it
+is infrastructure) — the second repo after quant-agent to pass that test. **The one repo here
+that is a reference implementation rather than a cautionary tale.**
+
+**★ A21 — it exposed an inconsistency in our own system.** They mark unrealized P&L
+**to bid**; our `_open_book_mtm` marks *"to the last 1m close ≤ cutoff"*. Since 6.8.2 our
+**fills** pay the real half-spread but our **marks** do not — we charge the spread in and out,
+then value the book as if we could exit at the untouched last price. With 82% of NSE books
+wider than 2 bps across a ~25-position book, reported open-book MTM is systematically
+optimistic. **The depth needed to fix it is already captured (6.8.1).** Also **A22** bracket
+sibling-qty rebalance on partial fill (a named function here; repo 4 called the same failure
+"the partial-fill mode that took several iterations to pin down" — two independent hits make it
+near-certain for Phase 7) and **A23** an effective-dated fee registry (ours is *designed* for
+versioning but is a single constant set today).
+
+**Correction to §5.2, found via their `docs/FEES.md`:** an earlier draft said real round-trip
+NSE delivery cost is ~0.12–0.13% because STT applies only to the sell leg. **Wrong — delivery
+STT is 0.1% on both legs** (intraday 0.025%, sell only), so ~0.22% round trip. Our own
+`app/trading/fees.py` already encodes this correctly, so no P&L is affected — but repo 5's 0.2%
+commission was *accurate*, not conservative, and §5 now carries the correction inline.
+
+**6B [artist-hks/SentimentStock](https://github.com/artist-hks/SentimentStock)** — 7 commits,
+no LICENSE (despite an MIT badge). Advertises *"Hinglish NLP sentiment analysis"* and
+*"LSTM-style stock predictions"*; there is no NLP and no model — `generateData.js` emits
+deterministic pseudo-random series from `Math.sin(seed) * 10000`. Judged as the UI demo it
+actually is, one idea is worth taking: **U19**, a lag/horizon correlation chart. We found *in
+prose* that we grade multi-day trades on a one-day clock (entry-day ≥1R 12% vs swing 36% /
+positional 54%, +1R typically d+3); this is that finding's natural rendering, and it
+generalises to every shadow overlay — *at what horizon does this gate separate winners from
+losers?*
+
+**6C [madhusudhan-nikhil/InvestmentPrediction](https://github.com/madhusudhan-nikhil/InvestmentPrediction)**
+— active FastAPI+React app for Indian retail, no LICENSE. **Hierarchical Risk Parity** for
+portfolio construction is a genuine pointer (López de Prado; our heat sits at 45.3% with no
+correlation-aware sizing). But its **"probable exit date"** is a specific calendar date computed
+from deterministic drift with **zero volatility**, a hardcoded category fudge (×0.70–×1.45), and
+— decisively — **no dependence on the target price at all**: ask for a 5% target or a 50% target
+on the same stock and horizon and you get the same date. Queued as **A24, a standing rule: never
+render a precise figure without its uncertainty.** Same failure as repo 3's vote-share-as-
+confidence; we are specifically exposed because a 2–3%/day goal invites converting a wish into a
+timeline.
+
+Synthesis extended to eight repos, with two new lessons: **(7) the repos worth reading are the
+ones with nothing to sell** — the only two that survive audit cleanly are both infrastructure,
+and the presence of a headline performance number is empirically the best predictor that a
+repo's claims will not survive its own source; **(8) two independent projects hitting the same
+bug makes it near-certain for us** — which is why A22 is queued before Phase 7 starts.
+
+
 ### docs(research): repo 5 QuantAgents-NSE — the only NSE repo, and its claim fails on six counts (2026-09-03)
 
 [PreethamSanji/QuantAgents-NSE](https://github.com/PreethamSanji/QuantAgents-NSE), ~7.9k LOC,
