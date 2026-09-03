@@ -28,6 +28,7 @@ import {
 } from '@/lib/api/suggestions'
 import { tradingApi } from '@/lib/api/trading'
 import { useTradingHaltStore } from '@/store/tradingHaltStore'
+import { tradeBlock } from '@/features/alerts/alertPresentation'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Skeleton } from '@/components/ui/skeleton'
@@ -121,6 +122,15 @@ const SuggestionRow = memo(function SuggestionRow({
   onDetail: (s: SuggestionOut) => void
   onTrade: (s: SuggestionOut) => void
 }) {
+  // The 5th Buy surface. It posts a real Signal id into the same paper order path, so it
+  // needs the same eligibility verdict as the other four (quant-verifier, 2026-09-02).
+  const block = tradeBlock(s, {
+    symbol: s.symbol,
+    halted,
+    isTrading,
+    normalTitle: s.direction === 'BUY' ? 'Paper Buy (open long)' : 'Paper Sell (open short)',
+    normalAria: `Paper ${s.direction} ${s.symbol}`,
+  })
   return (
     <TableRow style={{ height: ROW_HEIGHT }}>
       <TableCell>
@@ -160,12 +170,24 @@ const SuggestionRow = memo(function SuggestionRow({
         <Button
           variant="outline"
           size="xs"
-          disabled={isTrading || halted}
-          onClick={() => onTrade(s)}
-          style={{ color: s.direction === 'BUY' ? 'var(--color-bull)' : 'var(--color-bear)' }}
-          title={s.direction === 'BUY' ? 'Paper Buy (open long)' : 'Paper Sell (open short)'}
+          disabled={block.nativeDisabled}
+          aria-disabled={block.ariaDisabled}
+          onClick={() => {
+            if (block.inert) return
+            onTrade(s)
+          }}
+          style={{
+            color: block.blocked
+              ? 'var(--color-loss)'
+              : s.direction === 'BUY' ? 'var(--color-bull)' : 'var(--color-bear)',
+          }}
+          title={block.title}
+          aria-label={block.ariaLabel}
         >
-          {isTrading ? '…' : s.direction === 'BUY' ? '▲ Buy' : '▼ Sell'}
+          {block.blocked ? block.label : isTrading ? '…' : s.direction === 'BUY' ? '▲ Buy' : '▼ Sell'}
+          {block.unknown && (
+            <span className="ml-1 text-(--color-warning)">{block.unknownLabel}</span>
+          )}
         </Button>
       </TableCell>
     </TableRow>

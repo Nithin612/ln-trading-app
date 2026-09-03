@@ -10,6 +10,10 @@
  *
  * Provisional-layer honesty is preserved: the trade button routes through the same paper order path
  * (risk-first sizing + circuit breaker) as everywhere else.
+ *
+ * ELIGIBILITY HONESTY (2026-09-02): rows the ACTIVE gates would reject are still LISTED (so what
+ * the gates are doing stays visible) but their Buy button is DISABLED and carries the exact reason
+ * the order path would 409 with. Before this, 41 of 204 rows offered a click that could only fail.
  */
 
 import { memo, useCallback, useMemo, useState } from 'react'
@@ -26,13 +30,16 @@ import { useTradingHaltStore } from '@/store/tradingHaltStore'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
 import { PriceCell } from '@/components/ui/PriceCell'
+import { StatusPill } from '@/components/ui/StatusPill'
 import { SkeletonTable } from '@/components/ui/skeleton'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
 import { formatCurrency, formatPct, formatRatio } from '@/lib/format'
 import { cn } from '@/lib/utils'
-import { bestByLabel, chaseGuidance, signalAgeLabel, tradePlan, validityLabel } from './alertPresentation'
+import {
+  bestByLabel, chaseGuidance, signalAgeLabel, tradeBlock, tradePlan, validityLabel,
+} from './alertPresentation'
 import { rankSignals, type Ranked, TOP_N } from './conviction'
 
 const OppRow = memo(function OppRow({
@@ -50,11 +57,26 @@ const OppRow = memo(function OppRow({
 }) {
   const sig = ranked.signal
   const plan = tradePlan(sig)
+  // One shared helper across all five Buy surfaces — this used to be inline here.
+  const block = tradeBlock(sig, {
+    symbol: sig.symbol,
+    halted,
+    isTrading,
+    normalTitle: `Paper ${sig.direction} ${sig.symbol}`,
+    normalAria: `Paper ${sig.direction} ${sig.symbol}`,
+  })
   const chase = ltp !== undefined ? chaseGuidance(sig, ltp) : null // LIVE chase (recomputes on tick)
   const isBuy = sig.direction !== 'SELL'
   return (
+    /* A blocked row is marked with the loss accent, NOT dimmed: stacking opacity 0.55 on
+       the Button primitive's disabled:opacity-50 put the word "Blocked" at 1.52–1.99:1 in
+       every theme (AA needs 4.5) — the one row that most needs reading became the least
+       readable (ui-reviewer HIGH, 2026-09-02). */
     <TableRow
-      className={ranked.isTop ? 'bg-(--color-accent-bg)' : undefined}
+      className={cn(
+        ranked.isTop ? 'bg-(--color-accent-bg)' : undefined,
+        sig.blocked && 'border-l-2 border-l-(--color-loss)',
+      )}
       style={{ opacity: sig.near_expiry || sig.choppy ? 0.7 : 1 }}
     >
       <TableCell>
@@ -78,6 +100,22 @@ const OppRow = memo(function OppRow({
         >
           {sig.symbol}
         </Link>
+        {block.blocked && (
+          // The themed pill, not a hand-rolled one: StatusPill kind="rejected" already
+          // ships this exact token triplet at an on-scale size (UI_GUIDELINES §19.3
+          // "never hand-rolled").
+          <span className="ml-1.5 inline-block" title={block.title}>
+            <StatusPill kind="rejected">Blocked</StatusPill>
+          </span>
+        )}
+        {block.unknown && (
+          <span
+            title={block.title}
+            className="ml-1.5 text-[10px] text-(--color-warning) font-semibold"
+          >
+            {block.unknownLabel}
+          </span>
+        )}
         {sig.sources_count > 1 && (
           <span
             title={`${sig.sources_count} signals (base + profile) merged into one`}
@@ -157,13 +195,18 @@ const OppRow = memo(function OppRow({
         <Button
           variant="outline"
           size="xs"
-          disabled={isTrading || halted}
-          onClick={() => onTrade(sig.id, isBuy ? 'BUY' : 'SELL')}
-          title={halted ? 'Trading is halted — release the kill switch on Go Live' : `Paper ${sig.direction} ${sig.symbol}`}
-          aria-label={`Paper ${sig.direction} ${sig.symbol}`}
+          disabled={block.nativeDisabled}
+          aria-disabled={block.ariaDisabled}
+          onClick={() => {
+            if (block.inert) return
+            onTrade(sig.id, isBuy ? 'BUY' : 'SELL')
+          }}
+          title={block.title}
+          aria-label={block.ariaLabel}
+          style={block.blocked ? { color: 'var(--color-loss)' } : undefined}
         >
           <ShoppingCart size={12} aria-hidden="true" />
-          {isTrading ? '…' : isBuy ? '▲ Buy' : '▼ Sell'}
+          {block.blocked ? block.label : isTrading ? '…' : isBuy ? '▲ Buy' : '▼ Sell'}
         </Button>
       </TableCell>
     </TableRow>

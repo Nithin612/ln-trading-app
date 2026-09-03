@@ -31,6 +31,7 @@ import {
   chaseGuidance,
   formatAlertTime,
   signalAgeLabel,
+  tradeBlock,
   tradePlan,
   validityLabel,
 } from './alertPresentation'
@@ -288,6 +289,15 @@ const AlertRow = memo(function AlertRow({
   const meta = TAG_META[alert.tag]
   const chase = signal ? chaseGuidance(signal, Number(alert.price)) : null
   const plan = signal ? tradePlan(signal) : null
+  // One shared helper across all five Buy surfaces — this used to be inline here.
+  const block = tradeBlock(signal ?? {}, {
+    symbol: symbol ?? String(alert.sid),
+    halted,
+    isTrading,
+    normalTitle:
+      signal?.direction === 'SELL' ? 'Paper Sell (open short)' : 'Paper Buy (open long)',
+    normalAria: `Paper ${signal?.direction === 'SELL' ? 'sell' : 'buy'} ${symbol ?? alert.sid}`,
+  })
   return (
     <li className="px-3 py-2 text-xs hover:bg-(--color-surface-3)">
       <div className="flex items-baseline justify-between gap-2">
@@ -402,20 +412,34 @@ const AlertRow = memo(function AlertRow({
         // paper order path (risk-first sizing from the actual fill + circuit
         // breaker), so an alerted stock that isn't on the dashboard list is
         // still one click from a paper trade.
+        //
+        // ELIGIBILITY HONESTY (2026-09-02): if an ACTIVE gate would reject this
+        // signal, the button is DISABLED and states the reason instead of firing a
+        // request that can only 409. This bell is where those toasts were coming from.
         <div className="flex justify-end mt-1.5">
           <button
-            onClick={() => onTrade(signal.id, signal.direction === 'SELL' ? 'SELL' : 'BUY')}
-            disabled={isTrading || halted}
+            onClick={() => {
+              if (block.inert) return
+              onTrade(signal.id, signal.direction === 'SELL' ? 'SELL' : 'BUY')
+            }}
+            disabled={block.nativeDisabled}
+            aria-disabled={block.ariaDisabled}
             className="flex items-center gap-1 px-2 py-0.5 rounded text-[11px] font-semibold transition-colors disabled:opacity-50 border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-accent)"
             style={{
-              color: signal.direction === 'SELL' ? 'var(--color-bear)' : 'var(--color-bull)',
-              borderColor: signal.direction === 'SELL' ? 'var(--color-bear)' : 'var(--color-bull)',
+              color: block.blocked
+                ? 'var(--color-loss)'
+                : signal.direction === 'SELL' ? 'var(--color-bear)' : 'var(--color-bull)',
+              borderColor: block.blocked
+                ? 'var(--color-loss)'
+                : signal.direction === 'SELL' ? 'var(--color-bear)' : 'var(--color-bull)',
             }}
-            title={signal.direction === 'SELL' ? 'Paper Sell (open short)' : 'Paper Buy (open long)'}
-            aria-label={`Paper ${signal.direction === 'SELL' ? 'sell' : 'buy'} ${symbol ?? alert.sid}`}
+            title={block.title}
+            aria-label={block.ariaLabel}
           >
             <ShoppingCart size={10} aria-hidden="true" />
-            {isTrading ? '…' : signal.direction === 'SELL' ? 'Sell' : 'Buy'}
+            {block.blocked
+              ? block.label
+              : isTrading ? '…' : signal.direction === 'SELL' ? 'Sell' : 'Buy'}
           </button>
         </div>
       )}

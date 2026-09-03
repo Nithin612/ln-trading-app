@@ -29,6 +29,7 @@ function makeSuggestion(o: Partial<SuggestionOut> = {}): SuggestionOut {
     profile_version: 1, style: 'swing',
     validity_until: new Date(Date.now() + 5 * 86400000).toISOString(),
     created_at: new Date().toISOString(),
+    blocked: false, blocked_by: null, block_reason: null, unassessed: [],
     ...o,
   }
 }
@@ -126,6 +127,56 @@ describe('StylePage', () => {
     await waitFor(() =>
       expect(placeSpy).toHaveBeenCalledWith({ signal_id: 's1', side: 'SELL' }, 'tok'),
     )
+  })
+
+  // ── Eligibility honesty (2026-09-02) ──────────────────────────────────────
+  // StylePage is the FIFTH Buy surface and was missed twice: it posts a real Signal id
+  // into the same paper order path, so a gate-blocked suggestion offered a guaranteed
+  // 409 (quant-verifier). The styles endpoint now stamps the same verdict.
+  it('disables the suggestion Buy button when an active gate would reject it', async () => {
+    vi.spyOn(suggestionsApiModule.suggestionsApi, 'getByStyle').mockResolvedValue({
+      style: 'swing',
+      total: 1,
+      suggestions: [
+        makeSuggestion({
+          direction: 'BUY',
+          blocked: true,
+          blocked_by: 'entry_quality',
+          block_reason: 'Signal fails the entry-quality overlay: only 1 scoring factor(s) (< 2)',
+        }),
+      ],
+    })
+    const placeSpy = vi.spyOn(tradingApiModule.tradingApi, 'placeOrder')
+    placeSpy.mockClear()
+    renderStyle('swing')
+    await waitFor(() => screen.getByText('RELIANCE'))
+
+    const btn = screen.getByRole('button', { name: /not tradeable/i })
+    expect(btn).toHaveAttribute('aria-disabled', 'true')
+    // NOT natively disabled: a native `disabled` drops the button out of the tab order
+    // and kills its own tooltip, which made the block reason unreachable by keyboard AND
+    // mouse (ui-reviewer HIGH, 2026-09-02). It stays focusable and inert instead.
+    expect(btn).not.toBeDisabled()
+    expect(btn).toHaveAttribute('title', expect.stringContaining('only 1 scoring factor'))
+    fireEvent.click(btn)
+    expect(placeSpy).not.toHaveBeenCalled()
+    expect(screen.queryByTitle('Paper Buy (open long)')).toBeNull()
+  })
+
+  it('marks a partially-assessed suggestion as not fully checked, but keeps it clickable', async () => {
+    // `unassessed` means UNKNOWN, not blocked — fail open on the button, but say so, or
+    // "unknown" looks identical to "verified clear" right where the clicks happen.
+    vi.spyOn(suggestionsApiModule.suggestionsApi, 'getByStyle').mockResolvedValue({
+      style: 'swing',
+      total: 1,
+      suggestions: [makeSuggestion({ direction: 'BUY', unassessed: ['liquidity_gate'] })],
+    })
+    renderStyle('swing')
+    await waitFor(() => screen.getByText('RELIANCE'))
+
+    const btn = screen.getByRole('button', { name: /eligibility not fully checked/i })
+    expect(btn).toBeEnabled()
+    expect(btn).toHaveAttribute('title', expect.stringContaining('liquidity_gate'))
   })
 
   // ── v2 additions (Phase 5 slice 5.3) ──────────────────────────────────────

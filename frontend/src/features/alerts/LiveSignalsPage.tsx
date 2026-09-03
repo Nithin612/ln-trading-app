@@ -43,6 +43,7 @@ import { cn } from '@/lib/utils'
 import {
   ALERT_STYLES, SOURCE_LABEL, TAG_META, TONE_CLASS, bestByLabel, chaseGuidance,
   formatAlertTime, signalAgeLabel, tradePlan, validityLabel,
+  tradeBlock,
 } from './alertPresentation'
 import { ENTRY_SOURCE, useAlertContext } from './useAlertContext'
 import { OpportunitiesTable } from './OpportunitiesTable'
@@ -92,6 +93,17 @@ const FeedRow = memo(function FeedRow({
   const meta = TAG_META[alert.tag]
   const chase = signal ? chaseGuidance(signal, Number(alert.price)) : null
   const plan = signal ? tradePlan(signal) : null
+  // Eligibility verdict comes from the backend; `tradeBlock` only renders it.
+  const liveBlock = tradeBlock(
+    signal ?? { blocked: false, block_reason: null, direction: 'BUY' },
+    {
+      symbol,
+      halted,
+      isTrading,
+      normalTitle: `Paper ${signal?.direction ?? ''} ${symbol ?? ''}`.trim(),
+      normalAria: `Paper ${signal?.direction ?? ''} ${symbol ?? `stock ${alert.sid}`}`,
+    },
+  )
 
   return (
     <TableRow>
@@ -215,17 +227,23 @@ const FeedRow = memo(function FeedRow({
           <Button
             variant="outline"
             size="xs"
-            disabled={isTrading || halted}
-            onClick={() => onTrade(signal.id, signal.direction === 'SELL' ? 'SELL' : 'BUY')}
-            title={
-              halted
-                ? 'Trading is halted — release the kill switch on Go Live'
-                : `Paper ${signal.direction} ${symbol ?? ''}`.trim()
-            }
-            aria-label={`Paper ${signal.direction} ${symbol ?? `stock ${alert.sid}`}`}
+            disabled={liveBlock.nativeDisabled}
+            aria-disabled={liveBlock.ariaDisabled}
+            onClick={() => {
+              if (liveBlock.inert) return
+              onTrade(signal.id, signal.direction === 'SELL' ? 'SELL' : 'BUY')
+            }}
+            title={liveBlock.title}
+            aria-label={liveBlock.ariaLabel}
+            style={liveBlock.blocked ? { color: 'var(--color-loss)' } : undefined}
           >
             <ShoppingCart size={12} />
-            {isTrading ? '…' : signal.direction === 'SELL' ? '▼ Sell' : '▲ Buy'}
+            {liveBlock.blocked
+              ? liveBlock.label
+              : isTrading ? '…' : signal.direction === 'SELL' ? '▼ Sell' : '▲ Buy'}
+            {liveBlock.unknown && (
+              <span className="ml-1 text-(--color-warning)">{liveBlock.unknownLabel}</span>
+            )}
           </Button>
         ) : (
           <span className="text-(--color-text-muted) text-xs">—</span>

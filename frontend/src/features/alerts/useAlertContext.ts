@@ -4,10 +4,14 @@
  * Signals page share one implementation).
  *
  * Alert frames are deliberately thin: the Redis stream carries a `sid` and an
- * optional `signal_id`, not a symbol or a trade plan. Both referenced entities
- * are immutable for the life of an alert — a stock's symbol doesn't change
- * intraday and a committed signal never repaints — so both are cached with
- * `staleTime: Infinity` and fetched once per id.
+ * optional `signal_id`, not a symbol or a trade plan.
+ *
+ * A stock's symbol IS immutable intraday, so it keeps `staleTime: Infinity`.
+ * A signal's *plan* never repaints either — but since 2026-09-02 the signal payload
+ * also carries an order-eligibility verdict (`blocked`/`block_reason`) computed from
+ * LIVE settings, a live ATR and the live price, so the row is no longer immutable and
+ * `staleTime: Infinity` would pin a stale ⊘ Blocked (or a stale enabled Buy) for the
+ * whole session (bug-hunter LOW, 2026-09-02). Bounded instead.
  */
 
 import { useMemo } from "react";
@@ -19,6 +23,9 @@ import { stocksApi } from "@/lib/api/stocks";
 
 /** Alert source that carries an originating signal (and thus a trade plan). */
 export const ENTRY_SOURCE = "entry_zone";
+
+/** How long a fetched signal row (plan + eligibility verdict) stays fresh. */
+export const SIGNAL_STALE_MS = 60_000;
 
 export interface AlertContext {
   symbolBySid: Map<number, string>;
@@ -60,7 +67,8 @@ export function useAlertContext(alerts: LiveAlert[], token: string | null): Aler
     queries: signalIds.map((id) => ({
       queryKey: ["alert-signal", id],
       queryFn: () => signalsApi.getById(id, token ?? ""),
-      staleTime: Infinity,
+      // Bounded, NOT Infinity — the eligibility verdict on this payload is live state.
+      staleTime: SIGNAL_STALE_MS,
       enabled,
     })),
   });

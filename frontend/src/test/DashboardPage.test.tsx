@@ -53,6 +53,7 @@ function makeSignal(overrides: Partial<signalsApiModule.SignalOut> = {}): signal
     days_valid_remaining: 4,
     regime_er: 0.5,
     choppy: false,
+    blocked: false, blocked_by: null, block_reason: null, unassessed: [],
     ...overrides,
   }
 }
@@ -232,6 +233,42 @@ describe('DashboardPage', () => {
     await waitFor(() =>
       expect(placeSpy).toHaveBeenCalledWith({ signal_id: 'abc-123', side: 'BUY' }, 'test-token'),
     )
+  })
+
+  // ── Eligibility honesty (2026-09-02) ──────────────────────────────────────
+  // The Dashboard is the landing page and the widest Buy surface in the app. The first
+  // pass wired only AlertBell + OpportunitiesTable and left this one firing orders that
+  // could only 409 (bug-hunter). All four surfaces now go through `tradeBlock`.
+  it('disables the Dashboard Buy button when an active gate would reject the signal', async () => {
+    vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({
+      total: 1,
+      signals: [
+        makeSignal({
+          direction: 'BUY',
+          blocked: true,
+          blocked_by: 'entry_quality',
+          block_reason: 'Signal fails the entry-quality overlay: only 1 scoring factor(s) (< 2)',
+        }),
+      ],
+    })
+    const placeSpy = vi.spyOn(tradingApiModule.tradingApi, 'placeOrder')
+    // This file has no restoreAllMocks/clearAllMocks in beforeEach, so spy call history
+    // leaks between tests — clear it so "never called" means never called HERE.
+    placeSpy.mockClear()
+    wrap(<DashboardPage />)
+    await waitFor(() => screen.getByText('RELIANCE'))
+
+    const btn = screen.getByRole('button', { name: /not tradeable/i })
+    expect(btn).toHaveAttribute('aria-disabled', 'true')
+    // NOT natively disabled: a native `disabled` drops the button out of the tab order
+    // and kills its own tooltip, which made the block reason unreachable by keyboard AND
+    // mouse (ui-reviewer HIGH, 2026-09-02). It stays focusable and inert instead.
+    expect(btn).not.toBeDisabled()
+    expect(btn).toHaveAttribute('title', expect.stringContaining('only 1 scoring factor'))
+    fireEvent.click(btn)
+    expect(placeSpy).not.toHaveBeenCalled()
+    // The normal-path title must be gone, so no test can click it by accident.
+    expect(screen.queryByTitle('Paper Buy (open long)')).toBeNull()
   })
 
   it('renders FII/DII net values when data is available', async () => {

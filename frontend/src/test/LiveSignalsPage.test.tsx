@@ -142,6 +142,33 @@ describe('LiveSignalsPage', () => {
     )
   })
 
+  it('disables the Live-Signals trade button when an active gate would reject it', async () => {
+    // The 4th Buy surface. Same rule everywhere via `tradeBlock` — the first pass wired
+    // only two of them (bug-hunter, 2026-09-02).
+    streamState.alerts = [makeAlert()]
+    vi.spyOn(signalsApiModule.signalsApi, 'getById').mockResolvedValue(
+      makeSignal({
+        blocked: true,
+        blocked_by: 'regime',
+        block_reason: 'Signal regime is transitional (20–25) — gated by the regime overlay',
+      }),
+    )
+    const placeSpy = vi.spyOn(tradingApiModule.tradingApi, 'placeOrder')
+    placeSpy.mockClear()
+    renderPage()
+
+    const btn = await screen.findByRole('button', { name: /not tradeable/i })
+    expect(btn).toHaveAttribute('aria-disabled', 'true')
+    // NOT natively disabled: a native `disabled` drops the button out of the tab order
+    // and kills its own tooltip, which made the block reason unreachable by keyboard AND
+    // mouse (ui-reviewer HIGH, 2026-09-02). It stays focusable and inert instead.
+    expect(btn).not.toBeDisabled()
+    expect(btn).toHaveAttribute('title', expect.stringContaining('transitional'))
+    await userEvent.click(btn)
+    expect(placeSpy).not.toHaveBeenCalled()
+    expect(screen.queryByRole('button', { name: /Paper BUY RELIANCE/i })).toBeNull()
+  })
+
   it('offers no trade button on a shadow alert', async () => {
     // Shadow profiles run for evidence only. The order path rejects their
     // signals with 409, so a Buy button would be a button that cannot work.

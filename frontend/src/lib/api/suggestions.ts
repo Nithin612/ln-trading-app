@@ -27,6 +27,12 @@ export interface SuggestionOut {
   style: string
   validity_until: string
   created_at: string
+  // Order-eligibility preview — StylePage posts these ids into the same paper order
+  // path, so it needs the same verdict as every other Buy surface.
+  blocked: boolean
+  blocked_by: string | null
+  block_reason: string | null
+  unassessed: string[]
 }
 
 export interface SuggestionListResponse {

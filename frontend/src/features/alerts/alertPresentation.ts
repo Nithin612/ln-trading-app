@@ -185,3 +185,79 @@ const IST_TIME = new Intl.DateTimeFormat("en-IN", {
 export function formatAlertTime(tsEpochSec: number): string {
   return IST_TIME.format(new Date(tsEpochSec * 1000));
 }
+
+// ── Order-eligibility presentation (2026-09-02) ─────────────────────────────
+// A signal the ACTIVE gates would reject must not offer a live Buy button. The BACKEND
+// decides (`app/signals/eligibility.py` → `blocked`/`block_reason`); this only renders
+// that verdict. Centralised because the first pass wired only two of the FOUR Buy
+// surfaces and left the Dashboard — the landing page, and the widest one — still firing
+// orders that could only 409 (bug-hunter, 2026-09-02). Every surface calls this, so a
+// fifth cannot silently miss the rule.
+
+export interface TradeBlock {
+  blocked: boolean;
+  /**
+   * An ACTIVE gate the server could NOT judge on this path (`unassessed`). NOT blocked —
+   * we do not know — so the action stays available, but it MUST be visibly marked:
+   * ui-reviewer (2026-09-02) found the first version returned this field and no surface
+   * read it, while its own docstring promised the opposite. `unknownLabel` is the visible
+   * marker; render it next to the row's other flags.
+   */
+  unknown: boolean;
+  /**
+   * `disabled` ONLY for genuinely transient non-interactive states (in-flight order, kill
+   * switch). A BLOCKED button uses `ariaDisabled` instead, because a native `disabled`
+   * removes the element from the tab order AND (via the Button primitive's
+   * `disabled:pointer-events-none`) kills its own tooltip — so the reason became
+   * unreachable by keyboard *and* mouse (ui-reviewer HIGH, 2026-09-02). Blocked buttons
+   * stay focusable, keep their focus ring, and are made inert by the click guard below.
+   */
+  nativeDisabled: boolean;
+  ariaDisabled: true | undefined;
+  /** True when the click must not fire — check this first in every onClick. */
+  inert: boolean;
+  title: string;
+  ariaLabel: string;
+  /** The one blocked label for all surfaces: glyph + word, never colour alone. */
+  label: string;
+  /** The one "unknown" marker for all surfaces. */
+  unknownLabel: string;
+}
+
+/** Single visual+a11y vocabulary for the eligibility state, shared by all FIVE Buy
+ *  surfaces (AlertBell · OpportunitiesTable · DashboardPage · LiveSignalsPage ·
+ *  StylePage). ui-reviewer found five variations of one state when each surface rendered
+ *  it by hand; everything visible now comes from here. */
+export function tradeBlock(
+  signal: Partial<Pick<SignalOut, "blocked" | "block_reason" | "unassessed" | "direction">>,
+  opts: {
+    symbol?: string;
+    halted?: boolean;
+    isTrading?: boolean;
+    normalTitle: string;
+    normalAria: string;
+  },
+): TradeBlock {
+  const reason = signal.block_reason ?? "Blocked by an active eligibility gate";
+  const blocked = signal.blocked === true;
+  const gaps = signal.unassessed ?? [];
+  const unknown = !blocked && gaps.length > 0;
+  const note = ` · ⚠ not fully checked here (${gaps.join(", ")}) — the order path may still reject it`;
+  return {
+    blocked,
+    unknown,
+    nativeDisabled: opts.halted === true || opts.isTrading === true,
+    ariaDisabled: blocked ? true : undefined,
+    inert: blocked || opts.halted === true || opts.isTrading === true,
+    title: blocked
+      ? reason
+      : opts.halted
+        ? "Trading is halted — release the kill switch on Go Live"
+        : opts.normalTitle + (unknown ? note : ""),
+    ariaLabel: blocked
+      ? `${opts.symbol ?? "signal"} not tradeable: ${reason}`
+      : opts.normalAria + (unknown ? ", eligibility not fully checked" : ""),
+    label: "⊘ Blocked",
+    unknownLabel: "⚠ unchecked",
+  };
+}

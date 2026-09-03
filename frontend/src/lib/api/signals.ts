@@ -30,6 +30,13 @@ export interface SignalOut {
   days_valid_remaining: number  // calendar days until validity_until (server-computed)
   regime_er: number | null      // daily Kaufman efficiency ratio (0-1); null = insufficient bars
   choppy: boolean               // regime_er below the choppy threshold (~0.30)
+  // Order-eligibility preview (2026-09-02). The order path runs seven overlays and
+  // 409s on the first ACTIVE rejection; this list used to run none, so 41 of 204 rows
+  // showed a Buy button that could only fail. `block_reason` is verbatim the 409 detail.
+  blocked: boolean
+  blocked_by: string | null     // stable gate slug ("regime" | "entry_quality")
+  block_reason: string | null   // the exact message the order path would reject with
+  unassessed: string[]          // ACTIVE gates not judged on this path — UNKNOWN, not clear
 }
 
 export interface SignalListResponse {

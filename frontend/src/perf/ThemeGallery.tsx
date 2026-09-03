@@ -118,6 +118,7 @@ function suggestion(o: Partial<SuggestionOut> = {}): SuggestionOut {
     volatility_reduced: false, profile_key: 'rrbo', profile_name: 'RRBO',
     profile_version: 1, style: 'swing',
     validity_until: '2026-08-12T10:00:00Z', created_at: '2026-08-06T04:00:00Z',
+    blocked: false, blocked_by: null, block_reason: null, unassessed: [],
     ...o,
   }
 }

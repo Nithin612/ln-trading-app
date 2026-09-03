@@ -4,9 +4,17 @@
  * A v1 HEURISTIC — not a probability. It ranks active signals by how likely they are to work,
  * from what we can measure TODAY: the confluence confidence, a mild multi-factor bonus, and
  * penalties that encode the evidence we already have —
- *   • age decay: the signal-age study showed the edge lives ≤40% of validity elapsed and turns
- *     net-negative past it, so conviction is docked as a signal ages past 40% (up to −25 near
- *     expiry). This is the single most evidence-backed term.
+ *   • age decay: conviction is docked as a signal ages past 40% of its validity (up to −25 near
+ *     expiry). ⚠ CORRECTED 2026-09-02 — this was documented as "the single most evidence-backed
+ *     term", citing the signal-age study. It is NOT: `docs/analysis/signal-age-<date>.md`
+ *     headlines "no stale-entry penalty visible yet" (fresh ≤40% = 61 trades at −₹58 avg / 57%
+ *     win; stale >80% = 13 trades at +₹13 avg / 46% win). Age predicts WIN RATE mildly and ₹ not
+ *     at all. The term is kept on its MECHANICAL rationale — a signal near expiry has less runway
+ *     left to reach its target — not on a measured ₹ effect, and it is deliberately mild.
+ *     The measured discriminator is DISPLACEMENT from entry, not age: at-entry fills (−0.02…
+ *     +0.33R) = +₹9,830 / 55% win vs chased 0.33–1R = −₹12,789 / 22% (99 trades since 07-19).
+ *     Displacement is surfaced per-row as the live chase guidance, and enforced by `chase_guard`
+ *     on the order path — not folded into this score (ranking must not re-jitter every tick).
  *   • choppy regime: low Kaufman efficiency (`choppy`) → −10.
  * As the MCE slices mature (sector-RS, market-regime, liquidity, news) they become additional
  * terms here. Deliberately NOT a function of the live price — ranking must not re-jitter every

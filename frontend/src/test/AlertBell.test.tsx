@@ -132,6 +132,7 @@ describe('AlertBell', () => {
       days_valid_remaining: 4,
       regime_er: 0.5,
       choppy: false,
+      blocked: false, blocked_by: null, block_reason: null, unassessed: [],
       ...o,
     }) as SignalOut
 
@@ -571,5 +572,41 @@ describe('AlertBell', () => {
     fireEvent.click(screen.getByTestId('alert-bell'))
     expect(screen.getByText(/sign in again to resume live alerts/)).toBeInTheDocument()
     expect(screen.queryByText('Reconnecting…')).not.toBeInTheDocument()
+  })
+
+  // ── Eligibility honesty (2026-09-02) ──────────────────────────────────────
+  // This bell is where the 409 toasts in the 08-26/08-31 screenshots came from: the
+  // alert offered a Buy for a signal the ACTIVE gates were certain to reject.
+  it('disables the alert Buy button when an active gate would reject the signal', async () => {
+    stream.alerts = [{ ...ENTRY_ALERT, id: 'e', price: '100.5000', signalId: 'sig-1' }]
+    vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
+    vi.mocked(signalsApi.getById).mockResolvedValue(
+      makeSignal({
+        blocked: true,
+        blocked_by: 'regime',
+        block_reason: 'Signal regime is transitional (20–25) — gated by the regime overlay',
+      }),
+    )
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    const btn = await screen.findByRole('button', { name: /not tradeable/i })
+    expect(btn).toHaveAttribute('aria-disabled', 'true')
+    // NOT natively disabled: a native `disabled` drops the button out of the tab order
+    // and kills its own tooltip, which made the block reason unreachable by keyboard AND
+    // mouse (ui-reviewer HIGH, 2026-09-02). It stays focusable and inert instead.
+    expect(btn).not.toBeDisabled()
+    expect(btn).toHaveAttribute('title', expect.stringContaining('transitional'))
+    fireEvent.click(btn)
+    expect(tradingApi.placeOrder).not.toHaveBeenCalled()
+  })
+
+  it('leaves the alert Buy button live when no active gate objects', async () => {
+    stream.alerts = [{ ...ENTRY_ALERT, id: 'e', price: '100.5000', signalId: 'sig-1' }]
+    vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
+    vi.mocked(signalsApi.getById).mockResolvedValue(makeSignal())
+    setup()
+    fireEvent.click(screen.getByTestId('alert-bell'))
+    const btn = await screen.findByRole('button', { name: /Paper buy RELIANCE/i })
+    expect(btn).toBeEnabled()
   })
 })

@@ -31,6 +31,7 @@ function sig(o: Partial<SignalOut> = {}): SignalOut {
     days_valid_remaining: 10,
     regime_er: 0.5,
     choppy: false,
+    blocked: false, blocked_by: null, block_reason: null, unassessed: [],
     ...o,
   } as SignalOut
 }

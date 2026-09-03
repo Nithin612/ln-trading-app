@@ -285,7 +285,12 @@
 
   --color-profit:         #059669;
   --color-profit-bg:      #d1fae5;
-  --color-loss:           #dc2626;
+  /* red-700, not red-600: on this theme's light surfaces red-600 (#dc2626) on
+     --color-loss-bg measures 3.95:1 — below WCAG AA — and --color-loss carries the
+     eligibility safety state ("⊘ Blocked", the reason a trade is unavailable) plus every
+     hit_sl / rejected / sell StatusPill. red-700 measures 5.30:1 on --color-loss-bg,
+     5.91:1 on --color-surface-2 and 6.47:1 on white. (ui-reviewer, 2026-09-02.) */
+  --color-loss:           #b91c1c;
   --color-loss-bg:        #fee2e2;
   /* amber-700, not amber-600: on this theme's light surfaces amber-600 is
      2.91:1 — below WCAG AA — and --color-warning carries safety copy

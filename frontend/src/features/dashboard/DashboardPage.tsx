@@ -8,6 +8,7 @@ import { signalsApi } from '@/lib/api/signals'
 import { marketDataApi } from '@/lib/api/market_data'
 import { tradingApi } from '@/lib/api/trading'
 import type { SignalOut } from '@/lib/api/signals'
+import { tradeBlock } from '@/features/alerts/alertPresentation'
 import { SignalDetailModal } from './SignalDetailModal'
 import { FilingsPanel } from './FilingsPanel'
 import { ProvisionalPanel } from './ProvisionalPanel'
@@ -82,6 +83,15 @@ const SignalRow = memo(function SignalRow({
   onCopy: (sig: SignalOut) => void
 }) {
   const isSell = sig.direction === 'SELL'
+  // Eligibility verdict comes from the backend; `tradeBlock` only renders it. This
+  // surface was missed by the first pass and kept firing orders that could only 409.
+  const block = tradeBlock(sig, {
+    symbol: sig.symbol,
+    halted,
+    isTrading,
+    normalTitle: isSell ? 'Paper Sell (open short)' : 'Paper Buy (open long)',
+    normalAria: `Paper ${sig.direction} ${sig.symbol}`,
+  })
   const validUntil = new Date(sig.validity_until).toLocaleString('en-IN', {
     timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit',
   })
@@ -151,23 +161,40 @@ const SignalRow = memo(function SignalRow({
           onClick={(e) => { e.stopPropagation(); onCopy(sig) }}
           className="p-1 rounded text-(--color-text-muted) hover:text-(--color-text) hover:bg-(--color-surface-3) transition-colors"
           title="Copy signal"
+          aria-label={`Copy ${sig.symbol} signal`}
         >
           <Copy size={12} />
         </button>
       </td>
       <td className="px-3 py-2 text-right">
+        {/* focus-visible ring added 2026-09-02: this raw button had NO ring at all
+            (UI_GUIDELINES §10.1) — on the landing page's widest Buy surface, and it now
+            carries the eligibility reason, so a keyboard user could neither see focus
+            nor reach the message (ui-reviewer HIGH). */}
         <button
-          onClick={(e) => onTrade(e, sig)}
-          disabled={isTrading || halted}
-          className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold transition-colors disabled:opacity-50 border"
-          style={{
-            color: isSell ? 'var(--color-bear)' : 'var(--color-bull)',
-            borderColor: isSell ? 'var(--color-bear)' : 'var(--color-bull)',
+          onClick={(e) => {
+            if (block.inert) { e.stopPropagation(); return }
+            onTrade(e, sig)
           }}
-          title={isSell ? 'Paper Sell (open short)' : 'Paper Buy (open long)'}
+          disabled={block.nativeDisabled}
+          aria-disabled={block.ariaDisabled}
+          className="flex items-center gap-1 px-2 py-1 rounded text-xs font-semibold transition-colors disabled:opacity-50 border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-accent)"
+          style={{
+            color: block.blocked
+              ? 'var(--color-loss)'
+              : isSell ? 'var(--color-bear)' : 'var(--color-bull)',
+            borderColor: block.blocked
+              ? 'var(--color-loss)'
+              : isSell ? 'var(--color-bear)' : 'var(--color-bull)',
+          }}
+          title={block.title}
+          aria-label={block.ariaLabel}
         >
           <ShoppingCart size={10} />
-          {isTrading ? '…' : isSell ? 'Sell' : 'Buy'}
+          {block.blocked ? block.label : isTrading ? '…' : isSell ? 'Sell' : 'Buy'}
+          {block.unknown && (
+            <span className="text-(--color-warning)">{block.unknownLabel}</span>
+          )}
         </button>
       </td>
     </tr>

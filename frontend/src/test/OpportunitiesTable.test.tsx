@@ -32,6 +32,7 @@ function sig(o: Partial<signalsApiModule.SignalOut> = {}): signalsApiModule.Sign
     triggering_patterns: [], triggering_indicators: [], headline: 'BUY RELIANCE', status: 'active',
     created_at: '2026-08-20T00:00:00Z', validity_until: '2026-09-20T00:00:00Z',
     sources_count: 1, near_expiry: false, days_valid_remaining: 25, regime_er: 0.5, choppy: false,
+    blocked: false, blocked_by: null, block_reason: null, unassessed: [],
     ...o,
   } as signalsApiModule.SignalOut
 }
@@ -124,5 +125,94 @@ describe('OpportunitiesTable', () => {
     vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({ total: 1, signals: [sig()] })
     renderTable()
     expect(await screen.findByRole('button', { name: /Paper BUY RELIANCE/i })).toBeDisabled()
+  })
+
+  // ── Eligibility honesty (2026-09-02) ──────────────────────────────────────
+  // Before this, 41 of 204 listed rows offered a Buy that the order path was
+  // certain to 409. A gate-blocked row must stay VISIBLE but not clickable.
+  describe('gate-blocked signals', () => {
+    const blocked = () =>
+      sig({
+        blocked: true,
+        blocked_by: 'entry_quality',
+        block_reason:
+          'Signal fails the entry-quality overlay: only 1 scoring factor(s) (< 2)',
+      })
+
+    it('still lists a blocked signal — flagged, never silently hidden', async () => {
+      vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({
+        total: 1, signals: [blocked()],
+      })
+      renderTable()
+      expect(await screen.findByText('RELIANCE')).toBeInTheDocument()
+      // Flagged in TWO places: the row badge next to the symbol, and the button
+      // label — so the row reads as unavailable whichever the eye lands on first.
+      expect(screen.getAllByText(/blocked/i)).toHaveLength(2)
+    })
+
+    it('disables the trade button and states the reason', async () => {
+      vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({
+        total: 1, signals: [blocked()],
+      })
+      renderTable()
+      const btn = await screen.findByRole('button', { name: /not tradeable/i })
+      expect(btn).toHaveAttribute('aria-disabled', 'true')
+    // NOT natively disabled: a native `disabled` drops the button out of the tab order
+    // and kills its own tooltip, which made the block reason unreachable by keyboard AND
+    // mouse (ui-reviewer HIGH, 2026-09-02). It stays focusable and inert instead.
+    expect(btn).not.toBeDisabled()
+      expect(btn).toHaveAttribute('title', expect.stringContaining('only 1 scoring factor'))
+    })
+
+    it('never fires an order for a blocked signal', async () => {
+      vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({
+        total: 1, signals: [blocked()],
+      })
+      const place = vi.spyOn(tradingApiModule.tradingApi, 'placeOrder')
+      renderTable()
+      const btn = await screen.findByRole('button', { name: /not tradeable/i })
+      await userEvent.click(btn)
+      expect(place).not.toHaveBeenCalled()
+    })
+
+    it('renders a VISIBLE marker for a partially-assessed row, and keeps it clickable', async () => {
+      // ui-reviewer (2026-09-02) found `TradeBlock.unknown` was returned and read by ZERO
+      // call sites while its own docstring promised it "must LOOK different". A
+      // title-only affordance is invisible on touch and to a scanning eye, so the marker
+      // has to be in the DOM. It is NOT blocked — unknown ≠ blocked — so it stays live.
+      vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({
+        total: 1, signals: [sig({ unassessed: ['liquidity_gate'] })],
+      })
+      renderTable()
+      expect(await screen.findByText('RELIANCE')).toBeInTheDocument()
+      expect(screen.getByText(/⚠ unchecked/)).toBeInTheDocument()
+      const btn = screen.getByRole('button', { name: /eligibility not fully checked/i })
+      expect(btn).toBeEnabled()
+      expect(btn).not.toHaveAttribute('aria-disabled')
+    })
+
+    it('renders the themed StatusPill for a blocked row, not a hand-rolled badge', async () => {
+      // UI_GUIDELINES §19.3: state pills are `StatusPill`, never hand-rolled. The first
+      // version hand-built one at text-[9px] (off the §2.3 scale) inside a 0.55-opacity
+      // row, which measured 2.15–2.83:1 against a 4.5 AA floor.
+      vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({
+        total: 1, signals: [blocked()],
+      })
+      renderTable()
+      expect(await screen.findByText('RELIANCE')).toBeInTheDocument()
+      const pill = screen.getByText('Blocked')
+      expect(pill.className).toContain('--color-loss')
+      // and the row is NOT dimmed into illegibility
+      const row = pill.closest('tr')
+      expect(row?.getAttribute('style') ?? '').not.toContain('opacity: 0.55')
+    })
+
+    it('leaves an unblocked signal fully tradeable', async () => {
+      vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({
+        total: 1, signals: [sig()],
+      })
+      renderTable()
+      expect(await screen.findByRole('button', { name: /Paper BUY RELIANCE/i })).toBeEnabled()
+    })
   })
 })

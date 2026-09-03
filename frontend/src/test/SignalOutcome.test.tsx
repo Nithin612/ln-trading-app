@@ -39,6 +39,7 @@ const SIGNAL: SignalOut = {
   days_valid_remaining: 4,
   regime_er: 0.5,
   choppy: false,
+  blocked: false, blocked_by: null, block_reason: null, unassessed: [],
 }
 
 function outcome(overrides: Partial<SignalOutcome> = {}): SignalOutcome {
