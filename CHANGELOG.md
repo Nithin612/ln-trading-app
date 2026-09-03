@@ -7,6 +7,51 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 11 vnpy — the most Phase-7-relevant repo, and its 145-line event bus (2026-09-03)
+
+[vnpy/vnpy](https://github.com/vnpy/vnpy), **MIT**, core ~12.8k LOC (gateways and strategy apps
+ship as separate packages) — a decade old and the most battle-tested open-source live-trading
+framework in Asian markets. Our NautilusTrader review named the Phase-7 gap as *"runtime plumbing
+(event bus, ExecutionEngine + BrokerAdapter, RiskEngine, reconciliation)"*; **vnpy is a second,
+independent implementation of exactly that — and unlike Nautilus's LGPL it is MIT, so it is
+legally vendorable, not merely readable.**
+
+**The headline: the event bus is 145 lines of stdlib Python** — a `Queue`, one consumer thread, a
+`defaultdict` of handlers, and a timer thread. Three ideas worth taking: a **single consumer
+thread** (handlers never run concurrently, so none needs a lock against another); **wildcard
+`general_handlers`** so logging/recording/UI subscribe to everything without enumerating types;
+and a **bus-generated `EVENT_TIMER`**, which makes *everything periodic an ordinary subscriber* —
+one scheduling primitive instead of a scheduler plus a bus (**A34**). Our staleness alarm,
+provisional-health watch and CAS capture window are three different solutions to that one problem.
+
+**But I reproduced three robustness gaps.** `_run` catches only `queue.Empty`, so **a single
+handler exception kills the consumer thread**: the healthy handler received *nothing* (the failing
+one was registered first and aborted `_process`), `put()` kept succeeding afterwards, and the
+process stayed up — **the system looks alive and is completely deaf.** Plus an **unbounded queue**
+and **handler lists mutated while being iterated**. Queued as **A32**: isolate exceptions per
+handler, bound the queue with a stated overflow policy, iterate a snapshot, and **make a dead bus
+loud** — a silently deaf trading system is strictly worse than one that crashes.
+
+**A33 — the OMS as a projection.** `OmsEngine` keeps one dict per entity, all rebuilt purely from
+broker events, with `active_orders` maintained as a *side effect* of each order event under a
+single `OrderData.is_active()` predicate, and gateway-namespaced ids. Derived state can be
+rebuilt by replay, which is what makes reconciliation tractable — and we have been bitten by the
+inverse (`signals.status` is a mutable lifecycle field doing double duty as durable fact).
+**A35**: define `BrokerAdapter` as an interface a second broker *could* implement even while only
+Kite does — vnpy's core ships no gateway, which is what forces the interface to be a real contract.
+
+**A11 is now settled.** `MainEngine.send_notification` fans out to all configured channels as a
+core engine method — making vnpy the **third independent mature system** to treat push
+notification as a first-class primitive (after repo 4's noise-policy notifier and repo 9's
+multi-channel dispatcher). By lesson 9, three independent hits makes it near-certain.
+
+Synthesis extended to thirteen repos with a new lesson 12: **the scary part of Phase 7 is not the
+part we thought.** The bus is small and well understood; what actually costs is the order
+lifecycle and reconciliation — 82 defects across two audits in repo 4, 543 tests in 6A, and the
+same partial-fill bug found independently by both. Budget accordingly: little for the bus, a lot
+for the FSM.
+
+
 ### docs(research): repo 10 microsoft/qlib + two new review dimensions (testing, workbench) (2026-09-03)
 
 Brief widened by the user: *"take any idea worthy that upgrades us... don't stick only with
