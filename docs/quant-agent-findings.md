@@ -47,6 +47,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 7 | [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener) | 2026-09-03 | Unmaintained 2022–23 student project (MIT). **Picks its LSTM on a scaler fit over the full series and with no persistence baseline** — the winner is plausibly worse than "no change". Its breakout filter is **disabled by a truthy-string bug**. **Adopt nothing**; one pointer for the Minervini trend-template test. |
 | 8 | [pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain) | 2026-09-03 | **The only repo on our exact stack** (Kite WS + Redis + Indian derivatives), 952 LOC, unmaintained since 2023. Adopt no code (per-tick Redis writes, no TTL, unbounded threads). ⭐ **But it documents a Kite quirk we are exposed to — quote-mode ticks on a full-mode subscription — and our depth path never checks. A25 + A26.** |
 | 9 | [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) | 2026-09-03 | **332k LOC in 27 days** (LLM-generated at scale), multi-market daily analysis + push. Adopt no code. ⭐ **But its phase-aware, fails-closed "which bar could this have acted on" resolver is the best treatment of that question in the log** — read `src/core/trading_calendar.py`. Makes no accuracy claim. **A27 + A28 extend A11**; its `AGENTS.md` seeds **W1–W5**. |
+| 14 | [quantopian/zipline](https://github.com/quantopian/zipline) | 2026-09-03 | ⭐⭐ Archived 2020, but the ancestor of the modern Python backtesting lineage and **architecturally the best idea in the log: look-ahead is not forbidden, it is *not expressible*** (strategies get a `BarData` bound to the simulation clock). **A38 — a composable point-in-time `Restrictions` interface supersedes A30 and unifies our fragmented eligibility logic.** Plus A37, T10. |
 | 13 | [akfamily/akshare](https://github.com/akfamily/akshare) | 2026-09-03 | 103k LOC of China data wrappers — **India coverage is incidental and only 13 of 314 HTTP modules mention retry**, so adopt nothing from the data layer. ⭐ **But its answer to "how do you test 400 scrapers" is the best process idea in the log: a self-cleaning debt baseline (T8) and doc/release consistency as failing tests rather than a ritual (T9).** |
 | 12 | [wilsonfreitas/awesome-quant](https://github.com/wilsonfreitas/awesome-quant) | 2026-09-03 | A **curated list**, not a codebase — mined for candidates, confirms our existing external-libs review. ⭐ **Its best find: purpose-built anti-overfitting audit tools whose worked example feeds pure noise through the audit and shows it caught** — which becomes **H8, a negative control against our own deflated-Sharpe bar.** Plus A36, T7. |
 | 11 | [vnpy/vnpy](https://github.com/vnpy/vnpy) | 2026-09-03 | ⭐ **The most Phase-7-relevant repo here** — a decade-proven live-trading framework, and **MIT, so vendorable where NautilusTrader (LGPL) is not.** Its event bus is **145 lines**; I reproduced **three robustness gaps in it** (a handler exception silently kills the bus). **A32 + A33**; third independent repo to make notification a core primitive, which settles A11. |
@@ -2604,6 +2605,164 @@ process risk is *a ritual nobody is forced to run*. They have the same fix.
 
 ---
 
+# 15. Zipline — `quantopian/zipline`
+
+Reviewed 2026-09-03. Apache 2.0, **~65,000 LOC**, **last commit 2020-10-14** — archived when
+Quantopian shut down. The maintained successor is `zipline-reloaded` (stefan-jansen), which
+appeared in repo 12's list.
+
+Archived, but this is the **ancestor of the entire modern Python backtesting lineage** — it
+spawned `trading_calendars` → `exchange_calendars` (which qlib uses), `alphalens`, `pyfolio` and
+`empyrical`. It is worth reading for its architecture, not its code, and it contains **the single
+best structural idea in this whole log.**
+
+## 15.1 ★ Look-ahead is not forbidden — it is *not expressible*
+
+A Zipline strategy never receives data. It receives a `BarData` object constructed with a
+`simulation_dt_func`:
+
+```python
+def __init__(self, data_portal, simulation_dt_func, data_frequency,
+             trading_calendar, restrictions, universe_func=None):
+    self.simulation_dt_func = simulation_dt_func
+```
+
+Every accessor — `current()`, `history()`, `can_trade()` — resolves through
+`_get_current_minute()`, which asks the simulation clock what "now" is and then queries the data
+portal *as of that instant*. **There is no API through which a strategy can request a future
+bar.**
+
+That is a categorically stronger guarantee than everything else in this document. Across fifteen
+repos I have found look-ahead as: a commented-out holdout (repo 2), same-bar execution (repo 5), a
+scaler fit over the test window (repo 7). Each was a *mistake someone could make*. Zipline's
+design removes the possibility — the mistake has no syntax.
+
+Two refinements worth noting:
+
+- **`before_trading_start` sets `_adjust_minutes = True`**, so during the pre-market hook "current"
+  resolves to the *previous* market minute — because today's bar does not exist yet. **This is the
+  second world-class implementation in this log to conclude that the current bar depends on which
+  session phase you are in** (repo 9's `premarket` / `closing_auction` / `postmarket` resolver was
+  the first). Two independent arrivals at the same design is the strongest signal available here.
+- Daily mode maps the minute to a session label through the trading calendar, so daily and minute
+  simulations share one clock abstraction rather than forking the logic.
+
+For us the lesson is a design *stance*, not a port: our engine is frozen and our rules already
+say "compute on candle N, valid from N+1". But those are rules a reviewer enforces. **Where we
+build new evaluation surfaces — the MCE fundamentals path (5b), the sidecar cohort queries — the
+cheaper guarantee is an accessor bound to an "as of" timestamp, so the wrong query cannot be
+written.** That is the same instinct as qlib's `P($$field)` PIT syntax (T1), arrived at from the
+other direction.
+
+## 15.2 ★★ Restrictions as a composable, point-in-time interface — this reshapes A30
+
+`zipline/finance/asset_restrictions.py`:
+
+```python
+class Restrictions(ABC)          # is_restricted(assets, dt)
+class NoRestrictions
+class StaticRestrictions          # a fixed set
+class HistoricalRestrictions      # restrictions that VARY OVER TIME
+class SecurityListRestrictions
+class _UnionRestrictions          # compose several sources into one
+```
+
+…and `restrictions.is_restricted` is wired into `BarData` itself, so `can_trade()` — the question
+the *strategy* asks — already knows.
+
+**This is a better architecture than what I recommended in A30, and it unifies three of our open
+items.** I had suggested "enforce circuit bands in the backtest, as the order path already does".
+That is the right goal and the wrong shape. The right shape is:
+
+> **One composable, point-in-time `Restrictions` interface that the backtest, the paper order path
+> and the display path all consult** — with each of our tradability rules as a *source*: T2T/-BE
+> exclusions, circuit-band proximity, liquidity, market-hours/`allow_offmarket_entry`, and the
+> gate modes.
+
+Two properties make it worth the refactor:
+
+- **`HistoricalRestrictions` is point-in-time.** A backtest asks "was this restricted *on that
+  date*", which is the only correct question — and the one our backtest cannot currently ask at
+  all.
+- **`_UnionRestrictions` composes.** We already have restriction logic in at least three places
+  (`eligibility.py` for display, the order-path gates, `circuit_guard`), and our own review found
+  the cost of that fragmentation: **41 of 204 rows offered a Buy that could only 409**, and five
+  separate Buy surfaces needed retrofitting. A composed interface is the structural fix, not
+  another synchronisation ritual.
+
+Filed as **A38**, superseding A30's *implementation* while keeping its goal. It also subsumes the
+A31 concern for this class of constraint: with one interface, a new restriction lands on every
+path by construction rather than by remembering.
+
+## 15.3 Fills are capped by bar volume, with quadratic impact
+
+`VolumeShareSlippage`:
+
+```python
+DEFAULT_EQUITY_VOLUME_SLIPPAGE_BAR_LIMIT = 0.025   # you may fill at most 2.5% of the bar's volume
+price * (1 + price_impact * (volume_share ** 2))   # impact is QUADRATIC in your share
+```
+
+Excess spills to the next bar or is cancelled; over-large orders raise `LiquidityExceeded`.
+
+**We have no participation cap.** Our 6.8.2 model uses the real half-spread plus a
+size-vs-top-of-book impact term, which is good — but nothing limits an order to a fraction of the
+day's traded volume. Our notional cap bounds a position in **rupees**, not relative to the
+stock's **liquidity**.
+
+That gap has a name in our own history: **SRTL — a ₹39 micro-cap, 2,666 shares, −₹3.5k.** The
+diversity gate now blocks that entry for a different reason (single-factor), but the *fill* would
+still have been modelled as free. A ₹1L position in a stock trading ₹5L a day is 20% of daily
+volume and is not fillable at the quoted price.
+
+**A37 — cap paper and backtest fills at a fraction of the bar's traded volume, with impact rising
+faster than linearly above a threshold.** We already ingest volume. This is the model behind
+qlib's T3 test, and it is what makes a thin-stock backtest honest.
+
+## 15.4 A shipped test-support package — and `ExplodingObject`
+
+`zipline/testing/` is part of the library: fakes (`FakeDataPortal`, `MockDailyBarReader`),
+temp-resource fixtures (`tmp_asset_finder`, `tmp_dir`), composable `With*` mixins, and two
+diagnostic objects worth taking outright:
+
+```python
+class ExplodingObject          # raises UnexpectedAttributeAccess on ANY attribute access
+class UnexpectedAttributeAccess
+```
+
+**T10 — negative-space assertions.** You inject an `ExplodingObject` where a dependency must
+*never* be touched; if the code touches it, the test fails loudly. It proves a code path does
+**not** use something — which is normally the hardest kind of property to test.
+
+We have at least three claims of exactly this shape currently held by convention and review:
+
+- **"frozen engine untouched"** — every overlay (`regime_guard`, `circuit_guard`, `entry_quality`,
+  `sector_rs`) asserts it does not touch `app/analysis/`.
+- **`circuit_guard` "only READS the cache, fail-open"** — it must never write.
+- **Overlays must not see future data** — the same property Zipline enforces architecturally.
+
+Each is a documented safety net with no test that fails when it lapses — which is precisely the
+failure mode we already named when the `unassessed` tripwire turned out to be imaginary.
+`ExplodingObject` is roughly fifteen lines and turns all three into mechanical checks.
+
+## 15.5 Verdict
+
+**Adopt no code** — archived five years, Cython, US-equity-shaped, and superseded by
+`zipline-reloaded`. But architecturally this is the most valuable repo in the log after qlib, and
+it contributes three items:
+
+- **A38** — a composable, point-in-time `Restrictions` interface consulted by every path.
+  **Supersedes A30 and unifies our fragmented eligibility logic.**
+- **A37** — a volume-participation cap on fills, aimed at exactly the SRTL-shaped trade.
+- **T10** — `ExplodingObject` negative-space assertions for our three "must never touch" claims.
+
+And one stance worth internalising: **the strongest guarantee is the one that removes the syntax
+for the mistake.** Fifteen repos have shown look-ahead entering through a comment, a same-bar
+fill, and a scaler. Zipline is the only one where a strategy author *cannot* express it. Where we
+are building new surfaces — MCE 5b above all — that is the bar to aim at.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -2682,7 +2841,9 @@ from repo 1.
 | A34 | **A timer event as the single scheduling primitive** — periodic work becomes an ordinary subscriber | Phase 7 runtime; possibly earlier | ~half day | *(repo 11)* Our 6.8.6 staleness alarm, the provisional-health watch and the CAS capture window are all "do this on a clock" problems currently solved three different ways. |
 | A35 | **Define `BrokerAdapter` as an interface a second broker could implement**, even while only Kite does | Phase 7 | included in Phase 7 | *(repo 11)* vnpy's core ships no gateway, which forces the interface to be a real contract. The cheapest insurance against a Kite-shaped abstraction leaking through the whole execution path. |
 | **A29** | **★ Add the flat DP charge per delivery sell, and a per-trade cost floor** | `app/trading/fees.py` (`FeeSchedule`) | ~2 hours | *(repo 10 + 6A)* Our schedule is otherwise correct but has no `dp_charge_per_sell`; Zerodha/CDSL levy a **flat ~₹13.5–20 per delivery sell scrip regardless of size**. A fixed cost disproportionately hits small positions — exactly what our notional cap produces and exactly the ₹1L / 1–2 position shape live will have. **We are under-costing the paper book, in the direction that flatters an already-negative expectancy.** |
-| **A30** | **★ Enforce circuit bands in the backtest, as the order path already does** | `app/backtest/` | ~half day | *(repo 10)* `circuit_guard.py` (6.8.3) stops the *paper order path* entering a name pinned near its adverse band; the backtest has no band handling at all, so it fills orders on days a stock was locked limit-up/down and untradeable. Qlib warns explicitly when its `limit_threshold` is unset for this reason. |
+| **A38** | **★★ A composable, point-in-time `Restrictions` interface consulted by the backtest, the order path AND the display path** — each tradability rule a *source* (T2T/-BE, circuit-band proximity, liquidity, market hours / `allow_offmarket_entry`, gate modes), composed, and answerable **as of a date** | new `app/signals/restrictions.py`; absorbs `eligibility.py`, the order-path gates and `circuit_guard`'s read | ~2–3 days | *(repo 14)* **Supersedes A30's implementation while keeping its goal.** Zipline's `HistoricalRestrictions` answers "was this restricted *on that date*" — the only correct backtest question, and one ours cannot ask at all. `_UnionRestrictions` composes sources, which is the structural fix for the fragmentation that already cost us **41/204 rows offering a Buy that could only 409** and five Buy surfaces needing retrofit. A new restriction then lands on every path by construction, not by remembering (subsumes A31 for this class). |
+| A30 | *(superseded by A38)* Enforce circuit bands in the backtest as the order path does | `app/backtest/` | — | *(repo 10)* Goal retained, shape replaced — see A38. Kept for the finding: qlib warns explicitly when its `limit_threshold` is unset because an unset limit means the backtest trades stocks that were locked limit-up/down. |
+| **A37** | **★ Cap fills at a fraction of the bar's traded volume, with impact rising faster than linearly above a threshold** | `paper_broker` fill model + `app/backtest/` | ~1 day | *(repo 14)* Zipline caps equity fills at **2.5% of bar volume** with **quadratic** price impact. Our 6.8.2 model has real half-spread and size-vs-top-of-book impact but **no participation cap** — our notional cap bounds rupees, not liquidity. **SRTL is the named case**: ₹39 micro-cap, 2,666 shares; a ₹1L position in a stock trading ₹5L/day is 20% of daily volume and is not fillable at the quoted price. |
 | **A31** | **Standing rule: a realism constraint added to one execution path must be added to every path that produces a comparable number, in the same change** | rules + review checklist | ~1 hour to write | *(repo 10)* Now three instances: spread-aware fills but last-close marks (A21); circuit bands on the order path but not the backtest (A30); `MODE_FULL` subscribed but never verified (A25). Otherwise backtest, paper and live silently stop being comparable — the one property we need them to have. |
 | A27 | **A notification config dry-run** (`--check-notify`-style) plus a `--no-notify` escape hatch | alongside A11 | ~2 hours | *(repo 9)* A11 runs unattended, so the first time it *should* fire is the worst time to discover the credentials are wrong. Validate the setup without spamming a real channel. |
 | A28 | **Classify a delivery failure as retryable or not**, and return a structured per-channel dispatch result | alongside A11 | ~2 hours | *(repo 9)* Repo 4's "classify failures by whether a human can act", applied one level down to the transport. Combined rule: try, classify, record, never raise into the caller. |
@@ -2724,6 +2885,7 @@ is worth studying as a design artifact.
 | **T7** | **Exhaustive-enum mapping test** — assert every variant of an enum is handled and deterministically ordered, so adding a variant without handling it **fails the suite** | gate modes, rejection reasons, sidecar readiness states | ~2 hours | *(repo 12)* We have already been burned by exactly this: *"v1's `unassessed` tripwire was IMAGINARY — 3 of 8 modes passed."* An enumeration not exhaustively handled, with no test to catch it. |
 | **T8** | **★ A self-cleaning debt baseline (ratchet)** — allow known gaps so CI isn't red, **reject new ones**, and **reject baseline entries that are stale or already fixed** so the list can only shrink | `backend/tests/` + whatever audit script it guards | ~half day | *(repo 13)* Most known-failure allowlists rot into permanent amnesties that suppress real regressions. This one fails the build when an entry is no longer a problem, forcing removal. We have the shape (typecheck coverage gaps, `STATUS.html` prose duplicating gate modes) and no mechanism. |
 | **T9** | **★ Turn the doc-sync ritual into failing tests** — a new `settings.*` without an `.env.example` line; a `docs/PHASES.md` `(updated …)` stamp older than the newest `docs/phases/*.md` change; a gate mode in `STATUS.html` disagreeing with `settings`. Report **all** violations in one pass | `backend/tests/` | ~1 day | *(repo 13)* **Our ritual is a procedure an agent must remember; theirs is a test that fails.** Our own lesson — *"a documented safety net is worth nothing without a test that fails when it lapses"* — was applied to our code and never to our process. The memory note *"grep the gate name on every flip"* is a human ritual standing in for a test. Subsumes and promotes **W3**. |
+| **T10** | **★ Negative-space assertions via an `ExplodingObject`** — inject an object that raises on *any* attribute access where a dependency must never be touched | `backend/tests/` helpers | ~2 hours | *(repo 14)* Proves a code path does **not** use something — normally the hardest property to test. We hold three such claims by convention alone: **"frozen engine untouched"** (every overlay), **`circuit_guard` only READS the cache**, and overlays never seeing future data. Each is a documented safety net with no test that fails when it lapses — exactly the `unassessed` tripwire failure. ~15 lines. |
 | T2 | **Lifecycle-boundary tests for the execution simulator** — first step, start mid-stream, stop early, stop at benchmark | Phase 7 order FSM | Phase 7 | *(repo 10)* Not "does it run" but "does it behave when interrupted". Pairs with A22 (bracket sibling qty on partial fill) and A16 (durable repair queue) — both lifecycle-boundary bugs other people found the hard way. |
 | T3 | **Parametrised fill tests under a participation limit** | if/when we add a volume-participation cap | — | *(repo 10)* We model spread and size-vs-top-of-book impact; we do not cap participation by volume. This is the test shape if we do. |
 | T4 | **Explicit NaN / corner-case tests on every numeric boundary** (LTP, ATR, confidence, R:R) | `backend/tests/` | ~half day | *(repo 10)* Earned: a non-finite Redis LTP once 500'd the signal detail endpoint because `Decimal("nan")` parses without raising. |
@@ -2748,7 +2910,7 @@ session behaves.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Seven of fifteen advertise numbers or fields their own code cannot produce — and the
+0. **Seven of sixteen advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -2782,7 +2944,7 @@ lessons is worth more than any one of them:
    it did not compare against.** **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **A guard that cannot return false shows up in three of fifteen — and it is the single most
+2. **A guard that cannot return false shows up in three of sixteen — and it is the single most
    repeated defect in this log.** AgentQuant's `generalization_gap = max(avg − best, 0)` is
    identically zero; ai-quant-agents' `risk_approved = "risk" not in decision.lower()` where
    `decision ∈ {BUY,HOLD,SELL}` is always true; repo 7's `is_breaking_out` calls a predicate
@@ -2790,7 +2952,7 @@ lessons is worth more than any one of them:
    applies. Three different root causes, one symptom. **The test is mechanical: for every
    guard, name the input that makes it fail — if you cannot, it is not a guard.** Our own
    `unassessed` tripwire failed exactly this (3 of 8 modes passed).
-3. **Dead code advertised as a feature shows up in three of fifteen.** AgentQuant fits an HMM
+3. **Dead code advertised as a feature shows up in three of sixteen.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
@@ -2867,13 +3029,22 @@ lessons is worth more than any one of them:
     extension of our own rule that *a metric which cannot come out badly is not a metric*: a
     **bar** that has never been shown to reject anything is in the same position. Hence H8.
 14. **Our most repeated process risk has the same fix as their most repeated code defect.**
-    Across fifteen repos the single most common defect is *a guard that cannot fail*. Our own
+    Across sixteen repos the single most common defect is *a guard that cannot fail*. Our own
     equivalent, in process rather than code, is *a ritual nobody is forced to run* — the doc-sync
     ritual, the review calendar, the memory note that says "grep the gate name on every flip".
     AKShare shows the fix is identical in both cases: **make it a test that fails.** We already
     drew this conclusion once, about code, when the `unassessed` tripwire turned out to be
     imaginary — and never applied it to our process. Hence T8 and T9.
-15. **The most useful findings came from the repos closest to our own stack, and they were
+15. **★ The strongest guarantee is the one that removes the syntax for the mistake.** Look-ahead
+    entered this log four different ways — a commented-out holdout (repo 2), same-bar execution
+    (repo 5), a scaler fit over the test window (repo 7), a phase-unaware entry bar (repo 9 got
+    this right). Every one was *a mistake someone could make*. Zipline is the only repo where a
+    strategy author **cannot express it**: `BarData` is bound to the simulation clock and there is
+    no API for a future bar. Qlib reaches the same place from the other direction with `P($$field)`
+    PIT syntax. **Rules and reviews catch mistakes; design prevents them** — and where we build new
+    evaluation surfaces (MCE 5b above all), an accessor bound to an "as of" timestamp is cheaper
+    than a rule and cannot lapse.
+16. **The most useful findings came from the repos closest to our own stack, and they were
     about *us*.** PaperTrade-India exposed that our fills are spread-aware while our marks are
     not (A21); express-option-chain exposed that we harvest depth from `MODE_FULL` ticks
     without ever checking the mode, on a path built to fail open (A25). **Neither was a defect

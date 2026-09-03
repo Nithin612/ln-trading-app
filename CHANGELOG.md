@@ -7,6 +7,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 14 Zipline — look-ahead made inexpressible; A38 supersedes A30 (2026-09-03)
+
+[quantopian/zipline](https://github.com/quantopian/zipline), Apache 2.0, ~65k LOC, **archived
+2020-10-14** (successor: `zipline-reloaded`). The ancestor of the modern Python backtesting
+lineage — it spawned `trading_calendars` → `exchange_calendars`, `alphalens`, `pyfolio`,
+`empyrical`. Read for architecture, not code.
+
+**★ Its crown jewel: look-ahead is not forbidden, it is *not expressible*.** A strategy never
+receives data — it receives a `BarData` constructed with a `simulation_dt_func`, and every
+accessor (`current`, `history`, `can_trade`) resolves through the simulation clock and queries the
+data portal *as of that instant*. **There is no API for a future bar.** Across sixteen repos I
+found look-ahead four ways — a commented-out holdout, same-bar execution, a scaler fit over the
+test window — each *a mistake someone could make*. This is the only one where the mistake has no
+syntax. Its `before_trading_start` also sets "current" to the *previous* market minute, making it
+the **second independent world-class implementation to conclude the current bar depends on the
+session phase** (repo 9's resolver was the first).
+
+**★★ A38 — a composable, point-in-time `Restrictions` interface. This supersedes A30.**
+`asset_restrictions.py` ships `Restrictions` (ABC) with `Static`, **`Historical`** (time-varying),
+`SecurityList` and **`_UnionRestrictions`** (composes sources), wired into `BarData` so
+`can_trade()` — the question the *strategy* asks — already knows. I had recommended "enforce
+circuit bands in the backtest"; that is the right goal and the wrong shape. The right shape is
+**one composable interface consulted by the backtest, order path and display path**, with each of
+our rules as a source (T2T/-BE, circuit-band proximity, liquidity, market hours /
+`allow_offmarket_entry`, gate modes). `HistoricalRestrictions` answers *"was this restricted on
+that date"* — the only correct backtest question and one ours cannot ask at all; `_UnionRestrictions`
+is the structural fix for fragmentation that already cost us **41/204 rows offering a Buy that
+could only 409** and five Buy surfaces needing retrofit. A new restriction then lands on every
+path by construction (subsumes A31 for this class).
+
+**★ A37 — fills capped by bar volume.** `VolumeShareSlippage` caps equity fills at **2.5% of the
+bar's volume** with **quadratic** price impact, spilling or raising `LiquidityExceeded` beyond it.
+**We have no participation cap** — 6.8.2 models half-spread and size-vs-top-of-book impact, and
+the notional cap bounds *rupees*, not *liquidity*. **SRTL is the named case**: ₹39 micro-cap,
+2,666 shares. A ₹1L position in a stock trading ₹5L/day is 20% of daily volume and is not
+fillable at the quoted price.
+
+**T10 — `ExplodingObject` negative-space assertions.** `zipline/testing/` ships as part of the
+library, including an object that raises `UnexpectedAttributeAccess` on *any* attribute access:
+inject it where a dependency must never be touched and the test fails if it is. It proves a path
+does **not** use something — normally the hardest property to test. We hold three such claims by
+convention alone: **"frozen engine untouched"** (every overlay), **`circuit_guard` only READS the
+cache**, and overlays never seeing future data. Each is a documented safety net with no test that
+fails when it lapses — the `unassessed` tripwire failure exactly. ~15 lines.
+
+Synthesis extended to sixteen repos with lesson 15: **the strongest guarantee is the one that
+removes the syntax for the mistake.** Rules and reviews catch mistakes; design prevents them —
+and where we build new evaluation surfaces (MCE 5b above all), an accessor bound to an "as of"
+timestamp is cheaper than a rule and cannot lapse.
+
+
 ### docs(research): repo 13 AKShare — adopt no data code; take its testing strategy (2026-09-03)
 
 [akfamily/akshare](https://github.com/akfamily/akshare), MIT, **~103k LOC across 406 modules** —
