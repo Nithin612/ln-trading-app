@@ -14,6 +14,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from app.core.config import settings
 from app.models.signal import Signal
 from app.models.stock import Stock
 from app.models.trading import Position
@@ -27,6 +28,7 @@ from app.trading.trail_sl import (
     stop_fill_price,
 )
 from httpx import AsyncClient
+from sqlalchemy import select as sa_select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.helpers import create_test_user, get_auth_headers, make_stock
@@ -1590,7 +1592,7 @@ class TestChaseAndSizeForFill:
         assert (
             size_for_fill(
                 capital=Decimal("100000"), risk_pct=Decimal("2"),
-                fill=Decimal("500"), stop_loss=Decimal("480"),
+                fill=Decimal("500"), stop_loss=Decimal("480"), side="LONG",
             )
             == 100
         )
@@ -1601,7 +1603,7 @@ class TestChaseAndSizeForFill:
         # A fill 7 past entry widens |fill-SL| 20→27 → qty 100→74, risk ≤ ₹2000
         qty = size_for_fill(
             capital=Decimal("100000"), risk_pct=Decimal("2"),
-            fill=Decimal("507"), stop_loss=Decimal("480"),
+            fill=Decimal("507"), stop_loss=Decimal("480"), side="LONG",
         )
         assert qty == 74  # floor(2000/27)
         assert qty * Decimal("27") <= Decimal("2000")
@@ -1613,7 +1615,7 @@ class TestChaseAndSizeForFill:
         assert (
             size_for_fill(
                 capital=Decimal("100000"), risk_pct=Decimal("2"),
-                fill=Decimal("490"), stop_loss=Decimal("480"),
+                fill=Decimal("490"), stop_loss=Decimal("480"), side="LONG",
             )
             == 200  # floor(2000/10)
         )
@@ -1625,7 +1627,7 @@ class TestChaseAndSizeForFill:
         assert (
             size_for_fill(
                 capital=Decimal("100000"), risk_pct=Decimal("2"),
-                fill=Decimal("500"), stop_loss=Decimal("480"),
+                fill=Decimal("500"), stop_loss=Decimal("480"), side="LONG",
                 existing_qty=100, existing_entry=Decimal("500"),
             )
             == 0
@@ -1634,10 +1636,255 @@ class TestChaseAndSizeForFill:
         assert (
             size_for_fill(
                 capital=Decimal("100000"), risk_pct=Decimal("2"),
-                fill=Decimal("500"), stop_loss=Decimal("480"),
+                fill=Decimal("500"), stop_loss=Decimal("480"), side="LONG",
                 existing_qty=50, existing_entry=Decimal("500"),
             )
             == 50
+        )
+
+    async def test_place_order_rejects_price_through_the_stop(
+        self, client: AsyncClient, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """REGRESSION (bug-hunter LOW 2026-09-02 — the guard shipped untested): the
+        `place_paper_order` half of the wrong-side fix had no coverage. A stale BUY whose
+        stock now trades BELOW its stop (the PNCINFRA archetype: entry ₹238.21, SL
+        ₹237.26, LTP ₹191.85) must be refused with a reason that says the setup is void,
+        not the generic "size rounds to 0"."""
+        user = await create_test_user(db)
+        headers = await get_auth_headers(client)
+        stock = await make_stock(db)
+        sig = Signal(
+            stock_id=stock.id, direction="BUY", classification="swing", timeframe="1d",
+            entry_price="238.2100", stop_loss="237.2600", take_profit="273.9400",
+            suggested_qty=100, confidence_pct=80,
+            factor_scores={
+                "DOW_TREND": {"weight": 20, "score": 0.8, "explanation": "up"},
+                "MACD_CROSS": {"weight": 15, "score": 0.6, "explanation": "x"},
+            },
+            headline="BUY STALE", status="active", is_shadow=False,
+            validity_until=datetime.now(tz=UTC) + timedelta(days=5),
+            created_at=datetime.now(tz=UTC),
+        )
+        db.add(sig)
+        await db.commit()
+        # Price has collapsed far below the signal's stop.
+        from app.broker import paper_broker
+
+        async def _fake_ltp(stock_id: int) -> Decimal:
+            return Decimal("191.85")
+
+        monkeypatch.setattr(paper_broker, "get_live_ltp", _fake_ltp)
+
+        r = await client.post(
+            "/api/v1/trading/orders",
+            json={"signal_id": str(sig.id), "side": "BUY"},
+            headers=headers,
+        )
+        assert r.status_code == 422
+        detail = r.json()["detail"]
+        assert "through this signal's stop loss" in detail
+        assert "setup is void" in detail
+        # Canary: the OLD code sized this (floor(2000/45.41) = 44) and returned 201.
+        assert "rounds to 0" not in detail
+        opened = (
+            await db.execute(
+                sa_select(Position).where(
+                    Position.user_id == user.id, Position.closed_at.is_(None)
+                )
+            )
+        ).scalars().all()
+        assert opened == [], "no position may be opened through its own stop"
+
+    async def test_place_order_rejects_a_position_bigger_than_the_account(
+        self, client: AsyncClient, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """REGRESSION (found 2026-09-02, reproduced independently by two agent reviews):
+        `qty = risk_budget / risk_per_share` bounds the trade's RISK but says nothing about
+        its SIZE. A stop a few paise wide sized **50,000 shares = ₹1,18,65,000 on ₹1,00,000
+        of capital** — 119× the account — and returned 201, so the row entered the paper
+        book, the R statistics and the 30-day go-live clock.
+
+        Canary: without the cap this returns 201 with quantity ≈ 50,000."""
+        from app.broker import paper_broker
+
+        async def _fake_ltp(stock_id: int) -> Decimal:
+            return Decimal("237.30")
+
+        monkeypatch.setattr(paper_broker, "get_live_ltp", _fake_ltp)
+        user = await create_test_user(db)
+        headers = await get_auth_headers(client)
+        stock = await make_stock(db)
+        # SL four paise under the live price; TP far enough that the R:R floor passes, so
+        # this test exercises the NOTIONAL cap and nothing else.
+        sig = Signal(
+            stock_id=stock.id, direction="BUY", classification="swing", timeframe="1d",
+            entry_price="237.5000", stop_loss="237.2600", take_profit="245.0000",
+            suggested_qty=100, confidence_pct=80,
+            factor_scores={
+                "DOW_TREND": {"weight": 20, "score": 0.8, "explanation": "up"},
+                "MACD_CROSS": {"weight": 15, "score": 0.6, "explanation": "x"},
+            },
+            headline="BUY KNIFE", status="active", is_shadow=False,
+            validity_until=datetime.now(tz=UTC) + timedelta(days=5),
+            created_at=datetime.now(tz=UTC),
+        )
+        db.add(sig)
+        await db.commit()
+
+        r = await client.post(
+            "/api/v1/trading/orders",
+            json={"signal_id": str(sig.id), "side": "BUY"}, headers=headers,
+        )
+        assert r.status_code == 422
+        detail = r.json()["detail"]
+        assert "per-position cap" in detail
+        assert "account can hold" in detail
+        opened = (
+            await db.execute(
+                sa_select(Position).where(
+                    Position.user_id == user.id, Position.closed_at.is_(None)
+                )
+            )
+        ).scalars().all()
+        assert opened == [], "a position larger than the account must never open"
+
+    async def test_place_order_allows_a_normally_sized_position(
+        self, client: AsyncClient, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The cap must not touch ordinary trades: ₹2,000 risk over a ₹20 stop = 100 shares
+        at ₹500 = ₹50,000 notional, half the ₹1,00,000 capital."""
+        from app.broker import paper_broker
+
+        async def _fake_ltp(stock_id: int) -> Decimal:
+            return Decimal("500.00")
+
+        monkeypatch.setattr(paper_broker, "get_live_ltp", _fake_ltp)
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        stock = await make_stock(db)
+        sig = Signal(
+            stock_id=stock.id, direction="BUY", classification="swing", timeframe="1d",
+            entry_price="500.0000", stop_loss="480.0000", take_profit="540.0000",
+            suggested_qty=100, confidence_pct=80,
+            factor_scores={
+                "DOW_TREND": {"weight": 20, "score": 0.8, "explanation": "up"},
+                "MACD_CROSS": {"weight": 15, "score": 0.6, "explanation": "x"},
+            },
+            headline="BUY OK", status="active", is_shadow=False,
+            validity_until=datetime.now(tz=UTC) + timedelta(days=5),
+            created_at=datetime.now(tz=UTC),
+        )
+        db.add(sig)
+        await db.commit()
+        r = await client.post(
+            "/api/v1/trading/orders",
+            json={"signal_id": str(sig.id), "side": "BUY"}, headers=headers,
+        )
+        assert r.status_code == 201
+
+    def test_notional_cap_counts_an_existing_position(self) -> None:
+        """A repeat entry cannot stack past the cap — the held notional counts."""
+        from app.broker.paper_broker import PaperOrderError, _check_notional_cap
+        user = User(capital_inr=Decimal("100000"), risk_per_trade_pct=Decimal("2"))
+        # 100 × ₹500 = ₹50,000 fits on its own.
+        _check_notional_cap(
+            user, qty=100, fill_price=Decimal("500"), existing_qty=0, existing_entry=None
+        )
+        # The same add on top of ₹60,000 already held would reach ₹110,000 > ₹100,000.
+        with pytest.raises(PaperOrderError, match="already held"):
+            _check_notional_cap(
+                user, qty=100, fill_price=Decimal("500"),
+                existing_qty=120, existing_entry=Decimal("500"),
+            )
+
+    def test_notional_cap_disabled_by_zero_leverage(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """`paper_max_notional_leverage = 0` is the escape hatch — the cap is skipped
+        entirely. Asserted by patching the SETTING: an earlier version of this test set
+        capital to 0 instead, which took the same early-return branch for an unrelated
+        reason and so proved nothing about the knob."""
+        from app.broker.paper_broker import _check_notional_cap
+        user = User(capital_inr=Decimal("100000"), risk_per_trade_pct=Decimal("2"))
+        monkeypatch.setattr(settings, "paper_max_notional_leverage", 0.0)
+        # ₹50 lakh on ₹1 lakh of capital — refused at leverage 1.0, allowed at 0 (off).
+        _check_notional_cap(
+            user, qty=10_000, fill_price=Decimal("500"), existing_qty=0, existing_entry=None
+        )
+
+    def test_notional_cap_scales_with_the_leverage_knob(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """At leverage 2.0 the same position that breaches a ₹1 lakh cap fits a ₹2 lakh
+        one — so the knob is really what sets the ceiling."""
+        from app.broker.paper_broker import PaperOrderError, _check_notional_cap
+        user = User(capital_inr=Decimal("100000"), risk_per_trade_pct=Decimal("2"))
+        with pytest.raises(PaperOrderError, match="per-position cap"):
+            _check_notional_cap(
+                user, qty=300, fill_price=Decimal("500"),  # ₹150,000 > ₹100,000
+                existing_qty=0, existing_entry=None,
+            )
+        monkeypatch.setattr(settings, "paper_max_notional_leverage", 2.0)
+        _check_notional_cap(
+            user, qty=300, fill_price=Decimal("500"),  # ₹150,000 <= ₹200,000
+            existing_qty=0, existing_entry=None,
+        )
+
+    def test_size_for_fill_long_below_its_own_stop_returns_zero(self) -> None:
+        """REGRESSION (bug found 2026-09-02): a BUY whose fill lands BELOW its own stop
+        must be REJECTED, not sized. `per_share` was `abs(fill - stop_loss)`, which is
+        side-blind, so this returned floor(2000/46) = 43 and opened a LONG already
+        through its stop. One such row exists in the dev DB. Canary: the old code
+        returns 43 here, the fixed code 0."""
+        from app.broker.paper_broker import size_for_fill
+
+        qty = size_for_fill(
+            capital=Decimal("100000"), risk_pct=Decimal("2"),
+            fill=Decimal("191.85"), stop_loss=Decimal("237.26"), side="LONG",
+        )
+        assert qty == 0, "a long below its own stop must be rejected, never sized"
+
+    def test_size_for_fill_short_above_its_own_stop_returns_zero(self) -> None:
+        """The SHORT mirror: a SELL filled ABOVE its stop is already through it."""
+        from app.broker.paper_broker import size_for_fill
+
+        assert (
+            size_for_fill(
+                capital=Decimal("100000"), risk_pct=Decimal("2"),
+                fill=Decimal("237.26"), stop_loss=Decimal("191.85"), side="SHORT",
+            )
+            == 0
+        )
+
+    def test_size_for_fill_short_sizes_from_upward_risk(self) -> None:
+        """A well-formed SHORT (stop ABOVE the fill) still sizes normally — the fix
+        must not reject the valid short case along with the invalid one."""
+        from app.broker.paper_broker import size_for_fill
+
+        assert (
+            size_for_fill(
+                capital=Decimal("100000"), risk_pct=Decimal("2"),
+                fill=Decimal("480"), stop_loss=Decimal("500"), side="SHORT",
+            )
+            == 100  # floor(2000/20)
+        )
+
+    def test_size_for_fill_side_accepts_order_or_position_wording(self) -> None:
+        """The single production caller passes a POSITION side ("LONG"/"SHORT"); the
+        order-side wording ("BUY"/"SELL") must behave identically so a future caller
+        can't silently invert the check."""
+        from app.broker.paper_broker import size_for_fill
+
+        common = dict(capital=Decimal("100000"), risk_pct=Decimal("2"))
+        assert size_for_fill(
+            **common, fill=Decimal("500"), stop_loss=Decimal("480"), side="BUY"
+        ) == size_for_fill(
+            **common, fill=Decimal("500"), stop_loss=Decimal("480"), side="LONG"
+        )
+        assert size_for_fill(
+            **common, fill=Decimal("480"), stop_loss=Decimal("500"), side="SELL"
+        ) == size_for_fill(
+            **common, fill=Decimal("480"), stop_loss=Decimal("500"), side="SHORT"
         )
 
     def test_size_for_fill_stop_at_fill_returns_zero(self) -> None:
@@ -1646,7 +1893,7 @@ class TestChaseAndSizeForFill:
         assert (
             size_for_fill(
                 capital=Decimal("100000"), risk_pct=Decimal("2"),
-                fill=Decimal("480"), stop_loss=Decimal("480"),
+                fill=Decimal("480"), stop_loss=Decimal("480"), side="LONG",
             )
             == 0
         )

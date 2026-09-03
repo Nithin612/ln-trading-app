@@ -26,6 +26,7 @@ from app.core.config import settings
 from app.models.signal import Signal
 from app.models.trading import Order, Position
 from app.models.user import User
+from app.signals import eligibility
 from app.trading.fees import product_for_classification, roundtrip_charges
 from app.trading.trail_sl import compute_pnl
 
@@ -215,6 +216,47 @@ def _simulated_fill(base_price: Decimal, order_side: str) -> Decimal:
     return _round_tick(_apply_slippage(base_price, order_side))
 
 
+async def get_live_ltps(stock_ids: list[int]) -> dict[int, Decimal]:
+    """Live tick prices for MANY stocks in ONE round trip (Redis MGET, one connection).
+
+    `get_live_ltp` opens and closes its own connection per call, so calling it inside a
+    loop over a page of signals would open ~200 connections per request (bug-hunter,
+    2026-09-02). Use this for any list path. Missing/unparseable keys are simply absent
+    from the result — the caller treats absence as "no live price" and fails open."""
+    if not stock_ids:
+        return {}
+    try:
+        import contextlib
+
+        import redis.asyncio as aioredis
+
+        from app.broker.tick_consumer import LTP_KEY
+
+        keys = [LTP_KEY.format(stock_id=sid) for sid in stock_ids]
+        r = aioredis.from_url(settings.redis_url, decode_responses=True)
+        try:
+            values: list[str | None] = await r.mget(keys)
+        finally:
+            with contextlib.suppress(Exception):
+                await r.aclose()
+        out: dict[int, Decimal] = {}
+        for sid, raw in zip(stock_ids, values, strict=True):
+            if not raw:
+                continue
+            with contextlib.suppress(ArithmeticError, TypeError, ValueError):
+                px = Decimal(raw)
+                # `Decimal("nan")`/`Decimal("Infinity")` PARSE without raising, and the
+                # suppressed set does not catch that — a poisoned key would then blow up
+                # on the first comparison (`price <= stop_loss` raises InvalidOperation).
+                # Same bug class the 09-02 diff fixed in entry_quality; caught here by
+                # quant-verifier. A price we cannot reason about is no price at all.
+                if px.is_finite() and px > 0:
+                    out[sid] = px
+        return out
+    except Exception:
+        return {}
+
+
 async def get_live_ltp(stock_id: int) -> Decimal | None:
     """Latest LIVE tick price from Redis (no fallback). None means there is no
     fresh price — the market is closed or this stock isn't currently trading
@@ -233,7 +275,11 @@ async def get_live_ltp(stock_id: int) -> Decimal | None:
             # aclose in finally — a raised GET must not leak the connection
             with contextlib.suppress(Exception):
                 await r.aclose()
-        return Decimal(ltp_str) if ltp_str else None
+        if not ltp_str:
+            return None
+        px = Decimal(ltp_str)
+        # Non-finite/non-positive prices are dropped, not returned — see get_live_ltps.
+        return px if px.is_finite() and px > 0 else None
     except Exception:
         return None
 
@@ -280,6 +326,7 @@ def size_for_fill(
     risk_pct: Decimal,
     fill: Decimal,
     stop_loss: Decimal,
+    side: str,
     existing_qty: int = 0,
     existing_entry: Decimal | None = None,
 ) -> int:
@@ -292,12 +339,25 @@ def size_for_fill(
     REMAINING budget (budget minus the risk already on the book), so repeated
     entries on the same name can't stack risk past the budget. Returns 0 when no
     budget remains, or the stop sits at/through the fill (the caller rejects the
-    order — never clamps to a token size)."""
-    per_share = abs(fill - stop_loss)
+    order — never clamps to a token size).
+
+    ``side`` ("LONG"/"BUY" or "SHORT"/"SELL") is REQUIRED because the risk distance is
+    DIRECTIONAL: a long's stop must sit BELOW the fill, a short's ABOVE it. The distance
+    used to be ``abs(fill - stop_loss)``, which is side-blind — so a BUY filled *below*
+    its own stop was sized and opened instead of rejected, producing a position already
+    through its stop at birth (one such row exists in the dev DB; found 2026-09-02).
+    ``abs()`` cannot see that and ``compute_quantity`` raises only on exact equality, so
+    the check has to live here. Reject, never clamp (`.claude/rules/trading-domain.md`).
+    """
+    # Directional risk distance: a long risks fill→SL downward, a short upward. A
+    # non-positive distance means the stop is at or through the fill — not a trade.
+    is_long = side.upper() in ("LONG", "BUY")
+    per_share = (fill - stop_loss) if is_long else (stop_loss - fill)
     if per_share <= 0:
         return 0
     if existing_qty <= 0 or existing_entry is None:
         try:
+            # Side already validated above, so compute_quantity's abs() is safe here.
             return compute_quantity(capital, risk_pct, fill, stop_loss)
         except ValueError:
             return 0
@@ -307,6 +367,50 @@ def size_for_fill(
     if remaining <= 0:
         return 0
     return int((remaining / per_share).to_integral_value(rounding=ROUND_DOWN))
+
+
+def _check_notional_cap(
+    user: User,
+    *,
+    qty: int,
+    fill_price: Decimal,
+    existing_qty: int,
+    existing_entry: Decimal | None,
+) -> None:
+    """Raise `PaperOrderError` when a position would exceed the per-position notional cap.
+
+    `qty = risk_budget / risk_per_share` bounds the trade's RISK but says nothing about its
+    SIZE: a stop a few paise wide sized 50,000 shares = ₹1,18,65,000 on ₹1,00,000 of capital
+    (found 2026-09-02) — 119× the account — and that row then polluted the paper book, the R
+    statistics and the 30-day go-live clock. NSE cash delivery grants no leverage, so the
+    default cap is capital × 1.0: you cannot buy more stock than you have money.
+
+    Includes any existing position in the same name, so a repeat entry cannot stack past the
+    cap. **Reject, never clamp** (`.claude/rules/trading-domain.md`) — a clamped size would
+    silently change the trade's risk, the one thing sizing exists to hold fixed.
+
+    NOTE this is PER POSITION. Portfolio-wide exposure is the heat cap's job (not built — the
+    book ran at 45.3% risk across 23 positions on 2026-09-02).
+    """
+    cap = user.capital_inr * Decimal(str(settings.paper_max_notional_leverage))
+    if cap <= 0:
+        return
+    held = (
+        Decimal(existing_qty) * existing_entry
+        if existing_qty > 0 and existing_entry is not None
+        else Decimal(0)
+    )
+    wanted = Decimal(qty) * fill_price
+    if held + wanted <= cap:
+        return
+    raise PaperOrderError(
+        f"Position size {qty} × ₹{fill_price} = ₹{wanted:,.0f} exceeds your "
+        f"₹{cap:,.0f} per-position cap (capital ₹{user.capital_inr:,.0f} × "
+        f"{settings.paper_max_notional_leverage})"
+        + (f", with ₹{held:,.0f} already held" if held else "")
+        + ". The stop is so tight that risk-first sizing asks for more stock than the "
+        "account can hold — wait for a setup with a sane stop."
+    )
 
 
 async def place_paper_order(
@@ -343,11 +447,7 @@ async def place_paper_order(
     # without a live tick a fill would use a stale prior close.
     live_ltp = await get_live_ltp(signal.stock_id)
     if live_ltp is None and not user.allow_offmarket_entry:
-        raise PaperOrderError(
-            "No live market price for this stock right now — the market may be closed "
-            "or the stock isn't trading, so a fill would use a stale prior close. "
-            "Enable 'Allow off-market entry' in Settings to override."
-        )
+        raise PaperOrderError(eligibility.OFFMARKET_REASON)
     if live_ltp is not None:
         base_price = live_ltp
     else:
@@ -365,6 +465,23 @@ async def place_paper_order(
     # conservative by construction, never in our favour.
     fill = simulate_fill(base_price, side, depth=depth, quantity=None)
     fill_price = fill.fill
+
+    # A stop on the WRONG SIDE of the fill is not a tradeable position: a long filled
+    # at/below its own stop (or a short at/above) is already through the stop before it
+    # exists. This happens when a signal's entry has gone stale and price has travelled
+    # past the stop — e.g. a BUY planned at ₹238.21 with SL ₹237.26, clicked while the
+    # stock trades ₹191. Reject with a reason that SAYS so, instead of falling through to
+    # the generic "size rounds to 0" message. Checking the FIRST (spread-only) fill is
+    # sufficient: the impact refinement only moves the fill adversely, which for a long is
+    # UP (further above a valid stop) and for a short DOWN — never across the stop.
+    # The sentence itself is owned by `eligibility.through_stop_reason` so the display
+    # preview and this rejection cannot word it differently. Only the PRICE differs by
+    # construction: the preview knows the live LTP, this knows the post-slippage fill.
+    ts_reason = eligibility.through_stop_reason(
+        side=pos_side, price=fill_price, stop_loss=stop_loss
+    )
+    if ts_reason:
+        raise PaperOrderError(ts_reason)
 
     # Existing open position for this stock/user/side (a repeat entry averages in).
     existing_result = await db.execute(
@@ -389,6 +506,7 @@ async def place_paper_order(
             risk_pct=user.risk_per_trade_pct,
             fill=at_fill,
             stop_loss=stop_loss,
+            side=pos_side,
             existing_qty=existing_qty,
             existing_entry=existing_entry,
         )
@@ -415,6 +533,11 @@ async def place_paper_order(
             "is too wide (or the price ran too far past entry) for this account "
             "(raise capital, wait for a better entry, or pick a tighter setup)."
         )
+
+    _check_notional_cap(
+        user, qty=qty, fill_price=fill_price,
+        existing_qty=existing_qty, existing_entry=existing_entry,
+    )
 
     now = datetime.now(tz=UTC)
 

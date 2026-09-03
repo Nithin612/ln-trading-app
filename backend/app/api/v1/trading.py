@@ -61,6 +61,7 @@ from app.signals import (
     liquidity_guard,
     market_regime,
     regime_guard,
+    rr_guard,
     sector_rs,
 )
 from app.trading.atr import atr_timeframe_for, latest_atr
@@ -141,11 +142,13 @@ async def _apply_eligibility_overlays(  # noqa: C901 — linear sequence of inde
     market_regime.RegimeVerdict | None,
     liquidity_guard.LiquidityVerdict | None,
     chase_guard.ChaseVerdict | None,
+    rr_guard.RrVerdict | None,
 ]:
-    """Run the regime · circuit-band · entry-quality · sector-RS · market-regime · liquidity ·
-    anti-chase overlays on a committed signal. Raises 409 if any ACTIVE gate rejects; returns
-    (circuit, eq, rs, mkt, liq, chase) verdicts to stamp on the order (None when that gate is
-    off). All fail-open, frozen engine untouched — the downstream-overlay pattern."""
+    """Run the regime · circuit-band · entry-quality · reward:risk · sector-RS ·
+    market-regime · liquidity · anti-chase overlays on a committed signal. Raises 409 if any
+    ACTIVE gate rejects; returns (circuit, eq, rs, mkt, liq, chase, rr) verdicts to stamp on
+    the order (None when that gate is off). All fail-open, frozen engine untouched — the
+    downstream-overlay pattern."""
     # Regime-eligibility overlay (no-op unless regime_gate_mode == "active").
     gate_reason = regime_guard.order_block_reason(signal, settings.regime_gate_mode)
     if gate_reason:
@@ -192,6 +195,21 @@ async def _apply_eligibility_overlays(  # noqa: C901 — linear sequence of inde
         )
         if eq_reason:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=eq_reason)
+
+    # Reward:risk floor. Sits beside entry-quality because both judge the SIGNAL ITSELF
+    # (malformed levels), ahead of every gate that needs live market state. Pure — decidable
+    # from the signal row, which is why the display path can judge it too.
+    rr_verdict = None
+    if settings.rr_gate_mode != "off":
+        rr_verdict = rr_guard.evaluate(
+            entry=Decimal(str(signal.entry_price)),
+            stop_loss=Decimal(str(signal.stop_loss)),
+            take_profit=Decimal(str(signal.take_profit)),
+            rr_min=Decimal(str(settings.rr_min)),
+        )
+        rr_reason = rr_guard.order_block_reason(rr_verdict, settings.rr_gate_mode)
+        if rr_reason:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=rr_reason)
 
     # Sector/index relative-strength overlay (MCE slice 2). `off` = a TRUE no-op (no DB
     # query, no stamp). Benchmark closes are aligned to the stock's own sessions by the
@@ -309,7 +327,10 @@ async def _apply_eligibility_overlays(  # noqa: C901 — linear sequence of inde
         if chase_reason:
             raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=chase_reason)
 
-    return circuit_verdict, eq_verdict, rs_verdict, mkt_verdict, liq_verdict, chase_verdict
+    return (
+        circuit_verdict, eq_verdict, rs_verdict, mkt_verdict, liq_verdict,
+        chase_verdict, rr_verdict,
+    )
 
 
 def _overlay_stamps(
@@ -319,6 +340,7 @@ def _overlay_stamps(
     mkt_verdict: market_regime.RegimeVerdict | None,
     liq_verdict: liquidity_guard.LiquidityVerdict | None,
     chase_verdict: chase_guard.ChaseVerdict | None,
+    rr_verdict: rr_guard.RrVerdict | None,
 ) -> dict[str, object]:
     """The eligibility-overlay verdicts as order-payload stamps — only the gates that ran
     (a `None` verdict = that gate was off, so no footprint). ``chase_gate`` is the pre-fill
@@ -331,6 +353,7 @@ def _overlay_stamps(
         ("market_regime", mkt_verdict),
         ("liquidity", liq_verdict),
         ("chase_gate", chase_verdict),
+        ("rr_gate", rr_verdict),
     ):
         if verdict is not None:
             stamps[key] = verdict.as_payload()
@@ -369,6 +392,7 @@ async def place_order(
         mkt_verdict,
         liq_verdict,
         chase_verdict,
+        rr_verdict,
     ) = await _apply_eligibility_overlays(db, signal, req.side)
 
     try:
@@ -383,7 +407,8 @@ async def place_order(
     # only; off leaves no footprint). New dict, not in-place, so SQLAlchemy flags the
     # JSONB column dirty.
     stamps = _overlay_stamps(
-        circuit_verdict, eq_verdict, rs_verdict, mkt_verdict, liq_verdict, chase_verdict
+        circuit_verdict, eq_verdict, rs_verdict, mkt_verdict, liq_verdict, chase_verdict,
+        rr_verdict,
     )
     if stamps:
         order.broker_payload = {**(order.broker_payload or {}), **stamps}

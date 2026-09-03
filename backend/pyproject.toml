@@ -58,6 +58,32 @@ strict = true
 plugins = ["pydantic.mypy"]
 ignore_missing_imports = true
 
+# `scripts/` is now type-checked too (make typecheck runs `mypy app/ scripts/`).
+# Reason: it was NEVER checked, and that hid a real bug — 2026-09-02, adding a
+# required `mode` param to `regime_gate_shadow.render_markdown` updated every caller
+# except `scripts/regime_gate_shadow.py`, and mypy's clean run over `app/` proved
+# nothing. That script is the one the regime-gate forward-evidence protocol says to
+# run by hand, so it would have died with a TypeError at exactly the wrong moment.
+#
+# The nine modules below are GRANDFATHERED at the state they were in when the check
+# was switched on (64 pre-existing errors: mostly untyped experiment/backfill helpers).
+# They are exempt so switching the check on didn't redden the gate — NOT because they
+# are exempt in principle. Fix and delete an entry when you touch one; never add a new
+# entry for new code.
+[[tool.mypy.overrides]]
+module = [
+    "adjudication_experiments",
+    "adjudication_experiments_fgh",
+    "backfill_intraday",
+    "bench_baseline",
+    "gen_options_goldens",
+    "generate_engine_fixtures",
+    "seed_nse_holidays",
+    "seed_stocks",
+    "signal_filter_shadow",
+]
+ignore_errors = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"

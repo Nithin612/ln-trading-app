@@ -68,7 +68,15 @@ async def depth_in_redis(stock_id: int, depth: Depth) -> AsyncIterator[None]:
         await r.aclose()
 
 
-async def _make_user(db: AsyncSession, email: str = "spread@example.com") -> User:
+async def _make_user(
+    db: AsyncSession,
+    email: str = "spread@example.com",
+    capital: Decimal = Decimal("100000"),
+) -> User:
+    """`capital` is overridable because the per-position notional cap (added 2026-09-02,
+    `paper_max_notional_leverage`) makes an order larger than the account impossible — as
+    it should be. A test that needs a genuinely large order to exercise the impact term has
+    to fund it."""
     from app.core.security import hash_password
 
     user = User(
@@ -78,7 +86,7 @@ async def _make_user(db: AsyncSession, email: str = "spread@example.com") -> Use
         role="user",
         is_active=True,
         trading_mode="paper",
-        capital_inr=Decimal("100000"),
+        capital_inr=capital,
         risk_per_trade_pct=Decimal("2.00"),
         daily_loss_limit_pct=Decimal("3.00"),
         max_trades_per_day=5,
@@ -328,7 +336,13 @@ class TestEntryFill:
         monkeypatch.setattr(settings, "paper_slippage_bps", 0.0)
         monkeypatch.setattr(settings, "paper_impact_k_bps", 5.0)
         user_small = await _make_user(db, email="small@example.com")
-        user_big = await _make_user(db, email="big@example.com")
+        # Funded so the 3000-share order is a trade this account could actually place:
+        # 3000 × ~₹505 ≈ ₹15.2L, which needs more than ₹1L of capital now that the
+        # per-position notional cap is enforced. The fill economics under test are
+        # unchanged — what changed is that the scenario is no longer physically impossible.
+        user_big = await _make_user(
+            db, email="big@example.com", capital=Decimal("2000000")
+        )
         stock = await make_stock(db, symbol="IMPACTCO")
         signal = await _make_signal(db, stock.id)
         await db.commit()

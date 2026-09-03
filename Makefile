@@ -199,7 +199,7 @@ lint:  ## Lint backend (ruff) + frontend (eslint)
 .PHONY: typecheck
 typecheck:  ## Type-check backend (mypy) + frontend (tsc)
 	@echo "$(BLUE)▶ Mypy$(NC)"
-	@cd backend && uv run mypy app/
+	@cd backend && uv run mypy app/ scripts/
 	@echo "$(BLUE)▶ TypeScript$(NC)"
 	@cd frontend && pnpm typecheck
 

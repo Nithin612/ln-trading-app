@@ -42,6 +42,20 @@ class SignalOut(BaseModel):
     # The 07-30/31 review showed choppy tapes drove ~all the losses.
     regime_er: float | None = None
     choppy: bool = False
+    # Order-eligibility preview (2026-09-02). The order path runs seven overlays and
+    # 409s on the first ACTIVE rejection; this list ran NONE of them, so 41 of 204
+    # rows carried a Buy button that could only fail. `block_reason` is verbatim the
+    # 409 detail, so the list and the failed click cannot say different things.
+    # Source of truth: app/signals/eligibility.preview.
+    blocked: bool = False
+    blocked_by: str | None = None   # stable gate slug for the UI badge
+    block_reason: str | None = None
+    # ACTIVE gates the preview could NOT judge on this path. Non-empty means "possibly
+    # blocked, UNKNOWN" — never "clear". It has to reach the client: while it was only
+    # logged server-side, `blocked=False` + unassessed was byte-identical to a fully
+    # assessed clear, so the invariant lived in a log file and not where the wasted
+    # clicks happen (quant-verifier, 2026-09-02).
+    unassessed: list[str] = []
 
     model_config = {"from_attributes": True}
 

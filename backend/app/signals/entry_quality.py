@@ -51,6 +51,20 @@ def factor_diversity(factor_scores: object) -> tuple[int, Decimal | None]:
             weight = Decimal(str(v.get("weight", 0)))
         except (TypeError, ValueError, ArithmeticError):
             continue
+        # A non-finite value (NaN/Infinity smuggled in as a JSON *string* — JSONB
+        # accepts "nan") must be skipped, not accumulated: `Decimal('nan') != 0` is
+        # True, so it used to reach the `total > 0` comparison below and raise
+        # InvalidOperation. On the order path that cost one order; once this ran on the
+        # signals LIST it would have 500'd a whole page (bug-hunter, 2026-09-02).
+        #
+        # An unreadable factor is simply NOT a scoring factor. Note what that means for
+        # a MIXED payload (quant-verifier, 2026-09-02): {nan, 0.8} reads as ONE scoring
+        # factor, so an ACTIVE diversity gate BLOCKS it — this fails CLOSED, not open,
+        # and deliberately so: one readable factor IS a single indicator, which
+        # SIGNAL_ENGINE §1/§2 forbids. Only an ALL-unreadable payload yields count 0,
+        # which `evaluate` then fails open on (see its `count > 0` guard).
+        if not score.is_finite() or not weight.is_finite():
+            continue
         if score != 0:
             contribs.append(abs(weight * score))
     if not contribs:

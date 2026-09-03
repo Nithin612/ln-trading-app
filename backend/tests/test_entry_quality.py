@@ -184,3 +184,79 @@ class TestEntryQualityWiring:
         monkeypatch.setattr(settings, "entry_diversity_gate_mode", "shadow")
         monkeypatch.setattr(settings, "entry_sl_atr_gate_mode", "active")
         assert (await self._post(client, db, SINGLE)).status_code == 201
+
+
+class TestNonFiniteFactorScores:
+    """REGRESSION (bug-hunter LOW, 2026-09-02): a non-finite factor score raised
+    `decimal.InvalidOperation` out of `factor_diversity`.
+
+    `Decimal('nan') != 0` is True, so a NaN smuggled in as a JSON *string* (JSONB
+    accepts `"nan"`) got into `contribs` and then blew up on the `total > 0` comparison.
+    On the order path that cost one order; once the same helper began running on the
+    signals LIST it would have turned one malformed row into a 500 for the whole page.
+    An unreadable factor is simply not a scoring factor — fail open, never raise."""
+
+    def test_nan_score_is_ignored_not_raised(self) -> None:
+        count, dominant = eq.factor_diversity(
+            {"RSI_DIVERGENCE": {"weight": 20, "score": "nan", "explanation": "junk"}}
+        )
+        assert count == 0 and dominant is None
+
+    def test_infinite_weight_is_ignored(self) -> None:
+        count, _ = eq.factor_diversity(
+            {"A": {"weight": "Infinity", "score": 0.8, "explanation": ""}}
+        )
+        assert count == 0
+
+    def test_nan_alongside_good_factors_keeps_the_good_ones(self) -> None:
+        """The healthy factors must still count — a poisoned row degrades to its
+        readable part rather than to zero."""
+        count, dominant = eq.factor_diversity(
+            {
+                "A": {"weight": 20, "score": 0.8, "explanation": ""},
+                "B": {"weight": 15, "score": 0.6, "explanation": ""},
+                "BAD": {"weight": 10, "score": "nan", "explanation": ""},
+            }
+        )
+        assert count == 2
+        assert dominant is not None and dominant < Decimal("0.9")
+
+    def test_mixed_payload_fails_closed_under_an_active_diversity_gate(self) -> None:
+        """The mixed case, spelled out (quant-verifier, 2026-09-02): {nan, 0.8} reads as
+        ONE scoring factor, so an ACTIVE diversity gate BLOCKS it. That is fail-CLOSED,
+        and intentional — one readable factor IS a single indicator, which SIGNAL_ENGINE
+        §1/§2 forbids. Only an ALL-unreadable payload yields count 0 and fails open."""
+        v = eq.evaluate(
+            entry=Decimal("100"),
+            stop_loss=Decimal("96"),
+            factor_scores={
+                "BAD": {"weight": 20, "score": "nan", "explanation": ""},
+                "GOOD": {"weight": 15, "score": 0.8, "explanation": ""},
+            },
+            atr=None,
+            min_scoring_factors=2,
+            max_dominant_share=Decimal("0.9"),
+            min_sl_atr_mult=Decimal("1.0"),
+        )
+        assert v.scoring_factors == 1
+        assert v.diversity_blocked is True, "one readable factor is a single indicator"
+        assert eq.order_block_reason(v, "active", "off") is not None
+
+    def test_evaluate_survives_a_nan_payload(self) -> None:
+        """End-to-end through the overlay: no raise, and the poisoned payload reads as
+        ZERO scoring factors — which `evaluate` deliberately FAILS OPEN on
+        (`count > 0` guard, entry_quality.py:130: "a payload we couldn't read fails open
+        rather than flagging every such signal"). So the signal is not blocked on the
+        diversity axis. That is the intended trade-off: a gate that suppresses must not
+        suppress on uncertainty. The point of this test is that it does not RAISE."""
+        v = eq.evaluate(
+            entry=Decimal("100"),
+            stop_loss=Decimal("96"),
+            factor_scores={"A": {"weight": 20, "score": "nan", "explanation": ""}},
+            atr=None,
+            min_scoring_factors=2,
+            max_dominant_share=Decimal("0.9"),
+            min_sl_atr_mult=Decimal("1.0"),
+        )
+        assert v.diversity_blocked is False, "unreadable payload must fail OPEN, not block"
+        assert v.scoring_factors == 0

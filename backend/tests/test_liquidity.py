@@ -139,11 +139,21 @@ class TestProvider:
 
 
 # ── Order-path wiring ─────────────────────────────────────────────────────────
-async def _make_signal(db: AsyncSession, stock_id: int) -> Signal:
+async def _make_signal(
+    db: AsyncSession, stock_id: int, *, entry: str = "500.0000", sl: str = "480.0000",
+    tp: str = "540.0000",
+) -> Signal:
+    """Levels are overridable because they must MATCH whatever candles the test seeds.
+
+    With no Redis LTP in tests the paper fill falls back to the newest candle close, so a
+    signal priced ₹500 on a ₹39 micro-cap fills ₹441 BELOW its own stop — which
+    `place_paper_order` now correctly REJECTS as a position already through its stop
+    (2026-09-02). Tests that seed cheap candles must pass matching levels; the ₹39
+    archetype itself is worth keeping (it is the SRTL case the liquidity gate targets)."""
     now = datetime.now(tz=UTC)
     sig = Signal(
         stock_id=stock_id, direction="BUY", classification="swing", timeframe="1d",
-        entry_price="500.0000", stop_loss="480.0000", take_profit="540.0000",
+        entry_price=entry, stop_loss=sl, take_profit=tp,
         suggested_qty=100, confidence_pct=80,
         factor_scores={
             "DOW_TREND": {"weight": 20, "score": 0.8, "explanation": "up"},
@@ -203,7 +213,8 @@ class TestWiring:
         headers = await get_auth_headers(client)
         stock = await make_stock(db)
         await _recent_ohlcv(db, stock.id, [("39", 1000)] * 3)
-        sig = await _make_signal(db, stock.id)
+        # Levels matched to the seeded ₹39 candles — see _make_signal's docstring.
+        sig = await _make_signal(db, stock.id, entry="39.0000", sl="37.0000", tp="45.0000")
         await db.commit()
         assert await _order(client, headers, sig.id) == 201
 

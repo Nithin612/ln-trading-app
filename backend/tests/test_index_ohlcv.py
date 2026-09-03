@@ -202,15 +202,24 @@ class TestBenchmarkProvider:
 
 # ── Order-path wiring (mirrors the circuit-gate wiring tests) ─────────────────
 async def _make_signal(db: AsyncSession, stock_id: int) -> Signal:
+    """Levels are anchored at ₹100 to MATCH this file's seeded price series
+    (`_seed_pairs` writes stock closes from 100).
+
+    Why that matters (2026-09-02): with no Redis LTP in tests the paper fill falls back
+    to the newest candle close, so a fixture priced at ₹500 on a stock whose candles say
+    ₹100 produces a LONG filled ₹380 BELOW its own stop — which `place_paper_order` now
+    correctly REJECTS as a position already through its stop. The old 500/480 defaults
+    were silently inconsistent; keep signal levels and seeded candles in the same
+    universe or the order path will (rightly) refuse the trade."""
     now = datetime.now(tz=UTC)
     sig = Signal(
         stock_id=stock_id,
         direction="BUY",
         classification="swing",
         timeframe="1d",
-        entry_price="500.0000",
-        stop_loss="480.0000",
-        take_profit="540.0000",
+        entry_price="100.0000",
+        stop_loss="96.0000",
+        take_profit="112.0000",
         suggested_qty=100,
         confidence_pct=80,
         factor_scores={

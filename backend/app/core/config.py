@@ -311,6 +311,63 @@ class Settings(BaseSettings):
     # with chase_r ≤ 0.33 were net-positive; the only two past it were both losers.
     chase_max_r: float = 0.33
 
+    # ── Reward:risk floor overlay (app/signals/rr_guard.py) ─────────────────
+    # Rejects a signal whose planned TARGET is closer than its STOP. Unlike every other
+    # overlay this enforces an IDENTITY, not a hypothesis: at planned R:R < 1 the trade
+    # needs a >50% win rate merely to break even, which no trend-following system
+    # sustains — so it defaults to ACTIVE with no forward-evidence bar, because there is
+    # no hypothesis to test. (Moving the floor ABOVE 1.0 is a different matter entirely:
+    # 1.67 would be fitted to our observed 37.5% win rate and MUST go through the
+    # deflated-Sharpe / multiple-testing bar first.)
+    #
+    # Why the defect exists: `analysis/risk.py::compute_levels` pairs a STRUCTURAL stop
+    # (swing pivot / EMA20) with an ABSOLUTE-% target (swing +6%, positional +15%), so the
+    # ratio is an accident of where the pivot sat — 94 of 295 swing signals landed under
+    # 1.0 (2026-09-02 audit). Intraday/scalp are ratio-based (1:2, 1:1.5) and are fine.
+    # This overlay is the tourniquet; making swing/positional ratio-based is a §6 spec
+    # change with an §8 regression, deliberately not done here.
+    #   off    — TRUE no-op.
+    #   shadow — measure only.
+    #   active — reject (default; identity, not a tuned threshold).
+    rr_gate_mode: Literal["off", "shadow", "active"] = "active"
+    # The floor itself. Keep at 1.0 unless you have run the multiple-testing bar.
+    rr_min: float = 1.0
+
+    # ── Paper account constraints (app/broker/paper_broker.py) ──────────────
+    # Per-position NOTIONAL cap as a multiple of capital. `qty = risk_budget /
+    # risk_per_share` has no ceiling on `qty × price`, so a stop a few paise wide sized a
+    # ₹1,18,65,000 position on ₹1,00,000 of capital (2026-09-02) — 119× the account, which
+    # then polluted the paper book, the R statistics and the 30-day go-live clock.
+    # 1.0 = cash-delivery reality on NSE: you cannot buy more stock than you have money.
+    # Raise it ONLY to model an intraday product that genuinely grants leverage.
+    # NOTE: this is PER POSITION. Portfolio-wide exposure is the portfolio-heat cap's job
+    # (not built — the book ran at 45.3% risk across 23 positions on 2026-09-02).
+    paper_max_notional_leverage: float = 1.0
+
+    # ── Paper SAMPLING scale (reporting only — never affects sizing) ───────
+    # `capital_inr` is the LIVE account figure and drives per-trade sizing
+    # (risk_pct × capital). But the paper book is deliberately run as a WIDE EVIDENCE
+    # SAMPLER — 5 entries/day, ~5-day holds, so ~25 concurrent positions — which means
+    # exposure measured against the live figure reads alarmingly (45.3% "heat" on
+    # 2026-09-02) while the very same book is a textbook-conservative 9% against the
+    # scale the sampler actually represents. Same positions, different denominator.
+    #
+    # This is the declared notional account size the sampler stands for, used ONLY as a
+    # reporting denominator. It NEVER touches `compute_quantity`/`size_for_fill`, so no
+    # trade changes size and history stays comparable. 0 = unset ⇒ fall back to
+    # `capital_inr` (previous behaviour exactly).
+    #
+    # The daily report prints exposure against BOTH figures, labelled — replacing one
+    # misleading number with a different one would be no improvement.
+    paper_sampling_capital_inr: float = 0.0
+
+    # Portfolio-heat cap used by the COUNTERFACTUAL only (no enforcement anywhere).
+    # Elder's 6% rule / Tharp's 6–10% band. The counterfactual answers the question the
+    # 30-day go-live clock should be reading: "what would a disciplined ₹1L book, capped
+    # here, have returned from the same signals?" — because the wide sampler's P&L is not
+    # the book that will ever be traded live (1–2 positions on ₹1 lakh).
+    heat_counterfactual_pct: float = 6.0
+
     # ── Profit-lock: absolute-rupee ladder (app/trading/profit_lock.py) ─────
     # When a user opts in (users.profit_lock_enabled), the position monitor
     # governs open PAPER exits with a rupee-denominated profit ladder — the
@@ -326,6 +383,13 @@ class Settings(BaseSettings):
     profit_lock_trail_start_inr: float = 3000.0
     profit_lock_giveback_inr: float = 1000.0
     profit_lock_atr_k: float = 2.0
+    # The EARLY-BREAKEVEN candidate replayed beside the live ladder by
+    # `profit_lock_shadow` — an honest one-variable A/B for the rung the 2026-08-18
+    # exit-ladder research supported moving ("₹800 instead of ₹2,000… it cut blow-ups
+    # 3 vs 5 at little cost"). Nothing acts on it: it only names the counterfactual.
+    # Note ₹2,000 = exactly +1R at the ₹1L/2% budget, which is WHY the live rung almost
+    # never armed — every daily report shows "never reached +1R, lock stayed unarmed".
+    profit_lock_breakeven_early_inr: float = 800.0
 
     market_open_hour: int = 9
     market_open_minute: int = 15
