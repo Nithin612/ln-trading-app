@@ -5,6 +5,15 @@ what survives scrutiny, what we should harvest, and what we should refuse. The l
 section is the consolidated **harvest queue** — the only part that should ever turn into
 work.
 
+**Every repo gets its own UI/UX pass too**, even when its stack is far
+below ours. The bar is not "is their UI better than ours" — it is "**does any single
+screen, table, tile or label do a job better than our equivalent**". A Streamlit page can
+out-design a React page on *information architecture* while losing on everything else, and
+that idea still transfers. Findings split three ways: **take** (better than ours),
+**confirms** (their defect is something our rules already forbid — evidence the rule earns
+its place), and **reject**. UI items are numbered `U1, U2, …` in the harvest queue, kept
+separate from the analysis items `H1, H2, …`.
+
 Ground rule for this document, and the reason it exists in this form: we have twice
 promoted a gate on an argument and had to revert it (regime gate, R:R≥1 — see the
 CLAUDE.md hard constraint #8). **A claim in someone else's README is exactly the class of
@@ -14,7 +23,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 
 | # | Repo | Reviewed | Verdict |
 |---|---|---|---|
-| 1 | [OnePunchMonk/AgentQuant](https://github.com/OnePunchMonk/AgentQuant) | 2026-09-03 | **Harvest 4 ideas, adopt no code, reject the thesis** |
+| 1 | [OnePunchMonk/AgentQuant](https://github.com/OnePunchMonk/AgentQuant) | 2026-09-03 | **Adopt no code, reject the thesis — harvest 4 analysis ideas + 6 UI ideas.** Its Research Workspace screen is better information design than anything we have for the same job. |
 
 ---
 
@@ -355,7 +364,134 @@ Ignoring the agent-flavoured ones, three are pointed:
 | **The stack** (Streamlit / yfinance / vectorbt / SQLite) | Redundant against FastAPI + React + Postgres/Timescale + our Rust core. |
 | **Vendoring any code** | MIT is permissive, but there is no `LICENSE` file, and every idea worth having is ~30 lines. Reimplement against our types (`Decimal`, tz-aware, `Numeric(12,4)`) and our tests. |
 
-## 1.6 The most useful thing in the repo is a warning
+## 1.6 UI/UX findings
+
+Stack: **Streamlit + Plotly**, single light theme, no design tokens. On every axis our
+React 19 / Tailwind-token / 5-theme frontend is ahead. **And yet its Research Workspace
+screen is better information design than anything we have for the same job**, so the
+findings below are worth more than the stack comparison suggests.
+
+Assessed from the seven committed screenshots (I looked at them, rather than inferring
+from code) plus `src/app/streamlit_app.py` and `src/research/workspace.py`.
+
+### ★ TAKE — the Research Workspace screen is the UI our shadow-gate evidence deserves
+
+This is the finding. **We have seven shadow sidecars and every one of them is a separate
+markdown file** (`entry-quality-shadow-<date>.md`, `circuit-gate-shadow-<date>.md`,
+`sector-rs-shadow-<date>.md`, …) that a human must open one at a time and hold in their
+head. AgentQuant renders the same class of information — every experiment, its evidence,
+its verdict — as **one screen**. Concretely, in one viewport it gives:
+
+| Element | What it does | Our equivalent |
+|---|---|---|
+| **Experiment Registry** table | every run, one row: `Run ID · Name · Mode · Strategy · Source · Sharpe · Return · MaxDD · Robustness · Validation` | 7 separate `.md` files |
+| **4 KPI tiles** | `Tracked Runs 6 · Best Sharpe 1.490 · Best Robustness 0.711 · Validation Pass Rate 50.0%` | — |
+| **"Current leader" callout** | one sentence: *"Current leader: No Context ablation with robustness 0.711. Use this as the anchor run when comparing new agent or swarm experiments."* | — |
+| **Robustness Map** | scatter, Sharpe (y) × MaxDD (x), coloured by Mode | — |
+| **Run Inspector** | pick a run → result sentence, research notes, per-check validation with reasons, artifacts | — |
+
+**U1 — the registry as a screen, sorted by robustness rather than by the headline metric.**
+`load_research_workspace` sorts by `robustness_score`, defined as `sharpe − max_drawdown`
+(and `mean_sharpe − sharpe_std − max_drawdown` for walk-forward runs). The leaderboard's
+default order is a **dispersion- and drawdown-penalised** score, not the number everyone
+quotes. Sorting by the thing you actually care about instead of the thing that is easiest
+to game is a one-line decision with a large behavioural effect.
+
+**U2 — benchmarks are ROWS IN THE SAME TABLE, not a separate report.** `base-1 Buy and
+Hold · 0.896 · 102.4%` sits two rows above `wf-momentum · 1.49 · 42.4%`. You physically
+cannot read that table and miss that buy-and-hold won. This is **H2 rendered as UI**, and
+it is strictly stronger than H2 as a report line: a benchmark in its own section gets
+skipped, a benchmark in the same sort order does not. If we do H2, do it this way.
+
+**U3 — the "current leader" callout.** One highlighted sentence naming the champion *and
+telling you what to do with it* ("use this as the anchor run"). It converts a table into a
+decision. Our readiness banners say READY/NOT READY per gate but never say *which gate is
+currently the best candidate and what it should be compared against*.
+
+**U4 — a `Validation` column whose value is the WORST of its checks.**
+
+```python
+@property
+def validation_status(self) -> str:
+    statuses = {check.status for check in self.validation_checks}
+    if FAIL in statuses:  return FAIL
+    if WARN in statuses:  return WARN
+    return PASS
+```
+
+We already enforce this logic in the readiness guards ("no sidecar can print READY on bad
+evidence"). What they add is **rendering it as a scannable column**, with the individual
+checks and their *reasons* one click away in the inspector — not a bare tick but
+*"**Pass** Ablation coverage: 5 trials available for this ablation arm."* A green tick
+tells you the answer; the sentence tells you whether to believe it.
+
+**U5 — honest WARN labelling with the reason.** The Buy-and-Hold row shows `warn`, and the
+check explains why: *"Useful benchmark, but not a leakage-safe validation protocol."* The
+warning is not "this is bad", it is "this is not the kind of evidence you think it is".
+That is precisely the distinction our two reverted gates needed.
+
+**U6 — the funnel KPI strip.** `Stored Alphas 11 · Accepted 2 · Watchlist 0 · Rejected 9`.
+This is a **visible trials counter**, and it is exactly the `N` that `E[max SR]` needs in
+our deflated-Sharpe bar. Right now that N is a number I choose by hand when computing the
+bar (we assumed 20). A UI that counts *how many things we have tried* makes the multiple-
+testing denominator an observed quantity instead of an assumption — which is the single
+biggest soft spot in H1/our DSR work.
+
+**U7 — rejected candidates stay on screen, with their damage.** Nine rejected rows are
+rendered with their real numbers (Sharpe −0.857, −0.718, −0.864 …, `Score −1.352`), not
+filtered out. The failure archive is a first-class UI citizen. Ours is prose in
+`FIX_PLAN.md` and memory files.
+
+**U8 — an `Artifacts` panel naming the file that produced the number**
+(`experiments/ablation_results.csv`, in a code block). This is the discipline I proposed in
+§1.6 — *every reported number must name the code path that produced it* — already built as
+UI. Cheap for us: each sidecar banner could name its own generating service and query.
+
+**U9 — provenance as a column.** `Method`: `alpha_memory` / `random` / `grid_search`, plus
+collapsible *"Alpha memory used for this run"* / *"NLA memory used for this run"* panels.
+Every row says how it was generated and what prior knowledge fed it. Our signals carry
+`generation_method`-like provenance in the DB but never surface it.
+
+**U10 — regime stamped as a banner on the run** (`📊 Market Regime: MidVol-Bull`) and as a
+column on every stored candidate. The context a result was produced in travels with the
+result. We persist `Signal.regime` at commit but do not show it as run context.
+
+**U11 — the Robustness Map.** Sharpe × MaxDD scatter, colour = Mode (Ablation / Benchmark /
+Agent research). A risk-return frontier of every experiment on one pair of axes, where the
+benchmark cluster is visually adjacent to the candidate cluster. We have no equivalent
+view; our `dataviz` skill would render a better version of it.
+
+**U12 — small things worth stealing.** The headline number annotated *onto* the equity
+chart (`Total Return: 87.39%` pinned in-plot) rather than beside it. A free-text "Add
+tickers" input beside the multiselect, for symbols not in the preset universe. An explicit
+`☐ Refresh market data now` checkbox instead of an automatic refetch — the user decides
+when a network call happens. A one-line plain-English run summary in a status box
+(*"Generated 1 proposals, 1 backtested successfully, stored 1 alpha candidates…"*).
+
+### CONFIRMS — their defects are things our rules already forbid
+
+The `dashboard*.png` screens are the weak end, and every failure maps to a rule we already
+have. Useful as evidence those rules earn their keep, not as anything to copy.
+
+| Their defect (screenshot) | Our rule that prevents it |
+|---|---|
+| `Performance Metrics` is a raw wide dataframe dump — 19+ columns (`GLD_total_return … SPY_max_drawd…`) running off-screen, clipped | `ui.md`: wide content scrolls in its own `overflow-x` container; long format over wide |
+| `sharpe_ratio: None` rendered raw as "None" | `format.ts` for all numbers; explicit empty states |
+| Unformatted floats — `0.8739`, `-0.1282`, `0.9464`, mixed 2/3/4 decimals, no units | `lib/format.ts` exclusively; no `toFixed` in features |
+| Negative Sharpes in plain black — no profit/loss colour, no direction glyph | `--color-profit` / `--color-loss` + glyph, never colour alone |
+| Red chips for neutral asset tags (red = loss in a trading UI) | token semantics — red is reserved for loss |
+| Asset Allocation table rendered twice on one screen, beside an empty chart region | — (plain redundancy) |
+| A pandas index column rendering as a meaningless `0` | — |
+| `Validation` column clipped at the right edge of the registry | sticky/opaque headers + overflow handling |
+| Single light theme, no tokens | 5 themes via `data-theme`, tokens only |
+
+### REJECT
+
+The Streamlit stack itself, the sidebar-drives-everything layout (a global filter rail is
+wrong for our per-page workflows), and Plotly as a chart dependency — we are on
+Lightweight Charts + Recharts and that is the better pairing for candles + dashboards.
+
+## 1.7 The most useful thing in the repo is a warning
 
 AgentQuant is a well-engineered library wearing a research narrative that its own
 committed data contradicts. The mechanism is worth naming, because **we are running the
@@ -382,9 +518,12 @@ Worth adding to `.claude/rules/testing.md` as a one-liner.
 
 # Consolidated harvest queue
 
-Ranked by value-to-us ÷ effort. **Nothing here is authorised work** — items enter
-`docs/PHASES.md` only on the user's say-so, and we remain in watch mode to Fri 2026-09-04
-with no money-path build. Every one of these is measurement, not money path.
+Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
+**Nothing here is authorised work** — items enter `docs/PHASES.md` only on the user's
+say-so, and we remain in watch mode to Fri 2026-09-04 with no money-path build. Every one
+of these is measurement or reporting surface, never the money path.
+
+## Analysis queue
 
 | # | Item | Where it lands | Effort | Why now |
 |---|---|---|---|---|
@@ -396,10 +535,36 @@ with no money-path build. Every one of these is measurement, not money path.
 | H6 | `MAX_RATIO` sentinel instead of `inf` for degenerate ratios | wherever R:R / Calmar-like ratios are computed | ~1 hour | We have the `RR≈228` tiny-SL artifact on record. Trivial hygiene. |
 | H7 | Sharpe-decay alarm on shadow gates | daily report / readiness banners | ~1 day | The regime gate sat `NOT READY` for 7 report days before action. Detection existed; alarming did not. Partly subsumed by H4. |
 
-**If only one thing is done: H1, then H2.** H1 hardens the instrument that both recent
-reversals proved we were missing. H2 is a half-day that supplies the honest baseline every
-future gate argument should be measured against — and it is the specific omission that let
-AgentQuant celebrate a Sharpe of 0.621 while buy-and-hold quietly returned 102%.
+## UI/UX queue
+
+Same rule — nothing here is authorised. All of it is *reporting surface*, none of it
+touches the money path, and all of it obeys `.claude/rules/ui.md` (tokens, `format.ts`,
+5 themes, virtualization ≥200 rows).
+
+| # | Item | Where it lands | Effort | Why now |
+|---|---|---|---|---|
+| **U1** | **A "Research / Gate Registry" page** — one sortable table over all shadow gates and experiments: name · mode (shadow/active/reverted) · n · metric · bar · **robustness** · **validation** — **default-sorted by the penalised score, not the headline metric** | new `frontend/src/features/analytics/` page + an endpoint over the sidecar data | ~2–3 days | **The biggest UI gap we have.** Our shadow evidence is 7 separate markdown files a human must open one at a time; AgentQuant puts the same job on one screen. This is the UI half of H4 and would subsume the daily banner-reading ritual. |
+| **U2** | **Benchmarks as rows in that same table** (NIFTY buy-and-hold, random-entry baseline) | same page | included in U1 | A benchmark in its own section gets skipped; a benchmark in the same sort order cannot be. This is the *right* delivery for H2 — do H2 and U2 together. |
+| **U3** | **`Validation` column = worst-of-checks, with per-check reasons on drill-down** | same page | included in U1 | We already compute worst-of in the readiness guards; this renders it scannable and makes the *reason* reachable ("5 trials available for this arm"), not just a tick. Includes honest WARN labels — *"useful benchmark, but not a leakage-safe protocol"*. |
+| **U4** | **Trials-attempted counter** (`tried · accepted · watch · rejected` KPI strip) | same page; also one line in the daily report | ~half day | Makes `N` in `E[max SR]` an **observed** number instead of the hand-picked 20 we assume today. Directly hardens H1 — this is the soft spot in our whole DSR bar. |
+| **U5** | **"Current leader" callout** — one sentence naming the best current candidate and what to compare against | same page | ~2 hours | Turns a table into a decision. Our banners say READY/NOT READY per gate but never name the anchor. |
+| **U6** | **Rejected/reverted candidates stay visible with their damage** | same page | included in U1 | The regime gate (−8R) and R:R≥1 (+₹10,585 cohort blocked) should be permanent rows, not prose in memory files. |
+| U7 | **Provenance + regime stamped on every row** (how generated, which regime it ran in) | same page | ~half day | We persist `Signal.regime` and generation provenance already; neither is surfaced. |
+| U8 | **`Artifacts` line naming the file/service that produced each number** | banners + registry rows | ~2 hours | §1.7's rule as UI. Cheap, and it makes a stale number traceable instead of arguable. |
+| U9 | **Robustness Map** — metric × drawdown scatter, coloured by mode, benchmarks in the same axes | same page | ~half day | No equivalent today. Use the `dataviz` skill. |
+| U10 | Small: headline number annotated *onto* the equity chart; explicit "refresh now" over auto-refetch; free-text symbol add beside preset pickers | existing pages | ~2 hours each | Cheap polish, each independently useful. |
+
+**If only one UI thing is done: U1 with U2 and U4 folded in.** That single page replaces the
+"open seven markdown files and hold them in your head" ritual, puts the benchmark where it
+cannot be avoided, and turns the multiple-testing denominator into something we observe
+rather than assume.
+
+**Overall, if only one thing is done anywhere: H1, then H2+U2 together.** H1 hardens the
+instrument that both recent reversals proved we were missing. H2 is a half-day that
+supplies the honest baseline every future gate argument should be measured against — and
+it is the specific omission that let AgentQuant celebrate a Sharpe of 0.621 while
+buy-and-hold quietly returned 102%. U2 is what stops that baseline from being ignored.
 
 **Explicitly not recommended:** adopting any AgentQuant code, the LLM-parameter-proposal
-pattern, or anything from the harness-evolution line of work.
+pattern, anything from the harness-evolution line of work, or any part of its Streamlit
+stack, sidebar-driven layout, or raw-dataframe rendering.

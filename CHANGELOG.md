@@ -31,7 +31,25 @@ for by hand; **H2** a buy-and-hold benchmark line in the daily report (we have n
 is per-signal RS, not a portfolio baseline — and the index bars are already backfilled); **H3**
 re-frame the VIX companion as a trailing percentile, dissolving the "history too shallow to
 §8-validate" blocker on an absolute, US-derived threshold of 20; **H4** the gate/hypothesis register
-as data rather than prose. Also recorded as a cautionary case study: five mechanisms by which a
+as data rather than prose.
+
+**UI/UX pass — now a standing part of every repo review** (numbered `U1…`, separate from `H1…`).
+Its stack is Streamlit + Plotly, one light theme, no tokens — behind ours on every axis — but
+**its Research Workspace screen is better information design than anything we have for the same
+job**: one Experiment Registry table (name · mode · metric · robustness · validation)
+**default-sorted by a drawdown-penalised robustness score rather than the headline metric**, with
+**benchmark rows inside that same sort order** so buy-and-hold's 0.896 cannot be skipped; a
+worst-of-checks `Validation` column whose per-check *reasons* are one click away; a
+`tried/accepted/watch/rejected` funnel strip; rejected candidates left on screen with their
+damage; and an `Artifacts` panel naming the file each number came from. Our equivalent evidence
+is **seven separate markdown sidecars** opened one at a time. Queued U1–U10, led by a Research/
+Gate Registry page (U1) with benchmarks-as-rows (U2) and a trials-attempted counter (U4) — the
+last makes `N` in `E[max SR]` an observed number instead of the 20 we assume, the soft spot in
+the whole DSR bar. Its weak `dashboard*.png` screens are logged as *confirms*: wide dataframe
+dumps clipped off-screen, `None` rendered raw, unformatted floats, no profit/loss colour — each
+a defect `.claude/rules/ui.md` already forbids.
+
+Also recorded as a cautionary case study: five mechanisms by which a
 green, well-tested repo reports numbers its code cannot produce.
 
 ### feat(MCE slice 3): sector-RS shadow sidecar + per-entry context + flip off→shadow (2026-08-20)
