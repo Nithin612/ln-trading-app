@@ -7,6 +7,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(evidence): the deflated-Sharpe bar, and every readiness banner now ships its data (2026-09-03)
+
+Two gates were promoted on favourable-looking evidence in one week and both had to be
+reverted. The missing instrument was a bar that accounts for **how many things we have
+tried** — search enough variants and the best one looks good by luck alone.
+
+**NEW `app/services/deflated_sharpe.py`** (stdlib only — `statistics.NormalDist` supplies
+the normal CDF and its inverse, so no new dependency):
+- **PSR** — P(true Sharpe > benchmark), adjusted for sample length, **skew and kurtosis**.
+  That adjustment matters here specifically: our losses cluster in a few large trades, and
+  a metric that ignored that would flatter us.
+- **E[max SR]** — the Sharpe the best of N zero-skill trials would show anyway. The bar a
+  candidate must clear *instead of zero*. `DEFAULT_TRIALS = 20` is a documented constant
+  (8 gates + threshold variants + 4 exit policies + 2 breakeven rungs) — bump it when a new
+  variant is tested, never lower it.
+- **DSR** = PSR against E[max SR].
+- **MinTRL** — the sample size at which a candidate *could* reach the bar if today's
+  moments persisted. This turns "keep accruing" into "keep accruing until n ≈ X", which is
+  what the review calendar needed. It returns `None` when the candidate is not ahead of the
+  benchmark at all, because no amount of data rescues that.
+
+**First read on the live book — every gate fails, and all for the same reason:**
+
+| gate (eligible set = the book a flip leaves you holding) | n | Sharpe | 20-trial bar | DSR |
+|---|--:|--:|--:|--:|
+| market-regime | 33 | −0.004 | +0.331 | 2.9% |
+| anti-chase | 51 | +0.032 | +0.266 | 4.9% |
+| sector-RS | 59 | −0.105 | +0.247 | 0.3% |
+| liquidity | 72 | −0.150 | +0.224 | 0.1% |
+
+**Not one candidate's Sharpe even exceeds its benchmark**, so `MinTRL` is `None` for all
+four: more data cannot rescue them because they are not ahead. Bar 95%; best result 4.9%.
+**No gate currently on the board is promotable, and the constraint is not sample size** —
+the book a flip would leave you holding has a Sharpe of ~zero either way, so the leak is
+upstream of gating. 17 tests, including the PSR closed form checked against a
+hand-computed value and that fat tails/negative skew reduce confidence.
+
+**Evidence of record on every banner** (user request: *"along with ✅ READY or sign-off it
+is best to have the data or record of the captured one — it helps better"*).
+`flip_readiness.evidence_lines` now appends, under each readiness verdict: a
+would-block-vs-eligible table (**n · resolved · mean · median · trimmed mean · win%**), all
+three shared guards with their measured values, and the deflated-Sharpe block. A verdict
+without its numbers cannot be re-judged later — and both reverted gates were caught
+precisely because someone went back to the numbers.
+
+It immediately showed something the ₹ means had hidden: **market-regime's would-block
+trimmed mean is +₹200**, from a −₹302 mean. Trimming the worst 10% does not merely weaken
+that gate's case, it *reverses the sign*. The eligible set's trimmed mean is +₹346 — both
+cohorts are profitable once the tails come off, which locates the whole book's negativity
+in a handful of trades rather than in cohort selection.
+
 ### revert(R:R gate): ACTIVE → SHADOW — the "identity" premise was wrong (2026-09-03)
 
 Shipped active on 2026-09-02 with the argument that it enforces an *identity* and therefore

@@ -235,6 +235,10 @@ def render_markdown(r: LiquidityShadow, *, day: date) -> str:
     if r.detail:
         shown = r.detail[:_DETAIL_MAX]
         out += [
+            *fr.evidence_lines(
+                [fr.Row(side=d.side, blocked=d.blocked, realized=d.realized) for d in r.detail],
+                label="liquidity gate",
+            ),
             "## Per-entry context (each committed signal's liquidity)",
             "",
             "| date | stock | side | median ₹/day | liquidity | outcome |",

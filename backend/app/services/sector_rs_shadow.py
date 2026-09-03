@@ -258,6 +258,10 @@ def render_markdown(r: SectorRsShadow, *, day: date) -> str:
     if r.detail:
         shown = r.detail[:_DETAIL_MAX]
         out += [
+            *fr.evidence_lines(
+                [fr.Row(side=d.side, blocked=d.blocked, realized=d.realized) for d in r.detail],
+                label="sector-RS gate",
+            ),
             "## Per-entry context (each committed signal's sector/index RS)",
             "",
             "| date | stock | side | benchmark | excess vs bench | RS verdict | outcome |",

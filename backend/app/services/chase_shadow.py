@@ -267,6 +267,10 @@ def render_markdown(r: ChaseShadow, *, day: date) -> str:
     if r.detail:
         shown = r.detail[:_DETAIL_MAX]
         out += [
+            *fr.evidence_lines(
+                [fr.Row(side=d.side, blocked=d.would_block, realized=d.realized) for d in r.detail],
+                label="anti-chase gate",
+            ),
             "## Per-entry context (each committed signal's chase)",
             "",
             "| date | stock | side | chase_r | verdict | outcome |",

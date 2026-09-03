@@ -263,6 +263,10 @@ def render_markdown(r: MarketRegimeShadow, *, day: date) -> str:
     if r.detail:
         shown = r.detail[:_DETAIL_MAX]
         out += [
+            *fr.evidence_lines(
+                [fr.Row(side=d.side, blocked=d.blocked, realized=d.realized) for d in r.detail],
+                label="market-regime gate",
+            ),
             "## Per-entry context (each committed signal's market regime)",
             "",
             "| date | stock | side | mkt vs DMA | VIX | regime verdict | outcome |",

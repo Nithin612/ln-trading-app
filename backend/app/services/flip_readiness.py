@@ -181,3 +181,75 @@ def veto(rows: Sequence[Row]) -> str | None:
     if not failed:
         return None
     return "; ".join(f"[{g.name}] {g.reason}" for g in failed)
+
+
+# ── The RECORD, not just the verdict ─────────────────────────────────────────
+# User request 2026-09-03: "along with ✅ READY or sign-off it is best to have the data or
+# record of the captured one — it helps better." A verdict without its numbers cannot be
+# re-judged months later, and both gates we reverted were reverted precisely because
+# someone went back to the numbers. So every readiness banner now ships its evidence.
+
+
+def _fmt(x: Decimal | float | None, money: bool = True) -> str:
+    if x is None:
+        return "—"
+    return f"₹{x:,.0f}" if money else f"{x:.2f}"
+
+
+def evidence_lines(rows: Sequence[Row], *, label: str, trials: int | None = None) -> list[str]:
+    """Markdown recording WHAT was measured, beside the verdict.
+
+    Includes the deflated-Sharpe bar on the ELIGIBLE set — the book you would actually
+    hold if the gate were flipped — because that is the thing whose risk-adjusted return
+    has to survive the multiple-testing correction.
+    """
+    from app.services import deflated_sharpe as ds  # local: keeps this module dependency-light
+
+    b = _resolved(rows, blocked=True)
+    e = _resolved(rows, blocked=False)
+    n_b = sum(1 for r in rows if r.blocked)
+    n_e = len(rows) - n_b
+
+    def row(name: str, xs: list[Decimal], n: int) -> str:
+        if not xs:
+            return f"| {name} | {n} | 0 | — | — | — | — |"
+        k = max(1, math.ceil(len(xs) * TAIL_TRIM_FRAC))
+        trimmed = sorted(xs)[k:]
+        tmean = (sum(trimmed) / len(trimmed)) if trimmed else None
+        wp = _win_pct(xs)
+        return (
+            f"| {name} | {n} | {len(xs)} | {_fmt(sum(xs) / len(xs))} | {_fmt(_median(xs))} "
+            f"| {_fmt(tmean)} | {wp:.0%} |" if wp is not None else ""
+        )
+
+    out = [
+        "",
+        f"### Evidence of record — {label}",
+        "",
+        "_The numbers behind the verdict, so it can be re-judged later. `trimmed mean` drops "
+        f"the worst {TAIL_TRIM_FRAC:.0%} of outcomes: if the sign changes there, the signal is "
+        "tail-driven._",
+        "",
+        "| set | signals | resolved | mean | median | trimmed mean | win% |",
+        "|---|--:|--:|--:|--:|--:|--:|",
+        row("would-BLOCK", b, n_b),
+        row("eligible (kept)", e, n_e),
+        "",
+        "**Shared guards:**",
+    ]
+    for g in guards(rows):
+        out.append(f"- {'✅' if g.ok else '🚫'} `{g.name}` — {g.reason}")
+    out.append("")
+    if e:
+        dsr = (
+            ds.deflated_sharpe([float(x) for x in e], trials=trials)
+            if trials is not None
+            else ds.deflated_sharpe([float(x) for x in e])
+        )
+        out += ds.render_lines(
+            dsr, label="eligible set (the book a flip would leave you holding)"
+        )
+    else:
+        out.append("- **deflated Sharpe:** no resolved eligible trades yet")
+    out.append("")
+    return out

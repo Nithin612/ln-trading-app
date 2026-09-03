@@ -641,7 +641,8 @@ survive trimming the tail** and the partition must not be a proxy for something 
 | **momentum ×1.5 retune** | shadow | **3 minted, 0 resolved** in 6 days | — | ✗ **stalled** — at ~0.5 signals/day with no resolutions this decision is years away by this route; needs a backtest path instead |
 | **pair df-vs-adf** | shadow | nightly minter accruing | when both arms have resolutions | accruing |
 | **profit-lock breakeven** | live rung ₹2,000 | A/B built 09-03; 20 of 99 differ | ADR-denominated variant, pre-registered k | ⛔ ₹800 NOT shipped — 13 runners clipped vs 7 blow-ups prevented; the knob's UNITS are wrong |
-| **deflated-Sharpe bar** | **not built** | — | **build BEFORE the next flip** | two gates have now reached ✅ READY without it; this is the blocker on every promotion above |
+| **deflated-Sharpe bar** | ✅ **BUILT 2026-09-03** | every gate FAILS it | re-read each `make analysis` | `app/services/deflated_sharpe.py`. **Not one gate's eligible-set Sharpe even exceeds its 20-trial benchmark**, so MinTRL is `None` for all — more data cannot rescue them. market-regime −0.004 vs +0.331 (DSR 2.9%) · chase +0.032 vs +0.266 (4.9%) · sector-RS −0.105 (0.3%) · liquidity −0.150 (0.1%); bar 95%. **The constraint is NOT sample size — the leak is upstream of gating** |
+| **readiness guards** | ✅ **BUILT 2026-09-03** | market-regime now vetoed | — | `flip_readiness.py`: `side_proxy` · `tail` · `win_rate`, run as a veto BEFORE each sidecar's own test. Every banner also now ships an **evidence-of-record** block (n · resolved · mean · median · **trimmed mean** · win% + guards + DSR). It exposed that market-regime's would-block **trimmed mean is +₹200** against a −₹302 mean — trimming REVERSES the sign |
 
 **▶ POST-WATCH-MODE RESEARCH QUEUE (after Fri 2026-09-04)** — a consolidated "wind it back" list of the
 analysis threads parked during watch mode lives in the **`post-watchmode-research-queue`** memory
