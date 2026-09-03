@@ -7,6 +7,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 17 QuantDinger — closest analogue to our platform; its MCP model and worker-liveness alert (2026-09-03)
+
+[OpenByteInc/QuantDinger](https://github.com/OpenByteInc/QuantDinger), **Apache 2.0**, ~177.6k LOC,
+803 files, **committed the day of review** — a commercially backed open-source "AI Trading OS".
+**The closest product-shaped analogue to our platform in the log**, on nearly our stack (Python
+3.12 / PostgreSQL / Redis / Docker Compose) with the same end-to-end scope. **No performance
+claim** — the eighth repo to decline.
+
+**★ W6 — its MCP server is the best "expose your platform to an agent" model here**, and directly
+relevant because we already drive `make analysis` through skills. Seven decisions worth copying:
+the MCP server is a **thin wrapper over a dedicated versioned `/api/agent/v1`** — *the agent gets
+an API, never the internals*; **R vs R/W scopes tabulated per tool group**; trading tools
+separately **safety-gated**; **two distinct tokens** with the docs stating the inbound MCP client
+token *"must not be the Agent Gateway token"*; transport that **fails closed** (non-loopback
+requires a token, authenticated non-loopback requires HTTPS) with two separately-named escape
+hatches and *"never use either on a directly reachable public listener"*; explicit agent-specific
+credential hygiene (*"never place an agent token in prompts, logs, screenshots…"*, responses redact
+credentials); and **bounds on every long-running job** exposed to an agent — the fix for exactly
+the unbounded-stream hang found in repo 8. Recorded, not queued: we have no such need today, but
+the design should not be reinvented badly under pressure.
+
+**A40 — export a worker-liveness metric and alert on it.** Their
+`quantdinger_workers_healthy{role=~"trading|scheduler|celery"} < 1` for 2 minutes is precisely the
+alarm that would catch **two of our standing manual rituals**: CAS capture (`make worker` up
+15:15–15:33 IST, **a missed window cannot be back-filled**, protocol is "check the row count each
+morning") and the provisional-health watch (no scheduler at all). Both are worker-liveness problems
+dressed as human rituals. Strengthens A11 rather than replacing it.
+
+**A41 (low priority) — split Redis by durability.** They run separate `redis-cache` and
+`redis-jobs` instances. Our rule *"TTL-less keys are treated as broker-critical and never evicted"*
+exists **because** volatile cache and durable data share one eviction policy; two instances remove
+the conflict instead of documenting around it. Worth revisiting when Phase 7 adds a durable repair
+queue.
+
+Also recorded: a **multi-timeframe review lens** from their strategy guidance — use the
+**completed** higher timeframe, never conflate a persistent **state** ("is bullish") with an
+**event** ("just crossed"), and keep low-timeframe order conditions **idempotent** so a persistent
+higher-timeframe state cannot cause repeated scale-ins. Useful for auditing our own overlays, since
+both of our reverted gates failed on *what the partition actually meant*.
+
+Synthesis extended to nineteen repos with lesson 18: **alerting splits cleanly into platform and
+domain, and almost nobody has both.** Every one of their alerts is infrastructural and none is
+about the market; we are the mirror image. A green Prometheus board says nothing about a feed
+returning yesterday's prices, and a readiness banner says nothing about a worker that never
+started.
+
+
 ### docs(research): repo 16 turbovec — domain rejected, but its supply-chain gate found the log's #1 defect (2026-09-03)
 
 [RyanCodrai/turbovec](https://github.com/RyanCodrai/turbovec), MIT, ~39.6k LOC Rust + Python —

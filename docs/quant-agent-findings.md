@@ -47,6 +47,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 7 | [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener) | 2026-09-03 | Unmaintained 2022–23 student project (MIT). **Picks its LSTM on a scaler fit over the full series and with no persistence baseline** — the winner is plausibly worse than "no change". Its breakout filter is **disabled by a truthy-string bug**. **Adopt nothing**; one pointer for the Minervini trend-template test. |
 | 8 | [pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain) | 2026-09-03 | **The only repo on our exact stack** (Kite WS + Redis + Indian derivatives), 952 LOC, unmaintained since 2023. Adopt no code (per-tick Redis writes, no TTL, unbounded threads). ⭐ **But it documents a Kite quirk we are exposed to — quote-mode ticks on a full-mode subscription — and our depth path never checks. A25 + A26.** |
 | 9 | [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) | 2026-09-03 | **332k LOC in 27 days** (LLM-generated at scale), multi-market daily analysis + push. Adopt no code. ⭐ **But its phase-aware, fails-closed "which bar could this have acted on" resolver is the best treatment of that question in the log** — read `src/core/trading_calendar.py`. Makes no accuracy claim. **A27 + A28 extend A11**; its `AGENTS.md` seeds **W1–W5**. |
+| 17 | [OpenByteInc/QuantDinger](https://github.com/OpenByteInc/QuantDinger) | 2026-09-03 | ⭐ **The closest product-shaped analogue to our platform**, on nearly our stack (Py3.12/Postgres/Redis), same end-to-end scope, Apache-2, **no performance claim**, committed the day of review. **W6: its MCP server is the best "expose your platform to an agent" security model in the log** — the agent gets a versioned API, never the internals. Plus **A40**, **A41**. |
 | 16 | [RyanCodrai/turbovec](https://github.com/RyanCodrai/turbovec) | 2026-09-03 | **Not a trading repo** (quantized vector search for RAG) — **domain rejected, no stretch made.** But it shares our Rust+PyO3 wheel shape, and its `deny.toml` documents **a guard that could not fail caught in its own CI** (`yanked` defaults to Warn ⇒ a yanked dep passed green). **A39: we have no supply-chain gate on `engine/` at all.** |
 | 15 | [bbfamily/abu](https://github.com/bbfamily/abu) | 2026-09-03 | **GPL-3 — a hard adoption blocker**, and 2017-era code. But its `UmpBu` "referees" are **meta-labeling implemented years before the term was standard**, and structurally *our overlay pattern*: cluster your actual losers and let the clusters define the veto. **H10** (attacks our hypothesis-driven-partition failure mode; also an overfitting machine — gated behind DSR + H8) and **U20**. |
 | 14 | [quantopian/zipline](https://github.com/quantopian/zipline) | 2026-09-03 | ⭐⭐ Archived 2020, but the ancestor of the modern Python backtesting lineage and **architecturally the best idea in the log: look-ahead is not forbidden, it is *not expressible*** (strategies get a `BarData` bound to the simulation clock). **A38 — a composable point-in-time `Restrictions` interface supersedes A30 and unifies our fragmented eligibility logic.** Plus A37, T10. |
@@ -2940,6 +2941,147 @@ shape, which is why the supply-chain finding transferred and nothing else did.
 
 ---
 
+# 18. QuantDinger — `OpenByteInc/QuantDinger`
+
+Reviewed 2026-09-03. **Apache 2.0**, ~177,600 LOC, 803 files, **last commit the day of review** —
+a commercially backed open-source "AI Trading OS" from Open Byte Inc.
+
+**The closest product-shaped analogue to our platform in the entire log, on nearly our stack**:
+Python 3.12, PostgreSQL, Redis, Docker Compose, and the same end-to-end scope — *research →
+strategy code → backtest → paper → live execution → monitoring*. It makes **no performance
+claim**, the eighth repo to decline.
+
+Because it is scope-for-scope comparable, the useful findings are the pieces we have not built:
+its agent surface, its observability, and two design choices we can check ourselves against.
+
+## 18.1 ★ Its MCP server is the best security model in the log for exposing a platform to an agent
+
+**This is the most directly relevant workbench artifact reviewed**, because we *are* a Claude Code
+shop — we already drive `make analysis` through skills — and this is what "expose the trading
+platform to an agent" looks like done carefully.
+
+> *"The MCP server is a thin, tenant-scoped wrapper over `/api/agent/v1`."*
+
+Seven design decisions worth copying wholesale:
+
+1. **The agent gets an API, not the internals.** `app/routes/agent_v1` is a *separate, versioned
+   surface*; the MCP server is a thin wrapper over it rather than a second implementation reaching
+   into services or the DB.
+2. **Read and write scopes are tabulated per tool group** (`R` vs `R/W`), so the blast radius of
+   each tool is visible in the docs rather than inferred from code.
+3. **Trading tools are separately "safety-gated"** — the dangerous surface is called out as its own
+   category.
+4. **Two distinct tokens, and the docs say why**: `QUANTDINGER_AGENT_TOKEN` (upstream, to the
+   gateway) and `QUANTDINGER_MCP_AUTH_TOKEN` (inbound, authenticating MCP clients) — *"must not be
+   the Agent Gateway token."* Separating inbound auth from upstream auth is routinely got wrong.
+5. **Transport security fails closed.** Non-loopback binding *requires* an inbound token;
+   authenticated non-loopback listeners *require* HTTPS. The two escape hatches
+   (`ALLOW_HTTP`, `ALLOW_INSECURE_HTTP`) are separately named, separately scoped and documented
+   with *"never use either on a directly reachable public listener."* **Fails-closed by default
+   with named, justified exceptions** — the same discipline as repo 16's `deny.toml` ignore list.
+6. **Agent-specific credential hygiene**: *"Never place an agent token in prompts, logs,
+   screenshots, source control, or MCP configuration that will be shared. Responses redact
+   credential fields."* Secrets leaking through *prompts and screenshots* is a threat model
+   specific to agent tooling, and most people never write it down.
+7. **Every long-running job exposed to an agent is bounded** —
+   `JOB_STREAM_MAX_EVENTS`, `JOB_STREAM_MAX_SECONDS`, `JOB_POLL_MAX_SECONDS`. That is the
+   "bounded queue with an explicit overflow policy" principle applied to tool calls, and it
+   prevents precisely the failure I found in repo 8: an agent hanging forever on a stream that
+   never terminates.
+
+**W6 — if we ever expose our platform over MCP, this is the model.** Not queued as work (we have
+no such need today), but recorded so the design is not reinvented badly under time pressure. The
+single most important line is (1): **the agent gets a dedicated versioned API, never the
+internals.**
+
+*(Also noted: its universe and factor tools are described as "point-in-time research inputs" —
+the fourth repo in this log to treat PIT as first-class.)*
+
+## 18.2 Observability: their alerts are infrastructural, ours are domain — we need both
+
+A real stack, pinned to versions: Prometheus + Alertmanager + Grafana + a postgres exporter + **two
+separate Redis exporters (cache and jobs)**. The alert rules:
+
+```
+QuantDingerApiDown                  up{job="quantdinger-api"} == 0            critical, for 2m
+QuantDingerWorkerMissing            quantdinger_workers_healthy{...} < 1      critical, for 2m
+QuantDingerHighApiErrorRate         error rate > 5%                           warning, for 5m
+QuantDingerSlowApi                  p95 latency > 2s                          warning, for 10m
+QuantDingerStrategyCommandFailures  strategy_commands{status="failed"} > 0    warning, for 5m
+QuantDingerPostgres/RedisExporterDown                                         warning, for 3m
+```
+
+**Every one is about the platform; none is about the market.** There is no "no signals generated
+today", no "feed stale", no "position unprotected", no "circuit breaker fired". That is a useful
+contrast rather than a criticism: our 6.8.6 staleness alarm and readiness banners are exactly the
+*domain* alerts they lack, and their infra alerts are exactly what we lack.
+
+**A40 — export a worker-liveness metric and alert on it.** `quantdinger_workers_healthy{role=~
+"trading|scheduler|celery"} < 1` for 2 minutes is precisely the alarm that would have caught our
+two standing manual checks:
+
+- **CAS capture** — `make worker` must be up 15:15–15:33 IST daily and **a missed window cannot be
+  back-filled**; today the protocol is "check the row count each morning."
+- **Provisional health** — no scheduler at all; "run the script yourself each session."
+
+Both are worker-liveness problems dressed as human rituals. This strengthens **A11** rather than
+replacing it: the notifier is the delivery channel, worker-liveness is one of the first things
+worth delivering.
+
+## 18.3 Separate Redis instances for cache and jobs
+
+They run **two** Redis instances — `redis-cache` and `redis-jobs` — each with its own exporter.
+We run one Redis with logical DBs (0 for dev, 15 for tests).
+
+That distinction is not cosmetic. Our own Redis contract documents the workaround we adopted
+because the two concerns share an instance:
+
+> *"Every cache key gets a TTL — eviction policy is volatile-lru, so TTL-less keys are treated as
+> broker-critical and never evicted."*
+
+That rule exists because volatile cache (`ltp:`, `depth:`, `circuit:`) and things that must not be
+lost live under one eviction policy. **Two instances with different policies — `volatile-lru` for
+cache, `noeviction` for jobs/durable — removes the conflict rather than documenting around it.**
+
+Filed as **A41**, low priority: our current rule works and is well understood, and this is a
+deployment change with real ops cost. Worth doing if we ever add durable queues (Phase 7's repair
+queue is exactly that shape).
+
+## 18.4 A multi-timeframe rule worth adopting as a review lens
+
+Buried in their strategy-authoring guidance:
+
+> *"…use the **completed** higher timeframe as the requested confirmation and the fastest timeframe
+> as the execution clock. Preserve whether the request means higher-timeframe **bullish alignment**
+> (`fast > slow`) or a **fresh crossover event**; **do not silently substitute one meaning for the
+> other.** Make low-timeframe order conditions **idempotent** so a persistent higher-timeframe
+> state does not cause repeated scale-ins."*
+
+Three correct things in one paragraph: the higher timeframe must be **completed** (no look-ahead
+across timeframes); **state and event must not be conflated** ("is bullish" vs "just crossed");
+and if a condition is a persistent *state*, the order path must be **idempotent** or it will
+re-enter every cycle.
+
+The state-vs-event distinction is a genuinely useful lens for reviewing our own overlays: **is
+each gate asking about a state or a transition, and is that what we meant?** We have partial
+protection already (`_has_active_signal` for regeneration, risk-first sizing so repeat entries
+cannot stack past the budget), so this is a review question rather than a suspected bug — but it
+is the kind of question that has caught us before, since our two reverted gates both failed on
+*what the partition actually meant*.
+
+## 18.5 Verdict
+
+**Adopt no code** — different market coverage, its own strategy DSL, and a product surface far
+wider than ours. But it is the most useful *comparative* repo in the log, because it is the same
+shape of thing we are building and it is honest (no performance claims, real observability,
+Apache-2).
+
+Three items: **W6** (the MCP exposure model — recorded, not queued), **A40** (worker-liveness
+metric and alert, which converts two of our standing human rituals into an alarm), and **A41**
+(split Redis by durability, low priority). Plus one review lens on state-vs-event in overlays.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -3017,6 +3159,8 @@ from repo 1.
 | **A32** | **★ Event-bus robustness rules for Phase 7** — isolate exceptions **per handler**, bound the queue with a stated overflow policy, iterate a **snapshot** of the handler list, and **make a dead bus loud** | Phase 7 runtime | Phase 7 | *(repo 11)* Reproduced in vnpy: one handler exception kills the consumer thread, the healthy handler receives nothing, and `put()` keeps succeeding — the system looks alive and is completely deaf. A silently deaf trading system is strictly worse than one that crashes. |
 | **A33** | **★ OMS as a projection of the event stream**, with one `is_active()` predicate maintaining one active-order set, and gateway-namespaced ids | Phase 7 OMS | Phase 7 | *(repo 11)* State derived from events can be rebuilt by replay, which is what makes reconciliation tractable. We have been bitten by the inverse — `signals.status` is a mutable lifecycle field doing double duty as durable fact. |
 | **A36** | **Alarm on NSE calendar coverage expiry** — proactive "calendar covers only to `<date>`, N trading days remain", plus a cross-check of upcoming dates against `exchange_calendars`' XNSE | `app/services/market_calendar.py` + A11 | ~2 hours | *(repo 12)* Our calendar is **better sourced than any library** (past holidays derived from observed bhavcopy gaps = ground truth) but its expiry path is a **passive WARNING inside a query**, seen by nobody, falling back to weekday arithmetic. Same pattern as A25/A30: a degradation technically announced and practically invisible. |
+| **A40** | **★ Export a worker-liveness metric and alert on it** (`workers_healthy{role=…} < 1` for 2 min) | worker heartbeat + A11 delivery | ~half day | *(repo 17)* **Converts two standing human rituals into an alarm.** CAS capture needs `make worker` up 15:15–15:33 IST and **a missed window cannot be back-filled** — today's protocol is "check the row count each morning"; the provisional-health watch has no scheduler at all. Both are worker-liveness problems dressed as rituals. Strengthens A11 rather than replacing it. |
+| A41 | **Split Redis by durability** — `volatile-lru` for cache (`ltp:`/`depth:`/`circuit:`), `noeviction` for durable jobs | deployment | ~half day (ops cost) | *(repo 17)* They run separate `redis-cache` and `redis-jobs` instances. Our rule *"TTL-less keys are treated as broker-critical and never evicted"* exists **because** both concerns share one eviction policy — two instances remove the conflict instead of documenting around it. **Low priority** until Phase 7 adds a durable repair queue, which is exactly that shape. |
 | **A39** | **A `cargo-deny` supply-chain gate for `engine/`** — RustSec advisories, banned crates, licence audit; **`yanked = "deny"`**; and a documented ignore list where every entry names the advisory, the reason, the PR that accepted it and the revisit condition | `engine/deny.toml` + a CI step | ~2 hours | *(repo 16)* Our Rust gate is `fmt` + `clippy -D warnings` + `test` — **no advisory scan, no licence audit** — and we ship a compiled wheel (`tradecore`) running options math **on the money path** from a dependency graph nobody audits. The source repo also hands us the non-obvious setting: cargo-deny defaults `yanked` to *Warn*, so the gate passes green on a yanked dependency unless you say otherwise. |
 | A34 | **A timer event as the single scheduling primitive** — periodic work becomes an ordinary subscriber | Phase 7 runtime; possibly earlier | ~half day | *(repo 11)* Our 6.8.6 staleness alarm, the provisional-health watch and the CAS capture window are all "do this on a clock" problems currently solved three different ways. |
 | A35 | **Define `BrokerAdapter` as an interface a second broker could implement**, even while only Kite does | Phase 7 | included in Phase 7 | *(repo 11)* vnpy's core ships no gateway, which forces the interface to be a real contract. The cheapest insurance against a Kite-shaped abstraction leaking through the whole execution path. |
@@ -3081,6 +3225,7 @@ session behaves.
 |---|---|---|---|---|
 | **W1** | **Make doc/code precedence an explicit rule** — "if a doc disagrees with the code, the executable content wins; fix the doc in the same change" | CLAUDE.md | ~15 min | *(repo 9)* We hold this as a habit ("trust the artifact over the checkbox") but state it as a value, not a precedence rule. A rule tells a future session **what to do** on finding a conflict, not merely that conflicts are bad. |
 | **W2** | **"Do not add parallel implementations"** as a written rule | CLAUDE.md / rules | ~15 min | *(repo 9)* **The rule with the most evidence behind it for us**: our review round found **five separate Buy surfaces**, one unwired, and eligibility gating had to be retrofitted across all of them. |
+| W6 | **The MCP exposure model, if we ever open the platform to an agent** — a dedicated versioned `agent/v1` API (never the internals), R vs R/W scopes tabulated per tool, trading tools separately safety-gated, **two distinct tokens** (inbound client auth ≠ upstream gateway), transport that **fails closed** with named escape hatches, explicit "never put a token in a prompt/log/screenshot" hygiene, and **bounds on every long-running job** | recorded, not queued | — | *(repo 17)* We are a Claude Code shop already driving `make analysis` through skills, so this is the design to copy rather than reinvent under time pressure. The load-bearing decision is the first one: **the agent gets an API, not the internals.** |
 | W3 | **Same-commit config hygiene** — a new config item updates `.env.example` and its docs in the same change | rules | ~15 min | *(repo 9)* The narrow checkable instance of our doc-sync ritual. Config drift is what bit us when a `.env` gate flip did not reach a running process. |
 | W4 | **Decide the git boundary deliberately** — theirs forbids `commit`/`tag`/`push` without confirmation; ours reserves push only | CLAUDE.md | ~15 min | *(repo 9)* Worth writing down rather than inferring. The current working pattern (commit freely to a worktree branch, hold pushes) is fine — but it should be stated. |
 | W5 | **Forbid hardcoded model names alongside secrets, paths and ports** | rules | ~15 min | *(repo 9)* The non-obvious clause. Our analogue: `STATUS.html` hardcodes gate modes in prose and an ASCII diagram, so a mode flip silently falsifies it — a config value copied somewhere that cannot track it. |
@@ -3090,7 +3235,7 @@ session behaves.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Seven of eighteen advertise numbers or fields their own code cannot produce — and the
+0. **Seven of nineteen advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -3124,7 +3269,7 @@ lessons is worth more than any one of them:
    it did not compare against.** **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **A guard that cannot return false shows up in four of eighteen — and it is the single most
+2. **A guard that cannot return false shows up in four of nineteen — and it is the single most
    repeated defect in this log.** AgentQuant's `generalization_gap = max(avg − best, 0)` is
    identically zero; ai-quant-agents' `risk_approved = "risk" not in decision.lower()` where
    `decision ∈ {BUY,HOLD,SELL}` is always true; repo 7's `is_breaking_out` calls a predicate
@@ -3139,7 +3284,7 @@ lessons is worth more than any one of them:
    warning and a green run. **A gate can be disarmed by a default you never chose**, which means
    the test extends: name the input that makes it fail *and confirm the tool would actually
    fail on it*.
-3. **Dead code advertised as a feature shows up in three of eighteen.** AgentQuant fits an HMM
+3. **Dead code advertised as a feature shows up in three of nineteen.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
@@ -3231,7 +3376,7 @@ lessons is worth more than any one of them:
     PIT syntax. **Rules and reviews catch mistakes; design prevents them** — and where we build new
     evaluation surfaces (MCE 5b above all), an accessor bound to an "as of" timestamp is cheaper
     than a rule and cannot lapse.
-16. **Licence is a first-class review criterion, and it decides before merit does.** Eighteen
+16. **Licence is a first-class review criterion, and it decides before merit does.** Nineteen
     repos: mostly MIT or Apache, one **GPL-3** (abu — unadoptable for us regardless of quality),
     one **LGPL** (NautilusTrader, per our earlier review), and **four with no LICENSE file at all**
     (repos 5, 6B, 6C, and 3's org mismatch) — which is *more* restrictive than GPL, since no
@@ -3245,7 +3390,15 @@ lessons is worth more than any one of them:
     across. **The corollary matters more: when a repo shares neither stack nor discipline,
     "no" is the correct and complete answer**, and manufacturing relevance would have cost more
     than it returned.
-18. **The most useful findings came from the repos closest to our own stack, and they were
+18. **Alerting splits cleanly into platform and domain, and almost nobody has both.** QuantDinger
+    ships Prometheus/Alertmanager rules that are **entirely infrastructural** — API down, worker
+    missing, error rate, latency, exporters down — and **not one is about the market**. We are the
+    mirror image: our 6.8.6 staleness alarm and readiness banners are *domain* alerts, and we have
+    no infrastructural alerting at all. **Neither half substitutes for the other**: a green
+    Prometheus board tells you nothing about a feed that returned yesterday's prices, and a
+    readiness banner tells you nothing about a worker that never started. A11 is the delivery
+    channel; A40 (worker liveness) is the first infrastructural thing worth delivering through it.
+19. **The most useful findings came from the repos closest to our own stack, and they were
     about *us*.** PaperTrade-India exposed that our fills are spread-aware while our marks are
     not (A21); express-option-chain exposed that we harvest depth from `MODE_FULL` ticks
     without ever checking the mode, on a path built to fail open (A25). **Neither was a defect
