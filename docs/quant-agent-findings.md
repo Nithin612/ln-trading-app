@@ -18,8 +18,14 @@ notifications and alerting, navigation and menus, portfolio and position modelli
 credential/session lifecycle, agent topology, cost tiering, state schemas. Architecture
 items are numbered `A1, A2, …`.
 
-So three numbered queues, kept separate because they land in different places and have
-different owners: **`H`** analysis/methodology · **`U`** UI/UX · **`A`** architecture.
+**And, from 2026-09-03, two more dimensions** — the brief widened to "take any idea worth
+having, don't restrict to analysis/architecture/UI": **`T`** test patterns (cases and concepts
+worth copying, not just code) and **`W`** workbench (Claude Code agents, skills, hooks, commands
+and rules that other repos ship).
+
+So five numbered queues, kept separate because they land in different places and have different
+owners: **`H`** analysis/methodology · **`U`** UI/UX · **`A`** architecture · **`T`** testing ·
+**`W`** workbench.
 
 Ground rule for this document, and the reason it exists in this form: we have twice
 promoted a gate on an argument and had to revert it (regime gate, R:R≥1 — see the
@@ -40,7 +46,8 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 6C | [madhusudhan-nikhil/InvestmentPrediction](https://github.com/madhusudhan-nikhil/InvestmentPrediction) | 2026-09-03 | Real FastAPI+React app for Indian retail. **HRP portfolio construction is a genuine pointer**; its **"probable exit date" is arithmetic on the user's own input** — and doesn't even depend on the target price. No LICENSE. **Harvest A24 as a standing rule.** |
 | 7 | [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener) | 2026-09-03 | Unmaintained 2022–23 student project (MIT). **Picks its LSTM on a scaler fit over the full series and with no persistence baseline** — the winner is plausibly worse than "no change". Its breakout filter is **disabled by a truthy-string bug**. **Adopt nothing**; one pointer for the Minervini trend-template test. |
 | 8 | [pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain) | 2026-09-03 | **The only repo on our exact stack** (Kite WS + Redis + Indian derivatives), 952 LOC, unmaintained since 2023. Adopt no code (per-tick Redis writes, no TTL, unbounded threads). ⭐ **But it documents a Kite quirk we are exposed to — quote-mode ticks on a full-mode subscription — and our depth path never checks. A25 + A26.** |
-| 9 | [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) | 2026-09-03 | **332k LOC in 27 days** (LLM-generated at scale), multi-market daily analysis + push. Adopt no code. ⭐ **But its phase-aware, fails-closed "which bar could this have acted on" resolver is the best treatment of that question in the log** — read `src/core/trading_calendar.py`. Makes no accuracy claim. **A27 + A28 extend A11.** |
+| 9 | [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) | 2026-09-03 | **332k LOC in 27 days** (LLM-generated at scale), multi-market daily analysis + push. Adopt no code. ⭐ **But its phase-aware, fails-closed "which bar could this have acted on" resolver is the best treatment of that question in the log** — read `src/core/trading_calendar.py`. Makes no accuracy claim. **A27 + A28 extend A11**; its `AGENTS.md` seeds **W1–W5**. |
+| 10 | [microsoft/qlib](https://github.com/microsoft/qlib) | 2026-09-03 | ⭐⭐ **A different tier — the only genuine methodology reference here, and nothing needed debunking.** Point-in-time fundamentals as *syntax*, with **the best test in the log** (a value that changes on a cited real filing date). Exposed **two costing/realism gaps in our code (A29, A30)** and the pattern behind them (**A31**). Seeds **T1–T6**. |
 
 ---
 
@@ -1971,6 +1978,216 @@ and that decision is cheap, one-line, and absent from almost every other repo in
 
 ---
 
+# 10. Qlib — `microsoft/qlib`
+
+Reviewed 2026-09-03. MIT, Microsoft Research. **~56,000 LOC**, an AI-oriented quantitative
+investment platform: data layer with an expression engine, model zoo, backtest with a realistic
+exchange model, RL execution, and MLflow-shaped experiment tracking.
+
+**This is a different tier from everything else in this log** — a maintained, industrial-grade
+research platform rather than a project with a thesis to sell. It makes no performance claim at
+all (fifth of twelve), and it is the first repo where the right posture is *study it*, not
+*audit it*. Four findings below are gaps it exposed in **our** code.
+
+## 10.1 ★ Point-in-time fundamentals — and the best test in the entire log
+
+Qlib treats point-in-time correctness as a first-class concept: PIT fields carry a `$$` prefix
+and are queried through a `P()` operator (`P($$roewa_q)`), so **using non-PIT data is
+syntactically visible** rather than an invisible mistake.
+
+The test that pins it (`tests/test_pit.py`) is the single best piece of testing I have seen
+across twelve repos:
+
+```python
+# Mao Tai published 2019Q2 report at 2019-07-13 & 2019-07-18
+#  - http://www.cninfo.com.cn/new/commonUrl/pageOfSearch?url=disclosure/list/search
+data = D.features(["sh600519"], ["P($$roewa_q)", "P($$yoyni_q)"],
+                  start_time="2019-01-01", end_time="2019-07-19")
+
+#            P($$roewa_q)
+# 2019-07-17     0.000000
+# 2019-07-18     0.175322   ← the value changes on the actual publication date
+# 2019-07-19     0.175322
+```
+
+**It asserts that a fundamental value changes on the exact date the filing was published, and
+cites the real disclosure URL in a comment.** That is a regression test anchored to a verifiable
+external fact — it cannot rot into tautology, and it fails loudly the day someone introduces
+look-ahead into the fundamentals path. Its sibling `test_no_exist_data` asserts `NaN` for a stock
+with no PIT record rather than forward-filling: **fails closed**, again.
+
+**Why this matters to us specifically.** Our **MCE slice 5b (the `market_cap` writer) is
+unbuilt and is the keystone blocker** for everything fundamental — and the moment we build it we
+inherit exactly this trap: using a company's *currently reported* financials for a backtest date
+before that report existed. Nothing in our stack currently expresses "as known on date D."
+
+**T1 — when we build the fundamentals writer, ship a PIT test anchored to a real, cited NSE
+filing date.** Pick a Nifty name, cite the BSE/NSE announcement URL in the test, and assert the
+value changes on that date and not before. Cheap, permanent, and it is the only kind of test
+that makes a look-ahead claim falsifiable.
+
+## 10.2 Their exchange model exposes two gaps in ours
+
+`qlib/backtest/exchange.py` constructor defaults:
+
+```python
+open_cost: float = 0.0015,      # asymmetric — buy
+close_cost: float = 0.0025,     #              sell costs more (stamp duty is sell-side in CN)
+min_cost: float = 5.0,          # a FLOOR per trade
+trade_unit = 100,               # round lots (China A)
+limit_threshold = ...           # price-limit (circuit) enforcement
+```
+
+…and it *warns you when you leave the limit off*: `"limit_threshold not set. The stocks hit the
+limit may be bought/sold"` — i.e. it tells you your backtest is about to trade stocks that were
+locked limit-up/down and untradeable.
+
+Checked against ours:
+
+**A29 — we have no flat DP charge, and no minimum cost per trade.** Our `FeeSchedule` is
+otherwise excellent (delivery STT both legs, intraday sell-only, stamp on buy, GST on the right
+base) — but it has no `dp_charge_per_sell`. Zerodha/CDSL levy a **flat ~₹13.5–20 per delivery
+sell scrip regardless of size**, which PaperTrade-India (6A) models and we do not. A fixed cost
+disproportionately penalises small positions — which is exactly what our notional cap produces,
+and exactly the ₹1L / 1–2 position shape live trading will have. **We are under-costing our
+paper book, in the direction that flatters an already-negative expectancy.**
+
+**A30 — our backtest does not enforce circuit bands, though our order path does.** We built
+`circuit_guard.py` in 6.8.3 so the *paper order path* refuses to enter a name pinned near its
+adverse band. Grepping `app/backtest/` for band handling returns nothing (the only hit is
+`BBANDS`, a Bollinger indicator). So **the backtest will happily fill orders on days a stock was
+locked at a circuit limit and could not be traded at all.**
+
+That is worth naming as a pattern rather than a one-off, because it is now the **third** instance:
+
+| We added realism here | …but not here |
+|---|---|
+| Spread-aware **fills** (6.8.2) | Open-book **marks** still use last close (**A21**) |
+| Circuit bands on the **order path** (6.8.3) | **Backtest** fills ignore bands (**A30**) |
+| `MODE_FULL` depth **subscription** | Tick mode never **verified** (**A25**) |
+
+**A31 — when a realism constraint is added to one execution path, add it to every path that
+produces a comparable number, in the same change.** Otherwise backtest, paper and live results
+silently stop being comparable, which is precisely the property we need them to have.
+
+## 10.3 Experiment tracking — the mature form of H4 and U1
+
+`qlib/workflow/` is an MLflow-shaped recorder: experiments contain runs, and each run records
+**params** (what you configured), **metrics** (what came out), and **artifacts** (the files that
+prove it) — `log_params` / `log_metrics` / `log_artifact` / `save_objects`.
+
+That three-way split sharpens how I framed **H4** (gate register) and **U1** (registry page). Our
+shadow sidecars currently emit one markdown file per gate per day, with the configuration living
+in `.env` and the evidence living in prose. The recorder shape says: record the gate mode and
+thresholds and cohort definition as *params*; the n, expectancy, DSR and MinTRL as *metrics*; and
+the sidecar file and its query as *artifacts*. Then **U1's page is a view over that store and the
+review calendar is a query**, rather than either being a thing someone has to maintain by hand.
+
+Worth adopting the vocabulary even if we never adopt MLflow itself.
+
+## 10.4 Test concepts worth stealing — a new `T` queue
+
+The user asked for test ideas, and this is a serious library's answer. Extracted from
+`tests/`, the ones that map onto something we have or will have:
+
+**T2 — lifecycle-boundary tests for a simulator.** `test_simulator_first_step`,
+`test_simulator_start_middle`, `test_simulator_stop_early`, `test_simulator_stop_twap`. Not "does
+it run" but "does it behave when started mid-stream, stopped early, or stopped at a benchmark."
+**Directly applicable to Phase 7's order FSM** — resume mid-session, kill mid-flight, square off
+early — and it pairs with A22 (bracket sibling qty on partial fill) and A16 (the durable repair
+queue), both of which are lifecycle-boundary bugs found the hard way by other people.
+
+**T3 — parametrised fill tests under a participation limit.**
+`test_soft_topk_cold_start_impact_limit(impact_limit, expected_fill)` — given a market-impact
+cap, assert the resulting fill. We model spread and size-vs-top-of-book impact in 6.8.2 but have
+no *volume participation* cap; if we add one, this is its test shape.
+
+**T4 — explicit NaN and corner-case tests.** `test_nan`, `test_nan_option_covariance`,
+`test_corner_cases`. We have earned these: a non-finite Redis LTP once 500'd the signal detail
+endpoint because `Decimal("nan")` parses without raising. A standing NaN-path test on every
+numeric boundary (LTP, ATR, confidence, R:R) is cheap insurance.
+
+**T5 — crash-path tests.** `test_exit_on_crash_finite` / `test_exit_on_crash_infinite`: assert
+the system exits *correctly* when it dies, in both bounded and unbounded modes. Repo 4's
+"orphaned protection intents drain at the next session entry" is the trading-specific version;
+this is the general one.
+
+**T6 — ordered pipeline-stage integration tests.** `test_0_dump_bin` → `test_1_dump_calendars`
+→ `test_2_dump_instruments` → `test_3_dump_features`: numeric prefixes deliberately sequence a
+data-pipeline test so a failure names the stage that broke. Our EOD ingestion + enrichment chain
+has the same shape and currently has no staged integration test.
+
+## 10.5 Verdict
+
+**The only repo in this log I would call a genuine reference for research methodology**, and the
+first where nothing needed debunking. Adopt no code — it is a Python research platform for
+Chinese and US equities with its own data format, and we have a frozen Rust-backed engine — but
+its *concepts* are the most valuable harvest here:
+
+- **PIT-as-syntax** and a filing-date-anchored test (**T1**) — before MCE 5b, not after.
+- **Two concrete costing/realism gaps in our code** (**A29**, **A30**) and the pattern behind
+  them (**A31**).
+- **params / metrics / artifacts** as the shape of H4 and U1.
+- **Five test concepts** (T2–T6) that map onto Phase 7 and our ingestion chain.
+
+---
+
+# 11. Retro-mined: Claude Code tooling across the log — a new `W` queue
+
+The user's widened brief prompted a pass back over the repos still on disk for **workbench**
+material — agents, skills, hooks, commands, rules. Two repos carry any, and one is genuinely
+worth borrowing from.
+
+**Qlib has none** (Microsoft, pre-dating agent tooling conventions). **quant-agent (repo 4)**
+has the CLAUDE.md already covered at length in §4.4 — its invariants-with-dated-incidents
+section (A12) remains the best example in the log.
+
+**daily_stock_analysis (repo 9)** ships `.claude/skills/` (`fix-issue`, `analyze-issue`,
+`analyze-pr`), a root `SKILL.md`, and an `AGENTS.md`. Assessed honestly:
+
+- **Its three skills are GitHub triage workflows.** We are solo with no PR flow, so these are
+  *considered and rejected* rather than a gap.
+- **Its root `SKILL.md` exposes the product's own analysis capability as a skill**, with the
+  output contract documented inline. Interesting, but it overlaps our existing
+  `/daily-analysis` — noted, not queued.
+- **Its `AGENTS.md` hard rules are the real find.** Several are sharper than our equivalents:
+
+**W1 — make doc/code precedence an explicit rule.** Theirs: *"If this file disagrees with the
+repo's scripts, workflows or code, **the executable content wins** — and fix the doc in the same
+change so the drift stops."* We hold this belief (our doc-sync ritual says "trust the artifact
+over the checkbox") but state it as a habit rather than a precedence rule. Worth promoting to a
+one-line rule in CLAUDE.md, because it tells a future session what to do when it finds a conflict
+rather than merely that conflicts are bad.
+
+**W2 — "do not add parallel implementations" as a written rule.** Theirs: *"Prefer reusing
+existing modules, config entry points, scripts and tests; do not add parallel implementations."*
+**This is the rule with the most evidence behind it for us**: our own review round found there
+were **five separate Buy surfaces** in the frontend, one of them unwired, and the eligibility
+gating had to be retrofitted across all of them. A written rule would not have prevented it
+alone, but it names the failure mode.
+
+**W3 — same-commit config hygiene.** Theirs: *"When adding a config item, you must update
+`.env.example` and the related docs in the same change."* We have a broad doc-sync ritual; this
+is the narrow, checkable instance of it, and config drift is exactly what bit us when a `.env`
+gate-mode flip did not reach a running process.
+
+**W4 — extend the git restraint from push to commit and tag.** Theirs forbids `git commit`,
+`git tag` and `git push` without explicit confirmation. Our convention reserves *push*. Worth a
+deliberate decision rather than an accident — in this session I have been committing freely to a
+worktree branch and holding pushes, which has worked well, but the boundary should be written
+down rather than inferred.
+
+**W5 — forbid hardcoded model names alongside secrets and paths.** Theirs bans hardcoding
+"secrets, accounts, paths, **model names**, ports, or environment-difference logic". The model-name
+clause is the non-obvious one, and we have the analogous wound: `STATUS.html` hardcodes gate
+modes in prose and an ASCII diagram, so a mode flip silently falsifies it. Same class — a value
+that lives in config, copied into a place that cannot track it.
+
+*(Deliberately not queued: their commit-message convention forbids `Co-Authored-By`, which
+conflicts with this project's own instruction to include it.)*
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -2041,6 +2258,9 @@ from repo 1.
 | A17 | **Provider failover semantics + pinned cost table** | any LLM research loop | ~half day | *(repo 4)* Single-shot fallback on non-retryable failure (never on truncation), and model prices pinned so a cache refresh cannot overwrite them with stale values. |
 | **A18** | **India news sourcing for the MCE news veto** — Google News RSS with `hl=en-IN&gl=IN&ceid=IN:en` + **FinBERT** (`ProsusAI/finbert`); **not** HTML-scraping MoneyControl/ET | MCE slice 6 (unbuilt) | ~1–2 days | *(repo 5)* The only worked example of Indian financial-news ingestion in this log, and it lands on a slice we have not built. RSS is stable and ToS-clean where scraping is neither (they ship three HTML-debug scripts — the evidence it kept breaking); FinBERT is local, cheap and reproducible, which a §8-validatable veto requires. |
 | **A25** | **★ Assert the tick mode on the depth path, and count degradations** | `live_worker.py` / `tick_consumer.py` tick handlers | ~2 hours | *(repo 8)* Kite is documented to send **quote-mode ticks on a full-mode subscription**; that repo detects it and reopens the socket. We subscribe `MODE_FULL` and harvest depth from it with **no mode check**, so the failure would silently stale `depth:{stock_id}` and drop 6.8.2's spread-aware fills back to the flat floor — invisibly, on the book we judge expectancy with. Pairs with A11 and the 6.8.6 staleness alarm. |
+| **A29** | **★ Add the flat DP charge per delivery sell, and a per-trade cost floor** | `app/trading/fees.py` (`FeeSchedule`) | ~2 hours | *(repo 10 + 6A)* Our schedule is otherwise correct but has no `dp_charge_per_sell`; Zerodha/CDSL levy a **flat ~₹13.5–20 per delivery sell scrip regardless of size**. A fixed cost disproportionately hits small positions — exactly what our notional cap produces and exactly the ₹1L / 1–2 position shape live will have. **We are under-costing the paper book, in the direction that flatters an already-negative expectancy.** |
+| **A30** | **★ Enforce circuit bands in the backtest, as the order path already does** | `app/backtest/` | ~half day | *(repo 10)* `circuit_guard.py` (6.8.3) stops the *paper order path* entering a name pinned near its adverse band; the backtest has no band handling at all, so it fills orders on days a stock was locked limit-up/down and untradeable. Qlib warns explicitly when its `limit_threshold` is unset for this reason. |
+| **A31** | **Standing rule: a realism constraint added to one execution path must be added to every path that produces a comparable number, in the same change** | rules + review checklist | ~1 hour to write | *(repo 10)* Now three instances: spread-aware fills but last-close marks (A21); circuit bands on the order path but not the backtest (A30); `MODE_FULL` subscribed but never verified (A25). Otherwise backtest, paper and live silently stop being comparable — the one property we need them to have. |
 | A27 | **A notification config dry-run** (`--check-notify`-style) plus a `--no-notify` escape hatch | alongside A11 | ~2 hours | *(repo 9)* A11 runs unattended, so the first time it *should* fire is the worst time to discover the credentials are wrong. Validate the setup without spamming a real channel. |
 | A28 | **Classify a delivery failure as retryable or not**, and return a structured per-channel dispatch result | alongside A11 | ~2 hours | *(repo 9)* Repo 4's "classify failures by whether a human can act", applied one level down to the transport. Combined rule: try, classify, record, never raise into the caller. |
 | A26 | **Refuse loudly at a capacity boundary** — name the numbers and the remedy, never degrade silently | hot-set selection in `live_worker` | ~half day | *(repo 8)* They cap at Kite's `3 × 3000` tokens and refuse to start with an error stating the counts and two concrete fixes. **We had the opposite failure**: breadth alerts flooded the hot set and watchlist stocks silently stopped being scored. |
@@ -2070,12 +2290,39 @@ sidebar-driven layout or raw-dataframe rendering; QuantHarness's forced-trade de
 LLM-emitted risk-reward, natural-language confluence weighting, or vision-LLM chart
 reading as a signal source.
 
+## Testing queue
+
+Test *concepts*, not code. Sourced mostly from qlib, which is the only repo here whose test suite
+is worth studying as a design artifact.
+
+| # | Item | Where it lands | Effort | Why now |
+|---|---|---|---|---|
+| **T1** | **★ A point-in-time test anchored to a real, cited filing date** — assert a fundamental value changes on the publication date and not before, with the NSE/BSE announcement URL in the test | with MCE slice 5b (`market_cap` writer) | ~half day, *when 5b is built* | *(repo 10)* MCE 5b is the keystone blocker for everything fundamental, and it inherits the classic trap: using currently-reported financials for a date before the report existed. Nothing in our stack expresses "as known on date D". A test citing a real filing **cannot rot into tautology** and makes the look-ahead claim falsifiable. |
+| T2 | **Lifecycle-boundary tests for the execution simulator** — first step, start mid-stream, stop early, stop at benchmark | Phase 7 order FSM | Phase 7 | *(repo 10)* Not "does it run" but "does it behave when interrupted". Pairs with A22 (bracket sibling qty on partial fill) and A16 (durable repair queue) — both lifecycle-boundary bugs other people found the hard way. |
+| T3 | **Parametrised fill tests under a participation limit** | if/when we add a volume-participation cap | — | *(repo 10)* We model spread and size-vs-top-of-book impact; we do not cap participation by volume. This is the test shape if we do. |
+| T4 | **Explicit NaN / corner-case tests on every numeric boundary** (LTP, ATR, confidence, R:R) | `backend/tests/` | ~half day | *(repo 10)* Earned: a non-finite Redis LTP once 500'd the signal detail endpoint because `Decimal("nan")` parses without raising. |
+| T5 | **Crash-path tests** — assert correct exit when the process dies | worker/session entry points | ~half day | *(repo 10)* The general form of repo 4's "orphaned protection intents drain at next session entry". |
+| T6 | **Ordered pipeline-stage integration tests** (numeric prefixes so a failure names the stage) | EOD ingestion → enrichment chain | ~half day | *(repo 10)* Our ingestion chain has this exact shape and no staged integration test. |
+
+## Workbench queue
+
+Claude Code tooling and repo rules worth borrowing. Cheap, and they change how every future
+session behaves.
+
+| # | Item | Where it lands | Effort | Why now |
+|---|---|---|---|---|
+| **W1** | **Make doc/code precedence an explicit rule** — "if a doc disagrees with the code, the executable content wins; fix the doc in the same change" | CLAUDE.md | ~15 min | *(repo 9)* We hold this as a habit ("trust the artifact over the checkbox") but state it as a value, not a precedence rule. A rule tells a future session **what to do** on finding a conflict, not merely that conflicts are bad. |
+| **W2** | **"Do not add parallel implementations"** as a written rule | CLAUDE.md / rules | ~15 min | *(repo 9)* **The rule with the most evidence behind it for us**: our review round found **five separate Buy surfaces**, one unwired, and eligibility gating had to be retrofitted across all of them. |
+| W3 | **Same-commit config hygiene** — a new config item updates `.env.example` and its docs in the same change | rules | ~15 min | *(repo 9)* The narrow checkable instance of our doc-sync ritual. Config drift is what bit us when a `.env` gate flip did not reach a running process. |
+| W4 | **Decide the git boundary deliberately** — theirs forbids `commit`/`tag`/`push` without confirmation; ours reserves push only | CLAUDE.md | ~15 min | *(repo 9)* Worth writing down rather than inferring. The current working pattern (commit freely to a worktree branch, hold pushes) is fine — but it should be stated. |
+| W5 | **Forbid hardcoded model names alongside secrets, paths and ports** | rules | ~15 min | *(repo 9)* The non-obvious clause. Our analogue: `STATUS.html` hardcodes gate modes in prose and an ASCII diagram, so a mode flip silently falsifies it — a config value copied somewhere that cannot track it. |
+
 ## What the repos independently confirm
 
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Seven of eleven advertise numbers or fields their own code cannot produce — and the
+0. **Seven of twelve advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -2109,7 +2356,7 @@ lessons is worth more than any one of them:
    it did not compare against.** **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **A guard that cannot return false shows up in three of eleven — and it is the single most
+2. **A guard that cannot return false shows up in three of twelve — and it is the single most
    repeated defect in this log.** AgentQuant's `generalization_gap = max(avg − best, 0)` is
    identically zero; ai-quant-agents' `risk_approved = "risk" not in decision.lower()` where
    `decision ∈ {BUY,HOLD,SELL}` is always true; repo 7's `is_breaking_out` calls a predicate
@@ -2117,7 +2364,7 @@ lessons is worth more than any one of them:
    applies. Three different root causes, one symptom. **The test is mechanical: for every
    guard, name the input that makes it fail — if you cannot, it is not a guard.** Our own
    `unassessed` tripwire failed exactly this (3 of 8 modes passed).
-3. **Dead code advertised as a feature shows up in three of eleven.** AgentQuant fits an HMM
+3. **Dead code advertised as a feature shows up in three of twelve.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
@@ -2147,9 +2394,9 @@ lessons is worth more than any one of them:
    validation. We have real validation and no production system yet — and of the three
    states, only ours makes the missing half safe to build. An unvalidated system that runs
    flawlessly is still unvalidated; it just loses money with better uptime.
-8. **The repos worth reading are the ones with nothing to sell.** Across eleven, the four that
+8. **The repos worth reading are the ones with nothing to sell.** Across twelve, the five that
    survive audit cleanly (quant-agent, PaperTrade-India, express-option-chain,
-   daily_stock_analysis) all decline to publish a performance number. Three are pure
+   daily_stock_analysis, qlib) all decline to publish a performance number. Three are pure
    infrastructure; the fourth is a product that ships the *measuring instrument* and lets you
    run it on your own history. The ones that fail are all selling a result: an evolved harness,
    a beaten benchmark, an agent consensus, a probable exit date, an LSTM. **The presence of a
@@ -2170,7 +2417,13 @@ lessons is worth more than any one of them:
     between the repos worth reading and the rest.** It is also, directly, why our shadow-first
     overlay pattern and fail-open-with-an-alarm design are the right instincts — provided the
     alarm exists (A11, A25).
-11. **The most useful findings came from the repos closest to our own stack, and they were
+11. **Realism gets added to one path and forgotten on the others.** Three separate instances in
+    our own code, each surfaced by a different repo: spread-aware fills with last-close marks
+    (A21), circuit bands on the order path but not the backtest (A30), a `MODE_FULL`
+    subscription never verified (A25). None is a bug in isolation; together they mean
+    **backtest, paper and live results silently stop being comparable** — which is the one
+    property the whole measurement apparatus depends on. Hence A31 as a standing rule.
+12. **The most useful findings came from the repos closest to our own stack, and they were
     about *us*.** PaperTrade-India exposed that our fills are spread-aware while our marks are
     not (A21); express-option-chain exposed that we harvest depth from `MODE_FULL` ticks
     without ever checking the mode, on a path built to fail open (A25). **Neither was a defect

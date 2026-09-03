@@ -7,6 +7,60 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 10 microsoft/qlib + two new review dimensions (testing, workbench) (2026-09-03)
+
+Brief widened by the user: *"take any idea worthy that upgrades us... don't stick only with
+analysis, architecture, ui/ux"* — including test cases and other repos' Claude Code tooling. The
+log now carries **five** queues: **H** analysis · **U** UI/UX · **A** architecture · **T** testing ·
+**W** workbench.
+
+**[microsoft/qlib](https://github.com/microsoft/qlib)** (MIT, ~56k LOC) is a different tier from
+everything reviewed so far — a maintained industrial research platform, the fifth of twelve repos
+to make no performance claim, and **the first where nothing needed debunking**.
+
+**★ T1 — the best test in the log.** Qlib treats point-in-time correctness as *syntax* (`$$`
+fields, a `P()` operator, so non-PIT use is visible). `tests/test_pit.py` asserts that a
+fundamental value **changes on the exact date the filing was published**, citing the real
+disclosure URL in a comment — a regression test anchored to a verifiable external fact, which
+cannot rot into tautology. Its sibling asserts `NaN` for a stock with no PIT record rather than
+forward-filling: **fails closed**. **Our MCE slice 5b (`market_cap` writer) is the keystone
+blocker for everything fundamental and inherits exactly this trap**; T1 says ship a
+filing-date-anchored test with it, citing a real NSE/BSE announcement.
+
+**Two costing/realism gaps it exposed in our code.** **A29** — our `FeeSchedule` has no
+`dp_charge_per_sell`; Zerodha/CDSL levy a **flat ~₹13.5–20 per delivery sell scrip regardless of
+size** (PaperTrade-India models it, we don't). A fixed cost disproportionately hits small
+positions — exactly what the notional cap produces and exactly the ₹1L / 1–2 position shape live
+will have, so **we are under-costing the paper book in the direction that flatters an already
+negative expectancy.** **A30** — `circuit_guard.py` (6.8.3) stops the *paper order path* entering
+a name pinned near its adverse band, but `app/backtest/` has no band handling at all, so the
+backtest fills orders on days a stock was locked limit-up/down and untradeable. Qlib warns
+explicitly when its `limit_threshold` is unset for this reason.
+
+**A31 — and the pattern behind them, promoted to a standing rule:** a realism constraint added to
+one execution path must be added to every path producing a comparable number, in the same change.
+Three instances now — spread-aware fills vs last-close marks (A21), bands on the order path but
+not the backtest (A30), `MODE_FULL` subscribed but never verified (A25). Individually minor;
+together they mean backtest, paper and live silently stop being comparable.
+
+**T2–T6** from its test suite: lifecycle-boundary tests for an execution simulator (start
+mid-stream, stop early — directly Phase 7); parametrised fill tests under a participation limit;
+explicit NaN/corner-case tests (earned — a non-finite Redis LTP once 500'd our detail endpoint);
+crash-path tests; and ordered pipeline-stage integration tests, which our EOD ingestion chain
+lacks. Its `workflow/` recorder (params / metrics / artifacts) also sharpens **H4** and **U1**:
+record gate config as params, n/expectancy/DSR as metrics, the sidecar and its query as
+artifacts — then the registry page is a *view* and the review calendar is a *query*.
+
+**W1–W5, retro-mined from repo 9's `AGENTS.md`** (qlib ships no agent tooling; repo 4's CLAUDE.md
+was already covered as A12): make **doc/code precedence** an explicit rule — the executable
+content wins, fix the doc in the same change (W1); **"do not add parallel implementations"** as a
+written rule — the one with the most evidence behind it for us, given we found **five separate Buy
+surfaces** (W2); same-commit config hygiene (W3); decide the git boundary deliberately rather than
+by inference (W4); and forbid hardcoded **model names** alongside secrets and paths — our analogue
+being `STATUS.html`, which hardcodes gate modes a flip silently falsifies (W5). Their GitHub-triage
+skills are recorded as *considered and rejected* (we are solo, no PR flow).
+
+
 ### docs(research): repo 9 daily_stock_analysis — 332k LOC in 27 days, and the log's best treatment of "which bar could this have acted on" (2026-09-03)
 
 [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis), MIT,
