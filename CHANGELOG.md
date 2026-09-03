@@ -7,6 +7,52 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 2 QuantHarness reviewed + architecture becomes a standing review dimension (2026-09-03)
+
+Per user instruction the review log now carries **three** numbered queues — analysis
+(`H`), UI/UX (`U`) and **architecture (`A`: notifications, menus/IA, portfolio modelling,
+credential lifecycle, agent topology, cost tiering, state schemas)**.
+
+Repo 2 = [Y-Research-SBU/QuantHarness](https://github.com/Y-Research-SBU/QuantHarness)
+(arXiv:2509.09995; Stony Brook/CMU/UBC/Yale/Fudan; MIT; ~3.6k LOC): four LLM agents
+(Indicator → Pattern → Trend → Decision) in a LangGraph, two of them **vision** agents that
+render candles to PNG and have a VLM read the picture. Far more serious than repo 1 — the
+benchmark is real (1,600 CSVs) and the baselines are strong and honestly reported.
+
+**But the headline table does not carry the claim.** n=300/cell (the .3/.7 decimals are
+thirds); recomputing a two-proportion test the paper omits: **significant vs the naive
+baseline 5/8, but vs LOGISTIC REGRESSION 1 of 8** — and that one (ES) rests on LR scoring
+43.0%, below chance. Mean 55.8% vs LR 51.0%, inside the ±5.7pp CI on almost every asset.
+**BTC — the flagship — is the weakest cell (50.7%, z=1.40).** Directional accuracy is also
+not profitability: no costs, and the design forces a trade every window. Reproducibility
+gaps: **the 1,600 benchmark CSVs ship but no eval script does**, and the only visible
+look-ahead holdout is a **commented-out `.iloc[:-3]`** beside the live path, with no flag
+and no test.
+
+Two design choices rejected outright, both instructive: **`HOLD is prohibited`** (a
+forced-trade architecture — the inverse of our thesis that entry *selectivity* is the edge:
+44 defect trades −₹19,649 vs 55 clean +₹5,256), and an **LLM told to emit a risk-reward
+"between 1.2 and 1.8"** with no stop or target computed. Its confluence is done in prose,
+which is non-deterministic and un-backtestable — a case where our frozen numeric engine is
+ahead of a published paper.
+
+Harvested: **A3** a broker credential-status endpoint + banner (the Kite token dies ~06:00
+IST daily and its state is only discoverable from a failed request — highest-value item
+because the failure is known to recur); **A4** constraint pre-validation endpoints
+(generalises the fix that removed 41/204 Buy rows that could only 409); **A1** two-tier
+model routing for the research loop only; **A5** self-documenting `Annotated` state schemas;
+**A6** independent analysts fan out, never chain (theirs pays 3× latency for a chain of
+mutually independent agents); plus **U15**, a named-evidence line for the signal detail
+view — the human-readable half of U10.
+
+New closing section, **"What both repos independently confirm"**: a simple baseline matches
+the elaborate system in both (buy-and-hold +102.4% vs +0.7%; LR ≈ four-agent GPT-4o on 7/8
+assets) and neither leads with it though both ship the data; the guard that matters is the
+structural one (a metric that could only return zero; a holdout that is a comment); and
+published work stops where the hard part starts — neither models a position, and repo 2 is
+titled "for High-Frequency Trading".
+
+
 ### docs(research): external quant/AI-agent repo review log — `docs/quant-agent-findings.md` (2026-09-03)
 
 A running review log for external repos the user shares, starting with

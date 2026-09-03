@@ -11,8 +11,15 @@ screen, table, tile or label do a job better than our equivalent**". A Streamlit
 out-design a React page on *information architecture* while losing on everything else, and
 that idea still transfers. Findings split three ways: **take** (better than ours),
 **confirms** (their defect is something our rules already forbid — evidence the rule earns
-its place), and **reject**. UI items are numbered `U1, U2, …` in the harvest queue, kept
-separate from the analysis items `H1, H2, …`.
+its place), and **reject**.
+
+**And an architecture pass** — system design rather than screen design:
+notifications and alerting, navigation and menus, portfolio and position modelling,
+credential/session lifecycle, agent topology, cost tiering, state schemas. Architecture
+items are numbered `A1, A2, …`.
+
+So three numbered queues, kept separate because they land in different places and have
+different owners: **`H`** analysis/methodology · **`U`** UI/UX · **`A`** architecture.
 
 Ground rule for this document, and the reason it exists in this form: we have twice
 promoted a gate on an argument and had to revert it (regime gate, R:R≥1 — see the
@@ -23,7 +30,8 @@ the README and the code disagree, that disagreement is itself reported as a find
 
 | # | Repo | Reviewed | Verdict |
 |---|---|---|---|
-| 1 | [OnePunchMonk/AgentQuant](https://github.com/OnePunchMonk/AgentQuant) | 2026-09-03 | **Adopt no code, reject the thesis — harvest 4 analysis ideas + 12 UI ideas.** Its Research Workspace screen is better information design than anything we have for the same job. |
+| 1 | [OnePunchMonk/AgentQuant](https://github.com/OnePunchMonk/AgentQuant) | 2026-09-03 | **Adopt no code, reject the thesis — harvest 4 analysis + 12 UI + 2 architecture ideas.** Its Research Workspace screen is better information design than anything we have for the same job. |
+| 2 | [Y-Research-SBU/QuantHarness](https://github.com/Y-Research-SBU/QuantHarness) | 2026-09-03 | **Adopt no code, reject the trading thesis — harvest 5 architecture ideas.** A real paper with real baselines, honestly reported; but it beats logistic regression on **1 of 8 assets**, and its forced-trade design is the opposite of our whole thesis. |
 
 ---
 
@@ -552,6 +560,225 @@ Worth adding to `.claude/rules/testing.md` as a one-liner.
 
 ---
 
+# 2. QuantHarness — `Y-Research-SBU/QuantHarness`
+
+Reviewed 2026-09-03 at `2e64c7b` (last commit 2026-08-18; first 2025-08-26). ~3,630 LOC
+Python · MIT (real `LICENSE` file) · **an actual peer-reviewable artifact**:
+[arXiv:2509.09995](https://arxiv.org/abs/2509.09995), Stony Brook + CMU + UBC + Yale +
+Fudan. Formerly "QuantAgent".
+
+This is a much more serious repo than #1. The benchmark is real, the baselines are strong,
+and the authors report numbers that do not flatter them. My criticisms below are about
+**statistical strength and fitness for our platform**, not integrity.
+
+## 2.1 What it is
+
+Four LLM agents in a LangGraph, over crypto/futures/indices at 1h and 4h:
+
+```
+START → Indicator Agent → Pattern Agent → Trend Agent → Decision Maker → END
+```
+
+- **Indicator** computes RSI / MACD / Stochastic / ROC / Williams %R (TA-Lib) and writes a
+  prose report.
+- **Pattern** and **Trend** *render candlestick charts to PNG*, base64 them into the state,
+  and have a **vision** LLM read the picture — trendline channels, double bottoms,
+  support/resistance. ("Our model requires an LLM that can take images as input.")
+- **Decision** synthesises the three prose reports into `LONG` or `SHORT` + JSON.
+
+The whole system is **one stateless invocation over the last 45 candles**. There is no
+memory, no portfolio, no position sizing, no capital, no stop computation — I grepped for
+all of them and they do not exist. It answers "which way next?", nothing else.
+
+## 2.2 The benchmark — the honest read
+
+`benchmark/` ships **1,600 CSVs** (100 windows × 8 assets × 2 timeframes, 100 candles
+each). The headline table (`assets/table1.png`) reports directional accuracy vs three
+baselines. The `.3`/`.7` decimals put n at **300 per cell** (100 windows × 3 repeats).
+
+Recomputing significance — a two-proportion test, which the paper does not report:
+
+| asset | ours | naive base | z | **logistic regression** | **z vs LR** | XGBoost | beats LR? |
+|---|--:|--:|--:|--:|--:|--:|:--|
+| BTC | 50.7 | 45.0 | 1.40 | 46.0 | 1.15 | 45.3 | no |
+| CL | 55.0 | 41.0 | 3.43 | 54.3 | 0.17 | 40.0 | no |
+| DJI | 52.3 | 47.0 | 1.30 | 52.0 | 0.07 | 47.3 | no |
+| ES | 55.0 | 51.0 | 0.98 | 43.0 | 2.94 | 52.0 | **YES** |
+| VIX | 54.7 | 46.3 | 2.06 | 48.7 | 1.47 | 53.3 | no |
+| NQ | 55.3 | 43.7 | 2.84 | 48.7 | 1.62 | 47.3 | no |
+| QQQ | 59.7 | 47.3 | 3.04 | 56.0 | 0.91 | 52.7 | no |
+| SPX | 63.7 | 47.3 | 4.02 | 59.7 | 0.98 | 60.0 | no |
+
+**Significant vs the naive baseline: 5 of 8. Significant vs logistic regression: 1 of 8** —
+and that one (ES) is carried by LR scoring an anomalous 43.0%, *below* chance. Mean
+accuracy 55.8% vs LR's 51.0%, a +4.8pp edge that is inside the noise band on almost every
+individual asset (95% CI on a single cell is ±5.7pp).
+
+So the defensible claim is: **a four-agent GPT-4o vision pipeline roughly matches logistic
+regression on the same features.** That is not nothing — matching LR while producing a
+human-readable rationale has real value — but it is a much smaller claim than the table's
+bolding implies. Three further caveats:
+
+1. **Directional accuracy is not profitability.** No costs, no slippage, no spread. The
+   architecture forces a trade every window (below), so at 1h resolution the cost drag
+   would be severe, and a 55% hit rate with symmetric payoffs does not survive it. Our own
+   book is the cautionary case: **37.5% win rate, +1.14R/−1.17R, −0.303R expectancy** —
+   hit rate alone told us nothing.
+2. **BTC — the flagship asset, the one in every chart — is the weakest result** (50.7%,
+   z=1.40, not significant). A coin flip.
+3. **Multiple comparisons.** 8 assets × 2 timeframes × 4 methods, no correction. Exactly
+   what our deflated-Sharpe bar exists to price.
+
+**Reproducibility gap:** the 1,600 benchmark CSVs ship, but **no evaluation script does** —
+`grep -rln benchmark --include=*.py` returns nothing. The numbers live in the paper and in
+PNGs; nothing in the repo regenerates them.
+
+**And the look-ahead guard is a commented-out line.** `web_interface.py:311-317`:
+
+```python
+# if len(df) > 49:
+#     df_slice = df.tail(49).iloc[:-3]     # holdout: drop the 3 candles being predicted
+# else:
+#     df_slice = df.tail(45)
+
+df_slice = df.tail(45)                      # ← active: no holdout
+```
+
+For live use `tail(45)` is correct (the future does not exist yet). But the task is
+"predict the next 3 candlesticks", the holdout variant that drops exactly 3 is commented
+out directly above it, and **there is no separate evaluation path** — so benchmark mode was
+selected by hand-editing the line that also serves live requests. I cannot prove the
+published numbers used look-ahead, and I am not claiming they did. I am claiming this:
+**the only visible holdout mechanism in the repo is a comment, in shared code, with no
+flag and no test.** Our constraint #3 makes this structural for exactly this reason.
+
+## 2.3 The architectural disagreement that matters most
+
+**`HOLD is prohibited`** — the decision prompt, verbatim:
+
+> *"Your task is to issue an **immediate execution order**: **LONG** or **SHORT**.
+> ⚠️ HOLD is prohibited due to HFT constraints."*
+
+This is the deepest incompatibility with our platform, and it is worth stating plainly
+because it is the thing to *learn from*, not copy. Our entire architecture exists to be
+able to say **no**: the ≥70% confluence gate, the reject-don't-clamp SL rule, the
+eligibility overlays. Our diagnosis is that **the binding constraint on profit is entry
+selection** — 44 defect trades cost −₹19,649 while 55 clean ones made +₹5,256. A system
+that must take a position on every candle has, by construction, zero selectivity. It is
+optimising the one variable we have evidence is *not* the lever.
+
+Second: **the risk-reward ratio is invented, not computed.**
+
+> *"Suggest a reasonable **risk-reward ratio** between **1.2 and 1.8**"*
+
+The LLM is told to emit a number in a range — no stop, no target, no price levels. It is a
+plausible-sounding string, not a measurement. We have just been through this: our R:R≥1
+gate was reverted precisely because R:R turned out to be a **proxy for stop width** rather
+than the quantity we thought. Theirs is worse — it is not a proxy for anything, because
+nothing computed it.
+
+Third: **the "multi-agent" graph is strictly sequential.** `graph_setup.py` wires
+Indicator → Pattern → Trend as a chain, but the three agents are independent — each reads
+the same `kline_data` and none consumes another's output. They could fan out and join.
+As built, that is 3 serial LLM round-trips (two of them vision calls) where 1 wall-clock
+round-trip would do. For a system whose selling point is *high-frequency*, that is a
+notable miss.
+
+## 2.4 Architecture findings — what to take
+
+**A1 — two-tier model routing.** `agent_llm_model` (cheap: `gpt-4o-mini`) for leaf agents,
+`graph_llm_model` (strong: `gpt-4o`) for synthesis and graph logic, each with its own
+provider and temperature. Cheap model does the mechanical work; the expensive one only
+adjudicates. We do not have an LLM in the money path and should not, but we *will* have one
+in the research loop (daily analysis, the review calendar) — and the same split applies:
+a cheap pass to extract, an expensive pass to judge.
+
+**A2 — provider abstraction with per-provider default mapping.** `apply_provider_defaults()`
+swaps the whole model set when the provider changes, so switching OpenAI → Anthropic →
+Qwen → MiniMax → Gemini does not leave a stale model id behind. Community-contributed
+providers landed as small PRs against that seam, which is the proof it is the right seam.
+
+**A3 — a credential-status endpoint. This is the one with a live use for us today.**
+`/api/get-api-key-status` + `validate_api_key()` make credential health a *first-class,
+queryable state* rather than something you discover from a failed request. **Our Kite
+access token dies at ~06:00 IST every single day** — the domain rules already call this "a
+normal lifecycle event, not an error loop". A `GET /api/v1/broker/token-status` returning
+`{valid, expires_at, hours_remaining}`, surfaced as a topbar banner, converts a daily
+silent breakage into a visible one. Cheap, and it targets a failure we *know* recurs.
+
+**A4 — constraint pre-validation, not error-after-submit.**
+`get_timeframe_date_limits(timeframe)` and `validate_date_range()` tell the client what is
+legal *before* it asks (1m data only goes back so far, etc.). We have the same shape of
+constraint everywhere — the NSE calendar, per-classification validity (scalp 30min /
+intraday 3:15 / swing 5 trading days / positional 30), market hours, the
+`allow_offmarket_entry` rejection. Our display-path work already found the cost of *not*
+doing this: **41 of 204 rows offered a Buy that could only 409**, and separately every row
+read clear in the evening while the order path 422'd on off-market. Pushing the constraint
+to a queryable endpoint is the generalisation of the fix we already shipped once.
+
+**A5 — a self-documenting state schema.** Every field of the graph state is
+`Annotated[type, "what this is"]`:
+
+```python
+pattern_image: Annotated[str, "Base64-encoded K-line chart for pattern recognition agent use"]
+indicator_report: Annotated[str, "Final indicator agent summary report used by downstream agents"]
+```
+
+The schema carries its own contract, readable by both humans and tooling. Worth copying for
+our sidecar/report payloads, where field meaning currently lives in a docstring far from the
+type. (Their execution has a smell to copy *around*: the graph-wide state is still called
+`IndicatorAgentState` — named after the first agent that used it.)
+
+## 2.5 UI/UX findings
+
+Flask + Jinja, hand-written HTML/CSS/JS (`index.html` 1353 · `demo_new.html` 1996 ·
+`output.html` 754). Single-shot tool: pick asset → timeframe → date range → run → read.
+
+**TAKE**
+
+**U15 — per-agent result tabs, with the evidence named in plain language.** Results are
+split into a tab per analyst (Indicator / Pattern / Trend / Decision), and the decision
+card names its evidence rather than scoring it: *"Justification: MACD Bullish Crossover.
+Rising Rate of Change. Double Bottom Pattern + Steep Breakout Resist Line."* Plus an
+explicit **`forecast_horizon`** field — the prediction states what period it is about.
+
+This is the **human-readable complement to U10**. U10 was the arithmetic (which factors
+scored, their weights, the normalising division). This is the sentence. Our signal detail
+view should carry both: the arithmetic proves the confidence is honest, the named-evidence
+line makes it legible. Together they are what would have made SRTL's single-factor entry
+obvious on screen — "RSI_DIVERGENCE" alone in an evidence list reads as thin instantly, in
+a way that "78%" never does.
+
+**CONFIRMS** — their notification and IA layers are behind ours, usefully so:
+
+| Their approach | Ours |
+|---|---|
+| **20 raw `alert()` calls**, no toast/snackbar system — blocking, unstyleable, unthemeable | `AlertBell` + themed surfaces |
+| `print()` for request logging inside Flask handlers | structured logging with context |
+| API key pasted into a web form as the primary path | `.env` + hooks protecting it |
+| No empty/error/loading states beyond a spinner and `Loading` | required per page by `.claude/rules/ui.md` |
+
+**The absence worth naming: there is no portfolio, no position, no P&L, no risk layer at
+all.** For a paper titled *"…for High-Frequency Trading"*, the system stops at "which
+direction?" and never models what you own, how much, or what it cost. This is the reverse
+of our situation — we have paper positions, sizing, heat, exits, a circuit breaker and a
+30-day clock, and what we lack is the research surface (U1). Nothing to harvest here; it is
+a useful reminder that **the published-research end of this field routinely stops exactly
+where the hard part starts.**
+
+## 2.6 What to refuse
+
+| Reject | Why |
+|---|---|
+| **The forced-trade design** (`HOLD is prohibited`) | Inverts our central thesis. Selectivity *is* the edge we are trying to find. |
+| **LLM-emitted risk-reward** | A number in a prompt-specified range with no stop or target behind it. |
+| **Natural-language weighting** as the scoring mechanism | The decision prompt does confluence in prose ("give higher weight to…", "prioritise when all three align"). Non-deterministic, unauditable, un-backtestable, and it cannot be frozen for parity. Our numeric engine is strictly better here — and this is a case where **we are ahead of a published paper**. |
+| Vision-LLM chart reading as a signal source | Interesting research; unreproducible, slow, and impossible to §8-validate. |
+| The stack (Flask/Jinja/TA-Lib/yfinance) | Redundant against ours. |
+| Sequential fan-out | If we ever build an agent graph, independent analysts run in parallel. |
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -592,10 +819,27 @@ touches the money path, and all of it obeys `.claude/rules/ui.md` (tokens, `form
 | U11 | **Benchmark as a default second series on every equity/P&L curve** | existing charts | ~half day | Chart-level form of U2. Theirs plots one line with nothing to compare against. |
 | U12 | Small: headline number annotated *onto* the equity chart; explicit "refresh now" over auto-refetch; free-text symbol add beside preset pickers | existing pages | ~2 hours each | Cheap polish, each independently useful. |
 
+| **U15** | **Named-evidence line on the signal detail view** — the factors that scored, in plain language ("MACD bullish crossover · RSI divergence · volume spike"), beside U10's arithmetic; plus an explicit forecast-horizon label | signal detail view | ~half day on top of U10 | *(repo 2)* The human-readable half of U10. "RSI_DIVERGENCE" alone in an evidence list reads as thin instantly, in a way "78%" never does — which is exactly the SRTL failure. |
+
 **If only one UI thing is done: U1 with U2 and U4 folded in.** That single page replaces the
 "open seven markdown files and hold them in your head" ritual, puts the benchmark where it
 cannot be avoided, and turns the multiple-testing denominator into something we observe
 rather than assume.
+
+## Architecture queue
+
+System design rather than screen design. Sourced mostly from repo 2, plus two backfilled
+from repo 1.
+
+| # | Item | Where it lands | Effort | Why now |
+|---|---|---|---|---|
+| **A3** | **Broker credential-status endpoint + topbar banner** — `GET /api/v1/broker/token-status` → `{valid, expires_at, hours_remaining}` | `app/api/v1/`, consumed by the app shell | ~half day | **The highest-value architecture item, because it targets a failure we know recurs daily.** The Kite access token dies ~06:00 IST every day; the rules already class this as a normal lifecycle event, yet its state is only discoverable from a failed request. Makes a silent daily breakage visible. |
+| **A4** | **Constraint pre-validation endpoints** — what date ranges / classifications / market sessions are legal, queryable *before* submit | `app/api/v1/`, consumed by order + screener surfaces | ~1 day | The generalisation of a fix we already shipped once: 41/204 rows offered a Buy that could only 409, and every row read clear in the evening while the order path 422'd on off-market. `eligibility.py` centralised the *gate* answers; this centralises the *session and calendar* ones. |
+| A1 | **Two-tier model routing** (cheap extract pass / strong judge pass) for the research loop | daily-analysis + review-calendar tooling | ~half day when that work starts | Never in the money path. Applies the moment an LLM step enters the research loop. |
+| A5 | **Self-documenting state schemas** — `Annotated[type, "meaning"]` on report/sidecar payload fields | sidecar + report payloads | ~2 hours | Field meaning currently lives in a docstring far from the type. |
+| A6 | **Agent topology: independent analysts fan out, never chain** | any future agent graph | — | A standing note, not a task. Repo 2 chains three mutually independent agents and pays 3× latency for it. |
+| A7 | *(repo 1)* **Artifact provenance on every reported number** — the generating service/query named beside the value | banners, registry rows | ~2 hours | Same item as U8, recorded here because it is a contract, not a widget: a number that cannot name its source is not auditable. |
+| A8 | *(repo 1)* **Failure archive as a first-class store**, not prose | the H4 register's schema | included in H4 | Reverted gates (regime, R:R≥1) are permanent evidence and should be queryable, not narrated in memory files. |
 
 **Overall, if only one thing is done anywhere: H1, then H2+U2 together.** H1 hardens the
 instrument that both recent reversals proved we were missing. H2 is a half-day that
@@ -603,6 +847,28 @@ supplies the honest baseline every future gate argument should be measured again
 it is the specific omission that let AgentQuant celebrate a Sharpe of 0.621 while
 buy-and-hold quietly returned 102%. U2 is what stops that baseline from being ignored.
 
-**Explicitly not recommended:** adopting any AgentQuant code, the LLM-parameter-proposal
-pattern, anything from the harness-evolution line of work, or any part of its Streamlit
-stack, sidebar-driven layout, or raw-dataframe rendering.
+**Explicitly not recommended:** adopting any code from either repo; AgentQuant's
+LLM-parameter-proposal pattern, harness-evolution line of work, Streamlit stack,
+sidebar-driven layout or raw-dataframe rendering; QuantHarness's forced-trade design,
+LLM-emitted risk-reward, natural-language confluence weighting, or vision-LLM chart
+reading as a signal source.
+
+## What both repos independently confirm
+
+Two unrelated projects, one hobby and one academic, land on the same three lessons — which
+is worth more than either alone:
+
+1. **A simple baseline matches the elaborate system.** Buy-and-hold beat AgentQuant's agent
+   (+102.4% vs +0.7%); logistic regression matches QuantHarness's four-agent GPT-4o vision
+   pipeline on 7 of 8 assets. **Neither repo leads with this, and both ship the data that
+   shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
+   defence — it is not a reporting nicety, it is the thing that stops this happening to us.
+2. **The guard that matters is the one that is structural.** AgentQuant's generalization
+   gap was a metric that could only return zero; QuantHarness's look-ahead holdout is a
+   commented-out line beside the live path. Both are documented safety nets with nothing
+   that fails when they lapse — the same finding our own bug-hunter round produced when it
+   showed the `unassessed` tripwire was imaginary (3 of 8 modes passed).
+3. **Published work stops where the hard part starts.** Neither has position sizing, risk
+   limits, or a portfolio. QuantHarness is titled "for High-Frequency Trading" and models
+   no position at all. The runtime plumbing we have deferred to Phase 7 is not the boring
+   part of this field — it is the part almost nobody does.
