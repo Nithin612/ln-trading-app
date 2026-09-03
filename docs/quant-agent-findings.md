@@ -23,7 +23,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 
 | # | Repo | Reviewed | Verdict |
 |---|---|---|---|
-| 1 | [OnePunchMonk/AgentQuant](https://github.com/OnePunchMonk/AgentQuant) | 2026-09-03 | **Adopt no code, reject the thesis — harvest 4 analysis ideas + 6 UI ideas.** Its Research Workspace screen is better information design than anything we have for the same job. |
+| 1 | [OnePunchMonk/AgentQuant](https://github.com/OnePunchMonk/AgentQuant) | 2026-09-03 | **Adopt no code, reject the thesis — harvest 4 analysis ideas + 12 UI ideas.** Its Research Workspace screen is better information design than anything we have for the same job. |
 
 ---
 
@@ -461,7 +461,39 @@ Agent research). A risk-return frontier of every experiment on one pair of axes,
 benchmark cluster is visually adjacent to the candidate cluster. We have no equivalent
 view; our `dataviz` skill would render a better version of it.
 
-**U12 — small things worth stealing.** The headline number annotated *onto* the equity
+**U12 — the "Strategy Formula" card: the rules rendered as readable math.** A boxed card
+stating what the strategy *actually does*, generated from its parameters:
+
+```
+Historical Volatility = σ(34)
+Volatility Threshold   = 0.34
+
+Position = +1 if Volatility < Threshold
+Position =  0 if Volatility > Threshold
+
+Parameters: {'window': 34, 'vol_threshold': 0.34}
+Allocation Weights: GLD 0.32 · QQQ 0.08 · SPY 0.60
+```
+
+**This is the strongest single idea for our signal detail view.** Our confluence engine is
+opaque at the point of decision: a signal shows "78%" and the user cannot see how it got
+there. The SRTL loss is exactly this failure — one factor scoring 0.8 normalises to 80% and
+clears the ≥70% gate, and *nothing on screen made that visible*. A card that renders the
+actual arithmetic — each factor that scored, its weight, the `Σ(score×weight) / Σ(weight of
+factors that scored)` division, and the resulting confidence — would have made the
+single-factor entry obvious at a glance rather than a post-mortem finding. We now block it
+with the diversity gate, but the *explanation surface* is still missing, and it generalises
+to every gate verdict we show.
+
+(Take the idea, reject the execution: theirs is a **matplotlib-rendered image**, so the
+text is unselectable, unthemeable and fixed-size. Ours would be DOM.)
+
+**U13 — the equity curve has no benchmark overlay.** `Portfolio Performance` plots one
+line, annotated `Total Return: 87.39%`, with nothing to compare against — the chart-level
+form of the same blindness as §1.3. Any equity/P&L curve we draw should carry the
+benchmark as a second series by default, not as an option.
+
+**U14 — small things worth stealing.** The headline number annotated *onto* the equity
 chart (`Total Return: 87.39%` pinned in-plot) rather than beside it. A free-text "Add
 tickers" input beside the multiselect, for symbols not in the preset universe. An explicit
 `☐ Refresh market data now` checkbox instead of an automatic refetch — the user decides
@@ -482,6 +514,10 @@ have. Useful as evidence those rules earn their keep, not as anything to copy.
 | Red chips for neutral asset tags (red = loss in a trading UI) | token semantics — red is reserved for loss |
 | Asset Allocation table rendered twice on one screen, beside an empty chart region | — (plain redundancy) |
 | A pandas index column rendering as a meaningless `0` | — |
+| The **same number in two formats on one screen** — allocation table shows `0.316`, the pie beside it shows `31.6%` | `format.ts` as the single formatting path |
+| A **pie chart** for allocation | `dataviz` skill discourages pies; a bar/stacked bar reads better |
+| Static matplotlib images for charts — no hover, no tooltip, rotated date labels | Lightweight Charts / Recharts, interactive |
+| *"Optimization complete!"* success banner whose "optimized" params are **identical to the inputs** (`window 34, vol_threshold 0.34`) | a success message must state what changed, or say "no change" |
 | `Validation` column clipped at the right edge of the registry | sticky/opaque headers + overflow handling |
 | Single light theme, no tokens | 5 themes via `data-theme`, tokens only |
 
@@ -552,7 +588,9 @@ touches the money path, and all of it obeys `.claude/rules/ui.md` (tokens, `form
 | U7 | **Provenance + regime stamped on every row** (how generated, which regime it ran in) | same page | ~half day | We persist `Signal.regime` and generation provenance already; neither is surfaced. |
 | U8 | **`Artifacts` line naming the file/service that produced each number** | banners + registry rows | ~2 hours | §1.7's rule as UI. Cheap, and it makes a stale number traceable instead of arguable. |
 | U9 | **Robustness Map** — metric × drawdown scatter, coloured by mode, benchmarks in the same axes | same page | ~half day | No equivalent today. Use the `dataviz` skill. |
-| U10 | Small: headline number annotated *onto* the equity chart; explicit "refresh now" over auto-refetch; free-text symbol add beside preset pickers | existing pages | ~2 hours each | Cheap polish, each independently useful. |
+| **U10** | **A "Signal Formula" card on the signal detail view** — the confluence arithmetic rendered readably: each factor that scored, its weight, the normalising division, the resulting confidence | `frontend/src/features/` signal detail + an endpoint exposing the stored factor breakdown | ~1–2 days | **The strongest idea for our detail view.** Our engine is opaque at the point of decision: "78%" with no visible derivation. SRTL is exactly this — one 0.8 factor normalises to 80% and clears the ≥70% gate, invisible until the post-mortem. The diversity gate now blocks that case, but the *explanation surface* is still missing and it generalises to every gate verdict we render. DOM, not their matplotlib image. |
+| U11 | **Benchmark as a default second series on every equity/P&L curve** | existing charts | ~half day | Chart-level form of U2. Theirs plots one line with nothing to compare against. |
+| U12 | Small: headline number annotated *onto* the equity chart; explicit "refresh now" over auto-refetch; free-text symbol add beside preset pickers | existing pages | ~2 hours each | Cheap polish, each independently useful. |
 
 **If only one UI thing is done: U1 with U2 and U4 folded in.** That single page replaces the
 "open seven markdown files and hold them in your head" ritual, puts the benchmark where it
