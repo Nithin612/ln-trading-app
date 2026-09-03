@@ -34,6 +34,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 2 | [Y-Research-SBU/QuantHarness](https://github.com/Y-Research-SBU/QuantHarness) | 2026-09-03 | **Adopt no code, reject the trading thesis — harvest 5 architecture ideas.** A real paper with real baselines, honestly reported; but it beats logistic regression on **1 of 8 assets**, and its forced-trade design is the opposite of our whole thesis. |
 | 3 | [demandai/ai-quant-agents](https://github.com/demandai/ai-quant-agents) | 2026-09-03 | **Not a quant system — a 236-line marketing SDK for a closed paid API.** No algorithm to review; `risk_approved` is hardcoded true. **Harvest 3 UI + 1 protocol idea.** ⭐ Its real value: it names its upstream, **[TradingAgents](https://github.com/TauricResearch/TradingAgents)** — review that instead. |
 | 4 | [yebof/quant-agent](https://github.com/yebof/quant-agent) | 2026-09-03 | ⭐ **The best-engineered repo here, and the only one whose claims survived audit.** 63k LOC, 1,344 tests, live-capable via Alpaca, **zero performance claims**. Ahead of us on production discipline; **has no backtest or validation at all**. **Harvest 7 architecture ideas — A11 (session notifier) is the most actionable item in this whole document.** |
+| 5 | [PreethamSanji/QuantAgents-NSE](https://github.com/PreethamSanji/QuantAgents-NSE) | 2026-09-03 | **The only NSE repo — and its claim fails on six counts**, incl. **look-ahead (fills on the signal bar's close)**, a hindsight-picked survivor universe, and **2 of its 4 agents wired to nothing**. Result is +0.5pp CAGR at Sharpe 0.237. No LICENSE. **Harvest 2 ingredients for the MCE news veto.** |
 
 ---
 
@@ -1208,6 +1209,180 @@ unvalidated system, and it can lose money with perfect uptime.
 
 ---
 
+# 5. QuantAgents-NSE — `PreethamSanji/QuantAgents-NSE`
+
+Reviewed 2026-09-03 at `07559c5` (first 2025-12-24, last 2026-04-05). ~7,900 LOC.
+**No `LICENSE` file** — so nothing here is safely reusable regardless of merit.
+
+**The first repo in this log on our actual market**, which makes it the most directly
+comparable and the easiest to check: I know what NSE costs, what its calendar does, and
+what its microstructure looks like. Four named agents (Emily/news, Bob/technical, Dave/risk,
+Otto/manager) replicating [QuantAgents (arXiv:2501.04916)](https://arxiv.org/abs/2501.04916)
+on the Nifty 50, with FinBERT sentiment, a FinRL PPO model, and a portfolio backtester.
+
+## 5.1 The performance claim, and why it does not survive
+
+The claim is not in the README — it is the headline of the most recent commit:
+
+> `feat: improve backtester **to** Sharpe 0.237, CAGR 8.9% vs Nifty 8.4%`
+
+Note the word *to*. Read alongside the two commits before it (*"add portfolio backtester with
+corrected Dave architecture"*, *"fix: correct Sharpe ratio and win rate calculation"*), the
+history reads as iteration until the number looked right. Six independent problems, each
+verified in source:
+
+**1. Look-ahead — the backtest fills at the same bar it signals on.** In the rebalance loop,
+the Otto score for `date` is computed from indicators over the close series *including*
+`date`, and the trade executes at `closes.loc[date, sym]` — that same close:
+
+```python
+s = otto_scores[sym].get(date, 0.0)     # signal derived from date's close
+...
+proceeds = holdings[sym] * float(price) * (1 - commission)   # filled at date's close
+```
+
+Our constraint #3 is exactly this: compute on candle N, valid from N+1, fill at N+1 open.
+Deciding on a close you then transact at is the most common backtest error there is, and it
+inflates results systematically. **This is the first repo in the log with look-ahead in the
+live backtest path** — repo 2's holdout was at least a commented-out line rather than a
+wrong one.
+
+**2. Survivorship bias, twice over.** The default universe is ten names, chosen as *"top 10
+Nifty 50 stocks with longest yfinance history"* — RELIANCE, TCS, HDFCBANK, INFY, ICICIBANK,
+ITC, SBIN, BHARTIARTL, KOTAKBANK, LT. That is a double hindsight filter: **current** index
+membership (so anything demoted over the period is absent) *and* longest history (so anything
+delisted, merged or newly listed is absent). These are the ten largest Indian blue chips that
+both survived and stayed in the index. Backtesting long-only on the stocks you already know
+did well is not a test.
+
+**3. Two of the four agents have no effect on the backtested result.** Verified by grep:
+
+- `in_bull_market = bool(regime.get(date, True))` — **assigned at line 439 and never read.**
+  The 200-DMA regime filter whose docstring advertises that it *"eliminates the worst
+  drawdown periods (2008, 2011, 2020)"* is dead code in the backtest. (And the sample is
+  2020–2025, so 2008 and 2011 are not even in it — the docstring claims out-of-sample virtue
+  it never tested.)
+- `r_score_today = float(r_score_series.get(date, 0.5))` — **assigned at 448 and never
+  read**, with `risk_multiplier = 1.0  # Full deployment` hardcoded on the next line.
+
+So Dave — the risk agent, Equation 3, weighted 30% in `config.yaml` — contributes **nothing**
+to the number. The backtest runs Emily + Bob, which is exactly what a different docstring
+admits: *"With Otto weights Emily 42.9% + Bob 57.1%…"* (= 0.30/0.70 and 0.40/0.70, Dave
+dropped and the rest renormalised). **The system that was backtested is not the system the
+README diagrams.** Same species as repo 1's discarded HMM and never-loaded "production
+harness".
+
+**4. The tuning is documented in the comments.** To the author's credit these are candid, but
+they describe fitting: weekly rebalancing chosen because *"monthly rebalancing creates too
+much lag on re-entry… hurting CAGR in recovery phases"*; Emily's ±0.5 cap chosen so that
+*"a Bob=+0.4 (net 0.228) can overcome"* it, *"preventing spurious sells"*; asymmetric entry
+and exit thresholds of `+0.15` and `−0.10`. Each was selected by looking at the result on the
+same sample the result is quoted from.
+
+**5. Risk-free accrual on idle cash, added for the reason it flatters.** The comment is
+explicit: *"Without this, every day in cash subtracts rf from the Sharpe numerator; with it,
+cash-holding is Sharpe-neutral, so the regime filter only helps by avoiding losses."*
+Parking cash in a liquid fund is a real thing and 6% p.a. is a fair Indian assumption — but
+the stated justification is about the regime filter, and the regime filter is dead code
+(finding 3).
+
+**6. No spread, no slippage, no impact.** Commission is modelled — 0.1% on each leg, so ~0.2%
+round trip, which is actually *conservative* against real NSE delivery costs (~0.12–0.13%
+round trip at a zero-brokerage discount broker: STT 0.1% on the sell, stamp duty 0.015% on
+the buy, exchange and SEBI charges, GST). Credit where due — repos 1–3 modelled less. But
+there is no bid-ask spread and no impact at all, and our own 6.8.2 measurement found **82% of
+live NSE books have a half-spread wider than a flat 2 bps.** Trading at the untouched close
+is free money the backtest does not pay for.
+
+**And after all six, the result is nothing:** CAGR 8.9% against the Nifty's 8.4% — a **0.5
+percentage point** gap — at a Sharpe of **0.237**. For scale, repo 1's committed data has
+buy-and-hold SPY at Sharpe 0.896. A 0.5pp edge is well inside the noise of a ten-stock
+five-year sample before any of the above; after look-ahead and survivorship, the honest read
+is that **no edge is demonstrated and the true number is more likely negative.**
+
+## 5.2 An NSE calendar bug, reproduced
+
+Rebalancing is scheduled as:
+
+```python
+rebalance_days = set(closes.resample("W-FRI").last().dropna(how="all").index)
+...
+if date not in rebalance_days: continue
+```
+
+`resample("W-FRI")` labels each bucket with the **calendar Friday**, but `closes.index` holds
+**actual trading days**. When Friday is an NSE holiday, the label exists and no trading date
+matches it — so the week is silently skipped. I reproduced it against Good Friday 2025
+(18 April, a real NSE holiday):
+
+```
+rebalance_days labels        : ['2025-04-18']
+actual trading dates         : ['2025-04-14','2025-04-15','2025-04-16','2025-04-17']
+dates that trigger a rebalance: []
+=> NO REBALANCE THIS WEEK (silently skipped)
+```
+
+India has roughly 10–15 market holidays a year and several land on Fridays, so a handful of
+rebalances vanish across the sample with no error and no log line. This is precisely the
+failure our domain rules name — *"trading days need the NSE holiday calendar; calendar-day
+arithmetic is a bug"* — and it is satisfying to see the rule earn itself on someone else's
+code.
+
+## 5.3 What is worth taking
+
+Modest, but real, and it lands on a slice we have not built.
+
+**A18 / MCE slice 6 — India news sourcing.** Their Emily agent is the only worked example in
+this log of Indian financial-news ingestion, and it separates cleanly into a part to copy and
+a part to avoid:
+
+- **Take: Google News RSS with India locale parameters** —
+  `https://news.google.com/rss/search?q=<query>&hl=en-IN&gl=IN&ceid=IN:en`. Free, stable, no
+  scraping, no ToS problem, and India-localised. That is a legitimate starting feed for the
+  MCE news veto.
+- **Take: FinBERT (`ProsusAI/finbert`) for sentiment**, rather than a general LLM. Purpose-
+  built for financial text, runs locally, cheap, and far more reproducible than asking a chat
+  model how it feels — which matters because a news *veto* must be auditable, and our
+  overlays have to be §8-validatable.
+- **Avoid: the MoneyControl and Economic Times HTML scrapers.** The repo ships
+  `debug_mc_html.py`, `debug_et_html.py` and `debug_mc.py` — three debug scripts whose
+  existence is the evidence that the HTML kept breaking. Scraping those sites is fragile and
+  ToS-questionable; an RSS or licensed feed is the right dependency for something on the
+  money path.
+
+**Confirms — their weighted-agent synthesis vs our weighted confluence.** Otto combines
+Emily 30% / Bob 40% / Dave 30% with Dave always entering as a negative (a risk brake), and
+caps confidence at 60% when the risk alert fires. Structurally this is our confluence engine
+with agents instead of factors — and the comparison flatters ours: our weights are frozen and
+parity-tested, theirs are config values tuned against the same backtest they are reported on.
+The one idea worth noting is **the risk term entering with a guaranteed negative sign** — a
+component that can only ever subtract. Our overlays are boolean gates; a signed risk penalty
+that scales confidence is a different instrument, and closer to what the reverted regime gate
+should probably have been (a modifier, not a switch).
+
+**Also worth noting for Dave's Equation 3:** `R = 0.25β + 0.25(1/LR) + 0.25·max(SE) + 0.25σ`
+sums four quantities on entirely different scales (beta ≈ 1, inverse liquidity unbounded,
+sector concentration ∈ [0,1], annualised vol ≈ 0.2–0.5) with equal weights and no
+normalisation, then compares the total to a 0.75 threshold. Whichever term happens to be
+largest dominates the score. If we ever build a composite risk scalar, **normalise the
+components to a common scale first** — otherwise the weights are decorative.
+
+## 5.4 Verdict
+
+**Adopt no code** (there is no licence, and the backtest has look-ahead). **Take two
+ingredients for the MCE news veto** — India-localised Google News RSS and FinBERT — and one
+design note about signed risk penalties.
+
+The wider value is calibration. This is the closest repo to our own problem — same exchange,
+same index, same broad architecture — and its headline result is a 0.5pp edge produced by a
+backtest that fills on the signal bar, over a hindsight-picked survivor universe, with two of
+its four agents disconnected. **Our −0.303R expectancy is an uncomfortable number, but it is
+a real one**, measured on forward paper trades with spread-aware fills. Given the choice
+between an honest negative and a flattering artifact, we already hold the more valuable of
+the two.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -1275,6 +1450,9 @@ from repo 1.
 | A15 | **Assert scheduling window ≥ scheduler tick interval** | CAS capture + any timed window | ~2 hours | *(repo 4)* A 25-min window on a 30-min timer missed the close two days running. **Our CAS window is 18 minutes and its miss is unrecoverable.** |
 | A16 | **Order-protection lifecycle as a state machine + durable repair queue** | Phase 7 BrokerAdapter / order FSM | Phase 7 | *(repo 4)* Not actionable pre-live, but the best available map of what Phase 7 must handle — five failure branches, each found the hard way, incl. reprotect-on-actual-fill and a drain queue so a mid-flight crash cannot leave a position naked overnight. **Read before Phase 7 starts.** |
 | A17 | **Provider failover semantics + pinned cost table** | any LLM research loop | ~half day | *(repo 4)* Single-shot fallback on non-retryable failure (never on truncation), and model prices pinned so a cache refresh cannot overwrite them with stale values. |
+| **A18** | **India news sourcing for the MCE news veto** — Google News RSS with `hl=en-IN&gl=IN&ceid=IN:en` + **FinBERT** (`ProsusAI/finbert`); **not** HTML-scraping MoneyControl/ET | MCE slice 6 (unbuilt) | ~1–2 days | *(repo 5)* The only worked example of Indian financial-news ingestion in this log, and it lands on a slice we have not built. RSS is stable and ToS-clean where scraping is neither (they ship three HTML-debug scripts — the evidence it kept breaking); FinBERT is local, cheap and reproducible, which a §8-validatable veto requires. |
+| A19 | **Normalise components before summing into a composite risk scalar** | any future composite score | — | *(repo 5)* Their Equation 3 sums beta (~1), inverse liquidity (unbounded), sector concentration (0–1) and annualised vol (~0.2–0.5) at equal weights, then thresholds at 0.75 — whichever term is largest dominates, so the weights are decorative. |
+| A20 | **A signed risk penalty that scales confidence, rather than a boolean gate** | overlay design | — | *(repo 5)* Their risk agent always enters synthesis with a negative sign and caps confidence at 60% on alert. Our overlays are on/off switches; **a modifier is closer to what the reverted regime gate should have been.** |
 | A1 | **Two-tier model routing** (cheap extract pass / strong judge pass) for the research loop | daily-analysis + review-calendar tooling | ~half day when that work starts | Never in the money path. Applies the moment an LLM step enters the research loop. |
 | A5 | **Self-documenting state schemas** — `Annotated[type, "meaning"]` on report/sidecar payload fields | sidecar + report payloads | ~2 hours | Field meaning currently lives in a docstring far from the type. |
 | **A9** | **A progress envelope for long-running jobs** — `{phase, step, total_steps, message}` streamed over WS | `make analysis`, backtests, walk-forward replay, EOD ingestion | ~1 day | *(repo 3)* The one genuinely good idea in that repo, and it is LLM-agnostic. Several of our jobs run for minutes with no progress surface at all — the walk-forward replay alone is ~8 minutes of silence. |
@@ -1300,12 +1478,17 @@ reading as a signal source.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Three of four advertise numbers or fields their own code cannot produce — and the
+0. **Four of five advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
    veto behind a `risk_approved` flag that is **hardcoded true**, plus an example output
    whose four actionable fields are unconditionally `{}`.
+
+   QuantAgents-NSE makes it four of five: a commit headline of *"improve backtester **to**
+   Sharpe 0.237, CAGR 8.9% vs Nifty 8.4%"* resting on a backtest that fills on the signal
+   bar's close, over a hindsight-picked survivor universe, **with two of its four agents
+   assigned to variables that are never read**.
 
    **quant-agent breaks the streak, and the way it breaks it is the lesson: it makes no
    performance claim at all.** Its only numeric claim (874 tests) *understates* reality
@@ -1316,29 +1499,36 @@ lessons is worth more than any one of them:
    it — and treat a repo that declines to claim as a positive signal, not a gap.
 1. **A simple baseline matches the elaborate system.** Buy-and-hold beat AgentQuant's agent
    (+102.4% vs +0.7%); logistic regression matches QuantHarness's four-agent GPT-4o vision
-   pipeline on 7 of 8 assets. **Neither repo leads with this, and both ship the data that
+   pipeline on 7 of 8 assets; QuantAgents-NSE's four agents beat the Nifty by 0.5pp at
+   Sharpe 0.237 — and two of those four were wired to nothing, so the number came from two. **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **The guard that matters is the one that is structural.** AgentQuant's generalization
+2. **Dead code advertised as a feature shows up in three of five.** AgentQuant fits an HMM
+   per call and discards the result, and never loads the `.harness/v6_research.json` it calls
+   "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
+   NSE computes a regime filter and a risk score into variables nothing reads. **In each case
+   the README describes the feature and the code disconnects it** — so "does this code path
+   affect the output?" is a faster audit than reading the logic, and `grep` answers it.
+3. **The guard that matters is the one that is structural.** AgentQuant's generalization
    gap was a metric that could only return zero; QuantHarness's look-ahead holdout is a
    commented-out line beside the live path. Both are documented safety nets with nothing
    that fails when they lapse — the same finding our own bug-hunter round produced when it
    showed the `unassessed` tripwire was imaginary (3 of 8 modes passed).
-3. **Published work stops where the hard part starts — with one exception.** None of the
+4. **Published work stops where the hard part starts — with one exception.** None of the
    first three has position sizing, risk limits, or a portfolio. QuantHarness is titled "for High-Frequency Trading"
    and models no position at all; ai-quant-agents leaves `suggested_action` empty. The
    runtime plumbing we have deferred to Phase 7 is not the boring part of this field — it
    is the part almost nobody does. **quant-agent is the exception that proves it**: it is the
    only one of the four with a real broker lifecycle, and it needed two audits finding 82
    defects — one of them leaving positions naked overnight — to get there.
-5. **The two failure modes are opposite, and ours is the safer one.** Repos 1–3 have
-   validation theatre with no production system. Repo 4 has a production system with no
-   validation. We have real validation and no production system yet — and of the three
-   states, only ours makes the missing half safe to build. An unvalidated system that runs
-   flawlessly is still unvalidated; it just loses money with better uptime.
-4. **"Confidence" is repeatedly a share, not a probability.** ai-quant-agents divides the
+5. **"Confidence" is repeatedly a share, not a probability.** ai-quant-agents divides the
    modal vote by the total and calls it confidence; agents sharing a model and prompt are
    not independent estimators, so their agreement is correlated by construction. Our own
    confluence normalises by the weight of factors that *scored*, which is the same shape of
    error and is how SRTL entered on a single indicator. **U17 (show the distribution, not
    the scalar) is the fix, and it generalises.**
+6. **The two failure modes are opposite, and ours is the safer one.** Repos 1–3 have
+   validation theatre with no production system. Repo 4 has a production system with no
+   validation. We have real validation and no production system yet — and of the three
+   states, only ours makes the missing half safe to build. An unvalidated system that runs
+   flawlessly is still unvalidated; it just loses money with better uptime.

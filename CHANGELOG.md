@@ -7,6 +7,54 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 5 QuantAgents-NSE — the only NSE repo, and its claim fails on six counts (2026-09-03)
+
+[PreethamSanji/QuantAgents-NSE](https://github.com/PreethamSanji/QuantAgents-NSE), ~7.9k LOC,
+**no LICENSE file**. Four agents (news/technical/risk/manager) replicating arXiv:2501.04916 on
+the Nifty 50, with FinBERT sentiment and a FinRL PPO model. **The first repo in the log on our
+own exchange**, which makes it the easiest to check — and the claim (a commit headline, not the
+README: *"improve backtester **to** Sharpe 0.237, CAGR 8.9% vs Nifty 8.4%"*) does not survive:
+
+1. **Look-ahead in the live backtest path** — the Otto score for a date is computed from
+   indicators including that date's close, and the trade fills at that same close. Our
+   constraint #3 exists for exactly this. First repo here with look-ahead in the *executed*
+   path rather than a commented-out holdout.
+2. **Survivorship bias twice over** — the universe is "top 10 Nifty 50 stocks with longest
+   yfinance history": current index membership *and* longest history, i.e. the ten blue chips
+   that both survived and stayed in.
+3. **Two of the four agents are wired to nothing** — `in_bull_market` (the 200-DMA regime
+   filter, advertised as *"eliminates the worst drawdown periods (2008, 2011, 2020)"*) and
+   `r_score_today` (Dave's Equation 3, weighted 30% in config) are both assigned and **never
+   read**; `risk_multiplier` is hardcoded 1.0. The backtested system is not the diagrammed one.
+4. **Tuning documented in the comments** — weekly-over-monthly rebalancing because monthly
+   "hurt CAGR", Emily's ±0.5 cap set so Bob can overcome it, asymmetric ±0.15/−0.10 thresholds.
+5. **Risk-free accrual added on idle cash** with the stated reason that it makes cash-holding
+   Sharpe-neutral — justified by a regime filter that is dead code.
+6. **No spread or impact** (commission only, ~0.2% round trip — actually conservative vs real
+   NSE delivery cost, but our 6.8.2 finding is that 82% of NSE books are wider than a flat 2bps).
+
+After all six the result is **+0.5pp CAGR at Sharpe 0.237** — inside the noise of a ten-stock
+five-year sample before any of it.
+
+Also **reproduced an NSE calendar bug**: `resample("W-FRI")` labels buckets with the calendar
+Friday while the index holds trading days, so **any week whose Friday is an NSE holiday skips
+rebalancing silently** (demonstrated against Good Friday 2025). Precisely the failure our
+domain rules name.
+
+Harvested: **A18** India news sourcing for the unbuilt **MCE news veto (slice 6)** — Google
+News RSS with `hl=en-IN&gl=IN&ceid=IN:en` plus **FinBERT** (`ProsusAI/finbert`), and explicitly
+**not** their MoneyControl/ET HTML scrapers (the repo ships three HTML-debug scripts — the
+evidence it kept breaking); **A19** normalise components before summing a composite risk scalar
+(their Equation 3 sums beta, inverse liquidity, sector concentration and vol at equal weights
+with no normalisation, so the largest-scale term dominates and the weights are decorative);
+**A20** a signed risk penalty that scales confidence rather than a boolean gate — closer to what
+the reverted regime gate should have been.
+
+Synthesis extended: lesson 0 is now four of five, and a new lesson 2 — **dead code advertised as
+a feature appears in three of five repos**, so "does this path affect the output?" is a faster
+audit than reading the logic, and `grep` answers it.
+
+
 ### docs(research): repo 4 quant-agent — the best-engineered of the four, and the only one whose claims survived audit (2026-09-03)
 
 [yebof/quant-agent](https://github.com/yebof/quant-agent), MIT, **~63k LOC · 1,344 tests**,
