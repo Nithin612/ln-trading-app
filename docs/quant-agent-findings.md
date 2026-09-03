@@ -39,6 +39,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 6B | [artist-hks/SentimentStock](https://github.com/artist-hks/SentimentStock) | 2026-09-03 | **A synthetic-data UI demo** — "Hinglish NLP" and "LSTM-style predictions" are `Math.sin(seed)`. No LICENSE (despite the badge). **Harvest 1 UI idea** (U19, the lag-correlation chart). |
 | 6C | [madhusudhan-nikhil/InvestmentPrediction](https://github.com/madhusudhan-nikhil/InvestmentPrediction) | 2026-09-03 | Real FastAPI+React app for Indian retail. **HRP portfolio construction is a genuine pointer**; its **"probable exit date" is arithmetic on the user's own input** — and doesn't even depend on the target price. No LICENSE. **Harvest A24 as a standing rule.** |
 | 7 | [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener) | 2026-09-03 | Unmaintained 2022–23 student project (MIT). **Picks its LSTM on a scaler fit over the full series and with no persistence baseline** — the winner is plausibly worse than "no change". Its breakout filter is **disabled by a truthy-string bug**. **Adopt nothing**; one pointer for the Minervini trend-template test. |
+| 8 | [pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain) | 2026-09-03 | **The only repo on our exact stack** (Kite WS + Redis + Indian derivatives), 952 LOC, unmaintained since 2023. Adopt no code (per-tick Redis writes, no TTL, unbounded threads). ⭐ **But it documents a Kite quirk we are exposed to — quote-mode ticks on a full-mode subscription — and our depth path never checks. A25 + A26.** |
 
 ---
 
@@ -1725,6 +1726,130 @@ returned findings.
 
 ---
 
+# 8. express-option-chain — `pramakrishn/express-option-chain`
+
+Reviewed 2026-09-03. MIT, **952 LOC, 3 commits, 2023-01 → 2023-07**, unmaintained. A focused
+pip-installable library that streams NSE/MCX/CDS/BCD **option chains over Kite Connect into
+Redis**.
+
+**This is the only repo in the log built on our exact stack** — Kite Connect WebSocket +
+Redis, Indian derivatives. It is infrastructure with no strategy and no performance claim,
+which by lesson 8 predicts it will hold up better than the strategy repos. It mostly does,
+and its most valuable contribution is a documented broker quirk that **we are currently
+exposed to**.
+
+## 8.1 The finding that matters: Kite can send quote-mode ticks on a full-mode subscription
+
+From `option_stream.py`:
+
+```python
+def on_ticks(self, ws, ticks):
+    if ticks[0]['mode'] != ws.MODE_FULL:
+        # bug: web socket sent ticks in quote mode even though we subscribed in full mode
+        log.error('websocket sent ticks in quote mode.. closing connection and reopening another one')
+        ws.stop()
+        return
+```
+
+A field-discovered Kite behaviour, with a workaround: detect the downgrade, tear the socket
+down, reopen.
+
+**We subscribe `MODE_FULL` and harvest order-book depth from those ticks — and we never check
+the mode.** Verified:
+
+- `live_worker.py:979` — `ws.set_mode(ws.MODE_FULL, list(token_map))`
+- `live_worker.py:505` — *"Also harvests top-of-book from the MODE_FULL ticks into…"*
+- `tick_consumer.py:256` — *"Order-book depth (6.8.1): cache top-of-book from the MODE_FULL tick"*
+- **No `tick['mode']` validation anywhere on either path.**
+
+If Kite exhibits this downgrade against us, the depth fields simply are not in the tick, so
+`depth:{stock_id}` goes stale, and **6.8.2's spread-aware fills silently fall back to the flat
+`paper_slippage_bps` floor** — which is exactly the fail-open behaviour we designed. That is
+correct engineering *and* the reason it is dangerous here: the degradation is invisible. The
+only symptom would be paper fills quietly getting cheaper than reality, on a book we are
+using to judge whether a −0.303R expectancy is improving.
+
+**A25 — assert the tick mode and count the degradations.** Cheap: check `mode` on the batch,
+increment a counter when it is not full, and surface it. It pairs exactly with **A11** (the
+session notifier) and with our existing **silent-feed-outage alarm (6.8.6)** — which already
+establishes the pattern that a quiet data failure needs a loud signal. Note this is *not* a
+bug we have observed; it is a documented broker behaviour we have no detector for, on a path
+built to fail open.
+
+## 8.2 Capacity limits done right — the contrast with our own hot-set flood
+
+They name the broker's constraints as constants, with provenance:
+
+```python
+# these are the limits set in kite connect 3
+MAX_TOKENS_PER_WEBSOCKET = 3000
+MAX_WEBSOCKET_CONNECTIONS = 3
+```
+
+…shard the token list across `ceil(n / 3000)` processes, and **refuse to start** past the
+ceiling with an error that names the actual numbers and two concrete remedies:
+
+> *"You have passed N trading symbols. M instrument tokens must be subscribed… which is
+> greater than the allowed value of 9000 tokens. Please lower the number of trading symbols…
+> or use a percentage criteria filter to filter out the tokens which are far from spot price."*
+
+**This is the direct contrast with a failure we have already had.** Our `live-worker` hot set
+had a cap, breadth alerts flooded it, and **watchlist stocks silently stopped being scored** —
+a capacity limit breached without a word. They fail loudly at the boundary and tell you how to
+get under it; we failed quietly and found it later. **A26 — when a capacity limit exists,
+refuse at the boundary with the numbers and the remedy, rather than degrading silently.**
+
+Their `criteria` percentage filter (drop strikes more than X% from spot) is also the right
+domain-shaped answer to a token budget — the same idea as our hot-set selection, applied to
+an option chain.
+
+*(One honesty note: the README's example comment says "there is no limit on the number of
+symbols to subscribe to", while the code raises at 9000 tokens. Mild, but it is the seventh
+of ten repos where a README overstates what the code does.)*
+
+## 8.3 What not to copy — and it is what our own rules already forbid
+
+Four defects, each mapping to a rule we hold:
+
+| Their code | Our rule |
+|---|---|
+| `self.db.hset('ticks', token, json.dumps(tick))` — **one Redis round-trip per tick**, in a loop, no pipelining. At 9000 instruments that is 9000 calls per batch. | *"Any new live-pipeline feature MUST wire into `live_worker`'s per-batch pipeline, never a per-tick `redis.set`"* — the exact defect perf-auditor caught in our 6.8.1. |
+| `threading.Thread(target=self.handle_ticks, …).start()` **on every tick callback** — unbounded thread creation, no queue, no backpressure. | Bounded queues with an explicit overflow policy; every task owned. |
+| `hset('ticks', …)` with **no TTL**. | *"Every cache key gets a TTL — eviction policy is volatile-lru, so TTL-less keys are treated as broker-critical and never evicted."* On our Redis this would be actively harmful. |
+| `ticks[0]['mode']` — indexes element 0 **without checking the list is non-empty.** | — |
+
+And two operational gaps:
+
+- **Token expiry is unhandled.** `on_noreconnect` logs *"reconnect failed"* and stops. There is
+  no `TokenException` path and no refresh. Since the Kite access token dies ~06:00 IST daily,
+  a long-running stream simply ends every morning. Our domain rules name this precisely: token
+  expiry *"must be treated as a normal lifecycle event (restart + warmup + gap-fill), not an
+  error loop."*
+- **The process watchdog is a startup check, not a supervisor.** It loops restarting dead
+  processes until all are alive, then **returns** — after which a process that dies is never
+  restarted. It also rebuilds the `Process` around the *same* `KiteTicker` object from the dead
+  process. Compare repo 4's approach, which is the right one: layered timeouts, a durable
+  repair queue drained at every session entry.
+
+One thing worth keeping from the same file: an explicit, hardware-anchored latency budget in a
+comment — *"make sure this method doesn't take more than 2s. A subscription of about 9000
+stocks would surpass the capability of an 8-core Mac laptop."* Stating the budget and the
+machine it was measured on is better practice than most of this log.
+
+## 8.4 Verdict
+
+**Adopt no code** — it is unmaintained since 2023, and its Redis and threading patterns are
+things our rules explicitly forbid. But it is a useful artifact: the only repo here operating
+the same broker API we do, and it hands us **one concrete gap (A25, the unvalidated tick mode
+on a fail-open depth path)** and **one sharpened principle (A26, refuse loudly at a capacity
+boundary)** that our own hot-set flood already proved we needed.
+
+Its infrastructure-not-strategy character holds up lesson 8 again: three of ten repos make
+no performance claim, and all three (quant-agent, PaperTrade-India, this) are the ones whose
+code is worth reading.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -1794,6 +1919,8 @@ from repo 1.
 | A16 | **Order-protection lifecycle as a state machine + durable repair queue** | Phase 7 BrokerAdapter / order FSM | Phase 7 | *(repo 4)* Not actionable pre-live, but the best available map of what Phase 7 must handle — five failure branches, each found the hard way, incl. reprotect-on-actual-fill and a drain queue so a mid-flight crash cannot leave a position naked overnight. **Read before Phase 7 starts.** |
 | A17 | **Provider failover semantics + pinned cost table** | any LLM research loop | ~half day | *(repo 4)* Single-shot fallback on non-retryable failure (never on truncation), and model prices pinned so a cache refresh cannot overwrite them with stale values. |
 | **A18** | **India news sourcing for the MCE news veto** — Google News RSS with `hl=en-IN&gl=IN&ceid=IN:en` + **FinBERT** (`ProsusAI/finbert`); **not** HTML-scraping MoneyControl/ET | MCE slice 6 (unbuilt) | ~1–2 days | *(repo 5)* The only worked example of Indian financial-news ingestion in this log, and it lands on a slice we have not built. RSS is stable and ToS-clean where scraping is neither (they ship three HTML-debug scripts — the evidence it kept breaking); FinBERT is local, cheap and reproducible, which a §8-validatable veto requires. |
+| **A25** | **★ Assert the tick mode on the depth path, and count degradations** | `live_worker.py` / `tick_consumer.py` tick handlers | ~2 hours | *(repo 8)* Kite is documented to send **quote-mode ticks on a full-mode subscription**; that repo detects it and reopens the socket. We subscribe `MODE_FULL` and harvest depth from it with **no mode check**, so the failure would silently stale `depth:{stock_id}` and drop 6.8.2's spread-aware fills back to the flat floor — invisibly, on the book we judge expectancy with. Pairs with A11 and the 6.8.6 staleness alarm. |
+| A26 | **Refuse loudly at a capacity boundary** — name the numbers and the remedy, never degrade silently | hot-set selection in `live_worker` | ~half day | *(repo 8)* They cap at Kite's `3 × 3000` tokens and refuse to start with an error stating the counts and two concrete fixes. **We had the opposite failure**: breadth alerts flooded the hot set and watchlist stocks silently stopped being scored. |
 | **A21** | **★ Mark-to-bid, so marks match fills** — value longs at bid / shorts at ask using the depth we already capture, falling back to last when stale | `_open_book_mtm` in `app/services/daily_report.py`, and any unrealized-P&L surface | ~half day | *(repo 6A)* **An internal inconsistency in our own system**: since 6.8.2 our *fills* pay the real half-spread, but our *marks* still use the last 1m close. With 82% of NSE books wider than 2 bps and a ~25-position book, reported open-book MTM is systematically optimistic. The data is already there. |
 | A22 | **Bracket sibling-quantity rebalance on partial fill** | Phase 7 order FSM | Phase 7 | *(repos 6A + 4)* Two independent projects hit this same failure — 6A factors it as a named function with tests; repo 4 called it the partial-fill mode "that took several iterations to fully pin down". Near-certain for us. |
 | A23 | **Date-versioned fee schedule** (effective-dated registry) | `app/trading/fees.py` | ~half day | *(repo 6A)* Ours is *designed* for this — the docstring says "versioned by effective date" — but is a single constant set today. Indian STT rates change mid-year; a backtest spanning a change silently uses today's rates. |
@@ -1825,7 +1952,7 @@ reading as a signal source.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Six of nine advertise numbers or fields their own code cannot produce — and the
+0. **Seven of ten advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -1859,7 +1986,7 @@ lessons is worth more than any one of them:
    it did not compare against.** **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **A guard that cannot return false shows up in three of nine — and it is the single most
+2. **A guard that cannot return false shows up in three of ten — and it is the single most
    repeated defect in this log.** AgentQuant's `generalization_gap = max(avg − best, 0)` is
    identically zero; ai-quant-agents' `risk_approved = "risk" not in decision.lower()` where
    `decision ∈ {BUY,HOLD,SELL}` is always true; repo 7's `is_breaking_out` calls a predicate
@@ -1867,7 +1994,7 @@ lessons is worth more than any one of them:
    applies. Three different root causes, one symptom. **The test is mechanical: for every
    guard, name the input that makes it fail — if you cannot, it is not a guard.** Our own
    `unassessed` tripwire failed exactly this (3 of 8 modes passed).
-3. **Dead code advertised as a feature shows up in three of nine.** AgentQuant fits an HMM
+3. **Dead code advertised as a feature shows up in three of ten.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
@@ -1897,14 +2024,23 @@ lessons is worth more than any one of them:
    validation. We have real validation and no production system yet — and of the three
    states, only ours makes the missing half safe to build. An unvalidated system that runs
    flawlessly is still unvalidated; it just loses money with better uptime.
-8. **The repos worth reading are the ones with nothing to sell.** Across nine, the two that
-   survive audit cleanly (quant-agent, PaperTrade-India) are both *infrastructure* — a
-   personal trading harness and a broker simulator. The ones that fail are all selling a
-   result: an evolved harness, a beaten benchmark, an agent consensus, a probable exit date.
-   **The presence of a headline performance number is, empirically, the best available
-   predictor that a repo's claims will not survive contact with its own source.**
+8. **The repos worth reading are the ones with nothing to sell.** Across ten, the three that
+   survive audit cleanly (quant-agent, PaperTrade-India, express-option-chain) are all
+   *infrastructure* — a personal trading harness, a broker simulator, a market-data streamer.
+   The ones that fail are all selling a result: an evolved harness, a beaten benchmark, an
+   agent consensus, a probable exit date, an LSTM. **The presence of a headline performance
+   number is, empirically, the best available predictor that a repo's claims will not survive
+   contact with its own source** — and its absence is the best predictor that the code is
+   worth reading.
 9. **Two independent projects hitting the same bug makes it near-certain for us.** Bracket
    sibling quantity on partial fill was found the hard way by repo 4 *and* factored as a named
    function in 6A. That is the strongest signal in this document about what Phase 7 will
    actually cost — stronger than either repo alone, and the reason A22 is queued before we
    have written a line of it.
+10. **The most useful findings came from the repos closest to our own stack, and they were
+    about *us*.** PaperTrade-India exposed that our fills are spread-aware while our marks are
+    not (A21); express-option-chain exposed that we harvest depth from `MODE_FULL` ticks
+    without ever checking the mode, on a path built to fail open (A25). **Neither was a defect
+    in their code — both were gaps in ours, visible only because someone else had solved the
+    same problem and left the guard in.** The lesson for the remaining repos: prioritise the
+    ones sharing our exchange, broker, or stack over the ones sharing our ambition.

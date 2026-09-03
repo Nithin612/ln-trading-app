@@ -7,6 +7,54 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 8 express-option-chain — the only repo on our exact stack, and it found a gap in ours (2026-09-03)
+
+[pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain), MIT,
+**952 LOC, 3 commits, 2023, unmaintained** — a focused library streaming NSE/MCX/CDS/BCD option
+chains over **Kite Connect WebSocket into Redis**. The only repo in the log built on our exact
+stack, and infrastructure rather than strategy (no performance claim), which by lesson 8
+predicted it would hold up. It largely does.
+
+**★ A25 — it documents a Kite behaviour we are exposed to.** Their `on_ticks` guards:
+
+```python
+if ticks[0]['mode'] != ws.MODE_FULL:
+    # bug: web socket sent ticks in quote mode even though we subscribed in full mode
+    ws.stop(); return
+```
+
+**We subscribe `MODE_FULL` and harvest order-book depth from those ticks, and never check the
+mode** — verified at `live_worker.py:979` / `:505` and `tick_consumer.py:256`, with no
+`tick['mode']` validation on either path. If Kite downgrades against us, `depth:{stock_id}` goes
+stale and **6.8.2's spread-aware fills silently fall back to the flat `paper_slippage_bps`
+floor** — the fail-open path working exactly as designed, and therefore invisibly. The symptom
+would be paper fills quietly getting cheaper than reality, on the book we use to judge whether
+−0.303R expectancy is improving. Fix is ~2 hours: assert the mode, count degradations, surface
+it. Pairs with A11 and the existing 6.8.6 staleness alarm. *(Not an observed bug — a documented
+broker behaviour we have no detector for.)*
+
+**A26 — refuse loudly at a capacity boundary.** They name Kite's limits as constants with
+provenance (`MAX_TOKENS_PER_WEBSOCKET = 3000`, `MAX_WEBSOCKET_CONNECTIONS = 3`), shard across
+processes, and **refuse to start** past the ceiling with an error stating the actual counts and
+two concrete remedies. **The direct contrast with a failure we already had**: our `live-worker`
+hot set was flooded by breadth alerts and watchlist stocks silently stopped being scored.
+
+**Adopt no code.** Its Redis and threading patterns are things our rules explicitly forbid: one
+`hset` round-trip **per tick** with no pipelining (the exact defect perf-auditor caught in our
+6.8.1), a new `threading.Thread` on every tick callback with no queue or backpressure, **no TTL**
+on the tick hash (harmful under our volatile-lru policy), and `ticks[0]` indexed without an
+emptiness check. Operationally: **token expiry is unhandled** (`on_noreconnect` logs and stops;
+the Kite token dies ~06:00 IST daily — our rules call this "a normal lifecycle event, not an
+error loop"), and its process watchdog is a **startup check, not a supervisor** — it returns once
+all processes are alive, after which a death is never repaired.
+
+Synthesis extended to ten repos, with a new closing lesson: **the most useful findings came from
+the repos closest to our own stack, and they were about *us*** — PaperTrade-India exposed A21
+(fills spread-aware, marks not), this one exposed A25. Neither was a defect in their code; both
+were gaps in ours, visible only because someone else solved the same problem and left the guard
+in. **Prioritise repos sharing our exchange, broker or stack over those sharing our ambition.**
+
+
 ### docs(research): repo 7 Stock-market-prediction-and-screener — leaked scaler, missing baseline, disabled guard (2026-09-03)
 
 [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener),
