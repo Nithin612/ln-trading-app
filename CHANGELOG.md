@@ -7,6 +7,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 13 AKShare — adopt no data code; take its testing strategy (2026-09-03)
+
+[akfamily/akshare](https://github.com/akfamily/akshare), MIT, **~103k LOC across 406 modules** —
+the free China-market data library that repos 5 and 9 both lean on.
+
+**The data layer is not for us, on three checks.** India coverage is **incidental** (global-index
+and macro modules, a rich-list scraper — nothing resembling NSE equity, corporate actions or F&O).
+**314 modules issue HTTP requests and only 13 mention retry, backoff or rate-limiting** — about
+4%, so it is not a model for hardening our ingestion either. And
+`docs/EXTERNAL_LIBS_REVIEW_2026-08-02.md` already settled the data-source question.
+
+**But its answer to "how do you test 400 scrapers?" is the best process idea in the log.** You
+cannot unit-test a thousand live public endpoints without a permanently red CI — so it tests the
+**contract surface** instead: `interfaces.json` records every public function with its module,
+example, limits and **full output schema**, and the suite pins reachability, export mapping and
+documentation coverage against that registry.
+
+**★ T8 — a self-cleaning debt baseline.** Five tests govern how known debt may exist:
+`baseline_allows_known_gaps` (legacy debt does not redden CI), `baseline_rejects_new_orphan` /
+`_new_undocumented` (new debt does), and — the sophisticated part —
+`baseline_rejects_stale_entry` / `baseline_rejects_fixed_orphan`: **the build fails when a
+baseline entry is no longer a problem.** Most known-failure allowlists rot into permanent
+amnesties that eventually suppress real regressions; this one can only shrink. We have the shape
+(typecheck coverage gaps, `STATUS.html` prose duplicating gate modes) and no mechanism.
+
+**★ T9 — turn the doc-sync ritual into failing tests. The finding that matters most.** They test
+release/doc consistency mechanically — missing changelog entry, missing `__init__` history, tag
+vs version mismatch, and `reports_every_problem_at_once` so a sweep is one pass rather than N.
+**Our doc-sync ritual is a procedure an agent must remember to run; theirs is a test that fails.**
+Our own lesson — *"a documented safety net is worth nothing without a test that fails when it
+lapses"*, drawn when the `unassessed` tripwire proved imaginary — was applied to our code and
+never to our process. Three of the ritual's seven steps are mechanically checkable today: a new
+`settings.*` without an `.env.example` line (promotes **W3**); a `docs/PHASES.md` `(updated …)`
+stamp older than the newest `docs/phases/*.md` change; and a gate mode in `STATUS.html`
+disagreeing with `settings` — the exact drift our memory warns about with *"grep the gate name on
+every flip"*, **a human ritual standing in for a test.**
+
+Its per-interface declared output schema is filed as a note against U8/A7 rather than a new item:
+it is how a *returned-but-unrendered field* gets caught mechanically, which we found by review
+instead (`unknown` had zero consumers).
+
+Synthesis extended to fifteen repos with lesson 14: **our most repeated process risk has the same
+fix as their most repeated code defect.** The commonest defect across the log is *a guard that
+cannot fail*; our process equivalent is *a ritual nobody is forced to run*. Same fix — make it a
+test.
+
+
 ### docs(research): repo 12 awesome-quant — a curated list, and the negative-control idea (2026-09-03)
 
 [wilsonfreitas/awesome-quant](https://github.com/wilsonfreitas/awesome-quant) — a **curated list,

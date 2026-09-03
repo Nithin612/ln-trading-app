@@ -47,6 +47,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 7 | [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener) | 2026-09-03 | Unmaintained 2022–23 student project (MIT). **Picks its LSTM on a scaler fit over the full series and with no persistence baseline** — the winner is plausibly worse than "no change". Its breakout filter is **disabled by a truthy-string bug**. **Adopt nothing**; one pointer for the Minervini trend-template test. |
 | 8 | [pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain) | 2026-09-03 | **The only repo on our exact stack** (Kite WS + Redis + Indian derivatives), 952 LOC, unmaintained since 2023. Adopt no code (per-tick Redis writes, no TTL, unbounded threads). ⭐ **But it documents a Kite quirk we are exposed to — quote-mode ticks on a full-mode subscription — and our depth path never checks. A25 + A26.** |
 | 9 | [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) | 2026-09-03 | **332k LOC in 27 days** (LLM-generated at scale), multi-market daily analysis + push. Adopt no code. ⭐ **But its phase-aware, fails-closed "which bar could this have acted on" resolver is the best treatment of that question in the log** — read `src/core/trading_calendar.py`. Makes no accuracy claim. **A27 + A28 extend A11**; its `AGENTS.md` seeds **W1–W5**. |
+| 13 | [akfamily/akshare](https://github.com/akfamily/akshare) | 2026-09-03 | 103k LOC of China data wrappers — **India coverage is incidental and only 13 of 314 HTTP modules mention retry**, so adopt nothing from the data layer. ⭐ **But its answer to "how do you test 400 scrapers" is the best process idea in the log: a self-cleaning debt baseline (T8) and doc/release consistency as failing tests rather than a ritual (T9).** |
 | 12 | [wilsonfreitas/awesome-quant](https://github.com/wilsonfreitas/awesome-quant) | 2026-09-03 | A **curated list**, not a codebase — mined for candidates, confirms our existing external-libs review. ⭐ **Its best find: purpose-built anti-overfitting audit tools whose worked example feeds pure noise through the audit and shows it caught** — which becomes **H8, a negative control against our own deflated-Sharpe bar.** Plus A36, T7. |
 | 11 | [vnpy/vnpy](https://github.com/vnpy/vnpy) | 2026-09-03 | ⭐ **The most Phase-7-relevant repo here** — a decade-proven live-trading framework, and **MIT, so vendorable where NautilusTrader (LGPL) is not.** Its event bus is **145 lines**; I reproduced **three robustness gaps in it** (a handler exception silently kills the bus). **A32 + A33**; third independent repo to make notification a core primitive, which settles A11. |
 | 10 | [microsoft/qlib](https://github.com/microsoft/qlib) | 2026-09-03 | ⭐⭐ **A different tier — the only genuine methodology reference here, and nothing needed debunking.** Point-in-time fundamentals as *syntax*, with **the best test in the log** (a value that changes on a cited real filing date). Exposed **two costing/realism gaps in our code (A29, A30)** and the pattern behind them (**A31**). Seeds **T1–T6**. |
@@ -2481,6 +2482,128 @@ earlier.
 
 ---
 
+# 14. AKShare — `akfamily/akshare`
+
+Reviewed 2026-09-03. MIT. **~103,000 LOC across 406 modules** — a very large collection of
+data-source wrappers for Chinese markets (plus macro, futures, options, funds, and a long tail
+of non-financial series). It is the free data source that both repo 5 and repo 9 lean on.
+
+**Verdict up front: adopt nothing from the data layer, take one testing idea that is better than
+anything we have for a problem we actually have.**
+
+## 14.1 Why the data layer is not for us
+
+Three checks, all negative:
+
+- **India coverage is incidental.** Grepping for India/Nifty/Sensex returns global-index and
+  macro modules (`index_global_em.py`, `macro_bank.py`) and a rich-list scraper. There is nothing
+  resembling NSE equity, corporate actions or F&O data. We have Kite plus the NSE bhavcopy and
+  indices CSVs; this adds nothing.
+- **The resilience story is thin.** **314 modules issue HTTP requests; only 13 mention retry,
+  backoff or rate-limiting at all** — about 4%. Most wrappers are a bare `requests.get` against a
+  public endpoint. So it is not a model for hardening our own ingestion, and repo 9's own
+  disclaimer about free sources being *"subject to upstream throttling, interface changes and
+  network volatility"* is well earned.
+- Our `docs/EXTERNAL_LIBS_REVIEW_2026-08-02.md` already settled the data-source question.
+
+## 14.2 ★ How do you test 400 scrapers? You don't — you test the contract
+
+This is the interesting part, and it is a genuinely good answer to a hard problem. You cannot
+unit-test a thousand scrapers against live public endpoints — CI would be permanently red
+through no fault of the code. So AKShare tests the **contract surface** instead:
+
+`akshare/data/interfaces.json` is a machine-readable record for every public data function —
+name, module, category, description, a runnable example, a rate/limit note, and **the full output
+schema (column names and dtypes)**. The suite then pins properties of that registry rather than
+the network:
+
+```
+test_every_registry_entry_is_reachable
+test_collect_exports_maps_name_to_module
+test_collect_all_names_excludes_dunder_and_third_party
+test_interface_info_unknown_name_suggests_candidates
+```
+
+**T8 — the self-cleaning baseline, and it is the best idea in this repo.** Five tests govern how
+known debt is allowed to exist:
+
+```
+test_baseline_allows_known_gaps        # legacy debt does not make CI red
+test_baseline_rejects_new_orphan       # …but new debt does
+test_baseline_rejects_new_undocumented
+test_baseline_rejects_stale_entry      # …and so does a baseline entry that is out of date
+test_baseline_rejects_fixed_orphan     # …and so does one you have already FIXED
+```
+
+The last two are what make it work. Most "known failures" allowlists rot: items get fixed but
+stay on the list forever, so the list stops meaning anything and eventually suppresses real
+regressions. **This one fails the build when a baseline entry is no longer a problem** — so the
+list can only shrink, and fixing something forces you to remove it. A ratchet, not an amnesty.
+
+We have exactly this shape of problem and no mechanism for it: legacy gaps we do not want to
+block on (`make typecheck` historically not covering `scripts/`, `STATUS.html` prose that
+duplicates gate modes), but which we also must not silently grow.
+
+**T9 — turn the doc-sync ritual into failing tests. This is the finding that matters most.**
+They test their release and documentation consistency mechanically:
+
+```
+test_collect_problems_detects_missing_changelog_entry
+test_collect_problems_detects_missing_init_history
+test_collect_problems_detects_tag_version_mismatch
+test_collect_problems_passes_when_all_aligned
+test_collect_problems_reports_every_problem_at_once
+```
+
+**Our doc-sync ritual is a procedure Claude has to remember to run at the end of every task. Theirs
+is a test that fails.** And our own hard-won lesson says precisely why that matters: *"a documented
+safety net is worth nothing without a test that fails when it lapses"* — the conclusion we drew
+when the `unassessed` tripwire turned out to be imaginary. **We applied that lesson to our code
+and never applied it to our process.**
+
+Concretely, three of our ritual's seven steps are mechanically checkable today:
+
+- a test that fails when a new `settings.*` entry has no `.env.example` line (this is **W3**,
+  promoted from a rule to a test);
+- a test that fails when `docs/PHASES.md`'s `(updated <date>)` stamp is older than the newest
+  change to a `docs/phases/*.md`;
+- a test that fails when a gate mode named in `STATUS.html` disagrees with `settings` — the exact
+  drift our own memory warns about (*"it HARDCODES gate modes in prose + an ASCII diagram, so a
+  mode flip silently falsifies it, so grep the gate name on every flip"*). **That "so grep it"
+  instruction is a human ritual standing in for a test.**
+
+Small companion idea worth taking: `test_collect_problems_reports_every_problem_at_once` — the
+checker returns **all** violations in one run rather than failing on the first, so a drift sweep
+is one pass instead of N.
+
+## 14.3 A declared output schema per interface
+
+Every entry in `interfaces.json` carries its output columns and dtypes. That is a heavier
+discipline than we need for a handful of data providers — but the *idea* lands on a defect we
+have already had: our review round found that **`unknown` was a returned-but-unrendered field
+with zero consumers**, i.e. a contract entry nothing used. A declared, tested interface record is
+how that gets caught rather than noticed later by a reviewer.
+
+Filed as a note against **U8/A7** (artifact provenance) rather than a new item: the principle is
+the same — a field, number or file that cannot name its producer or its consumer should not be in
+the contract.
+
+## 14.4 Verdict
+
+**Adopt no code and no dependency.** The data layer is China-specific with thin resilience, and
+we have already settled that question elsewhere.
+
+**Take T8 and T9.** They are the answer to a problem this project genuinely has: our process
+discipline — the doc-sync ritual, the review calendar, the "grep the gate name on every flip"
+instruction — is entirely dependent on an agent remembering to perform it. AKShare shows the
+alternative: **make the ritual a test, and let the debt list shrink monotonically.**
+
+That is also the cleanest available response to the standing risk in this whole document. Fourteen
+repos in, the most repeated finding is *a guard that cannot fail* — and our own most repeated
+process risk is *a ritual nobody is forced to run*. They have the same fix.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -2599,6 +2722,8 @@ is worth studying as a design artifact.
 |---|---|---|---|---|
 | **T1** | **★ A point-in-time test anchored to a real, cited filing date** — assert a fundamental value changes on the publication date and not before, with the NSE/BSE announcement URL in the test | with MCE slice 5b (`market_cap` writer) | ~half day, *when 5b is built* | *(repo 10)* MCE 5b is the keystone blocker for everything fundamental, and it inherits the classic trap: using currently-reported financials for a date before the report existed. Nothing in our stack expresses "as known on date D". A test citing a real filing **cannot rot into tautology** and makes the look-ahead claim falsifiable. |
 | **T7** | **Exhaustive-enum mapping test** — assert every variant of an enum is handled and deterministically ordered, so adding a variant without handling it **fails the suite** | gate modes, rejection reasons, sidecar readiness states | ~2 hours | *(repo 12)* We have already been burned by exactly this: *"v1's `unassessed` tripwire was IMAGINARY — 3 of 8 modes passed."* An enumeration not exhaustively handled, with no test to catch it. |
+| **T8** | **★ A self-cleaning debt baseline (ratchet)** — allow known gaps so CI isn't red, **reject new ones**, and **reject baseline entries that are stale or already fixed** so the list can only shrink | `backend/tests/` + whatever audit script it guards | ~half day | *(repo 13)* Most known-failure allowlists rot into permanent amnesties that suppress real regressions. This one fails the build when an entry is no longer a problem, forcing removal. We have the shape (typecheck coverage gaps, `STATUS.html` prose duplicating gate modes) and no mechanism. |
+| **T9** | **★ Turn the doc-sync ritual into failing tests** — a new `settings.*` without an `.env.example` line; a `docs/PHASES.md` `(updated …)` stamp older than the newest `docs/phases/*.md` change; a gate mode in `STATUS.html` disagreeing with `settings`. Report **all** violations in one pass | `backend/tests/` | ~1 day | *(repo 13)* **Our ritual is a procedure an agent must remember; theirs is a test that fails.** Our own lesson — *"a documented safety net is worth nothing without a test that fails when it lapses"* — was applied to our code and never to our process. The memory note *"grep the gate name on every flip"* is a human ritual standing in for a test. Subsumes and promotes **W3**. |
 | T2 | **Lifecycle-boundary tests for the execution simulator** — first step, start mid-stream, stop early, stop at benchmark | Phase 7 order FSM | Phase 7 | *(repo 10)* Not "does it run" but "does it behave when interrupted". Pairs with A22 (bracket sibling qty on partial fill) and A16 (durable repair queue) — both lifecycle-boundary bugs other people found the hard way. |
 | T3 | **Parametrised fill tests under a participation limit** | if/when we add a volume-participation cap | — | *(repo 10)* We model spread and size-vs-top-of-book impact; we do not cap participation by volume. This is the test shape if we do. |
 | T4 | **Explicit NaN / corner-case tests on every numeric boundary** (LTP, ATR, confidence, R:R) | `backend/tests/` | ~half day | *(repo 10)* Earned: a non-finite Redis LTP once 500'd the signal detail endpoint because `Decimal("nan")` parses without raising. |
@@ -2623,7 +2748,7 @@ session behaves.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Seven of fourteen advertise numbers or fields their own code cannot produce — and the
+0. **Seven of fifteen advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -2657,7 +2782,7 @@ lessons is worth more than any one of them:
    it did not compare against.** **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **A guard that cannot return false shows up in three of fourteen — and it is the single most
+2. **A guard that cannot return false shows up in three of fifteen — and it is the single most
    repeated defect in this log.** AgentQuant's `generalization_gap = max(avg − best, 0)` is
    identically zero; ai-quant-agents' `risk_approved = "risk" not in decision.lower()` where
    `decision ∈ {BUY,HOLD,SELL}` is always true; repo 7's `is_breaking_out` calls a predicate
@@ -2665,7 +2790,7 @@ lessons is worth more than any one of them:
    applies. Three different root causes, one symptom. **The test is mechanical: for every
    guard, name the input that makes it fail — if you cannot, it is not a guard.** Our own
    `unassessed` tripwire failed exactly this (3 of 8 modes passed).
-3. **Dead code advertised as a feature shows up in three of fourteen.** AgentQuant fits an HMM
+3. **Dead code advertised as a feature shows up in three of fifteen.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
@@ -2741,7 +2866,14 @@ lessons is worth more than any one of them:
     proving the detector fires. Nothing else in thirteen repos does this, and it is the natural
     extension of our own rule that *a metric which cannot come out badly is not a metric*: a
     **bar** that has never been shown to reject anything is in the same position. Hence H8.
-14. **The most useful findings came from the repos closest to our own stack, and they were
+14. **Our most repeated process risk has the same fix as their most repeated code defect.**
+    Across fifteen repos the single most common defect is *a guard that cannot fail*. Our own
+    equivalent, in process rather than code, is *a ritual nobody is forced to run* — the doc-sync
+    ritual, the review calendar, the memory note that says "grep the gate name on every flip".
+    AKShare shows the fix is identical in both cases: **make it a test that fails.** We already
+    drew this conclusion once, about code, when the `unassessed` tripwire turned out to be
+    imaginary — and never applied it to our process. Hence T8 and T9.
+15. **The most useful findings came from the repos closest to our own stack, and they were
     about *us*.** PaperTrade-India exposed that our fills are spread-aware while our marks are
     not (A21); express-option-chain exposed that we harvest depth from `MODE_FULL` ticks
     without ever checking the mode, on a path built to fail open (A25). **Neither was a defect
