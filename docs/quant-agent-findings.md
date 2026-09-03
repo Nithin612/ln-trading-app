@@ -47,6 +47,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 7 | [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener) | 2026-09-03 | Unmaintained 2022–23 student project (MIT). **Picks its LSTM on a scaler fit over the full series and with no persistence baseline** — the winner is plausibly worse than "no change". Its breakout filter is **disabled by a truthy-string bug**. **Adopt nothing**; one pointer for the Minervini trend-template test. |
 | 8 | [pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain) | 2026-09-03 | **The only repo on our exact stack** (Kite WS + Redis + Indian derivatives), 952 LOC, unmaintained since 2023. Adopt no code (per-tick Redis writes, no TTL, unbounded threads). ⭐ **But it documents a Kite quirk we are exposed to — quote-mode ticks on a full-mode subscription — and our depth path never checks. A25 + A26.** |
 | 9 | [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) | 2026-09-03 | **332k LOC in 27 days** (LLM-generated at scale), multi-market daily analysis + push. Adopt no code. ⭐ **But its phase-aware, fails-closed "which bar could this have acted on" resolver is the best treatment of that question in the log** — read `src/core/trading_calendar.py`. Makes no accuracy claim. **A27 + A28 extend A11**; its `AGENTS.md` seeds **W1–W5**. |
+| 16 | [RyanCodrai/turbovec](https://github.com/RyanCodrai/turbovec) | 2026-09-03 | **Not a trading repo** (quantized vector search for RAG) — **domain rejected, no stretch made.** But it shares our Rust+PyO3 wheel shape, and its `deny.toml` documents **a guard that could not fail caught in its own CI** (`yanked` defaults to Warn ⇒ a yanked dep passed green). **A39: we have no supply-chain gate on `engine/` at all.** |
 | 15 | [bbfamily/abu](https://github.com/bbfamily/abu) | 2026-09-03 | **GPL-3 — a hard adoption blocker**, and 2017-era code. But its `UmpBu` "referees" are **meta-labeling implemented years before the term was standard**, and structurally *our overlay pattern*: cluster your actual losers and let the clusters define the veto. **H10** (attacks our hypothesis-driven-partition failure mode; also an overfitting machine — gated behind DSR + H8) and **U20**. |
 | 14 | [quantopian/zipline](https://github.com/quantopian/zipline) | 2026-09-03 | ⭐⭐ Archived 2020, but the ancestor of the modern Python backtesting lineage and **architecturally the best idea in the log: look-ahead is not forbidden, it is *not expressible*** (strategies get a `BarData` bound to the simulation clock). **A38 — a composable point-in-time `Restrictions` interface supersedes A30 and unifies our fragmented eligibility logic.** Plus A37, T10. |
 | 13 | [akfamily/akshare](https://github.com/akfamily/akshare) | 2026-09-03 | 103k LOC of China data wrappers — **India coverage is incidental and only 13 of 314 HTTP modules mention retry**, so adopt nothing from the data layer. ⭐ **But its answer to "how do you test 400 scrapers" is the best process idea in the log: a self-cleaning debt baseline (T8) and doc/release consistency as failing tests rather than a ritual (T9).** |
@@ -2874,6 +2875,71 @@ accidentally.
 
 ---
 
+# 17. turbovec — `RyanCodrai/turbovec`
+
+Reviewed 2026-09-03. MIT, ~39,600 LOC Rust + Python bindings. **Not a trading repo** — it is a
+quantized vector-search index (Google Research's TurboQuant) for RAG and embedding search.
+
+**The honest answer to "is it useful by any chance": no on the domain, yes on one small thing.**
+
+## 17.1 The domain is not ours, and I am not going to manufacture a use
+
+We have no embedding corpus, no RAG, and no similarity search anywhere in the stack. The only
+conceivable hook is "find similar historical trades", which is exactly abu's Edge referee from
+§16 — and there the bottleneck is **statistical validity, not search speed.** At n≈99 trades you
+compute pairwise distances in numpy, as abu does. A quantized ANN index that exists to fit 10
+million vectors in 4 GB has nothing to offer a hundred rows.
+
+Filed as **considered and rejected**, deliberately, because the more useful discipline at this
+point in the log is refusing to stretch for relevance.
+
+## 17.2 ★ But its supply-chain gate found the log's #1 defect in its own CI
+
+The genuinely valuable thing is `deny.toml` — a **cargo-deny** configuration, enforced by a
+`supply-chain.yml` workflow, auditing RustSec advisories, banned crates and sources. Its comment
+is the best worked example of this document's most repeated finding:
+
+> *`supply-chain.yml` advertises this gate as "RustSec vulnerabilities + yanked crates", but
+> cargo-deny **defaults `yanked` to Warn** and `cargo deny check` **only exits non-zero on
+> Deny-level findings** — so **a yanked dependency produced a warning and a green run (#491)**. A
+> yank is the registry telling us not to use a version; treat it as blocking.*
+> ```toml
+> yanked = "deny"
+> ```
+
+**A guard that could not fail, caught in the wild, with the issue number cited.** The gate was
+true in intent and false in effect, purely because a tool's default severity made it
+non-blocking. That is lesson 2 of this log — *a guard that cannot return false* — in its most
+instructive form, because nothing in the code was wrong: the *configuration default* was.
+
+Their `ignore` list also carries the **T8 ratchet discipline** without needing a test to enforce
+it: *"Keep this list tight and documented — every entry is a consciously accepted residual"*, with
+each entry giving the advisory ID, why it is accepted, the PR that accepted it, and the condition
+to revisit.
+
+**A39 — we have no supply-chain gate on `engine/` at all.** Our Rust rules specify
+`cargo fmt --check`, `cargo clippy -- -D warnings` and `cargo test`; there is no advisory scan and
+no licence audit. We ship a compiled wheel (`tradecore`) that runs options math **on the money
+path**, built from a dependency graph nobody audits. `cargo-deny` is a config file and a CI step,
+and this repo hands us the two settings that make it real: **`yanked = "deny"`**, and a documented
+ignore list where every entry is a dated, justified, revisitable exception.
+
+*(Their `.claude/` holds only a `bgIsolation` setting and a plain-English summarise skill —
+nothing we need.)*
+
+## 17.3 Verdict
+
+**Reject the library; take `A39`.** The domain is irrelevant to us and saying so plainly is the
+correct outcome — but the repo happens to demonstrate, on itself, the exact failure this log has
+now catalogued three times in code and once in tooling. That was worth the ten minutes.
+
+It also answers the implicit question well: **a non-trading repo can be worth reviewing, but for
+its engineering practice rather than its subject** — and the filter is whether it shares a *stack*
+or a *discipline* with us, not whether it shares a domain. This one shares our Rust + PyO3 wheel
+shape, which is why the supply-chain finding transferred and nothing else did.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -2951,6 +3017,7 @@ from repo 1.
 | **A32** | **★ Event-bus robustness rules for Phase 7** — isolate exceptions **per handler**, bound the queue with a stated overflow policy, iterate a **snapshot** of the handler list, and **make a dead bus loud** | Phase 7 runtime | Phase 7 | *(repo 11)* Reproduced in vnpy: one handler exception kills the consumer thread, the healthy handler receives nothing, and `put()` keeps succeeding — the system looks alive and is completely deaf. A silently deaf trading system is strictly worse than one that crashes. |
 | **A33** | **★ OMS as a projection of the event stream**, with one `is_active()` predicate maintaining one active-order set, and gateway-namespaced ids | Phase 7 OMS | Phase 7 | *(repo 11)* State derived from events can be rebuilt by replay, which is what makes reconciliation tractable. We have been bitten by the inverse — `signals.status` is a mutable lifecycle field doing double duty as durable fact. |
 | **A36** | **Alarm on NSE calendar coverage expiry** — proactive "calendar covers only to `<date>`, N trading days remain", plus a cross-check of upcoming dates against `exchange_calendars`' XNSE | `app/services/market_calendar.py` + A11 | ~2 hours | *(repo 12)* Our calendar is **better sourced than any library** (past holidays derived from observed bhavcopy gaps = ground truth) but its expiry path is a **passive WARNING inside a query**, seen by nobody, falling back to weekday arithmetic. Same pattern as A25/A30: a degradation technically announced and practically invisible. |
+| **A39** | **A `cargo-deny` supply-chain gate for `engine/`** — RustSec advisories, banned crates, licence audit; **`yanked = "deny"`**; and a documented ignore list where every entry names the advisory, the reason, the PR that accepted it and the revisit condition | `engine/deny.toml` + a CI step | ~2 hours | *(repo 16)* Our Rust gate is `fmt` + `clippy -D warnings` + `test` — **no advisory scan, no licence audit** — and we ship a compiled wheel (`tradecore`) running options math **on the money path** from a dependency graph nobody audits. The source repo also hands us the non-obvious setting: cargo-deny defaults `yanked` to *Warn*, so the gate passes green on a yanked dependency unless you say otherwise. |
 | A34 | **A timer event as the single scheduling primitive** — periodic work becomes an ordinary subscriber | Phase 7 runtime; possibly earlier | ~half day | *(repo 11)* Our 6.8.6 staleness alarm, the provisional-health watch and the CAS capture window are all "do this on a clock" problems currently solved three different ways. |
 | A35 | **Define `BrokerAdapter` as an interface a second broker could implement**, even while only Kite does | Phase 7 | included in Phase 7 | *(repo 11)* vnpy's core ships no gateway, which forces the interface to be a real contract. The cheapest insurance against a Kite-shaped abstraction leaking through the whole execution path. |
 | **A29** | **★ Add the flat DP charge per delivery sell, and a per-trade cost floor** | `app/trading/fees.py` (`FeeSchedule`) | ~2 hours | *(repo 10 + 6A)* Our schedule is otherwise correct but has no `dp_charge_per_sell`; Zerodha/CDSL levy a **flat ~₹13.5–20 per delivery sell scrip regardless of size**. A fixed cost disproportionately hits small positions — exactly what our notional cap produces and exactly the ₹1L / 1–2 position shape live will have. **We are under-costing the paper book, in the direction that flatters an already-negative expectancy.** |
@@ -3023,7 +3090,7 @@ session behaves.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Seven of seventeen advertise numbers or fields their own code cannot produce — and the
+0. **Seven of eighteen advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -3057,7 +3124,7 @@ lessons is worth more than any one of them:
    it did not compare against.** **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **A guard that cannot return false shows up in three of seventeen — and it is the single most
+2. **A guard that cannot return false shows up in four of eighteen — and it is the single most
    repeated defect in this log.** AgentQuant's `generalization_gap = max(avg − best, 0)` is
    identically zero; ai-quant-agents' `risk_approved = "risk" not in decision.lower()` where
    `decision ∈ {BUY,HOLD,SELL}` is always true; repo 7's `is_breaking_out` calls a predicate
@@ -3065,7 +3132,14 @@ lessons is worth more than any one of them:
    applies. Three different root causes, one symptom. **The test is mechanical: for every
    guard, name the input that makes it fail — if you cannot, it is not a guard.** Our own
    `unassessed` tripwire failed exactly this (3 of 8 modes passed).
-3. **Dead code advertised as a feature shows up in three of seventeen.** AgentQuant fits an HMM
+
+   **Repo 16 adds the most instructive variant: the code was fine and the *configuration default*
+   was not.** Its CI advertised a "yanked crates" gate, but `cargo-deny` defaults `yanked` to
+   *Warn* and only exits non-zero on Deny-level findings — so a yanked dependency produced a
+   warning and a green run. **A gate can be disarmed by a default you never chose**, which means
+   the test extends: name the input that makes it fail *and confirm the tool would actually
+   fail on it*.
+3. **Dead code advertised as a feature shows up in three of eighteen.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
@@ -3157,14 +3231,21 @@ lessons is worth more than any one of them:
     PIT syntax. **Rules and reviews catch mistakes; design prevents them** — and where we build new
     evaluation surfaces (MCE 5b above all), an accessor bound to an "as of" timestamp is cheaper
     than a rule and cannot lapse.
-16. **Licence is a first-class review criterion, and it decides before merit does.** Seventeen
+16. **Licence is a first-class review criterion, and it decides before merit does.** Eighteen
     repos: mostly MIT or Apache, one **GPL-3** (abu — unadoptable for us regardless of quality),
     one **LGPL** (NautilusTrader, per our earlier review), and **four with no LICENSE file at all**
     (repos 5, 6B, 6C, and 3's org mismatch) — which is *more* restrictive than GPL, since no
     licence means no grant of rights. **vnpy being MIT is the single most consequential licence
     fact in this document**, because it makes the one repo we would most plausibly borrow from
     (Phase 7 runtime) legally borrowable, where NautilusTrader is not.
-17. **The most useful findings came from the repos closest to our own stack, and they were
+17. **A repo outside our domain can still be worth reviewing — the filter is shared *stack* or
+    shared *discipline*, not shared subject.** turbovec is vector search for RAG and has nothing
+    to say about trading; its domain was rejected without stretching for a use. But it shares our
+    Rust + PyO3 wheel shape, and that one structural similarity carried a real finding (A39)
+    across. **The corollary matters more: when a repo shares neither stack nor discipline,
+    "no" is the correct and complete answer**, and manufacturing relevance would have cost more
+    than it returned.
+18. **The most useful findings came from the repos closest to our own stack, and they were
     about *us*.** PaperTrade-India exposed that our fills are spread-aware while our marks are
     not (A21); express-option-chain exposed that we harvest depth from `MODE_FULL` ticks
     without ever checking the mode, on a path built to fail open (A25). **Neither was a defect

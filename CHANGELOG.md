@@ -7,6 +7,42 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 16 turbovec — domain rejected, but its supply-chain gate found the log's #1 defect (2026-09-03)
+
+[RyanCodrai/turbovec](https://github.com/RyanCodrai/turbovec), MIT, ~39.6k LOC Rust + Python —
+**not a trading repo**: a quantized vector-search index (Google Research's TurboQuant) for RAG.
+User asked whether it was useful "by any chance".
+
+**Domain answer: no, and recorded as considered-and-rejected without stretching for a use.** We
+have no embedding corpus, no RAG and no similarity search. The only conceivable hook is "find
+similar historical trades" — abu's Edge referee from §16 — where the bottleneck is **statistical
+validity, not search speed**; at n≈99 trades you use numpy pairwise distances, as abu does. An ANN
+index built to fit 10M vectors in 4 GB has nothing to offer a hundred rows.
+
+**★ But it shares our Rust + PyO3 wheel shape, and that carried one finding across.** Its
+`deny.toml` (cargo-deny, enforced by a `supply-chain.yml` workflow) documents, in a comment, the
+most instructive instance yet of this log's #1 defect:
+
+> *the workflow advertises a "yanked crates" gate, but cargo-deny **defaults `yanked` to Warn** and
+> `cargo deny check` only exits non-zero on Deny-level findings — so **a yanked dependency produced
+> a warning and a green run (#491)**.*
+
+**A guard that could not fail, caught in the wild, issue number cited — and nothing in the code was
+wrong: the *configuration default* was.** Lesson 2 extended accordingly: name the input that makes
+a guard fail **and confirm the tool would actually fail on it**, because a gate can be disarmed by
+a default you never chose. Their `ignore` list also carries the T8 ratchet discipline informally —
+every entry names the advisory, the reason, the PR that accepted it and the revisit condition.
+
+**A39 — we have no supply-chain gate on `engine/` at all.** Our Rust gate is `fmt` + `clippy -D
+warnings` + `test`: no advisory scan, no licence audit. We ship a compiled wheel (`tradecore`)
+running options math **on the money path** from a dependency graph nobody audits. ~2 hours, and
+this repo hands us the two settings that make it real.
+
+Synthesis extended to eighteen repos with lesson 17: **a repo outside our domain can still be worth
+reviewing — the filter is shared *stack* or shared *discipline*, not shared subject.** The
+corollary matters more: when a repo shares neither, **"no" is the correct and complete answer**.
+
+
 ### docs(research): repo 15 abu — meta-labeling in 2017, and why it is dangerous (2026-09-03)
 
 [bbfamily/abu](https://github.com/bbfamily/abu), **GPL-3.0**, ~56k LOC — a Chinese quant framework
