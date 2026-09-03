@@ -47,6 +47,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 7 | [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener) | 2026-09-03 | Unmaintained 2022–23 student project (MIT). **Picks its LSTM on a scaler fit over the full series and with no persistence baseline** — the winner is plausibly worse than "no change". Its breakout filter is **disabled by a truthy-string bug**. **Adopt nothing**; one pointer for the Minervini trend-template test. |
 | 8 | [pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain) | 2026-09-03 | **The only repo on our exact stack** (Kite WS + Redis + Indian derivatives), 952 LOC, unmaintained since 2023. Adopt no code (per-tick Redis writes, no TTL, unbounded threads). ⭐ **But it documents a Kite quirk we are exposed to — quote-mode ticks on a full-mode subscription — and our depth path never checks. A25 + A26.** |
 | 9 | [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) | 2026-09-03 | **332k LOC in 27 days** (LLM-generated at scale), multi-market daily analysis + push. Adopt no code. ⭐ **But its phase-aware, fails-closed "which bar could this have acted on" resolver is the best treatment of that question in the log** — read `src/core/trading_calendar.py`. Makes no accuracy claim. **A27 + A28 extend A11**; its `AGENTS.md` seeds **W1–W5**. |
+| 12 | [wilsonfreitas/awesome-quant](https://github.com/wilsonfreitas/awesome-quant) | 2026-09-03 | A **curated list**, not a codebase — mined for candidates, confirms our existing external-libs review. ⭐ **Its best find: purpose-built anti-overfitting audit tools whose worked example feeds pure noise through the audit and shows it caught** — which becomes **H8, a negative control against our own deflated-Sharpe bar.** Plus A36, T7. |
 | 11 | [vnpy/vnpy](https://github.com/vnpy/vnpy) | 2026-09-03 | ⭐ **The most Phase-7-relevant repo here** — a decade-proven live-trading framework, and **MIT, so vendorable where NautilusTrader (LGPL) is not.** Its event bus is **145 lines**; I reproduced **three robustness gaps in it** (a handler exception silently kills the bus). **A32 + A33**; third independent repo to make notification a core primitive, which settles A11. |
 | 10 | [microsoft/qlib](https://github.com/microsoft/qlib) | 2026-09-03 | ⭐⭐ **A different tier — the only genuine methodology reference here, and nothing needed debunking.** Point-in-time fundamentals as *syntax*, with **the best test in the log** (a value that changes on a cited real filing date). Exposed **two costing/realism gaps in our code (A29, A30)** and the pattern behind them (**A31**). Seeds **T1–T6**. |
 
@@ -2359,6 +2360,127 @@ which repos 4 and 6A already showed cost 82 defects and 543 tests respectively t
 
 ---
 
+# 13. awesome-quant — `wilsonfreitas/awesome-quant`
+
+Reviewed 2026-09-03. A **curated list**, not a codebase — so there is nothing to audit and the
+review shape is different: mine it for candidates, cross-check against our existing
+`docs/EXTERNAL_LIBS_REVIEW_2026-08-02.md` (which concluded *adopt none as dependencies*), and
+report only what is genuinely new. Actively maintained — last commit the day before review, with
+a daily CI cron that re-parses the list, enriches it with GitHub stars and last-commit dates, and
+regenerates a static site.
+
+Most of its ~777 lines are irrelevant to us (crypto, R, FX, fixed income, US-market tooling).
+Three findings survive.
+
+## 13.1 ★ The best find: purpose-built anti-overfitting audit tools
+
+Two entries in its **Factor Analysis** section are, essentially, the checklist this entire review
+log has been applying by hand — packaged as libraries:
+
+> **Lacuna** — *"Engine-agnostic quantitative research validation for detecting **leakage,
+> overfitting, fragile results, unrealistic costs, and missing point-in-time evidence**."*
+
+> **Perception-XAlpha Lite** — *"Backtest-overfitting audit for factor research: **CSCV
+> probability of backtest overfitting, deflated Sharpe against the declared trial count, White's
+> Reality Check, point-in-time universe membership and disclosure-date alignment.** Ships a worked
+> example in which **24 pure-noise series produce a 1.11 Sharpe and the audit says so.**"*
+
+That second description maps onto our situation almost line by line:
+
+| Their check | Our state |
+|---|---|
+| Deflated Sharpe **against the declared trial count** | We built DSR on 2026-09-03 — and its known weakness is that **we hand-pick the trial count** (we assumed 20). U4 was meant to make it observed. |
+| **CSCV** probability of backtest overfitting | We don't have it. A genuine complement to DSR — different test, same question. |
+| White's Reality Check | We don't have it. |
+| **Point-in-time universe membership** | Exactly the survivorship failure I found in repo 5. |
+| **Disclosure-date alignment** | Exactly qlib's T1, and exactly what MCE 5b will need. |
+
+**H8 — the negative control, and it is the single best idea in this repo.** Their worked example
+feeds **pure noise** through the audit and shows it producing a 1.11 Sharpe, with the audit
+correctly rejecting it. That is a *test of the test*: proof that your overfitting detector
+actually fires.
+
+**We should do exactly this to our own deflated-Sharpe bar.** Generate N pure-noise "gates" —
+random partitions of the real trade set with no predictive content — run them through the same
+`deflated_sharpe.py` path our real gates use, and assert the bar rejects them. If a noise gate
+clears our bar, the bar is broken and every readiness banner built on it is worthless. This is
+cheap (the machinery already exists), it is a genuine test rather than an argument, and it
+directly addresses the thing that has bitten us twice: **promoting on evidence that looked
+sufficient.** Our own rule already says a metric that cannot come out badly is not a metric —
+this is the same principle applied to the bar itself.
+
+**H9 (research pointer, not queued work)** — CSCV/PBO and White's Reality Check as complements to
+DSR, and `mlfinlab`'s **meta-labeling**, which our e-book review already identified as *"our
+overlay pattern"* under a different name. Worth a look when the post-watch-mode research queue is
+next opened, not before.
+
+## 13.2 Calendar: we are ahead, but our warning is too quiet
+
+The **Calendars & Market Hours** section lists `exchange_calendars` (which qlib uses, and which
+ships an **XNSE** calendar) and `pandas_market_calendars`. Worth checking ours against:
+
+Our `app/services/market_calendar.py` is, on inspection, **better than adopting either** —
+because of how it sources the past:
+
+> *"the table is seeded from bhavcopy session gaps (past, ground truth) plus published NSE
+> circulars (future)."*
+
+Deriving historical holidays from **observed** bhavcopy gaps is ground truth; a published
+library's historical list can be wrong and you would never know. We should not replace that.
+
+But the same docstring names the weakness:
+
+> *"Queries beyond the last seeded holiday log a WARNING and fall back to weekday arithmetic —
+> add the new year's circular via the admin endpoint when NSE publishes it."*
+
+**A36 — alarm on calendar coverage expiry, don't just warn at query time.** This is the same
+pattern this log keeps surfacing: a degradation that is technically announced and practically
+invisible. A passive WARNING inside a query is seen by nobody; what is needed is a proactive
+"the NSE calendar covers only to `<date>` — N trading days remain" notification (A11), plus a
+cheap second opinion by cross-checking upcoming dates against `exchange_calendars`' XNSE. Note
+repo 6A solved the same problem a third way — a `scripts/update_nse_holidays.py` refresh plus a
+versioned `nse_holidays_2026.json`. Three approaches to one problem; ours has the best data and
+the weakest alarm.
+
+## 13.3 Workbench: a markdown list with a test suite
+
+Unusually, the list ships `tests/` — `test_readme_entries.py`, `test_url_probe.py`,
+`test_audit_readme.py` — validating entry format, resolving URLs, and detecting dead or archived
+projects. Two test names are worth stealing outright:
+
+**T7 — `test_all_finding_kinds_are_mapped_and_sorted_deterministically`.** A test asserting that
+the complete set of enum variants is exhaustively mapped and deterministically ordered — so
+**adding a new variant without handling it fails the suite.** We have exactly this exposure, and
+we have already been burned by it: our review round found *"v1's `unassessed` tripwire was
+IMAGINARY — 3 of 8 modes passed"*, which is precisely an enumeration that was not exhaustively
+handled with no test to catch it. Gate modes (`off`/`shadow`/`active`), rejection reasons and
+sidecar readiness states all want this test.
+
+**`test_api_error_fails_closed`** — the same principle as repo 9's phase resolver and qlib's PIT
+`NaN`. **Third independent appearance of "fails closed" as an explicitly named, tested
+behaviour**, which is why it is lesson 10.
+
+Its `CLAUDE.md` is a clean, ordinary example of the genre — pipeline description, commands,
+architecture — with nothing our own doesn't already do better. Its PR-review automation
+(`test_pr_review_workflow.py`) is real but irrelevant to a solo repo.
+
+## 13.4 Verdict
+
+**Adopt nothing; it confirms our existing external-libs review.** Its value is discovery, and it
+delivered one item worth real work — **H8, the noise negative-control against our own
+deflated-Sharpe bar** — plus **A36** and **T7**, and a research pointer at CSCV/PBO and
+meta-labeling.
+
+The meta-observation: a list like this is the correct *first* stop for a question like "does a
+tool already exist for the bar I am about to hand-build?" We built the deflated-Sharpe bar from
+first principles on 2026-09-03; two libraries in this list already implement it alongside three
+tests we do not have. **That does not mean we should have used them** — ours is stdlib-only and
+wired into our own evidence path, which is worth a great deal — but it does mean the *design*
+could have been informed for free, and the negative-control idea would have arrived a week
+earlier.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -2374,6 +2496,8 @@ of these is measurement or reporting surface, never the money path.
 | **H2** | **Buy-and-hold benchmark line in the daily report** | `app/services/daily_report.py`, reading the existing `index_ohlcv_1d` (782 bars/index, already backfilled) | ~half day | We do not have one — I checked; `benchmark.py` is per-signal relative strength, not a portfolio baseline. AgentQuant's most sobering number was buy-and-hold beating five years of agent work, and it was invisible until someone opened a CSV. Our book is **−0.303R expectancy**; the honest denominator is what NIFTY did over the same window. Cheap, and it reframes every subsequent gate argument. |
 | **H3** | **Re-frame the VIX companion as a trailing percentile** | `app/signals/market_regime.py` | ~1 day | Converts a knob blocked on backfill (`absolute 20`, US-derived, "too shallow to §8-validate") into a self-calibrating, distribution-free one. Does **not** promote anything — market-regime stays shadow and still owes its count and DSR bar. |
 | **H4** | **Gate/hypothesis register as data** | new table or a `docs/` machine-readable file: gate · mode · pre-registered prediction · bar · current count · verdict · review-due | ~1 day | Constraint #8 makes me the owner of the review calendar and requires me to raise items *unprompted*. That calendar is prose today. Modelled on `AlphaStore`'s schema, not its code. Would also give the failed-hypothesis archive a home (regime gate, R:R≥1 already populate it). |
+| **H8** | **★ A noise negative-control against our own deflated-Sharpe bar** — generate N random, content-free partitions of the real trade set, run them through the *same* `deflated_sharpe.py` path the real gates use, and assert the bar **rejects** them | `backend/tests/` + `app/services/deflated_sharpe.py` | ~half day | *(repo 12)* A test of the test. If a noise gate clears our bar, the bar is broken and every readiness banner built on it is worthless. The machinery already exists, it is a genuine test rather than an argument, and it targets exactly what has bitten us twice — **promoting on evidence that looked sufficient.** Our own rule says a metric that cannot come out badly is not a metric; this applies it to the bar itself. |
+| H9 | **CSCV / probability of backtest overfitting, and White's Reality Check**, as complements to DSR; and `mlfinlab`'s **meta-labeling** | post-watch-mode research queue | research | *(repo 12)* Different tests, same question — multiple-testing robustness. Meta-labeling is our overlay pattern under another name (already flagged in the e-book review). **Pointer, not queued work.** |
 | H5 | `WarmupEnforcer` / `@enforce_lookback` as a runtime invariant | `app/analysis/` boundary — **frozen engine, so overlay//caller side only** | ~1 day | Turns a review-convention into a loud failure. Low urgency: no look-ahead bug is currently suspected. |
 | H6 | `MAX_RATIO` sentinel instead of `inf` for degenerate ratios | wherever R:R / Calmar-like ratios are computed | ~1 hour | We have the `RR≈228` tiny-SL artifact on record. Trivial hygiene. |
 | H7 | Sharpe-decay alarm on shadow gates | daily report / readiness banners | ~1 day | The regime gate sat `NOT READY` for 7 report days before action. Detection existed; alarming did not. Partly subsumed by H4. |
@@ -2431,6 +2555,7 @@ from repo 1.
 | **A25** | **★ Assert the tick mode on the depth path, and count degradations** | `live_worker.py` / `tick_consumer.py` tick handlers | ~2 hours | *(repo 8)* Kite is documented to send **quote-mode ticks on a full-mode subscription**; that repo detects it and reopens the socket. We subscribe `MODE_FULL` and harvest depth from it with **no mode check**, so the failure would silently stale `depth:{stock_id}` and drop 6.8.2's spread-aware fills back to the flat floor — invisibly, on the book we judge expectancy with. Pairs with A11 and the 6.8.6 staleness alarm. |
 | **A32** | **★ Event-bus robustness rules for Phase 7** — isolate exceptions **per handler**, bound the queue with a stated overflow policy, iterate a **snapshot** of the handler list, and **make a dead bus loud** | Phase 7 runtime | Phase 7 | *(repo 11)* Reproduced in vnpy: one handler exception kills the consumer thread, the healthy handler receives nothing, and `put()` keeps succeeding — the system looks alive and is completely deaf. A silently deaf trading system is strictly worse than one that crashes. |
 | **A33** | **★ OMS as a projection of the event stream**, with one `is_active()` predicate maintaining one active-order set, and gateway-namespaced ids | Phase 7 OMS | Phase 7 | *(repo 11)* State derived from events can be rebuilt by replay, which is what makes reconciliation tractable. We have been bitten by the inverse — `signals.status` is a mutable lifecycle field doing double duty as durable fact. |
+| **A36** | **Alarm on NSE calendar coverage expiry** — proactive "calendar covers only to `<date>`, N trading days remain", plus a cross-check of upcoming dates against `exchange_calendars`' XNSE | `app/services/market_calendar.py` + A11 | ~2 hours | *(repo 12)* Our calendar is **better sourced than any library** (past holidays derived from observed bhavcopy gaps = ground truth) but its expiry path is a **passive WARNING inside a query**, seen by nobody, falling back to weekday arithmetic. Same pattern as A25/A30: a degradation technically announced and practically invisible. |
 | A34 | **A timer event as the single scheduling primitive** — periodic work becomes an ordinary subscriber | Phase 7 runtime; possibly earlier | ~half day | *(repo 11)* Our 6.8.6 staleness alarm, the provisional-health watch and the CAS capture window are all "do this on a clock" problems currently solved three different ways. |
 | A35 | **Define `BrokerAdapter` as an interface a second broker could implement**, even while only Kite does | Phase 7 | included in Phase 7 | *(repo 11)* vnpy's core ships no gateway, which forces the interface to be a real contract. The cheapest insurance against a Kite-shaped abstraction leaking through the whole execution path. |
 | **A29** | **★ Add the flat DP charge per delivery sell, and a per-trade cost floor** | `app/trading/fees.py` (`FeeSchedule`) | ~2 hours | *(repo 10 + 6A)* Our schedule is otherwise correct but has no `dp_charge_per_sell`; Zerodha/CDSL levy a **flat ~₹13.5–20 per delivery sell scrip regardless of size**. A fixed cost disproportionately hits small positions — exactly what our notional cap produces and exactly the ₹1L / 1–2 position shape live will have. **We are under-costing the paper book, in the direction that flatters an already-negative expectancy.** |
@@ -2473,6 +2598,7 @@ is worth studying as a design artifact.
 | # | Item | Where it lands | Effort | Why now |
 |---|---|---|---|---|
 | **T1** | **★ A point-in-time test anchored to a real, cited filing date** — assert a fundamental value changes on the publication date and not before, with the NSE/BSE announcement URL in the test | with MCE slice 5b (`market_cap` writer) | ~half day, *when 5b is built* | *(repo 10)* MCE 5b is the keystone blocker for everything fundamental, and it inherits the classic trap: using currently-reported financials for a date before the report existed. Nothing in our stack expresses "as known on date D". A test citing a real filing **cannot rot into tautology** and makes the look-ahead claim falsifiable. |
+| **T7** | **Exhaustive-enum mapping test** — assert every variant of an enum is handled and deterministically ordered, so adding a variant without handling it **fails the suite** | gate modes, rejection reasons, sidecar readiness states | ~2 hours | *(repo 12)* We have already been burned by exactly this: *"v1's `unassessed` tripwire was IMAGINARY — 3 of 8 modes passed."* An enumeration not exhaustively handled, with no test to catch it. |
 | T2 | **Lifecycle-boundary tests for the execution simulator** — first step, start mid-stream, stop early, stop at benchmark | Phase 7 order FSM | Phase 7 | *(repo 10)* Not "does it run" but "does it behave when interrupted". Pairs with A22 (bracket sibling qty on partial fill) and A16 (durable repair queue) — both lifecycle-boundary bugs other people found the hard way. |
 | T3 | **Parametrised fill tests under a participation limit** | if/when we add a volume-participation cap | — | *(repo 10)* We model spread and size-vs-top-of-book impact; we do not cap participation by volume. This is the test shape if we do. |
 | T4 | **Explicit NaN / corner-case tests on every numeric boundary** (LTP, ATR, confidence, R:R) | `backend/tests/` | ~half day | *(repo 10)* Earned: a non-finite Redis LTP once 500'd the signal detail endpoint because `Decimal("nan")` parses without raising. |
@@ -2497,7 +2623,7 @@ session behaves.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Seven of thirteen advertise numbers or fields their own code cannot produce — and the
+0. **Seven of fourteen advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -2531,7 +2657,7 @@ lessons is worth more than any one of them:
    it did not compare against.** **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **A guard that cannot return false shows up in three of thirteen — and it is the single most
+2. **A guard that cannot return false shows up in three of fourteen — and it is the single most
    repeated defect in this log.** AgentQuant's `generalization_gap = max(avg − best, 0)` is
    identically zero; ai-quant-agents' `risk_approved = "risk" not in decision.lower()` where
    `decision ∈ {BUY,HOLD,SELL}` is always true; repo 7's `is_breaking_out` calls a predicate
@@ -2539,7 +2665,7 @@ lessons is worth more than any one of them:
    applies. Three different root causes, one symptom. **The test is mechanical: for every
    guard, name the input that makes it fail — if you cannot, it is not a guard.** Our own
    `unassessed` tripwire failed exactly this (3 of 8 modes passed).
-3. **Dead code advertised as a feature shows up in three of thirteen.** AgentQuant fits an HMM
+3. **Dead code advertised as a feature shows up in three of fourteen.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
@@ -2588,7 +2714,10 @@ lessons is worth more than any one of them:
    have written a line of it.
 10. **One line decides whether a system is honest: what it does with the ambiguous case.**
     Repo 9's bar resolver returns `None` — excluding the record from scoring — for any unknown
-    or calendar-inconsistent session phase, and says so: *"it fails closed."* Every repo that
+    or calendar-inconsistent session phase, and says so: *"it fails closed."* Qlib's PIT layer
+    returns `NaN` rather than forward-filling; repo 12 ships a test literally named
+    `test_api_error_fails_closed`. **Three independent codebases name and test this as a
+    principle**, which is why it sits this high. Every repo that
     failed this audit resolved ambiguity the other way: a missing holdout became the full
     window, an unrecognised phase became "close enough", a `'NO'` string became `True`.
     **Failing closed is cheap, usually one line, and it is the single clearest separator
@@ -2607,7 +2736,12 @@ lessons is worth more than any one of them:
     order lifecycle and reconciliation** — 82 defects across two audits in repo 4, 543 tests in
     6A, and the same partial-fill bug found independently by both. Budget Phase 7 accordingly:
     little for the bus, a lot for the FSM.
-13. **The most useful findings came from the repos closest to our own stack, and they were
+13. **Test the test.** Repo 12's audit tool ships a worked example in which **24 pure-noise
+    series produce a 1.11 Sharpe and the audit correctly rejects them** — a negative control
+    proving the detector fires. Nothing else in thirteen repos does this, and it is the natural
+    extension of our own rule that *a metric which cannot come out badly is not a metric*: a
+    **bar** that has never been shown to reject anything is in the same position. Hence H8.
+14. **The most useful findings came from the repos closest to our own stack, and they were
     about *us*.** PaperTrade-India exposed that our fills are spread-aware while our marks are
     not (A21); express-option-chain exposed that we harvest depth from `MODE_FULL` ticks
     without ever checking the mode, on a path built to fail open (A25). **Neither was a defect

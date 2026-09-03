@@ -7,6 +7,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 12 awesome-quant — a curated list, and the negative-control idea (2026-09-03)
+
+[wilsonfreitas/awesome-quant](https://github.com/wilsonfreitas/awesome-quant) — a **curated list,
+not a codebase**, so mined for candidates rather than audited, and cross-checked against our
+existing `docs/EXTERNAL_LIBS_REVIEW_2026-08-02.md` (which concluded *adopt none as dependencies*).
+That conclusion stands. Three findings survive.
+
+**★ H8 — the best idea in the repo, and it is a test of our own bar.** Its Factor Analysis section
+lists purpose-built backtest-overfitting auditors — *Lacuna* ("leakage, overfitting, fragile
+results, unrealistic costs, missing point-in-time evidence") and *Perception-XAlpha Lite* ("CSCV
+probability of backtest overfitting, deflated Sharpe against the declared trial count, White's
+Reality Check, point-in-time universe membership, disclosure-date alignment"). The second **ships
+a worked example in which 24 pure-noise series produce a 1.11 Sharpe and the audit correctly
+rejects them** — a negative control proving the detector fires.
+
+**We should do exactly this to `deflated_sharpe.py`**: generate N content-free random partitions
+of the real trade set, run them through the *same* path the real gates use, and assert the bar
+rejects them. **If a noise gate clears our bar, the bar is broken and every readiness banner built
+on it is worthless.** Cheap (the machinery exists), a genuine test rather than an argument, and
+aimed squarely at what has bitten us twice — promoting on evidence that looked sufficient. Our own
+rule says a metric that cannot come out badly is not a metric; a *bar* never shown to reject
+anything is in the same position. **H9** records CSCV/PBO, White's Reality Check and `mlfinlab`'s
+meta-labeling as research pointers, not queued work.
+
+**A36 — our NSE calendar is better sourced than any library, and has the weakest alarm.**
+`market_calendar.py` seeds past holidays from **observed bhavcopy session gaps** (ground truth —
+a published list can be wrong and you would never know), so we should *not* adopt
+`exchange_calendars`. But its expiry path is a **passive WARNING inside a query**, falling back to
+weekday arithmetic — seen by nobody. Needs a proactive "calendar covers only to `<date>`, N
+trading days remain" notification (A11) plus a cheap cross-check against XNSE. Same pattern as
+A25/A30: a degradation technically announced and practically invisible. (Repo 6A solved it a third
+way — a refresh script plus versioned JSON.)
+
+**T7 — exhaustive-enum mapping test.** The list ships a test suite for its own markdown, including
+`test_all_finding_kinds_are_mapped_and_sorted_deterministically`: adding an enum variant without
+handling it fails the suite. **We have been burned by exactly this** — *"v1's `unassessed` tripwire
+was IMAGINARY — 3 of 8 modes passed."* Gate modes, rejection reasons and sidecar readiness states
+all want it. Its `test_api_error_fails_closed` is also the **third independent codebase** to name
+and test "fails closed" as a principle.
+
+Synthesis extended to fourteen repos with lesson 13, **"test the test"**, and lesson 10 reinforced
+by its third independent instance.
+
+Meta-observation recorded: we built the deflated-Sharpe bar from first principles on 2026-09-03,
+and two libraries in this list already implement it alongside three tests we do not have. That does
+**not** mean we should have used them — ours is stdlib-only and wired into our own evidence path —
+but the design could have been informed for free, and the negative-control idea would have arrived
+a week earlier. A curated list is the right *first* stop for "does a tool already exist for the bar
+I am about to hand-build?"
+
+
 ### docs(research): repo 11 vnpy — the most Phase-7-relevant repo, and its 145-line event bus (2026-09-03)
 
 [vnpy/vnpy](https://github.com/vnpy/vnpy), **MIT**, core ~12.8k LOC (gateways and strategy apps
