@@ -7,6 +7,41 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 18 QUANTAXIS — QIFI's account model exposes our missing frozen-capital concept (2026-09-03)
+
+[yutiansut/QUANTAXIS](https://github.com/yutiansut/QUANTAXIS), **MIT**, ~66.3k LOC, actively
+maintained — a long-running Chinese full-stack quant framework. **No performance claim, the ninth
+repo to decline.**
+
+Most of its layers duplicate ground this log already covered in better implementations
+(`QAEngine`/`QAPubSub` vs vnpy's event bus, `QAFetch` vs AKShare, `QAFactor`/`QAIndicator` vs qlib),
+and those are not re-derived. **One module is distinctive and produces one queue item.**
+
+**QIFI** is an account-state interoperability protocol, published as **`qifi.md` (spec) +
+`qifi.sql` (DDL) + one implementation** — the contract as an artifact rather than an
+implementation detail, which is the third independent appearance of that instinct here (after
+AKShare's `interfaces.json` and qlib's PIT field syntax). Its account model separates four things
+our code treats as roughly one: `pre_balance` (yesterday's close), `static_balance` (today's
+settlement baseline), `balance` (static + floating P&L) and `money` (**available** cash = balance −
+frozen − margin), with an explicit daily settlement roll. That vocabulary reinforces a rule repo 4
+already taught us — *the circuit-breaker baseline is always `last_equity`, not last night's DB
+snapshot* — expressed as a schema rather than a convention. Our breaker's IST calendar-day baseline
+is sound, so no defect there; the value is the naming.
+
+**★ A42 — the actionable finding: we have no concept of frozen capital.** Verified — every
+`frozen` in our codebase is `@dataclass(frozen=True)`. Cash committed to a *pending, unfilled*
+order is not reserved anywhere. Harmless today because paper fills are immediate, so no order is
+ever outstanding — **but Phase 7 removes that property**, and two orders can then be sized against
+the same cash. This is exactly the family of bug repo 4 documented from production: *a filter
+pre-deducted **phantom cash**, letting BUYs quietly borrow margin (2026-04-19)*. Cheap to design
+now while the account model is small and paper-only; expensive to retrofit once orders can sit
+unfilled. Pairs with **A33** — the frozen amount is derivable from the active-order set, so both
+belong in one design pass.
+
+Lesson 8 promoted from observation to prior: across twenty repos, **nine decline to publish any
+performance number, and they are without exception the ones whose code was worth reading.**
+
+
 ### docs(research): repo 17 QuantDinger — closest analogue to our platform; its MCP model and worker-liveness alert (2026-09-03)
 
 [OpenByteInc/QuantDinger](https://github.com/OpenByteInc/QuantDinger), **Apache 2.0**, ~177.6k LOC,

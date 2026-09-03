@@ -47,6 +47,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 7 | [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener) | 2026-09-03 | Unmaintained 2022–23 student project (MIT). **Picks its LSTM on a scaler fit over the full series and with no persistence baseline** — the winner is plausibly worse than "no change". Its breakout filter is **disabled by a truthy-string bug**. **Adopt nothing**; one pointer for the Minervini trend-template test. |
 | 8 | [pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain) | 2026-09-03 | **The only repo on our exact stack** (Kite WS + Redis + Indian derivatives), 952 LOC, unmaintained since 2023. Adopt no code (per-tick Redis writes, no TTL, unbounded threads). ⭐ **But it documents a Kite quirk we are exposed to — quote-mode ticks on a full-mode subscription — and our depth path never checks. A25 + A26.** |
 | 9 | [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) | 2026-09-03 | **332k LOC in 27 days** (LLM-generated at scale), multi-market daily analysis + push. Adopt no code. ⭐ **But its phase-aware, fails-closed "which bar could this have acted on" resolver is the best treatment of that question in the log** — read `src/core/trading_calendar.py`. Makes no accuracy claim. **A27 + A28 extend A11**; its `AGENTS.md` seeds **W1–W5**. |
+| 18 | [yutiansut/QUANTAXIS](https://github.com/yutiansut/QUANTAXIS) | 2026-09-03 | MIT, ~66k LOC, active. Most layers duplicate ground already covered better (vnpy, qlib, AKShare). **One distinctive module — QIFI, an account-state protocol published as spec + DDL + implementation** — and it exposed that **we have no frozen/committed-capital concept**, harmless while paper fills are immediate and a real hazard once Phase 7 has pending orders. **A42.** Ninth repo with no performance claim. |
 | 17 | [OpenByteInc/QuantDinger](https://github.com/OpenByteInc/QuantDinger) | 2026-09-03 | ⭐ **The closest product-shaped analogue to our platform**, on nearly our stack (Py3.12/Postgres/Redis), same end-to-end scope, Apache-2, **no performance claim**, committed the day of review. **W6: its MCP server is the best "expose your platform to an agent" security model in the log** — the agent gets a versioned API, never the internals. Plus **A40**, **A41**. |
 | 16 | [RyanCodrai/turbovec](https://github.com/RyanCodrai/turbovec) | 2026-09-03 | **Not a trading repo** (quantized vector search for RAG) — **domain rejected, no stretch made.** But it shares our Rust+PyO3 wheel shape, and its `deny.toml` documents **a guard that could not fail caught in its own CI** (`yanked` defaults to Warn ⇒ a yanked dep passed green). **A39: we have no supply-chain gate on `engine/` at all.** |
 | 15 | [bbfamily/abu](https://github.com/bbfamily/abu) | 2026-09-03 | **GPL-3 — a hard adoption blocker**, and 2017-era code. But its `UmpBu` "referees" are **meta-labeling implemented years before the term was standard**, and structurally *our overlay pattern*: cluster your actual losers and let the clusters define the veto. **H10** (attacks our hypothesis-driven-partition failure mode; also an overfitting machine — gated behind DSR + H8) and **U20**. |
@@ -3082,6 +3083,93 @@ metric and alert, which converts two of our standing human rituals into an alarm
 
 ---
 
+# 19. QUANTAXIS — `yutiansut/QUANTAXIS`
+
+Reviewed 2026-09-03. **MIT**, ~66,300 LOC, actively maintained (last commit 2026-09-01). A
+long-running Chinese full-stack quant framework: data fetch, indicators, factors, backtest,
+account/market simulation, scheduling, pub/sub, a web server, and **QIFI**.
+
+**No performance claim — the ninth repo to decline**, and at this point the correlation is strong
+enough to treat as a prior rather than an observation.
+
+Most of its layers replicate patterns this log has already covered in better implementations —
+`QAEngine`/`QAPubSub` against vnpy's event bus (§12), `QAFetch` against AKShare (§14),
+`QAFactor`/`QAIndicator` against qlib (§10). I am not going to re-derive those. **One module is
+genuinely distinctive and produces one queue item.**
+
+## 19.1 QIFI — an account-state protocol, defined as a spec rather than a class
+
+`QUANTAXIS/QIFI/` ships `qifi.md` (the specification), `qifi.sql` (the DDL) and
+`QifiAccount.py` (one implementation). **QIFI is an interoperability protocol for representing an
+account's complete state** — broker-agnostic, so different systems can exchange account snapshots.
+
+Its account model separates four things our code treats as roughly one:
+
+| QIFI field | Meaning |
+|---|---|
+| `pre_balance` | yesterday's closing balance |
+| `static_balance` | the **settlement baseline** for today |
+| `balance` | current value — static balance plus floating P&L |
+| `money` | **available** cash — balance minus frozen minus margin |
+
+…plus `frozen` (capital committed but not yet spent), `positions`, `orders`, `trades`, `banks`
+(deposits/withdrawals) and `events`, with an explicit daily settlement roll:
+
+```python
+self.pre_balance += (self.deposit - self.withdraw + self.close_profit)
+self.static_balance = self.pre_balance
+```
+
+Two observations.
+
+**First, the vocabulary is right and reinforces a rule we already learned.** Repo 4's CLAUDE.md
+records that *"the circuit-breaker baseline is **always** `last_equity`, not last night's DB
+snapshot"* — QIFI is that distinction expressed as a schema rather than a convention. Our own
+breaker computes from the IST calendar-day start, which is a sound baseline for our
+paper-and-realized model, so there is no defect here; the value is the naming.
+
+**Second, and this is the actionable one: we have no concept of frozen capital.** I checked —
+every `frozen` in our codebase is `@dataclass(frozen=True)`. Cash committed to a *pending,
+unfilled* order is not reserved anywhere.
+
+Today that is harmless, because paper fills are immediate: there is no window in which an order is
+outstanding. **Phase 7 removes that property.** With real pending orders at a broker, two orders
+can each be sized against the same cash unless something reserves it — and this is precisely the
+family of bug repo 4 documented from production:
+
+> *a filter once treated `alloc=0` as a full sell and pre-deducted **phantom cash**, letting BUYs
+> quietly borrow margin (2026-04-19).*
+
+Same failure class: cash accounting that does not account for what is in flight.
+
+**A42 — introduce `frozen` / available-cash accounting before Phase 7 places its first real
+order.** Cheap to design now while the account model is small and paper-only; expensive to retrofit
+once orders can sit unfilled. It pairs with A33 (the OMS as a projection with one `is_active()`
+predicate) — the frozen amount is derivable from the active-order set, which is exactly why the
+two belong in the same design pass.
+
+## 19.2 One practice note
+
+QIFI is published as **`qifi.md` (spec) + `qifi.sql` (schema) + implementation**, with the
+protocol documented independently of any one codebase. That is the right shape for a contract
+meant to outlive its first implementation — and it is the same instinct as AKShare's
+`interfaces.json` (§14.3) and qlib's PIT field syntax (§10.1): **make the contract an artifact,
+not an implementation detail.**
+
+Not queue-worthy for a solo project with one consumer, but worth naming, because it is the third
+independent appearance of that instinct in this log.
+
+## 19.3 Verdict
+
+**Adopt no code.** Most of the framework duplicates ground already covered better elsewhere in
+this review, and the parts that don't are shaped around Chinese futures/equity settlement
+mechanics that do not map to NSE.
+
+**One item: A42, frozen-capital accounting, as a Phase 7 prerequisite.** Plus the ninth
+confirmation that repos which decline to publish a performance number are the ones worth reading.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -3159,6 +3247,7 @@ from repo 1.
 | **A32** | **★ Event-bus robustness rules for Phase 7** — isolate exceptions **per handler**, bound the queue with a stated overflow policy, iterate a **snapshot** of the handler list, and **make a dead bus loud** | Phase 7 runtime | Phase 7 | *(repo 11)* Reproduced in vnpy: one handler exception kills the consumer thread, the healthy handler receives nothing, and `put()` keeps succeeding — the system looks alive and is completely deaf. A silently deaf trading system is strictly worse than one that crashes. |
 | **A33** | **★ OMS as a projection of the event stream**, with one `is_active()` predicate maintaining one active-order set, and gateway-namespaced ids | Phase 7 OMS | Phase 7 | *(repo 11)* State derived from events can be rebuilt by replay, which is what makes reconciliation tractable. We have been bitten by the inverse — `signals.status` is a mutable lifecycle field doing double duty as durable fact. |
 | **A36** | **Alarm on NSE calendar coverage expiry** — proactive "calendar covers only to `<date>`, N trading days remain", plus a cross-check of upcoming dates against `exchange_calendars`' XNSE | `app/services/market_calendar.py` + A11 | ~2 hours | *(repo 12)* Our calendar is **better sourced than any library** (past holidays derived from observed bhavcopy gaps = ground truth) but its expiry path is a **passive WARNING inside a query**, seen by nobody, falling back to weekday arithmetic. Same pattern as A25/A30: a degradation technically announced and practically invisible. |
+| **A42** | **★ Frozen / available-cash accounting — a Phase 7 prerequisite** — reserve capital committed to pending-but-unfilled orders; separate *balance* from *available cash* | account model, before the first real order | ~1 day | *(repo 18)* Verified: **we have no frozen-capital concept at all** (every `frozen` in the codebase is `@dataclass(frozen=True)`). Harmless today because paper fills are immediate — **Phase 7 removes that property**, and two orders can then be sized against the same cash. This is the family of bug repo 4 documented from production: *a filter pre-deducted **phantom cash**, letting BUYs quietly borrow margin*. Pairs with **A33**: the frozen amount is derivable from the active-order set, so both belong in one design pass. |
 | **A40** | **★ Export a worker-liveness metric and alert on it** (`workers_healthy{role=…} < 1` for 2 min) | worker heartbeat + A11 delivery | ~half day | *(repo 17)* **Converts two standing human rituals into an alarm.** CAS capture needs `make worker` up 15:15–15:33 IST and **a missed window cannot be back-filled** — today's protocol is "check the row count each morning"; the provisional-health watch has no scheduler at all. Both are worker-liveness problems dressed as rituals. Strengthens A11 rather than replacing it. |
 | A41 | **Split Redis by durability** — `volatile-lru` for cache (`ltp:`/`depth:`/`circuit:`), `noeviction` for durable jobs | deployment | ~half day (ops cost) | *(repo 17)* They run separate `redis-cache` and `redis-jobs` instances. Our rule *"TTL-less keys are treated as broker-critical and never evicted"* exists **because** both concerns share one eviction policy — two instances remove the conflict instead of documenting around it. **Low priority** until Phase 7 adds a durable repair queue, which is exactly that shape. |
 | **A39** | **A `cargo-deny` supply-chain gate for `engine/`** — RustSec advisories, banned crates, licence audit; **`yanked = "deny"`**; and a documented ignore list where every entry names the advisory, the reason, the PR that accepted it and the revisit condition | `engine/deny.toml` + a CI step | ~2 hours | *(repo 16)* Our Rust gate is `fmt` + `clippy -D warnings` + `test` — **no advisory scan, no licence audit** — and we ship a compiled wheel (`tradecore`) running options math **on the money path** from a dependency graph nobody audits. The source repo also hands us the non-obvious setting: cargo-deny defaults `yanked` to *Warn*, so the gate passes green on a yanked dependency unless you say otherwise. |
@@ -3235,7 +3324,7 @@ session behaves.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Seven of nineteen advertise numbers or fields their own code cannot produce — and the
+0. **Seven of twenty advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -3269,7 +3358,7 @@ lessons is worth more than any one of them:
    it did not compare against.** **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **A guard that cannot return false shows up in four of nineteen — and it is the single most
+2. **A guard that cannot return false shows up in four of twenty — and it is the single most
    repeated defect in this log.** AgentQuant's `generalization_gap = max(avg − best, 0)` is
    identically zero; ai-quant-agents' `risk_approved = "risk" not in decision.lower()` where
    `decision ∈ {BUY,HOLD,SELL}` is always true; repo 7's `is_breaking_out` calls a predicate
@@ -3284,7 +3373,7 @@ lessons is worth more than any one of them:
    warning and a green run. **A gate can be disarmed by a default you never chose**, which means
    the test extends: name the input that makes it fail *and confirm the tool would actually
    fail on it*.
-3. **Dead code advertised as a feature shows up in three of nineteen.** AgentQuant fits an HMM
+3. **Dead code advertised as a feature shows up in three of twenty.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
@@ -3314,11 +3403,9 @@ lessons is worth more than any one of them:
    validation. We have real validation and no production system yet — and of the three
    states, only ours makes the missing half safe to build. An unvalidated system that runs
    flawlessly is still unvalidated; it just loses money with better uptime.
-8. **The repos worth reading are the ones with nothing to sell.** Across thirteen, the six that
-   survive audit cleanly (quant-agent, PaperTrade-India, express-option-chain,
-   daily_stock_analysis, qlib, vnpy) all decline to publish a performance number. Three are pure
-   infrastructure; the fourth is a product that ships the *measuring instrument* and lets you
-   run it on your own history. The ones that fail are all selling a result: an evolved harness,
+8. **The repos worth reading are the ones with nothing to sell — now strong enough to use as a prior.** Across twenty repos, **nine decline to publish any performance number**, and they are, without exception, the ones whose code was worth reading (quant-agent, PaperTrade-India, express-option-chain, daily_stock_analysis, qlib, vnpy, turbovec, QuantDinger, QUANTAXIS). Most are
+   infrastructure; one is a product that ships the *measuring instrument* and lets you run it on
+   your own history. The ones that fail are all selling a result: an evolved harness,
    a beaten benchmark, an agent consensus, a probable exit date, an LSTM. **The presence of a
    headline performance number is, empirically, the best available predictor that a repo's
    claims will not survive contact with its own source** — and its absence is the best
@@ -3376,7 +3463,7 @@ lessons is worth more than any one of them:
     PIT syntax. **Rules and reviews catch mistakes; design prevents them** — and where we build new
     evaluation surfaces (MCE 5b above all), an accessor bound to an "as of" timestamp is cheaper
     than a rule and cannot lapse.
-16. **Licence is a first-class review criterion, and it decides before merit does.** Nineteen
+16. **Licence is a first-class review criterion, and it decides before merit does.** Twenty
     repos: mostly MIT or Apache, one **GPL-3** (abu — unadoptable for us regardless of quality),
     one **LGPL** (NautilusTrader, per our earlier review), and **four with no LICENSE file at all**
     (repos 5, 6B, 6C, and 3's org mismatch) — which is *more* restrictive than GPL, since no
