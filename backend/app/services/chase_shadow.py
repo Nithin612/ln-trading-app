@@ -26,6 +26,7 @@ from app.core.config import settings
 from app.models.signal import Signal
 from app.models.stock import Stock
 from app.models.trading import Order, Position
+from app.services import flip_readiness as fr
 from app.services.signal_outcomes import OUTCOME_EPOCH
 
 FORWARD_EVIDENCE_TARGET_N = 20
@@ -187,6 +188,16 @@ async def compute_chase_shadow(db: AsyncSession, *, since: datetime = OUTCOME_EP
 
 
 def chase_flip_ready(r: ChaseShadow) -> tuple[bool, str]:
+    # SHARED VETO FIRST. A gate-specific count/sign test is meaningless if the partition
+    # itself cannot certify anything — this is what let the market-regime banner print
+    # ✅ READY on a side proxy whose negative mean was 94% one trade. See
+    # `app/services/flip_readiness.py` for the three guards and why each exists.
+    _veto = fr.veto(
+        [fr.Row(side=d.side, blocked=d.would_block, realized=d.realized) for d in r.detail]
+    )
+    if _veto is not None:
+        return False, f"VETOED by a shared readiness guard — {_veto}"
+
     """Forward evidence to flip the anti-chase gate ACTIVE? ≥ N resolved chased trades, that set
     net-losing, AND worse than the near-entry set. Advice only — never flips."""
     b, p = r.chased, r.near_entry

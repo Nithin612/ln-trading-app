@@ -31,6 +31,7 @@ from app.core.config import settings
 from app.models.signal import Signal
 from app.models.stock import Stock
 from app.models.trading import Position
+from app.services import flip_readiness as fr
 from app.services.benchmark import load_rs_context
 from app.services.signal_outcomes import OUTCOME_EPOCH
 from app.signals import sector_rs
@@ -175,6 +176,16 @@ async def compute_sector_rs_shadow(
 
 
 def rs_flip_ready(r: SectorRsShadow) -> tuple[bool, str]:
+    # SHARED VETO FIRST. A gate-specific count/sign test is meaningless if the partition
+    # itself cannot certify anything — this is what let the market-regime banner print
+    # ✅ READY on a side proxy whose negative mean was 94% one trade. See
+    # `app/services/flip_readiness.py` for the three guards and why each exists.
+    _veto = fr.veto(
+        [fr.Row(side=d.side, blocked=d.blocked, realized=d.realized) for d in r.detail]
+    )
+    if _veto is not None:
+        return False, f"VETOED by a shared readiness guard — {_veto}"
+
     """Is there forward evidence to flip the sector-RS gate ACTIVE? Bar (all): ≥ N
     resolved would-block trades, that set net-losing, AND worse than the eligible set.
     Advice for the human sign-off — never flips anything."""

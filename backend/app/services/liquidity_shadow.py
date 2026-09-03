@@ -24,6 +24,7 @@ from app.core.config import settings
 from app.models.signal import Signal
 from app.models.stock import Stock
 from app.models.trading import Position
+from app.services import flip_readiness as fr
 from app.services.liquidity import load_traded_values
 from app.services.signal_outcomes import OUTCOME_EPOCH
 from app.signals import liquidity_guard
@@ -157,6 +158,16 @@ async def compute_liquidity_shadow(
 
 
 def liquidity_flip_ready(r: LiquidityShadow) -> tuple[bool, str]:
+    # SHARED VETO FIRST. A gate-specific count/sign test is meaningless if the partition
+    # itself cannot certify anything — this is what let the market-regime banner print
+    # ✅ READY on a side proxy whose negative mean was 94% one trade. See
+    # `app/services/flip_readiness.py` for the three guards and why each exists.
+    _veto = fr.veto(
+        [fr.Row(side=d.side, blocked=d.blocked, realized=d.realized) for d in r.detail]
+    )
+    if _veto is not None:
+        return False, f"VETOED by a shared readiness guard — {_veto}"
+
     """Forward evidence to flip the liquidity gate ACTIVE? ≥ N resolved illiquid trades,
     that set net-losing, AND worse than the liquid set. Advice only — never flips (mirrors
     sector_rs_shadow.rs_flip_ready)."""
