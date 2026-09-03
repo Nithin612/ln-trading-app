@@ -7,6 +7,52 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 4 quant-agent — the best-engineered of the four, and the only one whose claims survived audit (2026-09-03)
+
+[yebof/quant-agent](https://github.com/yebof/quant-agent), MIT, **~63k LOC · 1,344 tests**,
+solo author, US equities, live-capable via Alpaca. **The most relevant repo reviewed so far
+by a wide margin** — the same *shape* as what we are building (scheduled sessions, real
+broker, portfolio, risk gates, daily reflection), so the comparison is direct.
+
+**Its claims check out** — a first. `risk_reward` really is a Python `@computed_field` over
+entry/stop/target geometry returning `None` on malformed input "so PM/RM won't render a fake
+ratio"; the schema-enforced CoT is real (**64** `min_length=1` fields — a skipped step is a
+`ValidationError`); the "874 tests" claim *understates* the actual 1,344; and it makes **no
+performance claim anywhere**. Synthesis lesson 0 revised accordingly: the rule is not "public
+repos lie" but the narrower, more useful **"the claims that fail audit are almost always the
+performance claims, and the repos that make none are the ones worth reading."**
+
+**The gap, which the author states himself:** there is **no backtest, no walk-forward, no
+evaluation harness** in the repo — *"prompt changes cannot be backtested here, so it is easy
+to ship something merely because it sounds right."* His decision-replay harness diffs how a
+prompt change alters decisions on real historical inputs, but outcome-aware scoring is
+*"the layer above this, not yet built."* **The symmetric trade: he has the production machine
+we have not built, and none of the validation we already have — and ours is the safer of the
+two positions.**
+
+Harvested (architecture queue, now 12 items): **★A11 session notifier with a noise policy** —
+the most actionable item in the whole document. Silence for routine success, failures
+classified by whether a human can act (SEC transient suppressed, analysis error not), **any
+exception always notifies**, the artifact is its own confirmation, and a notifier outage can
+never affect trading. **We have at least two standing manual daily human checks that exist
+only because we have no notifier** — CAS capture (15:15–15:33 IST, *a missed window cannot be
+back-filled*) and provisional health (no scheduler at all). Also **A13** a test pinning the
+circuit breaker's un-suppressibility (theirs is exempt from both the dedup guard and the
+session mutex, pinned by a named test — our `unassessed` tripwire taught us documentation
+alone is worthless); **A15** assert scheduling window ≥ tick interval (a 25-min window on a
+30-min timer missed the close two days running — **our CAS window is 18 minutes and its miss
+is unrecoverable**); **A14** timeouts derived from measurement, layered, after a 13-hour hang;
+**A12** invariants documented with the dated incident that produced them; **A16** the
+order-protection lifecycle state machine — not actionable pre-live but the best available map
+of what Phase 7's BrokerAdapter must handle; **A17** provider failover semantics + a pinned
+cost table.
+
+Recorded for balance in §4.5: we are ahead on validation, a freezable deterministic engine,
+money types (they use floats for prices throughout), and a real UI — and self-modifying
+prompts on a live trading system, however well guarded, changes behaviour on argument alone,
+which is what our constraint #8 exists to prevent.
+
+
 ### docs(research): repo 3 ai-quant-agents reviewed — a 236-line SDK, not a quant system (2026-09-03)
 
 [demandai/ai-quant-agents](https://github.com/demandai/ai-quant-agents), single commit,

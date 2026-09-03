@@ -33,6 +33,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 1 | [OnePunchMonk/AgentQuant](https://github.com/OnePunchMonk/AgentQuant) | 2026-09-03 | **Adopt no code, reject the thesis — harvest 4 analysis + 12 UI + 2 architecture ideas.** Its Research Workspace screen is better information design than anything we have for the same job. |
 | 2 | [Y-Research-SBU/QuantHarness](https://github.com/Y-Research-SBU/QuantHarness) | 2026-09-03 | **Adopt no code, reject the trading thesis — harvest 5 architecture ideas.** A real paper with real baselines, honestly reported; but it beats logistic regression on **1 of 8 assets**, and its forced-trade design is the opposite of our whole thesis. |
 | 3 | [demandai/ai-quant-agents](https://github.com/demandai/ai-quant-agents) | 2026-09-03 | **Not a quant system — a 236-line marketing SDK for a closed paid API.** No algorithm to review; `risk_approved` is hardcoded true. **Harvest 3 UI + 1 protocol idea.** ⭐ Its real value: it names its upstream, **[TradingAgents](https://github.com/TauricResearch/TradingAgents)** — review that instead. |
+| 4 | [yebof/quant-agent](https://github.com/yebof/quant-agent) | 2026-09-03 | ⭐ **The best-engineered repo here, and the only one whose claims survived audit.** 63k LOC, 1,344 tests, live-capable via Alpaca, **zero performance claims**. Ahead of us on production discipline; **has no backtest or validation at all**. **Harvest 7 architecture ideas — A11 (session notifier) is the most actionable item in this whole document.** |
 
 ---
 
@@ -953,6 +954,260 @@ code cannot produce.
 
 ---
 
+# 4. quant-agent — `yebof/quant-agent`
+
+Reviewed 2026-09-03 at `6fc3cf1` (first commit 2026-05-16, last 2026-07-16). MIT.
+**~63,000 LOC · 1,344 test functions.** Solo author, US equities, live-capable via Alpaca.
+
+**This is the most relevant repo of the four by a wide margin, and the best-engineered.**
+It is the same *shape* of thing we are building — a personal, scheduled, risk-gated trading
+agent with a real broker, a portfolio, notifications and a daily reflection loop — so the
+comparison is direct rather than analogical. In several specific places it is ahead of us.
+
+## 4.1 What it is
+
+Six sessions per trading day on an OS-level timer (systemd user timers on Linux, launchd on
+macOS), each ET-window-gated by a bash wrapper:
+
+```
+08:00-09:15  earnings_preprocess   only session that runs the earnings LLM; others read cache
+09:30-12:00  morning               full team → PM → risk → execute
+09:30-16:00  intra_check           every 30-min tick, NO LLM, ~5s: daily-loss breaker only
+13:00-14:30  midday                sell-only, Position Reviewer "patient"
+15:30-16:00  close                 sell-only, Position Reviewer "act-on-trigger"
+20:00-22:00  evening               grade the day, set tomorrow's bias
+```
+
+Eight daily LLM agents (tech / news / macro / earnings / portfolio manager / risk manager /
+position reviewer / evening) plus a quarterly **meta-reflector** that edits six of the eight
+agents' prompt files under a 10-invariant safety system. Prompts live as versioned markdown
+in `config/prompts/`.
+
+## 4.2 The claims are true — the first repo in this log where that holds
+
+I ran the same audit that caught the first three, and it came back clean:
+
+| Claim | Verified |
+|---|---|
+| "R/R computed in Python, not trusted to the LLM" | **True.** `risk_reward` is a real `@computed_field` over entry/stop/target geometry, returning `None` on malformed geometry *"so PM / RM won't render a fake ratio"*. |
+| "Schema-enforced reasoning chains — the LLM cannot skip steps" | **True.** 64 occurrences of `min_length=1` in `models.py`; a missing CoT step is a `ValidationError`, not a silent pass. |
+| "874 tests" | **Understated.** 1,344 test functions actually present — the README is stale in the *conservative* direction. |
+| Performance claims | **There are none.** No Sharpe, no returns, no "beats the market", anywhere in README or CLAUDE.md. |
+
+That last row is the striking one. **This repo makes no performance claim at all** — the
+only thing resembling one is a disclaimer stating that no backtest, simulation, paper or
+live result in the repository predicts anything. After three repos whose headline numbers
+their own code could not produce, one that simply declines to claim is a genuine
+counterexample, and I have revised the synthesis section accordingly.
+
+## 4.3 The gap, stated plainly: nothing validates any of it
+
+There is **no backtest, no walk-forward, no evaluation harness** in the repository — I
+searched. The author says so himself, in CLAUDE.md:
+
+> *"prompt 改动这里没法回测,所以容易'听起来对就上'"* — prompt changes cannot be backtested
+> here, so it is easy to ship something merely because it sounds right.
+
+His mitigation is a **decision-replay harness** (`scripts/replay_decision.py`): feed a real
+historical `input_message` from `agent_logs` back through the *current* prompt and model,
+and structurally diff the old and new decisions — turning *"I think this version is better"*
+into *"here is exactly how it changed decisions on N real inputs."* That is a good tool, and
+he is equally clear about its ceiling:
+
+> *"outcome-aware 评分（对比次日/5日真实走势判好坏）是它之上的下一层,**尚未建**"* —
+> outcome-aware scoring, judging a change against the actual next-day/5-day move, is the
+> layer above this, **not yet built**.
+
+So the harness answers *what changed*, never *whether it was better*.
+
+**This is the symmetric trade with our platform, and it is worth being precise about it:**
+
+| | quant-agent | ours |
+|---|---|---|
+| Production/operational discipline | **ahead of us** — see §4.4 | catching up |
+| Decision engine | LLM, non-deterministic, un-backtestable by construction | frozen numeric confluence, parity-tested, replayable |
+| Validation apparatus | **none** | §8 walk-forward, golden fixtures, shadow overlays, outcome tracking, deflated-Sharpe bar |
+| Evidence of edge | none claimed, none shown | negative so far (−0.303R) — but *measured* |
+
+He has built an excellent machine with no instrument to tell him whether it works. We have
+a mediocre-performing machine with good instruments telling us so. **Ours is the better
+position to be in**, and it is worth saying that explicitly, because §4.4 is otherwise a
+long list of things he does better.
+
+One more honest note: `git log` shows 14 of 51 commits are fixes, including *"full-codebase
+audit — 25 defects (1 critical: stops expired at the close, positions naked overnight)"* and
+*"audit-r2: 57 verified defects"*. That is not sloppiness — it is a solo developer running
+adversarial audits and reporting the count honestly, which is exactly our own practice
+(three agent reviews, 21 defects, 2026-09-02). But 82 defects across two audits of a
+live-capable trading system is also a fair measure of how much complexity an LLM-in-the-loop
+design buys you.
+
+## 4.4 Architecture findings — the richest section in this document
+
+**★ A11 — a session notifier with a noise policy. The single most actionable item across
+all four repos.**
+
+Every session pushes a structured status message to Telegram. The design principles are all
+correct, and each one is a decision we would otherwise have to discover:
+
+- **Silence is the default for routine success.** The 14 daily `intra_check` ticks are
+  suppressed; only an emergency action surfaces. Pre-market `nothing_new` earnings polls are
+  suppressed. Quarterly meta is silent on the ~89 days it does not run.
+- **Failures are classified by whether a human can act on them.** `fetch_error` (SEC
+  transient) is suppressed; `analysis_error` notifies, because that one is a real bug.
+- **Any exception always notifies, bypassing the whole noise policy** — with the exception
+  type and a truncated message.
+- **The artifact is the confirmation.** For the daily P&L export, the CSV document *is* the
+  push; a separate "sent" status message would be pure noise. Only `error`/`skipped` speak.
+- **The notifier can never break trading.** Missing credentials → silent no-op, callers do
+  not branch. HTTP failures to Telegram are swallowed: *"a Telegram outage must never affect
+  trading."*
+- **It is wired into `main.py`'s `finally` block**, so even a `SystemExit` from a wrapper
+  kill still produces a push before the process dies.
+- Each message carries the **per-session LLM cost**, looked up by `run_id` — and *omits the
+  line entirely* if the data is missing rather than rendering `$?.??`.
+
+**Why this is our highest-value architecture item.** We currently have *at least two
+standing manual daily checks that exist only because we have no notifier*:
+
+1. **CAS capture** — `make worker` must be up 15:15–15:33 IST daily, and **a missed window
+   cannot be back-filled**. The current protocol is "check the row count each morning."
+2. **Provisional health** — the forward watch has no scheduler; the protocol is "run
+   `scripts/provisional_health.py --days 7` yourself each session."
+
+Both are unrecoverable-or-degrading failures whose detection depends on a human remembering.
+That is precisely the job of a notifier with an exception-always-notifies rule. Add the
+daily `make analysis` completion, the EOD ingestion self-heal, and the Kite token expiry
+(A3) and there is a real surface here.
+
+**A12 — invariants documented with the incident that produced them.** Their CLAUDE.md has a
+section titled *"不要违反的约定（这些不看代码就看不出，违反会出事）"* — "conventions not to
+violate (you cannot see these from the code, and violating them causes incidents)" — opening
+with:
+
+> *"这一节是 CLAUDE.md 的主要价值——约定背后的'为什么'在代码里不写死，所以必须记在这里。"*
+> This section is the main value of CLAUDE.md: the *why* behind a convention is not encoded
+> in the code, so it has to be recorded here.
+
+**That is our doc-sync ritual's thesis, stated more sharply than we state it.** And every
+entry carries a date and an incident:
+
+- SELL `allocation_pct`: `100` = all, `1–99` = partial, `0` = skip — *"stop using 0 to mean
+  sell-all"* — and it names **both** places that must honour it, because a filter once
+  treated `alloc=0` as a full sell and pre-deducted phantom cash, letting BUYs quietly borrow
+  margin (2026-04-19). **Same class as our `size_for_fill` wrong-side bug.**
+- Every SELL path must call `cancel_protective_stops()` first, or Alpaca marks the shares
+  `held_for_orders` and rejects the sell (2026-04-25, AMZN).
+- Daily P&L is `broker.equity − broker.last_equity`, and **the breaker baseline is always
+  `last_equity`, never last night's DB snapshot.**
+- Inverse ETFs use a **signed** multiplier for net exposure and an **absolute** one for
+  per-position and sector caps — two multipliers because they answer two different questions.
+- `MARGIN_DEFICIT_FLOOR_USD` is one constant imported in three places: *"do not rebuild a
+  private constant in any of them."*
+
+**A13 — a safety mechanism that bypasses all coordination machinery, pinned by a named
+test.** `intra_check` (the daily-loss circuit breaker) is explicitly exempt from both the
+last-run dedup guard and the cross-session mutex, with the reasoning recorded:
+
+> If the breaker is blocked while a long morning session runs, flash-crash protection goes
+> silent — *"the entire reason the breaker exists is negated."* When changing lock logic,
+> **always first confirm `intra_check` still passes through** — test:
+> `test_run_if_et_window_intra_check_bypasses_session_lock`.
+
+This is the lesson our own bug-hunter round produced — *a documented safety net is worth
+nothing without a test that fails when it lapses* (our `unassessed` tripwire was imaginary;
+3 of 8 modes passed). They got there first and pinned it by name. **Our circuit breaker
+deserves the same treatment**: a test asserting it cannot be suppressed by any scheduling,
+locking or mode change.
+
+**A14 — timeouts derived from measurement, and layered.** The 20-minute wrapper timeout is
+justified in writing: morning's normal path is tech_analyst 3 chunks × 140–180s + parallel
+news/macro + PM 50s + RM + execution, reaching 10–11 minutes on slow OpenAI days (measured
+2026-04-24); 600s had killed three consecutive ticks. 20 min is *"1.5–2× worst observed"*.
+Three layers: 30s HTTP timeout injected into the Alpaca SDK, `timeout --kill-after=30 1200`
+around the wrapper, and `TimeoutStartSec=1500` in the systemd unit — all added after a
+**13-hour hang** (2026-04-17). Compare our own `make check` stall at
+`test_walkforward_matches_golden`, which we diagnosed as resource starvation but never put a
+bound on.
+
+**A15 — window width ≥ scheduler tick interval.** A 25-minute close window against a 30-min
+timer missed the close entirely on two consecutive days (2026-04-23/24), because tick phase
+can land outside a window narrower than the interval. Non-obvious, and directly applicable:
+our CAS capture window is **15:15–15:33, eighteen minutes**, and its miss is unrecoverable.
+If anything ever schedules it on a coarser tick, it silently never fires.
+
+**A16 — the protection lifecycle as a state machine with a durable repair queue.** Every
+SELL path must do: cancel protective stops → submit → verify broker acceptance → wait for
+terminal status → **reprotect on the actual filled quantity, not the submitted one**. Five
+failure branches are enumerated, each tagged with the PR and review round that found it
+(PR I/J/K/O/R/S; codex r4/r5/r7/r9), including: accepted-then-expired limits, a 15s
+non-terminal timeout that must force-cancel before finalising to avoid racing the broker,
+and partial restores that persist **only the failed specs** so they do not duplicate stops
+already live at the broker. Anything unrepairable writes to a `pending_protection_restores`
+table drained at the next session entry, *"so a crash mid-flight cannot leave a position
+naked overnight."*
+
+We are pre-live, so this is not actionable today — but it is **the best available map of
+what Phase 7's BrokerAdapter and order FSM actually have to handle**, written by someone who
+found each branch the hard way. Worth reading in full before that phase starts.
+
+**A17 — cross-provider LLM failover with careful semantics.** On a non-retryable primary
+failure (quota, dead key, 402), one single-shot fallback to a different provider — no
+retries, to avoid eating the session window. Truncation deliberately does *not* trigger
+failover. No-op when the primary already is the fallback provider. Model prices are **pinned**
+in a cost table so a cache refresh cannot silently overwrite them with stale values.
+
+## 4.5 What we do better
+
+Stated for balance, because §4.4 is long:
+
+- **Validation.** They have none; we have walk-forward, golden parity fixtures, shadow-mode
+  overlays, outcome tracking and a deflated-Sharpe bar.
+- **A deterministic, freezable engine.** Their decisions cannot be reproduced; ours can, to
+  the integer.
+- **Money types.** They are on Python floats for prices throughout; we are `Decimal` /
+  `Numeric(12,4)` / `i64·1e-4` end to end.
+- **A real UI.** They have none at all — see below.
+- **Self-modifying prompts on a live trading system** is a risk we would not take. Their
+  guardrails are genuinely thoughtful (append-only, FIFO cap, Jaccard dedup, prohibited-word
+  regex, schema-protected agents that the reflector *cannot* name, git auto-commit so
+  `git revert <sha>` rolls back a quarter). But a system that rewrites its own decision
+  rules quarterly with **no out-of-sample check** is changing behaviour on argument alone —
+  the exact failure our constraint #8 exists to prevent, at a larger scale.
+
+## 4.6 UI/UX findings
+
+**There is no UI. Telegram is the entire interface**, and that is itself the finding.
+
+For a single-operator system this is a defensible, even elegant, choice: the interface is a
+push feed you already have on your phone, with a CSV document for the numbers. It means zero
+frontend surface to maintain and no dashboard that must be visited to be useful — the
+information comes to you. Against that: nothing is explorable, there is no way to ask a
+question the notifier was not written to answer, and every new view is a code change.
+
+We are building the opposite (19 pages of React), and both can be right — but the lesson
+transfers in one direction: **a dashboard nobody opens is worth less than a push nobody has
+to remember to check.** Our seven markdown sidecars are currently in the "must remember to
+open" category. U1 makes them explorable; A11 makes the important ones come to you. **They
+are complements, not alternatives** — and A11 is much cheaper.
+
+One concrete transferable detail: the per-session **LLM cost line** in every push, omitted
+entirely when unknown rather than rendered as a placeholder. Ours has an analogue in the
+per-run cost of `make analysis` and any future LLM research loop.
+
+## 4.7 Verdict
+
+**The best-engineered repo in this log, and the only one whose headline claims survived
+audit.** Adopt no code — it is US equities, Alpaca, floats-for-money and LLM-in-the-money-
+path — but read its CLAUDE.md before Phase 7, and take A11 now.
+
+The one-line summary: **he has built the production machine we have not built yet, and none
+of the validation we already have.** The two failure modes are not equivalent — his is the
+more dangerous one, because an unvalidated system that runs flawlessly is still an
+unvalidated system, and it can lose money with perfect uptime.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -1013,6 +1268,13 @@ from repo 1.
 |---|---|---|---|---|
 | **A3** | **Broker credential-status endpoint + topbar banner** — `GET /api/v1/broker/token-status` → `{valid, expires_at, hours_remaining}` | `app/api/v1/`, consumed by the app shell | ~half day | **The highest-value architecture item, because it targets a failure we know recurs daily.** The Kite access token dies ~06:00 IST every day; the rules already class this as a normal lifecycle event, yet its state is only discoverable from a failed request. Makes a silent daily breakage visible. |
 | **A4** | **Constraint pre-validation endpoints** — what date ranges / classifications / market sessions are legal, queryable *before* submit | `app/api/v1/`, consumed by order + screener surfaces | ~1 day | The generalisation of a fix we already shipped once: 41/204 rows offered a Buy that could only 409, and every row read clear in the evening while the order path 422'd on off-market. `eligibility.py` centralised the *gate* answers; this centralises the *session and calendar* ones. |
+| **A11** | **★ Session notifier with a noise policy** — push on completion/failure; suppress routine success; **any exception always notifies**; the artifact is its own confirmation; a notifier outage must never affect the pipeline | new `app/services/notifier.py` + wiring in the `finally` of each session/task | ~1–2 days | *(repo 4)* **The most actionable item in this document.** We have at least two standing *manual daily human checks* that exist only because we have no notifier — CAS capture (15:15–15:33 IST, **a missed window cannot be back-filled**) and provisional health (no scheduler at all). Both are detected today by someone remembering. Add `make analysis` completion, EOD self-heal and Kite token expiry (A3) and the surface is real. |
+| **A13** | **A test that pins the circuit breaker's un-suppressibility** — assert no scheduling, locking or mode change can silence it | `backend/tests/` | ~half day | *(repo 4)* Their breaker is explicitly exempt from both the dedup guard and the session mutex, pinned by a named test, because a breaker that goes quiet during a long session negates its own reason to exist. Our rules say the daily-loss breaker is *never* disableable; we should have the test that fails when that lapses — our `unassessed` tripwire taught us documentation alone is worthless. |
+| A12 | **Invariants documented with the incident that produced them** (date + code location + what broke) | our CLAUDE.md / rules | ongoing | *(repo 4)* Their CLAUDE.md states our doc-sync thesis more sharply — *the "why" is not encoded in the code, so it must be recorded here* — and every entry names a dated incident. |
+| A14 | **Timeouts derived from measurement, layered** | long-running jobs, `make check` | ~half day | *(repo 4)* Their 20-min wrapper timeout is "1.5–2× worst observed", in three layers, after a 13-hour hang. Our `make check` walk-forward stall has no bound at all. |
+| A15 | **Assert scheduling window ≥ scheduler tick interval** | CAS capture + any timed window | ~2 hours | *(repo 4)* A 25-min window on a 30-min timer missed the close two days running. **Our CAS window is 18 minutes and its miss is unrecoverable.** |
+| A16 | **Order-protection lifecycle as a state machine + durable repair queue** | Phase 7 BrokerAdapter / order FSM | Phase 7 | *(repo 4)* Not actionable pre-live, but the best available map of what Phase 7 must handle — five failure branches, each found the hard way, incl. reprotect-on-actual-fill and a drain queue so a mid-flight crash cannot leave a position naked overnight. **Read before Phase 7 starts.** |
+| A17 | **Provider failover semantics + pinned cost table** | any LLM research loop | ~half day | *(repo 4)* Single-shot fallback on non-retryable failure (never on truncation), and model prices pinned so a cache refresh cannot overwrite them with stale values. |
 | A1 | **Two-tier model routing** (cheap extract pass / strong judge pass) for the research loop | daily-analysis + review-calendar tooling | ~half day when that work starts | Never in the money path. Applies the moment an LLM step enters the research loop. |
 | A5 | **Self-documenting state schemas** — `Annotated[type, "meaning"]` on report/sidecar payload fields | sidecar + report payloads | ~2 hours | Field meaning currently lives in a docstring far from the type. |
 | **A9** | **A progress envelope for long-running jobs** — `{phase, step, total_steps, message}` streamed over WS | `make analysis`, backtests, walk-forward replay, EOD ingestion | ~1 day | *(repo 3)* The one genuinely good idea in that repo, and it is LLM-agnostic. Several of our jobs run for minutes with no progress surface at all — the walk-forward replay alone is ~8 minutes of silence. |
@@ -1038,15 +1300,20 @@ reading as a signal source.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **★ All three advertise numbers or fields their own code cannot produce.** AgentQuant's
-   `generalization_gap` is `max(avg − best, 0)` ≡ 0 yet ships as 0.124 decaying to 0.048;
-   QuantHarness's only look-ahead holdout is a commented-out line and its eval script is
-   absent; ai-quant-agents markets a Risk Manager veto behind a `risk_approved` flag that is
-   **hardcoded true**, and an example output whose four actionable fields
-   (`entry`/`stop_loss`/`target`/`position_size`) are set to `{}` unconditionally. Three for
-   three. **The base rate of a public quant repo's headline claim surviving contact with its
-   own source is, in this sample, zero** — which is the empirical case for the rule in §1.7
-   and for never taking a README number without recomputing it.
+0. **Three of four advertise numbers or fields their own code cannot produce — and the
+   exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
+   yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
+   commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
+   veto behind a `risk_approved` flag that is **hardcoded true**, plus an example output
+   whose four actionable fields are unconditionally `{}`.
+
+   **quant-agent breaks the streak, and the way it breaks it is the lesson: it makes no
+   performance claim at all.** Its only numeric claim (874 tests) *understates* reality
+   (1,344), and both architectural claims I tested — Python-computed R/R, schema-enforced
+   CoT — are true. So the rule is not "public repos lie"; it is narrower and more useful:
+   **the claims that fail audit are almost always the performance claims**, and the repos
+   that make none are the ones worth reading. Recompute every headline number before quoting
+   it — and treat a repo that declines to claim as a positive signal, not a gap.
 1. **A simple baseline matches the elaborate system.** Buy-and-hold beat AgentQuant's agent
    (+102.4% vs +0.7%); logistic regression matches QuantHarness's four-agent GPT-4o vision
    pipeline on 7 of 8 assets. **Neither repo leads with this, and both ship the data that
@@ -1057,11 +1324,18 @@ lessons is worth more than any one of them:
    commented-out line beside the live path. Both are documented safety nets with nothing
    that fails when they lapse — the same finding our own bug-hunter round produced when it
    showed the `unassessed` tripwire was imaginary (3 of 8 modes passed).
-3. **Published work stops where the hard part starts.** None of the three has position
-   sizing, risk limits, or a portfolio. QuantHarness is titled "for High-Frequency Trading"
+3. **Published work stops where the hard part starts — with one exception.** None of the
+   first three has position sizing, risk limits, or a portfolio. QuantHarness is titled "for High-Frequency Trading"
    and models no position at all; ai-quant-agents leaves `suggested_action` empty. The
    runtime plumbing we have deferred to Phase 7 is not the boring part of this field — it
-   is the part almost nobody does.
+   is the part almost nobody does. **quant-agent is the exception that proves it**: it is the
+   only one of the four with a real broker lifecycle, and it needed two audits finding 82
+   defects — one of them leaving positions naked overnight — to get there.
+5. **The two failure modes are opposite, and ours is the safer one.** Repos 1–3 have
+   validation theatre with no production system. Repo 4 has a production system with no
+   validation. We have real validation and no production system yet — and of the three
+   states, only ours makes the missing half safe to build. An unvalidated system that runs
+   flawlessly is still unvalidated; it just loses money with better uptime.
 4. **"Confidence" is repeatedly a share, not a probability.** ai-quant-agents divides the
    modal vote by the total and calls it confidence; agents sharing a model and prompt are
    not independent estimators, so their agreement is correlated by construction. Our own
