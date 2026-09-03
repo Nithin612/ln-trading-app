@@ -40,6 +40,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 6C | [madhusudhan-nikhil/InvestmentPrediction](https://github.com/madhusudhan-nikhil/InvestmentPrediction) | 2026-09-03 | Real FastAPI+React app for Indian retail. **HRP portfolio construction is a genuine pointer**; its **"probable exit date" is arithmetic on the user's own input** — and doesn't even depend on the target price. No LICENSE. **Harvest A24 as a standing rule.** |
 | 7 | [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener) | 2026-09-03 | Unmaintained 2022–23 student project (MIT). **Picks its LSTM on a scaler fit over the full series and with no persistence baseline** — the winner is plausibly worse than "no change". Its breakout filter is **disabled by a truthy-string bug**. **Adopt nothing**; one pointer for the Minervini trend-template test. |
 | 8 | [pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain) | 2026-09-03 | **The only repo on our exact stack** (Kite WS + Redis + Indian derivatives), 952 LOC, unmaintained since 2023. Adopt no code (per-tick Redis writes, no TTL, unbounded threads). ⭐ **But it documents a Kite quirk we are exposed to — quote-mode ticks on a full-mode subscription — and our depth path never checks. A25 + A26.** |
+| 9 | [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) | 2026-09-03 | **332k LOC in 27 days** (LLM-generated at scale), multi-market daily analysis + push. Adopt no code. ⭐ **But its phase-aware, fails-closed "which bar could this have acted on" resolver is the best treatment of that question in the log** — read `src/core/trading_calendar.py`. Makes no accuracy claim. **A27 + A28 extend A11.** |
 
 ---
 
@@ -1850,6 +1851,126 @@ code is worth reading.
 
 ---
 
+# 9. 股票智能分析系统 — `ZhuLinsen/daily_stock_analysis`
+
+Reviewed 2026-09-03. MIT. **~332,000 LOC · 5,782 test functions · 50 commits · 2026-08-05 →
+2026-09-01.** Chinese-language, multi-market (A-shares / HK / US / JP / KR / TW), AI-driven
+daily analysis pushed as a "decision dashboard" to WeCom, Feishu, Telegram, Discord, Slack and
+email. Trendshift #1 Python repo of the day; arXiv badge; active two days before review.
+
+**By far the largest repo in this log — 330k LOC in 27 days, about 12,000 lines a day.** That is
+only reachable with heavy LLM code generation, and the repo says so structurally: it ships
+`CLAUDE.md`, `AGENTS.md`, `SKILL.md` and a `.claude/skills/` directory. I mention the ratio not
+as a criticism but because it sets the audit question: **does the volume correspond to
+substance?** On the parts I checked, unexpectedly, yes — and in one area it is the most careful
+work in this entire document.
+
+## 9.1 Its backtest layer is the most methodologically careful in the log
+
+The system grades its own past analyses against realised outcomes — `direction_accuracy_pct`,
+`win_rate_pct`, `avg_stock_return_pct`, `avg_simulated_return_pct`. This is the honest version
+of what repo 1 faked with a hardcoded placeholder, and it is built properly.
+
+**It resolves the entry bar from the market session phase at analysis time.** The question that
+sank repo 5 — *which bar could you actually have acted on?* — is here a first-class concept:
+
+```python
+def resolve_historical_daily_bar_date(market, target_date, phase) -> Optional[date]:
+    """Resolve the completed daily bar that a historical phase could consume.
+    ...
+    It fails closed for missing, unknown, or calendar-inconsistent phases.
+    """
+    normalized_phase = str(phase or "").strip().lower()
+    if normalized_phase not in {
+        "premarket", "intraday", "lunch_break",
+        "closing_auction", "postmarket", "non_trading",
+    }:
+        return None
+```
+
+Four things worth naming:
+
+1. **It fails closed.** An unknown or calendar-inconsistent phase returns `None`, which *excludes
+   the record from scoring* rather than guessing. **In every other repo here, ambiguity resolved
+   in favour of the flattering answer.** This is the first one that resolves it in favour of
+   silence.
+2. **Six named session phases**, including `lunch_break` (real for A-shares and HK) and
+   **`closing_auction`** — directly interesting to us, since our own CAS work treats the
+   3:15–3:35 auction as a distinct regime, and here the auction is a phase that determines which
+   bar is consumable.
+3. **A real calendar library per market** (`exchange_calendars`), not calendar-day arithmetic —
+   the failure I reproduced in repo 5.
+4. **A persisted `effective_daily_bar_date` is "the primary authority"**, with this resolver as a
+   documented fallback for older snapshots. Provenance over recomputation.
+
+The win-rate definition is also stated rather than assumed — `胜 / (胜 + 负)`, **excluding
+neutral outcomes**, with a configurable `neutral_band_pct`. Excluding neutrals is a choice that
+can flatter, but it is *documented in the field table*, which is more than most.
+
+**And crucially: the README publishes no accuracy number.** It ships the measuring instrument
+and lets you run it on your own history. That is the fourth repo of eleven to decline a
+performance claim, and it keeps holding: **the ones that don't claim are the ones worth reading.**
+
+## 9.2 Notification design — additions to A11
+
+This is a daily-analysis-and-push system, which is exactly the shape of `make analysis` plus the
+notifier I have been recommending. Two ideas extend **A11** beyond what repo 4 gave us:
+
+**A27 — a notification config dry-run.** `main.py --check-notify` validates the notification
+setup *without sending anything*, alongside `--no-notify` (run the analysis, skip the push).
+Anyone who has configured a webhook knows the alternative is spamming a real channel to find out
+whether the token works. For us this matters more than it sounds: A11's whole value is that it
+runs unattended, so the first time it *should* fire is a bad time to discover the credentials
+are wrong.
+
+**A28 — classify a delivery failure by whether retrying can help.** Their `ChannelAttemptResult`
+carries an explicit `retryable: bool`, and dispatch returns a structured
+`NotificationDispatchResult` across channels rather than a single boolean. This is repo 4's
+insight (classify failures by whether a human can act) applied one level down, to the transport.
+Combined with repo 4's rule that **a notifier outage must never affect trading**, the design is:
+try, classify, record, never raise into the caller.
+
+They also carry a "noise reservation" concept with in-flight accounting, and truncate alert
+bodies to the top three failed checklist items — both consistent with repo 4's noise policy, and
+worth keeping in mind when A11 is built rather than designed from scratch.
+
+## 9.3 Honest cautions
+
+**The recommendations are monetised.** The README opens with a sponsors block, and the
+"recommended" LLM, market-data and search providers carry affiliate parameters —
+`share_code=`, `?aff=`, `ref=`, `utm_source=`. The free defaults (AkShare, Baostock, YFinance)
+genuinely work and the instability disclaimer is fair, but **"we recommend TickFlow/Tushare for
+stability" is not a neutral engineering opinion here.** Stated as fact, not as an accusation:
+the code is not compromised by it, but the provider comparisons should not be read as
+disinterested.
+
+**File sizes are a maintenance risk.** `system_config_service.py` at 5,563 lines,
+`config_registry.py` at 5,182, `analyzer.py` at 5,124, and test files at 4,841 and 4,754 lines.
+Whatever generated them can regenerate them; a human maintaining them later is a different
+proposition. The 5,782 tests are a real asset only to the extent they assert behaviour rather
+than restate implementation — which at this volume I did not attempt to verify, and would not
+assume.
+
+**Its actual decision layer is an LLM producing scores, buy/sell points and checklists**, which
+carries every reproducibility problem already covered in §2.6 and §4.5. Nothing here changes our
+position that the money path stays deterministic.
+
+## 9.4 Verdict
+
+**Adopt no code** — wrong market, wrong language for our team, and an LLM decision core we have
+deliberately rejected. But **read `src/core/trading_calendar.py`**: its phase-aware,
+fails-closed resolution of "which bar could this analysis have acted on" is the single best
+treatment of that question in eleven repos, and it is the exact question our own backtests, our
+CAS work and our outcome grading all depend on.
+
+Two queue items (**A27**, **A28**) extend A11. And one broader observation: this is the only
+repo here where large-scale AI-assisted generation produced work *more* methodologically careful
+than the hand-written academic and hobby projects alongside it. The determining factor was not
+how the code was written — it was that **someone decided the ambiguous case should fail closed**,
+and that decision is cheap, one-line, and absent from almost every other repo in this document.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -1920,6 +2041,8 @@ from repo 1.
 | A17 | **Provider failover semantics + pinned cost table** | any LLM research loop | ~half day | *(repo 4)* Single-shot fallback on non-retryable failure (never on truncation), and model prices pinned so a cache refresh cannot overwrite them with stale values. |
 | **A18** | **India news sourcing for the MCE news veto** — Google News RSS with `hl=en-IN&gl=IN&ceid=IN:en` + **FinBERT** (`ProsusAI/finbert`); **not** HTML-scraping MoneyControl/ET | MCE slice 6 (unbuilt) | ~1–2 days | *(repo 5)* The only worked example of Indian financial-news ingestion in this log, and it lands on a slice we have not built. RSS is stable and ToS-clean where scraping is neither (they ship three HTML-debug scripts — the evidence it kept breaking); FinBERT is local, cheap and reproducible, which a §8-validatable veto requires. |
 | **A25** | **★ Assert the tick mode on the depth path, and count degradations** | `live_worker.py` / `tick_consumer.py` tick handlers | ~2 hours | *(repo 8)* Kite is documented to send **quote-mode ticks on a full-mode subscription**; that repo detects it and reopens the socket. We subscribe `MODE_FULL` and harvest depth from it with **no mode check**, so the failure would silently stale `depth:{stock_id}` and drop 6.8.2's spread-aware fills back to the flat floor — invisibly, on the book we judge expectancy with. Pairs with A11 and the 6.8.6 staleness alarm. |
+| A27 | **A notification config dry-run** (`--check-notify`-style) plus a `--no-notify` escape hatch | alongside A11 | ~2 hours | *(repo 9)* A11 runs unattended, so the first time it *should* fire is the worst time to discover the credentials are wrong. Validate the setup without spamming a real channel. |
+| A28 | **Classify a delivery failure as retryable or not**, and return a structured per-channel dispatch result | alongside A11 | ~2 hours | *(repo 9)* Repo 4's "classify failures by whether a human can act", applied one level down to the transport. Combined rule: try, classify, record, never raise into the caller. |
 | A26 | **Refuse loudly at a capacity boundary** — name the numbers and the remedy, never degrade silently | hot-set selection in `live_worker` | ~half day | *(repo 8)* They cap at Kite's `3 × 3000` tokens and refuse to start with an error stating the counts and two concrete fixes. **We had the opposite failure**: breadth alerts flooded the hot set and watchlist stocks silently stopped being scored. |
 | **A21** | **★ Mark-to-bid, so marks match fills** — value longs at bid / shorts at ask using the depth we already capture, falling back to last when stale | `_open_book_mtm` in `app/services/daily_report.py`, and any unrealized-P&L surface | ~half day | *(repo 6A)* **An internal inconsistency in our own system**: since 6.8.2 our *fills* pay the real half-spread, but our *marks* still use the last 1m close. With 82% of NSE books wider than 2 bps and a ~25-position book, reported open-book MTM is systematically optimistic. The data is already there. |
 | A22 | **Bracket sibling-quantity rebalance on partial fill** | Phase 7 order FSM | Phase 7 | *(repos 6A + 4)* Two independent projects hit this same failure — 6A factors it as a named function with tests; repo 4 called it the partial-fill mode "that took several iterations to fully pin down". Near-certain for us. |
@@ -1952,7 +2075,7 @@ reading as a signal source.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Seven of ten advertise numbers or fields their own code cannot produce — and the
+0. **Seven of eleven advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -1986,7 +2109,7 @@ lessons is worth more than any one of them:
    it did not compare against.** **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **A guard that cannot return false shows up in three of ten — and it is the single most
+2. **A guard that cannot return false shows up in three of eleven — and it is the single most
    repeated defect in this log.** AgentQuant's `generalization_gap = max(avg − best, 0)` is
    identically zero; ai-quant-agents' `risk_approved = "risk" not in decision.lower()` where
    `decision ∈ {BUY,HOLD,SELL}` is always true; repo 7's `is_breaking_out` calls a predicate
@@ -1994,7 +2117,7 @@ lessons is worth more than any one of them:
    applies. Three different root causes, one symptom. **The test is mechanical: for every
    guard, name the input that makes it fail — if you cannot, it is not a guard.** Our own
    `unassessed` tripwire failed exactly this (3 of 8 modes passed).
-3. **Dead code advertised as a feature shows up in three of ten.** AgentQuant fits an HMM
+3. **Dead code advertised as a feature shows up in three of eleven.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
@@ -2024,20 +2147,30 @@ lessons is worth more than any one of them:
    validation. We have real validation and no production system yet — and of the three
    states, only ours makes the missing half safe to build. An unvalidated system that runs
    flawlessly is still unvalidated; it just loses money with better uptime.
-8. **The repos worth reading are the ones with nothing to sell.** Across ten, the three that
-   survive audit cleanly (quant-agent, PaperTrade-India, express-option-chain) are all
-   *infrastructure* — a personal trading harness, a broker simulator, a market-data streamer.
-   The ones that fail are all selling a result: an evolved harness, a beaten benchmark, an
-   agent consensus, a probable exit date, an LSTM. **The presence of a headline performance
-   number is, empirically, the best available predictor that a repo's claims will not survive
-   contact with its own source** — and its absence is the best predictor that the code is
-   worth reading.
+8. **The repos worth reading are the ones with nothing to sell.** Across eleven, the four that
+   survive audit cleanly (quant-agent, PaperTrade-India, express-option-chain,
+   daily_stock_analysis) all decline to publish a performance number. Three are pure
+   infrastructure; the fourth is a product that ships the *measuring instrument* and lets you
+   run it on your own history. The ones that fail are all selling a result: an evolved harness,
+   a beaten benchmark, an agent consensus, a probable exit date, an LSTM. **The presence of a
+   headline performance number is, empirically, the best available predictor that a repo's
+   claims will not survive contact with its own source** — and its absence is the best
+   predictor that the code is worth reading.
 9. **Two independent projects hitting the same bug makes it near-certain for us.** Bracket
    sibling quantity on partial fill was found the hard way by repo 4 *and* factored as a named
    function in 6A. That is the strongest signal in this document about what Phase 7 will
    actually cost — stronger than either repo alone, and the reason A22 is queued before we
    have written a line of it.
-10. **The most useful findings came from the repos closest to our own stack, and they were
+10. **One line decides whether a system is honest: what it does with the ambiguous case.**
+    Repo 9's bar resolver returns `None` — excluding the record from scoring — for any unknown
+    or calendar-inconsistent session phase, and says so: *"it fails closed."* Every repo that
+    failed this audit resolved ambiguity the other way: a missing holdout became the full
+    window, an unrecognised phase became "close enough", a `'NO'` string became `True`.
+    **Failing closed is cheap, usually one line, and it is the single clearest separator
+    between the repos worth reading and the rest.** It is also, directly, why our shadow-first
+    overlay pattern and fail-open-with-an-alarm design are the right instincts — provided the
+    alarm exists (A11, A25).
+11. **The most useful findings came from the repos closest to our own stack, and they were
     about *us*.** PaperTrade-India exposed that our fills are spread-aware while our marks are
     not (A21); express-option-chain exposed that we harvest depth from `MODE_FULL` ticks
     without ever checking the mode, on a path built to fail open (A25). **Neither was a defect

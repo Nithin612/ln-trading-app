@@ -7,6 +7,52 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 9 daily_stock_analysis — 332k LOC in 27 days, and the log's best treatment of "which bar could this have acted on" (2026-09-03)
+
+[ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis), MIT,
+**~332,000 LOC · 5,782 test functions · 50 commits over 27 days** — multi-market (A/HK/US/JP/KR/TW)
+AI daily analysis pushed to WeCom/Feishu/Telegram/Discord/Slack/email. By far the largest repo in
+the log, at ~12k LOC/day, which is only reachable with heavy LLM generation (it ships `CLAUDE.md`,
+`AGENTS.md`, `SKILL.md`, `.claude/skills/`). The audit question is whether the volume corresponds
+to substance — and on the parts checked, unexpectedly, yes.
+
+**★ Its backtest layer is the most methodologically careful in eleven repos.** It grades its own
+past analyses against realised outcomes, and resolves the entry bar **from the market session
+phase at analysis time** — the exact question that sank repo 5. `resolve_historical_daily_bar_date`
+recognises six named phases (`premarket` / `intraday` / `lunch_break` / **`closing_auction`** /
+`postmarket` / `non_trading`), uses a real per-market calendar library, treats a persisted
+`effective_daily_bar_date` as the primary authority, and — decisively — **fails closed**: an
+unknown or calendar-inconsistent phase returns `None`, excluding the record from scoring rather
+than guessing. In every other repo here, ambiguity resolved in favour of the flattering answer.
+`closing_auction` as a first-class phase is directly relevant to our own CAS work. **And the
+README publishes no accuracy number** — it ships the instrument and lets you run it on your own
+history.
+
+**A27 / A28 extend A11.** A27: a notification **config dry-run** (`--check-notify`) plus a
+`--no-notify` escape hatch — A11 runs unattended, so the first time it *should* fire is the worst
+time to discover the credentials are wrong. A28: `ChannelAttemptResult.retryable` — classify a
+delivery failure by whether retrying can help, and return a structured per-channel dispatch
+result. Combined with repo 4's rule that a notifier outage must never affect trading, the design
+is: try, classify, record, never raise into the caller.
+
+**Cautions recorded:** the README's "recommended" LLM/data/search providers carry affiliate
+parameters (`share_code=`, `?aff=`, `ref=`, `utm_source=`) — stated as fact, the code is not
+compromised, but the provider comparisons are not disinterested. File sizes are a maintenance
+risk (5,563 / 5,182 / 5,124-line source files; 4,841-line test files). And its decision layer is
+an LLM producing scores and buy/sell points, which changes nothing about our position that the
+money path stays deterministic.
+
+Synthesis extended to eleven repos with a new lesson 10: **one line decides whether a system is
+honest — what it does with the ambiguous case.** Repo 9 returns `None` and says "it fails closed";
+every repo that failed this audit resolved ambiguity the other way (a missing holdout became the
+full window, an unrecognised phase became "close enough", a `'NO'` string became `True`). Failing
+closed is cheap and is the clearest separator in the whole document — and it is why our
+shadow-first overlays and fail-open-with-an-alarm design are right *provided the alarm exists*
+(A11, A25). Lesson 8 also refined: the four repos that survive audit all decline to publish a
+performance number; three are pure infrastructure and the fourth ships the measuring instrument
+instead of a result.
+
+
 ### docs(research): repo 8 express-option-chain — the only repo on our exact stack, and it found a gap in ours (2026-09-03)
 
 [pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain), MIT,
