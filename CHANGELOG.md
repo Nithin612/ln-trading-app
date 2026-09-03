@@ -7,6 +7,52 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repos 23–29 the .NET batch, and a closing summary at thirty repos (2026-09-03)
+
+Seven C#/.NET repos, none sharing our stack, so lesson 17's filter applies: shared *stack* or
+shared *discipline*, not shared subject. **One of seven earns the reading; two are rejected on
+licence before any technical assessment.**
+
+**⚠ StockSharp and StockSharp/AlgoTrading — the strongest licence rejection in the log.** A custom
+notice stating the repo *"is not licensed under a general-purpose open source license"*, that
+**"viewing, downloading, copying, building, modifying, using, distributing, or otherwise
+accessing"** requires their EULA, and — decisively — that **"StockSharp may update its license terms
+… Users are responsible for monitoring … and complying with the then-current terms."** The terms are
+**unilaterally mutable with a monitoring duty on the user**, and even *viewing* is nominally gated,
+so the "read for architecture, adopt nothing" posture used with vnpy/zipline/qlib is not clearly
+available. StockSharp is essentially "vnpy for .NET" and **vnpy is MIT**, so the risk buys nothing.
+
+**⭐ facioquo/stock-indicators-dotnet is the one worth reading** — Apache 2.0, active, 518 test
+files, and **80 committed `.xlsx` hand-calculated oracles** (`Rsi.Calc.xlsx` beside
+`RsiSeriesTests.cs`). Its tests pin total count, **non-null count**, the **exact warmup boundary**
+(`sut[13]` null, `sut[14] = 62.0541`) and values across the series, plus property invariants — and
+every indicator is tested through **batch / incremental / streaming**, which must agree. Two
+findings about *our* code:
+
+- **T13** — we already have that agreement test, on **two** indicators (`sma.rs`, `ema.rs`).
+  **RSI/ADX/ATR do not have it**, and recursive smoothing makes the Wilder family both the most
+  likely to diverge and the loosest in our parity tolerance (1e-6 vs 1e-9).
+- **T14** — our oracle chain is **Rust ← Python ← pandas-ta** with **no external anchor**. If
+  pandas-ta carried a convention bug — exactly the QuantStats failure of §22 — our fixtures would
+  encode it and every parity test would pass forever, in green. ~20 hand-computed Wilder values,
+  once, and the chain stops being self-referential. **Fourth independent arrival at "anchor the
+  test to something the code did not produce"** (with T1, T11, H8).
+
+**One contrast** from `mccaffers/backtesting-engine` (MIT, no longer actively developed): its
+stated purpose is *horizontally scaling strategy permutations on AWS* for *"more comprehensive
+strategy exploration"* — **which is precisely what the deflated-Sharpe bar defends against.** Every
+permutation is a trial; `E[max SR]` grows with the trial count. Compute makes the overfitting
+problem worse, not better.
+
+The remaining four (Financial-Formulas — 12 files, superseded by FinanceToolkit; TradingStrategies;
+quant-trading-toolkit) are too small or too covered to repay the reading, and are recorded as such.
+
+**Added a closing "Where this leaves us" section** at the end of the first review series: the five
+items to do first (**A11+A40**, **H8**, **A21**, **H2+U2**, **A25**), the six findings that were
+about *our own code* rather than theirs, the three sentences worth remembering, and the calibration
+from §20's 4,843 replications.
+
+
 ### docs(research): repo 22 FinanceToolkit — the counter-example to QuantStats, and T12 turned on ourselves (2026-09-03)
 
 [JerBouma/FinanceToolkit](https://github.com/JerBouma/FinanceToolkit), **MIT**, ~131k LOC,

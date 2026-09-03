@@ -47,6 +47,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 7 | [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener) | 2026-09-03 | Unmaintained 2022–23 student project (MIT). **Picks its LSTM on a scaler fit over the full series and with no persistence baseline** — the winner is plausibly worse than "no change". Its breakout filter is **disabled by a truthy-string bug**. **Adopt nothing**; one pointer for the Minervini trend-template test. |
 | 8 | [pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain) | 2026-09-03 | **The only repo on our exact stack** (Kite WS + Redis + Indian derivatives), 952 LOC, unmaintained since 2023. Adopt no code (per-tick Redis writes, no TTL, unbounded threads). ⭐ **But it documents a Kite quirk we are exposed to — quote-mode ticks on a full-mode subscription — and our depth path never checks. A25 + A26.** |
 | 9 | [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) | 2026-09-03 | **332k LOC in 27 days** (LLM-generated at scale), multi-market daily analysis + push. Adopt no code. ⭐ **But its phase-aware, fails-closed "which bar could this have acted on" resolver is the best treatment of that question in the log** — read `src/core/trading_calendar.py`. Makes no accuracy claim. **A27 + A28 extend A11**; its `AGENTS.md` seeds **W1–W5**. |
+| 23–29 | **The .NET batch** — [stock-indicators-dotnet](https://github.com/facioquo/stock-indicators-dotnet) · [StockSharp](https://github.com/StockSharp/StockSharp) · [AlgoTrading](https://github.com/StockSharp/AlgoTrading) · [Financial-Formulas](https://github.com/srbrettle/Financial-Formulas-Library-.NET-Standard) · [backtesting-engine](https://github.com/mccaffers/backtesting-engine) · [TradingStrategies](https://github.com/SoftAlgoTrade/TradingStrategies) · [quant-trading-toolkit](https://github.com/Krexind/quant-trading-toolkit) | 2026-09-03 | **One of seven earns the reading.** ⭐ stock-indicators-dotnet commits **80 hand-calculated `.xlsx` oracles** and tests every indicator through batch/incremental/streaming — yielding **T13** and **T14** about *our* code. ⚠ **StockSharp + AlgoTrading rejected on licence**: proprietary, **unilaterally mutable, with a monitoring duty on the user** — the strongest rejection in the log. |
 | 22 | [JerBouma/FinanceToolkit](https://github.com/JerBouma/FinanceToolkit) | 2026-09-03 | MIT, 131k LOC, **1,486 tests**, 95 cited ratio formulas. ⭐ **The counter-example to QuantStats** — it makes the kurtosis convention an explicit documented parameter and cites formulas to source + page. **Does NOT unblock MCE 5b** (FMP-based, no NSE coverage; our blocker is the data half) but is the right reference when 5b is built. **T12**, applied to our own uncited trading-layer constants. |
 | 21 | [ranaroussi/quantstats](https://github.com/ranaroussi/quantstats) | 2026-09-03 | ⭐⭐ **Used it to cross-check our own `deflated_sharpe.py` — found two bugs in QuantStats and confirmed ours is correct.** Its PSR feeds pandas **excess** kurtosis into a formula expecting **Pearson** (SR² coefficient −0.25 instead of +0.5 ⇒ **PSR systematically overstated**), and its `annualize` flag multiplies a probability by √252. **Reference, not dependency.** H12 has a working implementation here; **T11**. |
 | 20 | [polakowo/vectorbt](https://github.com/polakowo/vectorbt) | 2026-09-03 | **Re-review of a decision already made** (`EXTERNAL_LIBS_REVIEW_2026-08-02`: "would REGRESS invariants") — **confirmed, with two sharper reasons.** ⚠ **Licence is Apache-2 + Commons Clause: not open source, and it only bites at commercialisation** — incompatible with our stated "possible future productization". Technically it makes constraint #3 a matter of caller discipline (`fshift(1)`). **No queue items; closes the log's look-ahead spectrum.** |
@@ -3634,6 +3635,185 @@ trading-layer constants, where we currently have fitted numbers nobody can re-de
 
 ---
 
+# 24. The .NET batch — seven repos
+
+Reviewed 2026-09-03. All C#/.NET, so **none shares our stack**. Per lesson 17 the filter is shared
+*stack* or shared *discipline* — and exactly one of the seven clears it on discipline. Two are
+rejected on licence before any technical read. The rest are small, inactive, or covered better by
+repos already reviewed.
+
+| Repo | Licence | Verdict |
+|---|---|---|
+| **facioquo/stock-indicators-dotnet** | Apache 2.0 | ⭐ **The one worth reading** — 518 test files, **80 committed hand-calculated oracles**. Produced two findings about *our* code. |
+| StockSharp/StockSharp | **Custom, proprietary** | **Rejected on licence.** |
+| StockSharp/AlgoTrading | **Custom, proprietary** | **Rejected on licence** (same terms). |
+| srbrettle/Financial-Formulas-Library | MIT | 12 files total. Superseded by FinanceToolkit (§23). |
+| mccaffers/backtesting-engine | MIT | *"No longer under active development"* — author moved to C++. One contrast worth noting. |
+| SoftAlgoTrade/TradingStrategies | Apache 2.0 | Strategy samples for a .NET platform. Nothing transferable. |
+| Krexind/quant-trading-toolkit | MIT | Small hobby bot. Nothing transferable. |
+
+## 24.1 ★ StockSharp's licence is the strongest rejection in this entire log
+
+Not open source, and it says so:
+
+> *"This repository is **not licensed under a general-purpose open source license**. **Viewing,
+> downloading, copying, building, modifying, using, distributing, or otherwise accessing** any part
+> of this repository is permitted only under the StockSharp End User License Agreement…*
+> *StockSharp **may update its license terms** on the official website. **Users are responsible for
+> monitoring** the official StockSharp website and complying with the **then-current** terms."*
+
+Two things make this worse than anything else encountered:
+
+1. **The terms are unilaterally mutable**, and the obligation to track changes falls on the user.
+   GPL (§16) and the Commons Clause (§21) are restrictive but *stable and knowable*; this is a
+   licence that can change after adoption.
+2. **Even viewing is nominally gated**, which makes "read it for architecture, adopt nothing" — the
+   posture this log has taken with vnpy, zipline and qlib — not obviously available.
+
+Since StockSharp is essentially "vnpy for .NET" and **vnpy is MIT** (§12), there is no reason to
+take on that risk: we already have a permissively licensed reference implementation of the same
+thing. **Rejected without technical assessment, which is lesson 16 working as intended.**
+
+The licence spectrum across twenty-nine repos now runs: **MIT / Apache** → **no LICENSE at all**
+(no grant of rights) → **LGPL** → **GPL-3** → **Commons Clause** (bites at commercialisation) →
+**unilaterally mutable proprietary with a monitoring duty**. Only the first tier is safe to build
+on, and the difference between tiers is not a matter of degree.
+
+## 24.2 ★★ stock-indicators-dotnet — 80 hand-calculated oracles, and two findings about us
+
+Apache 2.0, active (2026-08), 1,842 files, **518 test files**. Its testing of indicator
+correctness is the best in this log, and it is directly comparable to our Rust parity fixtures.
+
+**It commits 80 `.xlsx` spreadsheets as oracles** — `Rsi.Calc.xlsx` sits beside `RsiSeriesTests.cs`,
+`Sma.Calc.xlsx` beside the SMA tests, and so on. The expected values are derived **by hand, in
+Excel, independently of the code**, and committed. The tests then pin exact values:
+
+```csharp
+sut.Should().HaveCount(502);
+sut.Where(x => x.Rsi != null).Should().HaveCount(488);
+sut[13].Rsi.Should().BeNull();                              // warmup boundary, exactly
+sut[14].Rsi.Should().BeApproximately(62.0541, Money4);      // first valid value
+sut[249].Rsi.Should().BeApproximately(70.9368, Money4);
+sut[501].Rsi.Should().BeApproximately(42.0773, Money4);
+```
+
+Note what is pinned: total count, **non-null count**, the **exact warmup boundary** (index 13 null,
+index 14 first value), and three values across the series. Plus property tests
+(`Results_WithAnyInput_AreAlwaysBounded` — RSI ∈ [0,100]).
+
+And each indicator is tested through **three execution modes** — `Series` (batch), `BufferList`
+(incremental), `Hub` (streaming) — which must agree.
+
+### T13 — we have the right test, on two indicators
+
+Their Series/BufferList/Hub triad is the structural form of a test we already wrote:
+
+```
+engine-core/src/indicators/sma.rs:80   fn incremental_matches_batch_on_long_series()
+engine-core/src/indicators/ema.rs:120  fn incremental_equals_batch()
+```
+
+**Two indicators have it. The Wilder family does not** — and RSI/ADX/ATR are precisely where
+recursive smoothing makes batch and incremental most likely to diverge, *and* where our own parity
+tolerance is loosest (1e-6, against 1e-9 for the EMA family). **T13: extend
+`incremental_equals_batch` across the indicator set, Wilder family first.** Small, mechanical, and
+it targets the exact place a drift would hide.
+
+### T14 — our fixture chain has no external anchor
+
+Our rust rules state the oracle plainly:
+
+> *Golden fixture files (committed) **generated from the FROZEN Python implementation** are the
+> oracle — pandas-ta version recorded inside each fixture.*
+
+So the chain is **Rust ← Python ← pandas-ta**, and recording the pandas-ta version is good
+practice. **But nothing validates the chain against independent arithmetic.** If pandas-ta carried
+a convention bug — precisely the QuantStats failure of §22 — our fixtures would faithfully encode
+it and every parity test would pass, forever, in green.
+
+si-dotnet's committed spreadsheets are the missing anchor: a value a human derived, that no code
+produced. **T14: hand-compute a handful of Wilder-family values (RSI, ATR, ADX over a short
+series) and pin them as a separate fixture** — not to replace the parity fixtures, but to anchor
+them. Perhaps twenty values, once, and the chain stops being self-referential.
+
+This is the same shape as **T1** (qlib's filing-date-anchored PIT test), **T11** (pin PSR against
+independently derived values) and **H8** (the noise negative control): *anchor the test to
+something the code did not produce.* Four independent arrivals at that idea across this log.
+
+*(It also ships an `AGENTS.md`; nothing in it improves on what we already have.)*
+
+## 24.3 One contrast from the backtesting engine
+
+`mccaffers/backtesting-engine` (MIT, no longer actively developed) is well engineered — QuestDB
+for tick storage, SonarCloud quality gates, real CI — and its stated purpose is:
+
+> *"…AWS, for **horizontally scaling strategy permutations and experiments** … enabling rapid
+> iteration on trading hypotheses and **more comprehensive strategy exploration** than would be
+> feasible on local infrastructure."*
+
+**That capability is the exact thing our deflated-Sharpe bar exists to defend against.** Running
+thousands of strategy permutations in parallel is how you manufacture a beautiful false positive:
+every permutation is a trial, and `E[max SR]` grows with the trial count. The README frames the
+scale as an unalloyed good; §20's replication record (median published Sharpe 0.37, half
+indistinguishable from zero) is what that scale produces without a multiple-testing correction.
+
+Not a criticism of the engineering — a reminder that **compute makes the overfitting problem
+worse, not better**, and that our H1/H8/H11 axis matters more the faster we can search.
+
+## 24.4 Verdict
+
+**Adopt nothing.** Two licence rejections, four too small or inactive to repay the reading, and one
+genuinely excellent test suite that produced **T13** and **T14** — both about our own code, both
+small, and both landing on the theme that has run through this entire review: **anchor your tests
+to something the code did not produce.**
+
+---
+
+# Where this leaves us
+
+*Written 2026-09-03 after thirty repos, at the close of the first review series.*
+
+**Nothing here is authorised work.** Watch mode holds to Fri 2026-09-04, and every item below is
+measurement, reporting surface or test — none touches the money path.
+
+**If only five things are ever done from this document, these five:**
+
+| # | Item | Why it is first |
+|---|---|---|
+| **A11 + A40** | Session notifier with a noise policy, carrying a worker-liveness alert | **Three independent mature systems** made push a core primitive. We have **two standing daily human rituals** that exist only because we lack it — CAS capture (a missed window **cannot be back-filled**) and provisional health (no scheduler at all). |
+| **H8** | Feed pure noise through our own deflated-Sharpe bar and assert it **rejects** | A bar never shown to reject anything is a metric that cannot come out badly. Half a day, and the machinery exists. |
+| **A21** | Mark-to-bid, so marks match fills | An internal inconsistency **in our own system**: since 6.8.2 fills pay the real half-spread, marks still use last close. The depth is already captured. |
+| **H2 + U2** | Buy-and-hold benchmark, as a **row in the same sorted table** | We have no portfolio benchmark. A benchmark in its own section gets skipped; one in the same sort order cannot be. |
+| **A25** | Assert the tick mode on the depth path | Kite is documented to send quote-mode ticks on a full-mode subscription; we never check, on a path built to fail open — so it would degrade **silently**, on the book we judge expectancy with. |
+
+**The five findings that were about *us*, not them.** The most valuable output of this review was
+not a library — it was six defects and gaps in our own code, found by comparison:
+
+- **A21** — fills spread-aware, marks not *(PaperTrade-India)*
+- **A25** — `MODE_FULL` subscribed, never verified *(express-option-chain)*
+- **A29 / A30** — no flat DP charge; the backtest ignores circuit bands the order path enforces *(qlib)*
+- **A42** — no frozen-capital concept, harmless until Phase 7 has pending orders *(QUANTAXIS)*
+- **T13 / T14** — `incremental_equals_batch` on two indicators only; the fixture chain has no external anchor *(stock-indicators-dotnet)*
+- **And one validation:** our PSR is **correct** where QuantStats' is not *(§22)*
+
+**The three sentences worth remembering:**
+
+1. **A headline performance number is the best predictor that a repo's claims will not survive
+   contact with its own source.** Seven of thirty; and the twelve that publish no number are the
+   ones whose code was worth reading.
+2. **The strongest guarantee is the one that removes the syntax for the mistake.** Look-ahead
+   appeared at every point on that spectrum, and position on it predicted the outcome every time.
+3. **Anchor the test to something the code did not produce.** Arrived at independently four times
+   in this log — T1, T11, T14, H8 — and it is the one habit that would have caught the most defects
+   found here, including our own.
+
+**And the calibration, from the only population-level evidence anyone has shared** (§20, 4,843
+replicated papers): **median Sharpe 0.37, half indistinguishable from zero on their own sample, and
+roughly half the median edge is index beta.** A −0.303R book measured honestly is an early-stage
+position on that distribution, not an anomalous one. A 2–3%/day target is not on it at all.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -3765,6 +3945,8 @@ is worth studying as a design artifact.
 | **T8** | **★ A self-cleaning debt baseline (ratchet)** — allow known gaps so CI isn't red, **reject new ones**, and **reject baseline entries that are stale or already fixed** so the list can only shrink | `backend/tests/` + whatever audit script it guards | ~half day | *(repo 13)* Most known-failure allowlists rot into permanent amnesties that suppress real regressions. This one fails the build when an entry is no longer a problem, forcing removal. We have the shape (typecheck coverage gaps, `STATUS.html` prose duplicating gate modes) and no mechanism. |
 | **T9** | **★ Turn the doc-sync ritual into failing tests** — a new `settings.*` without an `.env.example` line; a `docs/PHASES.md` `(updated …)` stamp older than the newest `docs/phases/*.md` change; a gate mode in `STATUS.html` disagreeing with `settings`. Report **all** violations in one pass | `backend/tests/` | ~1 day | *(repo 13)* **Our ritual is a procedure an agent must remember; theirs is a test that fails.** Our own lesson — *"a documented safety net is worth nothing without a test that fails when it lapses"* — was applied to our code and never to our process. The memory note *"grep the gate name on every flip"* is a human ritual standing in for a test. Subsumes and promotes **W3**. |
 | **T10** | **★ Negative-space assertions via an `ExplodingObject`** — inject an object that raises on *any* attribute access where a dependency must never be touched | `backend/tests/` helpers | ~2 hours | *(repo 14)* Proves a code path does **not** use something — normally the hardest property to test. We hold three such claims by convention alone: **"frozen engine untouched"** (every overlay), **`circuit_guard` only READS the cache**, and overlays never seeing future data. Each is a documented safety net with no test that fails when it lapses — exactly the `unassessed` tripwire failure. ~15 lines. |
+| **T13** | **Extend `incremental_equals_batch` across the indicator set, Wilder family first** | `engine/crates/engine-core/src/indicators/` | ~half day | *(repo 23)* We already have this test — on **two** indicators (`sma.rs`, `ema.rs`). **RSI/ADX/ATR do not have it**, and recursive smoothing makes them the most likely to diverge *and* the loosest in our parity tolerance (1e-6 vs 1e-9). si-dotnet tests every indicator through batch / incremental / streaming and requires agreement. |
+| **T14** | **★ Anchor the fixture chain with hand-computed values** — ~20 Wilder-family values (RSI/ATR/ADX over a short series) derived by hand and pinned as a separate fixture | `engine/crates/engine-core/tests/fixtures/` | ~half day, once | *(repo 23)* Our oracle chain is **Rust ← Python ← pandas-ta** with **no external anchor**. If pandas-ta carried a convention bug — exactly the QuantStats failure (§22) — our fixtures would encode it and every parity test would pass forever, in green. si-dotnet commits **80 hand-calculated spreadsheets** for this reason. Fourth independent arrival at *anchor the test to something the code did not produce* (with T1, T11, H8). |
 | **T12** | **Every non-obvious constant and formula in the trading layer records its origin** — a citation, a fitting procedure with its sample, or an explicit *"chosen by judgement on <date>, never validated"* | `app/trading/`, overlays, gate thresholds | ~half day | *(repo 22)* Only `atr.py` (Wilder) and `deflated_sharpe.py` (Bailey & López de Prado) cite anything. The frozen engine has `SIGNAL_ENGINE.md`, which is better — **but the trading layer has no spec and is exactly where our churn is**: `profit_lock`'s ladder (+₹2k breakeven, peak−₹1k above ₹3k) and the gate thresholds are fitted constants nobody can re-derive. **The third option matters most** — it makes unvalidated knobs visible to the review calendar instead of indistinguishable from derived ones. Same criticism levelled at abu's `0.668`, applied to us. |
 | **T11** | **★ Pin PSR/DSR against independently derived values in a regression test** — including a normal-series case where the `SR²` coefficient must be `+0.5`, so the kurtosis convention can never silently flip | `backend/tests/` + `deflated_sharpe.py` | ~2 hours | *(repo 21)* The cross-check that validated our implementation was manual and one-off. QuantStats gets this exact thing wrong — pandas returns **excess** kurtosis into a formula expecting **Pearson** — and its PSR is overstated as a result. Same discipline as T1: **anchor the test to a value you can derive independently.** |
 | T2 | **Lifecycle-boundary tests for the execution simulator** — first step, start mid-stream, stop early, stop at benchmark | Phase 7 order FSM | Phase 7 | *(repo 10)* Not "does it run" but "does it behave when interrupted". Pairs with A22 (bracket sibling qty on partial fill) and A16 (durable repair queue) — both lifecycle-boundary bugs other people found the hard way. |
@@ -3792,7 +3974,7 @@ session behaves.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Seven of twenty-four advertise numbers or fields their own code cannot produce — and the
+0. **Seven of thirty advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -3826,7 +4008,7 @@ lessons is worth more than any one of them:
    it did not compare against.** **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **A guard that cannot return false shows up in four of twenty-four — and it is the single most
+2. **A guard that cannot return false shows up in four of thirty — and it is the single most
    repeated defect in this log.** AgentQuant's `generalization_gap = max(avg − best, 0)` is
    identically zero; ai-quant-agents' `risk_approved = "risk" not in decision.lower()` where
    `decision ∈ {BUY,HOLD,SELL}` is always true; repo 7's `is_breaking_out` calls a predicate
@@ -3841,7 +4023,7 @@ lessons is worth more than any one of them:
    warning and a green run. **A gate can be disarmed by a default you never chose**, which means
    the test extends: name the input that makes it fail *and confirm the tool would actually
    fail on it*.
-3. **Dead code advertised as a feature shows up in three of twenty-four.** AgentQuant fits an HMM
+3. **Dead code advertised as a feature shows up in three of thirty.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
@@ -3871,7 +4053,7 @@ lessons is worth more than any one of them:
    validation. We have real validation and no production system yet — and of the three
    states, only ours makes the missing half safe to build. An unvalidated system that runs
    flawlessly is still unvalidated; it just loses money with better uptime.
-8. **The repos worth reading are the ones with nothing to sell — now strong enough to use as a prior.** Across twenty-four repos, **eleven decline to publish any performance number**, and they are, without exception, the ones whose code was worth reading (quant-agent, PaperTrade-India, express-option-chain, daily_stock_analysis, qlib, vnpy, turbovec, QuantDinger, QUANTAXIS). Most are
+8. **The repos worth reading are the ones with nothing to sell — now strong enough to use as a prior.** Across thirty repos, **twelve decline to publish any performance number**, and they are, without exception, the ones whose code was worth reading (quant-agent, PaperTrade-India, express-option-chain, daily_stock_analysis, qlib, vnpy, turbovec, QuantDinger, QUANTAXIS). Most are
    infrastructure; one is a product that ships the *measuring instrument* and lets you run it on
    your own history. The ones that fail are all selling a result: an evolved harness,
    a beaten benchmark, an agent consensus, a probable exit date, an LSTM. **The presence of a
@@ -3936,8 +4118,13 @@ lessons is worth more than any one of them:
     PIT syntax. **Rules and reviews catch mistakes; design prevents them** — and where we build new
     evaluation surfaces (MCE 5b above all), an accessor bound to an "as of" timestamp is cheaper
     than a rule and cannot lapse.
-16. **Licence is a first-class review criterion, and it decides before merit does.** Twenty-four
-    repos: mostly MIT or Apache, one **GPL-3** (abu — unadoptable for us regardless of quality),
+16. **Licence is a first-class review criterion, and it decides before merit does.** Across thirty
+    repos the spectrum runs **MIT/Apache → no LICENSE at all** (no grant of rights) **→ LGPL →
+    GPL-3 → Commons Clause** (bites only at commercialisation) **→ unilaterally mutable
+    proprietary with a monitoring duty on the user** (StockSharp, §24.1 — where even *viewing* is
+    nominally gated). **Only the first tier is safe to build on, and the gaps between tiers are
+    differences in kind.** StockSharp is "vnpy for .NET" and **vnpy is MIT**, so the risk bought
+    nothing. Earlier detail: mostly MIT or Apache, one **GPL-3** (abu — unadoptable for us regardless of quality),
     one **LGPL** (NautilusTrader), one **Apache-2 + Commons Clause** (vectorbt — *not open source*,
     and the restriction only bites at commercialisation, i.e. when removal is most expensive),
     and **four with no LICENSE file at all**
