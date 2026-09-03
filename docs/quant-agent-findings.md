@@ -47,6 +47,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 7 | [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener) | 2026-09-03 | Unmaintained 2022–23 student project (MIT). **Picks its LSTM on a scaler fit over the full series and with no persistence baseline** — the winner is plausibly worse than "no change". Its breakout filter is **disabled by a truthy-string bug**. **Adopt nothing**; one pointer for the Minervini trend-template test. |
 | 8 | [pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain) | 2026-09-03 | **The only repo on our exact stack** (Kite WS + Redis + Indian derivatives), 952 LOC, unmaintained since 2023. Adopt no code (per-tick Redis writes, no TTL, unbounded threads). ⭐ **But it documents a Kite quirk we are exposed to — quote-mode ticks on a full-mode subscription — and our depth path never checks. A25 + A26.** |
 | 9 | [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) | 2026-09-03 | **332k LOC in 27 days** (LLM-generated at scale), multi-market daily analysis + push. Adopt no code. ⭐ **But its phase-aware, fails-closed "which bar could this have acted on" resolver is the best treatment of that question in the log** — read `src/core/trading_calendar.py`. Makes no accuracy claim. **A27 + A28 extend A11**; its `AGENTS.md` seeds **W1–W5**. |
+| 19 | [paperswithbacktest/awesome-systematic-trading](https://github.com/paperswithbacktest/awesome-systematic-trading) | 2026-09-03 | ⭐⭐ **The most useful source in this review — not for its links, for its replication record.** They ran **4,843 published papers**: median Sharpe **0.37**, **only 48% clear t>1.96**, median beta **+0.17** (stripping it halves the median edge). **H11** sample-size reality check · **H12** we compute no beta or IR anywhere. Also: its own showcase medians **1.06** vs a population **0.37** — a selection effect in the presentation layer. |
 | 18 | [yutiansut/QUANTAXIS](https://github.com/yutiansut/QUANTAXIS) | 2026-09-03 | MIT, ~66k LOC, active. Most layers duplicate ground already covered better (vnpy, qlib, AKShare). **One distinctive module — QIFI, an account-state protocol published as spec + DDL + implementation** — and it exposed that **we have no frozen/committed-capital concept**, harmless while paper fills are immediate and a real hazard once Phase 7 has pending orders. **A42.** Ninth repo with no performance claim. |
 | 17 | [OpenByteInc/QuantDinger](https://github.com/OpenByteInc/QuantDinger) | 2026-09-03 | ⭐ **The closest product-shaped analogue to our platform**, on nearly our stack (Py3.12/Postgres/Redis), same end-to-end scope, Apache-2, **no performance claim**, committed the day of review. **W6: its MCP server is the best "expose your platform to an agent" security model in the log** — the agent gets a versioned API, never the internals. Plus **A40**, **A41**. |
 | 16 | [RyanCodrai/turbovec](https://github.com/RyanCodrai/turbovec) | 2026-09-03 | **Not a trading repo** (quantized vector search for RAG) — **domain rejected, no stretch made.** But it shares our Rust+PyO3 wheel shape, and its `deny.toml` documents **a guard that could not fail caught in its own CI** (`yanked` defaults to Warn ⇒ a yanked dep passed green). **A39: we have no supply-chain gate on `engine/` at all.** |
@@ -3170,6 +3171,147 @@ confirmation that repos which decline to publish a performance number are the on
 
 ---
 
+# 20. awesome-systematic-trading — `paperswithbacktest/awesome-systematic-trading`
+
+Reviewed 2026-09-03. **No LICENSE file.** A curated list — 299 library rows, 61 showcased
+strategies, 55 books, 22 videos, blogs and courses — updated the day of review.
+
+**A note on method, because the ask was "dig deeply into each and every one":** I did not
+individually review 299 libraries or 4,843 papers, and any claim that I had would be false. What I
+did instead is worth more: **inventoried the whole list programmatically, computed the statistics
+it does not compute for you, cross-checked it against the eighteen repos already reviewed here and
+against our own open gaps, and kept only what changes something.** The result is three findings,
+two of which are new queue items, and one of them re-frames how we should read every evidence
+number we produce.
+
+## 20.1 ★★ The replication record is the most valuable thing anyone has shared in this review
+
+Buried above the fold, before the list itself:
+
+> *We have coded and run **4,843** of these papers over their own full history.*
+> - *The median replication returns a **Sharpe of 0.37**, and **48% clear a t-statistic of 1.96**.
+>   **Half the published record cannot be distinguished from zero on its own sample.***
+> - *Median test window **34 years**. A strategy needs roughly `(1.96 / Sharpe)²` years to prove
+>   itself, so a Sharpe of 0.4 needs about **24** of them.*
+> - *The median strategy carries a **beta of +0.17** to the S&P 500. Removing it takes the median
+>   information ratio down to **0.21** — a meaningful slice of the published edge is index exposure
+>   rather than skill.*
+> - *Across 2,838 papers with a record on both sides of publication, **no measurable decay after
+>   publication** once the market period is controlled for.*
+
+This is an **empirical prior on the entire published systematic-trading literature**, produced by
+actually running it. Three of the four facts land directly on open questions of ours.
+
+### H11 — the sample-size reality check, and it is uncomfortable
+
+`years ≈ (1.96 / Sharpe)²` is the same statement as our **MinTRL** in `deflated_sharpe.py`
+("accrue until n ≈ X"), arrived at independently and expressed in a unit anyone can check:
+
+| annualised Sharpe | years of daily data to reach t = 1.96 |
+|---|---|
+| 1.00 | ~4 |
+| 0.60 | ~11 |
+| **0.37** *(their median)* | **~28** |
+| 0.20 | ~96 |
+
+**Our gates are being judged on weeks.** The deflated-Sharpe read of 2026-09-03 put every gate's
+eligible-set Sharpe *below* its 20-trial benchmark — market-regime −0.004, anti-chase +0.032,
+sector-RS −0.105, liquidity −0.150 — on samples of 33 to 72 trades. This table says that even a
+*genuinely good* published strategy needs decades to separate from zero.
+
+I want to be precise rather than alarmist: their formula is for an **annualised Sharpe on a daily
+return series**, and our gate evidence is **per-trade over a trade count**, which is exactly why we
+built MinTRL instead of borrowing a years figure. The units do not transfer. **What transfers is
+the shape: required sample scales with the inverse square of effect size**, so halving the edge
+quadruples the evidence needed. Our edges are small, so our required samples are enormous, and
+this is independent external confirmation of the thing that has already cost us two reverted gates.
+
+**H11 is therefore not "adopt their formula" but "state the implied sample beside every readiness
+banner"** — we already compute MinTRL; the missing move is to render it as the headline rather
+than a footnote, so "n=44" is never read without "needs ≈N".
+
+### H12 — we compute no beta, and a slice of any edge we find may be index exposure
+
+*The median strategy carries a beta of +0.17; removing it takes the median information ratio to
+0.21.* On their own numbers, **beta-stripping roughly halves the apparent edge of the median
+published strategy.**
+
+**We compute no beta and no information ratio anywhere.** Our cohorts are judged on raw expectancy
+and raw per-trade Sharpe. If a would-block cohort happens to be long-biased in a rising market, its
+"edge" is partly the market — and we would never see it.
+
+This is our **H2/U2** finding (put the benchmark in the same table) generalised from the portfolio
+level to the *cohort* level: not just "how did we do against NIFTY", but "how much of this gate's
+apparent effect survives removing its index exposure". We already have the index bars
+(`index_ohlcv_1d`, backfilled) and `benchmark.py` for per-signal alignment, so the inputs exist.
+
+**H12 — add beta-to-NIFTY and an information ratio to every cohort evaluation.** It sits naturally
+beside H1 (block-bootstrap p5) and H8 (the noise control) as the third robustness axis: **H1 asks
+"is this stable?", H8 asks "does the bar reject noise?", H12 asks "is this just the market?"**
+
+### The calibration, stated plainly
+
+**Median published Sharpe 0.37. Half the literature cannot be distinguished from zero on its own
+sample.** That is the yardstick — from 4,843 replications — against which our own expectations
+should be set. It is also the most concrete answer available to the standing question of what
+return rate is achievable: a *median good published strategy* is a 0.37 Sharpe that takes
+~28 years to prove. Our position (−0.303R expectancy, measured honestly, on a book we are still
+fixing) is early-stage, not anomalous — and the target of 2–3% a day is not on this distribution
+at all.
+
+## 20.2 The selection effect I found in its own presentation
+
+I parsed the 61 showcased strategies and computed what the list does not:
+
+| asset class | n | median Sharpe | max | median vol | median years |
+|---|--:|--:|--:|--:|--:|
+| Equities | 12 | **1.51** | 1.89 | 6.2% | 37 |
+| Multi-asset | 12 | 1.23 | 1.62 | 6.9% | 37 |
+| Currencies | 4 | 1.39 | 1.74 | 8.5% | 36 |
+| Bonds | 12 | 0.62 | 0.90 | 6.0% | 36 |
+| Commodities | 3 | 0.63 | 0.65 | 20.7% | 37 |
+| Cryptocurrencies | 8 | 0.63 | 3.39 | 47.9% | 28 |
+| Derivatives | 10 | 0.53 | 1.06 | 9.4% | 37 |
+| **All showcased** | **61** | **1.06** | 3.39 | 8.6% | 37 |
+
+**The showcased median is 1.06. The population median is 0.37.** The list displays roughly the
+best 1.3% of what it has replicated, and a reader who skims the tables anchors on ~1.06 — nearly
+three times the truth.
+
+To be fair: **this is disclosed**, in the intro, above the tables, in plain language. That is more
+honesty than any other list in this review. But it is the subtlest instance of this log's central
+theme — **the selection effect had moved into the presentation layer**, where no code is wrong and
+no claim is false, and the reader still ends up mis-calibrated. Our own equivalent risk is exact:
+a readiness banner that shows the gates we are *watching* is a selected sample of the gates we
+have *tried*, which is precisely why **U4** (a trials-attempted counter) exists.
+
+## 20.3 Curation practice worth noting
+
+**27 of 299 library rows carry a dated maintenance flag** — `` `dormant since 2024-02` ``,
+`` `dormant since 2018-04` `` — inline with the entry rather than in a separate "deprecated"
+section. Maintenance status as a dated annotation on the thing itself is better than a graveyard
+list nobody reads, and it independently corroborates two calls made in this review: zipline
+(*dormant since 2024-02*; §15 called it archived) and backtrader.
+
+The books largely overlap our existing e-book review (López de Prado ×2, Jansen), so nothing new
+there. The blogs are notable for what they are: **mostly engineering blogs from real firms** —
+Jane Street, Hudson River Trading, Two Sigma, Man Group, Proof Engineering — rather than strategy
+blogs. By this log's own lesson 8, that makes them the more credible reading: they have engineering
+to describe and nothing to sell.
+
+## 20.4 Verdict
+
+**The single most useful source in this review**, and not for its links — for the four sentences of
+replication record above them. Two queue items (**H11**, **H12**), one sharpened prior, and a
+worked example of a selection effect surviving into a presentation layer that is otherwise honest.
+
+The list itself I would **use as a lookup, not read** — 299 entries of which we have already
+reviewed the relevant ones, and its own strategy tables point at a paywalled site. **The free,
+durable value is the prior: median 0.37, half indistinguishable from zero, a fifth of the edge is
+beta, and the sample you need grows with the square of how small your edge is.**
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -3187,6 +3329,8 @@ of these is measurement or reporting surface, never the money path.
 | **H4** | **Gate/hypothesis register as data** | new table or a `docs/` machine-readable file: gate · mode · pre-registered prediction · bar · current count · verdict · review-due | ~1 day | Constraint #8 makes me the owner of the review calendar and requires me to raise items *unprompted*. That calendar is prose today. Modelled on `AlphaStore`'s schema, not its code. Would also give the failed-hypothesis archive a home (regime gate, R:R≥1 already populate it). |
 | **H8** | **★ A noise negative-control against our own deflated-Sharpe bar** — generate N random, content-free partitions of the real trade set, run them through the *same* `deflated_sharpe.py` path the real gates use, and assert the bar **rejects** them | `backend/tests/` + `app/services/deflated_sharpe.py` | ~half day | *(repo 12)* A test of the test. If a noise gate clears our bar, the bar is broken and every readiness banner built on it is worthless. The machinery already exists, it is a genuine test rather than an argument, and it targets exactly what has bitten us twice — **promoting on evidence that looked sufficient.** Our own rule says a metric that cannot come out badly is not a metric; this applies it to the bar itself. |
 | H10 | **Loser-cluster meta-labeling as a research candidate** — don't guess the partition; cluster the actual losing trades and let the clusters define the veto | post-watch-mode research queue | research | *(repo 15)* Attacks the failure mode that cost us twice: **our overlays are hypothesis-driven and two of three were reverted because the partition was a proxy for something else** (market-regime → side; R:R<1 → wide stop). **But it is an overfitting machine** — clustering your own losers always looks good in-sample. **Only behind DSR with an honest trial count (every cluster config is a trial), MinTRL, and H8's negative control.** Explicitly not a build item. Third independent pointer at meta-labeling (e-book review, `mlfinlab`, this). |
+| **H11** | **★ Put the implied sample beside every readiness banner** — render MinTRL as the headline, so `n=44` is never read without `needs ≈N` | readiness banners / `deflated_sharpe.py` render path | ~2 hours | *(repo 19)* Independent external confirmation of MinTRL's message, with a number: required sample scales with the **inverse square of effect size**, so a median published strategy (Sharpe 0.37) needs **~28 years** to separate from zero. **Our gates are judged on 33–72 trades.** We already compute MinTRL — the missing move is promoting it from footnote to headline. |
+| **H12** | **★ Beta-to-NIFTY and an information ratio on every cohort evaluation** | cohort/sidecar evaluation, using the existing `index_ohlcv_1d` + `benchmark.py` | ~1 day | *(repo 19)* On 4,843 replications the median strategy carries **beta +0.17**, and stripping it takes the median IR to **0.21** — roughly **halving** the apparent edge. **We compute no beta and no IR anywhere**: a would-block cohort that is long-biased in a rising market would look like skill. Third robustness axis beside **H1** (is it stable?) and **H8** (does the bar reject noise?): **is it just the market?** |
 | H9 | **CSCV / probability of backtest overfitting, and White's Reality Check**, as complements to DSR; and `mlfinlab`'s **meta-labeling** | post-watch-mode research queue | research | *(repo 12)* Different tests, same question — multiple-testing robustness. Meta-labeling is our overlay pattern under another name (already flagged in the e-book review). **Pointer, not queued work.** |
 | H5 | `WarmupEnforcer` / `@enforce_lookback` as a runtime invariant | `app/analysis/` boundary — **frozen engine, so overlay//caller side only** | ~1 day | Turns a review-convention into a loud failure. Low urgency: no look-ahead bug is currently suspected. |
 | H6 | `MAX_RATIO` sentinel instead of `inf` for degenerate ratios | wherever R:R / Calmar-like ratios are computed | ~1 hour | We have the `RR≈228` tiny-SL artifact on record. Trivial hygiene. |
@@ -3324,7 +3468,7 @@ session behaves.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Seven of twenty advertise numbers or fields their own code cannot produce — and the
+0. **Seven of twenty-one advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -3358,7 +3502,7 @@ lessons is worth more than any one of them:
    it did not compare against.** **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **A guard that cannot return false shows up in four of twenty — and it is the single most
+2. **A guard that cannot return false shows up in four of twenty-one — and it is the single most
    repeated defect in this log.** AgentQuant's `generalization_gap = max(avg − best, 0)` is
    identically zero; ai-quant-agents' `risk_approved = "risk" not in decision.lower()` where
    `decision ∈ {BUY,HOLD,SELL}` is always true; repo 7's `is_breaking_out` calls a predicate
@@ -3373,7 +3517,7 @@ lessons is worth more than any one of them:
    warning and a green run. **A gate can be disarmed by a default you never chose**, which means
    the test extends: name the input that makes it fail *and confirm the tool would actually
    fail on it*.
-3. **Dead code advertised as a feature shows up in three of twenty.** AgentQuant fits an HMM
+3. **Dead code advertised as a feature shows up in three of twenty-one.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
@@ -3403,7 +3547,7 @@ lessons is worth more than any one of them:
    validation. We have real validation and no production system yet — and of the three
    states, only ours makes the missing half safe to build. An unvalidated system that runs
    flawlessly is still unvalidated; it just loses money with better uptime.
-8. **The repos worth reading are the ones with nothing to sell — now strong enough to use as a prior.** Across twenty repos, **nine decline to publish any performance number**, and they are, without exception, the ones whose code was worth reading (quant-agent, PaperTrade-India, express-option-chain, daily_stock_analysis, qlib, vnpy, turbovec, QuantDinger, QUANTAXIS). Most are
+8. **The repos worth reading are the ones with nothing to sell — now strong enough to use as a prior.** Across twenty-one repos, **nine decline to publish any performance number**, and they are, without exception, the ones whose code was worth reading (quant-agent, PaperTrade-India, express-option-chain, daily_stock_analysis, qlib, vnpy, turbovec, QuantDinger, QUANTAXIS). Most are
    infrastructure; one is a product that ships the *measuring instrument* and lets you run it on
    your own history. The ones that fail are all selling a result: an evolved harness,
    a beaten benchmark, an agent consensus, a probable exit date, an LSTM. **The presence of a
@@ -3463,7 +3607,7 @@ lessons is worth more than any one of them:
     PIT syntax. **Rules and reviews catch mistakes; design prevents them** — and where we build new
     evaluation surfaces (MCE 5b above all), an accessor bound to an "as of" timestamp is cheaper
     than a rule and cannot lapse.
-16. **Licence is a first-class review criterion, and it decides before merit does.** Twenty
+16. **Licence is a first-class review criterion, and it decides before merit does.** Twenty-one
     repos: mostly MIT or Apache, one **GPL-3** (abu — unadoptable for us regardless of quality),
     one **LGPL** (NautilusTrader, per our earlier review), and **four with no LICENSE file at all**
     (repos 5, 6B, 6C, and 3's org mismatch) — which is *more* restrictive than GPL, since no
@@ -3485,7 +3629,23 @@ lessons is worth more than any one of them:
     Prometheus board tells you nothing about a feed that returned yesterday's prices, and a
     readiness banner tells you nothing about a worker that never started. A11 is the delivery
     channel; A40 (worker liveness) is the first infrastructural thing worth delivering through it.
-19. **The most useful findings came from the repos closest to our own stack, and they were
+19. **★ The published literature's own median is a Sharpe of 0.37, and half of it cannot be
+    distinguished from zero on its own sample.** From 4,843 replications (repo 19) — the only
+    population-level evidence in this entire review, and the correct yardstick for our own
+    expectations. Two consequences we had not priced: **required sample grows with the inverse
+    square of the edge** (a 0.37 Sharpe needs ~28 years; our gates are judged on 33–72 trades),
+    and **the median strategy's beta of +0.17 accounts for roughly half its apparent edge**, which
+    we cannot even measure because we compute no beta anywhere. **A −0.303R book measured honestly
+    is an early-stage position on this distribution, not an anomalous one** — and a 2–3%/day target
+    is not on the distribution at all.
+20. **Selection effects survive into presentation layers, where no code is wrong.** Repo 19 is the
+    most honest list reviewed — it discloses its replication record in plain language above the
+    tables — and its showcased strategies still median **1.06** against a population median of
+    **0.37**, because a list shows its best. Nothing is false; a skimming reader is simply
+    mis-calibrated by 3×. **Our exact equivalent: a readiness banner shows the gates we are
+    watching, which is a selected sample of the gates we have tried** — which is why U4 (a
+    trials-attempted counter) exists and why it matters more than it looks.
+21. **The most useful findings came from the repos closest to our own stack, and they were
     about *us*.** PaperTrade-India exposed that our fills are spread-aware while our marks are
     not (A21); express-option-chain exposed that we harvest depth from `MODE_FULL` ticks
     without ever checking the mode, on a path built to fail open (A25). **Neither was a defect

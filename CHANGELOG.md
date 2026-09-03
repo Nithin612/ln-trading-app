@@ -7,6 +7,58 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 19 awesome-systematic-trading — a replication record over 4,843 papers (2026-09-03)
+
+[paperswithbacktest/awesome-systematic-trading](https://github.com/paperswithbacktest/awesome-systematic-trading),
+**no LICENSE**, updated the day of review: 299 library rows, 61 showcased strategies, 55 books,
+blogs and courses.
+
+**Method note, stated honestly:** the brief was "dig deeply into each and every one", and I did
+**not** individually review 299 libraries or 4,843 papers — claiming otherwise would be false.
+Instead: inventoried the list programmatically, computed the statistics it does not compute,
+cross-checked it against the eighteen repos already reviewed and against our own open gaps, and
+kept only what changes something.
+
+**★★ The replication record above the list is the most valuable thing in this whole review.** They
+coded and ran **4,843 published papers over their full history**: median Sharpe **0.37**; **only
+48% clear t > 1.96** (*"half the published record cannot be distinguished from zero on its own
+sample"*); median beta **+0.17** to the S&P, and **stripping it takes the median information ratio
+to 0.21** — roughly halving the apparent edge; and **no measurable post-publication decay** once
+the market period is controlled for. This is population-level evidence on the entire literature,
+produced by running it.
+
+**H11 — the sample-size reality check.** `years ≈ (1.96/Sharpe)²` is our **MinTRL** arrived at
+independently: a 0.37 Sharpe needs **~28 years** to separate from zero. Units do not transfer
+(theirs is annualised-on-daily, ours is per-trade — which is why we built MinTRL), **but the shape
+does: required sample grows with the inverse square of the edge.** Our gates are judged on 33–72
+trades. We already compute MinTRL; the missing move is rendering it as the **headline** beside
+every readiness banner so `n=44` is never read without `needs ≈N`.
+
+**H12 — we compute no beta and no information ratio anywhere.** Cohorts are judged on raw
+expectancy and per-trade Sharpe, so a would-block cohort that is long-biased in a rising market
+looks like skill. This is H2/U2 generalised from portfolio to *cohort* level, and the inputs exist
+(`index_ohlcv_1d` backfilled, `benchmark.py` for alignment). Third robustness axis beside **H1**
+(is it stable?) and **H8** (does the bar reject noise?): **is it just the market?**
+
+**A selection effect found in its own presentation.** Parsing the 61 showcased strategies gives a
+median Sharpe of **1.06** (equities 1.51, derivatives 0.53) against the population's **0.37** — the
+list shows roughly its best 1.3%, and a skimming reader anchors 3× high. **This is disclosed** in
+plain language above the tables, which is more honesty than any other list here — but it is the
+subtlest instance of this log's theme: the selection effect moved into the presentation layer,
+where no code is wrong and the reader is still mis-calibrated. **Our exact equivalent is a
+readiness banner showing the gates we are watching, a selected sample of the gates we have tried** —
+which is why U4 exists.
+
+Also noted: **27 of 299 library rows carry dated dormancy flags** inline (`dormant since 2024-02`),
+which independently corroborates this review's zipline call; books largely overlap our e-book
+review; and the blogs skew to **engineering blogs of real firms** (Jane Street, HRT, Two Sigma, Man
+Group) rather than strategy blogs — by lesson 8, the more credible reading.
+
+Synthesis extended to twenty-one repos with lessons 19 and 20. Calibration recorded plainly: **a
+−0.303R book measured honestly is an early-stage position on this distribution, not an anomalous
+one — and a 2–3%/day target is not on the distribution at all.**
+
+
 ### docs(research): repo 18 QUANTAXIS — QIFI's account model exposes our missing frozen-capital concept (2026-09-03)
 
 [yutiansut/QUANTAXIS](https://github.com/yutiansut/QUANTAXIS), **MIT**, ~66.3k LOC, actively
