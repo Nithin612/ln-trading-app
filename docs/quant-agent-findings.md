@@ -47,6 +47,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 7 | [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener) | 2026-09-03 | Unmaintained 2022–23 student project (MIT). **Picks its LSTM on a scaler fit over the full series and with no persistence baseline** — the winner is plausibly worse than "no change". Its breakout filter is **disabled by a truthy-string bug**. **Adopt nothing**; one pointer for the Minervini trend-template test. |
 | 8 | [pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain) | 2026-09-03 | **The only repo on our exact stack** (Kite WS + Redis + Indian derivatives), 952 LOC, unmaintained since 2023. Adopt no code (per-tick Redis writes, no TTL, unbounded threads). ⭐ **But it documents a Kite quirk we are exposed to — quote-mode ticks on a full-mode subscription — and our depth path never checks. A25 + A26.** |
 | 9 | [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) | 2026-09-03 | **332k LOC in 27 days** (LLM-generated at scale), multi-market daily analysis + push. Adopt no code. ⭐ **But its phase-aware, fails-closed "which bar could this have acted on" resolver is the best treatment of that question in the log** — read `src/core/trading_calendar.py`. Makes no accuracy claim. **A27 + A28 extend A11**; its `AGENTS.md` seeds **W1–W5**. |
+| 20 | [polakowo/vectorbt](https://github.com/polakowo/vectorbt) | 2026-09-03 | **Re-review of a decision already made** (`EXTERNAL_LIBS_REVIEW_2026-08-02`: "would REGRESS invariants") — **confirmed, with two sharper reasons.** ⚠ **Licence is Apache-2 + Commons Clause: not open source, and it only bites at commercialisation** — incompatible with our stated "possible future productization". Technically it makes constraint #3 a matter of caller discipline (`fshift(1)`). **No queue items; closes the log's look-ahead spectrum.** |
 | 19 | [paperswithbacktest/awesome-systematic-trading](https://github.com/paperswithbacktest/awesome-systematic-trading) | 2026-09-03 | ⭐⭐ **The most useful source in this review — not for its links, for its replication record.** They ran **4,843 published papers**: median Sharpe **0.37**, **only 48% clear t>1.96**, median beta **+0.17** (stripping it halves the median edge). **H11** sample-size reality check · **H12** we compute no beta or IR anywhere. Also: its own showcase medians **1.06** vs a population **0.37** — a selection effect in the presentation layer. |
 | 18 | [yutiansut/QUANTAXIS](https://github.com/yutiansut/QUANTAXIS) | 2026-09-03 | MIT, ~66k LOC, active. Most layers duplicate ground already covered better (vnpy, qlib, AKShare). **One distinctive module — QIFI, an account-state protocol published as spec + DDL + implementation** — and it exposed that **we have no frozen/committed-capital concept**, harmless while paper fills are immediate and a real hazard once Phase 7 has pending orders. **A42.** Ninth repo with no performance claim. |
 | 17 | [OpenByteInc/QuantDinger](https://github.com/OpenByteInc/QuantDinger) | 2026-09-03 | ⭐ **The closest product-shaped analogue to our platform**, on nearly our stack (Py3.12/Postgres/Redis), same end-to-end scope, Apache-2, **no performance claim**, committed the day of review. **W6: its MCP server is the best "expose your platform to an agent" security model in the log** — the agent gets a versioned API, never the internals. Plus **A40**, **A41**. |
@@ -3312,6 +3313,101 @@ beta, and the sample you need grows with the square of how small your edge is.**
 
 ---
 
+# 21. vectorbt — `polakowo/vectorbt`
+
+Reviewed 2026-09-03. ~62,700 LOC. A vectorised backtesting library — fast, popular, and the
+best-known member of its category.
+
+**We have already decided this one.** `docs/EXTERNAL_LIBS_REVIEW_2026-08-02.md` concluded *adopt
+none as dependencies*, singling out VectorBT as one that *"would REGRESS invariants"*. This
+re-review does not re-litigate that; it **confirms it and supplies two sharper reasons**, one of
+which is decisive on its own and was not in the original note.
+
+## 21.1 ★ The licence is not open source, and it springs exactly when we would care
+
+The README badge says "Fair Code"; the licence is **Apache 2.0 with the Commons Clause**. Verbatim:
+
+> *the grant of rights under the License **will not include** … the right to **Sell** the
+> Software. … "Sell" means … to provide to third parties, **for a fee or other consideration
+> (including without limitation fees for hosting or consulting/support services)**, a product or
+> service **whose value derives, entirely or substantially, from the functionality of the
+> Software**.*
+
+Set against the first line of our own CLAUDE.md:
+
+> *Personal intelligent stock-suggestion + algo-trading platform for Indian markets (NSE/BSE).
+> Solo developer, **personal use first, possible future productization**.*
+
+So: **personal use today is fine** — the Commons Clause does not bite because nothing is being
+sold. **Any future productization becomes a live legal problem**, and there is a paid
+`vectorbt.pro`, which is precisely why the free edition carries the restriction.
+
+**That makes it worse than a plain incompatible licence, because the trap only springs at
+commercialisation** — the moment when the dependency is most deeply embedded and least removable.
+Per lesson 16, licence decides before merit, and this decides it. Recorded because a future
+session weighing vectorbt on technical grounds needs to hit this first.
+
+## 21.2 The technical regression, now stated precisely
+
+The original note said "regresses invariants" without saying which. It is **constraint #3** —
+*compute on candle N, valid from N+1; backtest fills at N+1 open* — and the regression is in
+**kind, not degree**.
+
+vectorbt's own documentation is candid about where the responsibility sits:
+
+```
+base.py:2307   "...forward, for example, with `signals.vbt.fshift(1)`. In general,
+                make sure to use a price..."
+base.py:2649   "(for example, by using the closing price), otherwise you may expose
+                yourself to a look-ahead bias."
+```
+
+Signals are computed **vectorised over the whole array**, then simulated. The simulation loop is
+event-driven (its docs fairly claim *"less risk of exposure to look-ahead bias"* for that stage) —
+but the **signal generation** has already seen every bar, and the default fill is the same bar. **A
+correct backtest requires the user to remember `fshift(1)`.**
+
+For us that converts a structural property into a convention. Our engine computes on completed
+candles and our backtest fills at the next open *because it cannot do otherwise*; adopting a
+framework where correctness depends on remembering a shift is a regression regardless of how fast
+it runs.
+
+## 21.3 ★ This closes the log's look-ahead thread with a clean spectrum
+
+Across twenty-two repos, look-ahead has now been seen at every point on a single axis — and the
+position on that axis predicted the outcome every time:
+
+| Design | Look-ahead is… | Observed result |
+|---|---|---|
+| **Zipline** (§15) — `BarData` bound to the simulation clock, no API for a future bar | **not expressible** | no look-ahead possible |
+| **qlib** (§10) — `P($$field)` PIT syntax; unknown phase → `None` | not expressible for PIT fields; **fails closed** | the most careful backtest layer reviewed |
+| **daily_stock_analysis** (§9) — phase-aware entry-bar resolver, fails closed | prevented by resolution | correct |
+| **vectorbt** (§21) — vectorised signals, same-bar fill by default, `fshift(1)` is the caller's job | **the default unless you remember** | documented, not prevented |
+| **QuantHarness** (§2) — holdout is a commented-out line | one edit away | unverifiable results |
+| **QuantAgents-NSE** (§5) — signal from the bar's close, filled at that close | **already happened** | +0.5pp "edge" that isn't real |
+
+The bottom two rows are what the fourth row produces downstream. **Repo 5 is what using a
+vectorised framework's defaults looks like when nobody remembers the shift** — and its author
+almost certainly did not think of it as a choice.
+
+This is the strongest available argument for **A38** (accessors bound to an "as-of" time) and
+**T1** (a PIT test anchored to a real filing date): not that convention is unreliable in the
+abstract, but that **we have now watched it fail, in this exact way, in two of twenty-two repos,
+with a third documenting the trap it declines to remove.**
+
+## 21.4 Verdict
+
+**Reject — and the prior decision stands with better reasons.** Licence first: Commons Clause is
+incompatible with our stated possible future productization, and it only bites once removal is
+expensive. Technique second: it makes our single most important correctness invariant a matter of
+caller discipline.
+
+**No queue items.** The value of this re-review is a decision that now survives someone changing
+their mind about the technical merits, plus the spectrum in §21.3 — which is the clearest statement
+this document can make about *why* the design stance in A38/T1 is worth paying for.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -3468,7 +3564,7 @@ session behaves.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Seven of twenty-one advertise numbers or fields their own code cannot produce — and the
+0. **Seven of twenty-two advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -3502,7 +3598,7 @@ lessons is worth more than any one of them:
    it did not compare against.** **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **A guard that cannot return false shows up in four of twenty-one — and it is the single most
+2. **A guard that cannot return false shows up in four of twenty-two — and it is the single most
    repeated defect in this log.** AgentQuant's `generalization_gap = max(avg − best, 0)` is
    identically zero; ai-quant-agents' `risk_approved = "risk" not in decision.lower()` where
    `decision ∈ {BUY,HOLD,SELL}` is always true; repo 7's `is_breaking_out` calls a predicate
@@ -3517,7 +3613,7 @@ lessons is worth more than any one of them:
    warning and a green run. **A gate can be disarmed by a default you never chose**, which means
    the test extends: name the input that makes it fail *and confirm the tool would actually
    fail on it*.
-3. **Dead code advertised as a feature shows up in three of twenty-one.** AgentQuant fits an HMM
+3. **Dead code advertised as a feature shows up in three of twenty-two.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
@@ -3547,7 +3643,7 @@ lessons is worth more than any one of them:
    validation. We have real validation and no production system yet — and of the three
    states, only ours makes the missing half safe to build. An unvalidated system that runs
    flawlessly is still unvalidated; it just loses money with better uptime.
-8. **The repos worth reading are the ones with nothing to sell — now strong enough to use as a prior.** Across twenty-one repos, **nine decline to publish any performance number**, and they are, without exception, the ones whose code was worth reading (quant-agent, PaperTrade-India, express-option-chain, daily_stock_analysis, qlib, vnpy, turbovec, QuantDinger, QUANTAXIS). Most are
+8. **The repos worth reading are the ones with nothing to sell — now strong enough to use as a prior.** Across twenty-two repos, **nine decline to publish any performance number**, and they are, without exception, the ones whose code was worth reading (quant-agent, PaperTrade-India, express-option-chain, daily_stock_analysis, qlib, vnpy, turbovec, QuantDinger, QUANTAXIS). Most are
    infrastructure; one is a product that ships the *measuring instrument* and lets you run it on
    your own history. The ones that fail are all selling a result: an evolved harness,
    a beaten benchmark, an agent consensus, a probable exit date, an LSTM. **The presence of a
@@ -3598,7 +3694,12 @@ lessons is worth more than any one of them:
     AKShare shows the fix is identical in both cases: **make it a test that fails.** We already
     drew this conclusion once, about code, when the `unassessed` tripwire turned out to be
     imaginary — and never applied it to our process. Hence T8 and T9.
-15. **★ The strongest guarantee is the one that removes the syntax for the mistake.** Look-ahead
+15. **★ The strongest guarantee is the one that removes the syntax for the mistake — and the
+    position on that spectrum predicted the outcome every time.** §21.3 lays out the full axis,
+    from Zipline (look-ahead *not expressible*) through qlib and repo 9 (prevented, fails closed),
+    to vectorbt (**the default unless the caller remembers `fshift(1)`**), to repos 2 and 5 where
+    it simply happened. **Repo 5 is what the vectorbt row produces downstream**, and its author
+    almost certainly never saw it as a choice. Look-ahead
     entered this log four different ways — a commented-out holdout (repo 2), same-bar execution
     (repo 5), a scaler fit over the test window (repo 7), a phase-unaware entry bar (repo 9 got
     this right). Every one was *a mistake someone could make*. Zipline is the only repo where a
@@ -3607,9 +3708,11 @@ lessons is worth more than any one of them:
     PIT syntax. **Rules and reviews catch mistakes; design prevents them** — and where we build new
     evaluation surfaces (MCE 5b above all), an accessor bound to an "as of" timestamp is cheaper
     than a rule and cannot lapse.
-16. **Licence is a first-class review criterion, and it decides before merit does.** Twenty-one
+16. **Licence is a first-class review criterion, and it decides before merit does.** Twenty-two
     repos: mostly MIT or Apache, one **GPL-3** (abu — unadoptable for us regardless of quality),
-    one **LGPL** (NautilusTrader, per our earlier review), and **four with no LICENSE file at all**
+    one **LGPL** (NautilusTrader), one **Apache-2 + Commons Clause** (vectorbt — *not open source*,
+    and the restriction only bites at commercialisation, i.e. when removal is most expensive),
+    and **four with no LICENSE file at all**
     (repos 5, 6B, 6C, and 3's org mismatch) — which is *more* restrictive than GPL, since no
     licence means no grant of rights. **vnpy being MIT is the single most consequential licence
     fact in this document**, because it makes the one repo we would most plausibly borrow from

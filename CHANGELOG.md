@@ -7,6 +7,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 20 vectorbt — prior rejection confirmed, with a decisive licence reason (2026-09-03)
+
+[polakowo/vectorbt](https://github.com/polakowo/vectorbt), ~62.7k LOC. **A re-review of a decision
+already made** — `docs/EXTERNAL_LIBS_REVIEW_2026-08-02.md` concluded *adopt none as dependencies*
+and singled out VectorBT as one that *"would REGRESS invariants"*. That stands, and this review
+supplies **two sharper reasons, one of them decisive and absent from the original note.**
+
+**★ The licence is not open source.** The README badges "Fair Code"; the licence is **Apache 2.0
+with the Commons Clause**, which withholds the right to *"provide to third parties, for a fee or
+other consideration (including … hosting or consulting/support services), a product or service
+whose value derives, entirely or substantially, from the functionality of the Software."* Against
+our own CLAUDE.md opening line — *"personal use first, **possible future productization**"* —
+personal use today is fine and **any future productization becomes a live legal problem**. There is
+a paid `vectorbt.pro`, which is why the free edition carries the restriction. **This is worse than
+a plainly incompatible licence, because the trap springs only at commercialisation** — when the
+dependency is most embedded and least removable. Recorded so a future session weighing it on
+technical merit hits this first.
+
+**The technical regression, now named.** It is **constraint #3** (*compute on candle N, valid from
+N+1; fill at N+1 open*), and the regression is in **kind, not degree**. vectorbt's own docs are
+candid: *"forward, for example, with `signals.vbt.fshift(1)`"* and *"otherwise you may expose
+yourself to a look-ahead bias."* Signals are computed **vectorised over the whole array** and the
+default fill is the same bar, so **a correct backtest depends on the caller remembering the
+shift.** Our engine cannot make that mistake; adopting a framework where correctness is a
+convention is a regression however fast it runs.
+
+**★ This closes the log's look-ahead thread.** §21.3 now lays out the full spectrum across
+twenty-two repos, and position on it predicted the outcome every time: Zipline (*not expressible*)
+→ qlib and repo 9 (prevented, fails closed) → **vectorbt (the default unless you remember)** →
+QuantHarness (a commented-out holdout) → QuantAgents-NSE (it simply happened, producing a +0.5pp
+"edge" that isn't real). **Repo 5 is what the vectorbt row produces downstream**, and its author
+almost certainly never saw it as a choice. That is the strongest available argument for **A38**
+(accessors bound to an "as-of" time) and **T1** (a PIT test anchored to a real filing date): not
+that convention is unreliable in the abstract, but that we have now watched it fail in this exact
+way, twice, with a third project documenting the trap it declines to remove.
+
+**No queue items.** The value is a rejection that now survives someone changing their mind about
+the technical merits, plus the spectrum.
+
+
 ### docs(research): repo 19 awesome-systematic-trading — a replication record over 4,843 papers (2026-09-03)
 
 [paperswithbacktest/awesome-systematic-trading](https://github.com/paperswithbacktest/awesome-systematic-trading),
