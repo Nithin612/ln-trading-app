@@ -7,6 +7,51 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 21 QuantStats — cross-checked our PSR, found two bugs in theirs (2026-09-03)
+
+[ranaroussi/quantstats](https://github.com/ranaroussi/quantstats), **Apache 2.0**, ~12.3k LOC,
+**79 metric functions** — the canonical tearsheet library, by the author of `yfinance`.
+
+**★★ This one validated our own measurement stack.** We built PSR from Bailey & López de Prado on
+2026-09-03; QuantStats implements the same formula, which made an independent check possible.
+Algebraically the two agree exactly — collecting their `SR²` terms,
+`0.5·SR² + ((γ₄−3)/4)·SR² = ((γ₄−1)/4)·SR²`, which is ours.
+
+**But the agreement holds only if both feed the same kurtosis convention, and theirs does not.**
+Their `kurtosis()` returns `returns.kurtosis()` — pandas, i.e. **excess** kurtosis (normal = 0) —
+into a formula whose `(kurt − 3)/4` term expects **Pearson** (normal = 3). Demonstrated on 100k
+normal draws: the `SR²` coefficient evaluates to **−0.2422** where it should be **+0.5078**. That
+makes `sigma_sr` too small, the z too large, and **PSR systematically overstated — the library
+reports more confidence than the data supports.** A second, separate defect in the same function:
+`if annualize: return psr * (252 ** 0.5)` — **multiplying a probability by ≈15.87**, a unit error
+hiding behind an optional flag.
+
+**Ours is correct, with the trap explicitly pinned** — `kurtosis: float  # Pearson (normal = 3.0),
+not excess`. That comment is the entire difference. **This is the strongest validation our
+measurement code has received in this review: checked against the best-known reference in the
+field, and the reference is the one that is wrong.**
+
+**T11 — pin PSR/DSR against independently derived values in a regression test**, including a
+normal-series case where the `SR²` coefficient must be `+0.5`, so the convention can never silently
+flip. Same discipline as T1: anchor the test to a value you can derive independently.
+
+**The metric battery is a checklist of what we do not compute**: `information_ratio` and `greeks`
+(alpha/beta) — **a working implementation of H12**; `smart_sharpe` / `autocorr_penalty` — the
+*parametric* cousin of **H1**'s block bootstrap, worth having alongside rather than instead;
+`tail_ratio` / `outlier_win_ratio` / `remove_outliers` — named formalisations of the trimming check
+we improvised when market-regime's cohort showed a *trimmed mean of +₹200 against a −₹302 raw
+mean*; `risk_of_ruin`, which we do not compute and which matters against ₹1L and a negative
+expectancy.
+
+**Verdict: reference, not dependency.** Two structural reasons — the battery operates on a **daily
+returns Series** while our evidence unit is the **per-trade R-multiple** (exactly why MinTRL exists
+rather than a years formula), and it is float/pandas throughout where we are `Decimal` end to end.
+
+Synthesis extended to twenty-three repos with lesson 21: **check every statistical instrument
+against an independent implementation — the most-used implementation in a field is not a reference,
+it is another sample.**
+
+
 ### docs(research): repo 20 vectorbt — prior rejection confirmed, with a decisive licence reason (2026-09-03)
 
 [polakowo/vectorbt](https://github.com/polakowo/vectorbt), ~62.7k LOC. **A re-review of a decision

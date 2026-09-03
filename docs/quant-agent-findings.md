@@ -47,6 +47,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 7 | [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener) | 2026-09-03 | Unmaintained 2022–23 student project (MIT). **Picks its LSTM on a scaler fit over the full series and with no persistence baseline** — the winner is plausibly worse than "no change". Its breakout filter is **disabled by a truthy-string bug**. **Adopt nothing**; one pointer for the Minervini trend-template test. |
 | 8 | [pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain) | 2026-09-03 | **The only repo on our exact stack** (Kite WS + Redis + Indian derivatives), 952 LOC, unmaintained since 2023. Adopt no code (per-tick Redis writes, no TTL, unbounded threads). ⭐ **But it documents a Kite quirk we are exposed to — quote-mode ticks on a full-mode subscription — and our depth path never checks. A25 + A26.** |
 | 9 | [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) | 2026-09-03 | **332k LOC in 27 days** (LLM-generated at scale), multi-market daily analysis + push. Adopt no code. ⭐ **But its phase-aware, fails-closed "which bar could this have acted on" resolver is the best treatment of that question in the log** — read `src/core/trading_calendar.py`. Makes no accuracy claim. **A27 + A28 extend A11**; its `AGENTS.md` seeds **W1–W5**. |
+| 21 | [ranaroussi/quantstats](https://github.com/ranaroussi/quantstats) | 2026-09-03 | ⭐⭐ **Used it to cross-check our own `deflated_sharpe.py` — found two bugs in QuantStats and confirmed ours is correct.** Its PSR feeds pandas **excess** kurtosis into a formula expecting **Pearson** (SR² coefficient −0.25 instead of +0.5 ⇒ **PSR systematically overstated**), and its `annualize` flag multiplies a probability by √252. **Reference, not dependency.** H12 has a working implementation here; **T11**. |
 | 20 | [polakowo/vectorbt](https://github.com/polakowo/vectorbt) | 2026-09-03 | **Re-review of a decision already made** (`EXTERNAL_LIBS_REVIEW_2026-08-02`: "would REGRESS invariants") — **confirmed, with two sharper reasons.** ⚠ **Licence is Apache-2 + Commons Clause: not open source, and it only bites at commercialisation** — incompatible with our stated "possible future productization". Technically it makes constraint #3 a matter of caller discipline (`fshift(1)`). **No queue items; closes the log's look-ahead spectrum.** |
 | 19 | [paperswithbacktest/awesome-systematic-trading](https://github.com/paperswithbacktest/awesome-systematic-trading) | 2026-09-03 | ⭐⭐ **The most useful source in this review — not for its links, for its replication record.** They ran **4,843 published papers**: median Sharpe **0.37**, **only 48% clear t>1.96**, median beta **+0.17** (stripping it halves the median edge). **H11** sample-size reality check · **H12** we compute no beta or IR anywhere. Also: its own showcase medians **1.06** vs a population **0.37** — a selection effect in the presentation layer. |
 | 18 | [yutiansut/QUANTAXIS](https://github.com/yutiansut/QUANTAXIS) | 2026-09-03 | MIT, ~66k LOC, active. Most layers duplicate ground already covered better (vnpy, qlib, AKShare). **One distinctive module — QIFI, an account-state protocol published as spec + DDL + implementation** — and it exposed that **we have no frozen/committed-capital concept**, harmless while paper fills are immediate and a real hazard once Phase 7 has pending orders. **A42.** Ninth repo with no performance claim. |
@@ -3408,6 +3409,125 @@ this document can make about *why* the design stance in A38/T1 is worth paying f
 
 ---
 
+# 22. QuantStats — `ranaroussi/quantstats`
+
+Reviewed 2026-09-03. **Apache 2.0** (declared in `pyproject.toml`; no `LICENSE` file in the tree),
+~12,300 LOC, **79 metric functions** in `stats.py`. The canonical portfolio-analytics / tearsheet
+library, by the author of `yfinance`.
+
+**This one paid off in an unusual direction: I used it to cross-check our own
+`deflated_sharpe.py`, found two bugs in QuantStats, and confirmed ours is right.**
+
+## 22.1 ★★ Cross-checking our PSR against theirs — and the kurtosis trap
+
+We built PSR from first principles on 2026-09-03. QuantStats implements it too, which makes an
+independent verification possible. Their formula:
+
+```python
+sigma_sr = sqrt((1 + 0.5*SR**2 - skew*SR + ((kurt - 3)/4)*SR**2) / (n - 1))
+psr = norm.cdf((SR - rf) / sigma_sr)
+```
+
+Ours:
+
+```python
+denom_sq = 1.0 - m.skew * sr + ((m.kurtosis - 1.0) / 4.0) * sr**2
+z = (sr - benchmark_sharpe) * math.sqrt(m.n - 1) / math.sqrt(denom_sq)
+```
+
+**Algebraically these are the same expression.** Collecting their `SR²` terms:
+`0.5·SR² + ((γ₄−3)/4)·SR² = ((γ₄−1)/4)·SR²` — exactly ours. Two independent derivations of
+Bailey & López de Prado agreeing is a real check on the most important piece of measurement code
+we have.
+
+**Except the agreement holds only if both feed the same kurtosis convention — and theirs does
+not.** Their `kurtosis()` is:
+
+```python
+def kurtosis(returns, prepare_returns=True):
+    return returns.kurtosis()          # pandas → EXCESS kurtosis (Fisher, normal = 0)
+```
+
+…while the formula's `(kurt − 3)/4` term expects **Pearson** kurtosis (normal = 3). Demonstrated
+on 100,000 normal draws:
+
+```
+pandas .kurtosis() on a NORMAL series = 0.0314   → excess, not Pearson
+
+SR² coefficient with excess kurtosis (what they pass):  −0.2422
+SR² coefficient with Pearson kurtosis (correct)      :  +0.5078
+```
+
+For a normal return series the variance term should contribute **+0.5·SR²**; theirs contributes
+**−0.25·SR²**. That makes `sigma_sr` too small, the z-score too large, and **PSR systematically
+overstated — the library reports more confidence than the data supports**, which is the
+dangerous direction.
+
+**A second, separate defect** in the same function:
+
+```python
+if annualize:
+    return psr * (252 ** 0.5)
+```
+
+**PSR is a probability in [0, 1]; this multiplies it by ≈15.87.** A PSR of 0.9 "annualises" to
+14.3. It is a unit error hiding behind an optional flag — a new variant of this log's recurring
+theme, where nothing in the logic is wrong and a default or a flag makes the output meaningless.
+
+**And ours is correct, with the trap explicitly pinned:**
+
+```python
+kurtosis: float  # Pearson (normal = 3.0), not excess
+...
+kurt = m4 / pop_sd**4 if pop_sd > 0 else 3.0
+```
+
+That comment is the difference between the two implementations. **This is the strongest
+validation our measurement stack has received in this entire review** — checked against the
+best-known reference in the field, and the reference is the one that is wrong.
+
+**T11 — pin our PSR/DSR against known-good values in a test.** The cross-check above was
+manual and one-off; it should be a regression test with hand-computed expectations (including a
+normal-series case where the `SR²` coefficient must be `+0.5`), so the kurtosis convention can
+never silently flip. This is the same discipline as qlib's filing-date-anchored PIT test (T1):
+**anchor the test to a value you can derive independently.**
+
+## 22.2 The metric battery is a checklist of what we do not compute
+
+Seventy-nine functions, several of which land on open queue items:
+
+| QuantStats | Our state |
+|---|---|
+| `information_ratio`, `greeks` / `rolling_greeks` (alpha, beta) | **This is H12.** A reference implementation exists — port the formula rather than derive it. |
+| `smart_sharpe`, `smart_sortino`, `autocorr_penalty` | The **parametric** cousin of **H1** (block bootstrap). Two independent answers to "serial correlation inflates Sharpe" — theirs adjusts the statistic, ours resamples the path. Worth having both. |
+| `tail_ratio`, `outlier_win_ratio`, `outlier_loss_ratio`, `remove_outliers` | Formalisations of the check we did **ad hoc**: our market-regime cohort had a *trimmed mean of +₹200 against a −₹302 raw mean — trimming reversed the sign.* We caught that by hand; these are the standard named ratios for it. |
+| `risk_of_ruin` | We do not compute it. Directly relevant to ₹1L live capital against a currently negative expectancy. |
+| `montecarlo`, `montecarlo_sharpe`, `montecarlo_drawdown` | Adjacent to **H8**'s negative control. |
+| `kelly_criterion` | Sizing; noted, not needed (we size risk-first from the actual fill). |
+
+## 22.3 Verdict: reference, not dependency
+
+**Do not adopt it as a dependency**, for two structural reasons rather than any doubt about its
+usefulness:
+
+1. **Unit mismatch.** The battery operates on a **daily returns Series**. Our evidence unit is the
+   **per-trade R-multiple** over a trade count — which is exactly why we built MinTRL rather than
+   borrowing a years-based formula (§20.1). Most of the 79 functions would need a synthetic daily
+   series to be meaningful, and that synthesis is where errors would enter.
+2. **Money types.** Float and pandas throughout; we are `Decimal` end to end. Reporting-side only
+   would be defensible, but see (1).
+
+**Do use it as a reference** — it de-risks **H12** (a working alpha/beta/IR implementation),
+supplies named formalisations for the tail checks we improvised, and its metric list is a useful
+inventory of what a mature analytics surface reports.
+
+**And take the meta-lesson, which is the real find here: when we build a statistical instrument
+from a paper, check it against an independent implementation.** It cost twenty minutes, validated
+our PSR, and turned up two defects in the field's most-used tearsheet library — including one that
+makes it report *more* confidence than the data supports.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -3539,6 +3659,7 @@ is worth studying as a design artifact.
 | **T8** | **★ A self-cleaning debt baseline (ratchet)** — allow known gaps so CI isn't red, **reject new ones**, and **reject baseline entries that are stale or already fixed** so the list can only shrink | `backend/tests/` + whatever audit script it guards | ~half day | *(repo 13)* Most known-failure allowlists rot into permanent amnesties that suppress real regressions. This one fails the build when an entry is no longer a problem, forcing removal. We have the shape (typecheck coverage gaps, `STATUS.html` prose duplicating gate modes) and no mechanism. |
 | **T9** | **★ Turn the doc-sync ritual into failing tests** — a new `settings.*` without an `.env.example` line; a `docs/PHASES.md` `(updated …)` stamp older than the newest `docs/phases/*.md` change; a gate mode in `STATUS.html` disagreeing with `settings`. Report **all** violations in one pass | `backend/tests/` | ~1 day | *(repo 13)* **Our ritual is a procedure an agent must remember; theirs is a test that fails.** Our own lesson — *"a documented safety net is worth nothing without a test that fails when it lapses"* — was applied to our code and never to our process. The memory note *"grep the gate name on every flip"* is a human ritual standing in for a test. Subsumes and promotes **W3**. |
 | **T10** | **★ Negative-space assertions via an `ExplodingObject`** — inject an object that raises on *any* attribute access where a dependency must never be touched | `backend/tests/` helpers | ~2 hours | *(repo 14)* Proves a code path does **not** use something — normally the hardest property to test. We hold three such claims by convention alone: **"frozen engine untouched"** (every overlay), **`circuit_guard` only READS the cache**, and overlays never seeing future data. Each is a documented safety net with no test that fails when it lapses — exactly the `unassessed` tripwire failure. ~15 lines. |
+| **T11** | **★ Pin PSR/DSR against independently derived values in a regression test** — including a normal-series case where the `SR²` coefficient must be `+0.5`, so the kurtosis convention can never silently flip | `backend/tests/` + `deflated_sharpe.py` | ~2 hours | *(repo 21)* The cross-check that validated our implementation was manual and one-off. QuantStats gets this exact thing wrong — pandas returns **excess** kurtosis into a formula expecting **Pearson** — and its PSR is overstated as a result. Same discipline as T1: **anchor the test to a value you can derive independently.** |
 | T2 | **Lifecycle-boundary tests for the execution simulator** — first step, start mid-stream, stop early, stop at benchmark | Phase 7 order FSM | Phase 7 | *(repo 10)* Not "does it run" but "does it behave when interrupted". Pairs with A22 (bracket sibling qty on partial fill) and A16 (durable repair queue) — both lifecycle-boundary bugs other people found the hard way. |
 | T3 | **Parametrised fill tests under a participation limit** | if/when we add a volume-participation cap | — | *(repo 10)* We model spread and size-vs-top-of-book impact; we do not cap participation by volume. This is the test shape if we do. |
 | T4 | **Explicit NaN / corner-case tests on every numeric boundary** (LTP, ATR, confidence, R:R) | `backend/tests/` | ~half day | *(repo 10)* Earned: a non-finite Redis LTP once 500'd the signal detail endpoint because `Decimal("nan")` parses without raising. |
@@ -3564,7 +3685,7 @@ session behaves.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Seven of twenty-two advertise numbers or fields their own code cannot produce — and the
+0. **Seven of twenty-three advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -3598,7 +3719,7 @@ lessons is worth more than any one of them:
    it did not compare against.** **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **A guard that cannot return false shows up in four of twenty-two — and it is the single most
+2. **A guard that cannot return false shows up in four of twenty-three — and it is the single most
    repeated defect in this log.** AgentQuant's `generalization_gap = max(avg − best, 0)` is
    identically zero; ai-quant-agents' `risk_approved = "risk" not in decision.lower()` where
    `decision ∈ {BUY,HOLD,SELL}` is always true; repo 7's `is_breaking_out` calls a predicate
@@ -3613,7 +3734,7 @@ lessons is worth more than any one of them:
    warning and a green run. **A gate can be disarmed by a default you never chose**, which means
    the test extends: name the input that makes it fail *and confirm the tool would actually
    fail on it*.
-3. **Dead code advertised as a feature shows up in three of twenty-two.** AgentQuant fits an HMM
+3. **Dead code advertised as a feature shows up in three of twenty-three.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
@@ -3643,7 +3764,7 @@ lessons is worth more than any one of them:
    validation. We have real validation and no production system yet — and of the three
    states, only ours makes the missing half safe to build. An unvalidated system that runs
    flawlessly is still unvalidated; it just loses money with better uptime.
-8. **The repos worth reading are the ones with nothing to sell — now strong enough to use as a prior.** Across twenty-two repos, **nine decline to publish any performance number**, and they are, without exception, the ones whose code was worth reading (quant-agent, PaperTrade-India, express-option-chain, daily_stock_analysis, qlib, vnpy, turbovec, QuantDinger, QUANTAXIS). Most are
+8. **The repos worth reading are the ones with nothing to sell — now strong enough to use as a prior.** Across twenty-three repos, **ten decline to publish any performance number**, and they are, without exception, the ones whose code was worth reading (quant-agent, PaperTrade-India, express-option-chain, daily_stock_analysis, qlib, vnpy, turbovec, QuantDinger, QUANTAXIS). Most are
    infrastructure; one is a product that ships the *measuring instrument* and lets you run it on
    your own history. The ones that fail are all selling a result: an evolved harness,
    a beaten benchmark, an agent consensus, a probable exit date, an LSTM. **The presence of a
@@ -3708,7 +3829,7 @@ lessons is worth more than any one of them:
     PIT syntax. **Rules and reviews catch mistakes; design prevents them** — and where we build new
     evaluation surfaces (MCE 5b above all), an accessor bound to an "as of" timestamp is cheaper
     than a rule and cannot lapse.
-16. **Licence is a first-class review criterion, and it decides before merit does.** Twenty-two
+16. **Licence is a first-class review criterion, and it decides before merit does.** Twenty-three
     repos: mostly MIT or Apache, one **GPL-3** (abu — unadoptable for us regardless of quality),
     one **LGPL** (NautilusTrader), one **Apache-2 + Commons Clause** (vectorbt — *not open source*,
     and the restriction only bites at commercialisation, i.e. when removal is most expensive),
@@ -3748,7 +3869,14 @@ lessons is worth more than any one of them:
     mis-calibrated by 3×. **Our exact equivalent: a readiness banner shows the gates we are
     watching, which is a selected sample of the gates we have tried** — which is why U4 (a
     trials-attempted counter) exists and why it matters more than it looks.
-21. **The most useful findings came from the repos closest to our own stack, and they were
+21. **★ Check every statistical instrument against an independent implementation.** We built PSR
+    from the Bailey & López de Prado paper; QuantStats — the field's most-used tearsheet library —
+    implements the same formula. Comparing them cost twenty minutes and returned three things:
+    **our implementation is correct**, theirs feeds pandas **excess** kurtosis into a formula
+    expecting **Pearson** (so its PSR is systematically *overstated*), and its `annualize` flag
+    multiplies a probability by √252. **The most-used implementation in a field is not a
+    reference — it is another sample.** Hence T11.
+22. **The most useful findings came from the repos closest to our own stack, and they were
     about *us*.** PaperTrade-India exposed that our fills are spread-aware while our marks are
     not (A21); express-option-chain exposed that we harvest depth from `MODE_FULL` ticks
     without ever checking the mode, on a path built to fail open (A25). **Neither was a defect
