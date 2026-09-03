@@ -47,6 +47,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 7 | [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener) | 2026-09-03 | Unmaintained 2022–23 student project (MIT). **Picks its LSTM on a scaler fit over the full series and with no persistence baseline** — the winner is plausibly worse than "no change". Its breakout filter is **disabled by a truthy-string bug**. **Adopt nothing**; one pointer for the Minervini trend-template test. |
 | 8 | [pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain) | 2026-09-03 | **The only repo on our exact stack** (Kite WS + Redis + Indian derivatives), 952 LOC, unmaintained since 2023. Adopt no code (per-tick Redis writes, no TTL, unbounded threads). ⭐ **But it documents a Kite quirk we are exposed to — quote-mode ticks on a full-mode subscription — and our depth path never checks. A25 + A26.** |
 | 9 | [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) | 2026-09-03 | **332k LOC in 27 days** (LLM-generated at scale), multi-market daily analysis + push. Adopt no code. ⭐ **But its phase-aware, fails-closed "which bar could this have acted on" resolver is the best treatment of that question in the log** — read `src/core/trading_calendar.py`. Makes no accuracy claim. **A27 + A28 extend A11**; its `AGENTS.md` seeds **W1–W5**. |
+| 22 | [JerBouma/FinanceToolkit](https://github.com/JerBouma/FinanceToolkit) | 2026-09-03 | MIT, 131k LOC, **1,486 tests**, 95 cited ratio formulas. ⭐ **The counter-example to QuantStats** — it makes the kurtosis convention an explicit documented parameter and cites formulas to source + page. **Does NOT unblock MCE 5b** (FMP-based, no NSE coverage; our blocker is the data half) but is the right reference when 5b is built. **T12**, applied to our own uncited trading-layer constants. |
 | 21 | [ranaroussi/quantstats](https://github.com/ranaroussi/quantstats) | 2026-09-03 | ⭐⭐ **Used it to cross-check our own `deflated_sharpe.py` — found two bugs in QuantStats and confirmed ours is correct.** Its PSR feeds pandas **excess** kurtosis into a formula expecting **Pearson** (SR² coefficient −0.25 instead of +0.5 ⇒ **PSR systematically overstated**), and its `annualize` flag multiplies a probability by √252. **Reference, not dependency.** H12 has a working implementation here; **T11**. |
 | 20 | [polakowo/vectorbt](https://github.com/polakowo/vectorbt) | 2026-09-03 | **Re-review of a decision already made** (`EXTERNAL_LIBS_REVIEW_2026-08-02`: "would REGRESS invariants") — **confirmed, with two sharper reasons.** ⚠ **Licence is Apache-2 + Commons Clause: not open source, and it only bites at commercialisation** — incompatible with our stated "possible future productization". Technically it makes constraint #3 a matter of caller discipline (`fshift(1)`). **No queue items; closes the log's look-ahead spectrum.** |
 | 19 | [paperswithbacktest/awesome-systematic-trading](https://github.com/paperswithbacktest/awesome-systematic-trading) | 2026-09-03 | ⭐⭐ **The most useful source in this review — not for its links, for its replication record.** They ran **4,843 published papers**: median Sharpe **0.37**, **only 48% clear t>1.96**, median beta **+0.17** (stripping it halves the median edge). **H11** sample-size reality check · **H12** we compute no beta or IR anywhere. Also: its own showcase medians **1.06** vs a population **0.37** — a selection effect in the presentation layer. |
@@ -3528,6 +3529,111 @@ makes it report *more* confidence than the data supports.
 
 ---
 
+# 23. FinanceToolkit — `JerBouma/FinanceToolkit`
+
+Reviewed 2026-09-03. **MIT**, ~131,000 LOC, **1,486 tests**, actively maintained. A large financial
+metrics library — 95 fundamental ratios plus risk, performance, technicals, options, fixed income
+and econometrics modules — whose explicit pitch is **formula transparency**.
+
+Reviewed immediately after QuantStats, deliberately: repo 21 failed a formula audit, and this
+library's whole claim is that its formulas are inspectable. **It passes the same audit, explicitly.**
+
+## 23.1 ★ It gets right the exact thing QuantStats got wrong
+
+QuantStats fed pandas' **excess** kurtosis into a formula expecting **Pearson**, silently
+overstating PSR (§22.1). FinanceToolkit makes the convention a named, documented, defaulted
+parameter:
+
+```python
+def get_kurtosis(..., fisher: bool = True, ...):
+    """fisher (bool, optional): Whether to return Fisher's definition of kurtosis
+    (excess kurtosis, i.e. normal distribution equals 0.0) instead of Pearson's..."""
+    ...
+    return returns.kurtosis() if fisher else returns.kurtosis() + 3
+```
+
+The conversion is correct, the default is stated, and the caller cannot be confused about which
+they are getting. **This is the difference between a library you can audit and one you must audit.**
+
+And its formulas carry citations with page numbers. From the Cornish-Fisher VaR docstring:
+
+> *Formula for quantile from "Finance Compact Plus" by Zimmerman; Part 1, page 130-131.
+> More material/resources: "Numerical Methods and Optimization in Finance" by Gilli, Maringer &
+> Schumann; https://www.value-at-risk.net/the-cornish-fisher-expansion/;
+> https://www.diva-portal.org/... Section 2.4.2, p.18; "Risk Management and Financial
+> Institutions" by John C. Hull*
+
+Four independent sources, one with a page range, for a single quantile adjustment. **That is the
+transparency claim made good** — and the direct opposite of abu's `0.668` / `0.91` magic constants
+arriving with no derivation (§16).
+
+## 23.2 It does **not** unblock MCE 5b, and it is worth being clear why
+
+95 ratio formulas — valuation (29), profitability (23), efficiency (20), solvency (15), liquidity
+(8) — is exactly the battery MCE slice 5b would eventually need.
+
+**But our 5b blocker is the data half, not the formula half.** Our own record is explicit: *"the
+keystone blocker = `market_cap` has no writer → nothing fundamental unlocks until a source is
+chosen."* FinanceToolkit computes ratios **from financial statements you supply**, sourced from
+**FinancialModelingPrep** (10 README mentions) and yfinance. There is **no India/NSE-specific
+support anywhere in it**, and FMP's NSE coverage is neither free nor reliable for mid-caps.
+
+So it solves the half we do not have a problem with. Saying otherwise would be the "manufacturing
+relevance" failure I refused in §17.
+
+**What it does contribute to 5b is a warning, and it is the author's own founding observation:**
+
+> *"While browsing a variety of websites, I repeatedly observed **significant fluctuations in the
+> same financial metric among different sources**. Similarly, the reported financial statements
+> often didn't line up, and there was **limited information on the methodology used to calculate
+> each metric**."*
+
+**That is the argument for why 5b's source decision is the whole problem rather than a detail.**
+The same metric genuinely differs across vendors, which means whichever source we pick becomes
+*part of the definition* of every ratio we compute from it — and a market-cap threshold calibrated
+on one vendor's numbers is not portable to another's. When 5b is built, the source must be pinned
+alongside the formula, and the PIT test (**T1**) must be anchored to *that vendor's* published
+figures.
+
+## 23.3 T12 — and applying it to ourselves
+
+The practice worth taking: **cite the source for every non-obvious formula, and make convention
+choices explicit parameters rather than implicit assumptions.**
+
+Checked against our own code, and the result is mixed in an instructive way. Only **two** files in
+our trading layer cite a derivation: `atr.py` (Wilder) and `deflated_sharpe.py` (Bailey & López de
+Prado, plus the `# Pearson (normal = 3.0), not excess` pin that saved us in §22).
+
+In our defence, the **frozen analysis engine** is specified by `docs/SIGNAL_ENGINE.md` — a
+protected spec, which is *better* than inline citations because it is versioned and
+regression-gated.
+
+**But the trading layer is not covered by that spec, and it is precisely where our churn has
+been.** `profit_lock`'s absolute ladder — breakeven at +₹2k, seal peak−₹1k above ₹3k — and the
+various gate thresholds are **fitted constants with no recorded derivation**. That is the same
+criticism I levelled at abu's `0.668`, and it applies to us: a constant with no stated origin
+cannot be re-derived, re-fitted, or argued about on its merits — it can only be defended by
+whoever remembers choosing it.
+
+**T12 — every non-obvious constant and formula in the trading layer records its origin**: a
+citation, a fitting procedure with its sample, or an explicit "chosen by judgement on <date>,
+never validated". The third option is the important one — it is honest, it is cheap, and it makes
+the unvalidated knobs visible to the review calendar instead of indistinguishable from derived
+ones.
+
+## 23.4 Verdict
+
+**Adopt no dependency** (FMP-centric, no NSE coverage, and our fundamentals blocker lies
+upstream of it), but **keep it as the reference for when 5b is built** — 95 cited ratio definitions
+are worth more than deriving them, and lesson 21 says to check our implementations against an
+independent one.
+
+Two takeaways: it is the **counter-example to QuantStats** — proof that the kurtosis-convention
+trap is avoidable by naming it — and **T12**, which turns its citation practice on our own
+trading-layer constants, where we currently have fitted numbers nobody can re-derive.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -3659,6 +3765,7 @@ is worth studying as a design artifact.
 | **T8** | **★ A self-cleaning debt baseline (ratchet)** — allow known gaps so CI isn't red, **reject new ones**, and **reject baseline entries that are stale or already fixed** so the list can only shrink | `backend/tests/` + whatever audit script it guards | ~half day | *(repo 13)* Most known-failure allowlists rot into permanent amnesties that suppress real regressions. This one fails the build when an entry is no longer a problem, forcing removal. We have the shape (typecheck coverage gaps, `STATUS.html` prose duplicating gate modes) and no mechanism. |
 | **T9** | **★ Turn the doc-sync ritual into failing tests** — a new `settings.*` without an `.env.example` line; a `docs/PHASES.md` `(updated …)` stamp older than the newest `docs/phases/*.md` change; a gate mode in `STATUS.html` disagreeing with `settings`. Report **all** violations in one pass | `backend/tests/` | ~1 day | *(repo 13)* **Our ritual is a procedure an agent must remember; theirs is a test that fails.** Our own lesson — *"a documented safety net is worth nothing without a test that fails when it lapses"* — was applied to our code and never to our process. The memory note *"grep the gate name on every flip"* is a human ritual standing in for a test. Subsumes and promotes **W3**. |
 | **T10** | **★ Negative-space assertions via an `ExplodingObject`** — inject an object that raises on *any* attribute access where a dependency must never be touched | `backend/tests/` helpers | ~2 hours | *(repo 14)* Proves a code path does **not** use something — normally the hardest property to test. We hold three such claims by convention alone: **"frozen engine untouched"** (every overlay), **`circuit_guard` only READS the cache**, and overlays never seeing future data. Each is a documented safety net with no test that fails when it lapses — exactly the `unassessed` tripwire failure. ~15 lines. |
+| **T12** | **Every non-obvious constant and formula in the trading layer records its origin** — a citation, a fitting procedure with its sample, or an explicit *"chosen by judgement on <date>, never validated"* | `app/trading/`, overlays, gate thresholds | ~half day | *(repo 22)* Only `atr.py` (Wilder) and `deflated_sharpe.py` (Bailey & López de Prado) cite anything. The frozen engine has `SIGNAL_ENGINE.md`, which is better — **but the trading layer has no spec and is exactly where our churn is**: `profit_lock`'s ladder (+₹2k breakeven, peak−₹1k above ₹3k) and the gate thresholds are fitted constants nobody can re-derive. **The third option matters most** — it makes unvalidated knobs visible to the review calendar instead of indistinguishable from derived ones. Same criticism levelled at abu's `0.668`, applied to us. |
 | **T11** | **★ Pin PSR/DSR against independently derived values in a regression test** — including a normal-series case where the `SR²` coefficient must be `+0.5`, so the kurtosis convention can never silently flip | `backend/tests/` + `deflated_sharpe.py` | ~2 hours | *(repo 21)* The cross-check that validated our implementation was manual and one-off. QuantStats gets this exact thing wrong — pandas returns **excess** kurtosis into a formula expecting **Pearson** — and its PSR is overstated as a result. Same discipline as T1: **anchor the test to a value you can derive independently.** |
 | T2 | **Lifecycle-boundary tests for the execution simulator** — first step, start mid-stream, stop early, stop at benchmark | Phase 7 order FSM | Phase 7 | *(repo 10)* Not "does it run" but "does it behave when interrupted". Pairs with A22 (bracket sibling qty on partial fill) and A16 (durable repair queue) — both lifecycle-boundary bugs other people found the hard way. |
 | T3 | **Parametrised fill tests under a participation limit** | if/when we add a volume-participation cap | — | *(repo 10)* We model spread and size-vs-top-of-book impact; we do not cap participation by volume. This is the test shape if we do. |
@@ -3685,7 +3792,7 @@ session behaves.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Seven of twenty-three advertise numbers or fields their own code cannot produce — and the
+0. **Seven of twenty-four advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -3719,7 +3826,7 @@ lessons is worth more than any one of them:
    it did not compare against.** **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **A guard that cannot return false shows up in four of twenty-three — and it is the single most
+2. **A guard that cannot return false shows up in four of twenty-four — and it is the single most
    repeated defect in this log.** AgentQuant's `generalization_gap = max(avg − best, 0)` is
    identically zero; ai-quant-agents' `risk_approved = "risk" not in decision.lower()` where
    `decision ∈ {BUY,HOLD,SELL}` is always true; repo 7's `is_breaking_out` calls a predicate
@@ -3734,7 +3841,7 @@ lessons is worth more than any one of them:
    warning and a green run. **A gate can be disarmed by a default you never chose**, which means
    the test extends: name the input that makes it fail *and confirm the tool would actually
    fail on it*.
-3. **Dead code advertised as a feature shows up in three of twenty-three.** AgentQuant fits an HMM
+3. **Dead code advertised as a feature shows up in three of twenty-four.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
@@ -3764,7 +3871,7 @@ lessons is worth more than any one of them:
    validation. We have real validation and no production system yet — and of the three
    states, only ours makes the missing half safe to build. An unvalidated system that runs
    flawlessly is still unvalidated; it just loses money with better uptime.
-8. **The repos worth reading are the ones with nothing to sell — now strong enough to use as a prior.** Across twenty-three repos, **ten decline to publish any performance number**, and they are, without exception, the ones whose code was worth reading (quant-agent, PaperTrade-India, express-option-chain, daily_stock_analysis, qlib, vnpy, turbovec, QuantDinger, QUANTAXIS). Most are
+8. **The repos worth reading are the ones with nothing to sell — now strong enough to use as a prior.** Across twenty-four repos, **eleven decline to publish any performance number**, and they are, without exception, the ones whose code was worth reading (quant-agent, PaperTrade-India, express-option-chain, daily_stock_analysis, qlib, vnpy, turbovec, QuantDinger, QUANTAXIS). Most are
    infrastructure; one is a product that ships the *measuring instrument* and lets you run it on
    your own history. The ones that fail are all selling a result: an evolved harness,
    a beaten benchmark, an agent consensus, a probable exit date, an LSTM. **The presence of a
@@ -3829,7 +3936,7 @@ lessons is worth more than any one of them:
     PIT syntax. **Rules and reviews catch mistakes; design prevents them** — and where we build new
     evaluation surfaces (MCE 5b above all), an accessor bound to an "as of" timestamp is cheaper
     than a rule and cannot lapse.
-16. **Licence is a first-class review criterion, and it decides before merit does.** Twenty-three
+16. **Licence is a first-class review criterion, and it decides before merit does.** Twenty-four
     repos: mostly MIT or Apache, one **GPL-3** (abu — unadoptable for us regardless of quality),
     one **LGPL** (NautilusTrader), one **Apache-2 + Commons Clause** (vectorbt — *not open source*,
     and the restriction only bites at commercialisation, i.e. when removal is most expensive),
@@ -3876,7 +3983,15 @@ lessons is worth more than any one of them:
     expecting **Pearson** (so its PSR is systematically *overstated*), and its `annualize` flag
     multiplies a probability by √252. **The most-used implementation in a field is not a
     reference — it is another sample.** Hence T11.
-22. **The most useful findings came from the repos closest to our own stack, and they were
+22. **A constant with no recorded origin can only be defended by whoever remembers choosing it.**
+    FinanceToolkit cites formulas to source and page and makes convention choices explicit
+    parameters; abu ships `0.668` and `0.91` with no derivation; QuantStats' bug was an *implicit*
+    convention. **We are in the middle**: the frozen engine has `SIGNAL_ENGINE.md` (better than
+    citations — versioned and regression-gated), but the **trading layer has no spec at all**, and
+    that is exactly where the reverted gates and the fitted ladder constants live. The cheapest fix
+    is not to derive them retroactively but to **mark the ones that were judgement calls**, so the
+    review calendar can see them. Hence T12.
+23. **The most useful findings came from the repos closest to our own stack, and they were
     about *us*.** PaperTrade-India exposed that our fills are spread-aware while our marks are
     not (A21); express-option-chain exposed that we harvest depth from `MODE_FULL` ticks
     without ever checking the mode, on a path built to fail open (A25). **Neither was a defect

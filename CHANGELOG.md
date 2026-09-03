@@ -7,6 +7,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 22 FinanceToolkit — the counter-example to QuantStats, and T12 turned on ourselves (2026-09-03)
+
+[JerBouma/FinanceToolkit](https://github.com/JerBouma/FinanceToolkit), **MIT**, ~131k LOC,
+**1,486 tests**, 95 fundamental ratio formulas plus risk/performance/technicals/options modules.
+Reviewed immediately after QuantStats on purpose: repo 21 failed a formula audit, and this
+library's whole pitch is that its formulas are inspectable.
+
+**★ It passes the exact audit QuantStats failed.** Where QuantStats silently fed pandas' *excess*
+kurtosis into a formula expecting *Pearson*, FinanceToolkit makes the convention a named,
+documented, defaulted parameter — `get_kurtosis(..., fisher: bool = True)` returning
+`returns.kurtosis() if fisher else returns.kurtosis() + 3`, with the docstring spelling out both
+definitions. **That is the difference between a library you can audit and one you must audit.** Its
+formulas also carry real citations: the Cornish-Fisher VaR docstring names Zimmerman (Part 1, pp.
+130-131), Gilli/Maringer/Schumann, Hull, and a thesis section — four sources for one quantile
+adjustment, and the direct opposite of abu's underived `0.668` / `0.91`.
+
+**It does NOT unblock MCE 5b, and saying otherwise would be manufacturing relevance.** Its 95
+ratios compute *from statements you supply*, sourced from **FinancialModelingPrep** and yfinance,
+with **no India/NSE support anywhere**. Our recorded blocker is the data half — *"`market_cap` has
+no writer → nothing fundamental unlocks until a source is chosen"* — so it solves the half we do
+not have a problem with.
+
+**What it does contribute to 5b is a warning, in the author's own founding words:** *"I repeatedly
+observed significant fluctuations in the same financial metric among different sources… the
+reported financial statements often didn't line up."* **That is the argument for why 5b's source
+decision is the whole problem rather than a detail**: whichever vendor we pick becomes *part of the
+definition* of every ratio, a market-cap threshold calibrated on one vendor is not portable to
+another, and T1's PIT test must be anchored to *that vendor's* published figures.
+
+**T12 — and applied to ourselves, which is where it stings.** Only two files in our trading layer
+cite a derivation: `atr.py` (Wilder) and `deflated_sharpe.py` (Bailey & López de Prado, plus the
+`# Pearson (normal = 3.0), not excess` pin that saved us in §22). The frozen engine is covered by
+`docs/SIGNAL_ENGINE.md`, which is *better* than inline citations — versioned and regression-gated.
+**But the trading layer has no spec, and it is exactly where our churn is**: `profit_lock`'s ladder
+(+₹2k breakeven, seal peak−₹1k above ₹3k) and the gate thresholds are fitted constants nobody can
+re-derive — the same criticism levelled at abu, now applied to us. T12 asks each to record a
+citation, a fitting procedure with its sample, **or an explicit "chosen by judgement on <date>,
+never validated"** — the third option being the important one, because it makes unvalidated knobs
+visible to the review calendar instead of indistinguishable from derived ones.
+
+Synthesis extended to twenty-four repos with lesson 22: **a constant with no recorded origin can
+only be defended by whoever remembers choosing it.**
+
+
 ### docs(research): repo 21 QuantStats — cross-checked our PSR, found two bugs in theirs (2026-09-03)
 
 [ranaroussi/quantstats](https://github.com/ranaroussi/quantstats), **Apache 2.0**, ~12.3k LOC,
