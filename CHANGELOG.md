@@ -7,6 +7,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 3 ai-quant-agents reviewed — a 236-line SDK, not a quant system (2026-09-03)
+
+[demandai/ai-quant-agents](https://github.com/demandai/ai-quant-agents), single commit,
+Apache 2.0, **295 LOC total**. **Not a quant system: a marketing SDK for a closed paid
+service** (`dream.hmyk.ai`) — no indicators, no backtest, no data layer, no evaluation. The
+"12 AI agents" run server-side behind a PRO ONLY gate. Its most useful line names its
+upstream, **[TradingAgents](https://github.com/TauricResearch/TradingAgents)** (Tauric
+Research, Apache 2.0) — **that is the artifact worth reviewing, and it is now queued.**
+
+Four defects in 236 lines, all of a familiar kind: **`risk_approved` is hardcoded true**
+(`"risk" not in decision.lower()` where decision ∈ {BUY,HOLD,SELL}) while the product is
+marketed on a "Risk Manager with VETO POWER"; the README's example output advertises
+`entry`/`stop_loss`/`target`/`position_size` but the code sets `suggested_action={}`
+unconditionally — the only four fields a trader would act on are decorative; the decision is
+a **substring match on free LLM text** (`if "BUY" in text`, tested before SELL, so *"I would
+not BUY this"* → BUY); and **the stream has no correlation id**, connecting to a global
+socket and consuming any analysis until the first `analysis_complete` — on a shared demo
+server `analyze("NVDA")` can return a stranger's TSLA debate, stamped NVDA locally. Also
+`key_reasons` is harvested only from bull/aggressive speakers, so it is structurally the
+bull case even when the verdict is SELL.
+
+Harvested despite the above: **A9** a progress envelope for long-running jobs
+(`{phase, step, total_steps, message}` — LLM-agnostic, and several of our jobs run minutes
+in silence, the walk-forward replay ~8 of them); **A10** emit running results mid-flight;
+**U16** a phase/participant stage-tracker strip (~40px shows every phase and what has
+completed); **U18** a streaming log with phase tags and per-entry expansion; and **U17**,
+the most valuable — **confidence as a distribution bar rather than a scalar**, which
+completes the trio with U10 (the arithmetic) and U15 (the named evidence): a 78% scalar
+hides whether four factors agreed or one carried everything, which *is* the SRTL failure.
+
+Synthesis section extended and re-titled. New lesson 0: **all three repos advertise numbers
+or fields their own code cannot produce** — in this sample the base rate of a public quant
+repo's headline claim surviving contact with its own source is **zero**. New lesson 4:
+"confidence" is repeatedly a *share*, not a probability — theirs divides modal votes by
+total across agents that share a model and prompt (correlated by construction), which is the
+same shape as our own confluence normalising by the weight of factors that scored.
+
+
 ### docs(research): repo 2 QuantHarness reviewed + architecture becomes a standing review dimension (2026-09-03)
 
 Per user instruction the review log now carries **three** numbered queues — analysis

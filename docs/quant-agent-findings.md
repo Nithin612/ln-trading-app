@@ -32,6 +32,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 |---|---|---|---|
 | 1 | [OnePunchMonk/AgentQuant](https://github.com/OnePunchMonk/AgentQuant) | 2026-09-03 | **Adopt no code, reject the thesis — harvest 4 analysis + 12 UI + 2 architecture ideas.** Its Research Workspace screen is better information design than anything we have for the same job. |
 | 2 | [Y-Research-SBU/QuantHarness](https://github.com/Y-Research-SBU/QuantHarness) | 2026-09-03 | **Adopt no code, reject the trading thesis — harvest 5 architecture ideas.** A real paper with real baselines, honestly reported; but it beats logistic regression on **1 of 8 assets**, and its forced-trade design is the opposite of our whole thesis. |
+| 3 | [demandai/ai-quant-agents](https://github.com/demandai/ai-quant-agents) | 2026-09-03 | **Not a quant system — a 236-line marketing SDK for a closed paid API.** No algorithm to review; `risk_approved` is hardcoded true. **Harvest 3 UI + 1 protocol idea.** ⭐ Its real value: it names its upstream, **[TradingAgents](https://github.com/TauricResearch/TradingAgents)** — review that instead. |
 
 ---
 
@@ -779,6 +780,179 @@ where the hard part starts.**
 
 ---
 
+# 3. AI Quant Agents — `demandai/ai-quant-agents`
+
+Reviewed 2026-09-03 at `5aba01b` — **a single commit, 2026-03-24**. Apache 2.0.
+**295 LOC total, of which `client.py` is 236.**
+
+## 3.1 What it is — and what it is not
+
+**It is not a quant system. It is a marketing SDK for a closed commercial service.**
+
+There are no indicators, no backtest, no data layer, no evaluation, no strategy — none of
+it is here. The package is an HTTP + WebSocket client that POSTs a ticker to
+`https://dream.hmyk.ai/api/trigger_analysis` and streams back messages. The "12 AI agents"
+run server-side, closed-source, behind a **PRO ONLY** gate.
+
+The README is candid about the lineage, and this is the most useful line in the repo:
+
+> *"Built on [TradingAgents](https://github.com/TauricResearch/TradingAgents) (Apache 2.0)
+> by Tauric Research."*
+
+**So the artifact actually worth reviewing is upstream TradingAgents, not this wrapper.**
+Recommend adding it to the queue of repos to look at.
+
+(Minor provenance smell: the GitHub org is `demandai`, but `pyproject.toml` points
+`Repository` at `github.com/nicekate/ai-quant-agents`.)
+
+## 3.2 Code review — four defects in 236 lines
+
+Small surface, but the defects are the *interesting kind* — they repeat patterns this
+document has already named twice.
+
+**D1 — `risk_approved` can never be False.** The README markets a "Risk Manager with
+**VETO POWER** — can block any trade". In the client:
+
+```python
+risk_approved = "risk" not in decision.lower()
+```
+
+`decision` is only ever `"BUY"`, `"HOLD"` or `"SELL"`. The substring `"risk"` cannot
+appear. **The safety flag is hardcoded true.** This is the same species as AgentQuant's
+`generalization_gap` that could only return zero — *a metric that cannot come out badly* —
+except here it is the risk check, which is worse. The veto the product is sold on is not
+representable in the result object.
+
+**D2 — the README's example output is not reachable from the code.** It advertises:
+
+```json
+"suggested_action": {"entry": "$142-145", "stop_loss": "$132",
+                     "target": "$165", "position_size": "2-3% of portfolio"}
+```
+
+The code sets `suggested_action={}` unconditionally and never touches it again. Those are
+the only four fields a trader would actually act on, and they are decorative. Mechanism #2
+from §1.7 — a placeholder presented as a measurement.
+
+**D3 — the decision is parsed by substring match on free LLM text.**
+
+```python
+text = msg.message.upper()
+if "BUY" in text:    decision = "BUY"
+elif "SELL" in text: decision = "SELL"
+```
+
+*"I would not BUY this here"* → **BUY**. And because `BUY` is tested first, any message
+containing both words returns BUY. There is no structured output contract with the server.
+
+**D4 — the stream has no correlation id, so it can return someone else's analysis.**
+`stream()` POSTs the trigger, then connects to a **global** socket —
+`wss://dream.hmyk.ai/ws/live` — and consumes every `agent_speak` message until the first
+`analysis_complete`. Nothing filters by ticker or request id. On a shared demo server with
+concurrent users, `client.analyze("NVDA")` can return a stranger's TSLA debate, labelled
+NVDA, because the client stamps the ticker on locally. Two smaller bugs ride along: the
+trigger fires *before* the socket connects, so early messages are lost; and
+`while True: ws.recv()` has no timeout or reconnect, so a missing `analysis_complete`
+hangs the caller forever.
+
+Also: `key_reasons` are harvested only from speakers whose name contains `bull`/`aggressive`
+and `risk_warnings` only from `bear`/`risk`, each truncated at 200 chars mid-word. So
+`key_reasons` is **structurally the bull case regardless of the verdict** — a SELL still
+lists bullish arguments as its reasons.
+
+**And `confidence` is not a confidence.** `max(consensus.values()) / total` is the
+plurality share of agent votes: 8 of 12 agreeing gives 0.67. These agents share a model
+family and a prompt context, so they are not independent estimators — their agreement is
+correlated by construction and is not evidence about the world. Calling the modal vote
+share "confidence" is a category error, and a familiar one: it is the same shape as our own
+confluence normalisation, where a share of *scoring* weight reads as a probability.
+
+## 3.3 Architecture findings
+
+**A9 — a progress envelope for long-running jobs. The one genuinely good idea here.**
+Every streamed message carries:
+
+```python
+speaker · phase · progress · total_steps · action_type · timestamp · current_consensus
+```
+
+That is a well-designed protocol for a job that takes minutes: the client renders a phase
+label, a progress bar and a running tally **without knowing anything about the pipeline**.
+
+We have several long jobs with no progress protocol at all — `make analysis` (7 sidecars +
+report sections), backtests, the walk-forward replay that takes ~8 minutes, EOD ingestion
+with its ≤21-day self-heal. Today these are opaque until they finish or a log line appears.
+A `{phase, step, total_steps, message}` envelope would serve all of them, and it is
+independent of any LLM or agent framing.
+
+**A10 — running consensus emitted mid-flight** (`current_consensus` on every message), so
+the tally is visible while the job is still going rather than only at the end. Pairs with
+A9; same idea applied to the *result* rather than the *progress*.
+
+**Confirms, not take — the phased pipeline with an explicit veto stage.** Intelligence (4
+analysts) → Debate (bull/bear/3 debaters) → Trading (proposes) → Risk (**veto**) → Judge.
+Separating *propose* from *approve* is sound, and we already do it: the confluence engine
+proposes, `risk_guards` / `eligibility.py` / the circuit breaker can reject. Worth noting
+only because their framing makes the veto a named role, which is a clearer way to describe
+what our overlay pattern already is.
+
+## 3.4 UI/UX findings
+
+The product is a "cyberpunk trading room": an AI-generated illustration of a trading floor
+with agent names floating over it, occupying ~70% of the viewport and carrying **zero
+data**. That part is theatre. The right-hand rail, though, has three ideas worth taking.
+
+**U16 — a phase/participant stage-tracker strip.** A single row of chips grouped by stage:
+
+```
+INTELLIGENCE [NA][SA][FA][MA]   DEBATE [BUL][BER]   RISK [AGG][NEU][CON]   DECISION [R-M][R-J][TRD]
+```
+
+Phases, the participants inside each phase, and which have completed — in about 40px of
+vertical space. This is the visual form of A9 and the best compact representation of a
+multi-stage pipeline I have seen across these three repos. Directly applicable to a
+`make analysis` run and to backtest/walk-forward progress.
+
+**U17 — the consensus rendered as one stacked bar, not three numbers.**
+`BUY 0% | HOLD 33% | SELL 67%` as a single horizontal bar with the verdict in large type
+beside it. **This is the right shape for our confidence display.** A confluence score of
+78% is currently a scalar; the *distribution* behind it — which factors voted, how strongly,
+which abstained — is what actually tells you whether to trust it. Pair with U10 (the
+arithmetic) and U15 (the named evidence) and the signal detail view finally explains itself.
+Caveat to fix in ours: their bar renders a visible segment for a 0% category; zero-value
+segments must collapse.
+
+**U18 — a streaming log with per-entry phase tags and explicit expansion.** Each entry is
+prefixed `[Layer 1: INTELLIGENCE]`, truncated, and followed by `View Full Report →`, with a
+live `> reasoning...` cursor while a step is in flight. Summary inline, detail on demand,
+progress visible. Good pattern for our sidecar output, which is currently all-or-nothing
+markdown.
+
+Also present: a compact **HISTORY rail** (ticker · verdict chip · timestamp, newest first)
+and a top market-ticker strip using glyph + colour — the latter is a *confirms*, we already
+require it.
+
+**CONFIRMS**
+
+| Their approach | Our rule |
+|---|---|
+| ~70% of the viewport is a decorative illustration with no data | information density; every surface earns its space |
+| The primary input is disabled behind a **PRO ONLY** badge, so the demo cannot be driven | — |
+| A 0% category still renders a visible bar segment | zero/empty states must be explicit, not misleading |
+| "RISK MANAGER — VETO ARMED" is text baked into a static image, not a state indicator | state must come from state, not decoration |
+
+## 3.5 Verdict
+
+**Adopt no code — there is almost none, and what exists has a hardcoded-true risk flag, a
+substring-matched decision, and a stream that can hand you another user's analysis.** Take
+three UI ideas and one protocol idea, none of which depend on this repo existing.
+
+The lasting value is as a third data point for §"What both repos independently confirm":
+this is now the **third repo in a row** whose README advertises numbers or fields its own
+code cannot produce.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -821,6 +995,10 @@ touches the money path, and all of it obeys `.claude/rules/ui.md` (tokens, `form
 
 | **U15** | **Named-evidence line on the signal detail view** — the factors that scored, in plain language ("MACD bullish crossover · RSI divergence · volume spike"), beside U10's arithmetic; plus an explicit forecast-horizon label | signal detail view | ~half day on top of U10 | *(repo 2)* The human-readable half of U10. "RSI_DIVERGENCE" alone in an evidence list reads as thin instantly, in a way "78%" never does — which is exactly the SRTL failure. |
 
+| **U17** | **Confidence as a distribution bar, not a scalar** — one stacked bar showing which factors voted and how strongly, with the verdict beside it (zero-value segments collapsed) | signal detail view | ~half day on top of U10 | *(repo 3)* Completes the trio: **U10** the arithmetic, **U15** the named evidence, **U17** the shape of the vote. A 78% scalar hides whether it came from four factors agreeing or one factor carrying everything — which is exactly the SRTL failure. |
+| U16 | **Phase/participant stage-tracker strip** for multi-stage runs | wherever a long job is surfaced | ~half day | *(repo 3)* The visual form of A9; ~40px shows every phase, its participants and what has completed. Fits `make analysis` and walk-forward runs. |
+| U18 | **Streaming log with phase tags + explicit per-entry expansion** | sidecar/report output | ~half day | *(repo 3)* Summary inline, detail on demand. Our sidecar output is currently all-or-nothing markdown. |
+
 **If only one UI thing is done: U1 with U2 and U4 folded in.** That single page replaces the
 "open seven markdown files and hold them in your head" ritual, puts the benchmark where it
 cannot be avoided, and turns the multiple-testing denominator into something we observe
@@ -837,7 +1015,9 @@ from repo 1.
 | **A4** | **Constraint pre-validation endpoints** — what date ranges / classifications / market sessions are legal, queryable *before* submit | `app/api/v1/`, consumed by order + screener surfaces | ~1 day | The generalisation of a fix we already shipped once: 41/204 rows offered a Buy that could only 409, and every row read clear in the evening while the order path 422'd on off-market. `eligibility.py` centralised the *gate* answers; this centralises the *session and calendar* ones. |
 | A1 | **Two-tier model routing** (cheap extract pass / strong judge pass) for the research loop | daily-analysis + review-calendar tooling | ~half day when that work starts | Never in the money path. Applies the moment an LLM step enters the research loop. |
 | A5 | **Self-documenting state schemas** — `Annotated[type, "meaning"]` on report/sidecar payload fields | sidecar + report payloads | ~2 hours | Field meaning currently lives in a docstring far from the type. |
+| **A9** | **A progress envelope for long-running jobs** — `{phase, step, total_steps, message}` streamed over WS | `make analysis`, backtests, walk-forward replay, EOD ingestion | ~1 day | *(repo 3)* The one genuinely good idea in that repo, and it is LLM-agnostic. Several of our jobs run for minutes with no progress surface at all — the walk-forward replay alone is ~8 minutes of silence. |
 | A6 | **Agent topology: independent analysts fan out, never chain** | any future agent graph | — | A standing note, not a task. Repo 2 chains three mutually independent agents and pays 3× latency for it. |
+| A10 | **Emit running results mid-flight**, not only at completion | same surfaces as A9 | included in A9 | *(repo 3)* A partial verdict visible while the job runs. |
 | A7 | *(repo 1)* **Artifact provenance on every reported number** — the generating service/query named beside the value | banners, registry rows | ~2 hours | Same item as U8, recorded here because it is a contract, not a widget: a number that cannot name its source is not auditable. |
 | A8 | *(repo 1)* **Failure archive as a first-class store**, not prose | the H4 register's schema | included in H4 | Reverted gates (regime, R:R≥1) are permanent evidence and should be queryable, not narrated in memory files. |
 
@@ -853,11 +1033,20 @@ sidebar-driven layout or raw-dataframe rendering; QuantHarness's forced-trade de
 LLM-emitted risk-reward, natural-language confluence weighting, or vision-LLM chart
 reading as a signal source.
 
-## What both repos independently confirm
+## What the repos independently confirm
 
-Two unrelated projects, one hobby and one academic, land on the same three lessons — which
-is worth more than either alone:
+Three unrelated projects — one hobby, one academic, one commercial — landing on the same
+lessons is worth more than any one of them:
 
+0. **★ All three advertise numbers or fields their own code cannot produce.** AgentQuant's
+   `generalization_gap` is `max(avg − best, 0)` ≡ 0 yet ships as 0.124 decaying to 0.048;
+   QuantHarness's only look-ahead holdout is a commented-out line and its eval script is
+   absent; ai-quant-agents markets a Risk Manager veto behind a `risk_approved` flag that is
+   **hardcoded true**, and an example output whose four actionable fields
+   (`entry`/`stop_loss`/`target`/`position_size`) are set to `{}` unconditionally. Three for
+   three. **The base rate of a public quant repo's headline claim surviving contact with its
+   own source is, in this sample, zero** — which is the empirical case for the rule in §1.7
+   and for never taking a README number without recomputing it.
 1. **A simple baseline matches the elaborate system.** Buy-and-hold beat AgentQuant's agent
    (+102.4% vs +0.7%); logistic regression matches QuantHarness's four-agent GPT-4o vision
    pipeline on 7 of 8 assets. **Neither repo leads with this, and both ship the data that
@@ -868,7 +1057,14 @@ is worth more than either alone:
    commented-out line beside the live path. Both are documented safety nets with nothing
    that fails when they lapse — the same finding our own bug-hunter round produced when it
    showed the `unassessed` tripwire was imaginary (3 of 8 modes passed).
-3. **Published work stops where the hard part starts.** Neither has position sizing, risk
-   limits, or a portfolio. QuantHarness is titled "for High-Frequency Trading" and models
-   no position at all. The runtime plumbing we have deferred to Phase 7 is not the boring
-   part of this field — it is the part almost nobody does.
+3. **Published work stops where the hard part starts.** None of the three has position
+   sizing, risk limits, or a portfolio. QuantHarness is titled "for High-Frequency Trading"
+   and models no position at all; ai-quant-agents leaves `suggested_action` empty. The
+   runtime plumbing we have deferred to Phase 7 is not the boring part of this field — it
+   is the part almost nobody does.
+4. **"Confidence" is repeatedly a share, not a probability.** ai-quant-agents divides the
+   modal vote by the total and calls it confidence; agents sharing a model and prompt are
+   not independent estimators, so their agreement is correlated by construction. Our own
+   confluence normalises by the weight of factors that *scored*, which is the same shape of
+   error and is how SRTL entered on a single indicator. **U17 (show the distribution, not
+   the scalar) is the fix, and it generalises.**
