@@ -7,6 +7,33 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): external quant/AI-agent repo review log — `docs/quant-agent-findings.md` (2026-09-03)
+
+A running review log for external repos the user shares, starting with
+[OnePunchMonk/AgentQuant](https://github.com/OnePunchMonk/AgentQuant) (~12.1k LOC, MIT, LLM
+parameter-search agent over US ETFs). Every number was recomputed from the repo's own code and
+committed CSVs rather than read off its README — and the two disagree. **Verified: the "6-epoch
+harness evolution" runs identical code six times** (`harness_spec` is never passed to `run_agent`,
+which takes no harness parameter); the published results JSON **cannot be that script's output**
+(its `generalization_gap` is `max(avg − best, 0)` ≡ 0 yet stores 0.124; `claim_accuracy` is a
+hardcoded `0.8  # Placeholder`); and the algorithm-comparison table comes from a **`_mock_fitness_
+function` that never touches market data** and encodes its own conclusion (`+0.10 if use_tools`).
+The repo's *committed* experiments refute its thesis: buy-and-hold SPY returned **+102.4%/0.896
+Sharpe** vs the agent's converged golden cross at **+0.7%**, the LLM picked `(50,200)` in **8 of 9**
+walk-forward windows, 8 of 9 rationales say the regime context was empty, and the ablation has
+**No-Context 0.711 vs With-Context 0.277**.
+
+Verdict: **adopt no code, reject the thesis, harvest four ideas.** Queue (unauthorised — watch mode
+holds to 2026-09-04, and all four are measurement, not money path): **H1** moving-block bootstrap p5
+Sharpe beside PSR/DSR/MinTRL — the non-parametric complement to a bar whose own weakness is the
+independence assumption, and an automatic version of the tail-robustness check constraint #8 asks
+for by hand; **H2** a buy-and-hold benchmark line in the daily report (we have none — `benchmark.py`
+is per-signal RS, not a portfolio baseline — and the index bars are already backfilled); **H3**
+re-frame the VIX companion as a trailing percentile, dissolving the "history too shallow to
+§8-validate" blocker on an absolute, US-derived threshold of 20; **H4** the gate/hypothesis register
+as data rather than prose. Also recorded as a cautionary case study: five mechanisms by which a
+green, well-tested repo reports numbers its code cannot produce.
+
 ### feat(MCE slice 3): sector-RS shadow sidecar + per-entry context + flip off→shadow (2026-08-20)
 
 The forward-evidence half of the sector-RS overlay, mirroring `regime_gate_shadow` /
