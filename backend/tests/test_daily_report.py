@@ -836,3 +836,54 @@ async def test_weekly_series_skips_future_and_holiday(db: AsyncSession) -> None:
         db, monday=date(2026, 8, 3), user_id=user.id, now=datetime(2026, 8, 5, 8, 0, tzinfo=UTC)
     )
     assert [d for d, _ in wk.open_mtm_series] == [date(2026, 8, 3), date(2026, 8, 5)]
+
+
+class TestHeatDualDenominator:
+    """The heat line must print BOTH denominators (2026-09-02).
+
+    `capital_inr` is the LIVE figure and drives sizing, but the paper book is a deliberate
+    wide sampler — so the same positions read as 45.3% of ₹1L (alarming) or 9.1% of the
+    ₹5L scale the sampler represents (textbook conservative). Printing one number alone
+    misleads whichever is chosen, so the fix was NOT to swap the denominator."""
+
+    async def _report(self, db: AsyncSession, email: str):  # type: ignore[no-untyped-def]
+        now = datetime(2026, 8, 5, 8, 0, tzinfo=UTC)
+        opened = datetime(2026, 8, 5, 4, 0, tzinfo=UTC)
+        user = await create_test_user(db, email=email)
+        stock = await make_stock(db, symbol="HEATDEN")
+        sig = await _signal(
+            db, stock.id, created=opened, entry="100", sl="90", tp="130"
+        )
+        db.add(
+            Position(
+                user_id=user.id, stock_id=stock.id, mode="paper", side="LONG",
+                quantity=100, avg_entry_price=Decimal("100"), current_sl=Decimal("90"),
+                current_tp=Decimal("130"), trail_state="none", realized_pnl=Decimal("0"),
+                opened_at=opened, signal_id=sig.id,
+            )
+        )
+        await db.commit()
+        return await build_daily_report(db, day=date(2026, 8, 5), user_id=user.id, now=now)
+
+    async def test_sampling_scale_absent_when_unset(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.core.config import settings as s
+
+        monkeypatch.setattr(s, "paper_sampling_capital_inr", 0.0)
+        body = render_markdown(await self._report(db, "heat1@example.com"))
+        assert "LIVE capital" in body
+        assert "SAMPLING scale" not in body, "unset ⇒ previous behaviour exactly"
+
+    async def test_both_denominators_when_sampling_capital_declared(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.core.config import settings as s
+
+        monkeypatch.setattr(s, "paper_sampling_capital_inr", 500000.0)
+        body = render_markdown(await self._report(db, "heat2@example.com"))
+        assert "LIVE capital" in body
+        assert "SAMPLING scale" in body
+        # ₹1,000 of risk: 1.0% of ₹1L, 0.2% of ₹5L — the same risk, two denominators.
+        assert "1.0% of the ₹100,000 LIVE capital" in body
+        assert "**0.2%**" in body

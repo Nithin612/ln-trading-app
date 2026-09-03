@@ -15,6 +15,7 @@ from app.services.regime_gate_shadow import (
     forward_evidence_ready,
     measure,
     readiness_line,
+    render_markdown,
 )
 from app.signals import regime as rg
 from app.signals import regime_guard
@@ -285,3 +286,27 @@ def test_readiness_line_carries_tag_and_review_date() -> None:
     line = readiness_line(measure(_rows(rg.TRANSITIONAL, "sl_first", 3)))
     assert "NOT READY" in line
     assert FORWARD_EVIDENCE_REVIEW_DATE.isoformat() in line
+
+
+class TestShadowReportStatesItsRealMode:
+    """REGRESSION (doc bug found 2026-09-02): the report preamble HARDCODED
+    "SHADOW: nothing is suppressed." That sentence was false for the 19 days the gate
+    ran active (2026-08-14 -> 2026-09-02), so every reader of those reports — including
+    the ones used to justify keeping the gate on — was told nothing was being
+    suppressed while the order path was rejecting transitional entries outright."""
+
+    def _report(self, mode: str) -> str:
+        result = measure([], skip=frozenset({rg.TRANSITIONAL}), since=BASE)
+        return render_markdown(result, day=BASE.date(), mode=mode)
+
+    def test_active_mode_says_the_gate_is_active(self) -> None:
+        body = self._report("active")
+        assert "THE GATE IS ACTIVE" in body
+        # The canary: the old hardcoded sentence must NOT appear in active mode.
+        assert "SHADOW: nothing is suppressed" not in body
+
+    def test_shadow_mode_still_says_shadow(self) -> None:
+        assert "SHADOW: nothing is suppressed" in self._report("shadow")
+
+    def test_off_mode_says_off(self) -> None:
+        assert "GATE OFF" in self._report("off")

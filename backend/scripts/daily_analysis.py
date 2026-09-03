@@ -29,6 +29,7 @@ from pathlib import Path
 # Runnable from any cwd: put backend/ (the `app` package root) on sys.path.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.core.config import settings  # noqa: E402
 from app.db.session import AsyncSessionFactory  # noqa: E402
 from app.services.daily_report import (  # noqa: E402
     DailyReport,
@@ -118,7 +119,7 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
 
             shadow = await rgs.compute_regime_gate_shadow(db)
             spath = _ANALYSIS_DIR / f"regime-gate-shadow-{day.isoformat()}.md"
-            spath.write_text(rgs.render_markdown(shadow, day=day))
+            spath.write_text(rgs.render_markdown(shadow, day=day, mode=settings.regime_gate_mode))
             print(f"wrote {spath.relative_to(_REPO_ROOT)}", flush=True)
             print(rgs.readiness_line(shadow), flush=True)
         except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
@@ -133,11 +134,35 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
 
             cshadow = await cgs.compute_circuit_gate_shadow(db)
             cpath = _ANALYSIS_DIR / f"circuit-gate-shadow-{day.isoformat()}.md"
-            cpath.write_text(cgs.render_markdown(cshadow, day=day))
+            cpath.write_text(cgs.render_markdown(cshadow, day=day, mode=settings.circuit_gate_mode))
             print(f"wrote {cpath.relative_to(_REPO_ROOT)}", flush=True)
             print(cgs.readiness_line(cshadow), flush=True)
         except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
             print(f"circuit-gate shadow step skipped: {exc!r}", flush=True)
+
+        # Portfolio-heat counterfactual: what a DISCIPLINED ₹1L book, capped per Elder's
+        # 6% rule, would have returned from the same signals. Enforces nothing — it exists
+        # because the paper book is a deliberately wide sampler, so the 30-day clock (the
+        # go-live gate) is otherwise measuring a book that will never be traded. Same
+        # read-only, never-block discipline as the gate sidecars.
+        try:
+            from app.services import heat_counterfactual as hcf
+
+            hres = await hcf.compute_heat_counterfactual(
+                db,
+                capital=Decimal(str(report.user.capital_inr)),
+                cap_pct=Decimal(str(settings.heat_counterfactual_pct)),
+                # Same epoch the paper clock counts from — the counterfactual must answer
+                # the question about the window the go-live gate actually measures, and
+                # must not span the 08-17 cut (sizing + fill model both changed there).
+                since=report.user.paper_clock_started_at,
+            )
+            hpath = _ANALYSIS_DIR / f"heat-counterfactual-{day.isoformat()}.md"
+            hpath.write_text(hcf.render_markdown(hres, day=day))
+            print(f"wrote {hpath.relative_to(_REPO_ROOT)}", flush=True)
+            print(hcf.summary_line(hres), flush=True)
+        except Exception as exc:  # noqa: BLE001 - never block the daily report
+            print(f"heat-counterfactual step skipped: {exc!r}", flush=True)
 
         # Entry-quality forward evidence (6.8 R-track): what the breadth (diversity,
         # ACTIVE) + stop-tightness (sl_atr, SHADOW) checks flag on the live signal
@@ -148,7 +173,14 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
 
             eshadow = await eqs.compute_entry_quality_shadow(db)
             epath = _ANALYSIS_DIR / f"entry-quality-shadow-{day.isoformat()}.md"
-            epath.write_text(eqs.render_markdown(eshadow, day=day))
+            epath.write_text(
+                eqs.render_markdown(
+                    eshadow,
+                    day=day,
+                    diversity_mode=settings.entry_diversity_gate_mode,
+                    sl_atr_mode=settings.entry_sl_atr_gate_mode,
+                )
+            )
             print(f"wrote {epath.relative_to(_REPO_ROOT)}", flush=True)
             print(eqs.readiness_line(eshadow), flush=True)
         except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow

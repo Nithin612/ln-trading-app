@@ -927,6 +927,11 @@ def _render_engine_section(r: DailyReport) -> list[str]:
 
 
 def _render_risk_section(r: DailyReport) -> list[str]:
+    # Deferred import: `settings` is read per-render so a changed sampling scale takes
+    # effect on the next report without a process restart (this module is imported by
+    # long-lived workers). Matches the existing deferred-import pattern at :622.
+    from app.core.config import settings
+
     out: list[str] = ["## 5. Risk analysis", ""]
     chased = sorted(
         [t for t in r.opened if t.chase is not None and t.chase.oversize_factor > Decimal("1.15")],
@@ -947,10 +952,27 @@ def _render_risk_section(r: DailyReport) -> list[str]:
     heat_pct = (
         (r.open_risk_total / _d(r.user.capital_inr) * 100) if r.user.capital_inr else Decimal(0)
     )
-    out.append(
+    # BOTH denominators, labelled. `capital_inr` is the LIVE figure and drives sizing;
+    # the paper book is deliberately a wide sampler, so exposure against the live figure
+    # reads alarmingly while the same positions are conservative against the scale the
+    # sampler represents. Printing one number alone misleads whichever way it is chosen.
+    sampling_capital = _d(settings.paper_sampling_capital_inr)
+    heat_line = (
         f"- **Portfolio heat:** open positions risk {_inr(r.open_risk_total)} "
-        f"({heat_pct:.1f}% of capital) if every stop is hit."
+        f"({heat_pct:.1f}% of the ₹{_d(r.user.capital_inr):,.0f} LIVE capital) if every "
+        "stop is hit."
     )
+    if sampling_capital > 0:
+        sampler_pct = r.open_risk_total / sampling_capital * 100
+        heat_line += (
+            f" Against the declared paper SAMPLING scale of ₹{sampling_capital:,.0f} that "
+            f"is **{sampler_pct:.1f}%** — the sampler is intentionally wide (≈5 entries/day "
+            "× ~5-day holds ⇒ ~25 concurrent positions) to accrue entry/exit evidence "
+            "fast. Neither number alone is the whole picture: the live figure says what a "
+            "₹1L account would be carrying, the sampling figure says whether the "
+            "experiment itself is sanely sized."
+        )
+    out.append(heat_line)
     winners = [t for t in r.still_open if t.eod_unrealized and t.eod_unrealized > 0]
     if winners:
         top = max(winners, key=lambda t: t.eod_unrealized or Decimal(0))

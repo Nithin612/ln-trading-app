@@ -27,6 +27,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.models.stock import Stock
 from app.models.trading import Order, Position
 from app.services.signal_outcomes import OUTCOME_EPOCH
+from app.signals.eligibility import mode_banner
 
 # Forward-evidence bar for flipping the circuit gate active — the project's n=20
 # rank floor (same as the regime gate): enough resolved blocked trades to trust
@@ -203,13 +204,25 @@ def readiness_line(r: CircuitGateShadow) -> str:
     return f"[circuit-gate forward evidence] {tag} — {reason}"
 
 
-def render_markdown(r: CircuitGateShadow, *, day: date) -> str:
+MODE_EFFECTIVE_FROM = date(2026, 8, 17)
+"""When `circuit_gate_mode` last changed (built shadow-first in 6.8.3, never flipped).
+
+Printed beside the mode so this report cannot describe a differently-moded earlier
+window in the present tense — the generalisation of the regime-gate fix
+(quant-verifier, 2026-09-02). **Bump on every mode flip.**
+"""
+
+
+def render_markdown(r: CircuitGateShadow, *, day: date, mode: str) -> str:
+    """`mode` is the LIVE `circuit_gate_mode` - see `eligibility.mode_banner` for why a
+    shadow report must never hardcode "SHADOW" in its own preamble."""
     out = [
         f"# Circuit-gate shadow (live paper entries) — {day}",
         "",
         "_Read-only. What the circuit overlay WOULD suppress on the live paper-entry "
         f"cohort since {r.since.date()}: entries within the proximity threshold of the "
-        "ADVERSE circuit band (long→lower, short→upper). SHADOW: nothing is suppressed. "
+        f"ADVERSE circuit band (long→lower, short→upper). "
+        f"{mode_banner(mode, since=MODE_EFFECTIVE_FROM.isoformat())} "
         "A net-POSITIVE blocked set means the heuristic is killing good trades — do not "
         "flip to active._",
         "",

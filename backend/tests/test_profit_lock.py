@@ -10,6 +10,7 @@ from __future__ import annotations
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
+import pytest
 from app.models.market_data import Ohlcv1m, OhlcvDaily
 from app.models.signal import Signal
 from app.models.trading import Position
@@ -278,7 +279,14 @@ class TestShadowCompare:
         assert comp.peak_gross == Decimal("900")
 
         by = {p.policy: p for p in comp.policies}
-        assert set(by) == {"ladder", "layered", "giveback_33"}
+        # Exact set on purpose: it pins WHICH policies the comparator reports, so an
+        # accidental addition trips here. `abs_live` / `abs_early_be` were added
+        # deliberately on 2026-09-03 to make `profit_lock_breakeven_inr` A/B-able at all —
+        # the comparator had never replayed the absolute ladder that is actually
+        # live-wired, so the one knob the 08-18 research asked to A/B could not be.
+        assert set(by) == {
+            "ladder", "layered", "giveback_33", "abs_live", "abs_early_be",
+        }
         # ladder locks at 97 (trailing_1); layered rides down to 95.6125
         assert by["ladder"].exit_price == Decimal("97")
         assert by["layered"].exit_price == Decimal("95.6125")
@@ -287,6 +295,65 @@ class TestShadowCompare:
         assert not by["layered"].still_open and not by["ladder"].still_open
         # capture ratios are populated and ordered the same way
         assert by["layered"].capture_pct > by["ladder"].capture_pct
+
+    async def _extend_back_through_entry(self, db: AsyncSession, pos: Position) -> None:
+        """Append bars that carry a SHORT back UP through its ₹100 entry and beyond."""
+        from app.models.market_data import Ohlcv1m
+
+        t0 = datetime(2026, 7, 27, 4, 0, tzinfo=UTC)
+        for i, (o, h, low, c) in enumerate(
+            [("97", "101", "97", "101"), ("101", "104", "100", "104")], start=5
+        ):
+            db.add(
+                Ohlcv1m(
+                    time=t0 + timedelta(minutes=i), stock_id=pos.stock_id,
+                    open=Decimal(o), high=Decimal(h), low=Decimal(low), close=Decimal(c),
+                    volume=1000, is_complete=True,
+                )
+            )
+        await db.commit()
+
+    async def test_absolute_ladder_variants_differ_only_by_the_breakeven_rung(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The A/B must be ONE variable. Given a peak that clears the early rung but not
+        the live one, the two variants must diverge; with both rungs equal they must be
+        identical. (The 08-18 research was explicit that the wider "arm early AND trail
+        wide" hybrid did NOT win, so trail_start/giveback/atr_k stay put.)"""
+        from app.core.config import settings as s
+        from app.services.profit_lock_shadow import compare_position
+
+        pos = await self._short_scenario(db)  # MFE = ₹900 gross
+
+        # Extend the tape back THROUGH entry (100) after the ₹900 peak — the real-world
+        # shape this knob decides: 13 of the 20 differing live trades were exactly
+        # "ran to +₹300…3,000, came back to entry, then went on".
+        await self._extend_back_through_entry(db, pos)
+
+        # ₹900 peak clears an ₹800 early rung but misses the ₹2,000 live rung, so ONLY
+        # the early variant has a breakeven stop at 100 to be hit on the way back.
+        monkeypatch.setattr(s, "profit_lock_breakeven_inr", 2000.0)
+        monkeypatch.setattr(s, "profit_lock_breakeven_early_inr", 800.0)
+        by = {p.policy: p for p in (await compare_position(
+            db, pos, now=datetime.now(tz=UTC))).policies}
+        # The MECHANISM: only the early variant has a breakeven stop to be hit, and it
+        # exits at exactly the entry price.
+        assert by["abs_early_be"].exit_price == Decimal("100.0000"), "early BE exits flat"
+        assert by["abs_early_be"].still_open is False
+        assert by["abs_live"].exit_price != by["abs_early_be"].exit_price
+        # Deliberately NO assertion on which variant makes more money here. Whether an
+        # early flat exit is a saved blow-up or a clipped runner depends entirely on what
+        # price does next — that IS the empirical question, and pinning one answer in a
+        # unit test would be asserting a market opinion. It is measured over the real tape
+        # by `scripts/profit_lock_shadow.py`; see the 2026-09-03 finding (20 of 99 trades
+        # differ: 13 runners clipped vs 7 blow-ups prevented).
+
+        # Same rung on both sides ⇒ byte-identical, proving nothing else varies.
+        monkeypatch.setattr(s, "profit_lock_breakeven_early_inr", 2000.0)
+        by2 = {p.policy: p for p in (await compare_position(
+            db, pos, now=datetime.now(tz=UTC))).policies}
+        assert by2["abs_early_be"].exit_price == by2["abs_live"].exit_price
+        assert by2["abs_early_be"].exit_net == by2["abs_live"].exit_net
 
     async def test_off_tape_exit_is_flagged_and_capture_suppressed(
         self, db: AsyncSession

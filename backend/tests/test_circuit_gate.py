@@ -363,7 +363,7 @@ class TestCircuitGateShadow:
         ready, reason = cgs.forward_evidence_ready(r)
         assert not ready and "keep accruing" in reason
         assert "circuit-gate" in cgs.readiness_line(r)
-        assert "Circuit-gate shadow" in cgs.render_markdown(r, day=now.date())
+        assert "Circuit-gate shadow" in cgs.render_markdown(r, day=now.date(), mode="shadow")
 
     async def test_repeat_entries_on_one_signal_not_double_counted(
         self, db: AsyncSession
@@ -435,4 +435,5 @@ class TestCircuitGateShadow:
         r = await cgs.compute_circuit_gate_shadow(db, since=datetime.now(tz=UTC))
         assert r.n_evaluated == 0 and r.n_blocked == 0
         assert r.blocked_realized_total is None
-        assert "Circuit-gate shadow" in cgs.render_markdown(r, day=datetime.now(tz=UTC).date())
+        body = cgs.render_markdown(r, day=datetime.now(tz=UTC).date(), mode="shadow")
+        assert "Circuit-gate shadow" in body

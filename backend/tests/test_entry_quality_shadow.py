@@ -75,7 +75,10 @@ class TestEntryQualityShadow:
         assert (p.n, p.resolved, p.net) == (2, 1, Decimal("500"))
         # no ATR seeded → sl_atr check never fires → all in sl_passed
         assert r.sl_flagged.n == 0 and r.sl_passed.n == 3
-        md = eqs.render_markdown(r, day=datetime.now(tz=UTC).date())
+        md = eqs.render_markdown(
+            r, day=datetime.now(tz=UTC).date(),
+            diversity_mode="active", sl_atr_mode="shadow",
+        )
         assert "Entry-quality shadow" in md and "diversity FLAGGED" in md
 
     async def test_empty_cohort(self, db: AsyncSession) -> None:

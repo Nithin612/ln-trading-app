@@ -152,14 +152,24 @@ def _row(name: str, b: Bucket) -> str:
     return f"| {name} | {b.n} | {b.resolved} | {net} | {avg} | {win} |"
 
 
-def render_markdown(r: EntryQualityShadow, *, day: date) -> str:
+def render_markdown(
+    r: EntryQualityShadow, *, day: date, diversity_mode: str, sl_atr_mode: str
+) -> str:
+    """The two modes are LIVE values, printed rather than asserted.
+
+    This preamble used to hardcode "**diversity** is ACTIVE … **sl_atr** is SHADOW".
+    That is the same bug the regime/circuit sidecars had — and worse here, because
+    entry-quality is the only gate that currently BLOCKS money, so this is the report
+    most likely to be read as authoritative (bug-hunter LOW, 2026-09-02). Flip either
+    check and the sentence would have silently lied."""
     out = [
         f"# Entry-quality shadow (live signals) — {day}",
         "",
         f"_Read-only. The entry-quality overlay over the tradeable signal cohort since "
-        f"{r.since.date()} ({r.n_signals} signals). **diversity** is ACTIVE (the ≥2-factor hard "
-        "rule — single-factor signals no longer enter); **sl_atr** is SHADOW (measured only). A "
-        "flagged set net-negative and worse than passed is the evidence to flip sl_atr active._",
+        f"{r.since.date()} ({r.n_signals} signals). **diversity** is {diversity_mode.upper()} "
+        "(the ≥2-factor hard rule — single-factor signals do not enter while it is active); "
+        f"**sl_atr** is {sl_atr_mode.upper()} (a tunable stop-tightness floor). A flagged set "
+        "net-negative and worse than passed is the evidence to flip sl_atr active._",
         "",
         "| set | signals | resolved | net ₹ | avg ₹ | win% |",
         "|---|--:|--:|--:|--:|--:|",

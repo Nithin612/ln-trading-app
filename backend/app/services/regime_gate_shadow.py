@@ -26,6 +26,7 @@ from app.services.gate_walkforward import GateMetrics, gate_metrics
 from app.services.signal_outcomes import OUTCOME_EPOCH
 from app.signals import regime as rg
 from app.signals import regime_guard
+from app.signals.eligibility import mode_banner
 
 
 @dataclass(frozen=True)
@@ -100,6 +101,20 @@ def _row(name: str, m: GateMetrics) -> str:
 # ~4-week window over which the READY verdict must HOLD (surfaced every `make
 # analysis`) before the §8 sign-off + flip.
 FORWARD_EVIDENCE_TARGET_N = 20
+MODE_EFFECTIVE_FROM = date(2026, 9, 2)
+"""When `regime_gate_mode` last changed — printed beside the mode in the report.
+
+The mode is read at RENDER time while the cohort below spans weeks, so a report
+generated after a flip would otherwise describe an earlier, differently-moded period
+in the present tense. That is the same false-statement bug as the old hardcoded
+"SHADOW: nothing is suppressed", just inverted (bug-hunter LOW, 2026-09-02): after the
+09-02 revert this report would have claimed "nothing is suppressed" about the 88
+resolved suppressed trades from the 08-14 -> 09-02 ACTIVE window — and this report is
+the input to the keep/revert decision.
+
+**Bump this on every mode flip.**
+"""
+
 FORWARD_EVIDENCE_REVIEW_DATE = date(2026, 9, 15)
 
 
@@ -140,14 +155,18 @@ def readiness_line(result: RegimeGateShadow) -> str:
     )
 
 
-def render_markdown(result: RegimeGateShadow, *, day: date) -> str:
+def render_markdown(result: RegimeGateShadow, *, day: date, mode: str) -> str:
+    """`mode` is the LIVE `regime_gate_mode`, printed in the preamble. It used to be
+    hardcoded "SHADOW: nothing is suppressed", which was FALSE for the 19 days the gate
+    ran active (2026-08-14 -> 2026-09-02) - see `eligibility.mode_banner`."""
     skip = ", ".join(sorted(result.skip)) or "(none)"
     out = [
         f"# Regime-gate shadow (live cohort) — {day}",
         "",
         f"_Read-only. What the regime overlay (skip: {skip}) WOULD do to the live "
         f"tradeable cohort since {result.since.date()} — the forward, live counterpart "
-        "to the §8 backtest (`gate-walkforward-*.md`). SHADOW: nothing is suppressed. "
+        f"to the §8 backtest (`gate-walkforward-*.md`). "
+        f"{mode_banner(mode, since=MODE_EFFECTIVE_FROM.isoformat())} "
         "Same §8 metrics; a POSITIVE `killed (suppressed)` row means the live tape "
         "disagrees with the backtest — do not flip to active._",
         "",

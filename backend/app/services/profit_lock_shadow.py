@@ -18,20 +18,27 @@ no intra-bar look-ahead.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.models.market_data import Ohlcv1m
 from app.models.signal import Signal
 from app.models.stock import Stock
 from app.models.trading import Position
 from app.trading.atr import atr_timeframe_for, latest_atr
 from app.trading.fees import product_for_classification, roundtrip_charges
-from app.trading.profit_lock import RatchetParams, layered_ratchet_stop, params_for
+from app.trading.profit_lock import (
+    RatchetParams,
+    absolute_ladder_stop,
+    ladder_params_from_settings,
+    layered_ratchet_stop,
+    params_for,
+)
 from app.trading.trail_sl import advance_trail, compute_pnl, is_sl_hit
 
 
@@ -100,6 +107,41 @@ def _layered_step(
             entry=entry,
             original_sl=original_sl,
             peak_price=peak_price,
+            atr=atr,
+            params=params,
+            current_stop=current_stop,
+        )
+
+    return step
+
+
+def _absolute_step(
+    side: str,
+    entry: Decimal,
+    original_sl: Decimal,
+    qty: int,
+    atr: Decimal | None,
+    breakeven_inr: Decimal,
+) -> _Step:
+    """The ABSOLUTE-RUPEE ladder — the policy that is actually live-wired.
+
+    Added 2026-09-03. The comparator previously replayed only `ladder` / `layered` /
+    `giveback_33`, none of which is what `position_monitor` runs when
+    `User.profit_lock_enabled` is set — so the single knob the 2026-08-18 exit-ladder
+    research asked to A/B (`profit_lock_breakeven_inr`) could not be A/B'd here at all.
+    Only the breakeven rung varies between the two variants; trail_start, giveback and
+    atr_k stay at their live values, because the research was explicit that the wider
+    "arm early AND trail wide" hybrid did NOT win.
+    """
+    params = replace(ladder_params_from_settings(), breakeven_inr=breakeven_inr)
+
+    def step(peak_price: Decimal, current_stop: Decimal) -> Decimal:
+        return absolute_ladder_stop(
+            side=side,
+            entry=entry,
+            original_sl=original_sl,
+            peak_price=peak_price,
+            quantity=qty,
             atr=atr,
             params=params,
             current_stop=current_stop,
@@ -262,6 +304,16 @@ async def compare_position(
         "ladder": _ladder_step(side, entry, orig_sl),
         "layered": _layered_step(side, entry, orig_sl, atr, params_for(classification)),
         "giveback_33": _layered_step(side, entry, orig_sl, None, _giveback_only("0.33")),
+        # The live absolute ladder, and the SAME ladder with ONLY the breakeven rung
+        # moved — a one-variable A/B for `profit_lock_breakeven_inr`.
+        "abs_live": _absolute_step(
+            side, entry, orig_sl, qty, atr,
+            Decimal(str(settings.profit_lock_breakeven_inr)),
+        ),
+        "abs_early_be": _absolute_step(
+            side, entry, orig_sl, qty, atr,
+            Decimal(str(settings.profit_lock_breakeven_early_inr)),
+        ),
     }
 
     last_close = bars[-1].close

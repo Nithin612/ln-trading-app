@@ -16,6 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.core.config import settings  # noqa: E402
 from app.db.session import AsyncSessionFactory  # noqa: E402
 from app.services import regime_gate_shadow as rgs  # noqa: E402
 
@@ -37,7 +38,7 @@ async def main() -> None:
 
     day = datetime.now(tz=UTC).date()
     out = Path(__file__).resolve().parents[2] / "docs" / "analysis" / f"regime-gate-shadow-{day}.md"
-    out.write_text(rgs.render_markdown(result, day=day))
+    out.write_text(rgs.render_markdown(result, day=day, mode=settings.regime_gate_mode))
     log.warning("wrote %s", out)
 
 
