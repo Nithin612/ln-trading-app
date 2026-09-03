@@ -3814,6 +3814,177 @@ position on that distribution, not an anomalous one. A 2–3%/day target is not 
 
 ---
 
+# Execution plan — sequenced to cycle 2
+
+*Written 2026-09-03. Supersedes the informal ordering in "Where this leaves us" above.*
+**Nothing here is authorised.** Watch mode holds to Fri 2026-09-04; this is a plan, not a start.
+All 91 queue items are assigned a bucket below — none is left unplaced.
+
+## The rule that orders everything
+
+> **Anything that changes a recorded number must land BEFORE cycle 2's clock starts.**
+
+We have already paid this once. Paper P&L before and after 2026-08-17 is **not comparable**
+because the spread-aware fill model landed mid-window, and the 30-day clock had to reset. Cycle 2
+is 45–50 trading days on ₹1L. Shipping a costing, fill or eligibility change mid-cycle costs the
+whole window.
+
+**The corollary is what makes this tractable:** work that does *not* touch a recorded number —
+notifiers, tests, rules, UI — can be built **while the clock runs**. That is most of the backlog.
+So the choice is not "build everything first" versus "start accruing"; it is **freeze the
+number-changing surface, start the clock, and build the rest underneath it.**
+
+| Bucket | Meaning | Must precede the clock? |
+|---|---|---|
+| **A** | Changes a recorded number — costs, fills, marks, or which signals exist | **Yes** — or the cycle is invalid |
+| **B** | The instruments that will judge the cycle | **Yes** — or we cannot read the result |
+| **P7** | Phase 7.1–7.4, already a documented cycle-2 prerequisite | **Yes** — the long pole |
+| **MCE** | Slices 5b + 6, already documented prerequisites | **Yes** — gated on a *decision*, not code |
+| **C** | Touches no recorded number | **No** — build during accrual |
+| **PARK** | Research, or blocked on something that does not exist yet | No |
+
+## Bucket A — freeze the numbers (~7 days)
+
+| Item | What | Effort |
+|---|---|---|
+| **A38** | Composable point-in-time `Restrictions` interface — absorbs `eligibility.py`, the order-path gates and `circuit_guard`'s read. **Subsumes A30 and A31.** | 2–3 d |
+| **A21** | Mark-to-bid, so marks match fills | 0.5 d |
+| **A37 + T3** | Volume-participation cap on fills, with its parametrised test | 1 d |
+| **A29** | Flat DP charge per delivery sell + per-trade cost floor | 0.25 d |
+| **A23** | Date-versioned (effective-dated) fee registry | 0.5 d |
+| **A26** | Refuse loudly at the hot-set capacity boundary — **changes which stocks get scored, so it changes which signals exist** | 0.5 d |
+| **A25** | Assert tick mode on the depth path + count degradations | 0.25 d |
+| **H6** | `MAX_RATIO` sentinel instead of `inf` — changes reported R:R values | 1 h |
+| A30, A31 | *Superseded by / written as part of A38* | — |
+
+Each alters a number cycle 2 will record: A21 the marks, A29/A23 the P&L, A37 the fills, A26 the
+signal population, A38 which trades are eligible at all, A25 protection against fill quality
+regressing silently mid-cycle.
+
+## Bucket B — the instruments that read the cycle (~5 days)
+
+| Item | What | Effort |
+|---|---|---|
+| **H8** | Noise negative-control — prove the DSR bar rejects | 0.5 d |
+| **H1** | Moving-block bootstrap p5 Sharpe beside PSR/DSR/MinTRL | 0.5 d |
+| **H12** | Beta-to-NIFTY + information ratio on every cohort | 1 d |
+| **H2** | Buy-and-hold benchmark line in the daily report | 0.5 d |
+| **H11** | MinTRL as the banner headline — `n=44` never without `needs ≈N` | 2 h |
+| **T11** | Pin PSR/DSR against independently derived values | 2 h |
+| **H4** | Gate/hypothesis register as data (absorbs **A8**, the failure archive) | 1 d |
+| **U4** | Trials-attempted counter — makes `N` observed, not the assumed 20 | 0.5 d |
+| **H3** | VIX companion as a trailing percentile (shadow; changes no trade) | 1 d |
+| **T7** | Exhaustive-enum mapping test — gate modes, rejection reasons, readiness states | 2 h |
+| **A24** | Standing rule: never render a precise figure without its uncertainty | 1 h |
+
+These decide how cycle 2 is *read*. Changing the yardstick mid-window is the same error as
+changing the fill model — the halves stop being comparable.
+
+## Bucket P7 — Phase 7.1–7.4, the long pole (weeks, not days)
+
+Already a documented cycle-2 prerequisite: RiskEngine · BrokerAdapter · order FSM ·
+reconciliation. **Design these together in one pass** — this review found they are one problem,
+not four.
+
+| Item | What |
+|---|---|
+| **A33** | OMS as a projection of the event stream; one `is_active()` predicate; gateway-namespaced ids |
+| **A42** | Frozen / available-cash accounting (derivable from A33's active set) |
+| **A35** | `BrokerAdapter` as an interface a second broker *could* implement |
+| **A32** | Event-bus robustness — per-handler exception isolation, bounded queue, snapshot iteration, **a dead bus must be loud** |
+| **A22** | Bracket sibling-quantity rebalance on partial fill |
+| **A16** | Order-protection lifecycle state machine + durable repair queue |
+| **T2** | Lifecycle-boundary tests — first step, start mid-stream, stop early |
+| **A34** | Timer event as the single scheduling primitive |
+
+**Read before writing a line:** vnpy's 145-line event bus, PaperTrade-India's `orders/`, repo 4's
+CLAUDE.md invariants. This review's clearest Phase-7 finding: **the bus is small; the cost is the
+order FSM and reconciliation** — 82 defects across two audits in one project, 543 tests in another,
+and the *same* partial-fill bug found independently by both.
+
+## Bucket MCE — slices 5b + 6 (blocked on a decision, not on code)
+
+| Item | What | Blocker |
+|---|---|---|
+| **MCE 5b** | `market_cap` writer | **A vendor must be chosen.** Not a build task. |
+| **T1** | PIT test anchored to a real, cited NSE/BSE filing date — **ships with 5b, not after** | — |
+| **MCE 6 / A18** | News veto: Google News RSS (`hl=en-IN&gl=IN&ceid=IN:en`) + FinBERT; **not** HTML scraping | — |
+
+**The warning this review produced:** the same fundamental metric differs materially across
+vendors, so **the vendor becomes part of the definition** of every ratio. A market-cap threshold
+calibrated on one source is not portable to another, and T1 must anchor to *that vendor's*
+published figures.
+
+## Bucket C — build during accrual (touches no recorded number)
+
+**Operational safety and alerting** — the largest single win, and safe to ship mid-cycle:
+**A11** session notifier with noise policy · **A40** worker-liveness metric + alert ·
+**A27** config dry-run · **A28** retryable classification · **A3** broker token status ·
+**A36** calendar-expiry alarm · **H7** Sharpe-decay alarm · **A9/A10** progress envelope and
+mid-flight results.
+
+**Tests and invariants:** **T9** doc-sync ritual as failing tests · **T8** self-cleaning debt
+baseline · **T10** `ExplodingObject` negative-space assertions · **T13** `incremental_equals_batch`
+across indicators · **T14** hand-computed fixture anchor · **T12** record every constant's origin ·
+**T4** NaN boundaries · **T5** crash paths · **T6** ordered pipeline stages · **A13** breaker
+un-suppressibility · **A15** window ≥ tick interval · **H5** warmup enforcer.
+
+**Rules and hygiene (~15 min each):** **W1** doc/code precedence · **W2** no parallel
+implementations · **W3** same-commit config hygiene · **W4** git boundary · **W5** no hardcoded
+model names · **A12** invariants with their dated incident · **A5** self-documenting schemas ·
+**A7** artifact provenance · **A39** `cargo-deny` supply-chain gate.
+
+**UI, in this order:** **U1** registry page (folding in **U2** benchmarks-as-rows, **U3** worst-of
+validation, **U5** current-leader callout, **U6** rejected candidates visible) → the signal-detail
+trio **U10** arithmetic + **U15** named evidence + **U17** distribution bar → **U20** would-block
+cohort as charts → **U11** benchmark on every curve → **U19** horizon correlation →
+**U7 / U8 / U9 / U16 / U18 / U12** as polish.
+
+**Deployment and misc:** **A4** constraint pre-validation endpoints · **A14** measured, layered
+timeouts · **A17** provider failover + pinned cost table · **A1** two-tier model routing (if an LLM
+enters the research loop) · **A41** split Redis by durability — *after* P7 introduces a durable
+repair queue.
+
+## Parked — explicitly not now
+
+| Item | Why |
+|---|---|
+| **H10** | Loser-cluster meta-labeling. Attacks our real failure mode *and* is an overfitting machine. **Not until H8 exists to catch it**, then only behind DSR with an honest trial count. |
+| **H9** | CSCV / White's Reality Check / meta-labeling — research pointers. |
+| **A19, A20** | Composite-score normalisation; signed risk penalty instead of a boolean gate. No current consumer — revisit only if an overlay is redesigned as a modifier. |
+| **A6** | Agent-topology note, not a task. |
+| **W6** | MCP exposure model — recorded so it is not reinvented badly under pressure; no current need. |
+
+## Sequence and honest sizing
+
+```
+NOW ──────────────────────────────────────────────────────────────────────────►
+│
+├─ Weeks 1–2   Bucket A (~7 d) + Bucket B (~5 d)          ← freeze the numbers
+│              in parallel: the W rules (~1.5 h total)
+│
+├─ Weeks 3–?   Bucket P7 — design pass first               ← THE LONG POLE
+│              (A33 + A42 + A35 together), then A32/A22/A16/T2
+│              in parallel: the MCE vendor decision (not a build task)
+│
+├─ Then        MCE 5b + T1 · MCE 6 (A18) · CAS-2 · tuning
+│
+├─ THEN        ── cycle 2 clock starts ── 45–50 trading days on ₹1L
+│              and underneath it, continuously: all of Bucket C
+│
+└─ After       Read cycle 2 with instruments frozen before it began
+```
+
+**Honest total to the start of cycle 2: three to four months**, dominated by P7 and the MCE
+decisions — consistent with the standing "live is 4–6 months out" estimate. Buckets A and B are
+about two weeks of that; the rest of the critical path is P7 and decisions, not backlog.
+
+**The discipline this encodes:** every week spent building is a week not accruing, and cycle 2
+needs its 45–50 days regardless. Build only what must be frozen, start the clock, and let the
+remaining ~60 items land while the evidence accumulates.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.

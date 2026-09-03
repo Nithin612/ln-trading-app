@@ -7,6 +7,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): execution plan sequenced to cycle 2 — all 91 items bucketed (2026-09-03)
+
+Turns the review's 91 queue items into a sequenced plan in `docs/quant-agent-findings.md`.
+**Nothing is authorised** — watch mode holds to Fri 2026-09-04.
+
+**The rule that orders it:** *anything that changes a recorded number must land BEFORE cycle 2's
+clock starts.* We have already paid this once — paper P&L before and after 2026-08-17 is **not
+comparable** because the spread-aware fill model landed mid-window and the 30-day clock reset.
+Cycle 2 is 45–50 trading days on ₹1L; a costing, fill or eligibility change mid-cycle costs the
+whole window.
+
+**The corollary makes it tractable:** work that touches no recorded number — notifiers, tests,
+rules, UI — can be built **while the clock runs**, and that is most of the backlog. So the choice
+was never "build everything first" vs "start accruing": it is **freeze the number-changing
+surface, start the clock, build the rest underneath it.**
+
+Buckets, with all 91 items assigned and none left unplaced (verified programmatically):
+
+- **A — freeze the numbers (~7 d):** A38 (the point-in-time `Restrictions` interface, subsuming
+  A30/A31) · A21 marks · A37+T3 participation cap · A29 DP charge · A23 effective-dated fees ·
+  **A26** (hot-set capacity — it changes *which signals exist*) · A25 tick-mode assert · H6.
+- **B — the instruments that read the cycle (~5 d):** H8 · H1 · H12 · H2 · H11 · T11 · H4 (absorbing
+  A8) · U4 · H3 · T7 · A24.
+- **P7 — the long pole (weeks):** A33 + A42 + A35 designed **together**, then A32 · A22 · A16 ·
+  T2 · A34. Read vnpy's 145-line bus, PaperTrade-India's `orders/` and repo 4's CLAUDE.md first.
+- **MCE — blocked on a decision, not code:** 5b needs a **vendor chosen**; T1's filing-anchored PIT
+  test ships *with* it; MCE 6 = A18.
+- **C — during accrual (~60 items):** the whole notifier stack (A11/A40/A27/A28/A3/A36/H7/A9/A10),
+  every test item, all W rules, and the full UI queue led by U1 and the U10+U15+U17 trio.
+- **PARKED:** H10 (an overfitting machine until H8 exists), H9, A19, A20, A6, W6.
+
+**Honest sizing: three to four months to the start of cycle 2**, dominated by P7 and the MCE
+vendor decision — consistent with the standing "live is 4–6 months out". Buckets A+B are ~2 weeks
+of that. The discipline recorded: *every week building is a week not accruing, and cycle 2 needs
+its 45–50 days regardless.*
+
+
 ### docs(research): repos 23–29 the .NET batch, and a closing summary at thirty repos (2026-09-03)
 
 Seven C#/.NET repos, none sharing our stack, so lesson 17's filter applies: shared *stack* or
