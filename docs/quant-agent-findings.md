@@ -47,6 +47,7 @@ the README and the code disagree, that disagreement is itself reported as a find
 | 7 | [sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener) | 2026-09-03 | Unmaintained 2022–23 student project (MIT). **Picks its LSTM on a scaler fit over the full series and with no persistence baseline** — the winner is plausibly worse than "no change". Its breakout filter is **disabled by a truthy-string bug**. **Adopt nothing**; one pointer for the Minervini trend-template test. |
 | 8 | [pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain) | 2026-09-03 | **The only repo on our exact stack** (Kite WS + Redis + Indian derivatives), 952 LOC, unmaintained since 2023. Adopt no code (per-tick Redis writes, no TTL, unbounded threads). ⭐ **But it documents a Kite quirk we are exposed to — quote-mode ticks on a full-mode subscription — and our depth path never checks. A25 + A26.** |
 | 9 | [ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis) | 2026-09-03 | **332k LOC in 27 days** (LLM-generated at scale), multi-market daily analysis + push. Adopt no code. ⭐ **But its phase-aware, fails-closed "which bar could this have acted on" resolver is the best treatment of that question in the log** — read `src/core/trading_calendar.py`. Makes no accuracy claim. **A27 + A28 extend A11**; its `AGENTS.md` seeds **W1–W5**. |
+| 15 | [bbfamily/abu](https://github.com/bbfamily/abu) | 2026-09-03 | **GPL-3 — a hard adoption blocker**, and 2017-era code. But its `UmpBu` "referees" are **meta-labeling implemented years before the term was standard**, and structurally *our overlay pattern*: cluster your actual losers and let the clusters define the veto. **H10** (attacks our hypothesis-driven-partition failure mode; also an overfitting machine — gated behind DSR + H8) and **U20**. |
 | 14 | [quantopian/zipline](https://github.com/quantopian/zipline) | 2026-09-03 | ⭐⭐ Archived 2020, but the ancestor of the modern Python backtesting lineage and **architecturally the best idea in the log: look-ahead is not forbidden, it is *not expressible*** (strategies get a `BarData` bound to the simulation clock). **A38 — a composable point-in-time `Restrictions` interface supersedes A30 and unifies our fragmented eligibility logic.** Plus A37, T10. |
 | 13 | [akfamily/akshare](https://github.com/akfamily/akshare) | 2026-09-03 | 103k LOC of China data wrappers — **India coverage is incidental and only 13 of 314 HTTP modules mention retry**, so adopt nothing from the data layer. ⭐ **But its answer to "how do you test 400 scrapers" is the best process idea in the log: a self-cleaning debt baseline (T8) and doc/release consistency as failing tests rather than a ritual (T9).** |
 | 12 | [wilsonfreitas/awesome-quant](https://github.com/wilsonfreitas/awesome-quant) | 2026-09-03 | A **curated list**, not a codebase — mined for candidates, confirms our existing external-libs review. ⭐ **Its best find: purpose-built anti-overfitting audit tools whose worked example feeds pure noise through the audit and shows it caught** — which becomes **H8, a negative control against our own deflated-Sharpe bar.** Plus A36, T7. |
@@ -2763,6 +2764,116 @@ are building new surfaces — MCE 5b above all — that is the bar to aim at.
 
 ---
 
+# 16. abu (阿布量化) — `bbfamily/abu`
+
+Reviewed 2026-09-03. **GPL-3.0**, ~56,000 LOC, last commit 2026-01. A Chinese quant framework
+written as the companion codebase to a trading book, with lecture notebooks (`abupy_lecture`) and
+a Jupyter-widget UI.
+
+**Licence first: GPL-3 is a hard adoption blocker.** Every other repo in this log has been MIT or
+Apache; copyleft means vendoring any of it would impose GPL obligations on our codebase. So this
+is a *read-only* review regardless of merit — which is the right frame anyway, because the code
+is 2017-era (Python 2/3 compat shims, old sklearn) and the value here is one idea, not any
+implementation.
+
+It makes **no performance claim** in its README — the seventh repo to decline, and the pattern
+continues to hold.
+
+## 16.1 The module decomposition is thoughtful
+
+`abupy/` splits into `AlphaBu` (strategy) · `BetaBu` (portfolio) · **`FactorBuyBu` / `FactorSellBu`
+(buy and sell factors as separate first-class plugin families)** · `PickStockBu` (selection) ·
+`SlippageBu` · `MetricsBu` · `MLBu` · `TLineBu` · `SimilarBu` · **`UmpBu`**.
+
+The buy/sell factor split is worth noting because it matches how we actually think: our own
+central finding is that *the binding constraint is entry/regime selection, not exit logic*, and a
+framework that treats entry and exit factors as distinct composable families makes that
+distinction structural rather than incidental.
+
+## 16.2 ★ UMP — "referees" that veto trades, i.e. meta-labeling in 2017
+
+`UmpBu` is abu's signature idea (裁判 = *umpire/referee*), and it is a **two-tier learned veto
+layer sitting on top of a primary signal**:
+
+- **主裁 (Main referee)** — clusters historical trades on a feature set, identifies the clusters
+  with the **highest failure probability**, and vetoes new trades falling into them. It then
+  **saves candlestick snapshots of the worst cluster's trades**, so a human can *see* what the
+  losing pattern looks like.
+- **边裁 (Edge referee)** — a similarity/k-NN approach: pairwise distances between the candidate's
+  feature vector and historical trades, filtered in two rounds
+  (`K_DISTANCE_THRESHOLD = 0.668` → top `K_N_TOP_SEED = 100` seeds → `K_SIMILAR_THRESHOLD = 0.91`),
+  after which the surviving similar historical trades **vote** on win/lose.
+
+Both come in dimensions — **Deg** (trend angle), **Jump** (gaps), **Price**, **Wave**
+(volatility), **Full**, **Mul** (combined) — separately for buy and for sell.
+
+**This is meta-labeling, built years before López de Prado's book made the term standard.** It is
+also, structurally, *precisely our overlay pattern*: a frozen primary engine plus a secondary
+layer that permits or vetoes based on learned properties of past outcomes. Our reading review
+already identified meta-labeling as "our overlay pattern" by another name; repo 12 pointed at
+`mlfinlab`'s implementation. **This is the third independent arrival at the same idea, and the
+only working implementation of it in this log.**
+
+### Why it is genuinely interesting for us — and why it is dangerous
+
+Our overlays are all **hypothesis-driven**: we posit that transitional ADX is bad, that R:R<1 is
+bad, that single-factor entries are bad, and then test the posit. **Two of the three we tested
+empirically were reverted** — and our own recorded lesson explains why: *the partition turned out
+to be a proxy for something else* (market-regime → side; R:R<1 → wide stop).
+
+abu inverts the direction: **don't guess the partition — cluster the actual losers and let the
+clusters define the veto.** That directly attacks the failure mode that has cost us twice.
+
+But it is also, unmistakably, **an overfitting machine.** Clustering your own losing trades and
+then vetoing those clusters will *always* look good in-sample; it is the purest possible form of
+fitting to the sample. With 99 trades and a −0.303R book, a loser-clustering veto would produce a
+beautiful backtest and mean nothing.
+
+So the honest framing, and the reason this is a **research** item rather than a build item:
+
+> **H10 — loser-cluster meta-labeling is worth testing, but only behind the full bar we have
+> already built**: the deflated-Sharpe bar with an honest trial count (every cluster configuration
+> tried is a trial), MinTRL for the sample size, **and H8's noise negative control** — because a
+> method this prone to fitting is exactly the case the negative control exists to catch. Without
+> those, it is the most dangerous idea in this document.
+
+Note also its magic constants (`0.668`, `0.91`, `100`) arrive with no derivation — the same
+fitted-threshold problem flagged in repo 5. If we ever tried this, those become hyperparameters,
+and every one of them multiplies the trial count.
+
+### One idea we can take immediately
+
+**U20 — render the would-block cohort visually.** abu saves candlestick snapshots of the
+highest-failure cluster so a human can look at what the model learned. Our shadow sidecars report
+that a gate *"would block these 44 trades"* as statistics — expectancy, win rate, DSR — and
+**nobody has ever looked at those trades as a set of charts.**
+
+That is a real gap, and cheap to close. When the regime gate was refuted, it was refuted
+numerically; a contact sheet of the suppressed entries might have shown *why* far faster, and
+would have surfaced the "proxy for side" problem visually rather than after the fact. It also
+pairs with U17 (distribution, not scalar) and U10/U15 (the arithmetic and the named evidence):
+statistics say whether, charts say what.
+
+## 16.3 Verdict
+
+**Adopt nothing — GPL-3 settles it before age or quality enter the discussion.**
+
+Two items harvested, one for the research queue and one for the UI queue:
+
+- **H10** — loser-cluster meta-labeling as a *candidate* methodology that attacks our
+  hypothesis-driven-partition failure mode, gated behind DSR + MinTRL + **H8's negative control**.
+  Interesting and dangerous in equal measure; explicitly not a build item.
+- **U20** — render the would-block cohort as charts in the shadow sidecars, because we have been
+  judging suppressed trade sets numerically and never looking at them.
+
+And a smaller observation worth keeping: **three independent sources have now pointed at
+meta-labeling** — our own e-book review, repo 12's `mlfinlab` entry, and this working
+implementation. By the two-independent-hits rule that has served well through this log, it
+deserves a place on the post-watch-mode research queue rather than continuing to surface
+accidentally.
+
+---
+
 # Consolidated harvest queue
 
 Two queues: **analysis (`H`)** and **UI/UX (`U`)**. Ranked by value-to-us ÷ effort.
@@ -2779,6 +2890,7 @@ of these is measurement or reporting surface, never the money path.
 | **H3** | **Re-frame the VIX companion as a trailing percentile** | `app/signals/market_regime.py` | ~1 day | Converts a knob blocked on backfill (`absolute 20`, US-derived, "too shallow to §8-validate") into a self-calibrating, distribution-free one. Does **not** promote anything — market-regime stays shadow and still owes its count and DSR bar. |
 | **H4** | **Gate/hypothesis register as data** | new table or a `docs/` machine-readable file: gate · mode · pre-registered prediction · bar · current count · verdict · review-due | ~1 day | Constraint #8 makes me the owner of the review calendar and requires me to raise items *unprompted*. That calendar is prose today. Modelled on `AlphaStore`'s schema, not its code. Would also give the failed-hypothesis archive a home (regime gate, R:R≥1 already populate it). |
 | **H8** | **★ A noise negative-control against our own deflated-Sharpe bar** — generate N random, content-free partitions of the real trade set, run them through the *same* `deflated_sharpe.py` path the real gates use, and assert the bar **rejects** them | `backend/tests/` + `app/services/deflated_sharpe.py` | ~half day | *(repo 12)* A test of the test. If a noise gate clears our bar, the bar is broken and every readiness banner built on it is worthless. The machinery already exists, it is a genuine test rather than an argument, and it targets exactly what has bitten us twice — **promoting on evidence that looked sufficient.** Our own rule says a metric that cannot come out badly is not a metric; this applies it to the bar itself. |
+| H10 | **Loser-cluster meta-labeling as a research candidate** — don't guess the partition; cluster the actual losing trades and let the clusters define the veto | post-watch-mode research queue | research | *(repo 15)* Attacks the failure mode that cost us twice: **our overlays are hypothesis-driven and two of three were reverted because the partition was a proxy for something else** (market-regime → side; R:R<1 → wide stop). **But it is an overfitting machine** — clustering your own losers always looks good in-sample. **Only behind DSR with an honest trial count (every cluster config is a trial), MinTRL, and H8's negative control.** Explicitly not a build item. Third independent pointer at meta-labeling (e-book review, `mlfinlab`, this). |
 | H9 | **CSCV / probability of backtest overfitting, and White's Reality Check**, as complements to DSR; and `mlfinlab`'s **meta-labeling** | post-watch-mode research queue | research | *(repo 12)* Different tests, same question — multiple-testing robustness. Meta-labeling is our overlay pattern under another name (already flagged in the e-book review). **Pointer, not queued work.** |
 | H5 | `WarmupEnforcer` / `@enforce_lookback` as a runtime invariant | `app/analysis/` boundary — **frozen engine, so overlay//caller side only** | ~1 day | Turns a review-convention into a loud failure. Low urgency: no look-ahead bug is currently suspected. |
 | H6 | `MAX_RATIO` sentinel instead of `inf` for degenerate ratios | wherever R:R / Calmar-like ratios are computed | ~1 hour | We have the `RR≈228` tiny-SL artifact on record. Trivial hygiene. |
@@ -2809,6 +2921,7 @@ touches the money path, and all of it obeys `.claude/rules/ui.md` (tokens, `form
 
 | **U17** | **Confidence as a distribution bar, not a scalar** — one stacked bar showing which factors voted and how strongly, with the verdict beside it (zero-value segments collapsed) | signal detail view | ~half day on top of U10 | *(repo 3)* Completes the trio: **U10** the arithmetic, **U15** the named evidence, **U17** the shape of the vote. A 78% scalar hides whether it came from four factors agreeing or one factor carrying everything — which is exactly the SRTL failure. |
 | U19 | **Horizon/lag correlation chart** — correlation vs lag, zero reference line, per-bar colour | analytics surfaces; each shadow-overlay sidecar | ~half day | *(repo 6B)* We found in prose that **we grade multi-day trades on a one-day clock** (entry-day ≥1R 12% vs swing 36% / positional 54%, +1R typically on d+3). This is that finding's natural rendering, and it generalises: *at what horizon does this gate actually separate winners from losers?* Recharts, which we already use. |
+| U20 | **Render the would-block cohort as charts** in the shadow sidecars, not only as statistics | sidecar output / registry page (U1) | ~half day | *(repo 15)* abu saves candlestick snapshots of its highest-failure cluster so a human can see what the model learned. We report *"this gate would block these 44 trades"* as expectancy/win-rate/DSR and **have never looked at those trades as a set of charts.** The regime gate was refuted numerically; a contact sheet might have surfaced the "proxy for side" problem visually and sooner. Statistics say *whether*; charts say *what*. |
 | U16 | **Phase/participant stage-tracker strip** for multi-stage runs | wherever a long job is surfaced | ~half day | *(repo 3)* The visual form of A9; ~40px shows every phase, its participants and what has completed. Fits `make analysis` and walk-forward runs. |
 | U18 | **Streaming log with phase tags + explicit per-entry expansion** | sidecar/report output | ~half day | *(repo 3)* Summary inline, detail on demand. Our sidecar output is currently all-or-nothing markdown. |
 
@@ -2910,7 +3023,7 @@ session behaves.
 Three unrelated projects — one hobby, one academic, one commercial — landing on the same
 lessons is worth more than any one of them:
 
-0. **Seven of sixteen advertise numbers or fields their own code cannot produce — and the
+0. **Seven of seventeen advertise numbers or fields their own code cannot produce — and the
    exception is instructive.** AgentQuant's `generalization_gap` is `max(avg − best, 0)` ≡ 0
    yet ships as 0.124 decaying to 0.048; QuantHarness's only look-ahead holdout is a
    commented-out line and its eval script is absent; ai-quant-agents markets a Risk Manager
@@ -2944,7 +3057,7 @@ lessons is worth more than any one of them:
    it did not compare against.** **Neither repo leads with this, and both ship the data that
    shows it.** Our H2/U2 (benchmark as a row in the same sort order) is the structural
    defence — it is not a reporting nicety, it is the thing that stops this happening to us.
-2. **A guard that cannot return false shows up in three of sixteen — and it is the single most
+2. **A guard that cannot return false shows up in three of seventeen — and it is the single most
    repeated defect in this log.** AgentQuant's `generalization_gap = max(avg − best, 0)` is
    identically zero; ai-quant-agents' `risk_approved = "risk" not in decision.lower()` where
    `decision ∈ {BUY,HOLD,SELL}` is always true; repo 7's `is_breaking_out` calls a predicate
@@ -2952,7 +3065,7 @@ lessons is worth more than any one of them:
    applies. Three different root causes, one symptom. **The test is mechanical: for every
    guard, name the input that makes it fail — if you cannot, it is not a guard.** Our own
    `unassessed` tripwire failed exactly this (3 of 8 modes passed).
-3. **Dead code advertised as a feature shows up in three of sixteen.** AgentQuant fits an HMM
+3. **Dead code advertised as a feature shows up in three of seventeen.** AgentQuant fits an HMM
    per call and discards the result, and never loads the `.harness/v6_research.json` it calls
    "the production harness"; ai-quant-agents populates `suggested_action` never; QuantAgents-
    NSE computes a regime filter and a risk score into variables nothing reads. **In each case
@@ -3029,7 +3142,7 @@ lessons is worth more than any one of them:
     extension of our own rule that *a metric which cannot come out badly is not a metric*: a
     **bar** that has never been shown to reject anything is in the same position. Hence H8.
 14. **Our most repeated process risk has the same fix as their most repeated code defect.**
-    Across sixteen repos the single most common defect is *a guard that cannot fail*. Our own
+    Across seventeen repos the single most common defect is *a guard that cannot fail*. Our own
     equivalent, in process rather than code, is *a ritual nobody is forced to run* — the doc-sync
     ritual, the review calendar, the memory note that says "grep the gate name on every flip".
     AKShare shows the fix is identical in both cases: **make it a test that fails.** We already
@@ -3044,7 +3157,14 @@ lessons is worth more than any one of them:
     PIT syntax. **Rules and reviews catch mistakes; design prevents them** — and where we build new
     evaluation surfaces (MCE 5b above all), an accessor bound to an "as of" timestamp is cheaper
     than a rule and cannot lapse.
-16. **The most useful findings came from the repos closest to our own stack, and they were
+16. **Licence is a first-class review criterion, and it decides before merit does.** Seventeen
+    repos: mostly MIT or Apache, one **GPL-3** (abu — unadoptable for us regardless of quality),
+    one **LGPL** (NautilusTrader, per our earlier review), and **four with no LICENSE file at all**
+    (repos 5, 6B, 6C, and 3's org mismatch) — which is *more* restrictive than GPL, since no
+    licence means no grant of rights. **vnpy being MIT is the single most consequential licence
+    fact in this document**, because it makes the one repo we would most plausibly borrow from
+    (Phase 7 runtime) legally borrowable, where NautilusTrader is not.
+17. **The most useful findings came from the repos closest to our own stack, and they were
     about *us*.** PaperTrade-India exposed that our fills are spread-aware while our marks are
     not (A21); express-option-chain exposed that we harvest depth from `MODE_FULL` ticks
     without ever checking the mode, on a path built to fail open (A25). **Neither was a defect

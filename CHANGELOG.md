@@ -7,6 +7,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(research): repo 15 abu — meta-labeling in 2017, and why it is dangerous (2026-09-03)
+
+[bbfamily/abu](https://github.com/bbfamily/abu), **GPL-3.0**, ~56k LOC — a Chinese quant framework
+written as a book companion. **Licence settles adoption before quality enters the discussion**:
+every other repo here is MIT or Apache, and copyleft would impose GPL obligations on our codebase.
+Read-only review. It makes **no performance claim** — the seventh repo to decline.
+
+**★ Its `UmpBu` "referees" (裁判) are meta-labeling, implemented years before the term was
+standard, and structurally *our overlay pattern*.** A two-tier learned veto over a primary signal:
+a **Main referee** clusters historical trades, finds the clusters with the highest failure
+probability, vetoes new trades falling into them, **and saves candlestick snapshots of the worst
+cluster so a human can see what the losing pattern looks like**; an **Edge referee** does
+similarity/k-NN voting by surviving historical neighbours. Both across dimensions — trend angle,
+gaps, price, volatility — and separately for buy and sell.
+
+**Why it matters to us, and why it is queued as research not work.** Our overlays are all
+**hypothesis-driven** — we posit that transitional ADX is bad, R:R<1 is bad, single-factor is bad,
+then test the posit — and **two of the three we tested empirically were reverted, because the
+partition turned out to be a proxy for something else** (market-regime → side; R:R<1 → wide stop).
+abu inverts the direction: don't guess the partition, cluster the actual losers and let the
+clusters define the veto. That attacks our exact failure mode.
+
+**But it is unmistakably an overfitting machine.** Clustering your own losing trades and vetoing
+those clusters always looks good in-sample; with 99 trades and a −0.303R book it would produce a
+beautiful backtest that means nothing. Filed as **H10**, explicitly gated behind the bar we
+already built — DSR with an honest trial count (every cluster configuration is a trial), MinTRL,
+**and H8's noise negative control**, because a method this prone to fitting is precisely the case
+the negative control exists to catch. Its magic constants (`0.668`, `0.91`, `100`) arrive with no
+derivation, and each would become another hyperparameter multiplying the trial count.
+
+**U20 — one idea we can take immediately.** abu renders the highest-failure cluster's trades as
+charts. Our shadow sidecars report *"this gate would block these 44 trades"* as expectancy, win
+rate and DSR — and **nobody has ever looked at those trades as a set of charts.** The regime gate
+was refuted numerically; a contact sheet of the suppressed entries might have surfaced the
+"proxy for side" problem visually and sooner. Statistics say *whether*; charts say *what*.
+
+Also noted: three independent sources have now pointed at meta-labeling (our e-book review, repo
+12's `mlfinlab` entry, this working implementation), so it earns a place on the post-watch-mode
+research queue rather than continuing to surface accidentally.
+
+Synthesis extended to seventeen repos with lesson 16: **licence is a first-class review criterion
+and decides before merit** — one GPL-3, one LGPL, and **four repos with no LICENSE file at all**
+(which is *more* restrictive than GPL, since no licence means no grant of rights). **vnpy being MIT
+is the single most consequential licence fact in this document**, since it makes the repo we would
+most plausibly borrow from for Phase 7 legally borrowable where NautilusTrader is not.
+
+
 ### docs(research): repo 14 Zipline — look-ahead made inexpressible; A38 supersedes A30 (2026-09-03)
 
 [quantopian/zipline](https://github.com/quantopian/zipline), Apache 2.0, ~65k LOC, **archived
