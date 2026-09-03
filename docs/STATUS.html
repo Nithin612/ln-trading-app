@@ -419,7 +419,7 @@
   </div>
 
   <header class="mast">
-    <div class="eyebrow">Master reference · the whole project · updated 2026-08-25</div>
+    <div class="eyebrow">Master reference · the whole project · updated 2026-09-02</div>
     <h1>Trading Platform Compendium</h1>
     <p class="lede">One page for everything: how the system works end to end, what the money actually did, every experiment and what it proved, exactly where the build stands, and how the next two phases get built. Written for two readers at once — the business question <em class="q">is this working and is it safe?</em> and the engineering question <em class="q">where does this live in the code?</em></p>
     <div class="metastrip">
@@ -434,7 +434,7 @@
   <section class="board" aria-labelledby="board-h">
     <div class="board-hd">
       <h2 id="board-h">Status board</h2>
-      <span class="asof">as of 2026-08-25 21:10 IST · numbers read from the dev database and the repo, not from memory</span>
+      <span class="asof">as of 2026-09-02 · numbers read from the dev database and the repo, not from memory</span>
     </div>
     <div class="kpis">
       <div class="kpi"><div class="k">Build phase</div><div class="v acc">6.8 → MCE</div><div class="s">Phases 0–6 &amp; 6.8 closed. MCE slices 1–5a built, all shadow.</div></div>
@@ -452,10 +452,12 @@
   </section>
 
   <div class="watch" role="note">
-    <div class="cd"><b>8</b><span>sessions to go</span></div>
+    <div class="cd"><b>2</b><span>sessions to go</span></div>
     <div class="wt">
       <p><strong>What "watch mode" means right now.</strong> Nothing is being built on the money path this week. The Closing-Auction-Session capture (<code>cas_daily</code>) went in on 2026-08-25 and now needs to <em>accrue</em>: it writes one row per F&amp;O-underlying per day from the 3:15–3:35 PM auction window. The study that decides whether there is an edge cannot run until there is data — so the plan is to let it fill through <strong>Friday 2026-09-04</strong> (8 trading sessions: 26–28, 31 Aug, 1–4 Sep) and re-read then.</p>
-      <p><strong>Two things must stay true for that to happen.</strong> <code>make worker</code> must be up across 15:15–15:33 IST each day — the capture is a Celery-beat task, not a daemon of its own — and the Kite token must be fresh. As of tonight the table holds <strong>0 rows</strong>, which is expected: the code landed after today's auction window closed. <strong>First capture is Wednesday 2026-08-26.</strong> If Thursday morning still shows 0 rows, the worker was down and the day is gone — the auction window cannot be back-filled.</p>
+      <p><strong>Two things must stay true for that to happen.</strong> <code>make worker</code> must be up across 15:15–15:33 IST each day — the capture is a Celery-beat task, not a daemon of its own — and the Kite token must be fresh. <strong>As of 2026-09-02 accrual is healthy: 6 sessions captured, 208 rows each (26–28, 31 Aug, 1–2 Sep) = 1,248 rows, no missed window.</strong> A missed auction window cannot be back-filled, so keep checking the row count each morning.</p>
+
+      <p><strong>Two things changed on 2026-09-02, neither of them a build.</strong> First, the <strong>regime gate was reverted to shadow</strong> — over 88 decided trades its suppressed set was net-POSITIVE on the live tape for seven straight report days, and all three §8 metrics that justified the 08-14 flip had inverted. A gate promoted on 44 observations was refuted by 88; the standing rule is now that no shadow→active flip happens without its pre-registered count <em>and</em> a multiple-testing-aware bar. Second, an <strong>entry/eligibility audit</strong> traced the P&amp;L leak to arithmetic rather than stock picking: expectancy is <strong>−0.303R per trade</strong>, and payoff is capped by construction because <code>compute_levels</code> pairs a structural stop with an absolute-% target, so <strong>94 of 295 swing signals have a target closer than their stop</strong> and there is no minimum-R:R gate anywhere. Over 99 resolved trades, the 44 carrying at least one mechanical defect lost ₹19,649 while the 55 clean ones made ₹5,256 at a 55% win rate. Two fixes shipped the same day — the <strong>display path is now gated</strong> (41 of 204 listed signals had been offering a Buy button that could only fail) and the <strong>wrong-side-stop bug</strong> in <code>size_for_fill</code> is closed. The R:R floor overlay, the entry-window rework and a portfolio-heat cap remain queued.</p>
     </div>
   </div>
 
@@ -619,7 +621,9 @@
         ═══════ everything above is the FROZEN engine ═══════
         ▼
   ┌── SEVEN ELIGIBILITY GATES, in order (§7) ───────────────────┐
-  │ 1  regime gate     ACTIVE   skip transitional ADX 20–25     │
+  │ 1  regime gate     shadow   skip transitional ADX 20–25     │
+  │    ↳ was ACTIVE 08-14 → 09-02; REVERTED, its own forward    │
+  │      evidence refuted it (suppressed set net-POSITIVE)      │
   │ 2  circuit band    shadow   pinned near an un-exitable band │
   │ 3a entry quality   ACTIVE   ≥2 scoring factors  (diversity) │
   │ 3b entry quality   shadow   stop ≥ 1.0 × ATR    (sl_atr)    │
@@ -842,7 +846,7 @@ EMA_CROSS       0.0     FIBONACCI       0.0</pre>
             <tr><td class="mono">7</td><td><strong>anti-chase</strong><br><span class="n">chase_guard.py</span></td><td>Orders where the live price has already run past the signal's entry, so the reward is gone but the risk is not.</td><td class="mono">0.33 R</td><td><span class="chip prog"><span class="dot"></span>shadow</span></td></tr>
           </tbody>
         </table></div>
-        <p class="ov-note">Two gates currently block trades: the regime gate and factor diversity. The other five watch and record, so we can see what they <em>would</em> have done before trusting them with money.</p>
+        <p class="ov-note"><strong>One gate currently blocks trades: factor diversity</strong> (the "≥2 scoring factors, never a single indicator" rule). The other six watch and record, so we can see what they <em>would</em> have done before trusting them with money. The regime gate <em>was</em> the second one, from 2026-08-14 until <strong>2026-09-02, when it was reverted to shadow</strong>: over 88 decided trades its suppressed set came in <strong>net-POSITIVE</strong> on the live tape for seven straight report days, and all three §8 metrics that had justified the flip inverted (win 30% kept vs 36% suppressed, Sharpe −0.041 vs +0.044, maxDD 34.5R vs 11.2R). A gate promoted on 44 observations was refuted by 88.</p>
         <h3>What one real order looks like after passing all seven</h3>
         <p>BHARTIARTL, 2026-08-25 09:53 IST. This is the actual stamp on the order — the complete audit trail of a single decision:</p>
         <pre class="code tech"><span class="cm">// orders.broker_payload  (abridged — charges and fill detail omitted)</span>
@@ -859,7 +863,7 @@ EMA_CROSS       0.0     FIBONACCI       0.0</pre>
         <p><strong>Two gates said no and the trade went through anyway</strong> — because both are in shadow. Had sector-RS and market-regime been active, BHARTIARTL would not have been bought on 08-25. That is precisely the counterfactual the shadow sidecars accumulate, and it is why flipping a gate is a decision made on weeks of recorded verdicts rather than on an argument.</p>
         <div class="callout">
           <span class="k">One honest gap</span>
-          <p>The <strong>regime gate is the only gate with no per-order stamp</strong> — it is evaluated first, from the <code>signals.regime</code> column, and returns a block reason rather than a verdict object, so it never enters <code>_overlay_stamps</code>. Provenance is not lost (the regime is persisted on the signal, and the nightly sidecar reconstructs the cohort from it), but the one gate that actually blocks money is the one without an order-level footprint. Worth fixing for symmetry; not a correctness bug.</p>
+          <p>The <strong>regime gate is the only gate with no per-order stamp</strong> — it is evaluated first, from the <code>signals.regime</code> column, and returns a block reason rather than a verdict object, so it never enters <code>_overlay_stamps</code>. Provenance is not lost (the regime is persisted on the signal, and the nightly sidecar reconstructs the cohort from it). Worth fixing for symmetry; not a correctness bug. <em>(Since 2026-09-02 it no longer blocks anything — it is back in shadow.)</em></p>
         </div>
       </section>
 

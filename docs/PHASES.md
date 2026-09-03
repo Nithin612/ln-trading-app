@@ -10,13 +10,200 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-08-25) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-09-02) — read this block first
 
-**▶ NOW IN WATCH MODE until Fri 2026-09-04 — no money-path build this week.** CAS Stage 1
-(`cas_daily`) landed 2026-08-25 and must ACCRUE before Stage 2 can run; `cas_daily` holds **0 rows**
-tonight (expected — the code landed after today's 15:15–15:33 auction window). **First capture =
-Wed 2026-08-26; `make worker` must be up across 15:15–15:33 IST daily and an auction window cannot
-be back-filled.** Check the row count each morning:
+**▶ DECISION 2026-09-02 — the REGIME GATE IS REVERTED TO SHADOW** (user sign-off; decision record:
+`docs/analysis/regime-gate-revert-2026-09-02.md`). The gate went ACTIVE 2026-08-14 on a ✅ READY
+banner at **44** resolved suppressed trades. Its pre-registered revert condition
+(`phases/phase-06-plan.md` follow-up 1: *"if the banner diverges (⏳ NOT READY), revert"*) fired on
+2026-08-21 and has stayed fired for **7 consecutive report days**: the suppressed set is
+**net-POSITIVE on the live tape** (+0.090 expR at 09-01, sign never once negative, `decided` grown
+54 → 88 = **4.4× the 20-trade bar**). **All three §8 metrics that justified the flip have inverted** —
+win rate 30% kept vs 36% suppressed, Sharpe −0.041 vs +0.044, maxDD 34.5R vs 11.2R; gating moves
+total-R from −2.0R ungated to **−10.0R**, i.e. the gate SUBTRACTS ~8R by removing a +7.9R cohort.
+Verified enforcing (0 transitional positions opened since 08-14) — so this was real, not a phantom.
+It was also suppressing **37 of 204** visible signals. **Action:** `REGIME_GATE_MODE=shadow` + backend
+& worker restart (user-run — `.env` is hook-protected); gate modes are now documented in
+`.env.example`. **Lesson (standing):** a gate promoted on 44 observations was refuted by 88 — no
+shadow→active flip without its pre-registered count AND a multiple-testing-aware bar.
+**No other gate mode moved:** diversity stays ACTIVE (evidence intact); chase 4/20, sl_atr 17/20,
+liquidity 19/20 (already ruled don't-flip), circuit 0/20, sector-RS do-not-flip all stay shadow.
+
+**▶ ALSO 2026-09-02 — entry/eligibility audit** (from a desk question: *"signals were already dead in
+live market"*). Findings, evidence-backed on 99 resolved trades since 07-19: (1) **expectancy is
+−0.303R/trade** (24 closed since the 08-17 cut: 37.5% win, avg win +1.14R, avg loss −1.17R) — needs
+1.67R payoff at that win rate; (2) **payoff is capped by construction** — `compute_levels` pairs a
+STRUCTURAL stop with an ABSOLUTE-% target (swing TP = entry +6%, positional +15%), so R:R is an
+accident: **94 of 295 swing signals have R:R < 1**, 213 < 2, and 6 of the 23 open positions have
+targets closer than their stops. There is **no minimum-R:R gate anywhere**; (3) **tight stops are the
+₹ sink** — 14 trades with stops <2% of price lost ₹25,951 at 29% win, worst −2.01R, because fill cost
+is a fixed price amount (6 of 10 fills on 09-01 pinned the 50bps impact cap = order ~10× top-of-book);
+(4) **overlays gate the ORDER path, not the DISPLAY path** — 41 of 204 listed signals carry a Buy
+button that 409s; (5) **`size_for_fill` uses `abs(fill − stop_loss)`** so a BUY can be sized/filled
+BELOW its own stop — **one such position already exists in the DB** (bug, fix queued); (6) **portfolio
+heat is 45.3%** of ₹1L across 23 open positions (18 underwater) with **no heat cap and no
+max-position limit in the codebase** — Elder's rule is 6%, Tharp's 6–10%; (7) the **entry price is
+literally yesterday's close** (`signal_service.py:236`) and the live entry zone is **symmetric
+±0.5%**, so a BUY drifting DOWN into entry fires "Entered zone" — the setup failing reads as the
+setup triggering. Cohort split: **44 trades carrying ≥1 mechanical defect = −₹19,649; the 55 clean
+ones = +₹5,256 at 55% win.** Fix queue (post-watch-mode, none started): display honesty → R:R floor
+overlay (shadow-first) → directional trigger zones + entry window → heat cap → position-advisory
+upgrade.
+
+**▶ ⚠ MARKET-REGIME SIDECAR NOW READS ✅ READY (2026-09-02) — DO NOT ACT ON IT.** The gate would
+block **405 of 545 signals (74% of the book)**. Its blocked set has a **HIGHER win rate than the
+eligible set (52% vs 45%)** but a much worse mean (−₹302 vs −₹7) — the signature of a few large
+losers driving the average, which is what the memory already warned about ("BLUNT … mean driven by
+few big losers"). **The coded readiness bar tests count + mean + mean-comparison, but NOT whether the
+sign survives removing the tail** — and the regime gate cleared that same bar in August on 44
+observations and was refuted by 88. This is precisely the gap the post-watch-mode queue's item 1
+(deflated Sharpe / multiple-testing bar) exists to close. **Build the bar before believing this
+banner.** (Meanwhile the regime gate's own suppressed set reached **91 resolved at +0.078 expR** on
+09-02 — an 8th consecutive positive reading, further confirming the revert.)
+
+**▶ ✅ SHIPPED 2026-09-02 (user-approved): the DENOMINATOR FIX + the HEAT COUNTERFACTUAL.**
+`paper_sampling_capital_inr` (**reporting only** — never touches sizing, so no trade changes size and
+history stays comparable) lets the daily report print exposure against BOTH the ₹1L LIVE figure and
+the declared ₹5L sampling scale, labelled: the same 23 positions are *45.3%* of one and *9.1%* of the
+other. Replacing one misleading denominator with a different one would have been no improvement.
+Plus `app/services/heat_counterfactual.py` + a `heat-counterfactual-<date>.md` sidecar in
+`make analysis`. ⚠ **Two self-corrections worth keeping:** (1) the first run defaulted to
+`OUTCOME_EPOCH` and silently spanned the **08-17 cut**, where sizing moved from the signal entry to
+the actual fill AND the honest fill model started — the tell was admission risks of ₹5,663 against a
+₹2,000 budget; it now takes `user.paper_clock_started_at`, the clock's own epoch. (2) the first
+verdict string said "the cap would have HELPED" on TOTAL P&L alone, which is misleading because
+admission is CHRONOLOGICAL (selects by arrival time, not quality — one ₹6,000 entry can eat the whole
+budget); it now reports per-trade too and names that limit in the report body.
+
+**▶ ▶ GOVERNANCE 2026-09-02 — TWO PAPER CYCLES, NOT ONE (user ruling).** Full plan:
+[`phases/phase-07-live-trading-plan.md`](phases/phase-07-live-trading-plan.md).
+**Cycle 1 = the sampler running now** — deliberately wide (~5 entries/day, ~5-day holds ⇒ ~25
+concurrent positions) to accrue evidence fast; **its 30-day clock is INFORMATIONAL**, because a
+~25-position book at 45.3% of the live capital figure is not the book that will ever be traded (live
+= ₹1 lakh, 1–2 positions) and the two can produce OPPOSITE SIGNS from identical signals.
+**Cycle 2 = the rehearsal** — after CAS Stage 2, MCE 5b + 6, the tuning/promotions, the
+deflated-Sharpe bar, AND Phase 7.1–7.4, **reset the clock** and run **45–50 trading days targeting
+30 profitable** on a heat-capped ₹1 lakh book. **That** clock is the binding go-live gate. User's
+words: *"no point of going live without proper paper trading result with better strategy."*
+⚠ **Honest timeline: cycle 2 alone is ~9–10 weeks, so live is realistically 4–6 months out.**
+**Bridge already built:** the heat COUNTERFACTUAL measures cycle-2's book shape during cycle 1 with
+zero behaviour change — first read **admitted 12 / skipped 35, capped −₹13,303 vs full −₹19,093
+(+₹5,790 total) but per-trade −₹1,478 vs −₹796** ⇒ **the cap is a RISK control, not a profitability
+fix**; it cuts total loss by taking fewer trades at an unchanged negative expectancy. Nothing there
+repairs −0.303R/trade. **The heat cap itself is DESIGNED but deliberately NOT BUILT** — it belongs
+inside 7.1's RiskEngine (building it now means retrofitting), and it must not throttle cycle 1
+(a 6% cap cuts entries ~74%).
+
+**▶ ✅ SHIPPED 2026-09-02 (user-approved): the NOTIONAL CAP + the R:R ≥ 1 OVERLAY.**
+(1) **Per-position notional cap** (`paper_max_notional_leverage = 1.0`) — risk-first sizing bounds a
+trade's RISK but not its SIZE, so a four-paise stop sized **50,000 shares = ₹1,18,65,000 on ₹1,00,000
+capital** and returned 201. Cap = capital × leverage, existing position included, **reject never
+clamp**. **This deliberately replaced the proposed `paper_min_risk_pct` floor and needs NO spec
+change** — a %-of-price minimum stop is the wrong instrument (2% is comfortable on HDFC, a knife-edge
+on a ₹39 micro-cap); the volatility-relative gate that does that job (`sl_atr`, 17/20, reproduced by
+the 08-25 horizon study at the same 1.0× threshold) already exists. ⚠ PER POSITION only —
+portfolio-wide is still the unbuilt heat cap (book at 45.3% across 23 positions).
+(2) **R:R floor overlay** (`app/signals/rr_guard.py`, **ACTIVE**, `rr_min = 1.0`) — rejects a signal
+whose target is closer than its stop: **11 of 190 listed signals (5.8%)**, and 6 of 23 open positions
+were in that state. **It ships ACTIVE with NO forward-evidence bar on purpose:** unlike every other
+overlay it enforces an **identity** (planned R:R < 1 needs a >50% win rate merely to break even), so
+there is no hypothesis to falsify. **Raising the floor above 1.0 IS empirical** (1.67 is fitted to our
+37.5% win rate) and must pass the multiple-testing bar — documented in the module, the settings and
+`.env.example` so nobody "helpfully" tunes it. **Complementary to `sl_atr`, not redundant:** the two
+are structurally disjoint (a tight stop produces a LARGE ratio; R:R<1 needs a WIDE stop) — 11 vs 21
+signals with **zero overlap**, pinned by a test. Root cause remains `compute_levels` pairing a
+structural stop with an absolute-% target — a §6 spec change, deliberately not done here.
+
+**▶ ⚠ TWO PRE-EXISTING SIZING HOLES FOUND 2026-09-02 — ONE FIXED (the notional cap above), ONE STILL
+OPEN.**
+(1) **HIGH: no minimum risk-distance floor and no notional cap.** A signal one tick from its stop
+(LTP ₹237.30 vs SL ₹237.26 ⇒ ₹0.04/share risk) is accepted — reproduced as **201 CREATED, 50,000
+shares, ₹1,18,65,000 notional on ₹1,00,000 capital**. The 09-02 wrong-side fix closed the
+*negative*-distance half of this hole and left the *near-zero* half, which produces a WORSE position
+than the bug that was fixed, and that row enters the paper book, the R statistics and the 30-day
+clock. Same tiny-SL pathology as the known `RR≈228` artifacts. Fix = a `paper_min_risk_pct` floor
+(reject, never clamp) + a hard affordability check. **I'd do this before anything else on the queue.**
+⚠ **quant-verifier reproduced it independently AND established that the code is SPEC-FAITHFUL** —
+`docs/SIGNAL_ENGINE.md` §6 defines no minimum risk distance — so this is a **SPEC change** (§6 edit +
+§8 regression + explicit sign-off, per the protected-spec rule), not a bugfix that can be slipped in.
+**STILL OPEN —** (2) **LOW-MED: `used = abs(existing_entry - stop_loss)` invents risk** — a profitable long whose stop
+has trailed above entry is refused a repeat entry with "already at your per-trade risk budget", which
+is false. Fix = directional `used` **clamped at 0** (the naive directional fix hands out negative risk
+as free budget). Both are money-path sizing changes ⇒ user's call, post-watch-mode.
+
+**▶ AGENT REVIEWS 2026-09-02 — THREE rounds, 21 defects, all fixed: bug-hunter (9) →
+quant-verifier (PASS-WITH-NOTES) → ui-reviewer (FAIL).** ui-reviewer failed the diff on RENDERING:
+it MEASURED the contrast and the new blocked state was unreadable in every theme — **`opacity: 0.55`
+on the row stacked on the Button primitive's own `disabled:opacity-50` = 0.275 alpha, putting
+"Blocked" at 1.52–1.99:1 and the badge at 2.15–2.83:1 against a 4.5 AA floor.** The one row that
+most needs reading became the least readable, on the widest Buy surface. It also proved in jsdom that
+a native `disabled` drops the button out of the tab order AND kills its own tooltip
+(`disabled:pointer-events-none`), so **the block reason was unreachable by keyboard AND mouse** —
+an `aria-label` on an element nobody could reach. And `TradeBlock.unknown` was **read by zero call
+sites** while its docstring promised it "must LOOK different". Fixes: loss-accent border instead of
+the dim · `aria-disabled` + a click guard on all five surfaces (focusable, tooltip works, still
+inert) · a visible `⚠ unchecked` marker · the themed `StatusPill kind="rejected"` instead of a
+hand-rolled `text-[9px]` badge · label/glyph centralised. **Two pre-existing issues fixed because
+this work made them load-bearing:** the Dashboard trade button had NO focus-visible ring (§10.1) on
+the landing page, and **daybreak `--color-loss` was 3.95:1 — below AA for every existing
+hit_sl/rejected/sell pill** → red-700, measured at 5.30:1 (following the file's own `--color-warning`
+precedent). **Lesson worth keeping: three reviews found 21 defects in work that passed its own green
+suite twice — the tests asserted what was INTENDED, not what the code did.**
+
+**▶ AGENT REVIEWS 2026-09-02 — bug-hunter (9 defects) then quant-verifier (PASS-WITH-NOTES); all
+fixed.** quant-verifier confirmed spec conformance (frozen engine + fixtures untouched, no new
+look-ahead, sizing formula intact with `risk_pct` not re-divided, money Decimal end-to-end, shadow
+measurement byte-identical) and found the preview DISAGREEING with the order path in three ways:
+(a) **it compared the raw LTP while the broker compares its post-slippage fill**, disagreeing in a
+half-spread band BOTH ways — LTP 237.25 vs SL 237.26 previewed blocked while the order path fills
+237.30 and allows it, i.e. **a false BLOCK that HIDES a tradeable signal**, the worse error; now
+judged on `simulate_fill(...).fill`. (b) **the broker has TWO unconditional pre-fill rejections and
+only one was previewed** — the off-market guard fires whenever there is no live tick and
+`allow_offmarket_entry` is False (the DEFAULT), so **outside market hours every row read
+`blocked=False` while the order path 422'd all of them**; probably the app's most common wasted
+click. (c) **a FIFTH Buy surface** (`StylePage`, posting real Signal ids with no eligibility fields)
+— now stamped server-side, and `gate_modes()` moved into `eligibility` so all five share one
+definition. Also: `unassessed` now reaches the CLIENT (it was log-only, so "unknown" was
+indistinguishable from "verified clear" exactly where the clicks happen) and renders as an
+enabled-but-marked state; a non-finite Redis LTP would have 500'd the detail endpoint (`Decimal("nan")`
+parses without raising — the same bug class fixed one file over in the same commit); and the "all four
+share one helper" claim was false until `OpportunitiesTable`/`AlertBell` were actually converted.
+**Gate: backend 1574 passed · ruff + mypy (app/ + scripts/) clean · frontend typecheck 0, eslint
+clean, 411 vitest.**
+
+**▶ AGENT REVIEW 2026-09-02 — bug-hunter found 9 real defects IN the same-day eligibility work; all
+fixed** (details in CHANGELOG). The three that matter for future work: (a) **`make typecheck` only ran
+`mypy app/`, so `scripts/` was never type-checked** — that hole hid a missed `render_markdown` caller
+that would have crashed the hand-run regime sidecar; now `mypy app/ scripts/` with the 9 legacy
+scripts visibly grandfathered in `pyproject.toml`. (b) **the `unassessed` tripwire was imaginary** —
+`preview()` got 3 of 8 gate modes, so an ACTIVE liquidity gate produced `blocked=False` on a row the
+order path 409s, while three docs claimed the drift "cannot silently return"; now a COMPLETE mode map
++ a parametrized test per uncovered gate. (c) **only 2 of 4 Buy surfaces were wired** — the Dashboard
+landing page still fired guaranteed-409 orders; all four now route through one shared `tradeBlock()`.
+It also CONFIRMED the load-bearing claim: checking only the first spread-only fill is sufficient
+(property-checked over 20,000 randomized books incl. crossed books and zero top-of-book size, 0
+violations).
+
+**▶ SHIPPED 2026-09-02 (audit items 1, 2, 7):** the display path now shows what is actually
+tradeable (`app/signals/eligibility.py`, one source of truth, stamped on the list AND the detail
+endpoint AlertBell reads; blocked rows stay visible but un-clickable with the order path's own
+reason); the `size_for_fill` wrong-side-stop bug is fixed (`side` required, directional risk
+distance, reject-never-clamp) with canary regression tests; and both gate sidecars now print their
+REAL mode instead of hardcoding "SHADOW". Details in CHANGELOG + the CONTINUE HERE queue below.
+
+**▶ OPS 2026-09-02:** a **duplicate Celery beat** was found running (an orphan `worker -B` reparented
+to systemd alongside the `make worker` tree) — every scheduled task was firing twice, including the
+60s `position_monitor` on the live open book. **✅ RESOLVED** — user killed the orphan; one
+`make worker` tree remains. ⚠ **`REGIME_GATE_MODE=shadow` was set in `.env` but `settings` is an
+`@lru_cache` module singleton, so the RUNNING backend kept enforcing `active` until restarted** —
+check a mode change actually took effect in the live process, not just in the file.
+
+
+**▶ STILL IN WATCH MODE until Fri 2026-09-04 — no money-path build this week.** CAS Stage 1
+(`cas_daily`) landed 2026-08-25 and must ACCRUE before Stage 2 can run. **Accrual is HEALTHY as of
+2026-09-02: 6 sessions captured, 208 rows each (08-26, 08-27, 08-28, 08-31, 09-01, 09-02) = 1,248
+rows, no missed window.** `make worker` must stay up across 15:15–15:33 IST daily and an auction
+window cannot be back-filled. Check the row count each morning:
 `docker exec -i tp_postgres psql -U tpuser -d trading_platform -c "SELECT trade_date, count(*) FROM cas_daily GROUP BY 1 ORDER BY 1;"`
 
 **▶ NEW FINDING 2026-08-25 — the HORIZON / stop-width study** (`docs/analysis/horizon-recovery-2026-08-25.md`).
@@ -346,7 +533,7 @@ which is what Phase-6 expectancy calibration is for.
 | 5 | UI overhaul | **✅ slices 5.1–5.4 done, MERGED to main 2026-08-07** (`make check` green; bug-hunter + ui-reviewer clean; 60 fps MEASURED and MET; visual smoke passed in all 5 themes — only `/phase-gate` remains) | [phase-05](phases/phase-05-ui-overhaul.md) | 5.1 `useLiveQuotes` v2 (rAF-batched; fixed socket-churn, resubscribe-per-render + subscription-leak bugs) + `useVirtualRows` · 5.2 **F&O page** (chain ladder w/ per-leg IV+Greeks via `/fo/chain?greeks=true`, `/fo/underlyings`, `/fo/expiries`, strategy cards, expectancy labelled report-only) · 5.3 style pages v2 (committed-vs-forming, outcome stats w/ small-sample refusal, factor drawer) · 5.4 Live Signals feed + opt-in notifications (bursts coalesce). **IA + slate default were already done in Phase 3.** 🧭 **Nautilus doc** §4.2 — cache-then-publish lets UI subscribe without touching producers |
 | 6 | Outcome tracking + entry-selection | **✅ GATE PASSED + CLOSED 2026-08-20 — 6.1–6.5 built shadow-first; regime gate ACTIVE; code on `main` (pushed); 3 forward-evidence loops continue post-close (regime keep/revert ~09-15 · momentum-retune promote · pair df/adf)** — close report in `phase-06-plan.md` | [phase-06-plan](phases/phase-06-plan.md) | 6.1 MFE/MAE · 6.2 entry attribution (live+corpus) · gate experiment + §8 walk-forward · regime-gate overlay (ACTIVE) · 6.4 weight-retune (shadow) · 6.5 pair-trading (shadow, slices 1–4) · 🧭 **Nautilus doc** §7 — mimalloc on batch backtest sweeps; §4.3 richer bar aggregations for research |
 | 6.8 | Execution Realism & Exchange-Safety (paper-safe) | **✅ GATE PASSED 2026-08-20 — CLOSED + merged to `main` (ff, awaiting push); all six slices done + reviewed; research track (R1/R2/F1) optional/gated; paper day-1 deferred until user "proceed"** | [phase-06.8-plan](phases/phase-06.8-execution-realism-plan.md) | 6.8.1 ✅ order-book depth capture (`depth:{stock_id}`; both consumers; pipelined on live-worker) · 6.8.2 ✅ spread-aware slippage/impact (replaces flat 2bps) · 6.8.3 ✅ circuit-band eligibility overlay (shadow-first, regime-gate pattern; band-refresh task → Redis `circuit:{stock_id}`) · 6.8.4 ✅ open-book-MTM carried-position gap (rolling MFE/MAE for carried holds + weekly per-day open-MTM series) · 6.8.5 ✅ CA-adjust OPEN paper positions (R-preserving split/bonus; admin-verified ratio; ex-date worker, idempotent+catch-up; migration `a7b8c9d0e1f2`) · 6.8.6 ✅ silent-feed-outage alarm (trading-calendar-aware EOD staleness header) · research (gated, non-blocking): R1 VWAP/RVOL as confluence factors (§8+oracle regen) + R2 weekly spread-width gate · spike: F1 `market_cap` writer (de-risks MCE keystone) |
-| 7 | Live-trading hardening | planned | — | Kite orders behind trading_mode + 30-day gate, kill switch, reconciliation, VPS runbook · 🧭 **Nautilus doc** §6 — **SLICE 1 = RiskEngine single-gate** (test-first, equivalence-pinned) → then BrokerAdapter port · order FSM (Denied vs Rejected) · reconciliation |
+| 7 | Live-trading hardening | planned — **now split: 7.1–7.4 run BEFORE paper cycle 2, Kite-only parts after** | [phase-07-plan](phases/phase-07-live-trading-plan.md) | **Before cycle 2 (paper exercises them for real):** 7.1 RiskEngine single-gate (test-first, equivalence-pinned — absorbs the circuit breaker + 6 overlays + notional cap + R:R floor + the heat cap) · 7.2 BrokerAdapter port (`PaperBrokerAdapter` behind the interface `KiteBrokerAdapter` will implement) · 7.3 order FSM (Denied vs Rejected vs Filled) · 7.4 reconciliation-on-restart + kill switch + audit trail. **After cycle 2 (only reality validates):** Kite order placement · GTT · genuine partial fills/rejections · broker-book reconciliation · token lifecycle under live orders. Mitigation for designing the adapter blind: a READ-ONLY Kite spike in 7.2 (order-status/margins/positions, no placement). 🧭 **Nautilus doc** §6 |
 
 > **🧭 Nautilus doc pointers** (added 2026-08-01): before starting and at the
 > phase-gate of Phases 4–7, consult `docs/NAUTILUS_TRADER_ANALYSIS.md` for the
@@ -356,20 +543,117 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-08-25.**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-02.**
 
 **▶ THIS WEEK IS A WATCH, NOT A BUILD (to Fri 2026-09-04).** The only daily obligation is: worker up
 across 15:15–15:33 IST, then check `cas_daily`'s row count each morning (query in the STATE block
 above). A missed session is unrecoverable. Nothing else is queued on the money path. Optional
 low-risk work while waiting, in preference order:
-1. **Run the deep index backfill once** — `scripts/backfill_indices.py 2023-07-01 <today>`. It
-   unblocks MCE slices 3 + 4, which are currently INERT (sector-RS needs ~21 sessions, the 200-DMA
-   ~200; catch-up only reaches back 21 days). Their present "blocked" stamps are computed on
-   insufficient history and should not be weighted.
+1. ~~**Run the deep index backfill once**~~ — ✅ **ALREADY DONE (verified 2026-09-02).**
+   `index_ohlcv_1d` holds **782 bars per index, 2023-07-03 → 2026-09-02**, and the market-regime
+   sidecar reports **0 signals** in its "no market data (< 200-DMA history)" bucket. **MCE slice 4
+   (market-regime) is therefore NOT inert** — it is measuring a real partition, and this item was
+   stale. ⚠ **BUT only 3 indices are registered** (NIFTY50, BANKNIFTY, FINNIFTY — all broad or
+   financial), so **MCE slices 1/3 (sector-RS) are benchmarking EVERY stock against NIFTY50**: the
+   per-entry table shows `benchmark = NIFTY50` for every row. It is a *market*-RS gate wearing a
+   *sector*-RS label, so its "would-block not worse than eligible ⇒ do NOT flip" verdict **cannot be
+   read as "sector RS has no edge"** — it has never been tested. The real blocker is a DATA gap:
+   ingest the sector indices (NIFTY IT / PHARMA / AUTO / FMCG / METAL …) that the Option-B NSE
+   indices CSV already carries, then re-read the sidecar.
 2. **The two reporting changes from the horizon finding** (§ STATE block) — make the daily report's
    "reached ≥1R" horizon-aware, and add `sl_atr_mult` as a column in §2 of the report + on the
    Opportunities list. Both are read-only/UI; neither touches the order path.
 3. **Push the branch** (still manual, still pending).
+   **Also pending from the user:** add `PAPER_SAMPLING_CAPITAL_INR=500000` to `.env` and restart the
+   backend (the `@lru_cache` settings singleton means a `.env` edit does not reach a running
+   process). Until then the daily report prints the LIVE denominator only, exactly as before.
+4. **Kill the duplicate Celery beat** (found 2026-09-02) — an orphan `worker -B` was running
+   alongside the `make worker` tree, double-firing every beat including the 60s `position_monitor`.
+   Keep the `make worker` tree; kill the orphan PID.
+
+**▶ FROM THE 2026-09-02 ENTRY/ELIGIBILITY AUDIT — items 1, 2 and 7 are ✅ DONE (2026-09-02).**
+In priority order, all reversible, none touching the frozen engine:
+1. ✅ **DONE — display honesty.** New `app/signals/eligibility.py` = one source of truth for "what
+   would an ACTIVE gate do to this signal": pure, evaluated in the SAME order as the order path,
+   reason passed through VERBATIM so the list and the failed click can't word it differently.
+   Stamped on BOTH `GET /signals/active` (atr=None, no per-row I/O) and `GET /signals/{id}` (real
+   ATR — and that's the endpoint AlertBell reads, so the bell is fixed too, not half the problem).
+   New `SignalOut.blocked/blocked_by/block_reason`. Blocked rows are still LISTED — flagged, never
+   hidden — with a `⊘ blocked` badge, a dimmed row and a disabled Buy carrying the reason.
+   Covered: regime · diversity · sl_atr (with ATR). NOT covered (needs live state): circuit,
+   liquidity, chase, market-regime, sector-RS — all shadow today; an ACTIVE gate the preview can't
+   judge lands in `unassessed`, never in "clear", so the drift can't silently return. **⚠ Flipping
+   any uncovered gate ACTIVE means extending that module IN THE SAME COMMIT.** 12 backend tests
+   incl. the contract test (list-blocked ⇒ order path 409s with the SAME string) + 6 frontend.
+2. ✅ **DONE — `size_for_fill` wrong-side bugfix.** `side` is now a REQUIRED keyword and the risk
+   distance is directional; a BUY at/below its own stop (or a SELL at/above) sizes to 0 and the
+   order is rejected, with `place_paper_order` raising an accurate "price has moved through this
+   signal's stop loss — the setup is void" instead of the generic "size rounds to 0". 4 regression
+   tests with canaries (old code: 43 shares; fixed: 0). **The one pre-existing bad row in the dev
+   DB is untouched** — the fix is forward-only; decide separately whether to close it out.
+3. **R:R floor overlay** (shadow-first, moded, the `regime_guard` pattern) — the biggest remaining
+   arithmetic defect: 94/295 swing signals have targets closer than their stops. A money-path build,
+   so post-watch-mode.
+4. **Directional trigger zones + an entry window** — split the symmetric ±0.5% zone into
+   `trigger_cross` / `pullback_zone` / `void`, and separate the ENTRY window (D+1…D+2) from the HOLD
+   window (5/30 trading days). Note: the signal-age sidecar says age itself shows **no** penalty yet;
+   **displacement in R is the discriminator**, so gate on displacement and use age only to stop
+   re-listing. (`conviction.ts` currently documents an age-decay claim the sidecar contradicts — fix
+   that comment.)
+5. **Portfolio heat cap** — 45.3% of capital at risk across 23 open positions today, with no cap in
+   code. Elder 6% / Tharp 6–10% ⇒ 3–5 concurrent positions at ₹1L and 2%/trade.
+6. **Position-advisory upgrade** — `position_health.py` already returns CUT/WATCH with reasons; add a
+   positive HOLD verdict, an explicit ACTION (cut / trim ½ / trail to breakeven / hold), a broader
+   technical read than Kaufman ER alone, and PUSH a CUT to AlertBell instead of waiting for a page
+   visit.
+7. ✅ **DONE — sidecar preamble bug** (extended after review: `entry_quality_shadow` had the same
+   hardcoding and is the only gate that actually BLOCKS money, so it mattered most; and the banner now
+   stamps `MODE_EFFECTIVE_FROM`, without which the first report after the 09-02 revert would have said
+   "nothing is suppressed" about the 88 suppressed trades from the ACTIVE window — in the very report
+   that feeds the keep/revert decision). `regime_gate_shadow` AND `circuit_gate_shadow` both
+   hardcoded "SHADOW: nothing is suppressed" — false for the 19 days the regime gate ran active, so
+   the reports used to justify keeping it on misstated their own regime. `render_markdown` now takes
+   the live `mode` and renders it via one shared `eligibility.mode_banner` (active ⇒ "⚠ THE GATE IS
+   ACTIVE — these signals ARE being suppressed on the order path right now"). 3 regression tests
+   incl. a canary that the old string must NOT appear in active mode. Also ✅ **`conviction.ts`**: the
+   age-decay term was documented as "the single most evidence-backed term" citing the signal-age
+   study, which actually headlines "no stale-entry penalty visible yet" — re-documented on its
+   MECHANICAL rationale (less runway near expiry) with a pointer that DISPLACEMENT is the measured
+   discriminator. No behaviour change; the ranking weights are untouched.
+
+**▶ ▶ REVIEW CALENDAR — Claude owns this and must RAISE each item unprompted when its
+trigger fires (user rule 2026-09-03). Never flip on an argument; read the data first.**
+The bar for every gate is **≥20 resolved would-block trades AND the would-block set
+net-negative AND worse than the eligible set** — plus, from 2026-09-03, **the sign must
+survive trimming the tail** and the partition must not be a proxy for something else.
+
+| item | mode | stands at | trigger to re-check | current verdict |
+|---|---|---|---|---|
+| **CAS Stage 1 accrual** | — | 6 sessions × 208 rows | **Fri 2026-09-04** (watch-mode end) | on track; `make worker` must be up 15:15–15:33 IST daily, a missed window is unrecoverable |
+| **`sl_atr`** | shadow | **17/20** resolved flagged | when ≥20 resolved — **check every `make analysis`** | **HIGHEST-VALUE pending flip.** Strengthened 09-03: excluding <2% stops turns the long book to **+₹11,450 / 60% win over 57**. Still needs the count + a tail check |
+| **anti-chase** | shadow | 4/20 resolved chased | when ≥20 resolved | far off; retrospective reconstruction says the chase cohort is the loss, forward-stamped n is thin |
+| **liquidity** | shadow | 19/20 resolved illiquid | when ≥20 — but ⚠ | 5a deep-dive already ruled **DON'T flip** (illiquid set net-POSITIVE); reframe as a sizing/slippage modifier |
+| **circuit band** | shadow | 0/20 resolved blocked | when ≥20 resolved | nothing to measure yet |
+| **sector-RS** | shadow | would-block not worse than eligible | after sector indices are ingested | ⚠ **never actually tested** — only 3 broad indices exist, so it benchmarks every stock against NIFTY50. Data gap, not a verdict |
+| **market regime** | shadow | banner says ✅ READY | **a 2y corpus run only** | ⛔ **DO NOT FLIP — the banner is measuring SIDE.** NIFTY was below its 200-DMA 33/33 days; 39 LONG all blocked, 11 SHORT all kept. It would block the better-median, better-win cohort on a mean where **NDRAUTO alone is 94% of the long loss** |
+| **R:R ≥ 1** | shadow (reverted 09-03) | 24 resolved would-block | needs a proper bar + tail check | ⛔ blocked the only profitable cohort (**+₹10,585 / 63% win**); R:R<1 is a proxy for a WIDE stop |
+| **regime (ADX 20–25)** | shadow (reverted 09-02) | 91 resolved suppressed, +0.078 expR | re-promotion needs a FRESH forward window | settled: do not re-promote on the same §8 backtest |
+| **momentum ×1.5 retune** | shadow | **3 minted, 0 resolved** in 6 days | — | ✗ **stalled** — at ~0.5 signals/day with no resolutions this decision is years away by this route; needs a backtest path instead |
+| **pair df-vs-adf** | shadow | nightly minter accruing | when both arms have resolutions | accruing |
+| **profit-lock breakeven** | live rung ₹2,000 | A/B built 09-03; 20 of 99 differ | ADR-denominated variant, pre-registered k | ⛔ ₹800 NOT shipped — 13 runners clipped vs 7 blow-ups prevented; the knob's UNITS are wrong |
+| **deflated-Sharpe bar** | **not built** | — | **build BEFORE the next flip** | two gates have now reached ✅ READY without it; this is the blocker on every promotion above |
+
+**▶ POST-WATCH-MODE RESEARCH QUEUE (after Fri 2026-09-04)** — a consolidated "wind it back" list of the
+analysis threads parked during watch mode lives in the **`post-watchmode-research-queue`** memory
+(read-only research, none on the money path). Headline order: (1) a deflated-Sharpe / multiple-testing
+bar before promoting any shadow gate; (2) shadow-test a Minervini/O'Neil trend-template gate for the
+entry-leak; (3) CAS Stage-2 (excess-vs-acceptance); (4) intraday §8-shadow review; (5) the 2018+
+longer-history backtest (data-sourcing spike first). Sources: the two ebook-review memories +
+`docs/reading/e-book-suggested-takeaways-2026-08-29.md`. Ongoing monitor: ~~the regime-gate keep/revert
+(~09-15)~~ — **DECIDED 2026-09-02: REVERTED to shadow** (7 straight days of a net-positive suppressed
+set, 88 decided = 4.4× the bar; `docs/analysis/regime-gate-revert-2026-09-02.md`). The remaining
+readiness watch is **`sl_atr` at 17/20** — the closest of any gate to a decision, and independently
+reproduced at its 1.0× threshold by the 08-25 horizon study.
 
 **▶ 2026-08-25 also produced:** `docs/analysis/horizon-recovery-2026-08-25.md` (the horizon +
 stop-width study — read its §6/§7 before acting on it; it is retrospective, not a walk-forward) and

@@ -4,10 +4,10 @@
 same-day 6.8 gate on the byte-identical code tree: backend 1477 · parity 16 · walkforward 9 · replay 19
 · frontend 375 · cargo ok; §8 drift gate green = frozen engine untouched; smoke green). See the "Phase
 gate — CLOSE REPORT (2026-08-20)" section at the end. Code already on `main` (merged with the 6.8 gate,
-pushed). **Build ran 6.1 · 6.2 · gate experiment · §8 walk-forward · regime-gate overlay (FLIPPED ACTIVE
-2026-08-14) · 6.4 weight-retune experiment + shadow-promote · 6.5 pair-trading (shadow-first); 6.3
+pushed). **Build ran 6.1 · 6.2 · gate experiment · §8 walk-forward · regime-gate overlay (flipped ACTIVE
+2026-08-14, **REVERTED to shadow 2026-09-02** — refuted by its own forward evidence) · 6.4 weight-retune experiment + shadow-promote · 6.5 pair-trading (shadow-first); 6.3
 de-prioritised.** The DONE markers on each slice are the current truth. Three forward-evidence loops
-continue POST-close, none blocking (regime keep/revert review ~2026-09-15 · momentum-retune promotion ·
+continue POST-close, none blocking (regime keep/revert — **DECIDED 2026-09-02: REVERT** · momentum-retune promotion ·
 pair df-vs-adf) — see the close report. Phase 6 kept the FROZEN engine untouched throughout (every lever
 is a downstream overlay or a shadow profile).
 
@@ -205,7 +205,19 @@ use the identical partition; §8/corpus/attribution numbers unchanged. quant-ver
 
 **NEXT — recommended lead first; each starts on user command (nothing auto-advances):**
 
-1. **Flip the regime gate shadow→active — ✅ DONE 2026-08-14 (user decision, reversible).**
+1. **Flip the regime gate shadow→active — ✅ DONE 2026-08-14 · ⛔ REVERTED TO SHADOW 2026-09-02.**
+   **OUTCOME: the flip was wrong and its own pre-registered revert condition fired.** The banner
+   turned ⏳ NOT READY on 2026-08-21 and stayed so for 7 consecutive report days; the suppressed
+   set is net-POSITIVE live (+0.090 expR at 09-01, sign never negative, `decided` 54 → **88** =
+   4.4× the 20-trade bar) and **all three §8 metrics inverted** (win 30% kept vs 36% suppressed,
+   Sharpe −0.041 vs +0.044, maxDD 34.5R vs 11.2R; total-R −2.0R ungated → **−10.0R** gated, so the
+   gate subtracts ~8R). Verified enforcing (0 transitional positions opened since 08-14) and it was
+   suppressing 37 of 204 visible signals. Reverted via `REGIME_GATE_MODE=shadow` + restart; decision
+   record `docs/analysis/regime-gate-revert-2026-09-02.md`. **Methodological lesson: a gate promoted
+   on 44 observations was refuted by 88** — the OPEN question below (accept the accumulated cohort
+   vs require strictly-forward-only evidence) is now ANSWERED by events: strictly-forward, under a
+   multiple-testing-aware bar. Re-promotion needs a fresh forward window, not a re-read of §8.
+   Historical record of the original flip follows.
    Set via `REGIME_GATE_MODE=active` in `.env` + backend/worker restart (`place_order` reads it
    live); the paper order path now rejects transitional (20–25) entries. Revert = `shadow` +
    restart. **Precondition — first-class ADX level: ✅ DONE 2026-08-14** (migration
@@ -290,7 +302,7 @@ engine. The one-paragraph case + "what this must NOT become" are at the top of t
 - **6.1** signal-level MFE/MAE (`app/services/excursion.py`, `signal_outcomes`).
 - **6.2a/b** entry-quality attribution live + at corpus scale (`entry_attribution.py`, `corpus_attribution.py` via the parity-clean Rust `run_universe`, engine frozen) + per-factor attribution.
 - **Gate experiment** (`scripts/gate_experiment.py`) + **§8 walk-forward** (`gate_walkforward.py`) — the verdict: the 70–79 confidence band + transitional ADX regime are net-negative; skip-transitional beats raising the confidence gate; holds OOS 5/5 folds.
-- **Regime-gate overlay** (`app/signals/regime_guard.py` + `regime.py`, the `risk_guards` pattern, engine untouched) — **FLIPPED ACTIVE 2026-08-14** (`REGIME_GATE_MODE=active`, reversible); **first-class `Signal.regime`** persisted at commit (migration `e3f4a5b6c7d8`); the live shadow measures the same partition it enforces.
+- **Regime-gate overlay** (`app/signals/regime_guard.py` + `regime.py`, the `risk_guards` pattern, engine untouched) — flipped ACTIVE 2026-08-14, **REVERTED TO SHADOW 2026-09-02** (forward evidence refuted the §8 finding: suppressed set net-POSITIVE over 88 decided trades; see `docs/analysis/regime-gate-revert-2026-09-02.md`) (`REGIME_GATE_MODE=active`, reversible); **first-class `Signal.regime`** persisted at commit (migration `e3f4a5b6c7d8`); the live shadow measures the same partition it enforces.
 - **6.4 weight-retune** experiment (`weight_retune.py`) + **shadow-promote** (migration `d2e3f4a5b6c7`): `momentum ×1.5` and a `retune_base` control run as SHADOW profiles (forward A/B), never tradeable.
 - **6.5 pair-trading** (market-neutral, regime-agnostic; `phase-06-6.5-pairtrading-plan.md`): screen+universe + `pair_signals` dual-arm (df/adf) nightly minter + outcome tracker + attribution, numpy-only, **shadow-first**.
 - **6.3** interactive Strategy-Lab v2 — **DE-PRIORITISED** (the corpus attribution didn't need it; documented, not a gap).
