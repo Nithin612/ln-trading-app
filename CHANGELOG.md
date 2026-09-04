@@ -996,6 +996,1098 @@ request) confirmed sound; 1 MEDIUM (backfill lacked per-day error isolation) FIX
 1 LOW (sidecar N+1) FIXED via per-date memoization. No money-path change (shadow never blocks). The
 200-DMA is inert until `scripts/backfill_indices.py` seeds history; a shadow→active flip needs the
 R-track (§8-on-≥2y + sign-off).
+### docs(research): execution plan sequenced to cycle 2 — all 91 items bucketed (2026-09-03)
+
+Turns the review's 91 queue items into a sequenced plan in `docs/quant-agent-findings.md`.
+**Nothing is authorised** — watch mode holds to Fri 2026-09-04.
+
+**The rule that orders it:** *anything that changes a recorded number must land BEFORE cycle 2's
+clock starts.* We have already paid this once — paper P&L before and after 2026-08-17 is **not
+comparable** because the spread-aware fill model landed mid-window and the 30-day clock reset.
+Cycle 2 is 45–50 trading days on ₹1L; a costing, fill or eligibility change mid-cycle costs the
+whole window.
+
+**The corollary makes it tractable:** work that touches no recorded number — notifiers, tests,
+rules, UI — can be built **while the clock runs**, and that is most of the backlog. So the choice
+was never "build everything first" vs "start accruing": it is **freeze the number-changing
+surface, start the clock, build the rest underneath it.**
+
+Buckets, with all 91 items assigned and none left unplaced (verified programmatically):
+
+- **A — freeze the numbers (~7 d):** A38 (the point-in-time `Restrictions` interface, subsuming
+  A30/A31) · A21 marks · A37+T3 participation cap · A29 DP charge · A23 effective-dated fees ·
+  **A26** (hot-set capacity — it changes *which signals exist*) · A25 tick-mode assert · H6.
+- **B — the instruments that read the cycle (~5 d):** H8 · H1 · H12 · H2 · H11 · T11 · H4 (absorbing
+  A8) · U4 · H3 · T7 · A24.
+- **P7 — the long pole (weeks):** A33 + A42 + A35 designed **together**, then A32 · A22 · A16 ·
+  T2 · A34. Read vnpy's 145-line bus, PaperTrade-India's `orders/` and repo 4's CLAUDE.md first.
+- **MCE — blocked on a decision, not code:** 5b needs a **vendor chosen**; T1's filing-anchored PIT
+  test ships *with* it; MCE 6 = A18.
+- **C — during accrual (~60 items):** the whole notifier stack (A11/A40/A27/A28/A3/A36/H7/A9/A10),
+  every test item, all W rules, and the full UI queue led by U1 and the U10+U15+U17 trio.
+- **PARKED:** H10 (an overfitting machine until H8 exists), H9, A19, A20, A6, W6.
+
+**Honest sizing: three to four months to the start of cycle 2**, dominated by P7 and the MCE
+vendor decision — consistent with the standing "live is 4–6 months out". Buckets A+B are ~2 weeks
+of that. The discipline recorded: *every week building is a week not accruing, and cycle 2 needs
+its 45–50 days regardless.*
+
+
+### docs(research): repos 23–29 the .NET batch, and a closing summary at thirty repos (2026-09-03)
+
+Seven C#/.NET repos, none sharing our stack, so lesson 17's filter applies: shared *stack* or
+shared *discipline*, not shared subject. **One of seven earns the reading; two are rejected on
+licence before any technical assessment.**
+
+**⚠ StockSharp and StockSharp/AlgoTrading — the strongest licence rejection in the log.** A custom
+notice stating the repo *"is not licensed under a general-purpose open source license"*, that
+**"viewing, downloading, copying, building, modifying, using, distributing, or otherwise
+accessing"** requires their EULA, and — decisively — that **"StockSharp may update its license terms
+… Users are responsible for monitoring … and complying with the then-current terms."** The terms are
+**unilaterally mutable with a monitoring duty on the user**, and even *viewing* is nominally gated,
+so the "read for architecture, adopt nothing" posture used with vnpy/zipline/qlib is not clearly
+available. StockSharp is essentially "vnpy for .NET" and **vnpy is MIT**, so the risk buys nothing.
+
+**⭐ facioquo/stock-indicators-dotnet is the one worth reading** — Apache 2.0, active, 518 test
+files, and **80 committed `.xlsx` hand-calculated oracles** (`Rsi.Calc.xlsx` beside
+`RsiSeriesTests.cs`). Its tests pin total count, **non-null count**, the **exact warmup boundary**
+(`sut[13]` null, `sut[14] = 62.0541`) and values across the series, plus property invariants — and
+every indicator is tested through **batch / incremental / streaming**, which must agree. Two
+findings about *our* code:
+
+- **T13** — we already have that agreement test, on **two** indicators (`sma.rs`, `ema.rs`).
+  **RSI/ADX/ATR do not have it**, and recursive smoothing makes the Wilder family both the most
+  likely to diverge and the loosest in our parity tolerance (1e-6 vs 1e-9).
+- **T14** — our oracle chain is **Rust ← Python ← pandas-ta** with **no external anchor**. If
+  pandas-ta carried a convention bug — exactly the QuantStats failure of §22 — our fixtures would
+  encode it and every parity test would pass forever, in green. ~20 hand-computed Wilder values,
+  once, and the chain stops being self-referential. **Fourth independent arrival at "anchor the
+  test to something the code did not produce"** (with T1, T11, H8).
+
+**One contrast** from `mccaffers/backtesting-engine` (MIT, no longer actively developed): its
+stated purpose is *horizontally scaling strategy permutations on AWS* for *"more comprehensive
+strategy exploration"* — **which is precisely what the deflated-Sharpe bar defends against.** Every
+permutation is a trial; `E[max SR]` grows with the trial count. Compute makes the overfitting
+problem worse, not better.
+
+The remaining four (Financial-Formulas — 12 files, superseded by FinanceToolkit; TradingStrategies;
+quant-trading-toolkit) are too small or too covered to repay the reading, and are recorded as such.
+
+**Added a closing "Where this leaves us" section** at the end of the first review series: the five
+items to do first (**A11+A40**, **H8**, **A21**, **H2+U2**, **A25**), the six findings that were
+about *our own code* rather than theirs, the three sentences worth remembering, and the calibration
+from §20's 4,843 replications.
+
+
+### docs(research): repo 22 FinanceToolkit — the counter-example to QuantStats, and T12 turned on ourselves (2026-09-03)
+
+[JerBouma/FinanceToolkit](https://github.com/JerBouma/FinanceToolkit), **MIT**, ~131k LOC,
+**1,486 tests**, 95 fundamental ratio formulas plus risk/performance/technicals/options modules.
+Reviewed immediately after QuantStats on purpose: repo 21 failed a formula audit, and this
+library's whole pitch is that its formulas are inspectable.
+
+**★ It passes the exact audit QuantStats failed.** Where QuantStats silently fed pandas' *excess*
+kurtosis into a formula expecting *Pearson*, FinanceToolkit makes the convention a named,
+documented, defaulted parameter — `get_kurtosis(..., fisher: bool = True)` returning
+`returns.kurtosis() if fisher else returns.kurtosis() + 3`, with the docstring spelling out both
+definitions. **That is the difference between a library you can audit and one you must audit.** Its
+formulas also carry real citations: the Cornish-Fisher VaR docstring names Zimmerman (Part 1, pp.
+130-131), Gilli/Maringer/Schumann, Hull, and a thesis section — four sources for one quantile
+adjustment, and the direct opposite of abu's underived `0.668` / `0.91`.
+
+**It does NOT unblock MCE 5b, and saying otherwise would be manufacturing relevance.** Its 95
+ratios compute *from statements you supply*, sourced from **FinancialModelingPrep** and yfinance,
+with **no India/NSE support anywhere**. Our recorded blocker is the data half — *"`market_cap` has
+no writer → nothing fundamental unlocks until a source is chosen"* — so it solves the half we do
+not have a problem with.
+
+**What it does contribute to 5b is a warning, in the author's own founding words:** *"I repeatedly
+observed significant fluctuations in the same financial metric among different sources… the
+reported financial statements often didn't line up."* **That is the argument for why 5b's source
+decision is the whole problem rather than a detail**: whichever vendor we pick becomes *part of the
+definition* of every ratio, a market-cap threshold calibrated on one vendor is not portable to
+another, and T1's PIT test must be anchored to *that vendor's* published figures.
+
+**T12 — and applied to ourselves, which is where it stings.** Only two files in our trading layer
+cite a derivation: `atr.py` (Wilder) and `deflated_sharpe.py` (Bailey & López de Prado, plus the
+`# Pearson (normal = 3.0), not excess` pin that saved us in §22). The frozen engine is covered by
+`docs/SIGNAL_ENGINE.md`, which is *better* than inline citations — versioned and regression-gated.
+**But the trading layer has no spec, and it is exactly where our churn is**: `profit_lock`'s ladder
+(+₹2k breakeven, seal peak−₹1k above ₹3k) and the gate thresholds are fitted constants nobody can
+re-derive — the same criticism levelled at abu, now applied to us. T12 asks each to record a
+citation, a fitting procedure with its sample, **or an explicit "chosen by judgement on <date>,
+never validated"** — the third option being the important one, because it makes unvalidated knobs
+visible to the review calendar instead of indistinguishable from derived ones.
+
+Synthesis extended to twenty-four repos with lesson 22: **a constant with no recorded origin can
+only be defended by whoever remembers choosing it.**
+
+
+### docs(research): repo 21 QuantStats — cross-checked our PSR, found two bugs in theirs (2026-09-03)
+
+[ranaroussi/quantstats](https://github.com/ranaroussi/quantstats), **Apache 2.0**, ~12.3k LOC,
+**79 metric functions** — the canonical tearsheet library, by the author of `yfinance`.
+
+**★★ This one validated our own measurement stack.** We built PSR from Bailey & López de Prado on
+2026-09-03; QuantStats implements the same formula, which made an independent check possible.
+Algebraically the two agree exactly — collecting their `SR²` terms,
+`0.5·SR² + ((γ₄−3)/4)·SR² = ((γ₄−1)/4)·SR²`, which is ours.
+
+**But the agreement holds only if both feed the same kurtosis convention, and theirs does not.**
+Their `kurtosis()` returns `returns.kurtosis()` — pandas, i.e. **excess** kurtosis (normal = 0) —
+into a formula whose `(kurt − 3)/4` term expects **Pearson** (normal = 3). Demonstrated on 100k
+normal draws: the `SR²` coefficient evaluates to **−0.2422** where it should be **+0.5078**. That
+makes `sigma_sr` too small, the z too large, and **PSR systematically overstated — the library
+reports more confidence than the data supports.** A second, separate defect in the same function:
+`if annualize: return psr * (252 ** 0.5)` — **multiplying a probability by ≈15.87**, a unit error
+hiding behind an optional flag.
+
+**Ours is correct, with the trap explicitly pinned** — `kurtosis: float  # Pearson (normal = 3.0),
+not excess`. That comment is the entire difference. **This is the strongest validation our
+measurement code has received in this review: checked against the best-known reference in the
+field, and the reference is the one that is wrong.**
+
+**T11 — pin PSR/DSR against independently derived values in a regression test**, including a
+normal-series case where the `SR²` coefficient must be `+0.5`, so the convention can never silently
+flip. Same discipline as T1: anchor the test to a value you can derive independently.
+
+**The metric battery is a checklist of what we do not compute**: `information_ratio` and `greeks`
+(alpha/beta) — **a working implementation of H12**; `smart_sharpe` / `autocorr_penalty` — the
+*parametric* cousin of **H1**'s block bootstrap, worth having alongside rather than instead;
+`tail_ratio` / `outlier_win_ratio` / `remove_outliers` — named formalisations of the trimming check
+we improvised when market-regime's cohort showed a *trimmed mean of +₹200 against a −₹302 raw
+mean*; `risk_of_ruin`, which we do not compute and which matters against ₹1L and a negative
+expectancy.
+
+**Verdict: reference, not dependency.** Two structural reasons — the battery operates on a **daily
+returns Series** while our evidence unit is the **per-trade R-multiple** (exactly why MinTRL exists
+rather than a years formula), and it is float/pandas throughout where we are `Decimal` end to end.
+
+Synthesis extended to twenty-three repos with lesson 21: **check every statistical instrument
+against an independent implementation — the most-used implementation in a field is not a reference,
+it is another sample.**
+
+
+### docs(research): repo 20 vectorbt — prior rejection confirmed, with a decisive licence reason (2026-09-03)
+
+[polakowo/vectorbt](https://github.com/polakowo/vectorbt), ~62.7k LOC. **A re-review of a decision
+already made** — `docs/EXTERNAL_LIBS_REVIEW_2026-08-02.md` concluded *adopt none as dependencies*
+and singled out VectorBT as one that *"would REGRESS invariants"*. That stands, and this review
+supplies **two sharper reasons, one of them decisive and absent from the original note.**
+
+**★ The licence is not open source.** The README badges "Fair Code"; the licence is **Apache 2.0
+with the Commons Clause**, which withholds the right to *"provide to third parties, for a fee or
+other consideration (including … hosting or consulting/support services), a product or service
+whose value derives, entirely or substantially, from the functionality of the Software."* Against
+our own CLAUDE.md opening line — *"personal use first, **possible future productization**"* —
+personal use today is fine and **any future productization becomes a live legal problem**. There is
+a paid `vectorbt.pro`, which is why the free edition carries the restriction. **This is worse than
+a plainly incompatible licence, because the trap springs only at commercialisation** — when the
+dependency is most embedded and least removable. Recorded so a future session weighing it on
+technical merit hits this first.
+
+**The technical regression, now named.** It is **constraint #3** (*compute on candle N, valid from
+N+1; fill at N+1 open*), and the regression is in **kind, not degree**. vectorbt's own docs are
+candid: *"forward, for example, with `signals.vbt.fshift(1)`"* and *"otherwise you may expose
+yourself to a look-ahead bias."* Signals are computed **vectorised over the whole array** and the
+default fill is the same bar, so **a correct backtest depends on the caller remembering the
+shift.** Our engine cannot make that mistake; adopting a framework where correctness is a
+convention is a regression however fast it runs.
+
+**★ This closes the log's look-ahead thread.** §21.3 now lays out the full spectrum across
+twenty-two repos, and position on it predicted the outcome every time: Zipline (*not expressible*)
+→ qlib and repo 9 (prevented, fails closed) → **vectorbt (the default unless you remember)** →
+QuantHarness (a commented-out holdout) → QuantAgents-NSE (it simply happened, producing a +0.5pp
+"edge" that isn't real). **Repo 5 is what the vectorbt row produces downstream**, and its author
+almost certainly never saw it as a choice. That is the strongest available argument for **A38**
+(accessors bound to an "as-of" time) and **T1** (a PIT test anchored to a real filing date): not
+that convention is unreliable in the abstract, but that we have now watched it fail in this exact
+way, twice, with a third project documenting the trap it declines to remove.
+
+**No queue items.** The value is a rejection that now survives someone changing their mind about
+the technical merits, plus the spectrum.
+
+
+### docs(research): repo 19 awesome-systematic-trading — a replication record over 4,843 papers (2026-09-03)
+
+[paperswithbacktest/awesome-systematic-trading](https://github.com/paperswithbacktest/awesome-systematic-trading),
+**no LICENSE**, updated the day of review: 299 library rows, 61 showcased strategies, 55 books,
+blogs and courses.
+
+**Method note, stated honestly:** the brief was "dig deeply into each and every one", and I did
+**not** individually review 299 libraries or 4,843 papers — claiming otherwise would be false.
+Instead: inventoried the list programmatically, computed the statistics it does not compute,
+cross-checked it against the eighteen repos already reviewed and against our own open gaps, and
+kept only what changes something.
+
+**★★ The replication record above the list is the most valuable thing in this whole review.** They
+coded and ran **4,843 published papers over their full history**: median Sharpe **0.37**; **only
+48% clear t > 1.96** (*"half the published record cannot be distinguished from zero on its own
+sample"*); median beta **+0.17** to the S&P, and **stripping it takes the median information ratio
+to 0.21** — roughly halving the apparent edge; and **no measurable post-publication decay** once
+the market period is controlled for. This is population-level evidence on the entire literature,
+produced by running it.
+
+**H11 — the sample-size reality check.** `years ≈ (1.96/Sharpe)²` is our **MinTRL** arrived at
+independently: a 0.37 Sharpe needs **~28 years** to separate from zero. Units do not transfer
+(theirs is annualised-on-daily, ours is per-trade — which is why we built MinTRL), **but the shape
+does: required sample grows with the inverse square of the edge.** Our gates are judged on 33–72
+trades. We already compute MinTRL; the missing move is rendering it as the **headline** beside
+every readiness banner so `n=44` is never read without `needs ≈N`.
+
+**H12 — we compute no beta and no information ratio anywhere.** Cohorts are judged on raw
+expectancy and per-trade Sharpe, so a would-block cohort that is long-biased in a rising market
+looks like skill. This is H2/U2 generalised from portfolio to *cohort* level, and the inputs exist
+(`index_ohlcv_1d` backfilled, `benchmark.py` for alignment). Third robustness axis beside **H1**
+(is it stable?) and **H8** (does the bar reject noise?): **is it just the market?**
+
+**A selection effect found in its own presentation.** Parsing the 61 showcased strategies gives a
+median Sharpe of **1.06** (equities 1.51, derivatives 0.53) against the population's **0.37** — the
+list shows roughly its best 1.3%, and a skimming reader anchors 3× high. **This is disclosed** in
+plain language above the tables, which is more honesty than any other list here — but it is the
+subtlest instance of this log's theme: the selection effect moved into the presentation layer,
+where no code is wrong and the reader is still mis-calibrated. **Our exact equivalent is a
+readiness banner showing the gates we are watching, a selected sample of the gates we have tried** —
+which is why U4 exists.
+
+Also noted: **27 of 299 library rows carry dated dormancy flags** inline (`dormant since 2024-02`),
+which independently corroborates this review's zipline call; books largely overlap our e-book
+review; and the blogs skew to **engineering blogs of real firms** (Jane Street, HRT, Two Sigma, Man
+Group) rather than strategy blogs — by lesson 8, the more credible reading.
+
+Synthesis extended to twenty-one repos with lessons 19 and 20. Calibration recorded plainly: **a
+−0.303R book measured honestly is an early-stage position on this distribution, not an anomalous
+one — and a 2–3%/day target is not on the distribution at all.**
+
+
+### docs(research): repo 18 QUANTAXIS — QIFI's account model exposes our missing frozen-capital concept (2026-09-03)
+
+[yutiansut/QUANTAXIS](https://github.com/yutiansut/QUANTAXIS), **MIT**, ~66.3k LOC, actively
+maintained — a long-running Chinese full-stack quant framework. **No performance claim, the ninth
+repo to decline.**
+
+Most of its layers duplicate ground this log already covered in better implementations
+(`QAEngine`/`QAPubSub` vs vnpy's event bus, `QAFetch` vs AKShare, `QAFactor`/`QAIndicator` vs qlib),
+and those are not re-derived. **One module is distinctive and produces one queue item.**
+
+**QIFI** is an account-state interoperability protocol, published as **`qifi.md` (spec) +
+`qifi.sql` (DDL) + one implementation** — the contract as an artifact rather than an
+implementation detail, which is the third independent appearance of that instinct here (after
+AKShare's `interfaces.json` and qlib's PIT field syntax). Its account model separates four things
+our code treats as roughly one: `pre_balance` (yesterday's close), `static_balance` (today's
+settlement baseline), `balance` (static + floating P&L) and `money` (**available** cash = balance −
+frozen − margin), with an explicit daily settlement roll. That vocabulary reinforces a rule repo 4
+already taught us — *the circuit-breaker baseline is always `last_equity`, not last night's DB
+snapshot* — expressed as a schema rather than a convention. Our breaker's IST calendar-day baseline
+is sound, so no defect there; the value is the naming.
+
+**★ A42 — the actionable finding: we have no concept of frozen capital.** Verified — every
+`frozen` in our codebase is `@dataclass(frozen=True)`. Cash committed to a *pending, unfilled*
+order is not reserved anywhere. Harmless today because paper fills are immediate, so no order is
+ever outstanding — **but Phase 7 removes that property**, and two orders can then be sized against
+the same cash. This is exactly the family of bug repo 4 documented from production: *a filter
+pre-deducted **phantom cash**, letting BUYs quietly borrow margin (2026-04-19)*. Cheap to design
+now while the account model is small and paper-only; expensive to retrofit once orders can sit
+unfilled. Pairs with **A33** — the frozen amount is derivable from the active-order set, so both
+belong in one design pass.
+
+Lesson 8 promoted from observation to prior: across twenty repos, **nine decline to publish any
+performance number, and they are without exception the ones whose code was worth reading.**
+
+
+### docs(research): repo 17 QuantDinger — closest analogue to our platform; its MCP model and worker-liveness alert (2026-09-03)
+
+[OpenByteInc/QuantDinger](https://github.com/OpenByteInc/QuantDinger), **Apache 2.0**, ~177.6k LOC,
+803 files, **committed the day of review** — a commercially backed open-source "AI Trading OS".
+**The closest product-shaped analogue to our platform in the log**, on nearly our stack (Python
+3.12 / PostgreSQL / Redis / Docker Compose) with the same end-to-end scope. **No performance
+claim** — the eighth repo to decline.
+
+**★ W6 — its MCP server is the best "expose your platform to an agent" model here**, and directly
+relevant because we already drive `make analysis` through skills. Seven decisions worth copying:
+the MCP server is a **thin wrapper over a dedicated versioned `/api/agent/v1`** — *the agent gets
+an API, never the internals*; **R vs R/W scopes tabulated per tool group**; trading tools
+separately **safety-gated**; **two distinct tokens** with the docs stating the inbound MCP client
+token *"must not be the Agent Gateway token"*; transport that **fails closed** (non-loopback
+requires a token, authenticated non-loopback requires HTTPS) with two separately-named escape
+hatches and *"never use either on a directly reachable public listener"*; explicit agent-specific
+credential hygiene (*"never place an agent token in prompts, logs, screenshots…"*, responses redact
+credentials); and **bounds on every long-running job** exposed to an agent — the fix for exactly
+the unbounded-stream hang found in repo 8. Recorded, not queued: we have no such need today, but
+the design should not be reinvented badly under pressure.
+
+**A40 — export a worker-liveness metric and alert on it.** Their
+`quantdinger_workers_healthy{role=~"trading|scheduler|celery"} < 1` for 2 minutes is precisely the
+alarm that would catch **two of our standing manual rituals**: CAS capture (`make worker` up
+15:15–15:33 IST, **a missed window cannot be back-filled**, protocol is "check the row count each
+morning") and the provisional-health watch (no scheduler at all). Both are worker-liveness problems
+dressed as human rituals. Strengthens A11 rather than replacing it.
+
+**A41 (low priority) — split Redis by durability.** They run separate `redis-cache` and
+`redis-jobs` instances. Our rule *"TTL-less keys are treated as broker-critical and never evicted"*
+exists **because** volatile cache and durable data share one eviction policy; two instances remove
+the conflict instead of documenting around it. Worth revisiting when Phase 7 adds a durable repair
+queue.
+
+Also recorded: a **multi-timeframe review lens** from their strategy guidance — use the
+**completed** higher timeframe, never conflate a persistent **state** ("is bullish") with an
+**event** ("just crossed"), and keep low-timeframe order conditions **idempotent** so a persistent
+higher-timeframe state cannot cause repeated scale-ins. Useful for auditing our own overlays, since
+both of our reverted gates failed on *what the partition actually meant*.
+
+Synthesis extended to nineteen repos with lesson 18: **alerting splits cleanly into platform and
+domain, and almost nobody has both.** Every one of their alerts is infrastructural and none is
+about the market; we are the mirror image. A green Prometheus board says nothing about a feed
+returning yesterday's prices, and a readiness banner says nothing about a worker that never
+started.
+
+
+### docs(research): repo 16 turbovec — domain rejected, but its supply-chain gate found the log's #1 defect (2026-09-03)
+
+[RyanCodrai/turbovec](https://github.com/RyanCodrai/turbovec), MIT, ~39.6k LOC Rust + Python —
+**not a trading repo**: a quantized vector-search index (Google Research's TurboQuant) for RAG.
+User asked whether it was useful "by any chance".
+
+**Domain answer: no, and recorded as considered-and-rejected without stretching for a use.** We
+have no embedding corpus, no RAG and no similarity search. The only conceivable hook is "find
+similar historical trades" — abu's Edge referee from §16 — where the bottleneck is **statistical
+validity, not search speed**; at n≈99 trades you use numpy pairwise distances, as abu does. An ANN
+index built to fit 10M vectors in 4 GB has nothing to offer a hundred rows.
+
+**★ But it shares our Rust + PyO3 wheel shape, and that carried one finding across.** Its
+`deny.toml` (cargo-deny, enforced by a `supply-chain.yml` workflow) documents, in a comment, the
+most instructive instance yet of this log's #1 defect:
+
+> *the workflow advertises a "yanked crates" gate, but cargo-deny **defaults `yanked` to Warn** and
+> `cargo deny check` only exits non-zero on Deny-level findings — so **a yanked dependency produced
+> a warning and a green run (#491)**.*
+
+**A guard that could not fail, caught in the wild, issue number cited — and nothing in the code was
+wrong: the *configuration default* was.** Lesson 2 extended accordingly: name the input that makes
+a guard fail **and confirm the tool would actually fail on it**, because a gate can be disarmed by
+a default you never chose. Their `ignore` list also carries the T8 ratchet discipline informally —
+every entry names the advisory, the reason, the PR that accepted it and the revisit condition.
+
+**A39 — we have no supply-chain gate on `engine/` at all.** Our Rust gate is `fmt` + `clippy -D
+warnings` + `test`: no advisory scan, no licence audit. We ship a compiled wheel (`tradecore`)
+running options math **on the money path** from a dependency graph nobody audits. ~2 hours, and
+this repo hands us the two settings that make it real.
+
+Synthesis extended to eighteen repos with lesson 17: **a repo outside our domain can still be worth
+reviewing — the filter is shared *stack* or shared *discipline*, not shared subject.** The
+corollary matters more: when a repo shares neither, **"no" is the correct and complete answer**.
+
+
+### docs(research): repo 15 abu — meta-labeling in 2017, and why it is dangerous (2026-09-03)
+
+[bbfamily/abu](https://github.com/bbfamily/abu), **GPL-3.0**, ~56k LOC — a Chinese quant framework
+written as a book companion. **Licence settles adoption before quality enters the discussion**:
+every other repo here is MIT or Apache, and copyleft would impose GPL obligations on our codebase.
+Read-only review. It makes **no performance claim** — the seventh repo to decline.
+
+**★ Its `UmpBu` "referees" (裁判) are meta-labeling, implemented years before the term was
+standard, and structurally *our overlay pattern*.** A two-tier learned veto over a primary signal:
+a **Main referee** clusters historical trades, finds the clusters with the highest failure
+probability, vetoes new trades falling into them, **and saves candlestick snapshots of the worst
+cluster so a human can see what the losing pattern looks like**; an **Edge referee** does
+similarity/k-NN voting by surviving historical neighbours. Both across dimensions — trend angle,
+gaps, price, volatility — and separately for buy and sell.
+
+**Why it matters to us, and why it is queued as research not work.** Our overlays are all
+**hypothesis-driven** — we posit that transitional ADX is bad, R:R<1 is bad, single-factor is bad,
+then test the posit — and **two of the three we tested empirically were reverted, because the
+partition turned out to be a proxy for something else** (market-regime → side; R:R<1 → wide stop).
+abu inverts the direction: don't guess the partition, cluster the actual losers and let the
+clusters define the veto. That attacks our exact failure mode.
+
+**But it is unmistakably an overfitting machine.** Clustering your own losing trades and vetoing
+those clusters always looks good in-sample; with 99 trades and a −0.303R book it would produce a
+beautiful backtest that means nothing. Filed as **H10**, explicitly gated behind the bar we
+already built — DSR with an honest trial count (every cluster configuration is a trial), MinTRL,
+**and H8's noise negative control**, because a method this prone to fitting is precisely the case
+the negative control exists to catch. Its magic constants (`0.668`, `0.91`, `100`) arrive with no
+derivation, and each would become another hyperparameter multiplying the trial count.
+
+**U20 — one idea we can take immediately.** abu renders the highest-failure cluster's trades as
+charts. Our shadow sidecars report *"this gate would block these 44 trades"* as expectancy, win
+rate and DSR — and **nobody has ever looked at those trades as a set of charts.** The regime gate
+was refuted numerically; a contact sheet of the suppressed entries might have surfaced the
+"proxy for side" problem visually and sooner. Statistics say *whether*; charts say *what*.
+
+Also noted: three independent sources have now pointed at meta-labeling (our e-book review, repo
+12's `mlfinlab` entry, this working implementation), so it earns a place on the post-watch-mode
+research queue rather than continuing to surface accidentally.
+
+Synthesis extended to seventeen repos with lesson 16: **licence is a first-class review criterion
+and decides before merit** — one GPL-3, one LGPL, and **four repos with no LICENSE file at all**
+(which is *more* restrictive than GPL, since no licence means no grant of rights). **vnpy being MIT
+is the single most consequential licence fact in this document**, since it makes the repo we would
+most plausibly borrow from for Phase 7 legally borrowable where NautilusTrader is not.
+
+
+### docs(research): repo 14 Zipline — look-ahead made inexpressible; A38 supersedes A30 (2026-09-03)
+
+[quantopian/zipline](https://github.com/quantopian/zipline), Apache 2.0, ~65k LOC, **archived
+2020-10-14** (successor: `zipline-reloaded`). The ancestor of the modern Python backtesting
+lineage — it spawned `trading_calendars` → `exchange_calendars`, `alphalens`, `pyfolio`,
+`empyrical`. Read for architecture, not code.
+
+**★ Its crown jewel: look-ahead is not forbidden, it is *not expressible*.** A strategy never
+receives data — it receives a `BarData` constructed with a `simulation_dt_func`, and every
+accessor (`current`, `history`, `can_trade`) resolves through the simulation clock and queries the
+data portal *as of that instant*. **There is no API for a future bar.** Across sixteen repos I
+found look-ahead four ways — a commented-out holdout, same-bar execution, a scaler fit over the
+test window — each *a mistake someone could make*. This is the only one where the mistake has no
+syntax. Its `before_trading_start` also sets "current" to the *previous* market minute, making it
+the **second independent world-class implementation to conclude the current bar depends on the
+session phase** (repo 9's resolver was the first).
+
+**★★ A38 — a composable, point-in-time `Restrictions` interface. This supersedes A30.**
+`asset_restrictions.py` ships `Restrictions` (ABC) with `Static`, **`Historical`** (time-varying),
+`SecurityList` and **`_UnionRestrictions`** (composes sources), wired into `BarData` so
+`can_trade()` — the question the *strategy* asks — already knows. I had recommended "enforce
+circuit bands in the backtest"; that is the right goal and the wrong shape. The right shape is
+**one composable interface consulted by the backtest, order path and display path**, with each of
+our rules as a source (T2T/-BE, circuit-band proximity, liquidity, market hours /
+`allow_offmarket_entry`, gate modes). `HistoricalRestrictions` answers *"was this restricted on
+that date"* — the only correct backtest question and one ours cannot ask at all; `_UnionRestrictions`
+is the structural fix for fragmentation that already cost us **41/204 rows offering a Buy that
+could only 409** and five Buy surfaces needing retrofit. A new restriction then lands on every
+path by construction (subsumes A31 for this class).
+
+**★ A37 — fills capped by bar volume.** `VolumeShareSlippage` caps equity fills at **2.5% of the
+bar's volume** with **quadratic** price impact, spilling or raising `LiquidityExceeded` beyond it.
+**We have no participation cap** — 6.8.2 models half-spread and size-vs-top-of-book impact, and
+the notional cap bounds *rupees*, not *liquidity*. **SRTL is the named case**: ₹39 micro-cap,
+2,666 shares. A ₹1L position in a stock trading ₹5L/day is 20% of daily volume and is not
+fillable at the quoted price.
+
+**T10 — `ExplodingObject` negative-space assertions.** `zipline/testing/` ships as part of the
+library, including an object that raises `UnexpectedAttributeAccess` on *any* attribute access:
+inject it where a dependency must never be touched and the test fails if it is. It proves a path
+does **not** use something — normally the hardest property to test. We hold three such claims by
+convention alone: **"frozen engine untouched"** (every overlay), **`circuit_guard` only READS the
+cache**, and overlays never seeing future data. Each is a documented safety net with no test that
+fails when it lapses — the `unassessed` tripwire failure exactly. ~15 lines.
+
+Synthesis extended to sixteen repos with lesson 15: **the strongest guarantee is the one that
+removes the syntax for the mistake.** Rules and reviews catch mistakes; design prevents them —
+and where we build new evaluation surfaces (MCE 5b above all), an accessor bound to an "as of"
+timestamp is cheaper than a rule and cannot lapse.
+
+
+### docs(research): repo 13 AKShare — adopt no data code; take its testing strategy (2026-09-03)
+
+[akfamily/akshare](https://github.com/akfamily/akshare), MIT, **~103k LOC across 406 modules** —
+the free China-market data library that repos 5 and 9 both lean on.
+
+**The data layer is not for us, on three checks.** India coverage is **incidental** (global-index
+and macro modules, a rich-list scraper — nothing resembling NSE equity, corporate actions or F&O).
+**314 modules issue HTTP requests and only 13 mention retry, backoff or rate-limiting** — about
+4%, so it is not a model for hardening our ingestion either. And
+`docs/EXTERNAL_LIBS_REVIEW_2026-08-02.md` already settled the data-source question.
+
+**But its answer to "how do you test 400 scrapers?" is the best process idea in the log.** You
+cannot unit-test a thousand live public endpoints without a permanently red CI — so it tests the
+**contract surface** instead: `interfaces.json` records every public function with its module,
+example, limits and **full output schema**, and the suite pins reachability, export mapping and
+documentation coverage against that registry.
+
+**★ T8 — a self-cleaning debt baseline.** Five tests govern how known debt may exist:
+`baseline_allows_known_gaps` (legacy debt does not redden CI), `baseline_rejects_new_orphan` /
+`_new_undocumented` (new debt does), and — the sophisticated part —
+`baseline_rejects_stale_entry` / `baseline_rejects_fixed_orphan`: **the build fails when a
+baseline entry is no longer a problem.** Most known-failure allowlists rot into permanent
+amnesties that eventually suppress real regressions; this one can only shrink. We have the shape
+(typecheck coverage gaps, `STATUS.html` prose duplicating gate modes) and no mechanism.
+
+**★ T9 — turn the doc-sync ritual into failing tests. The finding that matters most.** They test
+release/doc consistency mechanically — missing changelog entry, missing `__init__` history, tag
+vs version mismatch, and `reports_every_problem_at_once` so a sweep is one pass rather than N.
+**Our doc-sync ritual is a procedure an agent must remember to run; theirs is a test that fails.**
+Our own lesson — *"a documented safety net is worth nothing without a test that fails when it
+lapses"*, drawn when the `unassessed` tripwire proved imaginary — was applied to our code and
+never to our process. Three of the ritual's seven steps are mechanically checkable today: a new
+`settings.*` without an `.env.example` line (promotes **W3**); a `docs/PHASES.md` `(updated …)`
+stamp older than the newest `docs/phases/*.md` change; and a gate mode in `STATUS.html`
+disagreeing with `settings` — the exact drift our memory warns about with *"grep the gate name on
+every flip"*, **a human ritual standing in for a test.**
+
+Its per-interface declared output schema is filed as a note against U8/A7 rather than a new item:
+it is how a *returned-but-unrendered field* gets caught mechanically, which we found by review
+instead (`unknown` had zero consumers).
+
+Synthesis extended to fifteen repos with lesson 14: **our most repeated process risk has the same
+fix as their most repeated code defect.** The commonest defect across the log is *a guard that
+cannot fail*; our process equivalent is *a ritual nobody is forced to run*. Same fix — make it a
+test.
+
+
+### docs(research): repo 12 awesome-quant — a curated list, and the negative-control idea (2026-09-03)
+
+[wilsonfreitas/awesome-quant](https://github.com/wilsonfreitas/awesome-quant) — a **curated list,
+not a codebase**, so mined for candidates rather than audited, and cross-checked against our
+existing `docs/EXTERNAL_LIBS_REVIEW_2026-08-02.md` (which concluded *adopt none as dependencies*).
+That conclusion stands. Three findings survive.
+
+**★ H8 — the best idea in the repo, and it is a test of our own bar.** Its Factor Analysis section
+lists purpose-built backtest-overfitting auditors — *Lacuna* ("leakage, overfitting, fragile
+results, unrealistic costs, missing point-in-time evidence") and *Perception-XAlpha Lite* ("CSCV
+probability of backtest overfitting, deflated Sharpe against the declared trial count, White's
+Reality Check, point-in-time universe membership, disclosure-date alignment"). The second **ships
+a worked example in which 24 pure-noise series produce a 1.11 Sharpe and the audit correctly
+rejects them** — a negative control proving the detector fires.
+
+**We should do exactly this to `deflated_sharpe.py`**: generate N content-free random partitions
+of the real trade set, run them through the *same* path the real gates use, and assert the bar
+rejects them. **If a noise gate clears our bar, the bar is broken and every readiness banner built
+on it is worthless.** Cheap (the machinery exists), a genuine test rather than an argument, and
+aimed squarely at what has bitten us twice — promoting on evidence that looked sufficient. Our own
+rule says a metric that cannot come out badly is not a metric; a *bar* never shown to reject
+anything is in the same position. **H9** records CSCV/PBO, White's Reality Check and `mlfinlab`'s
+meta-labeling as research pointers, not queued work.
+
+**A36 — our NSE calendar is better sourced than any library, and has the weakest alarm.**
+`market_calendar.py` seeds past holidays from **observed bhavcopy session gaps** (ground truth —
+a published list can be wrong and you would never know), so we should *not* adopt
+`exchange_calendars`. But its expiry path is a **passive WARNING inside a query**, falling back to
+weekday arithmetic — seen by nobody. Needs a proactive "calendar covers only to `<date>`, N
+trading days remain" notification (A11) plus a cheap cross-check against XNSE. Same pattern as
+A25/A30: a degradation technically announced and practically invisible. (Repo 6A solved it a third
+way — a refresh script plus versioned JSON.)
+
+**T7 — exhaustive-enum mapping test.** The list ships a test suite for its own markdown, including
+`test_all_finding_kinds_are_mapped_and_sorted_deterministically`: adding an enum variant without
+handling it fails the suite. **We have been burned by exactly this** — *"v1's `unassessed` tripwire
+was IMAGINARY — 3 of 8 modes passed."* Gate modes, rejection reasons and sidecar readiness states
+all want it. Its `test_api_error_fails_closed` is also the **third independent codebase** to name
+and test "fails closed" as a principle.
+
+Synthesis extended to fourteen repos with lesson 13, **"test the test"**, and lesson 10 reinforced
+by its third independent instance.
+
+Meta-observation recorded: we built the deflated-Sharpe bar from first principles on 2026-09-03,
+and two libraries in this list already implement it alongside three tests we do not have. That does
+**not** mean we should have used them — ours is stdlib-only and wired into our own evidence path —
+but the design could have been informed for free, and the negative-control idea would have arrived
+a week earlier. A curated list is the right *first* stop for "does a tool already exist for the bar
+I am about to hand-build?"
+
+
+### docs(research): repo 11 vnpy — the most Phase-7-relevant repo, and its 145-line event bus (2026-09-03)
+
+[vnpy/vnpy](https://github.com/vnpy/vnpy), **MIT**, core ~12.8k LOC (gateways and strategy apps
+ship as separate packages) — a decade old and the most battle-tested open-source live-trading
+framework in Asian markets. Our NautilusTrader review named the Phase-7 gap as *"runtime plumbing
+(event bus, ExecutionEngine + BrokerAdapter, RiskEngine, reconciliation)"*; **vnpy is a second,
+independent implementation of exactly that — and unlike Nautilus's LGPL it is MIT, so it is
+legally vendorable, not merely readable.**
+
+**The headline: the event bus is 145 lines of stdlib Python** — a `Queue`, one consumer thread, a
+`defaultdict` of handlers, and a timer thread. Three ideas worth taking: a **single consumer
+thread** (handlers never run concurrently, so none needs a lock against another); **wildcard
+`general_handlers`** so logging/recording/UI subscribe to everything without enumerating types;
+and a **bus-generated `EVENT_TIMER`**, which makes *everything periodic an ordinary subscriber* —
+one scheduling primitive instead of a scheduler plus a bus (**A34**). Our staleness alarm,
+provisional-health watch and CAS capture window are three different solutions to that one problem.
+
+**But I reproduced three robustness gaps.** `_run` catches only `queue.Empty`, so **a single
+handler exception kills the consumer thread**: the healthy handler received *nothing* (the failing
+one was registered first and aborted `_process`), `put()` kept succeeding afterwards, and the
+process stayed up — **the system looks alive and is completely deaf.** Plus an **unbounded queue**
+and **handler lists mutated while being iterated**. Queued as **A32**: isolate exceptions per
+handler, bound the queue with a stated overflow policy, iterate a snapshot, and **make a dead bus
+loud** — a silently deaf trading system is strictly worse than one that crashes.
+
+**A33 — the OMS as a projection.** `OmsEngine` keeps one dict per entity, all rebuilt purely from
+broker events, with `active_orders` maintained as a *side effect* of each order event under a
+single `OrderData.is_active()` predicate, and gateway-namespaced ids. Derived state can be
+rebuilt by replay, which is what makes reconciliation tractable — and we have been bitten by the
+inverse (`signals.status` is a mutable lifecycle field doing double duty as durable fact).
+**A35**: define `BrokerAdapter` as an interface a second broker *could* implement even while only
+Kite does — vnpy's core ships no gateway, which is what forces the interface to be a real contract.
+
+**A11 is now settled.** `MainEngine.send_notification` fans out to all configured channels as a
+core engine method — making vnpy the **third independent mature system** to treat push
+notification as a first-class primitive (after repo 4's noise-policy notifier and repo 9's
+multi-channel dispatcher). By lesson 9, three independent hits makes it near-certain.
+
+Synthesis extended to thirteen repos with a new lesson 12: **the scary part of Phase 7 is not the
+part we thought.** The bus is small and well understood; what actually costs is the order
+lifecycle and reconciliation — 82 defects across two audits in repo 4, 543 tests in 6A, and the
+same partial-fill bug found independently by both. Budget accordingly: little for the bus, a lot
+for the FSM.
+
+
+### docs(research): repo 10 microsoft/qlib + two new review dimensions (testing, workbench) (2026-09-03)
+
+Brief widened by the user: *"take any idea worthy that upgrades us... don't stick only with
+analysis, architecture, ui/ux"* — including test cases and other repos' Claude Code tooling. The
+log now carries **five** queues: **H** analysis · **U** UI/UX · **A** architecture · **T** testing ·
+**W** workbench.
+
+**[microsoft/qlib](https://github.com/microsoft/qlib)** (MIT, ~56k LOC) is a different tier from
+everything reviewed so far — a maintained industrial research platform, the fifth of twelve repos
+to make no performance claim, and **the first where nothing needed debunking**.
+
+**★ T1 — the best test in the log.** Qlib treats point-in-time correctness as *syntax* (`$$`
+fields, a `P()` operator, so non-PIT use is visible). `tests/test_pit.py` asserts that a
+fundamental value **changes on the exact date the filing was published**, citing the real
+disclosure URL in a comment — a regression test anchored to a verifiable external fact, which
+cannot rot into tautology. Its sibling asserts `NaN` for a stock with no PIT record rather than
+forward-filling: **fails closed**. **Our MCE slice 5b (`market_cap` writer) is the keystone
+blocker for everything fundamental and inherits exactly this trap**; T1 says ship a
+filing-date-anchored test with it, citing a real NSE/BSE announcement.
+
+**Two costing/realism gaps it exposed in our code.** **A29** — our `FeeSchedule` has no
+`dp_charge_per_sell`; Zerodha/CDSL levy a **flat ~₹13.5–20 per delivery sell scrip regardless of
+size** (PaperTrade-India models it, we don't). A fixed cost disproportionately hits small
+positions — exactly what the notional cap produces and exactly the ₹1L / 1–2 position shape live
+will have, so **we are under-costing the paper book in the direction that flatters an already
+negative expectancy.** **A30** — `circuit_guard.py` (6.8.3) stops the *paper order path* entering
+a name pinned near its adverse band, but `app/backtest/` has no band handling at all, so the
+backtest fills orders on days a stock was locked limit-up/down and untradeable. Qlib warns
+explicitly when its `limit_threshold` is unset for this reason.
+
+**A31 — and the pattern behind them, promoted to a standing rule:** a realism constraint added to
+one execution path must be added to every path producing a comparable number, in the same change.
+Three instances now — spread-aware fills vs last-close marks (A21), bands on the order path but
+not the backtest (A30), `MODE_FULL` subscribed but never verified (A25). Individually minor;
+together they mean backtest, paper and live silently stop being comparable.
+
+**T2–T6** from its test suite: lifecycle-boundary tests for an execution simulator (start
+mid-stream, stop early — directly Phase 7); parametrised fill tests under a participation limit;
+explicit NaN/corner-case tests (earned — a non-finite Redis LTP once 500'd our detail endpoint);
+crash-path tests; and ordered pipeline-stage integration tests, which our EOD ingestion chain
+lacks. Its `workflow/` recorder (params / metrics / artifacts) also sharpens **H4** and **U1**:
+record gate config as params, n/expectancy/DSR as metrics, the sidecar and its query as
+artifacts — then the registry page is a *view* and the review calendar is a *query*.
+
+**W1–W5, retro-mined from repo 9's `AGENTS.md`** (qlib ships no agent tooling; repo 4's CLAUDE.md
+was already covered as A12): make **doc/code precedence** an explicit rule — the executable
+content wins, fix the doc in the same change (W1); **"do not add parallel implementations"** as a
+written rule — the one with the most evidence behind it for us, given we found **five separate Buy
+surfaces** (W2); same-commit config hygiene (W3); decide the git boundary deliberately rather than
+by inference (W4); and forbid hardcoded **model names** alongside secrets and paths — our analogue
+being `STATUS.html`, which hardcodes gate modes a flip silently falsifies (W5). Their GitHub-triage
+skills are recorded as *considered and rejected* (we are solo, no PR flow).
+
+
+### docs(research): repo 9 daily_stock_analysis — 332k LOC in 27 days, and the log's best treatment of "which bar could this have acted on" (2026-09-03)
+
+[ZhuLinsen/daily_stock_analysis](https://github.com/ZhuLinsen/daily_stock_analysis), MIT,
+**~332,000 LOC · 5,782 test functions · 50 commits over 27 days** — multi-market (A/HK/US/JP/KR/TW)
+AI daily analysis pushed to WeCom/Feishu/Telegram/Discord/Slack/email. By far the largest repo in
+the log, at ~12k LOC/day, which is only reachable with heavy LLM generation (it ships `CLAUDE.md`,
+`AGENTS.md`, `SKILL.md`, `.claude/skills/`). The audit question is whether the volume corresponds
+to substance — and on the parts checked, unexpectedly, yes.
+
+**★ Its backtest layer is the most methodologically careful in eleven repos.** It grades its own
+past analyses against realised outcomes, and resolves the entry bar **from the market session
+phase at analysis time** — the exact question that sank repo 5. `resolve_historical_daily_bar_date`
+recognises six named phases (`premarket` / `intraday` / `lunch_break` / **`closing_auction`** /
+`postmarket` / `non_trading`), uses a real per-market calendar library, treats a persisted
+`effective_daily_bar_date` as the primary authority, and — decisively — **fails closed**: an
+unknown or calendar-inconsistent phase returns `None`, excluding the record from scoring rather
+than guessing. In every other repo here, ambiguity resolved in favour of the flattering answer.
+`closing_auction` as a first-class phase is directly relevant to our own CAS work. **And the
+README publishes no accuracy number** — it ships the instrument and lets you run it on your own
+history.
+
+**A27 / A28 extend A11.** A27: a notification **config dry-run** (`--check-notify`) plus a
+`--no-notify` escape hatch — A11 runs unattended, so the first time it *should* fire is the worst
+time to discover the credentials are wrong. A28: `ChannelAttemptResult.retryable` — classify a
+delivery failure by whether retrying can help, and return a structured per-channel dispatch
+result. Combined with repo 4's rule that a notifier outage must never affect trading, the design
+is: try, classify, record, never raise into the caller.
+
+**Cautions recorded:** the README's "recommended" LLM/data/search providers carry affiliate
+parameters (`share_code=`, `?aff=`, `ref=`, `utm_source=`) — stated as fact, the code is not
+compromised, but the provider comparisons are not disinterested. File sizes are a maintenance
+risk (5,563 / 5,182 / 5,124-line source files; 4,841-line test files). And its decision layer is
+an LLM producing scores and buy/sell points, which changes nothing about our position that the
+money path stays deterministic.
+
+Synthesis extended to eleven repos with a new lesson 10: **one line decides whether a system is
+honest — what it does with the ambiguous case.** Repo 9 returns `None` and says "it fails closed";
+every repo that failed this audit resolved ambiguity the other way (a missing holdout became the
+full window, an unrecognised phase became "close enough", a `'NO'` string became `True`). Failing
+closed is cheap and is the clearest separator in the whole document — and it is why our
+shadow-first overlays and fail-open-with-an-alarm design are right *provided the alarm exists*
+(A11, A25). Lesson 8 also refined: the four repos that survive audit all decline to publish a
+performance number; three are pure infrastructure and the fourth ships the measuring instrument
+instead of a result.
+
+
+### docs(research): repo 8 express-option-chain — the only repo on our exact stack, and it found a gap in ours (2026-09-03)
+
+[pramakrishn/express-option-chain](https://github.com/pramakrishn/express-option-chain), MIT,
+**952 LOC, 3 commits, 2023, unmaintained** — a focused library streaming NSE/MCX/CDS/BCD option
+chains over **Kite Connect WebSocket into Redis**. The only repo in the log built on our exact
+stack, and infrastructure rather than strategy (no performance claim), which by lesson 8
+predicted it would hold up. It largely does.
+
+**★ A25 — it documents a Kite behaviour we are exposed to.** Their `on_ticks` guards:
+
+```python
+if ticks[0]['mode'] != ws.MODE_FULL:
+    # bug: web socket sent ticks in quote mode even though we subscribed in full mode
+    ws.stop(); return
+```
+
+**We subscribe `MODE_FULL` and harvest order-book depth from those ticks, and never check the
+mode** — verified at `live_worker.py:979` / `:505` and `tick_consumer.py:256`, with no
+`tick['mode']` validation on either path. If Kite downgrades against us, `depth:{stock_id}` goes
+stale and **6.8.2's spread-aware fills silently fall back to the flat `paper_slippage_bps`
+floor** — the fail-open path working exactly as designed, and therefore invisibly. The symptom
+would be paper fills quietly getting cheaper than reality, on the book we use to judge whether
+−0.303R expectancy is improving. Fix is ~2 hours: assert the mode, count degradations, surface
+it. Pairs with A11 and the existing 6.8.6 staleness alarm. *(Not an observed bug — a documented
+broker behaviour we have no detector for.)*
+
+**A26 — refuse loudly at a capacity boundary.** They name Kite's limits as constants with
+provenance (`MAX_TOKENS_PER_WEBSOCKET = 3000`, `MAX_WEBSOCKET_CONNECTIONS = 3`), shard across
+processes, and **refuse to start** past the ceiling with an error stating the actual counts and
+two concrete remedies. **The direct contrast with a failure we already had**: our `live-worker`
+hot set was flooded by breadth alerts and watchlist stocks silently stopped being scored.
+
+**Adopt no code.** Its Redis and threading patterns are things our rules explicitly forbid: one
+`hset` round-trip **per tick** with no pipelining (the exact defect perf-auditor caught in our
+6.8.1), a new `threading.Thread` on every tick callback with no queue or backpressure, **no TTL**
+on the tick hash (harmful under our volatile-lru policy), and `ticks[0]` indexed without an
+emptiness check. Operationally: **token expiry is unhandled** (`on_noreconnect` logs and stops;
+the Kite token dies ~06:00 IST daily — our rules call this "a normal lifecycle event, not an
+error loop"), and its process watchdog is a **startup check, not a supervisor** — it returns once
+all processes are alive, after which a death is never repaired.
+
+Synthesis extended to ten repos, with a new closing lesson: **the most useful findings came from
+the repos closest to our own stack, and they were about *us*** — PaperTrade-India exposed A21
+(fills spread-aware, marks not), this one exposed A25. Neither was a defect in their code; both
+were gaps in ours, visible only because someone else solved the same problem and left the guard
+in. **Prioritise repos sharing our exchange, broker or stack over those sharing our ambition.**
+
+
+### docs(research): repo 7 Stock-market-prediction-and-screener — leaked scaler, missing baseline, disabled guard (2026-09-03)
+
+[sumittttttt/Stock-market-prediction-and-screener](https://github.com/sumittttttt/Stock-market-prediction-and-screener),
+MIT, ~3.9k LOC, **2022-04 → 2023-01, unmaintained**. A Streamlit multi-page app (fundamentals,
+indicators, "screener", pattern recognition, next-day forecasting) plus a notebook that selects
+the forecasting model. A competent student portfolio piece — and the ninth repo in the log,
+repeating three established failure modes in unusually clean form.
+
+**Model selection rests on two errors.** (1) *Leaked scaler*: the notebook defines
+`train = dataset[0:990]` / `valid = dataset[990:]` and then calls
+`scaler.fit_transform(dataset)` on the **whole series**, so the validation window's min/max are
+baked into the normalisation the LSTM trains under. (2) *No persistence baseline*: for a
+next-day **price** predictor the only benchmark that matters is "tomorrow = today", and it is
+absent from the comparison table. A large cap in the low thousands at ~1.5% daily vol has a
+persistence RMSE near ₹40–50; the selected LSTM scores **117.49** — plausibly two to three times
+worse than predicting no change, while comfortably beating the three other elaborate models it
+was measured against. (Order-of-magnitude estimate; the exact split isn't published. The point
+is the omission, not the constant.)
+
+**A guard that cannot return false — the third instance across nine repos.**
+`is_consolidating` returns the **strings** `'YES'`/`'NO'`; `is_breaking_out` uses it in a boolean
+context, and both strings are truthy (verified). The consolidation precondition is therefore
+always satisfied and `is_breaking_out` degrades to a plain 15-day-high check with its defining
+filter silently disabled.
+
+**UI confirms:** the "Screener" page takes a single-ticker `selectbox` and screens nothing; and
+every indicator is cast `.astype('int64')` **before** `round(..., 2)`, so RSI 67.83 renders as
+`67.00` and MACD values between −5 and +5 truncate to 0 — fake precision with the signal
+destroyed. Exactly why `lib/format.ts` is the single formatting path in our rules.
+
+**Taken:** nothing adoptable. One pointer — a compact consolidation primitive (`min_close >
+max_close × (1 − pct/100)` over N candles) for the already-queued **Minervini trend-template
+shadow test**, with the obvious upgrades: return a real boolean, measure the range in ATRs
+rather than raw percent, require a minimum base length.
+
+Synthesis restructured to nine repos with a promoted lesson: **"a guard that cannot return
+false" is now the single most repeated defect in the log (3 of 9)** — `generalization_gap ≡ 0`,
+`risk_approved` always true, and now a truthy-string predicate. Three root causes, one symptom.
+**The test is mechanical: for every guard, name the input that makes it fail; if you cannot, it
+is not a guard** — our own `unassessed` tripwire failed exactly this. Lesson 1 sharpened to its
+operational form: **when a repo picks a winner, look first at what it did not compare against.**
+
+
+### docs(research): repos 6A–6C — a reference implementation, a mock demo, and a fabricated exit date (2026-09-03)
+
+**6A [Mirzabaig313/PaperTrade-India](https://github.com/Mirzabaig313/PaperTrade-India)** —
+MIT, **~24.8k LOC · 543 tests**, a standalone pip-installable **NSE/BSE paper broker**: the
+same job as our `paper_broker`. Date-versioned statutory fee engine, T+1 settlement with
+deliverable-qty enforcement, 15:15 intraday square-off, tick/lot/band snapping, bracket/OCO,
+synthetic L2 book with queue position + Almgren impact, corporate actions, double-entry ledger,
+pluggable data providers with per-provider circuit breakers. **Makes no performance claim** (it
+is infrastructure) — the second repo after quant-agent to pass that test. **The one repo here
+that is a reference implementation rather than a cautionary tale.**
+
+**★ A21 — it exposed an inconsistency in our own system.** They mark unrealized P&L
+**to bid**; our `_open_book_mtm` marks *"to the last 1m close ≤ cutoff"*. Since 6.8.2 our
+**fills** pay the real half-spread but our **marks** do not — we charge the spread in and out,
+then value the book as if we could exit at the untouched last price. With 82% of NSE books
+wider than 2 bps across a ~25-position book, reported open-book MTM is systematically
+optimistic. **The depth needed to fix it is already captured (6.8.1).** Also **A22** bracket
+sibling-qty rebalance on partial fill (a named function here; repo 4 called the same failure
+"the partial-fill mode that took several iterations to pin down" — two independent hits make it
+near-certain for Phase 7) and **A23** an effective-dated fee registry (ours is *designed* for
+versioning but is a single constant set today).
+
+**Correction to §5.2, found via their `docs/FEES.md`:** an earlier draft said real round-trip
+NSE delivery cost is ~0.12–0.13% because STT applies only to the sell leg. **Wrong — delivery
+STT is 0.1% on both legs** (intraday 0.025%, sell only), so ~0.22% round trip. Our own
+`app/trading/fees.py` already encodes this correctly, so no P&L is affected — but repo 5's 0.2%
+commission was *accurate*, not conservative, and §5 now carries the correction inline.
+
+**6B [artist-hks/SentimentStock](https://github.com/artist-hks/SentimentStock)** — 7 commits,
+no LICENSE (despite an MIT badge). Advertises *"Hinglish NLP sentiment analysis"* and
+*"LSTM-style stock predictions"*; there is no NLP and no model — `generateData.js` emits
+deterministic pseudo-random series from `Math.sin(seed) * 10000`. Judged as the UI demo it
+actually is, one idea is worth taking: **U19**, a lag/horizon correlation chart. We found *in
+prose* that we grade multi-day trades on a one-day clock (entry-day ≥1R 12% vs swing 36% /
+positional 54%, +1R typically d+3); this is that finding's natural rendering, and it
+generalises to every shadow overlay — *at what horizon does this gate separate winners from
+losers?*
+
+**6C [madhusudhan-nikhil/InvestmentPrediction](https://github.com/madhusudhan-nikhil/InvestmentPrediction)**
+— active FastAPI+React app for Indian retail, no LICENSE. **Hierarchical Risk Parity** for
+portfolio construction is a genuine pointer (López de Prado; our heat sits at 45.3% with no
+correlation-aware sizing). But its **"probable exit date"** is a specific calendar date computed
+from deterministic drift with **zero volatility**, a hardcoded category fudge (×0.70–×1.45), and
+— decisively — **no dependence on the target price at all**: ask for a 5% target or a 50% target
+on the same stock and horizon and you get the same date. Queued as **A24, a standing rule: never
+render a precise figure without its uncertainty.** Same failure as repo 3's vote-share-as-
+confidence; we are specifically exposed because a 2–3%/day goal invites converting a wish into a
+timeline.
+
+Synthesis extended to eight repos, with two new lessons: **(7) the repos worth reading are the
+ones with nothing to sell** — the only two that survive audit cleanly are both infrastructure,
+and the presence of a headline performance number is empirically the best predictor that a
+repo's claims will not survive its own source; **(8) two independent projects hitting the same
+bug makes it near-certain for us** — which is why A22 is queued before Phase 7 starts.
+
+
+### docs(research): repo 5 QuantAgents-NSE — the only NSE repo, and its claim fails on six counts (2026-09-03)
+
+[PreethamSanji/QuantAgents-NSE](https://github.com/PreethamSanji/QuantAgents-NSE), ~7.9k LOC,
+**no LICENSE file**. Four agents (news/technical/risk/manager) replicating arXiv:2501.04916 on
+the Nifty 50, with FinBERT sentiment and a FinRL PPO model. **The first repo in the log on our
+own exchange**, which makes it the easiest to check — and the claim (a commit headline, not the
+README: *"improve backtester **to** Sharpe 0.237, CAGR 8.9% vs Nifty 8.4%"*) does not survive:
+
+1. **Look-ahead in the live backtest path** — the Otto score for a date is computed from
+   indicators including that date's close, and the trade fills at that same close. Our
+   constraint #3 exists for exactly this. First repo here with look-ahead in the *executed*
+   path rather than a commented-out holdout.
+2. **Survivorship bias twice over** — the universe is "top 10 Nifty 50 stocks with longest
+   yfinance history": current index membership *and* longest history, i.e. the ten blue chips
+   that both survived and stayed in.
+3. **Two of the four agents are wired to nothing** — `in_bull_market` (the 200-DMA regime
+   filter, advertised as *"eliminates the worst drawdown periods (2008, 2011, 2020)"*) and
+   `r_score_today` (Dave's Equation 3, weighted 30% in config) are both assigned and **never
+   read**; `risk_multiplier` is hardcoded 1.0. The backtested system is not the diagrammed one.
+4. **Tuning documented in the comments** — weekly-over-monthly rebalancing because monthly
+   "hurt CAGR", Emily's ±0.5 cap set so Bob can overcome it, asymmetric ±0.15/−0.10 thresholds.
+5. **Risk-free accrual added on idle cash** with the stated reason that it makes cash-holding
+   Sharpe-neutral — justified by a regime filter that is dead code.
+6. **No spread or impact** (commission only, ~0.2% round trip — actually conservative vs real
+   NSE delivery cost, but our 6.8.2 finding is that 82% of NSE books are wider than a flat 2bps).
+
+After all six the result is **+0.5pp CAGR at Sharpe 0.237** — inside the noise of a ten-stock
+five-year sample before any of it.
+
+Also **reproduced an NSE calendar bug**: `resample("W-FRI")` labels buckets with the calendar
+Friday while the index holds trading days, so **any week whose Friday is an NSE holiday skips
+rebalancing silently** (demonstrated against Good Friday 2025). Precisely the failure our
+domain rules name.
+
+Harvested: **A18** India news sourcing for the unbuilt **MCE news veto (slice 6)** — Google
+News RSS with `hl=en-IN&gl=IN&ceid=IN:en` plus **FinBERT** (`ProsusAI/finbert`), and explicitly
+**not** their MoneyControl/ET HTML scrapers (the repo ships three HTML-debug scripts — the
+evidence it kept breaking); **A19** normalise components before summing a composite risk scalar
+(their Equation 3 sums beta, inverse liquidity, sector concentration and vol at equal weights
+with no normalisation, so the largest-scale term dominates and the weights are decorative);
+**A20** a signed risk penalty that scales confidence rather than a boolean gate — closer to what
+the reverted regime gate should have been.
+
+Synthesis extended: lesson 0 is now four of five, and a new lesson 2 — **dead code advertised as
+a feature appears in three of five repos**, so "does this path affect the output?" is a faster
+audit than reading the logic, and `grep` answers it.
+
+
+### docs(research): repo 4 quant-agent — the best-engineered of the four, and the only one whose claims survived audit (2026-09-03)
+
+[yebof/quant-agent](https://github.com/yebof/quant-agent), MIT, **~63k LOC · 1,344 tests**,
+solo author, US equities, live-capable via Alpaca. **The most relevant repo reviewed so far
+by a wide margin** — the same *shape* as what we are building (scheduled sessions, real
+broker, portfolio, risk gates, daily reflection), so the comparison is direct.
+
+**Its claims check out** — a first. `risk_reward` really is a Python `@computed_field` over
+entry/stop/target geometry returning `None` on malformed input "so PM/RM won't render a fake
+ratio"; the schema-enforced CoT is real (**64** `min_length=1` fields — a skipped step is a
+`ValidationError`); the "874 tests" claim *understates* the actual 1,344; and it makes **no
+performance claim anywhere**. Synthesis lesson 0 revised accordingly: the rule is not "public
+repos lie" but the narrower, more useful **"the claims that fail audit are almost always the
+performance claims, and the repos that make none are the ones worth reading."**
+
+**The gap, which the author states himself:** there is **no backtest, no walk-forward, no
+evaluation harness** in the repo — *"prompt changes cannot be backtested here, so it is easy
+to ship something merely because it sounds right."* His decision-replay harness diffs how a
+prompt change alters decisions on real historical inputs, but outcome-aware scoring is
+*"the layer above this, not yet built."* **The symmetric trade: he has the production machine
+we have not built, and none of the validation we already have — and ours is the safer of the
+two positions.**
+
+Harvested (architecture queue, now 12 items): **★A11 session notifier with a noise policy** —
+the most actionable item in the whole document. Silence for routine success, failures
+classified by whether a human can act (SEC transient suppressed, analysis error not), **any
+exception always notifies**, the artifact is its own confirmation, and a notifier outage can
+never affect trading. **We have at least two standing manual daily human checks that exist
+only because we have no notifier** — CAS capture (15:15–15:33 IST, *a missed window cannot be
+back-filled*) and provisional health (no scheduler at all). Also **A13** a test pinning the
+circuit breaker's un-suppressibility (theirs is exempt from both the dedup guard and the
+session mutex, pinned by a named test — our `unassessed` tripwire taught us documentation
+alone is worthless); **A15** assert scheduling window ≥ tick interval (a 25-min window on a
+30-min timer missed the close two days running — **our CAS window is 18 minutes and its miss
+is unrecoverable**); **A14** timeouts derived from measurement, layered, after a 13-hour hang;
+**A12** invariants documented with the dated incident that produced them; **A16** the
+order-protection lifecycle state machine — not actionable pre-live but the best available map
+of what Phase 7's BrokerAdapter must handle; **A17** provider failover semantics + a pinned
+cost table.
+
+Recorded for balance in §4.5: we are ahead on validation, a freezable deterministic engine,
+money types (they use floats for prices throughout), and a real UI — and self-modifying
+prompts on a live trading system, however well guarded, changes behaviour on argument alone,
+which is what our constraint #8 exists to prevent.
+
+
+### docs(research): repo 3 ai-quant-agents reviewed — a 236-line SDK, not a quant system (2026-09-03)
+
+[demandai/ai-quant-agents](https://github.com/demandai/ai-quant-agents), single commit,
+Apache 2.0, **295 LOC total**. **Not a quant system: a marketing SDK for a closed paid
+service** (`dream.hmyk.ai`) — no indicators, no backtest, no data layer, no evaluation. The
+"12 AI agents" run server-side behind a PRO ONLY gate. Its most useful line names its
+upstream, **[TradingAgents](https://github.com/TauricResearch/TradingAgents)** (Tauric
+Research, Apache 2.0) — **that is the artifact worth reviewing, and it is now queued.**
+
+Four defects in 236 lines, all of a familiar kind: **`risk_approved` is hardcoded true**
+(`"risk" not in decision.lower()` where decision ∈ {BUY,HOLD,SELL}) while the product is
+marketed on a "Risk Manager with VETO POWER"; the README's example output advertises
+`entry`/`stop_loss`/`target`/`position_size` but the code sets `suggested_action={}`
+unconditionally — the only four fields a trader would act on are decorative; the decision is
+a **substring match on free LLM text** (`if "BUY" in text`, tested before SELL, so *"I would
+not BUY this"* → BUY); and **the stream has no correlation id**, connecting to a global
+socket and consuming any analysis until the first `analysis_complete` — on a shared demo
+server `analyze("NVDA")` can return a stranger's TSLA debate, stamped NVDA locally. Also
+`key_reasons` is harvested only from bull/aggressive speakers, so it is structurally the
+bull case even when the verdict is SELL.
+
+Harvested despite the above: **A9** a progress envelope for long-running jobs
+(`{phase, step, total_steps, message}` — LLM-agnostic, and several of our jobs run minutes
+in silence, the walk-forward replay ~8 of them); **A10** emit running results mid-flight;
+**U16** a phase/participant stage-tracker strip (~40px shows every phase and what has
+completed); **U18** a streaming log with phase tags and per-entry expansion; and **U17**,
+the most valuable — **confidence as a distribution bar rather than a scalar**, which
+completes the trio with U10 (the arithmetic) and U15 (the named evidence): a 78% scalar
+hides whether four factors agreed or one carried everything, which *is* the SRTL failure.
+
+Synthesis section extended and re-titled. New lesson 0: **all three repos advertise numbers
+or fields their own code cannot produce** — in this sample the base rate of a public quant
+repo's headline claim surviving contact with its own source is **zero**. New lesson 4:
+"confidence" is repeatedly a *share*, not a probability — theirs divides modal votes by
+total across agents that share a model and prompt (correlated by construction), which is the
+same shape as our own confluence normalising by the weight of factors that scored.
+
+
+### docs(research): repo 2 QuantHarness reviewed + architecture becomes a standing review dimension (2026-09-03)
+
+Per user instruction the review log now carries **three** numbered queues — analysis
+(`H`), UI/UX (`U`) and **architecture (`A`: notifications, menus/IA, portfolio modelling,
+credential lifecycle, agent topology, cost tiering, state schemas)**.
+
+Repo 2 = [Y-Research-SBU/QuantHarness](https://github.com/Y-Research-SBU/QuantHarness)
+(arXiv:2509.09995; Stony Brook/CMU/UBC/Yale/Fudan; MIT; ~3.6k LOC): four LLM agents
+(Indicator → Pattern → Trend → Decision) in a LangGraph, two of them **vision** agents that
+render candles to PNG and have a VLM read the picture. Far more serious than repo 1 — the
+benchmark is real (1,600 CSVs) and the baselines are strong and honestly reported.
+
+**But the headline table does not carry the claim.** n=300/cell (the .3/.7 decimals are
+thirds); recomputing a two-proportion test the paper omits: **significant vs the naive
+baseline 5/8, but vs LOGISTIC REGRESSION 1 of 8** — and that one (ES) rests on LR scoring
+43.0%, below chance. Mean 55.8% vs LR 51.0%, inside the ±5.7pp CI on almost every asset.
+**BTC — the flagship — is the weakest cell (50.7%, z=1.40).** Directional accuracy is also
+not profitability: no costs, and the design forces a trade every window. Reproducibility
+gaps: **the 1,600 benchmark CSVs ship but no eval script does**, and the only visible
+look-ahead holdout is a **commented-out `.iloc[:-3]`** beside the live path, with no flag
+and no test.
+
+Two design choices rejected outright, both instructive: **`HOLD is prohibited`** (a
+forced-trade architecture — the inverse of our thesis that entry *selectivity* is the edge:
+44 defect trades −₹19,649 vs 55 clean +₹5,256), and an **LLM told to emit a risk-reward
+"between 1.2 and 1.8"** with no stop or target computed. Its confluence is done in prose,
+which is non-deterministic and un-backtestable — a case where our frozen numeric engine is
+ahead of a published paper.
+
+Harvested: **A3** a broker credential-status endpoint + banner (the Kite token dies ~06:00
+IST daily and its state is only discoverable from a failed request — highest-value item
+because the failure is known to recur); **A4** constraint pre-validation endpoints
+(generalises the fix that removed 41/204 Buy rows that could only 409); **A1** two-tier
+model routing for the research loop only; **A5** self-documenting `Annotated` state schemas;
+**A6** independent analysts fan out, never chain (theirs pays 3× latency for a chain of
+mutually independent agents); plus **U15**, a named-evidence line for the signal detail
+view — the human-readable half of U10.
+
+New closing section, **"What both repos independently confirm"**: a simple baseline matches
+the elaborate system in both (buy-and-hold +102.4% vs +0.7%; LR ≈ four-agent GPT-4o on 7/8
+assets) and neither leads with it though both ship the data; the guard that matters is the
+structural one (a metric that could only return zero; a holdout that is a comment); and
+published work stops where the hard part starts — neither models a position, and repo 2 is
+titled "for High-Frequency Trading".
+
+
+### docs(research): external quant/AI-agent repo review log — `docs/quant-agent-findings.md` (2026-09-03)
+
+A running review log for external repos the user shares, starting with
+[OnePunchMonk/AgentQuant](https://github.com/OnePunchMonk/AgentQuant) (~12.1k LOC, MIT, LLM
+parameter-search agent over US ETFs). Every number was recomputed from the repo's own code and
+committed CSVs rather than read off its README — and the two disagree. **Verified: the "6-epoch
+harness evolution" runs identical code six times** (`harness_spec` is never passed to `run_agent`,
+which takes no harness parameter); the published results JSON **cannot be that script's output**
+(its `generalization_gap` is `max(avg − best, 0)` ≡ 0 yet stores 0.124; `claim_accuracy` is a
+hardcoded `0.8  # Placeholder`); and the algorithm-comparison table comes from a **`_mock_fitness_
+function` that never touches market data** and encodes its own conclusion (`+0.10 if use_tools`).
+The repo's *committed* experiments refute its thesis: buy-and-hold SPY returned **+102.4%/0.896
+Sharpe** vs the agent's converged golden cross at **+0.7%**, the LLM picked `(50,200)` in **8 of 9**
+walk-forward windows, 8 of 9 rationales say the regime context was empty, and the ablation has
+**No-Context 0.711 vs With-Context 0.277**.
+
+Verdict: **adopt no code, reject the thesis, harvest four ideas.** Queue (unauthorised — watch mode
+holds to 2026-09-04, and all four are measurement, not money path): **H1** moving-block bootstrap p5
+Sharpe beside PSR/DSR/MinTRL — the non-parametric complement to a bar whose own weakness is the
+independence assumption, and an automatic version of the tail-robustness check constraint #8 asks
+for by hand; **H2** a buy-and-hold benchmark line in the daily report (we have none — `benchmark.py`
+is per-signal RS, not a portfolio baseline — and the index bars are already backfilled); **H3**
+re-frame the VIX companion as a trailing percentile, dissolving the "history too shallow to
+§8-validate" blocker on an absolute, US-derived threshold of 20; **H4** the gate/hypothesis register
+as data rather than prose.
+
+**UI/UX pass — now a standing part of every repo review** (numbered `U1…`, separate from `H1…`).
+Its stack is Streamlit + Plotly, one light theme, no tokens — behind ours on every axis — but
+**its Research Workspace screen is better information design than anything we have for the same
+job**: one Experiment Registry table (name · mode · metric · robustness · validation)
+**default-sorted by a drawdown-penalised robustness score rather than the headline metric**, with
+**benchmark rows inside that same sort order** so buy-and-hold's 0.896 cannot be skipped; a
+worst-of-checks `Validation` column whose per-check *reasons* are one click away; a
+`tried/accepted/watch/rejected` funnel strip; rejected candidates left on screen with their
+damage; and an `Artifacts` panel naming the file each number came from. Our equivalent evidence
+is **seven separate markdown sidecars** opened one at a time. Queued U1–U10, led by a Research/
+Gate Registry page (U1) with benchmarks-as-rows (U2) and a trials-attempted counter (U4) — the
+last makes `N` in `E[max SR]` an observed number instead of the 20 we assume, the soft spot in
+the whole DSR bar. Its weak `dashboard*.png` screens are logged as *confirms*: wide dataframe
+dumps clipped off-screen, `None` rendered raw, unformatted floats, no profit/loss colour — each
+a defect `.claude/rules/ui.md` already forbids.
+
+Also recorded as a cautionary case study: five mechanisms by which a
+green, well-tested repo reports numbers its code cannot produce.
 
 ### feat(MCE slice 3): sector-RS shadow sidecar + per-entry context + flip off→shadow (2026-08-20)
 
