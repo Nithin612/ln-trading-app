@@ -47,9 +47,27 @@ heat 25.6% → **58.0%**; the gate table given its missing 8th row and the "seve
 corrected; and the critical-path diagram re-pointed at the execution plan. Date stamps moved to
 2026-09-04.
 
+**Rendering the page caught what grepping did not.** A headless screenshot showed the header still
+advertising *"CAS built → WATCH MODE to 09-04"*, an "Active work: CAS watch" tile, a **"2 sessions
+to go"** counter and a callout written in the present tense about a window that had closed — plus
+three more "seven gates" strings the earlier greps missed (the Part-I intro, the §01 paragraph and
+the guiding-principle callout) and the ASCII gate diagram, which needed its 8th row. **Read the
+rendered page, not just the source**; prose drift does not match the strings you think to grep for.
+
+**Paper-book figures re-read from the database** (the page claims its numbers come from the dev DB,
+so they were verified rather than trusted): all-time **−₹7,932 / 83 closed / ₹15,160 charges** →
+**−₹10,218 / 105 closed / ₹18,539**; era 2 **−₹10,817 / 6 trades** → **−₹13,104 / 28 trades, 11
+winners**; open book 13 → **29**; and 96 positions opened → **134** since 2026-07-07. The journal
+reconciliation in §22 was re-verified rather than merely restated: **105 journal entries vs 105
+closed positions, both summing to −₹10,218.30 exactly.** Era 1 still computes to +₹2,885, so the
+two eras remain internally consistent. The era-2 *trade-by-trade* table was **not** regenerated —
+it is the six trades §18's stop-width finding is argued from, and it is now labelled as the first
+six rather than silently presented as "the whole record".
+
 **The standing hazard, restated because this is its second bite:** `STATUS.html` hardcodes gate
-modes in prose, in tables and in an ASCII diagram, with no live data source. A mode flip silently
-falsifies it. **Grep every gate name in it on every flip.**
+modes AND figures in prose, in tables, in an ASCII diagram and in the KPI tiles, with no live data
+source. A mode flip silently falsifies it. **Grep every gate name in it on every flip, and render
+it before believing it.**
 
 Tests: 169 green over the touched surface (`test_rr_guard` 14, plus `test_eligibility_preview`,
 `test_trading`, `test_entry_quality`, `test_entry_quality_shadow` = 155). Every R:R test

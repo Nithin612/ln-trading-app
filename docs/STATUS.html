@@ -425,7 +425,7 @@
     <div class="metastrip">
       <span class="chip done"><span class="dot"></span>Phase 6.8 CLOSED · merged 08-20</span>
       <span class="chip done">MCE slices 1–5a built</span>
-      <span class="chip prog">CAS built → WATCH MODE to 09-04</span>
+      <span class="chip done">CAS watch CLOSED 09-04 · 1,664 rows</span>
       <span class="chip bad">Paper-only — no live order path</span>
       <span class="chip">1574 · 401 · 86 tests</span>
     </div>
@@ -438,9 +438,9 @@
     </div>
     <div class="kpis">
       <div class="kpi"><div class="k">Build phase</div><div class="v acc">6.8 → MCE</div><div class="s">Phases 0–6 &amp; 6.8 closed. MCE slices 1–5a built, all shadow.</div></div>
-      <div class="kpi"><div class="k">Active work</div><div class="v flag">CAS watch</div><div class="s">Stage 0 + 1 built 08-25. Capture accrues to Fri 09-04, then study.</div></div>
-      <div class="kpi"><div class="k">Paper book · all time</div><div class="v down">−₹7,932</div><div class="s">83 closed trades since 07-07, net of ₹15,160 charges.</div></div>
-      <div class="kpi"><div class="k">Since the fill-model reset</div><div class="v down">−₹10,817</div><div class="s">6 closed, 1 winner. Pre/post 08-17 are not comparable.</div></div>
+      <div class="kpi"><div class="k">Active work</div><div class="v">execution plan</div><div class="s">91 items from a 30-repo review, bucketed. A = freeze the recorded numbers, B = the instruments.</div></div>
+      <div class="kpi"><div class="k">Paper book · all time</div><div class="v down">−₹10,218</div><div class="s">105 closed trades since 07-07, net of ₹18,539 charges.</div></div>
+      <div class="kpi"><div class="k">Since the fill-model reset</div><div class="v down">−₹13,104</div><div class="s">28 closed, 11 winners. Pre/post 08-17 are not comparable.</div></div>
       <div class="kpi"><div class="k">Open book</div><div class="v down">29 · heat 58.0%</div><div class="s">₹58,034 at risk on ₹1L (09-04), up from 45.3% on 09-02. Still no portfolio cap.</div></div>
       <div class="kpi"><div class="k">Live order path</div><div class="v down">none</div><div class="s">Paper only. Live trading is Phase 7, not started.</div></div>
       <div class="kpi"><div class="k">Eligibility gates</div><div class="v">1 live · 8 shadow</div><div class="s">Only factor diversity enforces; eight measure only. Regime and R:R were both reverted.</div></div>
@@ -452,9 +452,9 @@
   </section>
 
   <div class="watch" role="note">
-    <div class="cd"><b>2</b><span>sessions to go</span></div>
+    <div class="cd"><b>✅</b><span>watch closed</span></div>
     <div class="wt">
-      <p><strong>What "watch mode" means right now.</strong> Nothing is being built on the money path this week. The Closing-Auction-Session capture (<code>cas_daily</code>) went in on 2026-08-25 and now needs to <em>accrue</em>: it writes one row per F&amp;O-underlying per day from the 3:15–3:35 PM auction window. The study that decides whether there is an edge cannot run until there is data — so the plan is to let it fill through <strong>Friday 2026-09-04</strong> (8 trading sessions: 26–28, 31 Aug, 1–4 Sep) and re-read then.</p>
+      <p><strong>What watch mode was, and what replaced it.</strong> For two weeks nothing was built on the money path. The Closing-Auction-Session capture (<code>cas_daily</code>) went in on 2026-08-25 and simply needed to <em>accrue</em>: one row per F&amp;O-underlying per day from the 3:15–3:35 PM auction window. The study that decides whether there is an edge could not run until there was data, so it was left to fill through <strong>Friday 2026-09-04</strong> (8 trading sessions: 26–28, 31 Aug, 1–4 Sep). <strong>That window is now closed and the next build is the 91-item execution plan</strong> in <code>docs/quant-agent-findings.md</code>, sequenced so that anything changing a recorded number lands before paper cycle 2 starts its clock.</p>
       <p><strong>Two things must stay true for that to happen.</strong> <code>make worker</code> must be up across 15:15–15:33 IST each day — the capture is a Celery-beat task, not a daemon of its own — and the Kite token must be fresh. <strong>✅ The watch window closed on 2026-09-04 with accrual healthy: 8 sessions captured, 208 rows each = 1,664 rows, no missed window.</strong> Stage 2 (the overnight-reversal study) is unblocked, and the daily row-count check is discharged. A missed auction window still cannot be back-filled, so if accrual resumes the worker must be up across that band.</p>
 
       <p><strong>Two things changed on 2026-09-02, neither of them a build.</strong> First, the <strong>regime gate was reverted to shadow</strong> — over 88 decided trades its suppressed set was net-POSITIVE on the live tape for seven straight report days, and all three §8 metrics that justified the 08-14 flip had inverted. A gate promoted on 44 observations was refuted by 88; the standing rule is now that no shadow→active flip happens without its pre-registered count <em>and</em> a multiple-testing-aware bar. Second, an <strong>entry/eligibility audit</strong> traced the P&amp;L leak to arithmetic rather than stock picking: expectancy is <strong>−0.303R per trade</strong>, and payoff is capped by construction because <code>compute_levels</code> pairs a structural stop with an absolute-% target, so <strong>94 of 295 swing signals have a target closer than their stop</strong> and there is no minimum-R:R gate anywhere. Over 99 resolved trades, the 44 carrying at least one mechanical defect lost ₹19,649 while the 55 clean ones made ₹5,256 at a 55% win rate. Two fixes shipped the same day — the <strong>display path is now gated</strong> (41 of 204 listed signals had been offering a Buy button that could only fail) and the <strong>wrong-side-stop bug</strong> in <code>size_for_fill</code> is closed. The <strong>R:R floor overlay shipped ACTIVE on 2026-09-02 and was reverted to shadow on 2026-09-03</strong> — it blocked the book's only profitable cohort (24 trades, +₹10,585, 63% win), because R:R&nbsp;&lt;&nbsp;1 turned out to be a proxy for a <em>wide</em> stop and wide stops are the good cohort. The entry-window rework and a portfolio-heat cap remain queued.</p>
@@ -513,15 +513,15 @@
       <div class="part" id="p1">
         <div class="pd-k">Part I</div>
         <div class="pd-t">The system, end to end</div>
-        <p class="pd-d">What the platform is and how every layer fits together — architecture, the signal engine, the confluence rule that governs what may be traded, the seven eligibility gates, the Rust core, realtime, and the constraints that bind them. This part describes <em>how it works</em>; it changes only when the system does.</p>
+        <p class="pd-d">What the platform is and how every layer fits together — architecture, the signal engine, the confluence rule that governs what may be traded, the eight eligibility gates, the Rust core, realtime, and the constraints that bind them. This part describes <em>how it works</em>; it changes only when the system does.</p>
       </div>
 
       <section class="doc" id="s1">
         <div class="sec-kicker">01 · What this is</div>
         <h2>What this is, in one paragraph <a class="anchor" href="#s1" aria-label="Link to this section">#</a></h2>
-        <p>A <strong>personal intelligent stock-suggestion and algo-trading platform for the Indian markets (NSE/BSE)</strong>. It ingests market data — end-of-day and live tick-by-tick — runs every stock through a <strong>weighted confluence signal engine</strong> that only fires when several independent technical factors agree at the same price level, sizes each idea off a mandatory stop-loss rule, filters it through seven downstream eligibility gates, and surfaces the result as an actionable suggestion: entry, stop, target, quantity, and <em>why</em>.</p>
+        <p>A <strong>personal intelligent stock-suggestion and algo-trading platform for the Indian markets (NSE/BSE)</strong>. It ingests market data — end-of-day and live tick-by-tick — runs every stock through a <strong>weighted confluence signal engine</strong> that only fires when several independent technical factors agree at the same price level, sizes each idea off a mandatory stop-loss rule, filters it through eight downstream eligibility gates, and surfaces the result as an actionable suggestion: entry, stop, target, quantity, and <em>why</em>.</p>
         <p>Trades execute in <strong>paper mode</strong> today. Live order placement is gated behind an explicit opt-in plus a proven profitable paper record. Built solo, for personal use first, with the option to productise later.</p>
-        <div class="callout"><span class="k">Guiding principle</span><p>Profits cannot be promised, but <strong>losses are controlled by construction</strong> — mandatory sizing, max-stop rejection, class-correct validity, seven eligibility gates, and a non-disableable circuit breaker. Every one of those is enforced in code, not by discipline.</p></div>
+        <div class="callout"><span class="k">Guiding principle</span><p>Profits cannot be promised, but <strong>losses are controlled by construction</strong> — mandatory sizing, max-stop rejection, class-correct validity, eight eligibility gates, and a non-disableable circuit breaker. Every one of those is enforced in code, not by discipline.</p></div>
         <h3>How to read this page</h3>
         <ul class="body">
           <li><strong>If you are here for the business answer</strong> — read the status board above, then §17 (what the money did), §18 (the finding that explains the current losing run), and §26 (risks). Set <em class="q">Detail: Overview</em> in the bar at the top to hide code and file paths.</li>
@@ -620,7 +620,7 @@
         │
         ═══════ everything above is the FROZEN engine ═══════
         ▼
-  ┌── SEVEN ELIGIBILITY GATES, in order (§7) ───────────────────┐
+  ┌── EIGHT ELIGIBILITY GATES, in order (§7) ───────────────────┐
   │ 1  regime gate     shadow   skip transitional ADX 20–25     │
   │    ↳ was ACTIVE 08-14 → 09-02; REVERTED, its own forward    │
   │      evidence refuted it (suppressed set net-POSITIVE)      │
@@ -631,6 +631,9 @@
   │ 5  market regime   shadow   index below its 200-DMA         │
   │ 6  liquidity       shadow   too illiquid to exit            │
   │ 7  anti-chase      shadow   price ran > 0.33R past entry    │
+  │ 8  R:R floor       shadow   target nearer than the stop     │
+  │    ↳ was ACTIVE 09-02 → 09-03; REVERTED, it blocked the     │
+  │      only profitable cohort (R:R<1 ⇒ proxy for a WIDE stop) │
   └─────────────────────────────────────────────────────────────┘
         │ eligible
         ▼  Paper order → fill priced off the REAL book (½-spread + size impact)
@@ -1090,17 +1093,17 @@ Committed candles → blocking writer queue → writer thread → Postgres upser
       <section class="doc" id="s17">
         <div class="sec-kicker">17 · Trades &amp; P&amp;L</div>
         <h2>The paper book — every trade, and what it cost <a class="anchor" href="#s17" aria-label="Link to this section">#</a></h2>
-        <p>Paper mode, capital ₹1,00,000, risk 2% per trade, daily-loss cap ₹3,000, maximum five entries per day, exit governor on the rupee profit ladder. <strong>96 positions have been opened since 2026-07-07</strong>: 83 closed, 13 still open.</p>
+        <p>Paper mode, capital ₹1,00,000, risk 2% per trade, daily-loss cap ₹3,000, maximum five entries per day, exit governor on the rupee profit ladder. <strong>134 positions have been opened since 2026-07-07</strong>: 105 closed, 29 still open.</p>
         <div class="metrics">
-          <div class="metric"><div class="v down">−₹7,932</div><div class="l">realised net, all time<br>83 closed trades</div></div>
-          <div class="metric"><div class="v flag">₹15,160</div><div class="l">Zerodha charges paid<br>modelled, not ignored</div></div>
+          <div class="metric"><div class="v down">−₹10,218</div><div class="l">realised net, all time<br>105 closed trades</div></div>
+          <div class="metric"><div class="v flag">₹18,539</div><div class="l">Zerodha charges paid<br>modelled, not ignored</div></div>
           <div class="metric"><div class="v up">+₹2,885</div><div class="l">era 1 · to 08-17<br>77 trades, flat-bps fills</div></div>
-          <div class="metric"><div class="v down">−₹10,817</div><div class="l">era 2 · since 08-18<br>6 trades, honest fills</div></div>
+          <div class="metric"><div class="v down">−₹13,104</div><div class="l">era 2 · since 08-17<br>28 trades, honest fills</div></div>
           <div class="metric"><div class="v">13 · −₹51</div><div class="l">open book at the 08-25 close<br>heat 25.6% of capital</div></div>
         </div>
         <div class="callout warn">
           <span class="k">Read the two eras separately — they are different experiments</span>
-          <p>On <strong>2026-08-17</strong> the fill model changed from a flat 2 bps to the real order book (§10), and the book was flattened and the clock reset. <strong>Era 1 and era 2 are not comparable</strong>, and adding them together produces a number that means nothing. Era 1's +₹2,885 was earned under a fill model that was systematically too generous on 82% of books. Era 2's −₹10,817 is small-sample but honest.</p>
+          <p>On <strong>2026-08-17</strong> the fill model changed from a flat 2 bps to the real order book (§10), and the book was flattened and the clock reset. <strong>Era 1 and era 2 are not comparable</strong>, and adding them together produces a number that means nothing. Era 1's +₹2,885 was earned under a fill model that was systematically too generous on 82% of books. Era 2's −₹13,104 over 28 trades is honest, and no longer small-sample enough to dismiss.</p>
         </div>
         <figure class="viz">
           <figcaption><b>Realised net, per session</b><span>Each bar is one trading session's realised profit or loss after charges. The dashed line marks the fill-model change: bars either side of it were produced by different execution models and should not be compared. The two tall green bars are 11 August and the 17 August clean-slate flatten.</span></figcaption>
@@ -1241,7 +1244,7 @@ Committed candles → blocking writer queue → writer thread → Postgres upser
         <p class="caption tech"><strong>A note on the colour in these charts.</strong> Profit and loss use the project's own profit/loss tokens, because that is the app's UI law and the reader's domain expectation. Measured against a colour-vision-deficiency simulation that green/red pair separates by only ΔE 4.2 under deuteranopia — a fail. The mitigation is the project's own rule: <strong>direction is always glyph plus colour</strong>, so every bar carries a ▲/▼ and a signed value, and every chart ships a table view. Colour is redundant reinforcement here, never the carrier of meaning. The categorical palette used in §6 and §18 was validated against this page's own surfaces and passes all six checks in both themes.</p>
 
         <h3>Era 2 — the live clock, trade by trade</h3>
-        <p>Six closed trades since the reset. This is the whole record, not a selection:</p>
+        <p><strong>⚠ This table is the FIRST SIX closed trades after the reset, captured 2026-08-25 — era 2 now stands at 28 closed / −₹13,104 / 11 winners</strong> (see the metrics above, which are current). The six rows below are kept because §18's stop-width finding is argued from them; they are no longer the whole record:</p>
         <div class="tablewrap"><table>
           <thead><tr><th>Symbol</th><th>Dir</th><th>Class</th><th class="num">Conf</th><th class="num">Net</th><th>Exit</th><th class="mono">Opened → closed</th><th class="num">Stop ÷ daily range</th></tr></thead>
           <tbody>
@@ -1251,7 +1254,7 @@ Committed candles → blocking writer queue → writer thread → Postgres upser
             <tr class="lose"><td><strong>PREMIERENE</strong></td><td>SHORT</td><td>swing</td><td class="num">82%</td><td class="num neg">−₹2,257</td><td>stop</td><td class="mono">08-18 → 08-21</td><td class="num">1.65×</td></tr>
             <tr class="lose"><td><strong>PFIZER</strong></td><td>LONG</td><td>positional</td><td class="num">74%</td><td class="num neg">−₹2,097</td><td>stop</td><td class="mono">08-21 → 08-25</td><td class="num">2.25×</td></tr>
             <tr class="win"><td><strong>CGCL</strong></td><td>LONG</td><td>swing</td><td class="num">73%</td><td class="num pos">+₹2,850</td><td>target</td><td class="mono">08-19 → 08-25</td><td class="num">0.86×</td></tr>
-            <tr class="tot"><td>6 trades</td><td></td><td></td><td class="num">—</td><td class="num neg">−₹10,817</td><td class="mono">1 of 6</td><td class="mono">—</td><td class="num">—</td></tr>
+            <tr class="tot"><td>first 6</td><td></td><td></td><td class="num">—</td><td class="num neg">−₹10,817</td><td class="mono">1 of 6</td><td class="mono">—</td><td class="num">—</td></tr>
           </tbody>
         </table></div>
         <p><strong>The single winner has the lowest confidence in the table</strong> (CGCL at 73%) and the highest-confidence trade was the third-worst loss (KSL at 91%). On six trades that is noise, not a finding — but it is the kind of noise that makes confidence-based intuition unreliable at this sample size, and it is why §19's attribution work was done on a corpus of hundreds rather than on the live book.</p>
@@ -1797,7 +1800,7 @@ Committed candles → blocking writer queue → writer thread → Postgres upser
           <p>A month-long feed outage in July went unnoticed because nothing complained. Since 6.8.6 a <strong>trading-calendar-aware staleness check</strong> on the EOD feeds raises a loud header in the report and logs a warning whenever a feed falls behind — weekend- and holiday-aware, so it does not cry wolf. The 2026-08-25 report opens with <em>"✅ Feeds current"</em> and names each feed's date. That line is the difference between a bad week and a lost month.</p>
         </div>
         <h3>The journal — working, and honestly under-used</h3>
-        <p>Every closed paper position writes a journal entry automatically. The record: <strong>83 entries between 2026-07-23 and 2026-08-25</strong>, net −₹7,932 — which reconciles exactly to the realised total in §17, a useful independent check that nothing is being dropped.</p>
+        <p>Every closed paper position writes a journal entry automatically. The record: <strong>105 entries between 2026-07-23 and 2026-09-04</strong>, net −₹10,218 — which reconciles exactly to the realised total in §17 (re-verified by query 2026-09-04: 105 journal entries vs 105 closed positions, both summing to −₹10,218.30), a useful independent check that nothing is being dropped.</p>
         <div class="callout warn">
           <span class="k">The gap</span>
           <p>All 83 entries are <code>entry_type = 'auto'</code>. <strong>Zero have a note, a lesson, or an emotion tag</strong> — the columns exist and are empty. So the journal is currently a second copy of the trade ledger rather than a trading journal. The quantitative loop (§18 and §21) is doing the work a journal would normally do, which is arguably better, but the qualitative layer — <em>what was I thinking, and was it the plan or the impulse?</em> — is not being captured at all. Worth either using deliberately or acknowledging as decoration.</p>
@@ -1890,7 +1893,7 @@ Committed candles → blocking writer queue → writer thread → Postgres upser
         <h2>Open decisions and known risks <a class="anchor" href="#s26" aria-label="Link to this section">#</a></h2>
         <p>Written down because an unwritten risk becomes a surprise.</p>
         <ul class="checks">
-          <li><span class="ic bad">▲</span><span><strong>Nothing has demonstrated profitability yet.</strong> The paper book is −₹7,932 all-time and −₹10,817 since the honest-fill reset. The adjudicated backtest baseline on 2023–26 daily data is negative. One profile walk-forwards positive; the live book does not yet. This is the headline risk and no amount of engineering quality substitutes for it.</span></li>
+          <li><span class="ic bad">▲</span><span><strong>Nothing has demonstrated profitability yet.</strong> The paper book is −₹10,218 all-time and −₹13,104 over 28 trades since the honest-fill reset. The adjudicated backtest baseline on 2023–26 daily data is negative. One profile walk-forwards positive; the live book does not yet. This is the headline risk and no amount of engineering quality substitutes for it.</span></li>
           <li><span class="ic bad">▲</span><span><strong>Open portfolio heat is not capped across days.</strong> The circuit breaker caps <em>daily realised</em> loss and trades per day. It does not cap accumulated open risk, which reached <strong>57.5%</strong> of capital on 08-14 and sits at 25.6% now. A cross-day heat gate belongs in the Phase-7 risk engine and does not exist yet.</span></li>
           <li><span class="ic warn">▲</span><span><strong>Positions outlive their signal's validity.</strong> Four open positions are past their validity window (§17). Defensible — a position is managed by its stop, not by a clock — but it should be a surfaced decision rather than a silent consequence.</span></li>
           <li><span class="ic warn">▲</span><span><strong>Small samples everywhere.</strong> Six trades in era 2, 24 closed positional trades, 12 of 20 resolved for the sl_atr readiness bar. Most flip decisions are gated on counts precisely because of this, but it means several questions cannot be answered for weeks.</span></li>
