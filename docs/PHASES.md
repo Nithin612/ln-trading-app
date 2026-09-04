@@ -12,6 +12,20 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ## ▶ STATE AT A GLANCE (updated 2026-09-04) — read this block first
 
+**▶ 2026-09-04 (latest) — H8 DONE: THE DEFLATED-SHARPE BAR IS VALIDATED, AND GATING IS CLOSED AS A
+PROGRAMME.** The bar rejects noise (1.10% on best-of-20 zero-edge selection, against a 5% design
+allowance) **and** accepts real edges (80% power at a true per-trade Sharpe of 0.52), so its
+verdicts can be acted on. **⭐ Restated as a t-statistic the bar demands t ≈ 3.6, flat in n** — just
+above Harvey/Liu/Zhu's recommended t > 3.0 for a new factor, so it is defensibly calibrated rather
+than arbitrary; and because the hurdle does not fall with n, **more data cannot rescue a candidate
+that is not already ahead** (which is exactly what MinTRL has been saying). ⇒ **`sl_atr` is DECIDED:
+NO** (t ≈ 0.41 vs 3.6 — short by ~9×, despite passing all three readiness guards); its 20-trade
+trigger is withdrawn. ⇒ **The leak is upstream of gating, now demonstrated:** eight gates, two
+refuted promotions, best survivor at t = 0.41 — the trades carry no edge to partition. Report:
+`docs/analysis/dsr-negative-control-2026-09-04.md`; guard: `tests/test_dsr_control.py` (14 tests).
+⚠ H8 as specified was insufficient — it asked only "does the bar reject noise", which a bar that
+rejects everything passes trivially; the power arm was added and is what made the verdict readable.
+
 **▶ 2026-09-04 (later) — GATE STATE RECONCILED. The R:R floor is VERIFIED `shadow` in both live
 processes** (fresh settings load + uvicorn reload-child and celery start times both post-dating the
 09-03 revert commit at 09:34:45). `config.py`'s default moved `"active"` → `"shadow"` so a fresh
@@ -649,28 +663,94 @@ rows · starts 08-26" (now 1,664 / 8 sessions), MCE as "2 inert pending backfill
 done), and heat at 25.6% (now 58.0%). This is the second time the hardcoded-mode problem has bitten
 — **grep every gate name in `STATUS.html` on every mode flip**, it has no live data source.
 
-Optional low-risk work, in preference order:
-1. ~~**Run the deep index backfill once**~~ — ✅ **ALREADY DONE (verified 2026-09-02).**
-   `index_ohlcv_1d` holds **782 bars per index, 2023-07-03 → 2026-09-02**, and the market-regime
-   sidecar reports **0 signals** in its "no market data (< 200-DMA history)" bucket. **MCE slice 4
-   (market-regime) is therefore NOT inert** — it is measuring a real partition, and this item was
-   stale. ⚠ **BUT only 3 indices are registered** (NIFTY50, BANKNIFTY, FINNIFTY — all broad or
-   financial), so **MCE slices 1/3 (sector-RS) are benchmarking EVERY stock against NIFTY50**: the
-   per-entry table shows `benchmark = NIFTY50` for every row. It is a *market*-RS gate wearing a
-   *sector*-RS label, so its "would-block not worse than eligible ⇒ do NOT flip" verdict **cannot be
-   read as "sector RS has no edge"** — it has never been tested. The real blocker is a DATA gap:
-   ingest the sector indices (NIFTY IT / PHARMA / AUTO / FMCG / METAL …) that the Option-B NSE
-   indices CSV already carries, then re-read the sidecar.
-2. **The two reporting changes from the horizon finding** (§ STATE block) — make the daily report's
-   "reached ≥1R" horizon-aware, and add `sl_atr_mult` as a column in §2 of the report + on the
-   Opportunities list. Both are read-only/UI; neither touches the order path.
-3. **Push the branch** (still manual, still pending).
-   **Also pending from the user:** add `PAPER_SAMPLING_CAPITAL_INR=500000` to `.env` and restart the
-   backend (the `@lru_cache` settings singleton means a `.env` edit does not reach a running
-   process). Until then the daily report prints the LIVE denominator only, exactly as before.
-4. **Kill the duplicate Celery beat** (found 2026-09-02) — an orphan `worker -B` was running
-   alongside the `make worker` tree, double-firing every beat including the 60s `position_monitor`.
-   Keep the `make worker` tree; kill the orphan PID.
+Optional low-risk work — **three of the original four are now DONE; only one remains:**
+1. ~~Deep index backfill~~ — ✅ DONE (verified 2026-09-02). `index_ohlcv_1d` holds **782 bars per
+   index, 2023-07-03 → 2026-09-02**, and the market-regime sidecar reports **0 signals** lacking
+   200-DMA history, so MCE slice 4 is NOT inert. ⚠ **But only 3 indices are registered** (NIFTY50,
+   BANKNIFTY, FINNIFTY — all broad or financial), so **MCE slices 1/3 benchmark EVERY stock against
+   NIFTY50**: it is a *market*-RS gate wearing a *sector*-RS label. Its "do not flip" verdict
+   therefore **cannot be read as "sector RS has no edge"** — it has never been tested. The blocker
+   is a DATA gap: ingest the sector indices (NIFTY IT / PHARMA / AUTO / FMCG / METAL …) the
+   Option-B NSE indices CSV already carries, then re-read the sidecar.
+2. **⬅ THE ONLY ONE STILL OPEN — the two reporting changes from the horizon finding:** make the
+   daily report's "reached ≥1R" line horizon-aware, and surface `sl_atr_mult` as a column in §2 of
+   the report and on the Opportunities list. Both read-only/UI; neither touches the order path.
+3. ~~`PAPER_SAMPLING_CAPITAL_INR`~~ — ✅ DONE. It is set to 500,000 and the daily report has printed
+   **both** denominators since 2026-09-03 (§5: "₹58,034 = 58.0% of the ₹100,000 LIVE capital …
+   against the ₹500,000 SAMPLING scale that is 11.6%"). **Push remains manual and pending.**
+4. ~~Kill the duplicate Celery beat~~ — ✅ RESOLVED (verified 2026-09-04): one `make worker` tree
+   only, no orphan `worker -B`.
+
+**▶ ⚠ RAISED UNPROMPTED 2026-09-04 (review-calendar duty) — STOP WAITING FOR `sl_atr`'s 20th TRADE.**
+`sl_atr` is the standing "highest-value pending flip" at 17/20 and is the **only** gate that passes
+all three readiness guards (`side_proxy` ✅ · `tail` ✅ — the would-block set stays net-negative at a
+−₹545 trimmed mean · `win_rate` ✅ 41% vs 51%), with a would-block set at **−₹18,998 over 17**.
+**It still FAILS the deflated-Sharpe bar, and the failure is not about sample size:** the eligible
+set — the book a flip would leave you holding — has **Sharpe +0.046 against a 20-trial benchmark of
++0.215**, DSR **6.7%** against a 95% bar, verdict *"more data cannot rescue it; the candidate is not
+ahead"* (and trials are treated as independent, so the true deflation is worse). **Three months of
+shadow accrual has produced zero promotable gates and two reverts. The leak is upstream of gating.**
+⇒ **The next action is H8, not more accrual** (see below). Do not spend another week waiting for
+three more resolved trades to answer a question the bar says the count cannot answer.
+
+**▶ ✅ DONE 2026-09-04 — H8, THE NEGATIVE CONTROL. VERDICT: THE BAR IS SOUND, AND `sl_atr` IS DEAD.**
+Report: [`analysis/dsr-negative-control-2026-09-04.md`](analysis/dsr-negative-control-2026-09-04.md).
+Code: `app/services/dsr_control.py` (pure, stdlib, seeded) · `scripts/dsr_negative_control.py` ·
+`tests/test_dsr_control.py` (14 tests — the standing guard, not just a one-off report).
+
+⚠ **H8 as specified in `quant-agent-findings.md` was NOT sufficient and was extended.** It asks only
+*"does the bar reject pure noise?"* — but **a bar that rejects everything passes that trivially**,
+and ours rejects everything. A specificity-only test would have gone green on a useless instrument.
+Both arms were built:
+
+| arm | result | expected |
+|---|---|---|
+| specificity · random content-free partitions of the real book | **0.00%** cleared | ≤ 5% ✅ |
+| specificity · **best of 20 zero-edge candidates** (the selection we actually perform) | **1.10%** cleared | ≤ 5% ✅ |
+| power · minimum detectable true per-trade Sharpe @ 50% | **0.43** (t ≈ 3.83) | — |
+| power · minimum detectable true per-trade Sharpe @ 80% | **0.52** (t ≈ 4.55) | — |
+
+**⭐ THE HEADLINE: the bar is equivalent to demanding a t-statistic of ≈3.6 on the trade series, and
+that hurdle is FLAT IN n** (3.76 at n=30 · 3.62 at n=78 · 3.55 at n=1000). That converts an opaque
+probability into a number the literature already argues about — **Harvey, Liu & Zhu (2016) recommend
+t > 3.0 for accepting a new factor**, precisely for multiple testing. **Our bar sits just above that:
+defensibly calibrated, not arbitrary, not broken.** It also finally explains why MinTRL keeps
+returning `None` — the benchmark falls as `1/√n` while the required t stays put, so **more data does
+not lower the bar**; it only sharpens an estimate that has to be large in the first place.
+
+**Consequences, in force from now:**
+1. **`sl_atr` is DECIDED: NO. Stop accruing.** Its eligible set is Sharpe **+0.046 over n=78 ⇒
+   t ≈ 0.41** against a ≈3.6 hurdle — short by ~9×, and far below even the low-power region where
+   the bar could be accused of missing something. It passes all three readiness guards and still has
+   no measurable edge in the book it would leave behind. The 20-trade trigger is **withdrawn**; the
+   count was never the constraint.
+2. **"Fails the bar" ≠ "no edge" — except when it is this far short.** The bar has ~0 power between
+   t ≈ 2.6 and t ≈ 3.5, so a genuine but modest edge is invisible to it. That is the price of
+   multiple-testing correction and the right trade for a promote-to-money decision. **A future gate
+   failing at t ≈ 2–3 deserves a different conversation from `sl_atr` at t = 0.41 — so record the t,
+   not just the pass/fail.**
+3. **The leak is upstream of gating, now demonstrated rather than suspected.** Three months of shadow
+   accrual, eight gates, two promotions both refuted, best surviving candidate at t = 0.41. No
+   partition of these trades will clear t ≈ 3.6, because the trades carry no edge to partition.
+   **Selection has been optimised; what GENERATES the candidates has not.**
+
+⚠ **Stated limits** (in the report): the bootstrap assumes i.i.d. trades while ours overlap and
+cluster by regime, so specificity is if anything optimistic; `trials = 20` is still an assumption
+until **U4** counts them; and the power arm plants a *constant* edge, so a regime-dependent one is
+harder to see than these curves suggest.
+
+**▶ BANKED CAUTION — do NOT act on "`compute_levels` is the known lever" without measuring first.**
+The standing line (94/295 swing signals at R:R<1 by construction) has acquired **counter-evidence**:
+the R:R revert showed that cohort was the *profitable* one (+₹10,585, 63% win) and that **nearer
+targets hit twice as often** (33% vs 16% tp_hit), while the tight-stop and horizon findings both say
+**wide** stops win. The emergent pattern across three independent findings is **wide stop + near
+target** — close to the opposite of "make targets ratio-based". Changing the spec on the old
+argument would be **the third instance of the mistake made twice already**. ⇒ **Recommendation: a
+read-only target-rule counterfactual first** — replay every closed trade against ratio-based (2R/3R),
+ATR-multiple and today's absolute-% rules, **scored in R, never ₹** (risk-first sizing makes a
+constant-qty replay a test of bet size, not level placement — that error inverted the horizon
+study's first pass). Propose a §6 spec change only if one rule clearly wins. Read-only ⇒ it can run
+during cycle-2 accrual.
 
 **▶ FROM THE 2026-09-02 ENTRY/ELIGIBILITY AUDIT — items 1, 2 and 7 are ✅ DONE (2026-09-02).**
 In priority order, all reversible, none touching the frozen engine:
@@ -731,7 +811,7 @@ survive trimming the tail** and the partition must not be a proxy for something 
 | item | mode | stands at | trigger to re-check | current verdict |
 |---|---|---|---|---|
 | **CAS Stage 1 accrual** | — | 6 sessions × 208 rows | **Fri 2026-09-04** (watch-mode end) | on track; `make worker` must be up 15:15–15:33 IST daily, a missed window is unrecoverable |
-| **`sl_atr`** | shadow | **17/20** resolved flagged | when ≥20 resolved — **check every `make analysis`** | **HIGHEST-VALUE pending flip.** Strengthened 09-03: excluding <2% stops turns the long book to **+₹11,450 / 60% win over 57**. Still needs the count + a tail check |
+| **`sl_atr`** | shadow — **DECIDED 2026-09-04: NO** | 17/20 resolved flagged; **t = 0.41 vs a hurdle of 3.6** | ⛔ **none — stop accruing.** The count was never the constraint | ⛔ **CLOSED by H8.** It passes all three readiness guards and is still the clearest case the bar has ever rejected: its eligible set is Sharpe **+0.046 over n=78 ⇒ t ≈ 0.41**, short of the bar's ≈3.6 hurdle by ~9×. H8 proved the bar is SOUND (rejects noise at 1.1%, accepts real edges at ≥80% power), so this verdict is the instrument working, not failing. Report: `docs/analysis/dsr-negative-control-2026-09-04.md` |
 | **anti-chase** | shadow | 4/20 resolved chased | when ≥20 resolved | far off; retrospective reconstruction says the chase cohort is the loss, forward-stamped n is thin |
 | **liquidity** | shadow | 19/20 resolved illiquid | when ≥20 — but ⚠ | 5a deep-dive already ruled **DON'T flip** (illiquid set net-POSITIVE); reframe as a sizing/slippage modifier |
 | **circuit band** | shadow | 0/20 resolved blocked | when ≥20 resolved | nothing to measure yet |
@@ -742,7 +822,7 @@ survive trimming the tail** and the partition must not be a proxy for something 
 | **momentum ×1.5 retune** | shadow | **3 minted, 0 resolved** in 6 days | — | ✗ **stalled** — at ~0.5 signals/day with no resolutions this decision is years away by this route; needs a backtest path instead |
 | **pair df-vs-adf** | shadow | nightly minter accruing | when both arms have resolutions | accruing |
 | **profit-lock breakeven** | live rung ₹2,000 | A/B built 09-03; 20 of 99 differ | ADR-denominated variant, pre-registered k | ⛔ ₹800 NOT shipped — 13 runners clipped vs 7 blow-ups prevented; the knob's UNITS are wrong |
-| **deflated-Sharpe bar** | ✅ **BUILT 2026-09-03** | every gate FAILS it | re-read each `make analysis` | `app/services/deflated_sharpe.py`. **Not one gate's eligible-set Sharpe even exceeds its 20-trial benchmark**, so MinTRL is `None` for all — more data cannot rescue them. market-regime −0.004 vs +0.331 (DSR 2.9%) · chase +0.032 vs +0.266 (4.9%) · sector-RS −0.105 (0.3%) · liquidity −0.150 (0.1%); bar 95%. **The constraint is NOT sample size — the leak is upstream of gating** |
+| **deflated-Sharpe bar** | ✅ BUILT 09-03 · ✅ **VALIDATED 09-04 (H8)** | every gate FAILS it — and the bar is now proven sound, so that is a finding about the gates | re-read each `make analysis` | `app/services/deflated_sharpe.py`. **Not one gate's eligible-set Sharpe even exceeds its 20-trial benchmark**, so MinTRL is `None` for all — more data cannot rescue them. market-regime −0.004 vs +0.331 (DSR 2.9%) · chase +0.032 vs +0.266 (4.9%) · sector-RS −0.105 (0.3%) · liquidity −0.150 (0.1%); bar 95%. **The constraint is NOT sample size — the leak is upstream of gating** |
 | **readiness guards** | ✅ **BUILT 2026-09-03** | market-regime now vetoed | — | `flip_readiness.py`: `side_proxy` · `tail` · `win_rate`, run as a veto BEFORE each sidecar's own test. Every banner also now ships an **evidence-of-record** block (n · resolved · mean · median · **trimmed mean** · win% + guards + DSR). It exposed that market-regime's would-block **trimmed mean is +₹200** against a −₹302 mean — trimming REVERSES the sign |
 
 **▶ POST-WATCH-MODE RESEARCH QUEUE (after Fri 2026-09-04)** — a consolidated "wind it back" list of the

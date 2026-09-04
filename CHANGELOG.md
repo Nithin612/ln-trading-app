@@ -7,6 +7,77 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(evidence): H8 — the negative control on our own deflated-Sharpe bar (2026-09-04)
+
+The bar was rejecting every gate we have, and that verdict was about to justify closing the
+gating programme and redirecting months of work. Before acting on an instrument that says no
+to everything, test the instrument.
+
+**The specification in `quant-agent-findings.md` was insufficient, and that matters.** H8 as
+written asks only *"does the bar reject pure noise?"* — modelled on an external repo's worked
+example. But **a bar that rejects everything passes that check trivially**, and ours was in
+exactly that state. A specificity-only suite would have gone green on a useless instrument:
+hollow coverage of precisely the kind `.claude/rules/testing.md` warns about. So a **power arm**
+was added — plant an edge of known size and require the bar to accept it. Only both arms
+together distinguish *"our gates are not good enough"* from *"our bar cannot say yes"*, and
+those two readings imply opposite next actions.
+
+**Verdict: the bar is SOUND.**
+
+| arm | result | expected |
+|---|--:|---|
+| specificity · random content-free partitions of the real book | **0.00%** cleared | ≤ 5% ✅ |
+| specificity · **best of 20 zero-edge candidates** (the selection we actually perform) | **1.10%** cleared | ≤ 5% ✅ |
+| power · min detectable true per-trade Sharpe @ 50% | **0.43** (t ≈ 3.83) | — |
+| power · min detectable true per-trade Sharpe @ 80% | **0.52** (t ≈ 4.55) | — |
+
+**⭐ The most useful output is a restatement: the bar is equivalent to demanding a t-statistic of
+≈3.6 on the trade series, and that hurdle is flat in n** (3.76 at n=30 · 3.62 at n=78 · 3.55 at
+n=1000). That turns an opaque probability into a number the literature already argues about —
+Harvey, Liu & Zhu (2016) recommend **t > 3.0** for accepting a new factor, precisely because of
+multiple testing. **Ours sits just above it: defensibly calibrated, not arbitrary.** It also
+explains why MinTRL keeps returning `None` — the benchmark falls as `1/√n` while the required t
+stays put, so more observations never lower the bar, they only sharpen an estimate that has to
+be large to begin with.
+
+**Consequences.** (1) **`sl_atr` is decided: NO, and its 20-trade trigger is withdrawn.** Its
+eligible set is Sharpe **+0.046 over n=78 ⇒ t ≈ 0.41** against a ≈3.6 hurdle — short by ~9×, and
+far below even the low-power band where the bar could be accused of missing something. It passes
+all three readiness guards and still has no measurable edge in the book a flip would leave
+behind; the count was never the constraint. (2) **"Fails the bar" is not "no edge" — except when
+it is this far short.** Power is ~0 between t ≈ 2.6 and t ≈ 3.5, so a genuine but modest edge is
+invisible; that is the price of multiple-testing correction and the right trade for a
+promote-to-money decision. **Record the t, not just the pass/fail** — a future gate failing at
+t ≈ 2–3 deserves a different conversation. (3) **The leak is upstream of gating, now demonstrated
+rather than suspected:** eight gates, two promotions both refuted, best survivor at t = 0.41. No
+partition of these trades clears t ≈ 3.6, because the trades carry no edge to partition.
+Selection has been optimised; what *generates* the candidates has not.
+
+**Shipped:** `app/services/dsr_control.py` (pure, stdlib, every entry point takes an explicit
+seeded `random.Random` so findings reproduce) · `scripts/dsr_negative_control.py` → writes
+`docs/analysis/dsr-negative-control-<date>.md` · `tests/test_dsr_control.py`, **14 tests** — the
+standing guard, so the bar cannot silently drift into being permissive *or* impossible.
+
+Synthetic series are **bootstrapped from the real book and shifted, never drawn from a normal**:
+PSR explicitly penalises skew and fat tails, so a Gaussian control would flatter the one
+distribution the bar has no complaint about. The real book's kurtosis is **11.46**. Shifting by a
+constant moves the mean without touching sd, skew or kurtosis, which makes the planted Sharpe
+exact by construction.
+
+**Two things the work itself taught, both pinned by tests.** A canary asserting "10,000 trials
+makes the bar impossible" **failed** — `E[max SR]` grows only as `√(2·ln N)`, so even a 500×
+increase in trials leaves the benchmark at ≈0.44 and a true Sharpe of 0.90 still clears ~99% of
+the time. The `confidence` threshold, not the trials count, is what makes a bar unreachable; both
+facts now have tests so nobody "tightens" the wrong knob. And `minimum_detectable_sharpe` is
+computed by bisection rather than read off the probe grid, which moved the reported 80%-power
+figure from a coarse 0.60 to 0.52.
+
+**Stated limits** (also in the report): the bootstrap assumes i.i.d. trades while ours overlap
+and cluster by regime, so specificity is if anything optimistic; `trials = 20` remains an
+assumption until **U4** counts them; and the power arm plants a *constant* edge, so a
+regime-dependent one is harder to see than these curves suggest.
+
+
 ### fix(state): the R:R gate's live mode verified, and three records made to agree (2026-09-04)
 
 Closes the one discrepancy the previous session flagged rather than guessed at. `config.py`

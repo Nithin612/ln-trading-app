@@ -282,6 +282,28 @@ else.
   count each morning" obligation is **discharged — do not carry it forward.** The capture remains a
   Celery-beat task, so if accrual resumes, `make worker` must be up across 15:15–15:33 IST and a
   missed window still cannot be back-filled.
+- **⭐ THE PROMOTION BAR, IN ONE NUMBER: t ≈ 3.6 on the trade series (H8, validated 2026-09-04).**
+  `app/services/deflated_sharpe.py` was rejecting every gate, so `app/services/dsr_control.py` +
+  `tests/test_dsr_control.py` (14) test the *instrument*. **It is SOUND** — it rejects noise (1.10%
+  of best-of-20 zero-edge selections clear, against a 5% design allowance; 0.00% of random
+  partitions) **and** accepts real edges (80% power at a true per-trade Sharpe of 0.52). Restated as
+  a plain t-statistic the bar demands **t ≈ 3.6, and the hurdle is FLAT IN n** (3.76 at n=30 → 3.55
+  at n=1000) — just above Harvey/Liu/Zhu (2016)'s recommended **t > 3.0** for a new factor. Two
+  consequences that change how banners are read: **(1) more data never lowers the bar** (the
+  benchmark falls as `1/√n` while the required t stays put — that is why MinTRL returns `None`), so
+  "keep accruing" is only ever right when the point estimate is already ahead; **(2) power is ~0
+  between t ≈ 2.6 and 3.5**, so *failing* is not proof of no edge — **record the t, not just the
+  pass/fail.** ⚠ H8 as specified in the findings doc was insufficient (it asked only "does the bar
+  reject noise", which a bar that rejects everything passes trivially); the power arm is the half
+  that made the verdict readable. Report: `docs/analysis/dsr-negative-control-2026-09-04.md`.
+- **⛔ GATING IS CLOSED AS A PROGRAMME (2026-09-04) — the leak is upstream, now demonstrated.**
+  Eight shadow gates over three months, two promotions both refuted (regime, R:R), and the best
+  surviving candidate — **`sl_atr`, which passes all three readiness guards** — sits at **t ≈ 0.41
+  against a 3.6 hurdle, short by ~9×**. **`sl_atr` is DECIDED: NO; its 20-trade trigger is
+  WITHDRAWN** (the count was never the constraint). No partition of these trades will clear the bar
+  because the trades carry no edge to partition. **Selection has been optimised; what GENERATES the
+  candidates has not.** The only ACTIVE order-path gate remains `entry_diversity`, which enforces a
+  stated hard rule rather than a measured edge — that is why it is exempt from this.
 - **The next build is the execution plan in `docs/quant-agent-findings.md`** — a 30-repo external
   review (2026-09-03/04, 4,358 lines) producing **91 items in five queues** (analysis · UI ·
   architecture · testing · workbench), bucketed by **when they must land**. Governing rule:
