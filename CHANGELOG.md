@@ -7,6 +7,55 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### fix(state): the R:R gate's live mode verified, and three records made to agree (2026-09-04)
+
+Closes the one discrepancy the previous session flagged rather than guessed at. `config.py`
+declared `rr_gate_mode = "active"`, CLAUDE.md described the R:R floor as ACTIVE, and the
+2026-09-03 record said it had been reverted to shadow. **`.env` is hook-protected and cannot be
+read**, so the question was whether the revert had actually reached the running processes.
+
+**It had. Verified `shadow` in both, by evidence rather than by reading the file:**
+
+| link | value |
+|---|---|
+| fresh settings load (`get_settings().rr_gate_mode`) | `shadow` — and since the *code* default was `"active"`, the mismatch is itself proof `.env` overrides |
+| uvicorn `--reload` **child** start (the parent never restarts) | 2026-09-03 **12:28:21** |
+| celery worker start | 2026-09-04 **08:37:49** |
+| the revert commit (`git log -S` on the CHANGELOG heading) | 2026-09-03 **09:34:45** |
+
+Both live processes re-imported `app.core.config` *after* the flip, so both hold `shadow`.
+The generalised recipe — including the trap that the uvicorn PID you see in `ps` is the reloader
+parent, whose start time is meaningless — is now written into **CLAUDE.md** as
+*"HOW TO VERIFY A GATE'S LIVE MODE"*, so the next check costs minutes.
+
+**`config.py`: default moved `"active"` → `"shadow"`.** A fresh checkout, a new dev box or CI had
+no `.env` and would therefore have run the *refuted* configuration. The comment block was also
+rewritten: it still argued the premise the tape falsified — that a >50% win rate is something "no
+trend-following system sustains" — which is a disproven rationale sitting in the code that
+implements it, worse than a merely stale comment. It now records why the premise was wrong
+(the blocked cohort sustained 63%, and R:R<1 is a proxy for a *wide* stop). **No live behaviour
+changed:** `.env` already said shadow, and shadow is what both processes were running.
+
+**⚠ `STATUS.html` had drifted much further than the R:R line**, and the same pass corrected it.
+It advertised **"2 live · 5 shadow"** gates and showed the **regime gate as ACTIVE in four separate
+places** (KPI tile, the gate table, the Phase-6 status row, and the risk list, which still read
+"the regime gate is live on one walk-forward … reverting is one environment variable") — three
+weeks after the 2026-09-02 revert. Also corrected: the R:R overlay described as "queued" when it
+had shipped *and* been reverted; `sl_atr` at 12/20 → **17/20**; CAS at "0 rows · starts 08-26" →
+**1,664 rows / 8 sessions, complete**; MCE "2 inert pending backfill" → backfill verified done;
+heat 25.6% → **58.0%**; the gate table given its missing 8th row and the "seven gates" headings
+corrected; and the critical-path diagram re-pointed at the execution plan. Date stamps moved to
+2026-09-04.
+
+**The standing hazard, restated because this is its second bite:** `STATUS.html` hardcodes gate
+modes in prose, in tables and in an ASCII diagram, with no live data source. A mode flip silently
+falsifies it. **Grep every gate name in it on every flip.**
+
+Tests: 169 green over the touched surface (`test_rr_guard` 14, plus `test_eligibility_preview`,
+`test_trading`, `test_entry_quality`, `test_entry_quality_shadow` = 155). Every R:R test
+monkeypatches the mode explicitly, so the default change moved no assertion.
+
+
 ### docs(state): watch mode closed, docs re-synced for the next session (2026-09-04)
 
 Doc-sync ritual run at the close of the review series.

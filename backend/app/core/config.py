@@ -312,24 +312,35 @@ class Settings(BaseSettings):
     chase_max_r: float = 0.33
 
     # ── Reward:risk floor overlay (app/signals/rr_guard.py) ─────────────────
-    # Rejects a signal whose planned TARGET is closer than its STOP. Unlike every other
-    # overlay this enforces an IDENTITY, not a hypothesis: at planned R:R < 1 the trade
-    # needs a >50% win rate merely to break even, which no trend-following system
-    # sustains — so it defaults to ACTIVE with no forward-evidence bar, because there is
-    # no hypothesis to test. (Moving the floor ABOVE 1.0 is a different matter entirely:
-    # 1.67 would be fitted to our observed 37.5% win rate and MUST go through the
-    # deflated-Sharpe / multiple-testing bar first.)
+    # Rejects a signal whose planned TARGET is closer than its STOP.
     #
-    # Why the defect exists: `analysis/risk.py::compute_levels` pairs a STRUCTURAL stop
-    # (swing pivot / EMA20) with an ABSOLUTE-% target (swing +6%, positional +15%), so the
-    # ratio is an accident of where the pivot sat — 94 of 295 swing signals landed under
-    # 1.0 (2026-09-02 audit). Intraday/scalp are ratio-based (1:2, 1:1.5) and are fine.
-    # This overlay is the tourniquet; making swing/positional ratio-based is a §6 spec
-    # change with an §8 regression, deliberately not done here.
+    # ⛔ SHIPPED ACTIVE 2026-09-02, REVERTED TO SHADOW 2026-09-03 — and the default here
+    # was moved with it (verified 2026-09-04). The original argument was that this gate
+    # enforces an IDENTITY, not a hypothesis, and therefore needed no forward-evidence
+    # bar: at planned R:R < 1 a trade needs a >50% win rate merely to break even, "which
+    # no trend-following system sustains". The arithmetic was right; the clause after the
+    # comma was an ASSERTION, never checked, and the tape falsified it in one week. The
+    # blocked cohort was the only profitable one in the book — 24 trades, +₹10,585, 63%
+    # win, 33% tp_hit — because (a) a nearer target is mechanically easier to hit, and
+    # (b) R:R < 1 is a PROXY FOR A WIDE STOP (7.29% avg, zero tight) and wide stops are
+    # independently the good cohort. The gate blocked wide stops. Backwards.
+    #
+    # Standing lesson (CLAUDE.md constraint 8): an identity about arithmetic still rests
+    # on an empirical premise — test the premise against the tape before flipping.
+    # Re-promotion needs the deflated-Sharpe / multiple-testing bar plus a tail check,
+    # not a repeat of the identity argument. Moving the floor ABOVE 1.0 is doubly
+    # empirical: 1.67 is fitted to our observed 37.5% win rate.
+    #
+    # Why the defect it targets exists: `analysis/risk.py::compute_levels` pairs a
+    # STRUCTURAL stop (swing pivot / EMA20) with an ABSOLUTE-% target (swing +6%,
+    # positional +15%), so the ratio is an accident of where the pivot sat — 94 of 295
+    # swing signals landed under 1.0 (2026-09-02 audit). Intraday/scalp are ratio-based
+    # (1:2, 1:1.5) and are fine. Making swing/positional ratio-based is a §6 spec change
+    # with an §8 regression, and remains the real fix.
     #   off    — TRUE no-op.
-    #   shadow — measure only.
-    #   active — reject (default; identity, not a tuned threshold).
-    rr_gate_mode: Literal["off", "shadow", "active"] = "active"
+    #   shadow — measure only (default, after the revert).
+    #   active — reject.
+    rr_gate_mode: Literal["off", "shadow", "active"] = "shadow"
     # The floor itself. Keep at 1.0 unless you have run the multiple-testing bar.
     rr_min: float = 1.0
 

@@ -246,19 +246,36 @@ else.
   POSITION — portfolio-wide is the **unbuilt heat cap** (45.3% across 23 positions vs Elder's 6%).
   **This replaced the proposed `paper_min_risk_pct`**: a %-of-price stop floor is the wrong instrument
   (2% is comfortable on HDFC, a knife-edge on a ₹39 micro-cap) and `sl_atr` already measures it in
-  ATRs at 17/20. (2) **R:R floor overlay** (`app/signals/rr_guard.py`, **ACTIVE**, `rr_min=1.0`) —
-  rejects a target closer than its stop: 11 of 190 listed signals. **It is the ONE gate with no
-  forward-evidence bar, deliberately: it enforces an IDENTITY** (R:R<1 needs a >50% win rate merely to
-  break even), not a claim about the tape. **Raising the floor above 1.0 IS empirical** (1.67 is fitted
-  to our 37.5% win rate) and must pass the multiple-testing bar. **R:R and `sl_atr` are STRUCTURALLY
-  DISJOINT — never deduplicate them** (a tight stop yields a LARGE ratio; R:R<1 needs a WIDE stop —
-  11 vs 21 signals, zero overlap, pinned by a test). Root cause stays `compute_levels` pairing a
-  structural stop with an absolute-% target — a §6 spec change, not done.
-  **⚠ UNVERIFIED AS OF 2026-09-04:** the 2026-09-03 record says this gate was **REVERTED to shadow**
-  (it blocked the only profitable cohort — 24 trades, +₹10,585, 63% win — because R:R<1 is a proxy
-  for a WIDE stop). `config.py` still defaults to `"active"` and `.env` is hook-protected, so the
-  live mode could not be confirmed. **Verify in the running process before trusting this bullet**,
-  then reconcile CLAUDE.md, the `config.py` default and `STATUS.html`.
+  ATRs at 17/20. (2) **R:R floor overlay** (`app/signals/rr_guard.py`, `rr_min=1.0`) — rejects a
+  target closer than its stop: 11 of 190 listed signals. Shipped **ACTIVE 2026-09-02** on the
+  argument that it is the ONE gate needing no forward-evidence bar because it enforces an IDENTITY
+  (R:R<1 needs a >50% win rate merely to break even) rather than a claim about the tape.
+  **⛔ REVERTED TO SHADOW 2026-09-03 — the premise was false.** The blocked cohort was the book's
+  ONLY profitable one: **24 trades, +₹10,585, 63% win, 33% tp_hit** vs the allowed set's 77 trades,
+  −₹26,792, 48% win, 16% tp_hit. Two mechanisms: a nearer target is mechanically EASIER to hit, and
+  **R:R<1 is a PROXY FOR A WIDE STOP** (7.29% avg, zero tight, vs 4.38% and 11 tight) — wide stops
+  are independently the good cohort, so the gate blocked wide stops. Backwards.
+  **✅ MODE VERIFIED 2026-09-04** in both live processes (see the mode-verification recipe below);
+  the `config.py` default was moved `"active"` → `"shadow"` the same day so a fresh checkout can no
+  longer run the refuted state. **Re-promotion needs the deflated-Sharpe bar + a tail check, never
+  the identity argument again**; raising the floor above 1.0 is doubly empirical (1.67 is fitted to
+  our 37.5% win rate). **R:R and `sl_atr` are STRUCTURALLY DISJOINT — never deduplicate them** (a
+  tight stop yields a LARGE ratio; R:R<1 needs a WIDE stop — 11 vs 21 signals, zero overlap, pinned
+  by a test). Root cause stays `compute_levels` pairing a structural stop with an absolute-% target
+  — a §6 spec change, not done.
+- **HOW TO VERIFY A GATE'S LIVE MODE (recipe, since `.env` is hook-protected and unreadable).**
+  `settings` is an `@lru_cache` singleton, so a `.env` edit reaches a process only when that process
+  re-imports `app.core.config`. You cannot read `.env`; you do not need to. Three steps:
+  (1) `cd backend && uv run python -c "from app.core.config import get_settings; print(get_settings().<knob>)"`
+  — a fresh load reads the same `.env`, and because every gate's code default differs from the
+  reverted value, a mismatch with the default proves `.env` is overriding;
+  (2) find when each live process last re-imported config — `ps --ppid <uvicorn-pid> -o pid,lstart,cmd`
+  gives the `--reload` CHILD's start time (the parent PID does NOT restart on reload, so reading the
+  parent is the trap), and `ps -eo lstart,cmd | grep celery` gives the worker's;
+  (3) compare those against the flip's own timestamp — `git log -S'<changelog heading>' --format='%h %ad' --date=iso -- CHANGELOG.md`.
+  Child-start AFTER flip-time ⇒ the live process holds the current value. Worked example
+  2026-09-04: R:R revert committed 09-03 09:34, uvicorn reload child started 09-03 12:28, celery
+  worker 09-04 08:37 ⇒ both live on `shadow`.
 - **✅ WATCH MODE COMPLETE (ran to Fri 2026-09-04).** CAS Stage-1 accrual finished **HEALTHY:
   `cas_daily` = 1,664 rows across 8 sessions, last 2026-09-04, no missed window** (verified by query
   2026-09-04). Stage 2 (the overnight-reversal study) is now unblocked. The daily "check the row

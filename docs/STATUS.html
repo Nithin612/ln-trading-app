@@ -419,7 +419,7 @@
   </div>
 
   <header class="mast">
-    <div class="eyebrow">Master reference · the whole project · updated 2026-09-02</div>
+    <div class="eyebrow">Master reference · the whole project · updated 2026-09-04</div>
     <h1>Trading Platform Compendium</h1>
     <p class="lede">One page for everything: how the system works end to end, what the money actually did, every experiment and what it proved, exactly where the build stands, and how the next two phases get built. Written for two readers at once — the business question <em class="q">is this working and is it safe?</em> and the engineering question <em class="q">where does this live in the code?</em></p>
     <div class="metastrip">
@@ -434,16 +434,16 @@
   <section class="board" aria-labelledby="board-h">
     <div class="board-hd">
       <h2 id="board-h">Status board</h2>
-      <span class="asof">as of 2026-09-02 · numbers read from the dev database and the repo, not from memory</span>
+      <span class="asof">as of 2026-09-04 · numbers read from the dev database and the repo, not from memory</span>
     </div>
     <div class="kpis">
       <div class="kpi"><div class="k">Build phase</div><div class="v acc">6.8 → MCE</div><div class="s">Phases 0–6 &amp; 6.8 closed. MCE slices 1–5a built, all shadow.</div></div>
       <div class="kpi"><div class="k">Active work</div><div class="v flag">CAS watch</div><div class="s">Stage 0 + 1 built 08-25. Capture accrues to Fri 09-04, then study.</div></div>
       <div class="kpi"><div class="k">Paper book · all time</div><div class="v down">−₹7,932</div><div class="s">83 closed trades since 07-07, net of ₹15,160 charges.</div></div>
       <div class="kpi"><div class="k">Since the fill-model reset</div><div class="v down">−₹10,817</div><div class="s">6 closed, 1 winner. Pre/post 08-17 are not comparable.</div></div>
-      <div class="kpi"><div class="k">Open book</div><div class="v">13 · −₹51</div><div class="s">EoD mark 08-25. Heat 25.6% of capital.</div></div>
+      <div class="kpi"><div class="k">Open book</div><div class="v down">29 · heat 58.0%</div><div class="s">₹58,034 at risk on ₹1L (09-04), up from 45.3% on 09-02. Still no portfolio cap.</div></div>
       <div class="kpi"><div class="k">Live order path</div><div class="v down">none</div><div class="s">Paper only. Live trading is Phase 7, not started.</div></div>
-      <div class="kpi"><div class="k">Eligibility gates</div><div class="v">2 live · 5 shadow</div><div class="s">Regime gate + factor diversity enforce; five measure only.</div></div>
+      <div class="kpi"><div class="k">Eligibility gates</div><div class="v">1 live · 8 shadow</div><div class="s">Only factor diversity enforces; eight measure only. Regime and R:R were both reverted.</div></div>
       <div class="kpi"><div class="k">Suites</div><div class="v up">1574 / 401</div><div class="s">backend / frontend · +16 parity, 9 walk-forward, 19 replay, 86 cargo.</div></div>
     </div>
     <div class="board-ft">
@@ -455,9 +455,9 @@
     <div class="cd"><b>2</b><span>sessions to go</span></div>
     <div class="wt">
       <p><strong>What "watch mode" means right now.</strong> Nothing is being built on the money path this week. The Closing-Auction-Session capture (<code>cas_daily</code>) went in on 2026-08-25 and now needs to <em>accrue</em>: it writes one row per F&amp;O-underlying per day from the 3:15–3:35 PM auction window. The study that decides whether there is an edge cannot run until there is data — so the plan is to let it fill through <strong>Friday 2026-09-04</strong> (8 trading sessions: 26–28, 31 Aug, 1–4 Sep) and re-read then.</p>
-      <p><strong>Two things must stay true for that to happen.</strong> <code>make worker</code> must be up across 15:15–15:33 IST each day — the capture is a Celery-beat task, not a daemon of its own — and the Kite token must be fresh. <strong>As of 2026-09-02 accrual is healthy: 6 sessions captured, 208 rows each (26–28, 31 Aug, 1–2 Sep) = 1,248 rows, no missed window.</strong> A missed auction window cannot be back-filled, so keep checking the row count each morning.</p>
+      <p><strong>Two things must stay true for that to happen.</strong> <code>make worker</code> must be up across 15:15–15:33 IST each day — the capture is a Celery-beat task, not a daemon of its own — and the Kite token must be fresh. <strong>✅ The watch window closed on 2026-09-04 with accrual healthy: 8 sessions captured, 208 rows each = 1,664 rows, no missed window.</strong> Stage 2 (the overnight-reversal study) is unblocked, and the daily row-count check is discharged. A missed auction window still cannot be back-filled, so if accrual resumes the worker must be up across that band.</p>
 
-      <p><strong>Two things changed on 2026-09-02, neither of them a build.</strong> First, the <strong>regime gate was reverted to shadow</strong> — over 88 decided trades its suppressed set was net-POSITIVE on the live tape for seven straight report days, and all three §8 metrics that justified the 08-14 flip had inverted. A gate promoted on 44 observations was refuted by 88; the standing rule is now that no shadow→active flip happens without its pre-registered count <em>and</em> a multiple-testing-aware bar. Second, an <strong>entry/eligibility audit</strong> traced the P&amp;L leak to arithmetic rather than stock picking: expectancy is <strong>−0.303R per trade</strong>, and payoff is capped by construction because <code>compute_levels</code> pairs a structural stop with an absolute-% target, so <strong>94 of 295 swing signals have a target closer than their stop</strong> and there is no minimum-R:R gate anywhere. Over 99 resolved trades, the 44 carrying at least one mechanical defect lost ₹19,649 while the 55 clean ones made ₹5,256 at a 55% win rate. Two fixes shipped the same day — the <strong>display path is now gated</strong> (41 of 204 listed signals had been offering a Buy button that could only fail) and the <strong>wrong-side-stop bug</strong> in <code>size_for_fill</code> is closed. The R:R floor overlay, the entry-window rework and a portfolio-heat cap remain queued.</p>
+      <p><strong>Two things changed on 2026-09-02, neither of them a build.</strong> First, the <strong>regime gate was reverted to shadow</strong> — over 88 decided trades its suppressed set was net-POSITIVE on the live tape for seven straight report days, and all three §8 metrics that justified the 08-14 flip had inverted. A gate promoted on 44 observations was refuted by 88; the standing rule is now that no shadow→active flip happens without its pre-registered count <em>and</em> a multiple-testing-aware bar. Second, an <strong>entry/eligibility audit</strong> traced the P&amp;L leak to arithmetic rather than stock picking: expectancy is <strong>−0.303R per trade</strong>, and payoff is capped by construction because <code>compute_levels</code> pairs a structural stop with an absolute-% target, so <strong>94 of 295 swing signals have a target closer than their stop</strong> and there is no minimum-R:R gate anywhere. Over 99 resolved trades, the 44 carrying at least one mechanical defect lost ₹19,649 while the 55 clean ones made ₹5,256 at a 55% win rate. Two fixes shipped the same day — the <strong>display path is now gated</strong> (41 of 204 listed signals had been offering a Buy button that could only fail) and the <strong>wrong-side-stop bug</strong> in <code>size_for_fill</code> is closed. The <strong>R:R floor overlay shipped ACTIVE on 2026-09-02 and was reverted to shadow on 2026-09-03</strong> — it blocked the book's only profitable cohort (24 trades, +₹10,585, 63% win), because R:R&nbsp;&lt;&nbsp;1 turned out to be a proxy for a <em>wide</em> stop and wide stops are the good cohort. The entry-window rework and a portfolio-heat cap remain queued.</p>
     </div>
   </div>
 
@@ -472,7 +472,7 @@
         <li><a href="#s4"><span class="num">04</span><span>End-to-end lifecycle</span></a></li>
         <li><a href="#s5"><span class="num">05</span><span>The signal engine</span></a></li>
         <li><a href="#s6"><span class="num">06</span><span>The multi-factor rule</span></a></li>
-        <li><a href="#s7"><span class="num">07</span><span>The seven gates</span></a></li>
+        <li><a href="#s7"><span class="num">07</span><span>The eight gates</span></a></li>
         <li><a href="#s8"><span class="num">08</span><span>Rust compute core</span></a></li>
         <li><a href="#s9"><span class="num">09</span><span>Realtime layer</span></a></li>
         <li><a href="#s10"><span class="num">10</span><span>Paper trading, risk &amp; fills</span></a></li>
@@ -820,8 +820,8 @@ EMA_CROSS       0.0     FIBONACCI       0.0</pre>
 
       <section class="doc" id="s7">
         <div class="sec-kicker">07 · The gates</div>
-        <h2>The seven eligibility gates — where behaviour is decided <a class="anchor" href="#s7" aria-label="Link to this section">#</a></h2>
-        <p>This is the section to read if you want to know what the system will and will not do. The signal engine proposes; these seven gates dispose. Each one is a small, pure module downstream of the frozen engine, and each has a three-position switch:</p>
+        <h2>The eight eligibility gates — where behaviour is decided <a class="anchor" href="#s7" aria-label="Link to this section">#</a></h2>
+        <p>This is the section to read if you want to know what the system will and will not do. The signal engine proposes; these eight gates dispose. Each one is a small, pure module downstream of the frozen engine, and each has a three-position switch:</p>
         <div class="split">
           <div class="box neutral"><h4>the three modes</h4>
             <p><span class="ladder"><i></i><i></i><i></i></span> &nbsp;<code>off</code> — a true no-op. No read, no compute, no footprint at all.</p>
@@ -836,7 +836,7 @@ EMA_CROSS       0.0     FIBONACCI       0.0</pre>
         <div class="tablewrap"><table>
           <thead><tr><th>#</th><th>Gate</th><th>What it refuses, in plain terms</th><th>Threshold</th><th>Mode</th></tr></thead>
           <tbody>
-            <tr class="win"><td class="mono">1</td><td><strong>regime</strong><br><span class="n">regime_guard.py</span></td><td>Entries in a <em>transitional</em> trend — ADX between 20 and 25, where price is neither ranging nor trending. Walk-forward showed this band is net-negative.</td><td class="mono">ADX 20–25</td><td><span class="chip done"><span class="dot"></span>ACTIVE</span></td></tr>
+            <tr><td class="mono">1</td><td><strong>regime</strong><br><span class="n">regime_guard.py</span></td><td>Entries in a <em>transitional</em> trend — ADX between 20 and 25, where price is neither ranging nor trending. Walk-forward showed this band is net-negative; <strong>the live tape disagreed</strong>.</td><td class="mono">ADX 20–25</td><td><span class="chip prog"><span class="dot"></span>shadow</span><br><span class="n">reverted 09-02</span></td></tr>
             <tr><td class="mono">2</td><td><strong>circuit band</strong><br><span class="n">circuit_guard.py</span></td><td>Names pinned near their <em>adverse</em> circuit limit. A long into the lower band has no buyers, so its stop cannot fill at any price.</td><td class="mono">1.5%</td><td><span class="chip prog"><span class="dot"></span>shadow</span></td></tr>
             <tr class="win"><td class="mono">3a</td><td><strong>factor diversity</strong><br><span class="n">entry_quality.py</span></td><td>Single-indicator signals — the AYE and SRTL archetype in §6.</td><td class="mono">≥2 factors<br>≤90% share</td><td><span class="chip done"><span class="dot"></span>ACTIVE</span></td></tr>
             <tr><td class="mono">3b</td><td><strong>stop too tight</strong><br><span class="n">entry_quality.py</span></td><td>Stops narrower than the stock's own daily noise — a stop that ordinary volatility reaches (§18).</td><td class="mono">1.0 × ATR</td><td><span class="chip prog"><span class="dot"></span>shadow</span></td></tr>
@@ -844,10 +844,11 @@ EMA_CROSS       0.0     FIBONACCI       0.0</pre>
             <tr><td class="mono">5</td><td><strong>market regime</strong><br><span class="n">market_regime.py</span></td><td>Longs while the broad index sits below its 200-day average — risk-off. VIX is carried but informational only.</td><td class="mono">200-DMA<br>VIX 20</td><td><span class="chip prog"><span class="dot"></span>shadow</span></td></tr>
             <tr><td class="mono">6</td><td><strong>liquidity</strong><br><span class="n">liquidity_guard.py</span></td><td>Names too thinly traded to exit — median daily traded value below the floor. Side-independent: illiquidity traps a long and a short alike.</td><td class="mono">₹1 cr/day</td><td><span class="chip prog"><span class="dot"></span>shadow</span></td></tr>
             <tr><td class="mono">7</td><td><strong>anti-chase</strong><br><span class="n">chase_guard.py</span></td><td>Orders where the live price has already run past the signal's entry, so the reward is gone but the risk is not.</td><td class="mono">0.33 R</td><td><span class="chip prog"><span class="dot"></span>shadow</span></td></tr>
+            <tr><td class="mono">8</td><td><strong>reward:risk floor</strong><br><span class="n">rr_guard.py</span></td><td>Signals whose planned <em>target</em> sits closer than their <em>stop</em> — 94 of 295 swing signals, an accident of pairing a structural stop with an absolute-% target.</td><td class="mono">R:R ≥ 1.0</td><td><span class="chip prog"><span class="dot"></span>shadow</span><br><span class="n">reverted 09-03</span></td></tr>
           </tbody>
         </table></div>
-        <p class="ov-note"><strong>One gate currently blocks trades: factor diversity</strong> (the "≥2 scoring factors, never a single indicator" rule). The other six watch and record, so we can see what they <em>would</em> have done before trusting them with money. The regime gate <em>was</em> the second one, from 2026-08-14 until <strong>2026-09-02, when it was reverted to shadow</strong>: over 88 decided trades its suppressed set came in <strong>net-POSITIVE</strong> on the live tape for seven straight report days, and all three §8 metrics that had justified the flip inverted (win 30% kept vs 36% suppressed, Sharpe −0.041 vs +0.044, maxDD 34.5R vs 11.2R). A gate promoted on 44 observations was refuted by 88.</p>
-        <h3>What one real order looks like after passing all seven</h3>
+        <p class="ov-note"><strong>One gate currently blocks trades: factor diversity</strong> (the "≥2 scoring factors, never a single indicator" rule). The other eight watch and record, so we can see what they <em>would</em> have done before trusting them with money. <strong>Two gates have been promoted and then reverted, one week apart</strong> — the R:R floor (active 09-02, reverted 09-03; it blocked the only profitable cohort, +₹10,585 at 63% win, because R:R&nbsp;&lt;&nbsp;1 is a proxy for a wide stop) and, before it, the regime gate, active from 2026-08-14 until <strong>2026-09-02, when it was reverted to shadow</strong>: over 88 decided trades its suppressed set came in <strong>net-POSITIVE</strong> on the live tape for seven straight report days, and all three §8 metrics that had justified the flip inverted (win 30% kept vs 36% suppressed, Sharpe −0.041 vs +0.044, maxDD 34.5R vs 11.2R). A gate promoted on 44 observations was refuted by 88.</p>
+        <h3>What one real order looks like after passing all of them</h3>
         <p>BHARTIARTL, 2026-08-25 09:53 IST. This is the actual stamp on the order — the complete audit trail of a single decision:</p>
         <pre class="code tech"><span class="cm">// orders.broker_payload  (abridged — charges and fill detail omitted)</span>
 <span class="st">"entry_quality"</span>: { <span class="st">"scoring_factors"</span>: 6, <span class="st">"dominant_share"</span>: <span class="st">"0.3103"</span>,
@@ -1036,7 +1037,7 @@ Committed candles → blocking writer queue → writer thread → Postgres upser
         <h2>Where we are now <a class="anchor" href="#s16" aria-label="Link to this section">#</a></h2>
         <div class="callout">
           <span class="k">One paragraph</span>
-          <p>v1 shipped. <strong>v2 phases 0 through 6 and 6.8 are all closed and merged to <code>main</code></strong> (Phase 6 and 6.8 both gated 2026-08-20). Phase 6 quantified the entry-selection leak and shipped the regime gate, now <strong>active</strong> on the paper path. Phase 6.8 made execution honest — real order-book fills, circuit-band safety, continuous open-book marking, corporate-action handling and a feed-staleness alarm. The <strong>Market Context Engine is in progress</strong>: six of its slices are built and every one is in shadow, so none has changed a trade yet. The <strong>Closing Auction Session</strong> capture landed on 2026-08-25 and is now accruing data until 2026-09-04. <strong>Live trading still does not exist</strong> — <code>place_order</code> is paper-only, and that is Phase 7, not started.</p>
+          <p>v1 shipped. <strong>v2 phases 0 through 6 and 6.8 are all closed and merged to <code>main</code></strong> (Phase 6 and 6.8 both gated 2026-08-20). Phase 6 quantified the entry-selection leak and shipped the regime gate, which ran <strong>active</strong> on the paper path from 2026-08-14 until its own pre-registered revert condition fired — it is <strong>back in shadow since 2026-09-02</strong>. Phase 6.8 made execution honest — real order-book fills, circuit-band safety, continuous open-book marking, corporate-action handling and a feed-staleness alarm. The <strong>Market Context Engine is in progress</strong>: six of its slices are built and every one is in shadow, so none has changed a trade yet. The <strong>Closing Auction Session</strong> capture landed on 2026-08-25 and <strong>finished its watch window on 2026-09-04 with 1,664 rows across 8 sessions and no missed window</strong>, which unblocks the Stage-2 overnight-reversal study. <strong>Live trading still does not exist</strong> — <code>place_order</code> is paper-only, and that is Phase 7, not started.</p>
         </div>
         <h3>Suites — run, not remembered</h3>
         <div class="metrics">
@@ -1056,9 +1057,9 @@ Committed candles → blocking writer queue → writer thread → Postgres upser
             <tr><td class="mono">3</td><td>Realtime v2 — tick to tick</td><td><span class="chip done"><span class="dot"></span>CLOSED 08-14</span></td><td>live-worker + Rust LiveEngine · committed vs forming · replay · soaks + shadow week</td></tr>
             <tr><td class="mono">4</td><td>F&amp;O analytics</td><td><span class="chip done"><span class="dot"></span>PASS 08-06</span></td><td>Chain builder · Rust IV and Greeks · IV-rank, PCR, max-pain · defined-risk selling</td></tr>
             <tr><td class="mono">5</td><td>UI overhaul</td><td><span class="chip done"><span class="dot"></span>gated 08-07</span></td><td>Sidebar IA · themes · four style pages · chain ladder · virtualised tables</td></tr>
-            <tr><td class="mono">6</td><td>Outcome tracking + entry selection</td><td><span class="chip done"><span class="dot"></span>CLOSED 08-20</span></td><td>MFE/MAE · attribution · regime gate <strong>ACTIVE</strong> · retune shadow · pair trading shadow</td></tr>
+            <tr><td class="mono">6</td><td>Outcome tracking + entry selection</td><td><span class="chip done"><span class="dot"></span>CLOSED 08-20</span></td><td>MFE/MAE · attribution · regime gate <strong>reverted to shadow 09-02</strong> · retune shadow · pair trading shadow</td></tr>
             <tr><td class="mono">6.8</td><td>Execution realism &amp; exchange safety</td><td><span class="chip done"><span class="dot"></span>CLOSED 08-20</span></td><td>Six paper-safe slices: depth · spread-aware fills · circuit overlay · open-book MTM · corporate actions · staleness alarm</td></tr>
-            <tr><td class="mono">—</td><td>R-track entry quality</td><td><span class="chip done"><span class="dot"></span>done 08-19</span></td><td>Diversity gate <strong>ACTIVE</strong>; stop-too-tight in shadow (§6)</td></tr>
+            <tr><td class="mono">—</td><td>R-track entry quality</td><td><span class="chip done"><span class="dot"></span>done 08-19</span></td><td>Diversity gate <strong>ACTIVE</strong> — the only one still enforcing; stop-too-tight in shadow at 17/20 (§6)</td></tr>
             <tr><td class="mono">—</td><td>Anti-chase + surfacing</td><td><span class="chip done"><span class="dot"></span>done 08-21</span></td><td>Seventh gate in shadow · alert-bell context · Opportunities table · 3-year regime study</td></tr>
             <tr><td class="mono">—</td><td>Market Context Engine</td><td><span class="chip prog"><span class="dot"></span>in progress</span></td><td>Slices 1–5a built, <strong>all shadow</strong> — sector RS, index store, market regime, liquidity</td></tr>
             <tr><td class="mono">—</td><td>Closing Auction Session</td><td><span class="chip prog"><span class="dot"></span>watch mode</span></td><td>Stage 0 confirmed, Stage 1 capturing. Study when data accrues (§23)</td></tr>
@@ -1069,13 +1070,16 @@ Committed candles → blocking writer queue → writer thread → Postgres upser
         <pre class="ascii">P0–P6 + P6.8 CLOSED, merged to main
         │
         ▼   three forward-evidence loops run themselves (no code task, none blocking):
-              · regime gate ACTIVE — keep-or-revert review ~2026-09-15
-              · momentum ×1.5 retune — A/B vs base, promote on evidence + sign-off
+              · regime gate — DECIDED 2026-09-02: REVERTED to shadow, refuted by 88 trades
+              · momentum ×1.5 retune — stalled at 3 minted / 0 resolved; needs a backtest path
               · pair trading — df vs adf arms, answered by attribution when it accrues
         │
-        ▼   THIS WEEK: CAS watch — capture accrues to Fri 2026-09-04, then the study
+        ▼   ✅ DONE: CAS watch closed Fri 2026-09-04 — 1,664 rows / 8 sessions, Stage 2 unblocked
         │
-        ▼   MCE remaining: deep index backfill → slice 5b (market cap) → slice 6 (news veto)
+        ▼   NEXT: the 91-item execution plan (docs/quant-agent-findings.md)
+              Bucket A ~7d freeze the recorded numbers · Bucket B ~5d the instruments
+        │
+        ▼   MCE remaining: ✅ index backfill done → slice 5b (market cap) → slice 6 (news veto)
         │
         ▼   Phase 7 — live-trading hardening, opening with the risk-engine single-gate slice
         │
@@ -1657,7 +1661,7 @@ Committed candles → blocking writer queue → writer thread → Postgres upser
         <ol class="body">
           <li><span class="chip done"><span class="dot"></span>do now</span> &nbsp;<strong>Score entries on their own horizon.</strong> The daily report's "reached ≥1R" line should read <code>0/5 today · 4/13 within horizon so far</code>, not a bare entry-day count. Reporting only — zero money-path risk.</li>
           <li><span class="chip done"><span class="dot"></span>do now</span> &nbsp;<strong>Surface stop-width-in-ATRs at entry.</strong> The number already exists — <code>sl_atr_mult</code> is stamped on every order (BHARTIARTL carried 2.6147 on 08-25). It belongs in §2 of the daily report and on the Opportunities list, so a 0.05× stop is visible <em>before</em> the fill rather than in a post-mortem.</li>
-          <li><span class="chip prog"><span class="dot"></span>keep accruing</span> &nbsp;<strong>The stop-too-tight gate stays in shadow.</strong> This study supports its threshold and supplies the mechanism, but readiness is 12 of 20 and a flip needs sign-off.</li>
+          <li><span class="chip prog"><span class="dot"></span>keep accruing</span> &nbsp;<strong>The stop-too-tight gate stays in shadow.</strong> This study supports its threshold and supplies the mechanism, but readiness is <strong>17 of 20</strong> and a flip needs sign-off — and, since 2026-09-03, must also clear the deflated-Sharpe bar and a tail check.</li>
           <li><span class="chip bad"><span class="dot"></span>rejected</span> &nbsp;<strong>Do not widen stops</strong> on the money path (Part 4), and <strong>do not hold through stops</strong> (Part 1, priced at −₹54,701 on one name).</li>
         </ol>
         <div class="callout warn">
@@ -1725,9 +1729,9 @@ Committed candles → blocking writer queue → writer thread → Postgres upser
         </div>
         <p>An anchored walk-forward that learns the bad regime only from the <em>past</em> and applies it forward lifted out-of-sample expectancy from <strong>+0.067 to +0.142</strong> — so the effect is not an artifact of knowing the answer in advance.</p>
         <div class="callout good">
-          <span class="k">Shipped, and it is the only gate on the money path</span>
-          <p>Built as a downstream overlay (<code>regime_guard.py</code>), engine untouched, and run in <strong>shadow first</strong>. Its first live read had the suppressed cohort at −0.061R and gating lifted live expectancy from −0.034R to −0.016R — consistent with the backtest. It was flipped <strong>ACTIVE on 2026-08-14</strong> by explicit user decision, and it is fully reversible with one environment variable plus a restart.</p>
-          <p><strong>It is now monitored, not decided.</strong> A keep-or-revert review is scheduled for around 2026-09-15, driven by the flip-readiness banner in the daily report. One honest flag: the first live read had the suppressed set <em>not</em> net-negative, which is worth watching.</p>
+          <span class="k">Shipped, promoted, and then reverted — the full arc</span>
+          <p>Built as a downstream overlay (<code>regime_guard.py</code>), engine untouched, and run in <strong>shadow first</strong>. Its first live read had the suppressed cohort at −0.061R and gating lifted live expectancy from −0.034R to −0.016R — consistent with the backtest. It was flipped <strong>ACTIVE on 2026-08-14</strong> by explicit user decision, on <strong>44</strong> resolved suppressed trades.</p>
+          <p><strong>⛔ It was reverted to shadow on 2026-09-02, and that honest flag is why.</strong> The one caveat recorded at the flip — that the first live read had the suppressed set <em>not</em> net-negative — is exactly what the forward evidence confirmed. The pre-registered revert condition fired on 08-21 and stayed fired for <strong>seven consecutive report days</strong>: the suppressed set was net-POSITIVE on the live tape (+0.090 expR, sign never once negative) with <code>decided</code> grown 54 → <strong>88</strong>, and all three §8 metrics that justified the flip inverted (win 30% kept vs 36% suppressed · Sharpe −0.041 vs +0.044 · maxDD 34.5R vs 11.2R). Gating moved total-R from −2.0R to −10.0R, so <strong>the gate subtracted about 8R</strong> by removing a +7.9R cohort, while suppressing 37 of 204 visible signals. <strong>A gate promoted on 44 observations was refuted by 88.</strong></p>
         </div>
       </section>
 
@@ -1738,14 +1742,15 @@ Committed candles → blocking writer queue → writer thread → Postgres upser
         <div class="tablewrap"><table>
           <thead><tr><th>Loop</th><th>What it answers</th><th>Where the answer lands</th><th>State</th></tr></thead>
           <tbody>
-            <tr><td><strong>Regime gate</strong></td><td>Was flipping it right? Keep or revert?</td><td class="mono">regime-gate-shadow-&lt;date&gt;.md</td><td><span class="chip done"><span class="dot"></span>active · review ~09-15</span></td></tr>
-            <tr><td><strong>Stop-too-tight</strong></td><td>Should the sl_atr gate go active, and at what multiple?</td><td class="mono">entry-quality-shadow-&lt;date&gt;.md</td><td><span class="chip prog"><span class="dot"></span>12 / 20 resolved</span></td></tr>
+            <tr><td><strong>Regime gate</strong></td><td>Was flipping it right? Keep or revert?</td><td class="mono">regime-gate-shadow-&lt;date&gt;.md</td><td><span class="chip bad"><span class="dot"></span>DECIDED 09-02 · reverted</span></td></tr>
+            <tr><td><strong>R:R ≥ 1 floor</strong></td><td>Does refusing a target nearer than the stop help?</td><td class="mono">§2 of the daily report</td><td><span class="chip bad"><span class="dot"></span>DECIDED 09-03 · reverted</span></td></tr>
+            <tr><td><strong>Stop-too-tight</strong></td><td>Should the sl_atr gate go active, and at what multiple?</td><td class="mono">entry-quality-shadow-&lt;date&gt;.md</td><td><span class="chip prog"><span class="dot"></span>17 / 20 resolved</span></td></tr>
             <tr><td><strong>Anti-chase</strong></td><td>Does blocking a chased entry help?</td><td class="mono">chase-shadow-&lt;date&gt;.md</td><td><span class="chip prog"><span class="dot"></span>2 / 20 resolved</span></td></tr>
             <tr><td><strong>Momentum ×1.5 retune</strong></td><td>Does the retuned weight set beat base out of sample?</td><td class="mono">§8 of the daily report</td><td><span class="chip prog"><span class="dot"></span>both arms dark so far</span></td></tr>
             <tr><td><strong>Intraday profiles</strong></td><td>Can forward evidence overturn a negative walk-forward?</td><td class="mono">§8 of the daily report</td><td><span class="chip prog"><span class="dot"></span>accruing</span></td></tr>
             <tr><td><strong>Pair trading</strong></td><td>Which cointegration test — Dickey-Fuller or augmented?</td><td class="mono">pair-attribution-&lt;date&gt;.md</td><td><span class="chip prog"><span class="dot"></span>dual-arm, accruing</span></td></tr>
-            <tr><td><strong>MCE slices 1–5a</strong></td><td>Do context gates improve selection?</td><td class="mono">sector-rs / market-regime / liquidity shadow</td><td><span class="chip prog"><span class="dot"></span>2 inert pending backfill</span></td></tr>
-            <tr><td><strong>CAS</strong></td><td>Does the auction move reverse overnight?</td><td class="mono">cas_daily → study</td><td><span class="chip prog"><span class="dot"></span>0 rows · starts 08-26</span></td></tr>
+            <tr><td><strong>MCE slices 1–5a</strong></td><td>Do context gates improve selection?</td><td class="mono">sector-rs / market-regime / liquidity shadow</td><td><span class="chip prog"><span class="dot"></span>backfilled · sector-RS untested</span></td></tr>
+            <tr><td><strong>CAS</strong></td><td>Does the auction move reverse overnight?</td><td class="mono">cas_daily → study</td><td><span class="chip done"><span class="dot"></span>1,664 rows · 8 sessions · complete</span></td></tr>
           </tbody>
         </table></div>
         <h3>Three findings that came out of these loops</h3>
@@ -1892,7 +1897,7 @@ Committed candles → blocking writer queue → writer thread → Postgres upser
           <li><span class="ic warn">▲</span><span><strong>Two MCE shadow layers are inert</strong> pending a one-off index backfill (§21). Their current verdicts are computed on insufficient history.</span></li>
           <li><span class="ic warn">▲</span><span><strong>The provisional-health watch has no scheduler.</strong> It must be run by hand each session, and the durable health key expires after 7 days — so a week of not looking is a week of data gone.</span></li>
           <li><span class="ic warn">▲</span><span><strong>CAS capture has no redundancy.</strong> If the worker is down over 15:15–15:33 IST, that day's auction is unrecoverable (§23).</span></li>
-          <li><span class="ic info">▲</span><span><strong>The regime gate is live on one walk-forward.</strong> It is the only gate touching money and its first live read had the suppressed set not net-negative. A keep-or-revert review is scheduled for around 2026-09-15; reverting is one environment variable.</span></li>
+          <li><span class="ic info">▲</span><span><strong>Two gates were promoted on thin evidence and both were reverted within three weeks.</strong> The regime gate went active on 44 observations and was refuted by 88 (2026-09-02, costing about 8R while it ran); the R:R floor went active on an <em>identity</em> argument and was refuted in a week (2026-09-03). Since then no shadow→active flip happens without its pre-registered count, a deflated-Sharpe / multiple-testing bar, and a check that the sign survives trimming the tail. <strong>Factor diversity is now the only gate touching money.</strong></span></li>
           <li><span class="ic info">▲</span><span><strong>Single-broker, single-machine.</strong> Kite is the only broker adapter, and the platform runs on one development machine whose quirks have destroyed virtual environments and package stores three times. Backups and the environment path matter more than they look.</span></li>
           <li><span class="ic info">▲</span><span><strong>Local <code>main</code> is ahead of the remote.</strong> Pushing is deliberately manual. Work that is committed but unpushed exists in exactly one place.</span></li>
         </ul>
@@ -2032,7 +2037,7 @@ make engine-build       rebuild the tradecore wheel <span class="cm"># after any
         <p><strong>This file is the durable copy.</strong> It lives at <code>docs/STATUS.html</code> in the repository — open it directly in any browser, no account and no network needed. Self-contained by design: no CDN, no external fonts, no scripts loaded from anywhere, and the charts are pre-rendered SVG rather than a charting library. The one canonical status source remains the top block of <code>docs/PHASES.md</code>; this page is its readable mirror plus the whole-system reference, regenerated from the repository and the database rather than from memory.</p>
         <div class="meta">
           <span>canonical status: docs/PHASES.md (top block)</span>
-          <span>updated: 2026-08-25</span>
+          <span>updated: 2026-09-04</span>
           <span>paper mode · no live order path</span>
           <span>local main ahead of origin · push is manual</span>
         </div>

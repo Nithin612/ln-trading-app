@@ -12,6 +12,16 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ## ▶ STATE AT A GLANCE (updated 2026-09-04) — read this block first
 
+**▶ 2026-09-04 (later) — GATE STATE RECONCILED. The R:R floor is VERIFIED `shadow` in both live
+processes** (fresh settings load + uvicorn reload-child and celery start times both post-dating the
+09-03 revert commit at 09:34:45). `config.py`'s default moved `"active"` → `"shadow"` so a fresh
+checkout cannot run the refuted state, and its comment block — still arguing the premise the tape
+falsified — was rewritten. **The reusable recipe for verifying a gate without reading the
+hook-protected `.env` is now in CLAUDE.md.** ⚠ The same pass found `STATUS.html` three weeks stale
+on gate modes (**"2 live · 5 shadow"**, regime shown ACTIVE in four places) plus five other stale
+figures; all corrected. **`STATUS.html` hardcodes modes in prose, tables and an ASCII diagram — grep
+every gate name there on every flip.** No live behaviour changed by any of this.
+
 **▶ 2026-09-04 — WATCH MODE COMPLETE + a 30-repo external review landed.**
 - **CAS Stage-1 accrual finished healthy**: `cas_daily` = **1,664 rows / 8 sessions**, last
   2026-09-04, no session missed. The daily row-count check is **discharged**, not carried forward.
@@ -132,13 +142,20 @@ change** — a %-of-price minimum stop is the wrong instrument (2% is comfortabl
 on a ₹39 micro-cap); the volatility-relative gate that does that job (`sl_atr`, 17/20, reproduced by
 the 08-25 horizon study at the same 1.0× threshold) already exists. ⚠ PER POSITION only —
 portfolio-wide is still the unbuilt heat cap (book at 45.3% across 23 positions).
-(2) **R:R floor overlay** (`app/signals/rr_guard.py`, **ACTIVE**, `rr_min = 1.0`) — rejects a signal
+(2) **R:R floor overlay** (`app/signals/rr_guard.py`, `rr_min = 1.0`) — rejects a signal
 whose target is closer than its stop: **11 of 190 listed signals (5.8%)**, and 6 of 23 open positions
-were in that state. **It ships ACTIVE with NO forward-evidence bar on purpose:** unlike every other
+were in that state. **It shipped ACTIVE with NO forward-evidence bar on purpose:** unlike every other
 overlay it enforces an **identity** (planned R:R < 1 needs a >50% win rate merely to break even), so
-there is no hypothesis to falsify. **Raising the floor above 1.0 IS empirical** (1.67 is fitted to our
-37.5% win rate) and must pass the multiple-testing bar — documented in the module, the settings and
-`.env.example` so nobody "helpfully" tunes it. **Complementary to `sl_atr`, not redundant:** the two
+there was held to be no hypothesis to falsify. **Raising the floor above 1.0 IS empirical** (1.67 is
+fitted to our 37.5% win rate) and must pass the multiple-testing bar.
+**⛔ SUPERSEDED — this gate was REVERTED TO SHADOW on 2026-09-03, one day later, and the reasoning
+above is the thing that failed.** The identity is true; the unstated premise attached to it ("which
+no trend-following system sustains") was an assertion never checked, and the tape falsified it in a
+week: the blocked cohort was the book's ONLY profitable one (24 trades, **+₹10,585**, 63% win, 33%
+tp_hit vs the allowed set's 77 trades, −₹26,792, 48%, 16%), because a nearer target is mechanically
+easier to hit AND **R:R<1 is a proxy for a WIDE stop** — the good cohort. Mode **verified `shadow`
+in both live processes 2026-09-04**, with the `config.py` default and `.env.example` moved to match.
+See CLAUDE.md constraint 8 and the review calendar below. **Complementary to `sl_atr`, not redundant:** the two
 are structurally disjoint (a tight stop produces a LARGE ratio; R:R<1 needs a WIDE stop) — 11 vs 21
 signals with **zero overlap**, pinned by a test. Root cause remains `compute_levels` pairing a
 structural stop with an absolute-% target — a §6 spec change, deliberately not done here.
@@ -607,14 +624,30 @@ That is frozen-engine territory (spec change + §8 regression), not a review fin
 **⚠ Heat has drifted: 45.3% → 58.0% of capital** (₹58,034 across 29 open positions, 2026-09-04).
 Still no portfolio-level cap. The per-position notional cap is unaffected.
 
-**⚠ FIRST ACTION NEXT SESSION — resolve one unverified gate state.** `backend/app/core/config.py`
-still declares `rr_gate_mode: … = "active"` with `rr_min = 1.0`, and CLAUDE.md describes the R:R
-floor as **ACTIVE** — but the 2026-09-03 record says it was **REVERTED to shadow** (it blocked the
-only profitable cohort: 24 trades, +₹10,585, 63% win; R:R<1 turned out to be a proxy for a WIDE
-stop). **`.env` is hook-protected so this could not be verified this session.** Per our own rule —
-*verify a gate's state from the live process, never the file, because `settings` is an
-`@lru_cache` singleton* — check the running backend, then make CLAUDE.md, `config.py`'s default and
-`STATUS.html` agree. **Do not flip anything on the strength of a doc.**
+**✅ RESOLVED 2026-09-04 — the R:R gate state is VERIFIED `shadow`, and the three records now agree.**
+The open question was whether the 09-03 revert had actually reached the running processes, since
+`config.py` still defaulted to `"active"` and `.env` cannot be read. It had. Evidence chain, each
+link checked rather than assumed:
+- a **fresh settings load** returns `rr_gate_mode = shadow`; because the *code* default was
+  `"active"`, that mismatch is itself proof `.env` is overriding — no need to read the file;
+- the **uvicorn `--reload` CHILD** (not the parent, which never restarts on reload) started
+  **2026-09-03 12:28:21**, and the **celery worker** at **2026-09-04 08:37:49**;
+- the revert commit is **2026-09-03 09:34:45** (`git log -S` on the CHANGELOG heading).
+Both live processes re-imported config *after* the flip ⇒ both hold `shadow`. The general recipe is
+now written down in CLAUDE.md ("HOW TO VERIFY A GATE'S LIVE MODE") so this costs minutes next time.
+**Also done:** `config.py`'s default moved `"active"` → `"shadow"` so a fresh checkout or CI can no
+longer silently run the refuted state, and its comment block — which still argued the *falsified*
+premise that no trend-following system sustains a >50% win rate — was rewritten to record why that
+premise was wrong. CLAUDE.md and `STATUS.html` re-synced. Nothing was flipped on the strength of a
+doc, and no live behaviour changed.
+
+⚠ **`STATUS.html` had drifted further than the R:R line** and was corrected in the same pass: it
+claimed **"2 live · 5 shadow"** gates and showed the **regime gate as ACTIVE** in four places (the
+KPI tile, the gate table, the Phase-6 row and the risk list) — three weeks after the 09-02 revert.
+It also still called the R:R overlay "queued", carried `sl_atr` at 12/20 (now 17/20), CAS at "0
+rows · starts 08-26" (now 1,664 / 8 sessions), MCE as "2 inert pending backfill" (backfill verified
+done), and heat at 25.6% (now 58.0%). This is the second time the hardcoded-mode problem has bitten
+— **grep every gate name in `STATUS.html` on every mode flip**, it has no live data source.
 
 Optional low-risk work, in preference order:
 1. ~~**Run the deep index backfill once**~~ — ✅ **ALREADY DONE (verified 2026-09-02).**
@@ -704,7 +737,7 @@ survive trimming the tail** and the partition must not be a proxy for something 
 | **circuit band** | shadow | 0/20 resolved blocked | when ≥20 resolved | nothing to measure yet |
 | **sector-RS** | shadow | would-block not worse than eligible | after sector indices are ingested | ⚠ **never actually tested** — only 3 broad indices exist, so it benchmarks every stock against NIFTY50. Data gap, not a verdict |
 | **market regime** | shadow | banner says ✅ READY | **a 2y corpus run only** | ⛔ **DO NOT FLIP — the banner is measuring SIDE.** NIFTY was below its 200-DMA 33/33 days; 39 LONG all blocked, 11 SHORT all kept. It would block the better-median, better-win cohort on a mean where **NDRAUTO alone is 94% of the long loss** |
-| **R:R ≥ 1** | shadow (reverted 09-03) | 24 resolved would-block | needs a proper bar + tail check | ⛔ blocked the only profitable cohort (**+₹10,585 / 63% win**); R:R<1 is a proxy for a WIDE stop |
+| **R:R ≥ 1** | shadow (reverted 09-03; **mode VERIFIED live 09-04**, `config.py` default moved to match) | 24 resolved would-block | needs a proper bar + tail check | ⛔ blocked the only profitable cohort (**+₹10,585 / 63% win**); R:R<1 is a proxy for a WIDE stop |
 | **regime (ADX 20–25)** | shadow (reverted 09-02) | 91 resolved suppressed, +0.078 expR | re-promotion needs a FRESH forward window | settled: do not re-promote on the same §8 backtest |
 | **momentum ×1.5 retune** | shadow | **3 minted, 0 resolved** in 6 days | — | ✗ **stalled** — at ~0.5 signals/day with no resolutions this decision is years away by this route; needs a backtest path instead |
 | **pair df-vs-adf** | shadow | nightly minter accruing | when both arms have resolutions | accruing |
