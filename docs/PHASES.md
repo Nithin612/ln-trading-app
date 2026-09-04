@@ -10,7 +10,36 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-09-02) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-09-04) — read this block first
+
+**▶ 2026-09-04 — WATCH MODE COMPLETE + a 30-repo external review landed.**
+- **CAS Stage-1 accrual finished healthy**: `cas_daily` = **1,664 rows / 8 sessions**, last
+  2026-09-04, no session missed. The daily row-count check is **discharged**, not carried forward.
+- **`docs/quant-agent-findings.md` (4,358 lines)** — 30 external repos audited across five queues
+  (analysis · UI/UX · architecture · testing · workbench), **91 items, all bucketed** into a
+  sequenced **"Execution plan — sequenced to cycle 2"**. Governing rule: *anything that changes a
+  recorded number must land BEFORE cycle 2's clock*; ~60 items touch no recorded number and can be
+  built during accrual. **Zero lines of external code adopted.**
+- **Six findings were about OUR code**: **A21** marks aren't spread-aware though fills are ·
+  **A25** we harvest depth from `MODE_FULL` ticks without checking the mode (fail-open ⇒ silent) ·
+  **A29/A30** no flat DP charge, and the backtest ignores circuit bands the order path enforces ·
+  **A42** no frozen-capital concept (harmless until Phase 7 has pending orders) · **T13/T14**
+  `incremental_equals_batch` on 2 indicators only, and the fixture chain (Rust←Python←pandas-ta)
+  has **no external anchor**. Plus one **validation**: our PSR is *correct* where QuantStats' —
+  the field's most-used tearsheet library — is **wrong** (it feeds pandas *excess* kurtosis into a
+  formula expecting *Pearson*, overstating PSR).
+- **Calibration to hold** (from a 4,843-paper replication record): **median published Sharpe 0.37,
+  half indistinguishable from zero on their own sample, ~half the median edge is index beta.**
+  A −0.303R book measured honestly is an *early-stage* position on that distribution, not an
+  anomalous one; **2–3%/day is not on that distribution at all.**
+- ⚠ **Heat drifted 45.3% → 58.0%** of capital (₹58,034, 29 open positions). Still no portfolio cap.
+- ⚠ **The plan buys evaluation, not edge.** The known lever — `compute_levels` producing **94/295
+  swing signals with R:R < 1 by construction** — is frozen-engine work and is **not** in the plan.
+
+**▶ 2026-09-03 — the deflated-Sharpe bar shipped** (see the entry below) and **user rulings**:
+never create a branch without approval; **`feature/phase6-overlay-walkforward-retune` is THE
+working branch** for everything except Phase 7.
+
 
 **▶ DECISION 2026-09-02 — the REGIME GATE IS REVERTED TO SHADOW** (user sign-off; decision record:
 `docs/analysis/regime-gate-revert-2026-09-02.md`). The gate went ACTIVE 2026-08-14 on a ✅ READY
@@ -543,12 +572,51 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-09-02.**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-04.**
 
-**▶ THIS WEEK IS A WATCH, NOT A BUILD (to Fri 2026-09-04).** The only daily obligation is: worker up
-across 15:15–15:33 IST, then check `cas_daily`'s row count each morning (query in the STATE block
-above). A missed session is unrecoverable. Nothing else is queued on the money path. Optional
-low-risk work while waiting, in preference order:
+**▶ WATCH MODE IS COMPLETE (ran 2026-08-26 → Fri 2026-09-04).** CAS Stage-1 accrual finished
+healthy: **`cas_daily` holds 1,664 rows across 8 sessions, last captured 2026-09-04** (verified by
+query, this session). No session was missed. The daily "check the row count each morning"
+obligation is **discharged** — do not carry it forward as a standing task.
+
+**▶ WHAT'S NEXT — the execution plan in `docs/quant-agent-findings.md` ("Execution plan — sequenced
+to cycle 2").** A 30-repo external review (2026-09-03/04) produced 91 items across five queues
+(analysis · UI · architecture · testing · workbench), all bucketed by **when they must land**:
+
+> **The rule: anything that changes a recorded number must land BEFORE cycle 2's clock starts.**
+> We have already paid this once — paper P&L before and after 2026-08-17 is not comparable because
+> the spread-aware fill model landed mid-window and the 30-day clock reset. **Corollary: ~60 of the
+> 91 items touch no recorded number and can be built *during* accrual.**
+
+- **Bucket A — freeze the numbers (~7 d):** A38 point-in-time `Restrictions` interface (subsumes
+  A30/A31) · A21 mark-to-bid · A37+T3 volume-participation cap · A29 flat DP charge · A23
+  effective-dated fees · A26 hot-set capacity refusal · A25 tick-mode assert · H6.
+- **Bucket B — the instruments that read the cycle (~5 d):** H8 noise negative-control · H1 block
+  bootstrap · H12 beta/IR · H2 buy-and-hold benchmark · H11 MinTRL as headline · T11 pin PSR ·
+  H4 gate register · U4 trials counter · H3 VIX percentile · T7 · A24.
+- **Then:** Phase 7.1–7.4 (the long pole) · MCE 5b (**blocked on a vendor decision, not code**) +
+  MCE 6 · CAS-2 · tuning → **then** cycle 2's 45–50 day clock on ₹1L.
+- **Honest sizing: 3–4 months to cycle-2 start**, consistent with "live is 4–6 months out".
+
+⚠ **The plan buys evaluation, not edge.** Nothing in the 91 items is a new entry signal, and none
+of the 30 repos produced one. **The known lever is already on record and is NOT in the plan:**
+`compute_levels` pairs a structural stop with an absolute-% target, so **94 of 295 swing signals
+have R:R < 1 by construction** — at a 37.5% win rate the arithmetic needs 1.67R and cannot close.
+That is frozen-engine territory (spec change + §8 regression), not a review finding.
+
+**⚠ Heat has drifted: 45.3% → 58.0% of capital** (₹58,034 across 29 open positions, 2026-09-04).
+Still no portfolio-level cap. The per-position notional cap is unaffected.
+
+**⚠ FIRST ACTION NEXT SESSION — resolve one unverified gate state.** `backend/app/core/config.py`
+still declares `rr_gate_mode: … = "active"` with `rr_min = 1.0`, and CLAUDE.md describes the R:R
+floor as **ACTIVE** — but the 2026-09-03 record says it was **REVERTED to shadow** (it blocked the
+only profitable cohort: 24 trades, +₹10,585, 63% win; R:R<1 turned out to be a proxy for a WIDE
+stop). **`.env` is hook-protected so this could not be verified this session.** Per our own rule —
+*verify a gate's state from the live process, never the file, because `settings` is an
+`@lru_cache` singleton* — check the running backend, then make CLAUDE.md, `config.py`'s default and
+`STATUS.html` agree. **Do not flip anything on the strength of a doc.**
+
+Optional low-risk work, in preference order:
 1. ~~**Run the deep index backfill once**~~ — ✅ **ALREADY DONE (verified 2026-09-02).**
    `index_ohlcv_1d` holds **782 bars per index, 2023-07-03 → 2026-09-02**, and the market-regime
    sidecar reports **0 signals** in its "no market data (< 200-DMA history)" bucket. **MCE slice 4

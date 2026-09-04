@@ -254,13 +254,29 @@ else.
   DISJOINT — never deduplicate them** (a tight stop yields a LARGE ratio; R:R<1 needs a WIDE stop —
   11 vs 21 signals, zero overlap, pinned by a test). Root cause stays `compute_levels` pairing a
   structural stop with an absolute-% target — a §6 spec change, not done.
-- **STILL IN WATCH MODE to Fri 2026-09-04 — no money-path build this week.** CAS Stage 1 (`cas_daily`)
-  landed 2026-08-25 and must ACCRUE before Stage 2 (the overnight-reversal study) can run. **Accrual
-  is HEALTHY as of 2026-09-02: 6 sessions × 208 rows = 1,248 rows, no missed window.**
-  The capture is a Celery-beat task, so **`make worker` must be up across 15:15–15:33 IST daily and a
-  missed auction window CANNOT be back-filled** — check the row count each morning. Optional low-risk
-  work while waiting: the deep index backfill (`scripts/backfill_indices.py 2023-07-01 <today>`, which
-  unblocks the INERT MCE slices 3+4), then the two reporting changes below.
+  **⚠ UNVERIFIED AS OF 2026-09-04:** the 2026-09-03 record says this gate was **REVERTED to shadow**
+  (it blocked the only profitable cohort — 24 trades, +₹10,585, 63% win — because R:R<1 is a proxy
+  for a WIDE stop). `config.py` still defaults to `"active"` and `.env` is hook-protected, so the
+  live mode could not be confirmed. **Verify in the running process before trusting this bullet**,
+  then reconcile CLAUDE.md, the `config.py` default and `STATUS.html`.
+- **✅ WATCH MODE COMPLETE (ran to Fri 2026-09-04).** CAS Stage-1 accrual finished **HEALTHY:
+  `cas_daily` = 1,664 rows across 8 sessions, last 2026-09-04, no missed window** (verified by query
+  2026-09-04). Stage 2 (the overnight-reversal study) is now unblocked. The daily "check the row
+  count each morning" obligation is **discharged — do not carry it forward.** The capture remains a
+  Celery-beat task, so if accrual resumes, `make worker` must be up across 15:15–15:33 IST and a
+  missed window still cannot be back-filled.
+- **The next build is the execution plan in `docs/quant-agent-findings.md`** — a 30-repo external
+  review (2026-09-03/04, 4,358 lines) producing **91 items in five queues** (analysis · UI ·
+  architecture · testing · workbench), bucketed by **when they must land**. Governing rule:
+  **anything that changes a recorded number must land BEFORE cycle 2's clock starts** (we already
+  reset one clock this way on 2026-08-17); ~60 of the 91 touch no recorded number and build *during*
+  accrual. **Bucket A** (~7 d, freeze the numbers): A38 point-in-time `Restrictions` · A21
+  mark-to-bid · A37 participation cap · A29 DP charge · A23 effective-dated fees · A26 hot-set
+  refusal · A25 tick-mode assert. **Bucket B** (~5 d, the instruments): H8 noise control · H1 block
+  bootstrap · H12 beta/IR · H2 benchmark · H11 MinTRL headline · T11 · H4 · U4 · H3.
+  **Zero external code adopted**; six findings were about *our* code, plus one validation (our PSR
+  is correct where QuantStats' is wrong). ⚠ **The plan buys evaluation, not edge** — the known lever
+  is still `compute_levels`, above.
 - **The HORIZON / stop-width finding (2026-08-25, `docs/analysis/horizon-recovery-2026-08-25.md`)** —
   from the desk observation that stopped-out names "failed for the day then recovered". **11 of 16
   stop-out losers traded back through their entry, median 1 trading day** — but "just hold" is far

@@ -7,6 +7,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(state): watch mode closed, docs re-synced for the next session (2026-09-04)
+
+Doc-sync ritual run at the close of the review series.
+
+**✅ WATCH MODE COMPLETE (2026-08-26 → Fri 2026-09-04).** CAS Stage-1 accrual verified by query:
+**`cas_daily` = 1,664 rows across 8 sessions, last captured 2026-09-04, no session missed.** Stage 2
+(the overnight-reversal study) is unblocked, and the standing daily "check the row count each
+morning" obligation is **discharged — explicitly marked not to carry forward**, since it was the
+kind of manual ritual that outlives its purpose.
+
+**`docs/PHASES.md`** — STATE block re-stamped 2026-09-02 → **2026-09-04** with the watch-mode close,
+the 30-repo review, the six findings that were about *our own* code, and the calibration (median
+published Sharpe 0.37). **CONTINUE HERE** rewritten: it still told the next session *"THIS WEEK IS A
+WATCH, NOT A BUILD (to Fri 2026-09-04)"*, which would have read as still-active; it now points at
+the execution plan with Buckets A and B named.
+
+**`CLAUDE.md`** — the watch-mode bullet replaced with the completed state plus the next build.
+
+**⚠ One unresolved discrepancy, flagged rather than guessed, in both docs.** `config.py` declares
+`rr_gate_mode = "active"` (`rr_min = 1.0`) and CLAUDE.md describes the R:R floor as ACTIVE, but the
+2026-09-03 record says it was **REVERTED to shadow** (it blocked the only profitable cohort — 24
+trades, +₹10,585, 63% win — because R:R<1 is a proxy for a wide stop). **`.env` is hook-protected,
+so the live mode could not be verified this session.** Per our own rule — *verify a gate from the
+running process, never the file, because `settings` is an `@lru_cache` singleton* — this is now the
+**first action item** in CONTINUE HERE. Nothing was flipped on the strength of a doc.
+
+**Also recorded:** heat has drifted **45.3% → 58.0%** of capital (₹58,034, 29 open positions), still
+with no portfolio-level cap; and the standing note that **the plan buys evaluation, not edge** — the
+known lever remains `compute_levels` producing 94/295 swing signals with R:R < 1 by construction,
+which is frozen-engine work and deliberately not in the 91 items.
+
+
 ### feat(evidence): the deflated-Sharpe bar, and every readiness banner now ships its data (2026-09-03)
 
 Two gates were promoted on favourable-looking evidence in one week and both had to be
