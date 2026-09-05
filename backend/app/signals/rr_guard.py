@@ -38,6 +38,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from decimal import Decimal
 
+from app.core.ratios import MAX_RR, clamp_ratio, is_capped
+
 _Q = Decimal("0.01")
 
 
@@ -49,7 +51,12 @@ class RrVerdict:
     blocked: bool
     assessable: bool  # False ⇒ zero-risk signal; blocked is False (fail-open)
     rr_min: Decimal
+    # Clamped at MAX_RR when the stop is near-zero (the RR≈228 artifact): a raw
+    # value would let one degenerate row dominate any sort or average built on the
+    # stamp. `rr_capped` says so, so nothing downstream reads a truncated 228 as a
+    # real 50:1 setup.
     rr: Decimal | None = None
+    rr_capped: bool = False
     reason: str | None = None
 
     def as_payload(self) -> dict[str, object]:
@@ -58,6 +65,7 @@ class RrVerdict:
             "assessable": self.assessable,
             "rr_min": str(self.rr_min),
             "rr": str(self.rr.quantize(_Q)) if self.rr is not None else None,
+            "rr_capped": self.rr_capped,
             "reason": self.reason,
         }
 
@@ -82,8 +90,12 @@ def evaluate(
             rr_min=rr_min,
             reason="zero-risk signal (entry == SL) — reward:risk not assessable",
         )
-    rr = abs(take_profit - entry) / risk
-    blocked = rr < rr_min
+    # H6 — the DECISION is taken on the raw ratio; only the value we report is
+    # clamped. MAX_RR (50) sits far above rr_min (1.0), so the two can never
+    # disagree, but the order is what guarantees it and a test pins it.
+    raw = abs(take_profit - entry) / risk
+    blocked = raw < rr_min
+    rr = clamp_ratio(raw, MAX_RR)
     reason = None
     if blocked:
         reason = (
@@ -92,7 +104,12 @@ def evaluate(
             "win rate above 50% just to break even"
         )
     return RrVerdict(
-        blocked=blocked, assessable=True, rr_min=rr_min, rr=rr, reason=reason
+        blocked=blocked,
+        assessable=True,
+        rr_min=rr_min,
+        rr=rr,
+        rr_capped=is_capped(raw, MAX_RR),
+        reason=reason,
     )
 
 

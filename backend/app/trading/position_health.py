@@ -20,6 +20,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from enum import StrEnum
 
+from app.core.ratios import MAX_RR, clamp_ratio_f
+
 
 class HealthVerdict(StrEnum):
     HOLD = "hold"    # nothing structurally wrong
@@ -139,13 +141,21 @@ def assess_position_health(  # noqa: C901 — a flat list of independent checks,
         reward_rem = (take_profit - px) if is_long else (px - take_profit)
         risk_rem = (px - stop_loss) if is_long else (stop_loss - px)
         if reward_rem > 0 and risk_rem > 0:
-            rr_remaining = float(reward_rem / risk_rem)
-            if adverse and rr_remaining < params.rr_floor:
+            # H6 — the CUT is decided on the raw ratio; only the number that leaves
+            # this function is clamped. As price closes on the stop, `risk_rem` → 0
+            # and the raw ratio → ∞: correct (little left to lose, much left to
+            # gain) and never a cut, but it reached the API uncapped and rendered
+            # as a five-figure "reward:risk". MAX_RR is far above rr_floor (1.0), so
+            # the clamp cannot flip the verdict — the ORDER here is what guarantees
+            # that, and a test pins it.
+            raw_rr = float(reward_rem / risk_rem)
+            rr_remaining = clamp_ratio_f(raw_rr, float(MAX_RR))
+            if adverse and raw_rr < params.rr_floor:
                 reasons.append(
                     HealthReason(
                         RR_INVERTED,
                         HealthVerdict.CUT,
-                        f"Remaining reward:risk {rr_remaining:.2f} — "
+                        f"Remaining reward:risk {raw_rr:.2f} — "
                         "risking more than it can still make.",
                     )
                 )

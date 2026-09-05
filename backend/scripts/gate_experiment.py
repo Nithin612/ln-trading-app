@@ -27,9 +27,10 @@ from pathlib import Path
 # Runnable from any cwd: put backend/ (the `app` package root) on sys.path.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+from app.core.ratios import WINSOR_R  # noqa: E402
 from app.db.session import AsyncSessionFactory  # noqa: E402
 from app.services.corpus_attribution import corpus_rows  # noqa: E402
-from app.services.entry_attribution import WINSOR_R, Row, _regime_bucket, realized_r  # noqa: E402
+from app.services.entry_attribution import Row, _regime_bucket, realized_r  # noqa: E402
 
 logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("gate_experiment")

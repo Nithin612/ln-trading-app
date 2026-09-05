@@ -18,9 +18,10 @@ from datetime import date, datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.ratios import WINSOR_R
 from app.models.pair import PairSignal
 
-_R_WINSOR = 10.0
+_R_WINSOR = WINSOR_R  # the shared expectancy winsor (H6) — was a third copy of 10.0
 RANK_FLOOR = 5  # sparse pairs — don't RANK a cell below this n (but always report it)
 
 

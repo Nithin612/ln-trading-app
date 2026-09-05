@@ -204,6 +204,25 @@ else.
   `tickmode:health:{day}` hash (7-day TTL, HSET-overwrite because counters are cumulative since
   worker start) rendered by `make analysis` beside the 6.8.6 feed alarm. A clean feed costs **zero**
   extra Redis round trips.
+- **Every ratio goes through `app/core/ratios.py` since H6 (2026-09-05).** A degenerate ratio has
+  THREE honest outcomes and the code conflated them: **UNDEFINED is `None`, NEVER `0.0`** (a
+  zero-risk signal returned the same number the code prints for the *worst possible* R:R, so "not
+  assessable" and "terrible" were indistinguishable); **OFF-SCALE is clamped AND MARKED** (`>50` —
+  printing a truncated 228 as "50.00" reads as a real 50:1 setup, worse than the artifact); NORMAL
+  is the number. ⭐ **THE RULE: clamp what you REPORT, never what you DECIDE** — every gate computes
+  its verdict from the raw ratio; `MAX_RR` is above every threshold that reads it (`rr_min` 1.0,
+  `rr_floor` 1.0) so the two cannot disagree, and the ordering is pinned by test. **`MAX_RR = 50`
+  was read off the book, not argued:** all 656 signals with levels give R:R p50 1.97 · p90 3.67 ·
+  **p99 28.5** · max 228.06, and **exactly one row (0.15%) exceeds 50** — the tiny-SL artifact with
+  a **2.6 bps** stop. ⚠ **Three constants, three DIFFERENT jobs — do not merge them:** `MAX_RR`
+  (reporting bound on R:R) · `MAX_R = 9999.999` (**representability** bound from the `Numeric(7,3)`
+  excursion columns, where overflow aborts a batch commit) · `WINSOR_R = 10.0` (**statistical**
+  winsor bounding one trade's contribution to a mean). They were four literals in four modules, two
+  disagreeing by 1000×. ⚠ **The FROZEN sites are untouched and deferred as H6-b** —
+  `_compute_sortino` returns **0.0 when there are no losing trades** (an infinite Sortino reported
+  as the worst possible score, and a §8 golden), `_compute_sharpe` guards `std == 0` by exact
+  equality (a 1e-16 stdev ⇒ Sharpe ~1e15 into `Numeric(6,3)`), `metrics.avg_rr` uncapped into
+  `Numeric(5,2)`.
 - **Two report sections exist because "the engine produced nothing" was once
   indistinguishable from "the engine is broken":** §7 F&O engine health and §8
   intraday shadow layer. Both attribute a zero to a *reason*. When either shows

@@ -20,6 +20,7 @@ from app.broker.paper_broker import get_live_ltp, get_live_ltps, simulate_fill
 from app.core.config import settings
 from app.core.deps import get_current_user as get_current_active_user
 from app.core.deps import get_db, require_admin
+from app.core.ratios import MAX_RR, safe_ratio
 from app.models.signal import Signal, SignalOutcome
 from app.models.stock import Stock
 from app.models.user import User
@@ -124,13 +125,19 @@ def _near_expiry(sig: Signal, now: datetime) -> bool:
 
 
 def _reward_risk(sig: Signal) -> float:
+    """Planned reward:risk, as a DEDUP TIEBREAKER — so it must return a number, not
+    the honest `None`. A zero-risk signal sorts last (0.0), and the ratio is clamped
+    at MAX_RR (H6) so a near-zero stop cannot manufacture an `RR≈228` that outranks
+    a genuine signal: the artifact ties at the cap and `created_at` decides."""
     # Decimal(str(...)) — robust whether the ORM attr is a Decimal (fresh load)
     # or a str (unrefreshed in-session), matching the project's money pattern.
     entry = Decimal(str(sig.entry_price))
-    risk = abs(entry - Decimal(str(sig.stop_loss)))
-    if risk == 0:
-        return 0.0
-    return float(abs(Decimal(str(sig.take_profit)) - entry) / risk)
+    rr = safe_ratio(
+        abs(Decimal(str(sig.take_profit)) - entry),
+        abs(entry - Decimal(str(sig.stop_loss))),
+        cap=MAX_RR,
+    )
+    return float(rr) if rr is not None else 0.0
 
 
 async def _enrich_page(

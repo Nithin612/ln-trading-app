@@ -38,6 +38,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.broker.paper_broker import exit_mark
 from app.broker.tick_mode import read_tick_mode_health, render_tick_mode_health
+from app.core.ratios import MAX_RR, clamp_ratio, format_ratio, safe_ratio
 from app.models.market_data import Ohlcv1m
 from app.models.signal import Signal, SignalOutcome
 from app.models.stock import Stock
@@ -98,8 +99,9 @@ class ChaseMetrics:
     chase_pct: Decimal
     past_chase_ceiling: bool
     oversize_factor: Decimal
-    rr_designed: Decimal
-    rr_at_fill: Decimal
+    # None = undefined (zero risk), never 0 — see chase_metrics.
+    rr_designed: Decimal | None
+    rr_at_fill: Decimal | None
     intended_risk_inr: Decimal
     actual_risk_inr: Decimal
     actual_risk_pct_capital: Decimal
@@ -125,16 +127,26 @@ def chase_metrics(
     chase_price = (fill - sig_entry) if is_long else (sig_entry - fill)
     qty = Decimal(quantity)
 
-    chase_r = (chase_price / r_designed) if r_designed > 0 else Decimal(0)
-    chase_pct = (chase_price / sig_entry * 100) if sig_entry > 0 else Decimal(0)
-    oversize = (r_at_fill / r_designed) if r_designed > 0 else Decimal(1)
-    rr_designed = (abs(sig_tp - sig_entry) / r_designed) if r_designed > 0 else Decimal(0)
-    rr_at_fill = (abs(sig_tp - fill) / r_at_fill) if r_at_fill > 0 else Decimal(0)
+    # H6 — every ratio here is clamped at MAX_RR before it is reported. `r_at_fill`
+    # goes to zero when a fill lands ON the stop, which used to print an R:R in the
+    # tens of thousands; `r_designed` is zero only for an entry == SL signal, which
+    # the book has never produced (0 of 656). The two R:R fields are `None` when
+    # undefined — a report must not print "0.00" for "there is no ratio", which is
+    # the same number it prints for the worst possible setup. The chase/oversize
+    # fields keep their numeric defaults because comparisons downstream depend on
+    # them, but are clamped so one degenerate row cannot dominate a sort.
+    chase_r = clamp_ratio(safe_ratio(chase_price, r_designed) or Decimal(0), MAX_RR)
+    chase_pct = clamp_ratio(
+        safe_ratio(chase_price * 100, sig_entry) or Decimal(0), MAX_RR * 100
+    )
+    oversize = clamp_ratio(safe_ratio(r_at_fill, r_designed) or Decimal(1), MAX_RR)
+    rr_designed = safe_ratio(abs(sig_tp - sig_entry), r_designed, cap=MAX_RR)
+    rr_at_fill = safe_ratio(abs(sig_tp - fill), r_at_fill, cap=MAX_RR)
     intended_risk = qty * r_designed
     actual_risk = qty * r_at_fill
-    actual_risk_pct = (actual_risk / capital * 100) if capital > 0 else Decimal(0)
+    actual_risk_pct = safe_ratio(actual_risk * 100, capital) or Decimal(0)
     budget = capital * risk_pct / 100
-    budget_mult = (actual_risk / budget) if budget > 0 else Decimal(0)
+    budget_mult = clamp_ratio(safe_ratio(actual_risk, budget) or Decimal(0), MAX_RR)
 
     return ChaseMetrics(
         side=side.upper(),
@@ -151,8 +163,8 @@ def chase_metrics(
         chase_pct=chase_pct.quantize(_Q2),
         past_chase_ceiling=chase_r > _CHASE_CEILING_R,
         oversize_factor=oversize.quantize(_Q3),
-        rr_designed=rr_designed.quantize(_Q2),
-        rr_at_fill=rr_at_fill.quantize(_Q2),
+        rr_designed=rr_designed.quantize(_Q2) if rr_designed is not None else None,
+        rr_at_fill=rr_at_fill.quantize(_Q2) if rr_at_fill is not None else None,
         intended_risk_inr=intended_risk.quantize(_Q2),
         actual_risk_inr=actual_risk.quantize(_Q2),
         actual_risk_pct_capital=actual_risk_pct.quantize(_Q2),
@@ -709,7 +721,8 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
     out.append(
         f"- **Open portfolio heat** (Σ risk-at-fill on open positions): "
         f"{_inr(r.open_risk_total)} "
-        f"({(r.open_risk_total / _d(u.capital_inr) * 100):.1f}% of capital)"
+        f"({format_ratio(safe_ratio(r.open_risk_total * 100, _d(u.capital_inr)), places=1)}"
+        f"% of capital)"
     )
     if cap_breaches:
         names = ", ".join(
@@ -758,7 +771,9 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
             f"| {t.symbol} | {pos.side}/{klass} | {conf} | {c.fill:,.2f} | "
             f"{c.sig_entry:,.2f} | {chase_cell} | {budget_cell} | "
             f"{_inr(c.actual_risk_inr)} ({c.actual_risk_pct_capital}%) | "
-            f"{c.rr_at_fill} / {c.rr_designed} | {_d(pos.current_sl):,.2f} | {status} |"
+            f"{format_ratio(c.rr_at_fill, cap=MAX_RR)} / "
+            f"{format_ratio(c.rr_designed, cap=MAX_RR)} | "
+            f"{_d(pos.current_sl):,.2f} | {status} |"
         )
     out.append("")
     out.append(
@@ -872,7 +887,8 @@ def _render_trade_block(t: TradeRow, *, show_date: bool = False) -> list[str]:
     if sig is not None and c is not None:
         out.append(
             f"- **Plan:** entry {c.sig_entry:,.2f} · SL {c.sig_sl:,.2f} · "
-            f"TP {c.sig_tp:,.2f} · RR {c.rr_designed}  ·  _{sig.headline}_"
+            f"TP {c.sig_tp:,.2f} · RR {format_ratio(c.rr_designed, cap=MAX_RR)}"
+            f"  ·  _{sig.headline}_"
         )
         chase_note = (
             f"chased +{c.chase_r}R past entry ({c.oversize_factor}× risk/share), "

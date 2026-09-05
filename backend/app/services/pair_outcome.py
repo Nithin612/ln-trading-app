@@ -23,11 +23,14 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.ratios import MAX_R, clamp_ratio_f
 from app.models.pair import PairSignal
 from app.services.pair_universe import load_daily_closes
 
 _IST = ZoneInfo("Asia/Kolkata")
-_R_BOUND = 9999.999  # Numeric(7,3) cap; slice-4 attribution winsorizes tiny-risk artifacts
+# Numeric(7,3) cap; slice-4 attribution winsorizes tiny-risk artifacts. The bound
+# is app/core/ratios.MAX_R (H6) — same column, same number, now stated once.
+_R_BOUND = float(MAX_R)
 
 
 @dataclass(frozen=True)
@@ -59,7 +62,7 @@ def resolve_spread(
 
     def outcome(status: str, z: float, spread: float, when: datetime) -> SpreadOutcome:
         fav = (z - sig.entry_z) if is_long else (sig.entry_z - z)
-        r = max(-_R_BOUND, min(_R_BOUND, fav / risk))
+        r = clamp_ratio_f(fav / risk, _R_BOUND)
         return SpreadOutcome(
             status=status, exit_z=z, spread_exit=spread, outcome_r=r, resolved_at=when
         )

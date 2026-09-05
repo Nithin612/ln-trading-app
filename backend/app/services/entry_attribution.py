@@ -32,6 +32,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.ratios import MAX_RR, WINSOR_R, clamp_ratio_f, safe_ratio
 from app.services.signal_outcomes import OUTCOME_EPOCH
 from app.signals import regime as regime_mod
 
@@ -42,12 +43,13 @@ RANK_FLOOR = 20  # below this a cell is computed but never ranked (user ruling 2
 # R-multiple means are dominated by tiny-SL signals (RR up to ~228 seen live), so
 # winsorize per-signal R at ±this bound before averaging — beyond it is a
 # near-zero-risk artifact, not a repeatable edge. Count metrics (hit_rate,
-# reached_1r_rate) are unaffected.
-WINSOR_R = 10.0
+# reached_1r_rate) are unaffected. The bound now lives in app/core/ratios.py (H6):
+# it was duplicated here and in pair_attribution, alongside two 1000×-larger
+# constants doing a different job in signal_excursions and pair_outcome.
 
 
 def _winsor(x: float) -> float:
-    return max(-WINSOR_R, min(WINSOR_R, x))
+    return clamp_ratio_f(x, WINSOR_R)
 
 
 @dataclass(frozen=True)
@@ -133,10 +135,13 @@ _SQL = text(
 
 
 def _rr(entry: Decimal | None, sl: Decimal | None, tp: Decimal | None) -> float | None:
+    """Planned reward:risk. None when undefined (a zero-risk signal has no ratio —
+    it is not a ratio of zero), clamped at MAX_RR so one near-zero stop cannot carry
+    a cohort's mean or win its sort (H6)."""
     if entry is None or sl is None or tp is None:
         return None
-    risk = abs(entry - sl)
-    return float(abs(tp - entry) / risk) if risk > 0 else None
+    rr = safe_ratio(abs(tp - entry), abs(entry - sl), cap=MAX_RR)
+    return float(rr) if rr is not None else None
 
 
 def _confidence_bucket(pct: int) -> str:
@@ -233,8 +238,11 @@ def _table(dimension: str, rows: list[Row], keyfn: Callable[[Row], str]) -> Tabl
     cells = [_cell(k, grp) for k, grp in groups.items()]
 
     # Rankable cells first (best expectancy first), unranked cells after.
-    def _sort_key(c: Cell) -> tuple[bool, float, str]:
-        return (not c.ranked, -(c.expectancy_r if c.expectancy_r is not None else -1e9), c.key)
+    def _sort_key(c: Cell) -> tuple[bool, bool, float, str]:
+        # "No expectancy" is its own sort position, not a magic -1e9 standing in for
+        # one (H6): a sentinel that large is indistinguishable from a real value
+        # until it isn't.
+        return (not c.ranked, c.expectancy_r is None, -(c.expectancy_r or 0.0), c.key)
 
     cells.sort(key=_sort_key)
     return Table(dimension=dimension, cells=cells)

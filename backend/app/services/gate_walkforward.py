@@ -34,7 +34,8 @@ import statistics
 from dataclasses import dataclass
 from datetime import date
 
-from app.services.entry_attribution import RANK_FLOOR, WINSOR_R, Row, _regime_bucket, realized_r
+from app.core.ratios import WINSOR_R
+from app.services.entry_attribution import RANK_FLOOR, Row, _regime_bucket, realized_r
 
 # The exact label `_regime_bucket` emits for ADX 20–25, derived from the canon so
 # it can never drift out of sync with the bucketing function.

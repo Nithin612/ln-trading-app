@@ -636,7 +636,15 @@ to cycle 2").** A 30-repo external review (2026-09-03/04) produced 91 items acro
   batch's `mode`; a quote-mode tick on our MODE_FULL subscription carries no book, so `depth:` goes
   stale and spread-aware fills silently fall back to the flat floor, i.e. **paper fills quietly
   cheaper than reality**. Detect/count/shout + a durable `tickmode:health:{day}` read by the daily
-  report; deliberately does NOT reopen the socket) · H6.
+  report; deliberately does NOT reopen the socket) ·
+  ✅ **H6 DONE 2026-09-05** (degenerate-ratio hygiene — `app/core/ratios.py` is now the single
+  definition: UNDEFINED is `None` **never `0.0`** (a zero-risk signal read as *the worst possible*
+  R:R, the same number), OFF-SCALE is clamped **and marked** (`>50`, because a truncated 228 printed
+  as "50.00" reads as a real setup). **`MAX_RR = 50` is read off the book** — p99 of all 656 signals
+  is 28.5 and **exactly one row (0.15%) exceeds 50**, the tiny-SL artifact with a **2.6 bps** stop.
+  ⭐ **Rule: clamp what you REPORT, never what you DECIDE.** Four literals doing three jobs in four
+  modules — two disagreeing by 1000× — consolidated without collapsing them).
+  **▶ Bucket A is now COMPLETE — every item that changes a recorded number has landed.**
 - **Bucket B — the instruments that read the cycle (~5 d):** H8 noise negative-control · H1 block
   bootstrap · H12 beta/IR · H2 buy-and-hold benchmark · H11 MinTRL as headline · T11 pin PSR ·
   H4 gate register · U4 trials counter · H3 VIX percentile · T7 · A24.

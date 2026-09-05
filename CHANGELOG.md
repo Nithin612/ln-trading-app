@@ -7,6 +7,59 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### fix(H6): a degenerate ratio is undefined, not zero, and off-scale is marked (2026-09-05)
+
+**Bucket A, item 8** — it changes reported R:R values, so it lands before cycle 2's clock.
+
+A ratio whose denominator goes to zero has three honest outcomes and the codebase conflated all
+three. **UNDEFINED** (`entry == SL`: there is no reward:risk) was returned as `0.0` — *the same
+number the code prints for the worst possible setup*, so "not assessable" and "terrible" became
+indistinguishable. **OFF-SCALE** (a 4-paise stop against a ₹9 target) was returned raw, so a single
+row could carry a cohort's mean, win a dedup sort, or overflow a `Numeric` column. **NORMAL** was
+the number.
+
+**The caps are read off the book, not argued for.** All 656 signals carrying levels, 2026-09-05:
+planned R:R p50 **1.97**, p90 **3.67**, p99 **28.5**, max **228.06** — and **exactly one row
+(0.15%) exceeds 50**, the known tiny-SL artifact whose stop is **2.6 bps** of its own price. So
+`MAX_RR = 50` sits above the 99th percentile of genuine signals and below the artifact: it touches
+the artifacts and nothing else. It is a reporting bound taken from the distribution, not a claim
+that a 60:1 setup is impossible.
+
+**⭐ THE RULE: clamp what you REPORT, never what you DECIDE.** Every gate computes its verdict from
+the raw ratio and clamps only the value it stamps or prints. `MAX_RR` (50) is above every threshold
+that reads it (`rr_guard.rr_min` 1.0, `position_health.rr_floor` 1.0), so the two can never
+disagree — but it is the *ordering* that guarantees this, and a test pins both the ordering and the
+constants' relative sizes.
+
+**Four literals doing three jobs, in four modules, two of them disagreeing by 1000×** — now stated
+once in `app/core/ratios.py`: `MAX_RR` (a reporting bound on R:R), `MAX_R = 9999.999` (a
+*representability* bound from the `Numeric(7,3)` excursion columns, where an overflow aborts a batch
+commit), `WINSOR_R = 10.0` (a *statistical* winsor bounding what one trade contributes to a mean).
+Consolidating them deliberately did **not** collapse them into one number.
+
+**Off-scale is marked, not silently truncated.** `format_ratio` renders `—` for undefined and `>50`
+for a clamped value, because printing a truncated 228 as "50.00" would read as a real 50:1 setup —
+worse than the artifact it replaced. `rr_guard` stamps `rr_capped` alongside `rr` for the same
+reason.
+
+Sites migrated: `rr_guard` (the stamped verdict) · `api/v1/signals._reward_risk` (a **dedup
+tiebreaker** — an uncapped 228 let a 4-paise stop beat every genuine candidate for the shown row) ·
+`entry_attribution._rr` + its `-1e9` sort sentinel (replaced by an explicit "no expectancy" sort
+position) · `daily_report.chase_metrics` (five ratios; `rr_at_fill` blows up when a fill lands ON
+the stop) · `position_health.rr_remaining` (reaches the API and the UI) · `signal_excursions` ·
+`pair_outcome` · `pair_attribution`. Also fixed: `daily_report` divided by `capital_inr` unguarded
+in one place and guarded in another **thirty lines apart, same expression**.
+
+**Not touched, and named as follow-ups** (both need §8 + sign-off, `app/backtest/engine.py` is
+FROZEN): `_compute_sortino` returns **`0.0` when there are no losing trades** — a genuinely infinite
+Sortino reported as the worst possible score, and a §8 golden field; `_compute_sharpe` guards
+`std == 0` by exact equality, so a `1e-16` float-noise stdev yields a Sharpe of ~`1e15` into a
+`Numeric(6,3)` column; `metrics.avg_rr` is uncapped into `Numeric(5,2)`.
+
+- `backend/app/core/ratios.py` — new: `MAX_RR`/`MAX_R`/`WINSOR_R`, `safe_ratio`, `safe_ratio_f`,
+  `clamp_ratio`, `clamp_ratio_f`, `is_capped`, `format_ratio`
+- Tests: 22 new (`tests/test_ratios.py`)
+
 ### feat(A25): assert the tick mode on the depth path (2026-09-05)
 
 **Bucket A, item 7.** We subscribe `KiteTicker.MODE_FULL` and harvest 5-level depth out of the

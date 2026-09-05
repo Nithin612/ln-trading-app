@@ -26,6 +26,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.ratios import MAX_R, clamp_ratio
 from app.services.excursion import load_1m_bars, tape_excursion
 from app.services.signal_outcomes import OUTCOME_EPOCH
 
@@ -45,13 +46,13 @@ _SIDE = {"BUY": "LONG", "SELL": "SHORT"}
 # re-fail every 5-min sweep — poisoning the whole backlog behind it. Any
 # |R| ≥ 10000 is a near-zero-risk artifact, not an edge, so capping it there
 # loses nothing 6.2 would trust (the raw value is logged when it happens).
-_MAX_R = Decimal("9999.999")
+# The bound itself now lives in app/core/ratios.MAX_R (H6) — it was duplicated
+# verbatim in pair_outcome, and two OTHER modules carried a 1000×-smaller constant
+# doing a different job (the expectancy winsor).
 
 
 def _clip_r(r: Decimal) -> Decimal:
-    if r > _MAX_R:
-        return _MAX_R
-    return -_MAX_R if r < -_MAX_R else r
+    return clamp_ratio(r, MAX_R)
 
 
 async def _stamp(db: AsyncSession, signal_id: str, now: datetime) -> int:

@@ -11,10 +11,10 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from app.core.ratios import WINSOR_R
 from app.models.signal import Signal, SignalOutcome
 from app.services.entry_attribution import (
     RANK_FLOOR,
-    WINSOR_R,
     compute_attribution,
     render_attribution_markdown,
 )
