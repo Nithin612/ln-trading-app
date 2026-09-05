@@ -34,13 +34,22 @@ def haircut(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 class TestExitSide:
-    @pytest.mark.parametrize("side", ["LONG", "long", "BUY"])
+    @pytest.mark.parametrize("side", ["LONG", "long"])
     def test_a_long_exits_by_selling(self, side: str) -> None:
         assert exit_side_for(side) == "SELL"
 
-    @pytest.mark.parametrize("side", ["SHORT", "short", "SELL"])
+    @pytest.mark.parametrize("side", ["SHORT", "short"])
     def test_a_short_exits_by_buying(self, side: str) -> None:
         assert exit_side_for(side) == "BUY"
+
+    @pytest.mark.parametrize("side", ["BUY", "SELL", "", "flat"])
+    def test_an_order_side_is_refused_not_guessed(self, side: str) -> None:
+        """`compute_pnl` and `roundtrip_charges` treat anything that is not LONG as a
+        SHORT, so accepting `"BUY"` here would mark the position DOWN and then value it
+        with the SHORT formula — turning the haircut into a phantom GAIN. The earlier
+        version mapped BUY→SELL and this test pinned it as intended contract."""
+        with pytest.raises(ValueError, match="POSITION side"):
+            exit_side_for(side)
 
 
 class TestMarkDirection:
@@ -56,7 +65,18 @@ class TestMarkDirection:
 
     @pytest.mark.parametrize("side", ["LONG", "SHORT"])
     @pytest.mark.parametrize("depth", [None, _WIDE, _TIGHT])
-    @pytest.mark.parametrize("ref", [Decimal("39"), Decimal("100"), Decimal("2500")])
+    @pytest.mark.parametrize(
+        "ref",
+        [
+            Decimal("39"), Decimal("100"), Decimal("2500"),
+            # OFF-GRID — where the bug actually lived. `ROUND_HALF_UP` to the nearest
+            # tick carried the price back PAST the reference: 4.9% of 20,000 real 1m
+            # closes marked a long ABOVE its last trade, and 27.2% of our closes are off
+            # the ₹0.05 grid. The original parametrize used only grid-aligned prices and
+            # could not fail (quant-verifier).
+            Decimal("39.04"), Decimal("99.999"), Decimal("2500.03"), Decimal("1234.5678"),
+        ],
+    )
     @pytest.mark.usefixtures("haircut")
     def test_a_mark_is_never_better_than_the_last_trade(
         self, side: str, depth: Depth | None, ref: Decimal
@@ -83,15 +103,14 @@ class TestMarkDirection:
         assert (m.fill < ref) if side == "LONG" else (m.fill > ref)
 
     @pytest.mark.usefixtures("haircut")
-    def test_the_flat_mark_is_a_no_op_on_cheap_stocks(self) -> None:
-        """A LIMITATION worth knowing, not a bug: with `paper_slippage_bps=2` and a ₹0.05
-        tick, the flat haircut only clears half a tick above ~₹125. Below that it rounds
-        away entirely, so the *historical* mark in the daily report (which has no book and
-        therefore always takes the flat path) does not move for a ₹39 micro-cap. The live
-        surface is unaffected — it marks against the real book."""
-        for ref in (Decimal("39"), Decimal("100")):
-            assert exit_mark(ref, "LONG", depth=None, quantity=10).fill == ref
-        assert exit_mark(Decimal("2500"), "LONG", depth=None, quantity=10).fill < Decimal("2500")
+    def test_the_flat_mark_bites_even_on_cheap_stocks(self) -> None:
+        """This USED to be `test_the_flat_mark_is_a_no_op_on_cheap_stocks`: with
+        `ROUND_HALF_UP` a 2bps haircut on a ₹39 stock (₹0.0078) was smaller than half a
+        ₹0.05 tick and rounded away entirely, so the historical mark did not move at all.
+        Directional rounding removed that limitation — the fix for the off-grid bug turned
+        out to fix this too, because a floor always reaches the next tick down."""
+        for ref in (Decimal("39"), Decimal("100"), Decimal("2500")):
+            assert exit_mark(ref, "LONG", depth=None, quantity=10).fill < ref
 
     def test_a_wider_book_marks_a_long_lower_than_a_tight_one(self) -> None:
         wide = exit_mark(Decimal("100"), "LONG", depth=_WIDE, quantity=10).fill
@@ -114,9 +133,14 @@ class TestItIsTheSameModelAsFills:
         ("position_side", "order_side"), [("LONG", "SELL"), ("SHORT", "BUY")]
     )
     @pytest.mark.parametrize("depth", [None, _WIDE])
+    @pytest.mark.usefixtures("haircut")
     def test_a_mark_equals_the_fill_of_the_closing_order(
         self, position_side: str, order_side: str, depth: Depth | None
     ) -> None:
+        """⚠ `usefixtures("haircut")` is load-bearing: with conftest's
+        `paper_slippage_bps=0` the two `depth=None` cells both returned the untouched
+        reference, so an INVERTED `exit_side_for` still passed them (quant-verifier
+        proved it by mutation). A test that survives the bug it guards is not a test."""
         ref = Decimal("250.75")
         mark = exit_mark(ref, position_side, depth=depth, quantity=100)
         fill = simulate_fill(ref, order_side, depth=depth, quantity=100)
@@ -128,7 +152,10 @@ class TestItIsTheSameModelAsFills:
     def test_no_book_falls_back_to_the_flat_floor_exactly_as_a_fill_does(self) -> None:
         m = exit_mark(Decimal("100"), "LONG", depth=None, quantity=10)
         assert m.model == "flat"
-        assert m.slippage_bps == m.baseline_bps
+        # NOT `slippage_bps == baseline_bps` — the flat branch assigns both from the same
+        # local, so that comparison is a tautology (quant-verifier). Assert the VALUE.
+        assert m.slippage_bps == Decimal("2.0")
+        assert m.fill == exit_mark(Decimal("100"), "LONG", depth=None, quantity=99999).fill
 
     def test_a_live_book_is_used_when_present(self) -> None:
         m = exit_mark(Decimal("100"), "LONG", depth=_WIDE, quantity=10)

@@ -15,7 +15,7 @@ fill worse — and a missing book fails open to exactly the old behaviour.
 
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from decimal import ROUND_DOWN, ROUND_HALF_UP, Decimal
+from decimal import ROUND_CEILING, ROUND_DOWN, ROUND_FLOOR, Decimal
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -66,12 +66,27 @@ def _apply_slippage(price: Decimal, order_side: str) -> Decimal:
     return _price_after_bps(price, order_side, _flat_slippage_bps())
 
 
-def _round_tick(price: Decimal) -> Decimal:
-    """Round a fill to the exchange tick grid (config `paper_tick_size`)."""
+def _round_tick(price: Decimal, order_side: str) -> Decimal:
+    """Snap a fill to the exchange tick grid (config `paper_tick_size`), ALWAYS adversely.
+
+    A BUY rounds UP, a SELL rounds DOWN. This is not cosmetic: the module contract is that
+    the model "can only make a fill worse", and `ROUND_HALF_UP` to the NEAREST tick broke
+    it whenever the reference sat off the grid — the rounding could carry the price back
+    *past* the reference and hand us a fill (or a mark) better than the last trade.
+
+    Measured by quant-verifier over 20,000 real `ohlcv_1m` closes: **4.9% of long marks
+    landed above their reference**, mean phantom gain ₹0.0132/share — and **27.2% of our
+    1m closes are off the ₹0.05 grid**, so this was not a corner case. The original test
+    parametrised only grid-aligned prices (39 / 100 / 2500) and could not see it.
+
+    Rounding away from the grid is also the more truthful model on its own terms: an
+    off-grid price is not transactable, so the achievable price is the next tick in the
+    direction that costs you."""
     tick = Decimal(str(settings.paper_tick_size))
     if tick <= 0:
         return price.quantize(Decimal("0.0001"))
-    steps = (price / tick).to_integral_value(rounding=ROUND_HALF_UP)
+    rounding = ROUND_CEILING if order_side.upper() == "BUY" else ROUND_FLOOR
+    steps = (price / tick).to_integral_value(rounding=rounding)
     return (steps * tick).quantize(Decimal("0.0001"))
 
 
@@ -176,7 +191,7 @@ def simulate_fill(
     """
     baseline = _flat_slippage_bps()
     if depth is None or not settings.paper_spread_fill_enabled:
-        fill = _round_tick(_price_after_bps(base_price, order_side, baseline))
+        fill = _round_tick(_price_after_bps(base_price, order_side, baseline), order_side)
         return FillModel(
             model="flat",
             reference=base_price,
@@ -191,7 +206,7 @@ def simulate_fill(
             quantity=quantity,
         )
     total, half_spread, impact = spread_aware_bps(depth, order_side, quantity)
-    fill = _round_tick(_price_after_bps(base_price, order_side, total))
+    fill = _round_tick(_price_after_bps(base_price, order_side, total), order_side)
     return FillModel(
         model="spread",
         reference=base_price,
@@ -213,7 +228,7 @@ def _simulated_fill(base_price: Decimal, order_side: str) -> Decimal:
     Kept for callers that have no book to price against; the depth-aware path
     goes through `simulate_fill`.
     """
-    return _round_tick(_apply_slippage(base_price, order_side))
+    return _round_tick(_apply_slippage(base_price, order_side), order_side)
 
 
 async def get_live_ltps(stock_ids: list[int]) -> dict[int, Decimal]:
@@ -697,8 +712,24 @@ async def close_position(
 
 
 def exit_side_for(position_side: str) -> str:
-    """The order side that CLOSES a position: a LONG exits by selling, a SHORT by buying."""
-    return "SELL" if position_side.upper() in ("LONG", "BUY") else "BUY"
+    """The order side that CLOSES a position: a LONG exits by selling, a SHORT by buying.
+
+    ⚠ Accepts the POSITION vocabulary only (`LONG`/`SHORT`), and raises otherwise. An
+    earlier version also mapped `BUY → SELL`, which looks harmless and is not: `compute_pnl`
+    and `roundtrip_charges` treat anything that is not `LONG` as a SHORT, so a `side="BUY"`
+    would have been marked DOWN and then valued with the SHORT formula — turning the
+    haircut into a phantom GAIN. Unreachable through `Position.side` today, but the helper
+    is public and a test had pinned the loose mapping as intended contract
+    (quant-verifier, 2026-09-05). Refusing the wrong vocabulary is cheaper than making
+    every downstream formula agree about it."""
+    side = position_side.upper()
+    if side not in ("LONG", "SHORT"):
+        raise ValueError(
+            f"exit_side_for expects a POSITION side (LONG/SHORT), got {position_side!r} — "
+            "order sides (BUY/SELL) are a different vocabulary and are handled by "
+            "compute_pnl/roundtrip_charges as SHORT, which would invert the mark"
+        )
+    return "SELL" if side == "LONG" else "BUY"
 
 
 def exit_mark(

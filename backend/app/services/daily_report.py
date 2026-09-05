@@ -350,13 +350,27 @@ async def _build_trade_row(
     eod_mark = eod_unreal = given_back = None
     if not closed_in_window and exc is not None:
         eod_mark = exc.last_close
-        eod_unreal = compute_pnl(
+        # GROSS leg, for give-back only: `exc.mfe_pnl` is a gross peak, so its EoD
+        # counterpart must be gross too. Haircutting one side of that subtraction would
+        # inflate every reported give-back (quant-verifier #6).
+        eod_unreal_gross = compute_pnl(
             side=pos.side,
             entry=_d(pos.avg_entry_price),
             exit_price=eod_mark,
             quantity=pos.quantity,
         ).quantize(_Q2)
-        gb = exc.mfe_pnl - eod_unreal  # gross peak minus gross EoD mark
+        # A21: the REPORTED figure is marked to exit, exactly as `_open_book_mtm` does —
+        # they print under the same "open book mark-to-market" label at the same cutoff,
+        # and shipping one haircut and one raw is precisely the inconsistency A21 set out
+        # to remove (quant-verifier HIGH, and A31's named first instance). `eod_mark`
+        # itself stays raw: it is displayed as the tape price.
+        eod_unreal = compute_pnl(
+            side=pos.side,
+            entry=_d(pos.avg_entry_price),
+            exit_price=exit_mark(eod_mark, pos.side, depth=None, quantity=pos.quantity).fill,
+            quantity=pos.quantity,
+        ).quantize(_Q2)
+        gb = exc.mfe_pnl - eod_unreal_gross  # gross peak minus gross EoD mark
         given_back = gb.quantize(_Q2) if gb > 0 else Decimal("0")
 
     # Profit sealed right now: how far the stop has ratcheted PAST entry into

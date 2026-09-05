@@ -582,7 +582,14 @@ class TestPaperBroker:
         mark = exit_mark(Decimal("460"), "SHORT", depth=None, quantity=100).fill
         assert mark > Decimal("460"), "a short was not marked up"
         assert pos.unrealized_pnl is not None
-        assert pos.unrealized_pnl < (Decimal("500") - Decimal("460")) * 100
+        # Compare against the OLD last-trade valuation net of ITS charges. The looser
+        # `< (500-460)*100` held from `roundtrip_charges` alone and would have passed with
+        # no mark haircut at all (quant-verifier: an assertion that cannot fail).
+        old_est, _ = roundtrip_charges(
+            position_side="SHORT", entry_price=Decimal("500"), exit_price=Decimal("460"),
+            quantity=100, product="delivery",
+        )
+        assert pos.unrealized_pnl < (Decimal("500") - Decimal("460")) * 100 - old_est
 
 
 # ── API endpoint tests ─────────────────────────────────────────────────────────

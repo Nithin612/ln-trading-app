@@ -728,6 +728,44 @@ async def test_open_book_mtm_no_future_bar_leakage(db: AsyncSession) -> None:
     assert mtm == Decimal("10.00")  # marks to 101, never the future 130
 
 
+async def test_the_daily_and_weekly_open_mtm_agree_on_the_same_book(
+    db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A31, whose named first instance is A21 itself: a realism constraint added to one
+    path must be added to EVERY path producing a comparable number, in the same change.
+
+    `report.open_unrealized_eod` and `_open_book_mtm` print under the same
+    "open book mark-to-market" label, for the same book, at the same cutoff. The first cut
+    of A21 haircut only the second, so the daily and weekly reports contradicted each
+    other (quant-verifier HIGH). This equality is the invariant that would have caught it.
+    """
+    monkeypatch.setattr(settings, "paper_slippage_bps", 20.0)
+
+    now = datetime(2026, 8, 5, 8, 0, tzinfo=UTC)
+    opened = datetime(2026, 8, 5, 4, 0, tzinfo=UTC)
+    user = await create_test_user(db, email="a31agree@example.com")
+    stock = await make_stock(db, symbol="AGREE")
+    sig = await _signal(db, stock.id, created=opened, entry="2000", sl="1900", tp="2300")
+    db.add(Position(
+        user_id=user.id, stock_id=stock.id, mode="paper", side="LONG", quantity=20,
+        avg_entry_price=Decimal("2000"), current_sl=Decimal("1900"),
+        current_tp=Decimal("2300"), trail_state="none", realized_pnl=Decimal("0"),
+        opened_at=opened, signal_id=sig.id,
+    ))
+    _candles(db, stock.id, opened, [(5, "2400", "2500", "2400", "2500")])
+    await db.commit()
+
+    report = await build_daily_report(db, day=date(2026, 8, 5), user_id=user.id, now=now)
+    direct = await _open_book_mtm(db, user.id, report.report_end)
+
+    assert report.open_unrealized_eod == direct, (
+        "the daily EoD mark and the weekly per-day mark disagree about the same book"
+    )
+    # ...and both are strictly below the raw last-close valuation, or the equality above
+    # would be satisfied by neither of them being haircut.
+    assert direct < (Decimal("2500") - Decimal("2000")) * 20
+
+
 async def test_open_book_mtm_marks_to_the_exit_not_the_last_close(
     db: AsyncSession, monkeypatch: pytest.MonkeyPatch
 ) -> None:

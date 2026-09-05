@@ -7,6 +7,75 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### fix(A21): five quant-verifier findings — a missed surface, and rounding that paid us (2026-09-05)
+
+Review pass on `873477a`. The A21 mechanism verified correct — direction, no double-counting,
+reporting-only, no market look-ahead — but it **failed on scope and on rounding**.
+
+**A surface was missed, and it is the exact failure A31 exists to prevent.**
+`daily_report.py:352` computed the EoD open figure from the raw last close and printed it as
+*"Open book mark-to-market (gross, EoD)"*, while the weekly series printed a **haircut** number
+under the same label. Same book, same cutoff — provably identical (`report_end` and the weekly
+`cutoff` are both `min(day_end, now)`) — two different models, shipped by the commit whose whole
+purpose was making marks consistent. A31 names A21 as its first instance and it recurred inside
+A21 itself. Fixed, with the invariant test that would have caught it:
+`report.open_unrealized_eod == await _open_book_mtm(db, user_id, report.report_end)`.
+The give-back leg deliberately stays **gross on both sides** — `exc.mfe_pnl` is a gross peak, and
+haircutting one side of that subtraction would inflate every reported give-back.
+
+**`_round_tick` could round a price back PAST its reference — in our favour.** It used
+`ROUND_HALF_UP` to the *nearest* tick, so an off-grid reference could produce a fill or mark
+**better than the last trade**, violating the module's own "can only make a fill worse" contract.
+Measured over 20,000 real `ohlcv_1m` closes: **4.9% of long marks landed above their reference**
+(mean phantom gain ₹0.0132/share), and **27.2% of our 1m closes are off the ₹0.05 grid** — not a
+corner case. My test parametrised only grid-aligned prices (39 / 100 / 2500) and could not see it.
+Rounding is now **directional**: a BUY ceils, a SELL floors. This is also the more truthful model —
+an off-grid price is not transactable, so the achievable price is the next tick in the direction
+that costs you.
+
+**It applies to entry fills too, and there it was not latent.** Correcting the rounding turned
+`test_sizing_is_risk_first_from_the_spread_aware_fill` red — and the test was asserting the bug.
+On its fixture the model computes a raw adverse price of **502.5733** and the old rounding filled
+the BUY at **502.55, below the price it had just computed**: we underpaid by ₹0.023/share on every
+such entry while the module promised it "can only make a fill worse". The fill is now 502.60.
+**So this is a recorded-number change on the money path, not only on the marks** — entry fills get
+marginally worse, which is the honest direction and exactly why Bucket A lands before cycle 2.
+
+**A side effect worth naming: this removed the limitation the previous entry documented.** The
+"flat mark is a no-op below ~₹125" case existed only because a sub-half-tick haircut rounded away.
+A floor always reaches the next tick down, so the cheap-stock mark now bites. That entry's
+limitation 2 is **obsolete** and the test was renamed to assert the opposite.
+
+**`exit_side_for` accepted an order side and would have inverted the sign.** It mapped
+`BUY → SELL`, but `compute_pnl` and `roundtrip_charges` treat anything that is not `LONG` as a
+SHORT — so a `side="BUY"` would have been marked DOWN and then valued with the SHORT formula,
+turning the haircut into a phantom **gain**. Unreachable through `Position.side` today, but the
+helper is public and **a test had pinned the loose mapping as intended contract**. It now accepts
+`LONG`/`SHORT` only and raises otherwise.
+
+**`get_live_depths` shipped with zero tests** while feeding three live call sites. Added, including
+the assertion that actually matters — a three-id read with a gap in the middle, proving the
+key→stock_id mapping holds. A mis-zip there would mark a position against **another stock's order
+book**, which is silent and expensive.
+
+**And three more assertions that could not fail** — in the commit where I had asked the reviewer to
+hunt specifically for them. (a) The two `depth=None` cells of the fill-equivalence test: with
+`conftest`'s `paper_slippage_bps=0` both sides returned the untouched reference, so **an inverted
+`exit_side_for` still passed** (proven by mutation). (b) `assert m.slippage_bps == m.baseline_bps`
+— the flat branch assigns both from the same local. (c) The short test's final assertion held from
+`roundtrip_charges` alone, with no dependence on the mark. All three replaced with assertions on
+values, and the equivalence test now takes the haircut fixture.
+
+Left alone deliberately: `_week_giveback` marks its `final` raw, which is **correct** — its `peak`
+leg is raw too, and haircutting one side would inflate give-back. Two point-in-time notes recorded
+for later: the historical mark applies *today's* `paper_slippage_bps` to a past cutoff (same class
+as A23, effective-dated fees), and it passes *today's* `pos.quantity` — inert now because the flat
+branch only records quantity, but a real leak if depth is ever supplied on that path.
+
+Tests: `test_exit_mark.py` 37 → 63 (off-grid references added), `test_depth.py` 24 → 27,
+plus the daily-vs-weekly agreement test. ruff + mypy clean across 248 files.
+
+
 ### feat(A21): mark-to-exit — marks are priced by the same model as fills (2026-09-05)
 
 **Bucket A, item 2.** Since 6.8.2 our *fills* pay the real half-spread, but our *marks* used

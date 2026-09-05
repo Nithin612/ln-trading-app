@@ -17,6 +17,7 @@ from app.broker.depth import (
     Depth,
     extract_top_of_book,
     get_live_depth,
+    get_live_depths,
     parse_depth,
     serialize_depth,
     write_depth,
@@ -311,3 +312,74 @@ class TestConsumerIntegration:
 
         assert LTP_KEY.format(stock_id=1) in spy.sets
         assert DEPTH_KEY.format(stock_id=1) not in spy.sets
+
+
+class TestGetLiveDepths:
+    """A21 — the BATCHED read that every live mark now goes through.
+
+    It shipped with zero tests (quant-verifier #4) while feeding three call sites. The
+    assertion that matters is the key→stock_id MAPPING: a mis-zip would mark a position
+    against ANOTHER stock's order book, which is silent and expensive."""
+
+    async def test_empty_input_makes_no_round_trip(self) -> None:
+        assert await get_live_depths([]) == {}
+
+    async def test_each_book_maps_to_its_own_stock_even_with_a_gap(self) -> None:
+        """Three ids where the MIDDLE one has no book: the other two must still map to
+        the right stocks. This is the mis-zip canary — with a positional bug the third
+        stock would receive the second's book."""
+        import redis.asyncio as aioredis
+
+        r = aioredis.from_url(settings.redis_url, decode_responses=True)
+        try:
+            await write_depth(
+                r, 9001, 111, Depth(Decimal("10.00"), Decimal("10.10"), 1, 1), ts="t"
+            )
+            await write_depth(
+                r, 9003, 333, Depth(Decimal("30.00"), Decimal("30.30"), 3, 3), ts="t"
+            )
+            out = await get_live_depths([9001, 9002, 9003])
+            assert set(out) == {9001, 9003}
+            assert out[9001].bid == Decimal("10.00")
+            assert out[9003].bid == Decimal("30.00")
+        finally:
+            await r.delete(DEPTH_KEY.format(stock_id=9001))
+            await r.delete(DEPTH_KEY.format(stock_id=9003))
+            await r.aclose()
+
+    async def test_a_corrupt_value_is_absent_not_raised(self) -> None:
+        """Fail open, like every other microstructure read: a poisoned key must not take
+        down the positions list."""
+        import redis.asyncio as aioredis
+
+        r = aioredis.from_url(settings.redis_url, decode_responses=True)
+        try:
+            await r.set(DEPTH_KEY.format(stock_id=9004), "not json at all")
+            await write_depth(
+                r, 9005, 555, Depth(Decimal("50.00"), Decimal("50.50"), 5, 5), ts="t"
+            )
+            out = await get_live_depths([9004, 9005])
+            assert 9004 not in out
+            assert out[9005].bid == Decimal("50.00")
+        finally:
+            await r.delete(DEPTH_KEY.format(stock_id=9004))
+            await r.delete(DEPTH_KEY.format(stock_id=9005))
+            await r.aclose()
+
+    async def test_it_agrees_with_the_single_read_through_both_sides(self) -> None:
+        """Integration through the real seam (`write_depth` → read), not a mock: mocking
+        it would hide exactly the serialisation mismatch worth catching."""
+        import redis.asyncio as aioredis
+
+        r = aioredis.from_url(settings.redis_url, decode_responses=True)
+        try:
+            book = Depth(Decimal("1234.5500"), Decimal("1235.0000"), 7, 9)
+            await write_depth(r, 9006, 666, book, ts="t")
+            batched = (await get_live_depths([9006]))[9006]
+            single = await get_live_depth(9006)
+            assert single is not None
+            assert batched == single == book
+        finally:
+            await r.delete(DEPTH_KEY.format(stock_id=9006))
+            await r.aclose()
+

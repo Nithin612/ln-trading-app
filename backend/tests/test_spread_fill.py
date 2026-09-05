@@ -382,8 +382,16 @@ class TestEntryFill:
             await db.commit()
 
         # Budget = 100000 × 2% = ₹2000. Flat would fill 500 → 20/share → 100 sh.
-        # Spread-aware fills 502.55 → 22.55/share → 88 sh.
-        assert pos.avg_entry_price == Decimal("502.5500")
+        # Spread-aware charges 51.47 bps → a raw adverse price of 502.5733, which ceils
+        # to 502.60 → 22.60/share → 88 sh.
+        #
+        # ⚠ This asserted 502.5500 until 2026-09-05, and that value was the BUG: with
+        # `ROUND_HALF_UP` to the NEAREST tick a BUY filled at 502.55 — **below** the
+        # 502.5733 the model had just computed — so we underpaid by ₹0.023/share while the
+        # module's contract says it "can only make a fill worse". `_round_tick` is now
+        # directional (BUY ceils, SELL floors). Canary: 502.60 ≥ the raw adverse price and
+        # 502.55 is not.
+        assert pos.avg_entry_price == Decimal("502.6000")
         assert pos.quantity == 88
         risk = Decimal(pos.quantity) * (pos.avg_entry_price - Decimal("480"))
         assert risk <= Decimal("2000")  # budget held despite the worse fill

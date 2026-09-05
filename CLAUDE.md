@@ -139,11 +139,18 @@ else.
   position across ~29 positions. Wired into `update_position_pnl` (API list · summary · monitor,
   each batching ONE `get_live_depths` MGET — never a per-position Redis read) and
   `_open_book_mtm`. **Reporting-only: nothing branches on `unrealized_pnl`** (every exit decision
-  is taken on the live tick), so this changed a recorded number and no behaviour. ⚠ **Two limits:**
-  the HISTORICAL mark cannot be a true mark-to-bid (depth is Redis-only, 60 s TTL, never persisted
-  — so `_open_book_mtm` always takes the flat-bps floor); and **the flat haircut is a NO-OP below
-  ~₹125**, where 2 bps is smaller than half a ₹0.05 tick and rounds away. ⚠ `conftest` zeroes
-  `paper_slippage_bps` for the suite — a flat-path test that does not set it passes vacuously.
+  is taken on the live tick), so this changed a recorded number and no behaviour.
+  ⚠ **`_round_tick` is DIRECTIONAL since 2026-09-05** — a BUY ceils, a SELL floors. `ROUND_HALF_UP`
+  to the *nearest* tick could carry an off-grid price back PAST its reference, handing us a fill or
+  mark BETTER than the last trade: **4.9% of 20,000 real 1m closes**, and **27.2% of our closes are
+  off the ₹0.05 grid**. This is the module's stated "can only make a fill worse" contract, and it
+  applies to ENTRY fills too. ⚠ **The one limit that remains:** the HISTORICAL mark cannot be a true
+  mark-to-bid (depth is Redis-only, 60 s TTL, never persisted — `_open_book_mtm` always takes the
+  flat floor; using *today's* book for a past cutoff would be genuine look-ahead, not just
+  imprecision). ⚠ `exit_side_for` accepts **LONG/SHORT only and raises on BUY/SELL** — `compute_pnl`
+  treats non-LONG as SHORT, so accepting an order side would mark down *and* value short = a phantom
+  gain. ⚠ `conftest` zeroes `paper_slippage_bps` for the suite — a flat-path test that does not set
+  it passes vacuously, which has now produced tautological assertions twice.
 - **Paper fills are spread-aware since 6.8.2**: when the live `depth:{stock_id}`
   book is fresh, the haircut is the real half-spread + a size-vs-top-of-book
   impact term, floored at `paper_slippage_bps` so a fill is never *cheaper* than
