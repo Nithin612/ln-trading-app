@@ -7,6 +7,80 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### refactor(A38): one composable, point-in-time registry for every tradability rule (2026-09-05)
+
+**Bucket A, item 1.** The eight eligibility gates were written out twice — once in
+`api/v1/trading.py::_apply_eligibility_overlays` (with I/O, raising 409) and once in
+`signals/eligibility.py::preview` (pure, for the list). Two hand-maintained sequences that had
+to agree on which gates exist, in what order, and with what wording. The 2026-09-02 fix for the
+display-path hole *was* the second sequence, kept in step by a contract test and a comment
+reading *"⚠ flipping an uncovered gate ACTIVE means extending this module IN THE SAME COMMIT"* —
+a synchronisation ritual, which is the thing that had just failed (41 of 204 listed signals
+offering a Buy that could only 409, five Buy surfaces needing retrofit).
+
+**Now each rule is declared once** in `app/signals/restrictions.py` and both paths walk the same
+ordered registry. `eligibility.py` is a thin display-path adapter; `_apply_eligibility_overlays`
+is replaced by `_load_restriction_context` + `restrictions.check(enforced_by=OVERLAY)`.
+
+Three properties are now **data the composer reads** rather than rules a human remembers:
+- **`requires`** — the context keys a rule needs. A rule whose context is unresolved is skipped
+  and, if ACTIVE, NAMED in `unassessed`. `COVERED_GATES`/`UNCOVERED_GATES` are *derived* from
+  this instead of typed out, so a new live-state rule becomes uncovered automatically.
+- **`enforced_by`** — `OVERLAY` (settings-moded) vs `BROKER` (the paper broker's own
+  unconditional pre-fill rejections). The order path runs only overlays, since the broker
+  enforces its own and running them twice would double-reject; the preview runs both, because a
+  user clicking Buy meets both.
+- **`as_of`** — mandatory on the context. Every loader already accepted one; nothing could *pose*
+  the composed question. A backtest can now ask "was this restricted **on that date**".
+
+**Behaviour is preserved, and that was verified rather than asserted.** quant-verifier
+transcribed the old order path and differentially fuzzed it against the new one: **30,000 cases
+× 6 signals × 2 sides → 0 block diffs**, and 18,000 preview cases → 0 diffs under the live
+callers' contract. Evaluation order is verbatim identical on both paths, `off` is still a true
+no-op (no query, no verdict, no stamp), all four `as_of`/`before` anchors survive, the three
+savepoint fail-opens are unchanged, and the frozen engine and protected spec are untouched.
+
+**⚠ Two HIGH defects the first cut shipped, both found by that review, both now fixed and pinned
+by canary tests proven to fail on the old code:**
+
+1. **A truthiness bug silently stopped writing the `entry_quality` stamp.**
+   `mode = "active" if "active" in (div, sl) else div or sl` — **`"off"` is a non-empty string
+   and therefore truthy**, so `div or sl` returned `"off"` whenever diversity was off. The
+   judgement was tagged off, `check` dropped it, and for `diversity=off, sl_atr=shadow` the gate
+   ran and recorded nothing. That stamp is the entire forward-evidence mechanism for the sl_atr
+   sidecar. The fuzz found exactly this: 1,885 stamp diffs, all in that one mode class. Replaced
+   with an explicit `_effective_mode(active > shadow > off)`.
+2. **`through_stop` could be skipped, reporting a void setup as CLEAR.** `requires` is an AND, so
+   declaring `{market_price}` skipped the rule whenever only a modelled fill was supplied — and
+   the preview judges the post-slippage fill by design. Added `requires_any`, so the rule needs
+   *a usable price* and either will do. Latent (both live callers only build a fill when there is
+   a price) but the dead `CTX_FILL_PRICE` constant was the tell.
+
+Also from that review: `allow_offmarket` is now a **required** context field (a safety field
+defaulting permissive is one refactor from being wrong, and `allow_offmarket_entry` defaults
+FALSE); `stamp_key` is declared **once** on the `Restriction` and attached by `check` instead of
+being repeated in every judge; the display path's stand-in thresholds for gates it cannot judge
+now **block everything rather than pass everything**, so if `LIST_AVAILABLE` ever grows the
+failure is loud instead of a plausible-looking verdict against fabricated numbers; and the
+docstring no longer claims an I/O economy the code does not have — context is resolved **eagerly**
+(the price of a pure composer), so a blocked order pays for the later gates' loads.
+
+**Not done, and blocked rather than skipped:** A38 also wants the **backtest** consulting the
+registry. The backtest currently consults no gate at all and `app/backtest/engine.py` is FROZEN,
+so wiring it in changes recorded backtest numbers and needs explicit sign-off plus an §8
+regression and regenerated Rust oracle fixtures. The interface can now pose the question; the
+connection is a separate, sanctioned change.
+
+Tests: **1684 passed** (full backend suite, run exclusively) · `tests/test_restrictions.py` adds
+**28** covering the structural claims — including one that adds a rule to a copy of the registry
+and asserts it lands on both paths untouched, a two-sided canary on the test fixture itself, and
+the two regressions above. ruff + mypy clean across 248 files.
+
+⚠ **Process note:** the first full-suite run was void — launched alongside the review agents, it
+deadlocked on the shared test DB's per-test table reset and named an unrelated frozen-engine
+test. Per the user's standing rule (2026-09-05), long tasks now run **strictly one at a time**.
+
+
 ### feat(evidence): H8 — the negative control on our own deflated-Sharpe bar (2026-09-04)
 
 The bar was rejecting every gate we have, and that verdict was about to justify closing the

@@ -166,6 +166,25 @@ else.
   (`signal_service.py:236`) and the live entry zone is **symmetric ±0.5%**, so a BUY drifting DOWN
   into entry fires "Entered zone". Fix queue in the PHASES CONTINUE HERE block; **items 1, 2 and 7
   shipped 2026-09-02** (see the next bullet).
+- **⭐ SINGLE SOURCE OF TRUTH FOR TRADABILITY = `app/signals/restrictions.py` (A38, 2026-09-05).**
+  Every eligibility rule is declared ONCE in an ordered registry; the order path
+  (`_load_restriction_context` + `restrictions.check(enforced_by=OVERLAY)`) and the display path
+  (`eligibility.preview`, now a thin adapter) both walk it. **This RETIRES the old standing
+  warning** that flipping an uncovered gate active meant hand-extending `eligibility.py` in the
+  same commit — coverage is now DERIVED from each rule's `requires`, so a new live-state rule
+  becomes "uncovered" automatically and an ACTIVE rule that cannot be judged is NAMED in
+  `unassessed`, never silently cleared. Three fields carry the semantics: **`requires`** (+
+  `requires_any` for "either price will do") · **`enforced_by`** (`OVERLAY` = settings-moded, run
+  by the order path; `BROKER` = the paper broker's own unconditional pre-fill rejections, run by
+  the preview only — the order path would otherwise double-reject) · **`as_of`**, mandatory, so a
+  backtest can finally ask *"was this restricted ON THAT DATE"*. Behaviour was proven unchanged by
+  differential fuzz (30,000 order-path cases, 0 block diffs). ⚠ **Adding a gate = adding one
+  `Restriction` + its context loader; do not add a second sequence anywhere.** ⚠ Context is
+  resolved **eagerly** (the price of a pure composer), so a blocked order pays for later gates'
+  I/O. ⚠ **`"off"` is a TRUTHY string** — never `mode_a or mode_b`; use `_effective_mode`. That
+  bug silently stopped writing the `entry_quality` stamp, the sl_atr sidecar's only evidence.
+  ⚠ The **backtest still consults NO gate** and `app/backtest/engine.py` is FROZEN, so wiring it
+  to the registry needs sign-off + an §8 regression + regenerated Rust fixtures.
 - **The DISPLAY path is gated since 2026-09-02 — `app/signals/eligibility.py` is the single source
   of truth for "what would an ACTIVE gate do to this signal".** Before it, `place_order` ran seven
   overlays while `GET /signals/active` and `GET /signals/{id}` ran none, so 41 of 204 listed signals

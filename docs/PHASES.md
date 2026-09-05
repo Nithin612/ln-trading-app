@@ -619,8 +619,10 @@ to cycle 2").** A 30-repo external review (2026-09-03/04) produced 91 items acro
 > the spread-aware fill model landed mid-window and the 30-day clock reset. **Corollary: ~60 of the
 > 91 items touch no recorded number and can be built *during* accrual.**
 
-- **Bucket A — freeze the numbers (~7 d):** A38 point-in-time `Restrictions` interface (subsumes
-  A30/A31) · A21 mark-to-bid · A37+T3 volume-participation cap · A29 flat DP charge · A23
+- **Bucket A — freeze the numbers (~7 d):** ✅ **A38 DONE 2026-09-05** (point-in-time
+  `Restrictions` registry, subsumes A30/A31 — both live paths migrated, behaviour proven
+  unchanged by differential fuzz; ⚠ the BACKTEST leg is blocked on the engine freeze) ·
+  A21 mark-to-bid · A37+T3 volume-participation cap · A29 flat DP charge · A23
   effective-dated fees · A26 hot-set capacity refusal · A25 tick-mode assert · H6.
 - **Bucket B — the instruments that read the cycle (~5 d):** H8 noise negative-control · H1 block
   bootstrap · H12 beta/IR · H2 buy-and-hold benchmark · H11 MinTRL as headline · T11 pin PSR ·

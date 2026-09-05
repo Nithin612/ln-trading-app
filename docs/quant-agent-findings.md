@@ -3847,7 +3847,7 @@ number-changing surface, start the clock, and build the rest underneath it.**
 
 | Item | What | Effort |
 |---|---|---|
-| **A38** | Composable point-in-time `Restrictions` interface — absorbs `eligibility.py`, the order-path gates and `circuit_guard`'s read. **Subsumes A30 and A31.** | 2–3 d |
+| **A38** ✅ **DONE 2026-09-05** | Composable point-in-time `Restrictions` interface — absorbs `eligibility.py`, the order-path gates and `circuit_guard`'s read. **Subsumes A30 and A31.** Shipped as `app/signals/restrictions.py`; both live paths migrated, behaviour proven unchanged by differential fuzz (0 block diffs / 30k cases). ⚠ The **backtest leg is NOT done** — it consults no gate today and `backtest/engine.py` is FROZEN, so it needs sign-off + §8 + regenerated fixtures. | 2–3 d |
 | **A21** | Mark-to-bid, so marks match fills | 0.5 d |
 | **A37 + T3** | Volume-participation cap on fills, with its parametrised test | 1 d |
 | **A29** | Flat DP charge per delivery sell + per-trade cost floor | 0.25 d |
