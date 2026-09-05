@@ -628,8 +628,8 @@ to cycle 2").** A 30-repo external review (2026-09-03/04) produced 91 items acro
   surface; the real book has a position at **17% of daily volume** that was priced at the 2 bps
   floor) · ✅ **A29 DONE 2026-09-05** (flat ₹15.34 DP charge on the delivery SELL leg — **₹1,610.70 was
   never levied across all 105 closed positions, 15.8% of the book's loss**; a flat cost is the one
-  charge that is not neutral to position size, and small is the shape live trading will have) · A23
-  effective-dated fees · A26 hot-set capacity refusal · A25 tick-mode assert · H6.
+  charge that is not neutral to position size, and small is the shape live trading will have) · ✅ **A23 DONE 2026-09-05** (effective-dated fee registry; each leg costed on its own
+  date, pre-coverage dates refused rather than guessed) · A26 hot-set capacity refusal · A25 tick-mode assert · H6.
 - **Bucket B — the instruments that read the cycle (~5 d):** H8 noise negative-control · H1 block
   bootstrap · H12 beta/IR · H2 buy-and-hold benchmark · H11 MinTRL as headline · T11 pin PSR ·
   H4 gate register · U4 trials counter · H3 VIX percentile · T7 · A24.
@@ -642,6 +642,17 @@ of the 30 repos produced one. **The known lever is already on record and is NOT 
 `compute_levels` pairs a structural stop with an absolute-% target, so **94 of 295 swing signals
 have R:R < 1 by construction** — at a 37.5% win rate the arithmetic needs 1.67R and cannot close.
 That is frozen-engine territory (spec change + §8 regression), not a review finding.
+
+**⚠⚠ THE BACKTEST MODELS NO TRADING COSTS AT ALL (found 2026-09-05 while wiring A23).**
+Grepping `app/backtest/` for fees, charges or commission returns **nothing** — not undated fees,
+**zero fees**. So **backtest P&L is GROSS while paper P&L is NET**, and every comparison ever drawn
+between backtest expectancy and the live book is off by the whole charge load: **22–62 bps
+round-trip plus the flat ₹15.34 DP charge** (A29 — which alone is 15.8% of the paper book's loss).
+On a −0.303R book that gap is not a rounding detail. **This is the most consequential member of the
+A21/A30/A31 "realism added here but not there" family**, and it is frozen-engine territory
+(`app/backtest/engine.py`), so it needs explicit sign-off + an §8 regression + regenerated Rust
+fixtures — the same blocker A38's and A37's backtest legs hit. **Until then, treat every backtest
+expectancy as an upper bound, not a comparable number.**
 
 **⚠ PAPER SIZING NOW DEVIATES FROM `SIGNAL_ENGINE.md` §6 ON THIN NAMES (A37, 2026-09-05).**
 §6 specifies `qty = floor(capital × risk% ÷ |entry − SL|)`. Sizing from the actual FILL rather

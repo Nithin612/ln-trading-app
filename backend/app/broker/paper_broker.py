@@ -773,12 +773,16 @@ async def close_position(
             sig = await db.get(Signal, position.signal_id)
             if sig is not None:
                 classification = sig.classification
+        # A23: each leg costed on its OWN date. A position opened before a statutory
+        # rate change and closed after it really did pay two schedules.
         charges, breakdown = roundtrip_charges(
             position_side=position.side,
             entry_price=entry,
             exit_price=price,
             quantity=position.quantity,
             product=product_for_classification(classification),
+            entry_on=position.opened_at.date(),
+            exit_on=datetime.now(UTC).date(),
         )
 
     payload: dict[str, object] = {"reason": reason, "fill": exit_fill.as_payload()}
@@ -898,6 +902,9 @@ async def _estimated_roundtrip_charges(
         exit_price=exit_price,
         quantity=position.quantity,
         product=product_for_classification(classification),
+        entry_on=position.opened_at.date(),
+        # The exit has not happened; this estimates "if it closed now".
+        exit_on=datetime.now(UTC).date(),
     )
     return charges
 

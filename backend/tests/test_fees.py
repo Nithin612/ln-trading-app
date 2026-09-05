@@ -4,7 +4,7 @@ Pure functions, no DB. Numbers cross-checked with Zerodha's public brokerage
 calculator for a 100-share ₹1000→₹1100 round trip.
 """
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
@@ -173,6 +173,9 @@ def test_the_breakdown_reports_the_dp_charge():
     )
     assert breakdown["exit"]["dp_charge"] == "15.34"
     assert breakdown["entry"]["dp_charge"] == "0"
+    # No dates passed here, so the legs record none — the back-compat path. The SEAM test
+    # below is what proves a real position's own dates reach the schedule.
+    assert breakdown["entry"]["priced_on"] is None
 
 
 def test_unknown_product_raises():
@@ -234,6 +237,9 @@ async def test_a_closed_delivery_position_is_charged_the_dp_fee(
     # The DP charge is inside that total, itemised on the SELL leg.
     assert order.broker_payload["charges"]["exit"]["dp_charge"] == "15.34"
     assert order.broker_payload["charges"]["entry"]["dp_charge"] == "0"
+    # A23 seam: the ENTRY leg was priced on the position's OWN open date, not today's.
+    assert order.broker_payload["charges"]["entry"]["priced_on"] == pos.opened_at.date().isoformat()
+    assert order.broker_payload["charges"]["exit"]["priced_on"] is not None
     # And it is not free: the same trade costed without the DP fee is ₹15.34 cheaper.
     from dataclasses import replace
 
@@ -245,4 +251,120 @@ async def test_a_closed_delivery_position_is_charged_the_dp_fee(
         schedule=replace(ZERODHA_EQUITY, dp_charge_per_sell=Decimal("0")),
     )
     assert expected - without == Decimal("15.34")
+
+
+# ── A23: the effective-dated registry ───────────────────────────────────────
+
+
+def test_schedule_history_is_ascending_and_non_empty():
+    """`schedule_for` walks the list and stops at the first entry past the date, so an
+    out-of-order registry would silently return the wrong schedule."""
+    from app.trading.fees import SCHEDULE_HISTORY
+
+    assert SCHEDULE_HISTORY
+    dates = [e.effective_from for e in SCHEDULE_HISTORY]
+    assert dates == sorted(dates)
+    assert len(dates) == len(set(dates)), "two schedules cannot take effect the same day"
+
+
+def test_schedule_for_returns_the_entry_in_force():
+    """With a synthetic three-entry history: on the boundary date the NEW schedule applies,
+    the day before it does not."""
+    from dataclasses import replace as dc_replace
+
+    from app.trading.fees import ZERODHA_EQUITY, DatedSchedule, schedule_for
+
+    a = dc_replace(ZERODHA_EQUITY, delivery_stt_pct=Decimal("0.1"))
+    b = dc_replace(ZERODHA_EQUITY, delivery_stt_pct=Decimal("0.2"))
+    hist = (
+        DatedSchedule(date(2020, 1, 1), a, "a"),
+        DatedSchedule(date(2024, 7, 1), b, "b"),
+    )
+
+    def lookup(on: date):
+        match = None
+        for e in hist:
+            if e.effective_from <= on:
+                match = e.schedule
+            else:
+                break
+        return match
+
+    assert lookup(date(2024, 6, 30)).delivery_stt_pct == Decimal("0.1")
+    assert lookup(date(2024, 7, 1)).delivery_stt_pct == Decimal("0.2")
+    assert lookup(date(2026, 1, 1)).delivery_stt_pct == Decimal("0.2")
+    # and the real registry answers for a real trade date
+    assert schedule_for(date(2026, 9, 5)).dp_charge_per_sell == Decimal("15.34")
+
+
+def test_a_date_before_coverage_raises_rather_than_guessing():
+    """Falling back to the earliest schedule would cost a trade with rates from outside
+    their period and call it a number. Unknown must be loud."""
+    from app.trading.fees import SCHEDULE_HISTORY, schedule_for
+
+    before = SCHEDULE_HISTORY[0].effective_from - timedelta(days=1)
+    with pytest.raises(ValueError, match="no fee schedule covers"):
+        schedule_for(before)
+
+
+def test_each_leg_is_costed_on_its_own_date():
+    """The point of the registry: a position opened before a rate change and closed after
+    it paid TWO schedules. Uses an explicit two-entry history via the `schedule` override
+    being absent and dates straddling a synthetic change."""
+    from dataclasses import replace as dc_replace
+
+    import app.trading.fees as fees_mod
+
+    cheap = dc_replace(fees_mod.ZERODHA_EQUITY, delivery_stt_pct=Decimal("0.05"))
+    dear = dc_replace(fees_mod.ZERODHA_EQUITY, delivery_stt_pct=Decimal("0.50"))
+    original = fees_mod.SCHEDULE_HISTORY
+    fees_mod.SCHEDULE_HISTORY = (
+        fees_mod.DatedSchedule(date(2020, 1, 1), cheap, "cheap"),
+        fees_mod.DatedSchedule(date(2026, 6, 1), dear, "dear"),
+    )
+    try:
+        total, breakdown = roundtrip_charges(
+            position_side="LONG", entry_price=Decimal("1000"), exit_price=Decimal("1000"),
+            quantity=100, product="delivery",
+            entry_on=date(2026, 5, 1),   # under `cheap`
+            exit_on=date(2026, 7, 1),    # under `dear`
+        )
+        entry_stt = Decimal(breakdown["entry"]["stt"])
+        exit_stt = Decimal(breakdown["exit"]["stt"])
+        assert entry_stt == Decimal("50.000")    # 0.05% of 100,000
+        assert exit_stt == Decimal("500.000")    # 0.50% of 100,000
+        assert exit_stt == entry_stt * 10
+        assert total > Decimal("500")
+        # the record says which date priced each leg
+        assert breakdown["entry"]["priced_on"] == "2026-05-01"
+        assert breakdown["exit"]["priced_on"] == "2026-07-01"
+    finally:
+        fees_mod.SCHEDULE_HISTORY = original
+
+
+def test_an_explicit_schedule_still_overrides_the_registry():
+    """Tests and what-if costing pass a schedule directly; the date must then be ignored."""
+    from dataclasses import replace as dc_replace
+
+    from app.trading.fees import ZERODHA_EQUITY
+
+    free = dc_replace(
+        ZERODHA_EQUITY, delivery_stt_pct=Decimal("0"), dp_charge_per_sell=Decimal("0")
+    )
+    b = leg_charges(
+        side="SELL", product="delivery", price=Decimal("1000"), qty=100,
+        on=date(2026, 9, 5), schedule=free,
+    )
+    assert b.stt == Decimal("0")
+    assert b.dp_charge == Decimal("0")
+
+
+def test_omitting_the_date_uses_the_current_schedule():
+    """Back-compat for a fill happening NOW — and the reason historical callers must pass
+    `on` explicitly rather than relying on the default."""
+    dated = leg_charges(
+        side="SELL", product="delivery", price=Decimal("1000"), qty=100, on=date(2026, 9, 5)
+    )
+    undated = leg_charges(side="SELL", product="delivery", price=Decimal("1000"), qty=100)
+    assert dated.total == undated.total
 

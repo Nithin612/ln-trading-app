@@ -7,6 +7,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(A23): the effective-dated fee registry — each leg costed on its own date (2026-09-05)
+
+**Bucket A, item 5.** `fees.py` has claimed since Phase 8 that costs are *"versioned by effective
+date"*, and `ZERODHA_EQUITY` carried a note that *"a future effective-dated registry can replace
+this constant"*. It was still a single constant. Indian statutory rates (STT above all) change
+mid-year, so any record spanning a change was silently priced at today's rates.
+
+`SCHEDULE_HISTORY` is now an ascending list of `DatedSchedule(effective_from, schedule, note)`, and
+`schedule_for(on)` returns the entry in force on a date. **`roundtrip_charges` costs each leg on
+its OWN date** — `entry_on` and `exit_on` — because a position opened before a rate change and
+closed after it genuinely paid two schedules, and collapsing that to one is the error the registry
+exists to prevent. The breakdown records `priced_on` per leg, so a cost can be re-derived from the
+record alone.
+
+**Wired to the three live call sites with real dates:** `close_position` (entry on the position's
+open date, exit today), `_estimated_roundtrip_charges` (same, exit = "if it closed now"), and
+`profit_lock_shadow`'s replay — which matters most, because it replays *real* positions opened weeks
+ago and was costing every one of them at today's schedule.
+
+**A date before the registry's coverage RAISES rather than falling back to the earliest schedule.**
+Costing a trade with rates from outside their period produces a number that looks valid and is
+fabricated; this project's repeated lesson is that unknown must be loud.
+
+**⚠ The registry ships with ONE entry, and that is deliberate rather than a stub.** We hold no
+researched history of Indian rate changes, and inventing effective dates would fabricate precision —
+the same error as inventing a per-trade cost floor, which A29 declined for the same reason. Its
+`effective_from` is documented as a **coverage floor** ("we model nothing earlier"), not a claim
+that these rates began in 2000. To record a real change, *append* an entry — never edit an existing
+one, exactly as with a migration: editing history re-prices every trade already costed under the old
+rates.
+
+**⚠ A bigger gap found while wiring this, and it is not A23's:** grepping for fee usage in
+`app/backtest/` returns **nothing**. The backtest does not model costs *at all* — not undated fees,
+zero fees. So **backtest P&L is GROSS while paper P&L is NET**, and any comparison between backtest
+expectancy and paper expectancy is off by the entire charge load: 22–62 bps round-trip plus the flat
+₹15.34 (A29). That is frozen-engine territory — the same blocker A38's and A37's backtest legs hit —
+so it is recorded here and in PHASES rather than fixed. It is arguably the most consequential item
+in the A21/A30/A31 "realism added here but not there" family, because it silently flatters every
+backtest number we have ever compared against the live book.
+
+Tests: **1807 passed** (full suite, run exclusively); `tests/test_fees.py` 14 → 20. The registry
+tests use a synthetic two-entry history straddling a rate change and assert the entry leg pays 0.05%
+STT while the exit pays 0.50% — a 10× difference the old single-constant model could not express —
+plus the pre-coverage raise, the explicit-schedule override, and back-compat when no date is passed.
+The A29 seam test now also asserts the entry leg was priced on **the position's own open date**.
+
+
 ### feat(A29): the flat depository charge — the one cost that is not neutral to size (2026-09-05)
 
 **Bucket A, item 4.** Our `FeeSchedule` modelled delivery STT on both legs, intraday STT sell-only,

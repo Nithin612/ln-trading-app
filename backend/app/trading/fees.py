@@ -17,6 +17,7 @@ float (trading-domain money rule).
 from __future__ import annotations
 
 from dataclasses import asdict, dataclass
+from datetime import date
 from decimal import ROUND_HALF_UP, Decimal
 
 _PAISE = Decimal("0.01")
@@ -85,6 +86,66 @@ ZERODHA_EQUITY = FeeSchedule(
     dp_charge_per_sell=Decimal("15.34"),
 )
 
+# ── A23 — the effective-dated registry ──────────────────────────────────────
+# The module docstring has claimed since Phase 8 that costs are "versioned by effective
+# date", and the constant above carried a note that "a future effective-dated registry can
+# replace this constant". This is that registry. Statutory Indian rates (STT above all)
+# change mid-year, and a trade must be costed with the rates in force ON ITS OWN DATE —
+# otherwise a record spanning a change is silently priced at today's rates.
+
+
+@dataclass(frozen=True)
+class DatedSchedule:
+    """A schedule and the date it took effect."""
+
+    effective_from: date
+    schedule: FeeSchedule
+    note: str
+
+
+#: Ascending by `effective_from`. **To record a rate change, append an entry — never edit
+#: an existing one**, exactly as with a migration: editing history silently re-prices every
+#: trade already costed under the old rates.
+#:
+#: ⚠ There is ONE entry today, so `schedule_for` returns the same schedule for every date.
+#: That is not a placeholder to be filled with guesses: we hold no researched history of
+#: Indian statutory rate changes, and inventing effective dates would fabricate precision
+#: rather than model it — the same error as inventing a per-trade cost floor. Its
+#: `effective_from` is a COVERAGE FLOOR ("we model nothing earlier"), not a claim that
+#: these rates began in 2000.
+SCHEDULE_HISTORY: tuple[DatedSchedule, ...] = (
+    DatedSchedule(
+        effective_from=date(2000, 1, 1),
+        schedule=ZERODHA_EQUITY,
+        note="Zerodha NSE cash-equity schedule (≈2025), incl. the ₹15.34 DP charge (A29). "
+        "Coverage floor, not a researched start date.",
+    ),
+)
+
+
+def schedule_for(on: date) -> FeeSchedule:
+    """The schedule in force on `on` — the latest entry whose `effective_from` ≤ `on`.
+
+    Raises for a date before the registry's coverage rather than silently falling back to
+    the earliest schedule. A cost we cannot source is unknown, and this project's repeated
+    lesson is that unknown must be loud rather than read as a verified value.
+    """
+    match: FeeSchedule | None = None
+    for entry in SCHEDULE_HISTORY:
+        if entry.effective_from <= on:
+            match = entry.schedule
+        else:
+            break
+    if match is None:
+        raise ValueError(
+            f"no fee schedule covers {on.isoformat()} — the registry starts at "
+            f"{SCHEDULE_HISTORY[0].effective_from.isoformat()}. Costing a trade with rates "
+            "from outside their period would be a fabricated number, so this refuses "
+            "rather than guessing."
+        )
+    return match
+
+
 PRODUCTS = ("delivery", "intraday")
 
 
@@ -122,14 +183,22 @@ def leg_charges(
     product: str,
     price: Decimal,
     qty: int,
-    schedule: FeeSchedule = ZERODHA_EQUITY,
+    on: date | None = None,
+    schedule: FeeSchedule | None = None,
 ) -> ChargeBreakdown:
     """Charges for ONE executed leg. `side` in {BUY, SELL}; `product` in PRODUCTS.
 
     Components are kept at full precision; only the leg `total` is rounded to
     paise (matches how the round-trip total is stored).
+
+    **A23 — pass `on`, the date this leg EXECUTED**, and the rates in force on that date
+    are used. An explicit `schedule` overrides it (tests, and what-if costing). Passing
+    neither falls back to the current schedule, which is correct for a fill happening now
+    and wrong for anything historical — so historical callers should always pass `on`.
     """
     side = side.upper()
+    if schedule is None:
+        schedule = schedule_for(on) if on is not None else ZERODHA_EQUITY
     if product not in PRODUCTS:
         raise ValueError(f"Unknown product: {product!r}")
     turnover = price * Decimal(qty)
@@ -182,26 +251,43 @@ def roundtrip_charges(
     exit_price: Decimal,
     quantity: int,
     product: str,
-    schedule: FeeSchedule = ZERODHA_EQUITY,
+    entry_on: date | None = None,
+    exit_on: date | None = None,
+    schedule: FeeSchedule | None = None,
 ) -> tuple[Decimal, dict[str, object]]:
     """Total charges for a full open→close round trip, plus a per-leg
     breakdown suitable for stashing in the closing order's audit payload.
 
     A LONG buys to enter and sells to exit; a SHORT is mirrored.
+
+    **A23 — each leg is costed on ITS OWN date.** A position opened before a statutory rate
+    change and closed after it really did pay two different schedules, and collapsing that
+    to one is the error the registry exists to prevent. The breakdown records the effective
+    date used per leg, so a cost can be re-derived from the record alone.
     """
     is_long = position_side.upper() == "LONG"
     entry_side = "BUY" if is_long else "SELL"
     exit_side = "SELL" if is_long else "BUY"
     entry_leg = leg_charges(
-        side=entry_side, product=product, price=entry_price, qty=quantity, schedule=schedule
+        side=entry_side, product=product, price=entry_price, qty=quantity,
+        on=entry_on, schedule=schedule,
     )
     exit_leg = leg_charges(
-        side=exit_side, product=product, price=exit_price, qty=quantity, schedule=schedule
+        side=exit_side, product=product, price=exit_price, qty=quantity,
+        on=exit_on, schedule=schedule,
     )
     total = _paise(entry_leg.total + exit_leg.total)
     breakdown: dict[str, object] = {
-        "entry": {"side": entry_side, **entry_leg.as_dict()},
-        "exit": {"side": exit_side, **exit_leg.as_dict()},
+        "entry": {
+            "side": entry_side,
+            "priced_on": entry_on.isoformat() if entry_on else None,
+            **entry_leg.as_dict(),
+        },
+        "exit": {
+            "side": exit_side,
+            "priced_on": exit_on.isoformat() if exit_on else None,
+            **exit_leg.as_dict(),
+        },
         "product": product,
     }
     return total, breakdown

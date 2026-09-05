@@ -324,12 +324,17 @@ async def compare_position(
         # Censor an un-stopped policy at the last close (its future is unknown).
         eff_price = exit_price if exit_price is not None else last_close
         gross = compute_pnl(side=side, entry=entry, exit_price=eff_price, quantity=qty)
+        # A23: cost each leg on its own date. This replays a REAL position, so the entry
+        # date is the one it actually opened on — using today's schedule for a trade
+        # opened weeks ago is exactly what the registry exists to stop.
         charges, _ = roundtrip_charges(
             position_side=side,
             entry_price=entry,
             exit_price=eff_price,
             quantity=qty,
             product=product,
+            entry_on=position.opened_at.date(),
+            exit_on=(exit_time or now).date(),
         )
         net = gross - charges
         base.policies.append(
