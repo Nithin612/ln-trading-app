@@ -36,6 +36,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.broker.paper_broker import exit_mark
 from app.models.market_data import Ohlcv1m
 from app.models.signal import Signal, SignalOutcome
 from app.models.stock import Stock
@@ -1114,9 +1115,27 @@ async def _last_1m_close_at(
 
 
 async def _open_book_mtm(db: AsyncSession, user_id: int, cutoff: datetime) -> Decimal:
-    """Gross unrealized P&L of every paper position OPEN at `cutoff`, each marked to
-    the last 1m close ≤ cutoff. 0 when the book is flat. Read-only, no look-ahead —
-    a position that closed after `cutoff` is still treated as open as of `cutoff`."""
+    """Gross unrealized P&L of every paper position OPEN at `cutoff`, each marked to the
+    price it could actually be EXITED at. 0 when the book is flat. Read-only, no
+    look-ahead — a position that closed after `cutoff` is still treated as open as of
+    `cutoff`.
+
+    **A21.** The reference is still the last 1m close ≤ cutoff, but it is then passed
+    through `exit_mark`, so a long is valued toward the bid and a short toward the ask.
+    Before this the book was valued at the untouched last trade while every *fill* paid
+    the real half-spread — the same system charging the spread on the way in and out, then
+    pretending it could exit at a price nobody was offering. With 82% of live NSE books
+    wider than the flat 2 bps and ~29 open positions, this line was systematically
+    optimistic by roughly a half-spread per position.
+
+    ⚠ **This is a historical mark, so it gets the FLAT-bps floor, not a true mark-to-bid.**
+    Depth lives in Redis under a 60-second TTL and is never persisted, so no book exists
+    for a past cutoff — and this function is called for every day of a week. Reaching for
+    *today's* live book would price Monday's mark with Friday's spread, which is worse
+    than a consistent floor. The live surface (`list_open_positions`) does mark to the
+    real bid/ask, because there the book is current. Both now pay a spread; they differ in
+    precision, not in kind, and the difference is bounded by `paper_slippage_bps`.
+    """
     rows = (
         await db.execute(
             select(Position).where(
@@ -1129,9 +1148,12 @@ async def _open_book_mtm(db: AsyncSession, user_id: int, cutoff: datetime) -> De
     ).scalars().all()
     total = Decimal("0")
     for pos in rows:
-        mark = await _last_1m_close_at(db, pos.stock_id, cutoff)
-        if mark is None:
+        reference = await _last_1m_close_at(db, pos.stock_id, cutoff)
+        if reference is None:
             continue
+        # depth=None: no historical book exists (see the docstring), so this takes the
+        # flat-bps floor — the same fallback the fill model uses when a book is stale.
+        mark = exit_mark(reference, pos.side, depth=None, quantity=pos.quantity).fill
         total += compute_pnl(
             side=pos.side,
             entry=_d(pos.avg_entry_price),

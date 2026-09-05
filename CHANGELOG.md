@@ -7,6 +7,58 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(A21): mark-to-exit — marks are priced by the same model as fills (2026-09-05)
+
+**Bucket A, item 2.** Since 6.8.2 our *fills* pay the real half-spread, but our *marks* used
+the untouched last trade. The same system charged the spread on the way in and out, then valued
+the book as if it could be exited at a price nobody was offering. With **82% of live NSE books
+wider than the flat 2 bps** across ~29 open positions, reported unrealized P&L was systematically
+optimistic by roughly a half-spread per position. An internal inconsistency, not a modelling
+preference.
+
+**`exit_mark()` routes marks through `simulate_fill` with the EXIT side**, so the two halves
+cannot drift apart again: a long marks toward the **bid**, a short toward the **ask**, and both
+fail open to the flat `paper_slippage_bps` floor when no fresh book is available — the same
+fallback the fill path takes. Passing the position quantity also charges the size-vs-top-of-book
+impact, because a 5,000-share position cannot be exited at the touch either. The test that
+matters asserts *equivalence to the closing order's fill*, not the arithmetic, so the property
+A21 actually wants is the one pinned.
+
+Wired into every unrealized-P&L surface: `update_position_pnl` (the API list, the summary and the
+position monitor, each batching one `get_live_depths` MGET rather than opening a Redis connection
+per position) and `_open_book_mtm` (the daily report + the weekly per-day series).
+
+**Not double-counting:** `roundtrip_charges` is statutory/brokerage cost (STT, stamp, GST), a
+different thing from the spread; and the entry half of the spread is already inside
+`avg_entry_price`, so this adds only the exit half. `update_position_pnl` still **returns** the
+raw reference price — callers show it as "current market price", and a haircut mark is not what
+the tape says.
+
+**⚠ This changes a recorded number and nothing else.** `unrealized_pnl` is purely reported:
+every exit decision in `position_monitor` is taken on the live tick, and nothing branches on it.
+Reported open-book MTM gets *worse*, which is the point — and it lands now precisely because
+cycle 2's clock has not started.
+
+**Two limitations found while testing, both pinned rather than papered over:**
+1. **The historical mark cannot be a true mark-to-bid.** Depth lives in Redis under a 60-second
+   TTL and is never persisted, so no book exists for a past cutoff — and `_open_book_mtm` is
+   called for every day of a week. Reaching for *today's* book would price Monday's mark with
+   Friday's spread, which is worse than a consistent floor, so the historical path always takes
+   the flat-bps model. The live surface does mark to the real book. Both now pay a spread; they
+   differ in precision, not in kind, bounded by `paper_slippage_bps`.
+2. **The flat mark is a no-op on cheap stocks.** At 2 bps with a ₹0.05 tick, the haircut only
+   clears half a tick above ~₹125 — below that it rounds away entirely, so a ₹39 micro-cap's
+   *historical* mark does not move at all. Discovered because the first version of the test
+   asserted "strictly worse" and failed; the true invariant is **never better**, and both halves
+   (the invariant, and that a material spread does bite) are now separate tests.
+
+Tests: **1728 passed** (full suite, run exclusively). New `tests/test_exit_mark.py` (37) plus
+integration coverage for both directions in `test_trading.py` and the report path in
+`test_daily_report.py`. ⚠ `conftest` zeroes `paper_slippage_bps` for the suite, so every
+flat-path assertion sets it explicitly — otherwise it passes vacuously, which is the failure mode
+this project keeps meeting. ruff + mypy clean across 248 files.
+
+
 ### fix(A38): seven bug-hunter findings — including two guard tests that could not fail (2026-09-05)
 
 Second review pass on the A38 registry (`878b7ad`). quant-verifier had already proved block

@@ -14,6 +14,8 @@ from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
+from app.broker.paper_broker import exit_mark
+from app.core.config import settings
 from app.models.fo_data import FoBhavcopy, IndiaVixDaily
 from app.models.market_data import Ohlcv1m
 from app.models.signal import Signal
@@ -724,6 +726,39 @@ async def test_open_book_mtm_no_future_bar_leakage(db: AsyncSession) -> None:
     cutoff = datetime(2026, 8, 3, 4, 30, tzinfo=UTC)  # before the +120 spike
     mtm = await _open_book_mtm(db, user.id, cutoff)
     assert mtm == Decimal("10.00")  # marks to 101, never the future 130
+
+
+async def test_open_book_mtm_marks_to_the_exit_not_the_last_close(
+    db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A21: the open book is valued at what it could be EXITED at, not at the untouched
+    last trade. Fills have paid the real half-spread since 6.8.2; this line did not, so
+    reported open MTM was systematically optimistic by ~a half-spread per position.
+
+    The historical path has no order book (depth is Redis-only, 60s TTL) so it takes the
+    flat-bps floor — the same fallback the fill model uses. `conftest` zeroes that floor
+    for the suite, so it is set here or the assertion is vacuous. Priced at ₹2,500 because
+    below ~₹125 a 2bps haircut is smaller than half a ₹0.05 tick and rounds away."""
+    monkeypatch.setattr(settings, "paper_slippage_bps", 20.0)
+
+    user = await create_test_user(db, email="a21mtm@example.com")
+    stock = await make_stock(db, symbol="MARKME")
+    opened = datetime(2026, 8, 3, 4, 0, tzinfo=UTC)
+    db.add(Position(
+        user_id=user.id, stock_id=stock.id, mode="paper", side="LONG", quantity=10,
+        avg_entry_price=Decimal("2000"), current_sl=Decimal("1900"),
+        trail_state="none", realized_pnl=Decimal("0"), opened_at=opened,
+    ))
+    _candles(db, stock.id, opened, [(5, "2400", "2500", "2400", "2500")])
+    await db.commit()
+
+    mtm = await _open_book_mtm(db, user.id, datetime(2026, 8, 3, 4, 30, tzinfo=UTC))
+
+    mark = exit_mark(Decimal("2500"), "LONG", depth=None, quantity=10).fill
+    assert mark < Decimal("2500"), "the mark was not haircut"
+    assert mtm == ((mark - Decimal("2000")) * 10).quantize(Decimal("0.01"))
+    # Canary: the old last-close valuation was 5000.00 and is now strictly less.
+    assert mtm < Decimal("5000.00")
 
 
 async def test_open_book_mtm_excludes_closed_and_skips_no_tape(db: AsyncSession) -> None:

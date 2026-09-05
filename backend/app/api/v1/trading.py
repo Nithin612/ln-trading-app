@@ -21,6 +21,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.broker.circuit_bands import get_circuit_band_checked
+from app.broker.depth import get_live_depths
 from app.broker.paper_broker import (
     PaperOrderError,
     close_position,
@@ -394,10 +395,13 @@ async def list_open_positions(
     positions = result.scalars().all()
 
     # Refresh unrealized P&L; keep the price each refresh used so the UI can
-    # show the current market price alongside entry.
+    # show the current market price alongside entry. Depth is fetched ONCE for the whole
+    # book (A21 marks to bid/ask): `get_live_depth` opens its own connection per call, so
+    # a per-position read would open ~29 of them per request.
+    books = await get_live_depths([p.stock_id for p in positions])
     prices: dict[str, Decimal | None] = {}
     for pos in positions:
-        prices[pos.id] = await update_position_pnl(db, pos)
+        prices[pos.id] = await update_position_pnl(db, pos, depth=books.get(pos.stock_id))
     await db.commit()
 
     # Emergency-exit watcher: regime ER (one batch) + signal validity feed the
@@ -581,8 +585,9 @@ async def daily_pnl(
     open_positions = open_result.scalars().all()
     open_count = len(open_positions)
     total_unrealized = Decimal("0")
+    books = await get_live_depths([p.stock_id for p in open_positions])
     for pos in open_positions:
-        await update_position_pnl(db, pos)
+        await update_position_pnl(db, pos, depth=books.get(pos.stock_id))
         if pos.unrealized_pnl is not None:
             total_unrealized += pos.unrealized_pnl
 

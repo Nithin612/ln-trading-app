@@ -132,6 +132,18 @@ else.
   of its ADVERSE band (long→lower, short→upper) — an un-exitable trade. Bands from a
   market-hours task's batched Kite `quote()` → Redis `circuit:{stock_id}`; the order
   path only READS the cache, fail-open. Frozen engine untouched; `off` = true no-op.
+- **Marks are priced by the SAME model as fills since A21 (2026-09-05)** — `paper_broker.exit_mark`
+  routes every unrealized-P&L surface through `simulate_fill` with the **exit** side, so a long
+  marks toward the BID and a short toward the ASK. Before it, fills paid the real half-spread while
+  marks used the untouched last trade, making reported open MTM optimistic by ~a half-spread per
+  position across ~29 positions. Wired into `update_position_pnl` (API list · summary · monitor,
+  each batching ONE `get_live_depths` MGET — never a per-position Redis read) and
+  `_open_book_mtm`. **Reporting-only: nothing branches on `unrealized_pnl`** (every exit decision
+  is taken on the live tick), so this changed a recorded number and no behaviour. ⚠ **Two limits:**
+  the HISTORICAL mark cannot be a true mark-to-bid (depth is Redis-only, 60 s TTL, never persisted
+  — so `_open_book_mtm` always takes the flat-bps floor); and **the flat haircut is a NO-OP below
+  ~₹125**, where 2 bps is smaller than half a ₹0.05 tick and rounds away. ⚠ `conftest` zeroes
+  `paper_slippage_bps` for the suite — a flat-path test that does not set it passes vacuously.
 - **Paper fills are spread-aware since 6.8.2**: when the live `depth:{stock_id}`
   book is fresh, the haircut is the real half-spread + a size-vs-top-of-book
   impact term, floored at `paper_slippage_bps` so a fill is never *cheaper* than

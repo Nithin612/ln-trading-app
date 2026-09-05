@@ -696,6 +696,43 @@ async def close_position(
     return order, position
 
 
+def exit_side_for(position_side: str) -> str:
+    """The order side that CLOSES a position: a LONG exits by selling, a SHORT by buying."""
+    return "SELL" if position_side.upper() in ("LONG", "BUY") else "BUY"
+
+
+def exit_mark(
+    reference: Decimal,
+    position_side: str,
+    *,
+    depth: Depth | None = None,
+    quantity: int | None = None,
+) -> FillModel:
+    """A21 — what an OPEN position could actually be EXITED at, priced by the same model
+    that prices entries.
+
+    Since 6.8.2 our *fills* pay the real half-spread while our *marks* used the untouched
+    last trade, so the book was valued as if it could be exited at a price nobody was
+    offering. With **82% of live NSE books wider than the flat 2 bps** and ~29 open
+    positions, reported unrealized P&L was systematically optimistic by roughly a
+    half-spread per position — an internal inconsistency in one system, not a modelling
+    preference.
+
+    This routes marks through `simulate_fill` with the EXIT side, so the two halves cannot
+    drift apart again: a long marks toward the BID, a short toward the ASK, both fail open
+    to the flat `paper_slippage_bps` floor when no fresh book is available — the same
+    fallback the fill path takes. Passing `quantity` also charges the size-vs-top-of-book
+    impact, because a 5,000-share position cannot be exited at the touch either.
+
+    NOT double-counting against `roundtrip_charges`: those are statutory and brokerage
+    costs (STT, stamp, GST), a different thing from the spread. And the entry half of the
+    spread is already inside `avg_entry_price`, so this adds only the exit half.
+    """
+    return simulate_fill(
+        reference, exit_side_for(position_side), depth=depth, quantity=quantity
+    )
+
+
 async def _estimated_roundtrip_charges(
     db: AsyncSession, position: Position, exit_price: Decimal
 ) -> Decimal:
@@ -726,14 +763,25 @@ async def update_position_pnl(
     db: AsyncSession,
     position: Position,
     price: Decimal | None = None,
+    *,
+    depth: Depth | None = None,
 ) -> Decimal | None:
     """Refresh unrealized_pnl (NET of estimated round-trip costs) on an open
-    position and return the price used.
+    position and return the REFERENCE price used.
 
     Pass `price` to reuse a price the caller already fetched (the monitor
     passes the live LTP it acted on); otherwise the best-effort current price
     is used (live LTP → last daily close). Returns None if the position is
     closed or no price is available.
+
+    **A21:** the P&L is computed against the `exit_mark` — the price this position could
+    actually be closed at, marked toward the bid for a long and the ask for a short — not
+    against the raw reference. Pass `depth` (batch it with `get_live_depths` on any list
+    path) for a true mark-to-bid; without it the mark falls back to the flat-bps floor,
+    the same fallback the fill model uses.
+
+    The RETURN value stays the raw reference price: callers show it as "current market
+    price" beside the entry, and a haircut mark is not what the tape says.
     """
     if position.closed_at is not None:
         return None
@@ -741,12 +789,13 @@ async def update_position_pnl(
         price = await get_current_price(db, position.stock_id)
     if price is None:
         return None
+    mark = exit_mark(price, position.side, depth=depth, quantity=position.quantity).fill
     gross = compute_pnl(
         side=position.side,
         entry=Decimal(str(position.avg_entry_price)),
-        exit_price=price,
+        exit_price=mark,
         quantity=position.quantity,
     )
-    charges = await _estimated_roundtrip_charges(db, position, price)
+    charges = await _estimated_roundtrip_charges(db, position, mark)
     position.unrealized_pnl = gross - charges
     return price

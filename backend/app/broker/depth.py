@@ -153,6 +153,36 @@ async def write_depth(
     )
 
 
+async def get_live_depths(stock_ids: list[int]) -> dict[int, Depth]:
+    """Live top-of-book for MANY stocks in ONE round trip (Redis MGET, one connection).
+
+    `get_live_depth` opens and closes its own connection per call, so calling it in a loop
+    over an open book (~29 positions today) would open ~29 connections per request — the
+    same trap `get_live_ltps` exists to avoid. Use this on any list path. Missing, stale
+    or unparseable keys are simply absent, and the caller treats absence as "no book" and
+    falls back to the flat-bps model exactly as the fill path does."""
+    if not stock_ids:
+        return {}
+    try:
+        import redis.asyncio as aioredis
+
+        keys = [DEPTH_KEY.format(stock_id=sid) for sid in stock_ids]
+        r = aioredis.from_url(settings.redis_url, decode_responses=True)
+        try:
+            values: list[str | None] = await r.mget(keys)
+        finally:
+            with contextlib.suppress(Exception):
+                await r.aclose()
+        out: dict[int, Depth] = {}
+        for sid, raw in zip(stock_ids, values, strict=True):
+            parsed = parse_depth(raw)
+            if parsed is not None:
+                out[sid] = parsed
+        return out
+    except Exception:
+        return {}
+
+
 async def get_live_depth(stock_id: int) -> Depth | None:
     """Latest LIVE top-of-book from Redis (no fallback). ``None`` means no fresh
     book — market closed, the stock isn't trading, or depth capture is off (the

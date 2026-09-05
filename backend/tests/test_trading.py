@@ -523,6 +523,67 @@ class TestPaperBroker:
         assert est > Decimal("0")
         assert pos.unrealized_pnl == Decimal("4000") - est
 
+    async def test_update_position_pnl_marks_to_the_exit_not_the_last_trade(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A21. Fills have paid the real half-spread since 6.8.2 while marks used the
+        untouched last trade, so the book was valued as if it could be exited at a price
+        nobody was offering. A long must now be marked toward the BID.
+
+        Canary: on the old code `unrealized_pnl` was gross-at-540 minus charges; the mark
+        haircut makes it strictly smaller. `conftest` zeroes the haircut for the suite, so
+        it is set here explicitly or the assertion would be vacuous."""
+        from app.broker.paper_broker import exit_mark, update_position_pnl
+
+        monkeypatch.setattr(settings, "paper_slippage_bps", 20.0)  # 20bps >> half a tick
+
+        user = await _make_user(db)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000")
+        pos = await _open_position(db, user, stock, signal, entry=Decimal("500"), qty=100)
+
+        used = await update_position_pnl(db, pos, price=Decimal("540"))
+
+        # The RETURN value is still the raw reference — callers show it as "current price".
+        assert used == Decimal("540")
+
+        mark = exit_mark(Decimal("540"), "LONG", depth=None, quantity=100).fill
+        assert mark < Decimal("540"), "a long was not marked down"
+
+        est, _ = roundtrip_charges(
+            position_side="LONG", entry_price=Decimal("500"), exit_price=mark,
+            quantity=100, product="delivery",
+        )
+        assert pos.unrealized_pnl == (mark - Decimal("500")) * 100 - est
+        # ...and strictly worse than the old last-trade valuation.
+        old_est, _ = roundtrip_charges(
+            position_side="LONG", entry_price=Decimal("500"), exit_price=Decimal("540"),
+            quantity=100, product="delivery",
+        )
+        assert pos.unrealized_pnl < Decimal("4000") - old_est
+
+    async def test_update_position_pnl_marks_a_short_toward_the_ask(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The mirror case — a short exits by BUYING, so its mark moves UP and its
+        unrealized P&L also gets worse. Direction bugs here are silent and expensive."""
+        from app.broker.paper_broker import exit_mark, update_position_pnl
+
+        monkeypatch.setattr(settings, "paper_slippage_bps", 20.0)
+
+        user = await _make_user(db)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id, entry="500.0000")
+        pos = await _open_position(
+            db, user, stock, signal, entry=Decimal("500"), qty=100, side="SHORT"
+        )
+
+        await update_position_pnl(db, pos, price=Decimal("460"))
+        mark = exit_mark(Decimal("460"), "SHORT", depth=None, quantity=100).fill
+        assert mark > Decimal("460"), "a short was not marked up"
+        assert pos.unrealized_pnl is not None
+        assert pos.unrealized_pnl < (Decimal("500") - Decimal("460")) * 100
+
 
 # ── API endpoint tests ─────────────────────────────────────────────────────────
 

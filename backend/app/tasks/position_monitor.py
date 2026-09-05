@@ -92,6 +92,14 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
     # per scan (a handful of users at most).
     profit_lock_by_user: dict[int, bool] = {}
 
+    # A21: top-of-book for the whole open set in ONE round trip, so the persisted
+    # `unrealized_pnl` is marked to bid/ask like the API surface rather than drifting to
+    # the flat floor. Reporting only — nothing in this task branches on unrealized P&L,
+    # every exit decision below is taken on the live tick.
+    from app.broker.depth import get_live_depths
+
+    books = await get_live_depths([p.stock_id for p in positions])
+
     for pos in positions:
         # Live tick only — never the daily-close fallback. No fresh price
         # (illiquid, between ticks, holiday) → leave the position untouched.
@@ -210,7 +218,7 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
                         pos.current_sl = trail.new_sl
                         pos.trail_state = trail.new_state
 
-        await update_position_pnl(db, pos, price=price)
+        await update_position_pnl(db, pos, price=price, depth=books.get(pos.stock_id))
         updated += 1
 
     await db.commit()
