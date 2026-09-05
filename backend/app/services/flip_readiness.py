@@ -286,6 +286,17 @@ def evidence_lines(rows: Sequence[Row], *, label: str, trials: int | None = None
             _chronological(rows, blocked=False),
             label="eligible set",
         )
+        # H11 — the count bar each sidecar prints ("17/20 resolved — keep accruing") is a
+        # PROCESS convention, not a statistical one. Read alone it looks like progress
+        # toward a threshold that was never within reach: `sl_atr` passed all three
+        # readiness guards and still sat at t ≈ 0.41 against a 3.6 hurdle, ~9× short. The
+        # implied sample above is the number that decides, so the two must never be read
+        # apart.
+        out.append(
+            "- ⚠ **the `n/20` bar above is a process convention, not the statistical "
+            "requirement** — the implied sample on the deflated-Sharpe line is what "
+            "decides. Reaching 20 resolved trades is not evidence of anything on its own."
+        )
     else:
         out.append("- **deflated Sharpe:** no resolved eligible trades yet")
     out.append("")

@@ -199,6 +199,22 @@ def deflated_sharpe(
     )
 
 
+def _implied_sample(r: DsrResult) -> str:
+    """The headline half of H11: the observed sample AND the sample this candidate would
+    need, always in the same breath.
+
+    Required sample scales with the INVERSE SQUARE of effect size, so halving an edge
+    quadruples the evidence needed. Our edges are small, so our required samples are
+    enormous — and "n=44" read on its own has repeatedly looked like progress toward a bar
+    that was never within reach. On 4,843 published replications the median strategy
+    (Sharpe 0.37) needs ~28 years of daily data to separate from zero; the units do not
+    transfer to per-trade evidence, which is why MinTRL exists, but the shape does.
+    """
+    if r.min_trl is None:
+        return f"n={r.moments.n}, and MORE DATA CANNOT RESCUE IT (not ahead of the bar)"
+    return f"n={r.moments.n} of ≈{r.min_trl:,.0f} needed"
+
+
 def render_lines(r: DsrResult | None, *, label: str) -> list[str]:
     """Compact markdown for a daily report — the numbers, not just the verdict."""
     if r is None:
@@ -206,7 +222,8 @@ def render_lines(r: DsrResult | None, *, label: str) -> list[str]:
     m = r.moments
     return [
         f"- **{label} — deflated Sharpe bar:** {'✅ CLEARS' if r.passes else '⏳ does NOT clear'}"
-        f" — {r.note}",
+        f" · **{_implied_sample(r)}**",
+        f"  - {r.note}",
         f"  - n={m.n} · mean {m.mean:+.4f} · sd {m.stdev:.4f} · **Sharpe {m.sharpe:+.3f}**"
         f" · skew {m.skew:+.2f} · kurtosis {m.kurtosis:.2f}",
         f"  - P(true Sharpe > 0) = {r.psr_vs_zero:.1%} · **after deflating for"
