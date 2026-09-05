@@ -7,6 +7,62 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(A29): the flat depository charge — the one cost that is not neutral to size (2026-09-05)
+
+**Bucket A, item 4.** Our `FeeSchedule` modelled delivery STT on both legs, intraday STT sell-only,
+stamp on buy and GST on the right base — everything except the charge that does not scale. Zerodha
+and CDSL levy a **flat ₹15.34 per delivery SELL, per scrip, irrespective of quantity**, and we
+levied nothing.
+
+**Measured on the real book: all 105 closed positions were delivery, so ₹1,610.70 of depository
+charge was never levied — 15.8% of the book's entire loss.** Realised P&L should read
+**−₹11,829, not −₹10,218**. We were under-costing the paper record in the direction that flatters
+an already-negative expectancy, which is the one direction that matters for a record whose whole
+job is gating live trading.
+
+**Why a flat charge is different in kind.** Every other cost here is a percentage, and a percentage
+is neutral to position size. A fixed cost is not:
+
+| position | notional | round-trip charges | as bps |
+|---|--:|--:|--:|
+| 100 × ₹39 | ₹3,900 | ₹24.01 | **61.6 bps** |
+| 1,000 × ₹39 | ₹39,000 | ₹102.01 | 26.2 bps |
+| 400 × ₹2,500 | ₹10,00,000 | ₹2,237.80 | 22.4 bps |
+
+Nearly **3× the relative cost** on the small position — and small is exactly the shape the
+per-position notional cap produces today, and exactly the ₹1 lakh / 1–2 position shape live trading
+will have. A test asserts that ratio rather than describing it.
+
+Applied to the **delivery SELL leg only**: the charge is levied when shares leave the demat account,
+so there is no buy-side and no intraday analogue. Added after the GST line because the published
+₹15.34 is already GST-inclusive. It is itemised as `dp_charge` in the audit breakdown rather than
+folded into the total — a charge you cannot see is one nobody notices going wrong.
+
+**The per-trade cost floor ships as a mechanism, defaulting to zero, and that is deliberate.** The
+Zerodha cash-equity schedule has no minimum per trade; inventing a rate would fabricate a cost
+rather than model one, which is the same error as omitting the real one, only in the other
+direction. `min_charge_per_leg` exists so a broker that *does* levy a minimum needs no call-site
+change — the reason rates live in a schedule at all — and a test pins both that it is off by default
+and that it applies when set.
+
+⚠ **One caveat recorded in the code:** the charge is applied to whichever leg is the SELL, which for
+a delivery SHORT means the *entry*. A cash-equity delivery short is not actually possible — you
+cannot deliver stock you do not hold — so that combination is an artefact of the paper model, and
+charging it consistently is closer to right than exempting it.
+
+⚠ **Forward-only.** Closed positions keep their stored, under-costed `realized_pnl`; only new trades
+and open positions' re-estimated `unrealized_pnl` reflect the charge. So the ₹1,610.70 above is what
+history *should* have cost, not a restatement — and paper P&L before and after 2026-09-05 is not
+comparable, on top of the A21/A37 fill changes the same day. Bucket A is where that is acceptable:
+**cycle 2's clock has not started.**
+
+Tests: **1800 passed** before this commit's own tests; `tests/test_fees.py` 8 → 14, including a
+**seam test that closes a real position through the broker** and asserts the charge lands in both
+`position.charges` and the order payload. Zeroing `dp_charge_per_sell` fails **7** of them — checked
+by mutation, because A37 shipped a feature whose tests all passed while it could have been inert.
+Two pre-existing hand-computed totals moved by exactly ₹15.34 and now say why.
+
+
 ### fix(A37): thirteen quant-verifier findings — a sizing loop with no fixed point (2026-09-05)
 
 Review pass on `bac1bac`. The formula, units, money types, anchoring and fail-open behaviour all

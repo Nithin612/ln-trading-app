@@ -132,6 +132,20 @@ else.
   of its ADVERSE band (long→lower, short→upper) — an un-exitable trade. Bands from a
   market-hours task's batched Kite `quote()` → Redis `circuit:{stock_id}`; the order
   path only READS the cache, fail-open. Frozen engine untouched; `off` = true no-op.
+- **The flat DEPOSITORY charge is levied since A29 (2026-09-05)** — `fees.ZERODHA_EQUITY
+  .dp_charge_per_sell = ₹15.34`, on the **delivery SELL leg only** (shares leaving the demat
+  account), **flat regardless of quantity**, added after the GST line because the published figure
+  is GST-inclusive, and itemised as `dp_charge` in the audit breakdown. **Measured when it shipped:
+  all 105 closed positions were delivery, so ₹1,610.70 had never been levied — 15.8% of the book's
+  entire loss; realised should read −₹11,829 not −₹10,218.** ⚠ **It is the ONE cost that is not
+  neutral to position size:** 100 × ₹39 pays **61.6 bps** of round-trip charges vs 22.4 bps for
+  400 × ₹2,500 — and small is exactly what the notional cap produces and what live trading (₹1L,
+  1–2 positions) will be. ⚠ `min_charge_per_leg` exists but defaults to **0 on purpose** — the
+  Zerodha schedule has no per-trade minimum, and inventing one would fabricate a cost rather than
+  model one. ⚠ **Forward-only:** closed rows keep their under-costed `realized_pnl`, so that
+  ₹1,610.70 is what history *should* have cost, not a restatement. ⚠ Applied to whichever leg is the
+  SELL, so a delivery SHORT is charged on ENTRY — an artefact of the paper model, since a
+  cash-equity delivery short is not actually possible.
 - **Order size is priced against the STOCK, not just the book, since A37 (2026-09-05).**
   `paper_broker.participation_bps` charges **`k × participation²`** bps, participation = order
   value ÷ **median daily traded value** (`load_median_traded_values`, batched, median taken in

@@ -626,7 +626,9 @@ to cycle 2").** A 30-repo external review (2026-09-03/04) produced 91 items acro
   reported open MTM stops being optimistic by ~a half-spread per position; reporting-only —
   nothing branches on unrealized P&L) · ✅ **A37+T3 DONE 2026-09-05** (participation impact `k×p²` on both fill paths and every mark
   surface; the real book has a position at **17% of daily volume** that was priced at the 2 bps
-  floor) · A29 flat DP charge · A23
+  floor) · ✅ **A29 DONE 2026-09-05** (flat ₹15.34 DP charge on the delivery SELL leg — **₹1,610.70 was
+  never levied across all 105 closed positions, 15.8% of the book's loss**; a flat cost is the one
+  charge that is not neutral to position size, and small is the shape live trading will have) · A23
   effective-dated fees · A26 hot-set capacity refusal · A25 tick-mode assert · H6.
 - **Bucket B — the instruments that read the cycle (~5 d):** H8 noise negative-control · H1 block
   bootstrap · H12 beta/IR · H2 buy-and-hold benchmark · H11 MinTRL as headline · T11 pin PSR ·

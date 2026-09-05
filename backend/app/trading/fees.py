@@ -46,6 +46,22 @@ class FeeSchedule:
     exchange_txn_pct: Decimal      # both legs (NSE equity)
     sebi_per_cr: Decimal           # ₹ per crore, both legs
     gst_pct: Decimal               # on (brokerage + exchange_txn + sebi)
+    # ── A29 — costs that do NOT scale with turnover ─────────────────────────
+    #: FLAT ₹ per DELIVERY SELL, per scrip, **irrespective of quantity** — the
+    #: depository (CDSL) charge, levied when shares leave the demat account. This is the
+    #: only charge here that is size-independent, which is precisely why it matters: a
+    #: percentage cost is neutral to position size, a flat one is not. It falls hardest on
+    #: SMALL positions — which is exactly the shape the notional cap produces today and
+    #: exactly the ₹1 lakh / 1–2 position shape live trading will have. Omitting it
+    #: under-costed the paper book in the direction that flatters an already-negative
+    #: expectancy.
+    dp_charge_per_sell: Decimal
+    #: Minimum total charge per executed leg. **Zero by default, and that is not an
+    #: oversight**: the Zerodha cash-equity schedule has no such floor, and inventing one
+    #: would fabricate a cost rather than model one. It exists so a broker that DOES levy a
+    #: minimum can be represented without touching any call site — the same reason the
+    #: rates live in a schedule rather than inline.
+    min_charge_per_leg: Decimal = Decimal("0")
 
 
 # Zerodha NSE cash-equity schedule (≈2025). Edit here to adjust rates; a
@@ -62,6 +78,11 @@ ZERODHA_EQUITY = FeeSchedule(
     exchange_txn_pct=Decimal("0.00297"),
     sebi_per_cr=Decimal("10"),
     gst_pct=Decimal("18"),
+    # Zerodha's published all-in DP charge (≈2025): ₹15.34 per scrip per debit, GST
+    # INCLUSIVE — which is why it is added after the GST line rather than into its base.
+    # Same provenance and the same caveat as every other rate here: a schedule figure held
+    # in one editable place, not a derived quantity.
+    dp_charge_per_sell=Decimal("15.34"),
 )
 
 PRODUCTS = ("delivery", "intraday")
@@ -84,6 +105,7 @@ class ChargeBreakdown:
     sebi: Decimal
     gst: Decimal
     stamp_duty: Decimal
+    dp_charge: Decimal
     total: Decimal
 
     def as_dict(self) -> dict[str, str]:
@@ -126,7 +148,21 @@ def leg_charges(
     exchange_txn = _pct(turnover, schedule.exchange_txn_pct)
     sebi = turnover * schedule.sebi_per_cr / _CRORE
     gst = _pct(brokerage + exchange_txn + sebi, schedule.gst_pct)
-    total = brokerage + stt + exchange_txn + sebi + gst + stamp
+    # A29 — the flat depository charge. DELIVERY SELL only: it is levied when shares leave
+    # the demat account, so it has no intraday analogue and no buy-side analogue. Added
+    # AFTER `gst` because the schedule figure is already GST-inclusive.
+    #
+    # ⚠ Applied to the SELL leg wherever it falls, which for a delivery SHORT means the
+    # ENTRY. A cash-equity delivery short is not actually possible (you cannot deliver
+    # stock you do not hold), so that combination is an artefact of the paper model rather
+    # than a real trade; charging it consistently is closer to right than exempting it.
+    dp = (
+        schedule.dp_charge_per_sell
+        if (product == "delivery" and side == "SELL")
+        else Decimal("0")
+    )
+    total = brokerage + stt + exchange_txn + sebi + gst + stamp + dp
+    total = max(total, schedule.min_charge_per_leg)
     return ChargeBreakdown(
         brokerage=brokerage,
         stt=stt,
@@ -134,6 +170,7 @@ def leg_charges(
         sebi=sebi,
         gst=gst,
         stamp_duty=stamp,
+        dp_charge=dp,
         total=_paise(total),
     )
 
