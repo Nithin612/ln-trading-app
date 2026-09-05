@@ -44,8 +44,12 @@ from app.models.signal import Signal, SignalOutcome
 from app.models.stock import Stock
 from app.models.trading import Order, Position
 from app.models.user import User
+from app.services import beta_ir as bir
+from app.services import buy_and_hold as bah
 from app.services import fo_analytics as fa
 from app.services import fo_suggestions as fs
+from app.services.beta_ir import BetaIr
+from app.services.buy_and_hold import BuyAndHold
 from app.services.excursion import Excursion, load_1m_bars, tape_excursion
 from app.services.feed_health import FeedStatus, check_feed_staleness, render_feed_health
 from app.services.liquidity import load_median_traded_values_safe
@@ -264,6 +268,12 @@ class DailyReport:
     fill_realism: list[FillRealismRow] = field(default_factory=list)
     # Silent-feed-outage alarm (6.8.6) — staleness of each EOD feed vs the calendar.
     feed_health: list[FeedStatus] = field(default_factory=list)
+    # Buy-and-hold benchmark over the paper-clock window (H2). None = not assessable.
+    buy_and_hold: BuyAndHold | None = None
+    # Market exposure of the closed book, whole and split by side (H12). "is it just the
+    # market?" — the axis beside H1 (is it stable?) and H8 (does the bar reject noise?).
+    beta_all: BetaIr | None = None
+    beta_by_side: dict[str, BetaIr | None] = field(default_factory=dict)
     # Tick-mode degradation counters for the report day (A25). Empty = a clean
     # day OR no record at all (older than the 7-day TTL, or Redis unreachable) —
     # the two are indistinguishable here, which is why the renderer stays silent
@@ -533,6 +543,37 @@ async def build_daily_report(
     # ticks on the day whose fills this report is judging? Keyed by the REPORT
     # day, not by now: a --DATE run must read that day's counters.
     report.tick_mode_health = await read_tick_mode_health(day.isoformat())
+    # Buy-and-hold benchmark (H2) — the book against doing nothing with the same money,
+    # over the SAME dates. The window is the paper clock, never OUTCOME_EPOCH: that
+    # spans the 08-17 sizing/fill-model cut and would compare two different books.
+    if report.user.paper_clock_started_at is not None:
+        report.buy_and_hold = await bah.compare(
+            db,
+            start=report.user.paper_clock_started_at.astimezone(_IST).date(),
+            end=day,
+            # Realised over the whole window PLUS the open book's mark: a book sitting on
+            # an unrealised loss must not flatter itself against a daily-marked index.
+            book_pnl=(
+                await _realized_between(
+                    db, user_id, report.user.paper_clock_started_at, day_end
+                )
+                + report.open_unrealized_eod
+            ),
+            capital=_d(report.user.capital_inr),
+        )
+    # Beta / IR (H12) — on the CLOSED book since the paper clock, plus the LONG/SHORT
+    # split, because a directionally-biased cohort in a trending window looks like skill
+    # and that is exactly how the market-regime evidence fooled us.
+    closes = await bir.load_index_closes(db)
+    if closes:
+        trades = await bir.load_closed_trades(
+            db, user_id=user_id, since=report.user.paper_clock_started_at
+        )
+        report.beta_all = bir.compute(trades, closes)
+        report.beta_by_side = {
+            side: bir.compute([t for t in trades if t.side.upper() == side], closes)
+            for side in ("LONG", "SHORT")
+        }
     return report
 
 
@@ -707,6 +748,29 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
         f"- **Realised today (net):** {_signed_inr(r.realized_today)}  ·  "
         f"**Open book mark-to-market (gross, EoD):** {_signed_inr(r.open_unrealized_eod)}"
     )
+    # H2 — the honest denominator. Zero is the wrong benchmark for a trading system;
+    # "what the same money did doing nothing" is the right one.
+    out.extend(
+        bah.render_lines(
+            r.buy_and_hold,
+            exposure_pct=(
+                safe_ratio(r.open_risk_total * Decimal(100), _d(r.user.capital_inr))
+            ),
+        )
+    )
+    if r.beta_all is not None or r.beta_by_side:
+        out.extend(bir.render_lines(r.beta_all, label="closed book"))
+        for side, br in r.beta_by_side.items():
+            if br is not None:
+                ir = (
+                    f"{br.information_ratio:+.3f}"
+                    if br.information_ratio is not None
+                    else "—"
+                )
+                out.append(
+                    f"  - {side}: beta **{br.beta:+.2f}** · alpha {br.alpha:+.4f}/trade "
+                    f"· IR {ir} (n={br.n})"
+                )
     out.append(
         f"- **Profit given back** (peak → EoD on open positions that faded): "
         f"**{_signed_inr(-r.given_back_total)}**"
