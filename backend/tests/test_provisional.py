@@ -19,6 +19,7 @@ Everything runs on the real test Postgres + real Redis (no seam mocks).
 from __future__ import annotations
 
 import json
+import logging
 import uuid
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
@@ -32,9 +33,11 @@ from app.broker.provisional import (
     HEALTH_KEY,
     LEADERBOARD_CHANNEL,
     LEADERBOARD_KEY,
+    HotStock,
     _in_session,
     _seed_counters,
     append_forming,
+    apply_hotset_cap,
     forming_daily_bar,
     load_hot_set,
     publish_cycle_stats,
@@ -1295,3 +1298,91 @@ class TestProvisionalRest:
 
         resp = await client.get("/api/v1/market/provisional/bogus", headers=headers)
         assert resp.status_code == 404
+
+
+# ── A26: the hot-set capacity boundary ──────────────────────────────────────
+# The failure this prevents already happened: breadth alerts flooded the hot set,
+# watchlist stocks silently stopped being scored, and it was found weeks later. The rule
+# is now that the cap is HARD for discovery tiers and SOFT for protected ones — because
+# dropping a signal-bound stock does not shed load, it removes a signal from the record.
+
+
+def _hot(spec: dict[int, str]) -> dict[int, HotStock]:
+    """{stock_id: "signal"|"trigger"|"watchlist"|"market"} → a hot set."""
+    return {sid: HotStock(symbol=f"S{sid}", sources={src}) for sid, src in spec.items()}
+
+
+class TestHotSetCap:
+    def test_under_the_cap_nothing_is_touched(self) -> None:
+        hot = _hot({1: "signal", 2: "watchlist", 3: "market"})
+        kept, overflow = apply_hotset_cap(hot, cap=10)
+        assert kept == hot
+        assert overflow == 0
+
+    def test_discovery_tiers_are_clipped_to_fit(self) -> None:
+        hot = _hot({1: "signal", 2: "trigger", 3: "watchlist", 4: "market", 5: "market"})
+        kept, overflow = apply_hotset_cap(hot, cap=3)
+        assert overflow == 0
+        assert len(kept) == 3
+        assert {1, 2} <= set(kept), "protected stocks must survive the clip"
+
+    def test_a_signal_bound_stock_is_never_dropped(self) -> None:
+        """The Bucket-A property: the cap must not decide which signals exist. With more
+        signal-bound stocks than the cap, ALL of them are admitted and the budget is
+        knowingly exceeded."""
+        hot = _hot({i: "signal" for i in range(1, 11)})
+        kept, overflow = apply_hotset_cap(hot, cap=4)
+        assert len(kept) == 10, "protected stocks were dropped to satisfy a CPU budget"
+        assert overflow == 6
+        assert set(kept) == set(hot)
+
+    def test_protected_overflow_drops_every_discovery_stock(self) -> None:
+        """When protected work alone exceeds the cap there is no budget left; discovery is
+        dropped wholesale rather than partially, so the readout is unambiguous."""
+        hot = _hot({1: "signal", 2: "signal", 3: "signal", 8: "watchlist", 9: "market"})
+        kept, overflow = apply_hotset_cap(hot, cap=2)
+        assert set(kept) == {1, 2, 3}
+        assert overflow == 1
+
+    def test_triggers_are_protected_alongside_signals(self) -> None:
+        hot = _hot({1: "trigger", 2: "trigger", 3: "watchlist"})
+        kept, overflow = apply_hotset_cap(hot, cap=1)
+        assert set(kept) == {1, 2}
+        assert overflow == 1
+
+    def test_a_multi_source_stock_takes_its_strongest_tier(self) -> None:
+        """A stock that is both watchlisted and signal-bound is protected — the weakest
+        source must not demote it into the clippable pool."""
+        hot = {
+            1: HotStock(symbol="S1", sources={"watchlist", "signal"}),
+            2: HotStock(symbol="S2", sources={"watchlist"}),
+            3: HotStock(symbol="S3", sources={"market"}),
+        }
+        kept, _overflow = apply_hotset_cap(hot, cap=1)
+        assert set(kept) == {1}
+
+    def test_the_overflow_is_reported_not_swallowed(self, caplog: pytest.LogCaptureFixture) -> None:
+        """A26's actual demand: refuse LOUDLY at the boundary, with the numbers and a
+        remedy. An ERROR-level record naming both is what makes it un-missable."""
+        with caplog.at_level(logging.ERROR):
+            apply_hotset_cap(_hot({i: "signal" for i in range(1, 8)}), cap=3)
+        assert any(r.levelno >= logging.ERROR for r in caplog.records)
+        msg = caplog.text
+        assert "EXCEEDED" in msg
+        assert "REMEDY" in msg
+        assert "live_provisional_hotset_max" in msg
+
+    def test_an_ordinary_clip_also_names_a_remedy(self, caplog: pytest.LogCaptureFixture) -> None:
+        with caplog.at_level(logging.WARNING):
+            apply_hotset_cap(
+                _hot({1: "signal", 2: "watchlist", 3: "market", 4: "market"}), cap=2
+            )
+        assert "REMEDY" in caplog.text
+
+    def test_a_nonsense_cap_is_a_no_op_rather_than_an_empty_hot_set(self) -> None:
+        """cap<=0 would otherwise score nothing at all — a misconfiguration must not
+        silently disable the entire provisional layer."""
+        hot = _hot({1: "signal", 2: "watchlist"})
+        assert apply_hotset_cap(hot, cap=0) == (hot, 0)
+        assert apply_hotset_cap(hot, cap=-5) == (hot, 0)
+

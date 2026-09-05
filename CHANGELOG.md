@@ -7,6 +7,47 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(A26): the hot-set cap is hard for discovery, soft for committed work (2026-09-05)
+
+**Bucket A, item 6.** The provisional hot set clipped at `live_provisional_hotset_max` by tier
+priority and logged a warning. Two things were wrong with that, and we have already paid for one
+of them: breadth alerts flooded the hot set, **watchlist stocks silently stopped being scored, and
+it was found weeks later**.
+
+**A stock carrying an active signal was clippable.** With more signal-bound stocks than the cap,
+the surplus was dropped — and a signal-bound stock that is never scored is a signal that silently
+does not exist. That makes a CPU budget a determinant of the trading record, which is precisely
+why A26 sits in the bucket that must land before cycle 2's clock.
+
+**The cap is now HARD for discovery tiers and SOFT for protected ones.** `signal` and `trigger`
+stocks are never dropped: if they alone exceed the cap, all of them are admitted, the budget is
+knowingly exceeded, and the overflow is escalated at ERROR with the actual numbers and a named
+remedy. Discovery tiers (`watchlist`, `market`) still clip to whatever budget remains — and their
+warning now names a remedy too, following the contrasting library (repo 8) that refuses at its
+broker token ceiling with an error stating the numbers and two concrete fixes.
+
+**Refusing to run was considered and rejected.** That library refuses because exceeding its
+ceiling would fail at the broker anyway. Ours is a self-imposed CPU budget, and refusing would
+score *nothing* — strictly worse than running over budget. Overflow-and-shout is the right shape
+here; the point of A26 is not the refusal, it is that a capacity boundary must never be crossed
+quietly.
+
+**And it is durable now, not just a log line.** `protected_overflow` rides the cycle stats into
+`provisional:health:{day}`, and `scripts/provisional_health.py` prints a `⛔ PROTECTED OVERFLOW`
+marker plus the remedy. The original incident hid in a log line for weeks precisely because the
+clip existed nowhere else — the same reasoning that put `clipped` on the stats in the first place.
+
+The rule moved out of `load_hot_set` into a pure `apply_hotset_cap(hot, cap)`, so the boundary is
+testable without a database. It previously could only be exercised through a full cycle, which is
+part of why a real clip went unnoticed.
+
+Tests: **1816 passed** (full suite, run exclusively); 9 new, covering the protection guarantee,
+multi-source stocks taking their *strongest* tier (a watchlisted signal must not be demoted into
+the clippable pool), the ERROR carrying both numbers and remedy, and `cap <= 0` being a no-op
+rather than silently disabling the entire provisional layer. Reverting to the pre-A26 behaviour
+fails **4** of them — checked by mutation.
+
+
 ### feat(A23): the effective-dated fee registry — each leg costed on its own date (2026-09-05)
 
 **Bucket A, item 5.** `fees.py` has claimed since Phase 8 that costs are *"versioned by effective

@@ -165,6 +165,10 @@ class HotSetStats:
     trigger: int = 0
     watchlist: int = 0
     market: int = 0
+    #: A26 — how far the PROTECTED tiers (signal + trigger) overflowed the cap. Non-zero
+    #: means the cap was deliberately exceeded to avoid dropping committed work, and it is
+    #: a configuration problem that must be seen, not a steady state.
+    protected_overflow: int = 0
 
 
 @dataclass
@@ -284,12 +288,99 @@ def admit_market_tier(
     return admitted
 
 
+#: Tiers whose stocks are NEVER dropped to fit the cap. A stock carrying an active signal
+#: or a live trigger represents committed work: not scoring it does not shed load, it
+#: deletes a signal from the record.
+_TIER_RANK = {"signal": 0, "trigger": 1, "watchlist": 2, "market": 3}
+_PROTECTED_MAX_RANK = _TIER_RANK["trigger"]
+
+
+def apply_hotset_cap(hot: dict[int, HotStock], cap: int) -> tuple[dict[int, HotStock], int]:
+    """A26 — enforce the hot-set cap, HARD for discovery tiers and SOFT for protected ones.
+
+    Returns `(kept, protected_overflow)`. `protected_overflow` is how far the protected
+    tiers alone exceeded `cap`; non-zero means the cap was knowingly broken rather than
+    committed work dropped, and it is a configuration problem to be seen, not a steady
+    state.
+
+    **Why the cap is not simply enforced.** It is a CPU budget. Dropping a discovery stock
+    costs an opportunity; dropping a signal-bound stock removes a signal from the trading
+    record — the cap would then be determining what we traded. Refusing to run at all (the
+    contrasting library's answer to its broker token ceiling) is worse again: it scores
+    NOTHING. So protected tiers overflow the budget and shout.
+
+    Pure and dependency-free so the boundary is testable without a database — the previous
+    version lived inline and could only be exercised through a full cycle, which is part of
+    why a real clip went unnoticed for weeks.
+    """
+    if cap <= 0 or len(hot) <= cap:
+        return hot, 0
+
+    def rank(entry: HotStock) -> int:
+        return min(_TIER_RANK[s] for s in entry.sources)
+
+    ordered = sorted(hot.items(), key=lambda kv: (rank(kv[1]), kv[0]))
+    protected = [kv for kv in ordered if rank(kv[1]) <= _PROTECTED_MAX_RANK]
+    discovery = [kv for kv in ordered if rank(kv[1]) > _PROTECTED_MAX_RANK]
+
+    if len(protected) > cap:
+        overflow = len(protected) - cap
+        log.error(
+            "provisional: hot-set cap EXCEEDED — %d protected stocks (%d signal-bound, "
+            "%d trigger-bound) against a cap of %d. Admitting all %d and running over "
+            "budget, because dropping them would silently remove %d stocks carrying "
+            "committed work from the record. REMEDY: raise `live_provisional_hotset_max` "
+            "above %d, or reduce concurrent active signals. All %d discovery stocks are "
+            "dropped this cycle.",
+            len(protected),
+            sum(1 for _, e in protected if "signal" in e.sources),
+            sum(1 for _, e in protected if "trigger" in e.sources),
+            cap,
+            len(protected),
+            overflow,
+            len(protected),
+            len(discovery),
+        )
+        return dict(protected), overflow
+
+    room = cap - len(protected)
+    kept = protected + discovery[:room]
+    dropped = discovery[room:]
+    log.warning(
+        "provisional: hot set clipped %d → %d — %d discovery stocks dropped (%s…). All %d "
+        "protected (signal/trigger) stocks kept. REMEDY: raise "
+        "`live_provisional_hotset_max`, trim watchlists, or lower "
+        "`live_provisional_market_max`.",
+        len(ordered),
+        len(kept),
+        len(dropped),
+        [sid for sid, _ in dropped[:10]],
+        len(protected),
+    )
+    return dict(kept), 0
+
+
 async def load_hot_set(
     db: Any, redis: Any, now_utc: datetime
 ) -> tuple[dict[int, HotStock], list[SignalPair], HotSetStats]:
-    """Assemble the bounded hot set. Priority when clipping:
-    signal > trigger > watchlist (clipping is logged, never silent, and
-    counted onto the returned HotSetStats)."""
+    """Assemble the bounded hot set.
+
+    **A26 — the cap is HARD for discovery tiers and SOFT for protected ones.**
+
+    `signal` and `trigger` stocks are PROTECTED: a stock carrying an active signal that is
+    not scored is a signal that silently does not exist, which makes the cap a determinant
+    of the trading record rather than a CPU budget. So if the protected tiers alone exceed
+    the cap they are ALL admitted, the cap is knowingly exceeded, and the overflow is
+    escalated with the numbers and a remedy.
+
+    `watchlist` and `market` are discovery tiers and still clip to fill whatever budget
+    remains, by priority — but the warning now names what to do about it.
+
+    The failure this exists to prevent already happened: breadth alerts flooded the hot
+    set, watchlist stocks silently stopped being scored, and it was found weeks later. The
+    contrast (repo 8) is a library that refuses at its token ceiling with an error naming
+    the actual numbers and two concrete remedies. Degrading quietly is the defect.
+    """
     hot: dict[int, HotStock] = {}
     pairs: list[SignalPair] = []
 
@@ -360,21 +451,10 @@ async def load_hot_set(
 
     cap = settings.live_provisional_hotset_max
     raw = len(hot)
-    if len(hot) > cap:
-        rank = {"signal": 0, "trigger": 1, "watchlist": 2, "market": 3}
-        ordered = sorted(
-            hot.items(), key=lambda kv: (min(rank[s] for s in kv[1].sources), kv[0])
-        )
-        dropped = ordered[cap:]
-        hot = dict(ordered[:cap])
-        log.warning(
-            "provisional: hot set clipped %d → %d (dropped %d: %s…)",
-            len(ordered),
-            cap,
-            len(dropped),
-            [sid for sid, _ in dropped[:10]],
-        )
-    stats = HotSetStats(raw=raw, kept=len(hot), clipped=raw - len(hot))
+    hot, overflow = apply_hotset_cap(hot, cap)
+    stats = HotSetStats(
+        raw=raw, kept=len(hot), clipped=max(0, raw - len(hot)), protected_overflow=overflow
+    )
     for entry in hot.values():
         stats.signal += "signal" in entry.sources
         stats.trigger += "trigger" in entry.sources
@@ -867,6 +947,10 @@ async def run_cycle(
         "hot": len(hot),
         "hot_raw": hot_stats.raw,
         "clipped": hot_stats.clipped,
+        # A26: durable, so "did the cap bite, and did it drop committed work?" is
+        # answerable from a run started without a log file. The original incident was
+        # found weeks late precisely because the clip existed only as a log line.
+        "protected_overflow": hot_stats.protected_overflow,
         "src_signal": hot_stats.signal,
         "src_trigger": hot_stats.trigger,
         "src_watchlist": hot_stats.watchlist,

@@ -629,7 +629,9 @@ to cycle 2").** A 30-repo external review (2026-09-03/04) produced 91 items acro
   floor) · ✅ **A29 DONE 2026-09-05** (flat ₹15.34 DP charge on the delivery SELL leg — **₹1,610.70 was
   never levied across all 105 closed positions, 15.8% of the book's loss**; a flat cost is the one
   charge that is not neutral to position size, and small is the shape live trading will have) · ✅ **A23 DONE 2026-09-05** (effective-dated fee registry; each leg costed on its own
-  date, pre-coverage dates refused rather than guessed) · A26 hot-set capacity refusal · A25 tick-mode assert · H6.
+  date, pre-coverage dates refused rather than guessed) · ✅ **A26 DONE 2026-09-05** (hot-set cap now HARD for discovery, SOFT for
+  signal/trigger-bound stocks — a committed signal can no longer be dropped to satisfy a CPU
+  budget; overflow escalates with numbers + remedy and is durable in the health record) · A25 tick-mode assert · H6.
 - **Bucket B — the instruments that read the cycle (~5 d):** H8 noise negative-control · H1 block
   bootstrap · H12 beta/IR · H2 buy-and-hold benchmark · H11 MinTRL as headline · T11 pin PSR ·
   H4 gate register · U4 trials counter · H3 VIX percentile · T7 · A24.

@@ -193,15 +193,26 @@ async def main() -> None:
             f"max={doc.get('elapsed_max_ms', 0.0):>6.0f}ms  "
             f"restarts={doc.get('restarts', 0)}{flag}"
         )
+        # A26: a protected overflow means the cap was knowingly exceeded to avoid
+        # dropping committed work. It must be impossible to miss in this readout — the
+        # original incident hid in a log line for weeks.
+        overflow = last.get("protected_overflow") or 0
+        over_txt = f", ⛔ PROTECTED OVERFLOW {overflow}" if overflow else ""
         print(
             f"      last cycle: hot={last.get('hot')} (raw {last.get('hot_raw')}, "
             # a stock can hold several sources, so these OVERLAP — they are
             # not a partition of `hot`
-            f"clipped {last.get('clipped')})  src (overlapping) sig/trig/wl/mkt="
+            f"clipped {last.get('clipped')}{over_txt})  "
+            f"src (overlapping) sig/trig/wl/mkt="
             f"{last.get('src_signal')}/{last.get('src_trigger')}/"
             f"{last.get('src_watchlist')}/{last.get('src_market')}  "
             f"engine_calls={last.get('engine_calls')}  windows={last.get('windows')}"
         )
+        if overflow:
+            print(
+                f"      ⛔ the hot-set cap ({overflow} over) could not hold every "
+                "signal/trigger-bound stock. REMEDY: raise `live_provisional_hotset_max`."
+            )
     if not days:
         print(f"  (no {HEALTH_KEY.format(day='<day>')} key in the last {args.days} days")
         print("   — the worker did not run, or ran before this build)")
