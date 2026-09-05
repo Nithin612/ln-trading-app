@@ -115,3 +115,101 @@ class TestDeflatedSharpe:
 
     def test_render_handles_none(self) -> None:
         assert "not assessable" in "\n".join(ds.render_lines(None, label="x"))
+
+
+class TestT11PinnedAgainstKnownGood:
+    """T11 — pin PSR/DSR to independently-derived values so the kurtosis convention can
+    never silently flip.
+
+    Background: cross-checking this module against QuantStats (the best-known reference in
+    the field) found **QuantStats wrong and us right**. Its PSR feeds pandas' **excess**
+    kurtosis into a formula that expects **Pearson**, which turns the `SR²` coefficient
+    from `+0.5` into `−0.25` and systematically **overstates** PSR. That check was manual
+    and one-off; these make it permanent, and every expectation below is written out from
+    Bailey & López de Prado rather than by calling the code under test.
+    """
+
+    def test_the_sr_squared_coefficient_is_plus_half_on_a_normal_series(self) -> None:
+        """The single number the whole bug turns on. Pearson kurtosis 3.0 gives
+        (3−1)/4 = **+0.5**; excess kurtosis 0.0 would give (0−1)/4 = **−0.25**."""
+        pearson_coeff = (3.0 - 1.0) / 4.0
+        excess_coeff = (0.0 - 1.0) / 4.0
+        assert pearson_coeff == 0.5
+        assert excess_coeff == -0.25
+
+        sr = 0.8
+        m = ds.Moments(n=50, mean=0.8, stdev=1.0, skew=0.0, kurtosis=3.0, sharpe=sr)
+        # Denominator written out longhand, not taken from the module.
+        denom_sq = 1.0 - 0.0 * sr + pearson_coeff * sr**2
+        expected = NormalDist().cdf(sr * math.sqrt(49) / math.sqrt(denom_sq))
+        assert abs(ds.psr(m, 0.0) - expected) < 1e-12
+
+    def test_the_quantstats_convention_would_flip_a_decision(self) -> None:
+        """⭐ Not merely "a different number" — a different VERDICT.
+
+        Passing EXCESS kurtosis where Pearson is expected shrinks the denominator and
+        inflates PSR. At n=10, SR=0.585 the correct PSR is **0.9476 (fails a 95% bar)**
+        while the QuantStats convention reports **0.9668 (clears it)**. Chosen precisely
+        because a test that only asserts "bigger" would pass just as happily in the
+        saturated region where both round to 1.0 and nothing is at stake.
+        """
+        sr = 0.585
+        correct = ds.Moments(n=10, mean=sr, stdev=1.0, skew=0.0, kurtosis=3.0, sharpe=sr)
+        as_if_excess = ds.Moments(
+            n=10, mean=sr, stdev=1.0, skew=0.0, kurtosis=0.0, sharpe=sr
+        )
+        got, buggy = ds.psr(correct, 0.0), ds.psr(as_if_excess, 0.0)
+        assert got < 0.95 <= buggy
+        assert abs(got - 0.94757) < 1e-4
+        assert abs(buggy - 0.96677) < 1e-4
+
+    def test_the_seam_moments_feeds_psr_pearson(self) -> None:
+        """The bug can only reach `psr` through `moments`, so pin the actual handoff — a
+        unit test of either half alone would not have caught QuantStats' version either."""
+        xs = [NormalDist(0, 1).inv_cdf((i + 0.5) / 2000) for i in range(2000)]
+        m = ds.moments(xs)
+        assert m is not None
+        assert 2.9 < m.kurtosis < 3.1, "moments must emit PEARSON kurtosis"
+        # And that value, fed through, reproduces the +0.5-coefficient denominator.
+        denom_sq = 1.0 - m.skew * m.sharpe + ((m.kurtosis - 1.0) / 4.0) * m.sharpe**2
+        expected = NormalDist().cdf(m.sharpe * math.sqrt(m.n - 1) / math.sqrt(denom_sq))
+        assert abs(ds.psr(m, 0.0) - expected) < 1e-12
+
+    def test_expected_max_sharpe_pinned(self) -> None:
+        """E[max SR] over N zero-skill trials, written out from the Bailey–López de Prado
+        approximation with the Euler–Mascheroni constant."""
+        euler = 0.5772156649015329
+        trials, sd = 20, 0.25
+        a = NormalDist().inv_cdf(1.0 - 1.0 / trials)
+        b = NormalDist().inv_cdf(1.0 - 1.0 / (trials * math.e))
+        expected = sd * ((1.0 - euler) * a + euler * b)
+        assert abs(ds.expected_max_sharpe(trials, sd) - expected) < 1e-9
+        # Sanity: the 20-trial bar on our own trial dispersion is a real hurdle, not ~0.
+        assert 0.2 < ds.expected_max_sharpe(20, 0.25) < 0.6
+
+    def test_min_trl_pinned(self) -> None:
+        """MinTRL = 1 + denom² · (z_conf / (SR − SR*))², longhand."""
+        sr = 0.5
+        m = ds.Moments(n=40, mean=0.5, stdev=1.0, skew=0.0, kurtosis=3.0, sharpe=sr)
+        bench = 0.2
+        denom_sq = 1.0 - 0.0 * sr + ((3.0 - 1.0) / 4.0) * sr**2
+        z = NormalDist().inv_cdf(0.95)
+        expected = 1.0 + denom_sq * (z / (sr - bench)) ** 2
+        got = ds.min_track_record_length(m, bench, 0.95)
+        assert got is not None
+        assert abs(got - expected) < 1e-9
+
+    def test_end_to_end_dsr_on_a_fixed_series(self) -> None:
+        """The whole pipeline pinned on a deterministic series, so a refactor anywhere in
+        moments → E[max] → psr → dsr moves a number a human has to look at."""
+        xs = [0.1 * ((i % 7) - 3) + 0.05 for i in range(120)]
+        r = ds.deflated_sharpe(xs, trials=20)
+        assert r is not None
+        m = r.moments
+        # Recompute the reported DSR longhand from the reported moments + benchmark.
+        denom_sq = 1.0 - m.skew * m.sharpe + ((m.kurtosis - 1.0) / 4.0) * m.sharpe**2
+        z = (m.sharpe - r.benchmark_sharpe) * math.sqrt(m.n - 1) / math.sqrt(denom_sq)
+        assert abs(r.dsr - NormalDist().cdf(z)) < 1e-12
+        assert r.trials == 20
+        # A near-zero-Sharpe series must NOT clear a 20-trial bar.
+        assert r.passes is False

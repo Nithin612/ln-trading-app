@@ -645,11 +645,32 @@ to cycle 2").** A 30-repo external review (2026-09-03/04) produced 91 items acro
   ⭐ **Rule: clamp what you REPORT, never what you DECIDE.** Four literals doing three jobs in four
   modules — two disagreeing by 1000× — consolidated without collapsing them).
   **▶ Bucket A is now COMPLETE — every item that changes a recorded number has landed.**
-- **▶▶ Bucket B IS THE NEXT WORK — the instruments that read the cycle (~5 d):**
-  ✅ H8 noise negative-control (DONE 2026-09-04) · **H1 block bootstrap ← start here** · H12 beta/IR ·
-  H2 buy-and-hold benchmark · H11 MinTRL as headline · T11 pin PSR · H4 gate register ·
-  U4 trials counter · H3 VIX percentile · T7 · A24. None of these changes a recorded number, so
-  they may be built DURING accrual — Bucket A was the part that had to land first, and it has.
+- **▶▶ Bucket B IN PROGRESS — the instruments that read the cycle (~5 d):**
+  ✅ H8 noise negative-control (2026-09-04) · ✅ **H1 block bootstrap** (2026-09-05) ·
+  ✅ **H2 buy-and-hold benchmark** (2026-09-05) · ✅ **H12 beta/IR** (2026-09-05) ·
+  ✅ **T11 pin PSR** (2026-09-05) · **remaining: H11 MinTRL as headline · H4 gate register ·
+  U4 trials counter · H3 VIX percentile · T7 · A24.** None of these changes a recorded number, so
+  they build DURING accrual — Bucket A was the part that had to land first, and it has.
+
+> **⭐⭐ WHAT BUCKET B HAS ALREADY ESTABLISHED — read this before arguing about any gate.**
+> **(1) The book has not measured an edge in EITHER direction.** Block bootstrap on all 105
+> closed positions: Sharpe **−0.033**, 90% interval **[−0.223, +0.118]**, sign fails to survive
+> in ~30% of resampled histories. At n=105 even the LOSS is not statistically established. It is
+> not that we measured a small negative edge — we have not measured anything, so **any gate
+> partitioning this series is partitioning noise.** That is why no partition has ever cleared the
+> DSR bar, and it is a stronger statement than the ₹ figure alone supports.
+> **(2) The book lost to doing nothing by 15.92 percentage points.** 2026-08-17 → 09-04:
+> NIFTY 50 **−1.61%**, the book **−17.52%**. And under-deployment does NOT excuse it — the index
+> FELL and the book fell ten times further with only ~45% of capital at risk, so partial
+> deployment makes the comparison worse, not better.
+> **(3) Market exposure is far above the published median.** Beta **+0.638** overall (LONG +0.34,
+> **SHORT +1.49**) against a +0.17 median across 4,843 replications.
+> **(4) A sizing finding, surfaced but NOT resolved.** Equal-weighted return is **+0.382%/trade**
+> while capital-weighted is **−0.118%**. This is **concentration, not selection** —
+> Spearman(notional, return%) = **−0.061**, and the largest quartile's mean return is *positive*
+> (+0.084%) while its rupee total is **−₹25,404**. Its median notional is **₹122,566 on ₹100,000
+> of capital**; those rows predate the per-position notional cap. **Worth a decision: whether the
+> cap alone is enough, or sizing needs a second look.**
 - **Then:** Phase 7.1–7.4 (the long pole) · MCE 5b (**blocked on a vendor decision, not code**) +
   MCE 6 · CAS-2 · tuning → **then** cycle 2's 45–50 day clock on ₹1L.
 - **Honest sizing: 3–4 months to cycle-2 start**, consistent with "live is 4–6 months out".

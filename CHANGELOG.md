@@ -7,6 +7,167 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### test(T11): pin PSR/DSR against independently-derived values (2026-09-05)
+
+**Bucket B, item 4.** Cross-checking `deflated_sharpe.py` against QuantStats — the
+best-known reference in the field — found **QuantStats wrong and us right**: its PSR feeds
+pandas' **excess** kurtosis into a formula expecting **Pearson**, turning the `SR²`
+coefficient from `+0.5` into `−0.25` and systematically **overstating** PSR. That check was
+manual and one-off. It is now permanent, with every expectation written out from
+Bailey & López de Prado rather than by calling the code under test (the T1 discipline:
+anchor a test to a value you can derive independently).
+
+**⭐ The bug is pinned as a VERDICT FLIP, not a rounding difference.** A test asserting
+merely "excess kurtosis gives a bigger number" passes just as happily in the saturated
+region where both conventions round to 1.0 and nothing is at stake — the first draft did
+exactly that, and both sides printed 1.0000. Searched for the case that matters instead: at
+**n=10, SR=0.585 the correct PSR is 0.9476 (fails a 95% bar) while the QuantStats
+convention reports 0.9668 (clears it)**. Same data, opposite decision.
+
+Also pinned: the `+0.5` vs `−0.25` coefficient longhand; the **seam** `moments → psr` (the
+bug can only arrive through that handoff, and a unit test of either half alone would not
+have caught QuantStats' version either); `expected_max_sharpe` against the
+Euler–Mascheroni form; `min_track_record_length`; and the end-to-end DSR on a fixed
+deterministic series.
+
+- Tests: 6 new (`tests/test_deflated_sharpe.py`)
+
+### feat(H2): the buy-and-hold benchmark — the honest denominator (2026-09-05)
+
+**Bucket B, item 2.** We report P&L against zero. Zero is the wrong denominator: the
+question a trading system has to answer is not "did it make money" but **"did it beat doing
+nothing with the same money"**. The external review's most sobering number was a five-year
+agent project that buy-and-hold quietly beat, invisible until someone opened a CSV. This
+was genuinely absent rather than merely unreported — `benchmark.py` is per-signal relative
+strength for the sector-RS overlay, not a portfolio baseline.
+
+**⭐ First read, and it is not close.** Over the paper-clock window 2026-08-17 → 2026-09-04:
+**NIFTY 50 −1.61%, the book −17.52%** (−₹17,522 realised + open MTM on ₹1L). The book **lost
+to buy-and-hold by 15.92 percentage points.**
+
+**The partial-deployment caveat is direction-aware, because here it makes things worse.**
+Buy-and-hold is 100% invested and our sampler carries ~45% of capital at risk, so the
+obvious sentence is "we were under-deployed, that explains some of the gap". It does not —
+the index *fell* and the book fell ten times further, with **less** capital exposed. A fixed
+caveat claiming otherwise would be exactly the misleading line this report exists to
+prevent, so `_deployment_note` branches on the two signs: an under-deployed book that
+trails a **rising** index is partly excused, one that loses more than a **falling** index is
+not, and one that is **ahead** on less risk is stronger than its headline. This is the same
+lesson `flip_readiness.tail_guard` learned when it announced "the negative mean is carried
+by losses" for a cohort whose mean was positive.
+
+Fails closed — `None` without a paper clock, a capital figure, or NIFTY bars at both ends —
+and reaches BACK for the last bar on or before each edge (the clock can start on a weekend)
+but never forward, which would be look-ahead. A window resolving to one bar at both ends is
+refused: a 0.0% benchmark there is an artefact of the window, not a fact about the market.
+
+- `backend/app/services/buy_and_hold.py` — new · wired into the scorecard
+- Tests: 15 new (`tests/test_buy_and_hold.py`)
+
+### feat(H12): beta to NIFTY and an information ratio (2026-09-05)
+
+**Bucket B, item 3.** On 4,843 published replications the median strategy carries **beta
++0.17**, and stripping that exposure roughly halves the median edge. We computed **no beta
+and no IR anywhere**, which left one specific blindness: a cohort that is directionally
+biased in a trending market looks like skill. We have been bitten by exactly that — the
+market-regime gate's evidence was a **proxy for side**. `side_proxy_guard` catches the
+extreme version by counting sides; beta catches the graded version. Third robustness axis
+beside **H1** (is it stable?) and **H8** (does the bar reject noise?): **is it just the
+market?**
+
+The market return per trade is taken over that trade's own holding window and **signed by
+side** — a short profiting while the index falls is collecting exposure, not skill, and
+unsigned it would read as negative beta and flatter the cohort.
+
+**⭐ First read (105 closed positions):** beta **+0.638**, per-trade alpha **+0.607%**, IR
+**+0.133**; LONG beta +0.342, **SHORT beta +1.492**. Our market exposure is far above the
++0.17 published median and the shorts carry most of it.
+
+**⚠ A dimensional bug found while validating against the real book, now a regression test.**
+Feeding **currency** returns against a fractional market move yields a beta carrying units —
+measured at **−12,561** on the live book. Arithmetically fine, completely incomparable to
+the +0.17 the finding is calibrated against. `Trade.ret` is now documented and tested as a
+**fractional** return (`pnl ÷ notional`); a test asserts scaling the returns by 50,000
+scales beta by 50,000, and that a fractional beta is a small number.
+
+**⚠ And a discrepancy the instrument surfaced, reported rather than resolved.**
+Equal-weighted return per trade is **+0.382%** while capital-weighted is **−0.118%**. The
+tempting reading is "big positions pick worse" and it is **wrong** — Spearman(notional,
+return%) is **−0.061**, essentially zero, and the largest quartile's *mean return is
+positive* (+0.084%) while its rupee total is **−₹25,404**. The sign flip is
+**concentration, not selection**. Worth noting the top quartile's median notional is
+**₹122,566 on ₹100,000 of capital** — rows predating the per-position notional cap, which is
+precisely the shape that cap exists to prevent.
+
+**Scope:** rendered on the closed book and the LONG/SHORT split in the daily report.
+Per-GATE-cohort beta is a follow-up: `flip_readiness` is contractually pure ("rows in,
+verdicts out, no I/O") and `Row` carries no exit date or notional, so it would need four
+more fields plumbed through six sidecars plus a DB read inside a pure module.
+
+- `backend/app/services/beta_ir.py` — new · wired into the scorecard
+- Tests: 17 new (`tests/test_beta_ir.py`)
+
+### feat(H1): moving-block bootstrap beside the deflated-Sharpe bar (2026-09-05)
+
+**Bucket B, item 1.** `deflated_sharpe.py` is parametric and **assumes the trades are
+independent** — its own documented weakness. Ours are not: concurrent positions in one book
+share the same market move, so a bad day is several correlated bad trades and an iid
+instrument counts that as several independent pieces of evidence.
+
+`app/services/block_bootstrap.py` is the non-parametric complement. Künsch's moving-block
+bootstrap resamples runs of consecutive trades (`L = ceil(n^(1/3))`, the Hall–Horowitz–Jing
+rate — 3–5 at our sample sizes) so short-range dependence survives the resampling, and
+reports the Sharpe's 90% interval beside PSR/DSR/MinTRL. The two answer different
+questions and must be read together: **DSR asks "better than luck given N trials", the
+bootstrap asks "if the same process ran again, would the sign hold".** It also automates
+by construction the tail-robustness check constraint #8 currently asks to be done by hand.
+
+**⭐ First read on the live book — the loss is not statistically established either.** All
+105 closed positions, chronological: observed Sharpe **−0.033**, 90% interval
+**[−0.223, +0.118]**, sign fails to survive in ~30% of resampled histories. At n=105 the
+book is indistinguishable from zero in **both** directions. That is sharper than the ₹
+figure alone: it is not that we measured a small negative edge, it is that we have not yet
+measured anything — and any gate partitioning this series is partitioning noise, which is
+why no partition has ever cleared the bar.
+
+**The blocks earn their keep, measured two ways.** On the real book the block interval is
+**9% wider than iid** (0.342 vs 0.314) — small but in the expected direction, so the series
+does carry dependence. On synthetic AR(1) data the effect is stark: with no autocorrelation
+blocks cost nothing (interval ratio 0.99), at φ=0.8 they are **77% wider**, i.e. an
+independence-assuming bootstrap would report a falsely tight bound. Both are pinned by test.
+
+**Validated the way H8 validated the DSR bar** — an instrument that cannot come out badly
+is not an instrument: at n=44 a zero-edge series' sign "survives" **6.2%** of the time
+against a one-sided 5% design (percentile bootstraps under-cover slightly at small n; that
+is recorded rather than hidden), and a true per-trade Sharpe of 0.5 survives **95%** of the
+time.
+
+**⚠ A defect found in this module while validating it, and fixed.** A near-constant series
+with one outlier (43 trades of +0.2, one of −40) produced **76% zero-variance resamples**.
+Dropping those silently left only the draws that *contained* the outlier, so the reported
+interval described a filtered subpopulation and read as if the negative sign were robust —
+when it was one trade. Exactly the failure this instrument exists to detect, occurring
+inside the instrument. It now **refuses** above `MAX_DEGENERATE_SHARE` (10%) rather than
+reporting a biased interval.
+
+**⚠ Block order had to become a property of the data.** Blocks are runs of *consecutive*
+trades, so they are meaningless unless the series is chronological — and sidecars sort their
+rows for display (`market_regime_shadow` sorts newest-first). Rather than trust a convention
+nothing can check, `flip_readiness.Row` gained an optional `at`, the bootstrap sorts by it,
+and it **refuses when any row lacks one**. All six sidecars now pass it (`circuit_gate` and
+`entry_quality` needed the timestamp plumbed onto their detail rows). A test asserts display
+order cannot change the number.
+
+Deterministic by construction (fixed seed) — a readiness figure that moves between two runs
+on identical data would read as news. Costs ~190 ms at n=105, so under ~1.2 s across all six
+sidecars in `make analysis`.
+
+- `backend/app/services/block_bootstrap.py` — new
+- `backend/app/services/flip_readiness.py` — `Row.at`, `_chronological`, one block in
+  `evidence_lines`
+- six `*_shadow.py` sidecars — pass `at=`
+- Tests: 20 new (`tests/test_block_bootstrap.py` 17, `tests/test_flip_readiness.py` +3)
+
 ### fix(H6): a degenerate ratio is undefined, not zero, and off-scale is marked (2026-09-05)
 
 **Bucket A, item 8** — it changes reported R:R values, so it lands before cycle 2's clock.
