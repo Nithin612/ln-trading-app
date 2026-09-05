@@ -7,6 +7,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### fix(H12): a market-driven GAIN and a market-driven LOSS are different findings (2026-09-06)
+
+Found by running `make analysis` against the real book rather than by a test: the flag
+printed **⚠ MARKET-DRIVEN** beside a **positive** per-trade alpha, which reads as "your edge
+is fake" while the arithmetic said something else entirely — beta +0.92, alpha +0.0010, and
+the market explaining **−0.0031** of the mean outcome. The market had sunk an
+otherwise-positive alpha.
+
+Both are real and they are opposite findings. A market-driven **gain** is the failure mode
+H12 exists to catch: a directionally-biased cohort in a trending window looking like skill —
+precisely how the market-regime gate's evidence became a proxy for SIDE. A market-driven
+**loss** says the exposure sank the cohort, not that the signals were empty.
+
+The flag now branches: `MARKET-DRIVEN GAIN` names the skill illusion, `MARKET-DRIVEN LOSS`
+notes that the alpha is the opposite sign, and a market-neutral cohort gets no gloss at all.
+The A24 rule applied to our own output — a caveat must branch on the data, because one
+sentence covering both cases is wrong in one of them.
+
+- `backend/app/services/beta_ir.py` — `market_helped`, branched render
+- Tests: 3 new (`tests/test_beta_ir.py`)
+
 ### feat(H3): the VIX companion is a trailing percentile, not an inherited absolute (2026-09-05)
 
 **Bucket B, item 10 — the last of the bucket.** `market_regime`'s VIX threshold was a flat

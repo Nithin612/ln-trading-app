@@ -143,3 +143,44 @@ class TestRender:
         assert "MARKET-DRIVEN" in out
         assert "beta **+0.90**" in out
         assert "per-TRADE beta, not a portfolio beta" in out
+
+
+class TestMarketDrivenGainVsLoss:
+    """⭐ The flag fires on outcomes of BOTH signs and they mean opposite things — found on
+    the real book, where it printed MARKET-DRIVEN beside a POSITIVE alpha.
+
+    A market-driven GAIN is the failure mode H12 exists to catch: a directionally-biased
+    cohort in a trending window looking like skill. A market-driven LOSS says the exposure
+    sank an otherwise-positive alpha. One sentence for both would mislead in one of them —
+    the A24 rule that a caveat must branch on the data.
+    """
+
+    def _mk(self, explained: float) -> BetaIr:
+        return BetaIr(
+            n=44, beta=0.92, alpha=0.0010, information_ratio=0.017,
+            market_mean=explained / 0.92, explained_by_market=explained,
+        )
+
+    def test_a_market_driven_gain_names_the_skill_illusion(self) -> None:
+        r = self._mk(+0.0031)
+        assert r.is_market_driven and r.market_helped
+        out = "\n".join(render_lines(r, label="x"))
+        assert "MARKET-DRIVEN GAIN" in out
+        assert "looks like skill" in out
+
+    def test_a_market_driven_loss_says_the_alpha_is_the_other_sign(self) -> None:
+        """The real book's shape: beta +0.92, alpha +0.0010, market explains −0.0031."""
+        r = self._mk(-0.0031)
+        assert r.is_market_driven and not r.market_helped
+        out = "\n".join(render_lines(r, label="x"))
+        assert "MARKET-DRIVEN LOSS" in out
+        assert "OPPOSITE sign" in out
+        assert "looks like skill" not in out, "the gain gloss must not appear on a loss"
+
+    def test_a_market_neutral_cohort_gets_no_gloss_at_all(self) -> None:
+        r = BetaIr(
+            n=44, beta=0.05, alpha=0.0090, information_ratio=0.30,
+            market_mean=0.002, explained_by_market=0.0001,
+        )
+        out = "\n".join(render_lines(r, label="x"))
+        assert "MARKET-DRIVEN" not in out

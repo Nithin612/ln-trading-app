@@ -123,13 +123,27 @@ class BetaIr:
 
     @property
     def is_market_driven(self) -> bool:
-        """True when the market explains at least half of the cohort's mean return, in
-        the same direction. The graded version of the side-proxy veto."""
+        """True when the market explains at least half of the cohort's mean outcome. The
+        graded version of the side-proxy veto.
+
+        ⚠ Read this together with `market_helped`. The flag fires on outcomes of either
+        sign, and they mean opposite things: a market-driven GAIN is the failure mode H12
+        exists to catch (a directionally-biased cohort in a trending window looking like
+        skill), while a market-driven LOSS says the exposure sank an otherwise-positive
+        alpha. `render_lines` branches on it rather than printing one sentence for both —
+        found on the real book, where the flag fired beside a POSITIVE alpha.
+        """
         total = self.alpha + self.explained_by_market
         if total == 0:
             return False
         share = self.explained_by_market / total
         return share >= 0.5
+
+    @property
+    def market_helped(self) -> bool:
+        """Did market exposure push the outcome UP? Distinguishes the two readings of
+        `is_market_driven`."""
+        return self.explained_by_market > 0
 
 
 def _signed_market_return(
@@ -256,9 +270,24 @@ def render_lines(r: BetaIr | None, *, label: str) -> list[str]:
             f"- **{label} — beta / IR:** not assessable (needs ≥{MIN_TRADES} trades with "
             "index bars at both ends, and a window in which the index actually moved)"
         ]
-    flag = " ⚠ **MARKET-DRIVEN**" if r.is_market_driven else ""
     ir = f"{r.information_ratio:+.3f}" if r.information_ratio is not None else "— (perfect fit)"
-    return [
+    if not r.is_market_driven:
+        flag, gloss = "", ""
+    elif r.market_helped:
+        flag = " ⚠ **MARKET-DRIVEN GAIN**"
+        gloss = (
+            "  - ⚠ the market, not the signals, produced most of this — a cohort biased "
+            "toward one side in a trending window looks like skill. This is the failure "
+            "mode that made the market-regime gate's evidence a proxy for SIDE."
+        )
+    else:
+        flag = " ⚠ **MARKET-DRIVEN LOSS**"
+        gloss = (
+            "  - ⚠ the exposure explains the loss — note the per-trade alpha is the "
+            "OPPOSITE sign, so this says the market sank the cohort, not that the signals "
+            "were empty. A different finding from a market-driven gain."
+        )
+    out = [
         f"- **{label} — market exposure:** beta **{r.beta:+.2f}** · "
         f"per-trade alpha **{r.alpha:+.4f}** · IR **{ir}**{flag}",
         f"  - of the cohort's mean outcome, {r.explained_by_market:+.4f} is explained by "
@@ -268,3 +297,6 @@ def render_lines(r: BetaIr | None, *, label: str) -> list[str]:
         "regardless of holding period; and overlapping holds share market moves, so the "
         "IR is optimistic in the same way DSR is.",
     ]
+    if gloss:
+        out.insert(1, gloss)
+    return out
