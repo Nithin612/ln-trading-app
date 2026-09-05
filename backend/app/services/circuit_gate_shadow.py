@@ -43,6 +43,7 @@ class BlockedEntry:
     adverse: str | None
     distance_pct: Decimal | None
     realized_pnl: Decimal | None  # None while the position is still open
+    at: datetime | None = None  # order placement — the block bootstrap needs time order
 
 
 @dataclass(frozen=True)
@@ -136,6 +137,7 @@ async def _link_blocked_outcomes(
             adverse=v.get("adverse"),
             distance_pct=Decimal(str(dist)) if dist is not None else None,
             realized_pnl=realized,
+            at=o.placed_at,
         )
 
     blocked: list[BlockedEntry] = []
@@ -187,7 +189,7 @@ def forward_evidence_ready(r: CircuitGateShadow) -> tuple[bool, str]:
     # `tail` guard does the work — which is the guard that matters for a small blocked
     # cohort, since one outlier could otherwise carry the whole net-losing verdict.
     _veto = fr.veto(
-        [fr.Row(side=d.side, blocked=True, realized=d.realized_pnl) for d in r.blocked]
+        [fr.Row(side=d.side, blocked=True, realized=d.realized_pnl, at=d.at) for d in r.blocked]
     )
     if _veto is not None:
         return False, f"VETOED by a shared readiness guard — {_veto}"
@@ -265,7 +267,7 @@ def render_markdown(r: CircuitGateShadow, *, day: date, mode: str) -> str:
         "",
     ]
     out += fr.evidence_lines(
-        [fr.Row(side=d.side, blocked=True, realized=d.realized_pnl) for d in r.blocked],
+        [fr.Row(side=d.side, blocked=True, realized=d.realized_pnl, at=d.at) for d in r.blocked],
         label="circuit-band gate",
     )
     return "\n".join(out) + "\n"

@@ -181,7 +181,10 @@ def rs_flip_ready(r: SectorRsShadow) -> tuple[bool, str]:
     # ✅ READY on a side proxy whose negative mean was 94% one trade. See
     # `app/services/flip_readiness.py` for the three guards and why each exists.
     _veto = fr.veto(
-        [fr.Row(side=d.side, blocked=d.blocked, realized=d.realized) for d in r.detail]
+        [
+            fr.Row(side=d.side, blocked=d.blocked, realized=d.realized, at=d.created_at)
+            for d in r.detail
+        ]
     )
     if _veto is not None:
         return False, f"VETOED by a shared readiness guard — {_veto}"
@@ -259,7 +262,12 @@ def render_markdown(r: SectorRsShadow, *, day: date) -> str:
         shown = r.detail[:_DETAIL_MAX]
         out += [
             *fr.evidence_lines(
-                [fr.Row(side=d.side, blocked=d.blocked, realized=d.realized) for d in r.detail],
+                [
+                    fr.Row(
+                        side=d.side, blocked=d.blocked, realized=d.realized, at=d.created_at
+                    )
+                    for d in r.detail
+                ],
                 label="sector-RS gate",
             ),
             "## Per-entry context (each committed signal's sector/index RS)",

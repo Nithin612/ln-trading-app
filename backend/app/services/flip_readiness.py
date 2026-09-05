@@ -38,7 +38,12 @@ from __future__ import annotations
 import math
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from decimal import Decimal
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from app.services import block_bootstrap as bb
 
 #: Blocked/eligible purity above which the partition is treated as a proxy for side.
 SIDE_PURITY = 0.95
@@ -53,6 +58,12 @@ class Row:
     side: str
     blocked: bool
     realized: Decimal | None  # None = not resolved (no P&L yet)
+    # When the entry happened. Optional only for backwards compatibility: the block
+    # bootstrap (H1) resamples CONSECUTIVE runs of trades, so it is meaningless unless the
+    # series is in time order — and sidecars sort their rows for DISPLAY (market_regime
+    # sorts newest-first). Rather than trust a convention nothing can check, the bootstrap
+    # sorts by this and REFUSES when any row lacks it.
+    at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -64,6 +75,23 @@ class Guard:
 
 def _resolved(rows: Sequence[Row], *, blocked: bool) -> list[Decimal]:
     return [r.realized for r in rows if r.blocked is blocked and r.realized is not None]
+
+
+def _chronological(rows: Sequence[Row], *, blocked: bool) -> bb.BootstrapResult | None:
+    """Resolved outcomes for one side of the partition, in TIME order.
+
+    Returns the bootstrap result, or None when the order cannot be established because a
+    row carries no timestamp — blocks drawn from an arbitrarily-ordered series are not
+    blocks, and an interval computed from them would look authoritative while measuring
+    nothing. Fail closed.
+    """
+    from app.services import block_bootstrap as bb
+
+    picked = [r for r in rows if r.blocked is blocked and r.realized is not None]
+    if not picked or any(r.at is None for r in picked):
+        return None
+    ordered = sorted(picked, key=lambda r: r.at)  # type: ignore[arg-type,return-value]
+    return bb.moving_block_bootstrap([float(r.realized) for r in ordered])  # type: ignore[arg-type]
 
 
 def _median(xs: Sequence[Decimal]) -> Decimal:
@@ -203,7 +231,8 @@ def evidence_lines(rows: Sequence[Row], *, label: str, trials: int | None = None
     hold if the gate were flipped — because that is the thing whose risk-adjusted return
     has to survive the multiple-testing correction.
     """
-    from app.services import deflated_sharpe as ds  # local: keeps this module dependency-light
+    from app.services import block_bootstrap as bb  # local: keeps this module dependency-light
+    from app.services import deflated_sharpe as ds
 
     b = _resolved(rows, blocked=True)
     e = _resolved(rows, blocked=False)
@@ -248,6 +277,14 @@ def evidence_lines(rows: Sequence[Row], *, label: str, trials: int | None = None
         )
         out += ds.render_lines(
             dsr, label="eligible set (the book a flip would leave you holding)"
+        )
+        # H1 — the non-parametric complement, on the same set. DSR asks "better than
+        # luck given N trials"; this asks "if the same process ran again, would the sign
+        # hold". Read them together: DSR's weakness is the independence assumption, and
+        # blocks are what price that in.
+        out += bb.render_lines(
+            _chronological(rows, blocked=False),
+            label="eligible set",
         )
     else:
         out.append("- **deflated Sharpe:** no resolved eligible trades yet")

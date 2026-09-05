@@ -10,6 +10,7 @@ These are the shared vetoes. Each sidecar keeps its own count/sign rules; a fail
 refuses READY regardless of how good the headline looks.
 """
 
+from datetime import timedelta
 from decimal import Decimal
 
 from app.services import flip_readiness as fr
@@ -130,3 +131,51 @@ class TestVeto:
         assert v is not None
         # side proxy AND tail AND win-rate all fire on this shape
         assert "side_proxy" in v and "tail" in v and "win_rate" in v
+
+
+class TestBlockBootstrapInEvidence:
+    """H1 — the non-parametric complement to the DSR bar, rendered beside it.
+
+    Blocks are runs of CONSECUTIVE trades, so the series must be in time order. Sidecars
+    sort their rows for display (market_regime sorts newest-first), so the ordering cannot
+    be left to convention — `Row.at` carries it and the bootstrap refuses without it.
+    """
+
+    def _dated(self, i: int, *, blocked: bool, pnl: str) -> fr.Row:
+        from datetime import UTC, datetime
+
+        return fr.Row(
+            side="LONG",
+            blocked=blocked,
+            realized=Decimal(pnl),
+            at=datetime(2026, 8, 1, tzinfo=UTC) + timedelta(days=i),
+        )
+
+    def test_evidence_includes_the_bootstrap_when_rows_are_dated(self) -> None:
+        rows = [
+            self._dated(i, blocked=False, pnl=str(500 if i % 3 else -300)) for i in range(30)
+        ]
+        out = "\n".join(fr.evidence_lines(rows, label="test gate"))
+        assert "block bootstrap" in out
+        assert "90% interval" in out
+
+    def test_undated_rows_refuse_rather_than_bootstrap_an_arbitrary_order(self) -> None:
+        """Fail closed: an interval computed from arbitrarily-ordered blocks would look
+        authoritative while measuring nothing."""
+        rows = [
+            fr.Row(side="LONG", blocked=False, realized=Decimal(500 if i % 3 else -300))
+            for i in range(30)
+        ]
+        out = "\n".join(fr.evidence_lines(rows, label="test gate"))
+        assert "block bootstrap" in out
+        assert "not assessable" in out
+
+    def test_display_order_does_not_change_the_result(self) -> None:
+        """A sidecar that sorts newest-first must get the same number as one that does not
+        — which is the whole reason the timestamp is carried."""
+        rows = [
+            self._dated(i, blocked=False, pnl=str(500 if i % 3 else -300)) for i in range(30)
+        ]
+        forward = "\n".join(fr.evidence_lines(rows, label="g"))
+        reverse = "\n".join(fr.evidence_lines(list(reversed(rows)), label="g"))
+        assert forward == reverse

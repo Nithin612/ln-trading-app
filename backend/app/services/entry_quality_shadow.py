@@ -69,6 +69,7 @@ class SignalQuality:
 
     symbol: str
     side: str
+    at: datetime | None  # signal creation — the block bootstrap needs time order
     div_blocked: bool
     sl_blocked: bool
     realized: Decimal | None
@@ -136,7 +137,7 @@ async def compute_entry_quality_shadow(
         (sl_f if v.sl_blocked else sl_p).add(r)
         detail.append(
             SignalQuality(
-                symbol="", side=s.direction,
+                symbol="", side=s.direction, at=s.created_at,
                 div_blocked=v.diversity_blocked, sl_blocked=v.sl_blocked, realized=r,
             )
         )
@@ -152,7 +153,7 @@ def sl_flip_ready(r: EntryQualityShadow) -> tuple[bool, str]:
     # Shared veto first — see app/services/flip_readiness.py. This banner decides the
     # `sl_atr` rung, so the partition is sl_blocked, not diversity.
     _veto = fr.veto(
-        [fr.Row(side=d.side, blocked=d.sl_blocked, realized=d.realized) for d in r.detail]
+        [fr.Row(side=d.side, blocked=d.sl_blocked, realized=d.realized, at=d.at) for d in r.detail]
     )
     if _veto is not None:
         return False, f"VETOED by a shared readiness guard — {_veto}"
@@ -224,7 +225,7 @@ def render_markdown(
         "",
     ]
     out += fr.evidence_lines(
-        [fr.Row(side=d.side, blocked=d.sl_blocked, realized=d.realized) for d in r.detail],
+        [fr.Row(side=d.side, blocked=d.sl_blocked, realized=d.realized, at=d.at) for d in r.detail],
         label="entry-quality sl_atr rung",
     )
     return "\n".join(out) + "\n"
