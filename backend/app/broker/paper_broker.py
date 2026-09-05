@@ -26,6 +26,7 @@ from app.core.config import settings
 from app.models.signal import Signal
 from app.models.trading import Order, Position
 from app.models.user import User
+from app.services.liquidity import load_median_traded_values
 from app.signals import eligibility
 from app.trading.fees import product_for_classification, roundtrip_charges
 from app.trading.trail_sl import compute_pnl
@@ -105,11 +106,16 @@ class FillModel:
     slippage_bps: Decimal  # TOTAL adverse bps applied
     baseline_bps: Decimal  # what the flat model would have charged
     half_spread_bps: Decimal
-    impact_bps: Decimal
+    impact_bps: Decimal  # size vs TOP OF BOOK
     bid: Decimal | None
     ask: Decimal | None
     top_qty: int | None  # size resting on the side we take (ask for BUY)
     quantity: int | None  # order size the impact term was computed for
+    # A37 — size vs DAILY VOLUME. Defaulted and therefore LAST: a dataclass cannot take a
+    # non-default field after a defaulted one, and defaulting these keeps every existing
+    # construction site valid.
+    participation_bps: Decimal = Decimal(0)
+    participation: Decimal = Decimal(0)  # order value ÷ median daily traded value
 
     @property
     def excess_bps(self) -> Decimal:
@@ -129,6 +135,8 @@ class FillModel:
             "excess_bps": str(self.excess_bps.quantize(_Q_BPS)),
             "half_spread_bps": str(self.half_spread_bps.quantize(_Q_BPS)),
             "impact_bps": str(self.impact_bps.quantize(_Q_BPS)),
+            "participation_bps": str(self.participation_bps.quantize(_Q_BPS)),
+            "participation_pct": str((self.participation * 100).quantize(_Q_BPS)),
             "bid": str(self.bid) if self.bid is not None else None,
             "ask": str(self.ask) if self.ask is not None else None,
             "top_qty": self.top_qty,
@@ -169,12 +177,40 @@ def spread_aware_bps(
     return total, half_spread, impact
 
 
+def participation_bps(
+    order_value: Decimal, adv_value: Decimal | None
+) -> tuple[Decimal, Decimal]:
+    """A37 — adverse bps from being large relative to the stock's DAILY VOLUME.
+
+    Returns ``(impact_bps, participation)`` where participation = order value ÷ median
+    daily traded value. `k × participation²`, quadratic, following zipline's
+    `VolumeShareSlippage` (`price × (1 + price_impact × volume_share²)`), which is where
+    the 0.1 default comes from: 2.5% ≈ 0.6 bps, 10% ≈ 10 bps, 20% ≈ 40 bps.
+
+    Distinct from the top-of-book term in `spread_aware_bps`: that one asks "can the book
+    absorb this right now", this asks "can the STOCK absorb this at all". An order can be
+    small against a deep touch and still be a fifth of the day's volume, which is the SRTL
+    shape — ₹1 lakh in a name trading ₹5 lakh a day.
+
+    Fails OPEN to zero on missing or unusable data: no ADV means unknown, and unknown must
+    not read as infinitely illiquid.
+    """
+    if not settings.paper_participation_enabled:
+        return Decimal(0), Decimal(0)
+    if adv_value is None or adv_value <= 0 or order_value <= 0:
+        return Decimal(0), Decimal(0)
+    participation = order_value / adv_value
+    k = Decimal(str(settings.paper_participation_k))
+    return (k * participation * participation * _BPS), participation
+
+
 def simulate_fill(
     base_price: Decimal,
     order_side: str,
     *,
     depth: Depth | None = None,
     quantity: int | None = None,
+    adv_value: Decimal | None = None,
 ) -> FillModel:
     """Price a simulated fill, spread-aware when a live book is available.
 
@@ -190,22 +226,32 @@ def simulate_fill(
     "fill at the ask" does not.
     """
     baseline = _flat_slippage_bps()
+    # A37 participation impact is computed on BOTH paths, deliberately: a thin stock often
+    # has NO live book at all, so charging it only on the spread path would exempt exactly
+    # the names the model exists for.
+    order_value = base_price * Decimal(quantity) if quantity else Decimal(0)
+    part_bps, participation = participation_bps(order_value, adv_value)
+    ceiling = Decimal(str(settings.paper_slippage_max_bps))
     if depth is None or not settings.paper_spread_fill_enabled:
-        fill = _round_tick(_price_after_bps(base_price, order_side, baseline), order_side)
+        total = min(max(baseline, baseline + part_bps), ceiling)
+        fill = _round_tick(_price_after_bps(base_price, order_side, total), order_side)
         return FillModel(
             model="flat",
             reference=base_price,
             fill=fill,
-            slippage_bps=baseline,
+            slippage_bps=total,
             baseline_bps=baseline,
             half_spread_bps=Decimal(0),
             impact_bps=Decimal(0),
+            participation_bps=part_bps,
+            participation=participation,
             bid=None,
             ask=None,
             top_qty=None,
             quantity=quantity,
         )
     total, half_spread, impact = spread_aware_bps(depth, order_side, quantity)
+    total = min(total + part_bps, ceiling)
     fill = _round_tick(_price_after_bps(base_price, order_side, total), order_side)
     return FillModel(
         model="spread",
@@ -471,6 +517,14 @@ async def place_paper_order(
     # Live top-of-book for the spread-aware fill model (6.8.2). None (no book,
     # capture off, Redis cold) simply prices the fill on the flat-bps path.
     depth = await get_live_depth(signal.stock_id)
+    # A37: the stock's median daily traded value, the denominator of the participation
+    # impact. Absent (too little history) simply charges no participation — unknown must
+    # never read as infinitely illiquid.
+    adv = (
+        await load_median_traded_values(
+            db, [signal.stock_id], lookback=settings.paper_participation_lookback
+        )
+    ).get(signal.stock_id)
     # Size and impact are mutually dependent: sizing is risk-first from the ACTUAL
     # fill, but the impact term needs the order size. Resolve it in one refinement
     # pass — price the spread-only fill, size from it, then re-price WITH the
@@ -478,7 +532,7 @@ async def place_paper_order(
     # always widens |fill − SL|, so the second size is ≤ the first and the impact
     # we charged is ≥ the impact the final size would imply: the residual error is
     # conservative by construction, never in our favour.
-    fill = simulate_fill(base_price, side, depth=depth, quantity=None)
+    fill = simulate_fill(base_price, side, depth=depth, quantity=None, adv_value=adv)
     fill_price = fill.fill
 
     # A stop on the WRONG SIDE of the fill is not a tradeable position: a long filled
@@ -529,12 +583,19 @@ async def place_paper_order(
     if quantity is not None:
         # Size fixed by the caller, so the impact term is known outright.
         qty = quantity
-        fill = simulate_fill(base_price, side, depth=depth, quantity=qty)
+        fill = simulate_fill(base_price, side, depth=depth, quantity=qty, adv_value=adv)
         fill_price = fill.fill
     else:
         qty = _size(fill_price)
-        if qty > 0 and fill.model == "spread":
-            fill = simulate_fill(base_price, side, depth=depth, quantity=qty)
+        # Re-price whenever a size exists. This used to be gated on
+        # `fill.model == "spread"`, because top-of-book impact was the only size-dependent
+        # term. A37's participation impact is size-dependent on the FLAT path too — and a
+        # thin stock usually has no book at all, so that gate would have exempted exactly
+        # the names the model exists for, sizing SRTL off a 2 bps fill that should have
+        # been 45. Harmless where nothing is size-dependent: the second call then returns
+        # the identical fill.
+        if qty > 0:
+            fill = simulate_fill(base_price, side, depth=depth, quantity=qty, adv_value=adv)
             fill_price = fill.fill
             qty = _size(fill_price)
     if qty <= 0:
@@ -651,6 +712,11 @@ async def close_position(
         close_side,
         depth=await get_live_depth(position.stock_id),
         quantity=position.quantity,
+        adv_value=(
+            await load_median_traded_values(
+                db, [position.stock_id], lookback=settings.paper_participation_lookback
+            )
+        ).get(position.stock_id),
     )
     price = exit_fill.fill
 
@@ -738,6 +804,7 @@ def exit_mark(
     *,
     depth: Depth | None = None,
     quantity: int | None = None,
+    adv_value: Decimal | None = None,
 ) -> FillModel:
     """A21 — what an OPEN position could actually be EXITED at, priced by the same model
     that prices entries.
@@ -758,9 +825,18 @@ def exit_mark(
     NOT double-counting against `roundtrip_charges`: those are statutory and brokerage
     costs (STT, stamp, GST), a different thing from the spread. And the entry half of the
     spread is already inside `avg_entry_price`, so this adds only the exit half.
+
+    `adv_value` carries A37's participation impact into the mark as well. That is A31, not
+    thoroughness: getting out of a fifth of a day's volume costs what getting in cost, so
+    charging it on the fill and not on the mark would re-create exactly the optimism A21
+    was written to remove. Batch it with `load_median_traded_values` on any list path.
     """
     return simulate_fill(
-        reference, exit_side_for(position_side), depth=depth, quantity=quantity
+        reference,
+        exit_side_for(position_side),
+        depth=depth,
+        quantity=quantity,
+        adv_value=adv_value,
     )
 
 
@@ -796,6 +872,7 @@ async def update_position_pnl(
     price: Decimal | None = None,
     *,
     depth: Depth | None = None,
+    adv_value: Decimal | None = None,
 ) -> Decimal | None:
     """Refresh unrealized_pnl (NET of estimated round-trip costs) on an open
     position and return the REFERENCE price used.
@@ -820,7 +897,9 @@ async def update_position_pnl(
         price = await get_current_price(db, position.stock_id)
     if price is None:
         return None
-    mark = exit_mark(price, position.side, depth=depth, quantity=position.quantity).fill
+    mark = exit_mark(
+        price, position.side, depth=depth, quantity=position.quantity, adv_value=adv_value
+    ).fill
     gross = compute_pnl(
         side=position.side,
         entry=Decimal(str(position.avg_entry_price)),

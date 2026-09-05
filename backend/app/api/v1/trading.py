@@ -29,6 +29,7 @@ from app.broker.paper_broker import (
     place_paper_order,
     update_position_pnl,
 )
+from app.core.config import settings
 from app.core.deps import get_current_user, get_db
 from app.models.signal import Signal
 from app.models.stock import Stock
@@ -52,7 +53,7 @@ from app.schemas.trading import (
 )
 from app.services.benchmark import load_market_regime_context, load_rs_context
 from app.services.journal_service import auto_create_journal_entry
-from app.services.liquidity import load_traded_values
+from app.services.liquidity import load_median_traded_values, load_traded_values
 from app.services.profit_lock_shadow import compare_position
 from app.signals import restrictions
 from app.trading.atr import atr_timeframe_for, latest_atr
@@ -399,9 +400,14 @@ async def list_open_positions(
     # book (A21 marks to bid/ask): `get_live_depth` opens its own connection per call, so
     # a per-position read would open ~29 of them per request.
     books = await get_live_depths([p.stock_id for p in positions])
+    advs = await load_median_traded_values(
+        db, [p.stock_id for p in positions], lookback=settings.paper_participation_lookback
+    )
     prices: dict[str, Decimal | None] = {}
     for pos in positions:
-        prices[pos.id] = await update_position_pnl(db, pos, depth=books.get(pos.stock_id))
+        prices[pos.id] = await update_position_pnl(
+            db, pos, depth=books.get(pos.stock_id), adv_value=advs.get(pos.stock_id)
+        )
     await db.commit()
 
     # Emergency-exit watcher: regime ER (one batch) + signal validity feed the
@@ -586,8 +592,14 @@ async def daily_pnl(
     open_count = len(open_positions)
     total_unrealized = Decimal("0")
     books = await get_live_depths([p.stock_id for p in open_positions])
+    advs = await load_median_traded_values(
+        db, [p.stock_id for p in open_positions],
+        lookback=settings.paper_participation_lookback,
+    )
     for pos in open_positions:
-        await update_position_pnl(db, pos, depth=books.get(pos.stock_id))
+        await update_position_pnl(
+            db, pos, depth=books.get(pos.stock_id), adv_value=advs.get(pos.stock_id)
+        )
         if pos.unrealized_pnl is not None:
             total_unrealized += pos.unrealized_pnl
 

@@ -97,8 +97,13 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
     # the flat floor. Reporting only — nothing in this task branches on unrealized P&L,
     # every exit decision below is taken on the live tick.
     from app.broker.depth import get_live_depths
+    from app.core.config import settings
+    from app.services.liquidity import load_median_traded_values
 
     books = await get_live_depths([p.stock_id for p in positions])
+    advs = await load_median_traded_values(
+        db, [p.stock_id for p in positions], lookback=settings.paper_participation_lookback
+    )
 
     for pos in positions:
         # Live tick only — never the daily-close fallback. No fresh price
@@ -218,7 +223,10 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
                         pos.current_sl = trail.new_sl
                         pos.trail_state = trail.new_state
 
-        await update_position_pnl(db, pos, price=price, depth=books.get(pos.stock_id))
+        await update_position_pnl(
+            db, pos, price=price, depth=books.get(pos.stock_id),
+            adv_value=advs.get(pos.stock_id),
+        )
         updated += 1
 
     await db.commit()

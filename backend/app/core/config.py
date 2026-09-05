@@ -344,6 +344,34 @@ class Settings(BaseSettings):
     # The floor itself. Keep at 1.0 unless you have run the multiple-testing bar.
     rr_min: float = 1.0
 
+    # ── Volume-participation impact (A37, app/broker/paper_broker.py) ───────
+    # Our 6.8.2 model charges the real half-spread plus a size-vs-TOP-OF-BOOK impact.
+    # Neither notices that an order is large relative to the stock's DAILY VOLUME: the
+    # notional cap bounds a position in rupees, not in liquidity. SRTL is the named case
+    # — a ₹39 micro-cap, 2,666 shares; a ₹1 lakh position in a name trading ₹5 lakh a day
+    # is 20% of a session and is not fillable at the quoted price, yet we modelled it free.
+    #
+    # Charge `k × participation²` bps, participation = order value ÷ median daily traded
+    # value. Quadratic, following zipline's `VolumeShareSlippage`
+    # (`price × (1 + price_impact × volume_share²)`, `price_impact` 0.1), which is where
+    # the calibration comes from. At k=0.1: 2.5% participation ≈ 0.6 bps, 10% ≈ 10 bps,
+    # 20% ≈ 40 bps, 50% ≈ 250 bps. Small orders are untouched; the cost bites exactly
+    # where the order stops being absorbable.
+    #
+    # ⚠ It OVERLAPS the top-of-book term rather than being orthogonal to it: one measures
+    # instantaneous depth, the other daily capacity, and an illiquid name trips both. That
+    # is intended — both being large IS the signal the trade is unfillable — and the sum
+    # is bounded by `paper_slippage_max_bps`.
+    #
+    # ⚠ NOT a partial-fill cap. Zipline also refuses to fill more than 2.5% of a bar and
+    # spills the rest; that needs partial fills, which are Phase 7. This prices the trade
+    # honestly rather than rejecting it — no signal is suppressed by this knob.
+    paper_participation_enabled: bool = True
+    paper_participation_k: float = 0.1
+    #: Sessions of history required before participation is charged at all. Fewer than this
+    #: is "unknown", and unknown fails OPEN (no impact) — never "infinitely illiquid".
+    paper_participation_lookback: int = 20
+
     # ── Paper account constraints (app/broker/paper_broker.py) ──────────────
     # Per-position NOTIONAL cap as a multiple of capital. `qty = risk_budget /
     # risk_per_share` has no ceiling on `qty × price`, so a stop a few paise wide sized a

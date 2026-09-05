@@ -624,7 +624,9 @@ to cycle 2").** A 30-repo external review (2026-09-03/04) produced 91 items acro
   unchanged by differential fuzz; ⚠ the BACKTEST leg is blocked on the engine freeze) ·
   ✅ **A21 DONE 2026-09-05** (mark-to-exit: marks now priced by the SAME model as fills, so
   reported open MTM stops being optimistic by ~a half-spread per position; reporting-only —
-  nothing branches on unrealized P&L) · A37+T3 volume-participation cap · A29 flat DP charge · A23
+  nothing branches on unrealized P&L) · ✅ **A37+T3 DONE 2026-09-05** (participation impact `k×p²` on both fill paths and every mark
+  surface; the real book has a position at **17% of daily volume** that was priced at the 2 bps
+  floor) · A29 flat DP charge · A23
   effective-dated fees · A26 hot-set capacity refusal · A25 tick-mode assert · H6.
 - **Bucket B — the instruments that read the cycle (~5 d):** H8 noise negative-control · H1 block
   bootstrap · H12 beta/IR · H2 buy-and-hold benchmark · H11 MinTRL as headline · T11 pin PSR ·

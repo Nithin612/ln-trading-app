@@ -132,6 +132,22 @@ else.
   of its ADVERSE band (long→lower, short→upper) — an un-exitable trade. Bands from a
   market-hours task's batched Kite `quote()` → Redis `circuit:{stock_id}`; the order
   path only READS the cache, fail-open. Frozen engine untouched; `off` = true no-op.
+- **Order size is priced against the STOCK, not just the book, since A37 (2026-09-05).**
+  `paper_broker.participation_bps` charges **`k × participation²`** bps, participation = order
+  value ÷ **median daily traded value** (`load_median_traded_values`, batched, median taken in
+  Python with Decimal because `percentile_cont` returns a float). Quadratic, calibrated to
+  zipline's `VolumeShareSlippage` (k=0.1): 2.5% ≈ 0.6 bps · 10% ≈ 10 · 20% ≈ 40 · 50% ≈ 250.
+  Applied on **both** fill paths (a thin stock often has NO book, so spread-path-only would exempt
+  the very names it exists for) and on **every mark surface** (A31 — exiting a fifth of a day's
+  volume costs what entering cost). **Real book 2026-09-05: ADROITINFO sits at 16.95% of daily
+  volume on ₹33k notional — 28.7 bps, previously the 2 bps floor; only 3 of 29 positions are
+  charged >1 bp.** ⚠ **NOT a partial-fill cap** — zipline's 2.5%-of-bar refusal needs partial
+  fills (Phase 7), so this PRICES the trade and suppresses no signal. ⚠ It **overlaps** the
+  top-of-book term by design (instantaneous depth vs daily capacity; an illiquid name trips both),
+  bounded by `paper_slippage_max_bps`. ⚠ Too little history ⇒ **absent, not zero** — unknown fails
+  OPEN; zero would mean infinite participation. ⚠ The **sizing refinement pass** now re-prices
+  whenever a size exists, not only on the spread model — participation makes the FLAT fill
+  size-dependent too. ⚠ **Backtest untouched** (FROZEN engine), same blocker as A38's backtest leg.
 - **Marks are priced by the SAME model as fills since A21 (2026-09-05)** — `paper_broker.exit_mark`
   routes every unrealized-P&L surface through `simulate_fill` with the **exit** side, so a long
   marks toward the BID and a short toward the ASK. Before it, fills paid the real half-spread while

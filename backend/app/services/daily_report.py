@@ -46,6 +46,7 @@ from app.services import fo_analytics as fa
 from app.services import fo_suggestions as fs
 from app.services.excursion import Excursion, load_1m_bars, tape_excursion
 from app.services.feed_health import FeedStatus, check_feed_staleness, render_feed_health
+from app.services.liquidity import load_median_traded_values
 from app.services.profit_lock_shadow import ShadowComparison, compare_position
 from app.trading.regime import CHOPPY_ER, er_by_stock
 from app.trading.trail_sl import compute_pnl
@@ -300,6 +301,16 @@ async def _build_trade_row(
     stock = await db.get(Stock, pos.stock_id)
     symbol = stock.symbol if stock is not None else str(pos.stock_id)
     sig = await db.get(Signal, pos.signal_id) if pos.signal_id else None
+    # A37 denominator for this row's EoD mark, anchored to the report's own cutoff.
+    from app.core.config import settings  # local: module-level would cycle (cf. :648)
+
+    adv_value = (
+        await load_median_traded_values(
+            db, [pos.stock_id],
+            lookback=settings.paper_participation_lookback,
+            as_of=report_end,
+        )
+    ).get(pos.stock_id)
     outcome = await db.get(SignalOutcome, pos.signal_id) if pos.signal_id else None
 
     chase = None
@@ -367,7 +378,9 @@ async def _build_trade_row(
         eod_unreal = compute_pnl(
             side=pos.side,
             entry=_d(pos.avg_entry_price),
-            exit_price=exit_mark(eod_mark, pos.side, depth=None, quantity=pos.quantity).fill,
+            exit_price=exit_mark(
+                eod_mark, pos.side, depth=None, quantity=pos.quantity, adv_value=adv_value
+            ).fill,
             quantity=pos.quantity,
         ).quantize(_Q2)
         gb = exc.mfe_pnl - eod_unreal_gross  # gross peak minus gross EoD mark
@@ -1161,13 +1174,27 @@ async def _open_book_mtm(db: AsyncSession, user_id: int, cutoff: datetime) -> De
         )
     ).scalars().all()
     total = Decimal("0")
+    # A37: one batched ADV read for the whole book, anchored to the cutoff so a past mark
+    # uses the liquidity knowable then. Charging participation on the FILL but not on the
+    # MARK would re-open exactly the optimism A21 closed (A31).
+    from app.core.config import settings  # local: module-level would cycle (cf. :648)
+
+    advs = await load_median_traded_values(
+        db,
+        [p.stock_id for p in rows],
+        lookback=settings.paper_participation_lookback,
+        as_of=cutoff,
+    )
     for pos in rows:
         reference = await _last_1m_close_at(db, pos.stock_id, cutoff)
         if reference is None:
             continue
         # depth=None: no historical book exists (see the docstring), so this takes the
         # flat-bps floor — the same fallback the fill model uses when a book is stale.
-        mark = exit_mark(reference, pos.side, depth=None, quantity=pos.quantity).fill
+        mark = exit_mark(
+            reference, pos.side, depth=None, quantity=pos.quantity,
+            adv_value=advs.get(pos.stock_id),
+        ).fill
         total += compute_pnl(
             side=pos.side,
             entry=_d(pos.avg_entry_price),

@@ -138,6 +138,56 @@ class TestProvider:
         assert await liquidity.load_traded_values(db, 999_999, lookback=3) == []
 
 
+# ── Batched ADV provider (A37) ──────────────────────────────────────────────
+class TestBatchedMedianProvider:
+    """The denominator of the participation impact. The assertion that matters is the
+    stock_id MAPPING: getting it wrong would price one stock's order against another's
+    liquidity, silently."""
+
+    async def test_each_stock_gets_its_own_median(self, db: AsyncSession) -> None:
+        thin = await make_stock(db, symbol="THINCO")
+        deep = await make_stock(db, symbol="DEEPCO")
+        await _seed_ohlcv(db, thin.id, [("10", 1000), ("10", 2000), ("10", 3000)])
+        await _seed_ohlcv(db, deep.id, [("100", 10_000), ("100", 20_000), ("100", 30_000)])
+        await db.commit()
+        out = await liquidity.load_median_traded_values(db, [thin.id, deep.id], lookback=3)
+        assert out[thin.id] == D(20_000)     # median of 10k/20k/30k
+        assert out[deep.id] == D(2_000_000)  # median of 1M/2M/3M
+
+    async def test_a_stock_with_too_little_history_is_absent_not_zero(
+        self, db: AsyncSession
+    ) -> None:
+        """Absent means "unknown" and the caller charges no impact. ZERO would mean
+        infinite participation and would make every order in that name unfillable."""
+        short = await make_stock(db, symbol="SHORTCO")
+        await _seed_ohlcv(db, short.id, [("10", 1000), ("10", 2000)])
+        await db.commit()
+        out = await liquidity.load_median_traded_values(db, [short.id], lookback=3)
+        assert short.id not in out
+
+    async def test_it_agrees_with_the_single_stock_provider(self, db: AsyncSession) -> None:
+        """Through both sides: the batch query and the per-stock query must not drift."""
+        stock = await make_stock(db, symbol="AGREECO")
+        await _seed_ohlcv(db, stock.id, [("100", 1000), ("110", 2000), ("120", 3000)])
+        await db.commit()
+        batched = (await liquidity.load_median_traded_values(db, [stock.id], lookback=3))[stock.id]
+        singles = await liquidity.load_traded_values(db, stock.id, lookback=3)
+        assert batched == liquidity.median_traded_value(singles)
+
+    async def test_as_of_excludes_future_sessions(self, db: AsyncSession) -> None:
+        stock = await make_stock(db, symbol="BASOF")
+        await _seed_ohlcv(db, stock.id, [("100", 1000), ("100", 1000), ("100", 9999)])
+        await db.commit()
+        out = await liquidity.load_median_traded_values(
+            db, [stock.id], lookback=2, as_of=datetime(2026, 8, 2, 12, 0, tzinfo=UTC)
+        )
+        assert out[stock.id] == D(100_000)  # the 9999-volume bar is after the cutoff
+
+    async def test_empty_and_unknown_are_handled(self, db: AsyncSession) -> None:
+        assert await liquidity.load_median_traded_values(db, [], lookback=3) == {}
+        assert await liquidity.load_median_traded_values(db, [999_999], lookback=3) == {}
+
+
 # ── Order-path wiring ─────────────────────────────────────────────────────────
 async def _make_signal(
     db: AsyncSession, stock_id: int, *, entry: str = "500.0000", sl: str = "480.0000",

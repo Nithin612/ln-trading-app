@@ -7,6 +7,72 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(A37+T3): volume-participation impact — size priced against the stock, not just the book (2026-09-05)
+
+**Bucket A, item 3.** The 6.8.2 model charged the real half-spread plus a size-vs-**top-of-book**
+impact. Neither notices that an order is large relative to the stock's **daily volume**: the
+notional cap bounds a position in rupees, not in liquidity. **SRTL is the named case** — a ₹39
+micro-cap, 2,666 shares; ₹1 lakh in a name trading ₹5 lakh a day is a fifth of a session and is
+not fillable at the quoted price, yet we modelled it free.
+
+`participation_bps` charges **`k × participation²`**, participation = order value ÷ median daily
+traded value. Quadratic, following zipline's `VolumeShareSlippage`
+(`price × (1 + price_impact × volume_share²)`, `price_impact` 0.1), which is where the calibration
+comes from: 2.5% ≈ 0.6 bps · 10% ≈ 10 bps · 20% ≈ 40 bps · 50% ≈ 250 bps. Small orders are
+untouched; the cost bites exactly where the order stops being absorbable.
+
+**On the real book right now — ADV resolved for all 29 open positions:**
+
+| symbol | notional | participation | impact |
+|---|--:|--:|--:|
+| **ADROITINFO** | ₹32,832 | **16.95%** | **28.7 bps** |
+| BVCL | ₹41,289 | 6.04% | 3.7 bps |
+| LOVABLE | ₹31,748 | 5.69% | 3.2 bps |
+
+**Only 3 of 29 positions are charged more than 1 bp** — it is surgical, not a blanket tax. And we
+are holding the archetype today: a ₹33k position that is a sixth of its stock's daily volume, which
+the old model priced at the 2 bps floor.
+
+**Applied on BOTH fill paths, deliberately.** A thin stock usually has no live book at all, so
+charging participation only on the spread path would exempt exactly the names the model exists for.
+
+**The sizing refinement pass had to widen with it.** It re-priced only when
+`fill.model == "spread"`, because top-of-book impact was previously the only size-dependent term.
+Participation is size-dependent on the flat path too, so that gate would have sized SRTL off a
+2 bps fill that should have been 45. It now re-prices whenever a size exists — a no-op where
+nothing is size-dependent, since the second call returns the identical fill.
+
+**Marks pay it too (A31).** Getting out of a fifth of a day's volume costs what getting in cost, so
+`exit_mark` takes the same denominator and every mark surface batches it —
+`list_open_positions`, the summary, `position_monitor`, `_open_book_mtm` and the daily EoD row.
+Charging it on the fill and not on the mark would have re-opened precisely the optimism A21 closed,
+which is the mistake this same commit sequence already made once.
+
+New `load_median_traded_values` batches the denominator in one round trip, **and takes the median in
+Python with `Decimal`** — Postgres `percentile_cont` returns double precision, and money through a
+float is what the money rules forbid. It shares `median_traded_value` with the liquidity gate on
+purpose: the gate and the fill model must not disagree about how liquid a name is. A stock with
+fewer than `lookback` sessions is **absent, not zero** — too little history is *unknown*, and
+unknown fails open to no impact. Zero would mean infinite participation and would make every order
+in that name unfillable.
+
+**Not a partial-fill cap.** Zipline also refuses to fill more than 2.5% of a bar and spills the
+rest. That needs partial fills, which are explicitly Phase 7. This prices the trade honestly rather
+than rejecting it — **no signal is suppressed by this knob**, which also keeps it out of
+gate-promotion territory where this project has been burned twice.
+
+⚠ **It overlaps the top-of-book term rather than being orthogonal to it** — one measures
+instantaneous depth, the other daily capacity, and an illiquid name trips both. That is intended
+(both being large *is* the signal the trade is unfillable) and the sum stays bounded by
+`paper_slippage_max_bps`. ⚠ **The backtest is untouched**: its fill logic lives in the FROZEN
+`app/backtest/engine.py`, the same blocker A38's backtest leg hit.
+
+Tests: **1789 passed** (full suite, run exclusively). New `tests/test_participation.py` (26)
+including **T3's parametrised `(participation → expected fill)` table**, and five DB tests for the
+batched loader whose key assertion is the stock_id **mapping** — getting that wrong would price one
+stock's order against another's liquidity, silently. ruff + mypy clean across 248 files.
+
+
 ### fix(A21): five quant-verifier findings — a missed surface, and rounding that paid us (2026-09-05)
 
 Review pass on `873477a`. The A21 mechanism verified correct — direction, no double-counting,
