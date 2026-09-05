@@ -213,3 +213,32 @@ class TestT11PinnedAgainstKnownGood:
         assert r.trials == 20
         # A near-zero-Sharpe series must NOT clear a 20-trial bar.
         assert r.passes is False
+
+
+class TestH11ImpliedSampleIsTheHeadline:
+    """H11 — `n=44` must never be read without `needs ≈N`.
+
+    Required sample scales with the inverse square of effect size, so halving an edge
+    quadruples the evidence needed. Our edges are small, our required samples enormous,
+    and a bare `n` has repeatedly read as progress toward a bar that was never in reach —
+    `sl_atr` passed all three readiness guards at t ≈ 0.41 against a 3.6 hurdle.
+    """
+
+    def test_the_first_line_carries_both_numbers(self) -> None:
+        xs = [0.1 * ((i % 7) - 3) + 0.05 for i in range(120)]
+        head = ds.render_lines(ds.deflated_sharpe(xs, trials=20), label="eligible set")[0]
+        assert "n=120" in head
+        assert "needed" in head, "the implied sample must be in the HEADLINE, not a footnote"
+
+    def test_a_candidate_that_is_not_ahead_says_so_in_the_headline(self) -> None:
+        """The most important case to surface loudly: when the observed Sharpe does not
+        exceed the benchmark, MinTRL is None and accruing is futile — 'keep accruing'
+        would be actively misleading advice."""
+        xs = [-0.05 + 0.01 * ((i % 5) - 2) for i in range(60)]
+        head = ds.render_lines(ds.deflated_sharpe(xs, trials=20), label="x")[0]
+        assert "MORE DATA CANNOT RESCUE IT" in head
+
+    def test_the_detail_note_is_still_present_below(self) -> None:
+        xs = [0.1 * ((i % 7) - 3) + 0.05 for i in range(120)]
+        lines = ds.render_lines(ds.deflated_sharpe(xs, trials=20), label="x")
+        assert any("observations at these moments" in ln for ln in lines[1:])

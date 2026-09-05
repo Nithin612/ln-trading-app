@@ -7,6 +7,55 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(H11): the implied sample is the headline, not a footnote (2026-09-05)
+
+**Bucket B, item 5.** We already compute MinTRL; the missing move was rendering it where it
+cannot be missed. Required sample scales with the **inverse square of effect size**, so
+halving an edge quadruples the evidence needed — on 4,843 published replications the median
+strategy (Sharpe 0.37) needs **~28 years** of daily data to separate from zero. Our gates
+are judged on **weeks**.
+
+`deflated_sharpe.render_lines` now leads with `n=120 of ≈715 needed`, and when the observed
+Sharpe does not exceed its benchmark the headline says **"MORE DATA CANNOT RESCUE IT"** —
+the case where "keep accruing" is not merely unhelpful but actively wrong advice, since the
+candidate is not ahead to begin with.
+
+And the counterpart: every sidecar prints a `n/20 resolved — keep accruing` bar, which is a
+**process convention, not a statistical requirement**. `flip_readiness.evidence_lines` now
+says so explicitly beside it. `sl_atr` is the cautionary case — it passed all three
+readiness guards and still sat at **t ≈ 0.41 against a 3.6 hurdle**, about 9× short, while
+its `17/20` bar read like progress.
+
+- Tests: 3 new (`tests/test_deflated_sharpe.py`)
+
+### test(T7): exhaustive-enum mapping tests (2026-09-05)
+
+**Bucket B, item 6.** We have been burned by precisely this: *"v1's `unassessed` tripwire
+was IMAGINARY — 3 of 8 modes passed"* — an enumeration not exhaustively handled, with no
+test that could notice.
+
+**The gate-mode vocabulary was declared nine times and tied together nowhere.** Nine
+`*_gate_mode` settings each say `Literal["off", "shadow", "active"]` independently, and
+`_effective_mode` handles them with no link back. Add a fourth mode to one knob and it
+falls through as `"off"` — silently, on the order path. `GATE_MODES` is now the single
+declaration, and a contract test introspects the settings model against it, so extending
+one without the other fails the suite.
+
+Also pinned: `_effective_mode` over **every ordered pair** (the precedence lattice written
+out longhand — this is where the `"off"`-is-truthy bug lived, and `div or sl` returning
+`"off"` is exactly the case a spot-check misses); every `EnforcedBy` variant appearing in
+the registry; and the registry's order as a **golden list**.
+
+⚠ **One test was rewritten because it would have passed vacuously.** A
+`test_broker_rules_come_last` written to the registry's own comment ("the broker's own
+rejections come last, as they do in reality") is not true of the declaration — `offmarket`
+is a BROKER rule declared **first**, deliberately, because the absence of a price is its
+trigger. The draft passed only through an escape clause and asserted nothing. It is now a
+pinned order list, which cannot.
+
+- `backend/app/signals/restrictions.py` — `GATE_MODES` declared once
+- Tests: 11 new (`tests/test_enum_exhaustiveness.py`)
+
 ### test(T11): pin PSR/DSR against independently-derived values (2026-09-05)
 
 **Bucket B, item 4.** Cross-checking `deflated_sharpe.py` against QuantStats — the

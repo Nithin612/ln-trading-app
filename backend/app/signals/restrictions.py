@@ -279,6 +279,15 @@ def _judge_circuit(ctx: RestrictionContext, cfg: RestrictionConfig) -> Judgement
     )
 
 
+#: THE gate-mode vocabulary, weakest first. Every `*_gate_mode` setting is typed
+#: `Literal["off", "shadow", "active"]` — eight separate declarations with nothing tying
+#: them together, which is precisely the shape T7 exists to catch: an enumeration extended
+#: in one place and unhandled in another, with no test that fails. A contract test walks
+#: the settings model against this tuple, so a fourth mode cannot be added to one knob and
+#: silently fall through `_effective_mode` as "off".
+GATE_MODES: tuple[str, ...] = ("off", "shadow", "active")
+
+
 def _effective_mode(*modes: str) -> str:
     """The strongest of several modes: active > shadow > off.
 
