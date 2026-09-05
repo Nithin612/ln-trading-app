@@ -355,3 +355,109 @@ class TestBackfill:
         assert rc == 0
         idx_dates = (await db.execute(select(IndexOhlcvDaily.trade_date))).scalars().all()
         assert set(idx_dates) == {date(2026, 8, 3), date(2026, 8, 5)}  # 1 & 3 survived
+
+
+class TestVixTrailingPercentile:
+    """H3 — the VIX companion is a trailing percentile, not an inherited absolute.
+
+    A fixed `20` is a US-derived number that does not describe this market: across the 784
+    sessions in `india_vix_daily` (2023-07-03 → 2026-09-04) India VIX has a **median of
+    13.35** and exceeds 20 on only **5.1%** of days, so "20 = elevated" is really the
+    **94.8th percentile** — an extreme, not the "somewhat nervous" marker it reads as. The
+    80th percentile sits at 15.73.
+
+    VIX never blocks, so none of this changes a gate decision — it changes what the shadow
+    sidecar reports about market conditions, and it does so self-calibratingly.
+    """
+
+    def _history(self) -> list[Decimal]:
+        # 300 sessions spanning 10.0–16.5, shaped like the real distribution's body.
+        return [Decimal(str(10 + (i % 14) * 0.5)) for i in range(300)]
+
+    def test_percentile_is_preferred_when_history_is_deep_enough(self) -> None:
+        elevated, pct, basis = mr.vix_standing(
+            Decimal("15.80"),
+            self._history(),
+            percentile_threshold=Decimal("0.80"),
+            absolute_threshold=Decimal(20),
+        )
+        assert basis == "percentile"
+        assert pct is not None and pct > Decimal("0.80")
+        assert elevated is True
+
+    def test_a_quiet_tape_is_not_elevated_even_though_it_would_pass_no_absolute(
+        self,
+    ) -> None:
+        elevated, pct, basis = mr.vix_standing(
+            Decimal("10.68"),  # the real latest VIX, at its own 7th percentile
+            self._history(),
+            percentile_threshold=Decimal("0.80"),
+            absolute_threshold=Decimal(20),
+        )
+        assert elevated is False and basis == "percentile"
+        assert pct is not None and pct < Decimal("0.30")
+
+    def test_the_inherited_absolute_would_almost_never_fire(self) -> None:
+        """⭐ The point of H3, stated as a test. A threshold that fires on ~5% of sessions
+        is not a regime marker, and the percentile threshold sits far below it."""
+        hist = self._history()
+        over_20 = sum(1 for h in hist if h > Decimal(20))
+        assert over_20 == 0, "this body-of-distribution history never reaches the absolute"
+        elevated, _, basis = mr.vix_standing(
+            Decimal("16.40"), hist,
+            percentile_threshold=Decimal("0.80"), absolute_threshold=Decimal(20),
+        )
+        assert elevated is True and basis == "percentile", (
+            "a session near the top of its own range must read as elevated even though it "
+            "is nowhere near the inherited absolute"
+        )
+
+    def test_falls_back_to_the_absolute_when_history_is_too_shallow(self) -> None:
+        """Below MIN_VIX_HISTORY a rank is a handful of atoms; the absolute is more honest
+        than a percentile computed from nothing."""
+        elevated, pct, basis = mr.vix_standing(
+            Decimal("21"),
+            self._history()[: mr.MIN_VIX_HISTORY - 1],
+            percentile_threshold=Decimal("0.80"),
+            absolute_threshold=Decimal(20),
+        )
+        assert basis == "absolute"
+        assert pct is None
+        assert elevated is True
+
+    def test_no_history_at_all_falls_back(self) -> None:
+        _, pct, basis = mr.vix_standing(
+            Decimal("21"), None,
+            percentile_threshold=Decimal("0.80"), absolute_threshold=Decimal(20),
+        )
+        assert basis == "absolute" and pct is None
+
+    def test_absent_vix_reports_nothing_rather_than_false(self) -> None:
+        """`False` would claim "not elevated", which we did not measure."""
+        assert mr.vix_standing(
+            None, self._history(),
+            percentile_threshold=Decimal("0.80"), absolute_threshold=Decimal(20),
+        ) == (None, None, None)
+
+    def test_the_basis_reaches_the_payload(self) -> None:
+        """The two bases must never be confused, so the verdict says which one ran."""
+        v = mr.evaluate(
+            side="BUY",
+            market_closes=[Decimal(100)] * 200,
+            vix=Decimal("15.80"),
+            vix_history=self._history(),
+        )
+        assert v.as_payload()["vix_basis"] == "percentile"
+        assert v.as_payload()["vix_percentile"] is not None
+
+    def test_vix_still_never_blocks(self) -> None:
+        """The invariant H3 must not disturb: VIX is informational, full stop."""
+        rising = [Decimal(100 + i) for i in range(300)]  # market well above its DMA
+        v = mr.evaluate(
+            side="BUY",
+            market_closes=rising,
+            vix=Decimal("27"),
+            vix_history=self._history(),
+        )
+        assert v.vix_elevated is True
+        assert v.blocked is False

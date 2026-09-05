@@ -15,10 +15,24 @@ Two dimensions:
     A LONG is flagged when the market is below (× the buffer); a SHORT when it is above.
     This is the dimension that can go active — it is §8-validatable on our 3y of daily
     history.
-  - **India VIX (informational companion, NOT a gate yet).** The latest VIX and whether it
-    exceeds `vix_threshold` are reported for context + the shadow sidecar, but VIX never
-    drives the block: our VIX history is too shallow (~weeks) to §8-validate, so it stays a
-    shadow-only companion until `india_vix_daily` is backfilled (a later step).
+  - **India VIX (informational companion, NOT a gate).** The latest VIX and whether it is
+    elevated are reported for context + the shadow sidecar; VIX never drives the block.
+
+    ⚠ **The old note here — "our VIX history is too shallow (~weeks)" — was STALE.**
+    `india_vix_daily` holds **784 sessions, 2023-07-03 → 2026-09-04**; the backfill has
+    happened, the same way the index backfill had (corrected 2026-09-02).
+
+    **H3 — the threshold is a trailing PERCENTILE, not an absolute.** A fixed `20` is a
+    US-derived number and it does not describe this market: India VIX has a median of
+    **13.35** over those 784 sessions and exceeds 20 on only **5.1%** of them, so "20 =
+    elevated" is really the **94.8th percentile** — an extreme, not the "somewhat nervous"
+    marker it reads as. The 80th percentile sits at **15.73**. A percentile is
+    self-calibrating and distribution-free: it keeps meaning the same thing as the VIX
+    regime drifts, and it needs no view about what number is high in India.
+
+    The absolute threshold remains the fallback when history is too shallow to rank
+    against, and `vix_basis` always says which one produced the flag — the two must never
+    be confused for each other.
 
 **Fail-open:** fewer than `dma_period` market closes (history not deep enough) ⇒ eligible,
 never suppress on uncertainty. The market close series must be aligned to the signal's own
@@ -56,8 +70,14 @@ class RegimeVerdict:
     dma: Decimal | None = None  # the dma_period-session SMA
     gap_pct: Decimal | None = None  # (market_close / dma − 1) × 100; <0 ⇒ below the DMA
     vix: Decimal | None = None  # latest India VIX (informational)
-    vix_threshold: Decimal | None = None
-    vix_elevated: bool | None = None  # vix > threshold (informational, never blocks)
+    vix_threshold: Decimal | None = None  # the ABSOLUTE fallback threshold
+    vix_elevated: bool | None = None  # elevated by `vix_basis` (informational, never blocks)
+    #: Where the current VIX sits in its own trailing history, 0–1. None when there is not
+    #: enough history to rank against.
+    vix_percentile: Decimal | None = None
+    #: "percentile" | "absolute" | None — which basis produced `vix_elevated`. Reported so
+    #: the two can never be mistaken for one another (H3/A24).
+    vix_basis: str | None = None
     reasons: list[str] = field(default_factory=list)
 
     def as_payload(self) -> dict[str, object]:
@@ -76,8 +96,42 @@ class RegimeVerdict:
             "vix": s(self.vix),
             "vix_threshold": s(self.vix_threshold),  # quantized like the other Decimals
             "vix_elevated": self.vix_elevated,
+            "vix_percentile": s(self.vix_percentile),
+            "vix_basis": self.vix_basis,
             "reasons": list(self.reasons),
         }
+
+
+#: Sessions of VIX history needed before a percentile means anything. Below this the rank
+#: is a handful of atoms and the absolute fallback is more honest.
+MIN_VIX_HISTORY = 250
+
+
+def vix_standing(
+    vix: Decimal | None,
+    history: Sequence[Decimal] | None,
+    *,
+    percentile_threshold: Decimal,
+    absolute_threshold: Decimal,
+) -> tuple[bool | None, Decimal | None, str | None]:
+    """`(elevated, percentile, basis)` for the current VIX — H3.
+
+    Prefers the trailing percentile, because a fixed level is a claim about what is high in
+    a market and we have no basis for one (the inherited `20` turns out to be India's
+    94.8th percentile). Falls back to the absolute when history is too shallow to rank
+    against, and always names the basis, so a `True` from one is never read as a `True`
+    from the other.
+    """
+    if vix is None:
+        return None, None, None
+    if history is not None and len(history) >= MIN_VIX_HISTORY:
+        ranked = sorted(history)
+        # Fraction of the history strictly below the current value — the standard
+        # "percentile rank", and the natural reading of "VIX is high for this market".
+        below = sum(1 for h in ranked if h < vix)
+        pct = Decimal(below) / Decimal(len(ranked))
+        return pct >= percentile_threshold, pct, "percentile"
+    return vix > absolute_threshold, None, "absolute"
 
 
 def evaluate(
@@ -88,6 +142,8 @@ def evaluate(
     buffer_pct: Decimal = Decimal(0),
     vix: Decimal | None = None,
     vix_threshold: Decimal = Decimal(20),
+    vix_history: Sequence[Decimal] | None = None,
+    vix_percentile_threshold: Decimal = Decimal("0.80"),
     market_symbol: str = "NIFTY50",
 ) -> RegimeVerdict:
     """Judge a signal's side against the broad-market 200-DMA trend.
@@ -97,6 +153,12 @@ def evaluate(
     blocks. Fail-open (un-blocked, ``has_data`` False) when there are fewer than
     ``dma_period`` closes."""
     pos_side = _pos_side(side)
+    elevated, vix_pct, basis = vix_standing(
+        vix,
+        vix_history,
+        percentile_threshold=vix_percentile_threshold,
+        absolute_threshold=vix_threshold,
+    )
     base = RegimeVerdict(
         blocked=False,
         has_data=False,
@@ -105,7 +167,9 @@ def evaluate(
         dma_period=dma_period,
         vix=vix,
         vix_threshold=vix_threshold,
-        vix_elevated=(vix > vix_threshold) if vix is not None else None,
+        vix_elevated=elevated,
+        vix_percentile=vix_pct,
+        vix_basis=basis,
     )
     if len(market_closes) < dma_period or dma_period <= 0:
         return RegimeVerdict(
@@ -151,7 +215,9 @@ def evaluate(
         gap_pct=gap_pct,
         vix=vix,
         vix_threshold=vix_threshold,
-        vix_elevated=(vix > vix_threshold) if vix is not None else None,
+        vix_elevated=elevated,
+        vix_percentile=vix_pct,
+        vix_basis=basis,
         reasons=reasons,
     )
 

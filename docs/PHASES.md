@@ -650,7 +650,17 @@ to cycle 2").** A 30-repo external review (2026-09-03/04) produced 91 items acro
   ✅ **H2 buy-and-hold benchmark** (2026-09-05) · ✅ **H12 beta/IR** (2026-09-05) ·
   ✅ **T11 pin PSR** (2026-09-05) · ✅ **H11 MinTRL as headline** (2026-09-05) ·
   ✅ **T7 exhaustive-enum tests** (2026-09-05) · ✅ **A24 uncertainty rule** (2026-09-05,
-  `.claude/rules/ui.md`) · **remaining: H4 gate register · U4 trials counter · H3 VIX percentile.** None of these changes a recorded number, so
+  `.claude/rules/ui.md`) · ✅ **H4 gate register + U4 trials counter** (2026-09-05 —
+  `app/services/gate_register.py`; **observed trials 15 vs 20 assumed**, but that is a LOWER
+  BOUND because threshold variants are not yet recorded, so it does NOT license calling the bar
+  conservative; `DEFAULT_TRIALS` left untouched — raising it is a decision for the user) ·
+  ✅ **H3 VIX trailing percentile** (2026-09-05 — the inherited absolute `20` is India's
+  **94.8th percentile**: median VIX 13.35 over 784 sessions, above 20 on only 5.1% of days.
+  Now self-calibrating, with the absolute as a shallow-history fallback and `vix_basis` naming
+  which ran. VIX still never blocks) · **▶▶ BUCKET B IS COMPLETE.**
+  ⚠ **The REVIEW CALENDAR below is now duplicated as data.** When an item's status moves, update
+  `gate_register.REGISTER` too — a contract test maps every `*_gate_mode` knob to an entry, but it
+  cannot check that a *verdict* is current. None of these changes a recorded number, so
   they build DURING accrual — Bucket A was the part that had to land first, and it has.
 
 > **⭐⭐ WHAT BUCKET B HAS ALREADY ESTABLISHED — read this before arguing about any gate.**

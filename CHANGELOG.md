@@ -7,6 +7,78 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(H3): the VIX companion is a trailing percentile, not an inherited absolute (2026-09-05)
+
+**Bucket B, item 10 — the last of the bucket.** `market_regime`'s VIX threshold was a flat
+`20`, a US-derived number carried over without ever being checked against this market.
+
+**⭐ Checked, and it does not describe India at all.** Across the 784 sessions in
+`india_vix_daily` (2023-07-03 → 2026-09-04): median **13.35**, and VIX exceeds 20 on only
+**5.1%** of days — so "20 = elevated" is really the **94.8th percentile**. It reads like a
+"somewhat nervous" marker and behaves like an extreme. The 80th percentile sits at
+**15.73**.
+
+The threshold is now a **trailing percentile of our own history** — self-calibrating,
+distribution-free, and requiring no view about what number is high in India. It keeps
+meaning the same thing as the VIX regime drifts. The absolute remains the fallback when
+history is too shallow to rank against (`MIN_VIX_HISTORY = 250` sessions), and
+`vix_basis` always names which one produced the flag, so a `True` from one is never read as
+a `True` from the other.
+
+**⚠ A stale claim corrected in the same file.** The module said "our VIX history is too
+shallow (~weeks) to §8-validate", which is why the absolute was never revisited. It holds
+**784 sessions** — the backfill has happened, exactly as the index backfill had (corrected
+2026-09-02). A doc that disagrees with the data is how a knob stays unexamined.
+
+**Nothing about a gate decision changes.** VIX is informational and never blocks; this
+changes what the shadow sidecar *reports* about market conditions. The market-regime gate
+remains shadow and still owes its count, its DSR bar, and an answer to the side-proxy veto.
+
+- `backend/app/signals/market_regime.py` — `vix_standing`, `vix_percentile`, `vix_basis`
+- Tests: 8 new (`tests/test_market_regime.py`), including that VIX still never blocks
+
+### feat(H4+U4): the gate register as data, and the trials counter it makes possible (2026-09-05)
+
+**Bucket B, items 8 and 9.** Constraint #8 makes the review calendar Claude's to own and
+requires raising each item *unprompted*. That calendar lived in `docs/PHASES.md` as a
+markdown table — fine for a human, useless to code, with three consequences: **`N` in
+`E[max SR]` was a guess** (`DEFAULT_TRIALS = 20`, hand-picked, and the deflation is the
+entire point of the bar); the **failed-hypothesis archive had no home** (the regime gate's
+−8R and R:R≥1's blocked +₹10,585 cohort existed only as prose in memory files); and nothing
+could assert the calendar was complete.
+
+`app/services/gate_register.py` is that table as data — deliberately a Python module rather
+than YAML, so it is type-checked, imported by the code that reports it, and covered by
+tests that fail when it drifts from the settings that actually exist.
+
+**⭐ Observed trials: 15, against 20 assumed.** Seventeen hypotheses registered, of which 15
+consumed a multiple-testing trial: 2 promoted-then-reverted, 3 decided against, 8 still in
+shadow, 2 active.
+
+**⚠ And the counter says out loud why "15 < 20, so the bar is conservative" does NOT
+follow.** One entry is one *hypothesis*, but most were evaluated at several thresholds —
+`sl_atr`'s k, anti-chase's 0.33R, circuit's 1.5%, liquidity's floor, the confidence gate's
+level — and each variant we could have adopted is its own trial. The observed count is a
+**lower bound**; the register does not record variants yet. A reassuring number with an
+unstated caveat is exactly the failure A24 was written against.
+
+**Two things deliberately excluded from the count**, each stating why in its own entry:
+`entry_diversity` implements hard constraint #2 and could not have been rejected on
+returns, and the notional cap bounds catastrophe while claiming nothing about edge. Neither
+inflates a best-of-N Sharpe. Everything else counts **including the failures** — a trial
+count that drops its failures is the precise selection bias the deflation corrects for, and
+a reverted gate consumed a trial exactly *because* we adopted it.
+
+**`DEFAULT_TRIALS` is untouched, on purpose.** Raising the assumed N makes the bar harder
+for every candidate; that is a decision for a person looking at the discrepancy, not a side
+effect of shipping the counter.
+
+A contract test maps every `*_gate_mode` setting to a register entry and fails when a knob
+is added or removed — which is precisely how a trial would otherwise escape the count.
+
+- `backend/app/services/gate_register.py` — new · rendered in the daily report
+- Tests: 12 new (`tests/test_gate_register.py`)
+
 ### docs(A24): never render a precise figure without its uncertainty (2026-09-05)
 
 **Bucket B, item 7** — a standing rule, written into `.claude/rules/ui.md` where ui-reviewer
