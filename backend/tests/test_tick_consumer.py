@@ -233,3 +233,61 @@ class TestLoopSurvival:
         finally:
             consumer._running = False
             await asyncio.wait_for(task, timeout=5)
+
+
+class TestTickModeAssertionV1:
+    """A25 on the DORMANT v1 path. It still writes depth:{stock_id}, and a
+    realism check added to one path that produces a number must be added to
+    every path that produces it (A31) — otherwise the two paths silently stop
+    being comparable, which is the one property they must keep."""
+
+    async def test_batch_census_counts_the_downgrade(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.broker import tick_consumer as tc
+
+        class _NoopAgg:
+            def on_tick(self, tick: dict[str, Any]) -> list[Any]:
+                return []
+
+        monkeypatch.setattr(tc._registry, "get_or_create", lambda _sid: _NoopAgg())
+        consumer = _make_consumer()
+        spy = _RedisSpy()
+        ticks = [
+            {"instrument_token": 123, "last_price": 10.0, "mode": "full"},
+            {"instrument_token": 123, "last_price": 10.1, "mode": "quote"},
+        ]
+        await consumer._process_batch(ticks, spy, db=None)
+
+        assert consumer._mode_monitor.degraded == 1
+        assert consumer._mode_monitor.full == 1
+        assert consumer._mode_monitor.by_mode == {"quote": 1}
+
+    async def test_full_mode_without_a_book_is_a_depth_miss_but_an_index_is_not(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        from app.broker import tick_consumer as tc
+
+        class _NoopAgg:
+            def on_tick(self, tick: dict[str, Any]) -> list[Any]:
+                return []
+
+        monkeypatch.setattr(tc._registry, "get_or_create", lambda _sid: _NoopAgg())
+        consumer = _make_consumer()
+        spy = _RedisSpy()
+        await consumer._handle_tick(
+            {"instrument_token": 123, "last_price": 10.0, "mode": "full"}, spy, db=None
+        )
+        assert consumer._mode_monitor.depth_missing == 1
+        # An index tick is full mode and bookless by design — never a miss.
+        await consumer._handle_tick(
+            {
+                "instrument_token": 123,
+                "last_price": 10.0,
+                "mode": "full",
+                "tradable": False,
+            },
+            spy,
+            db=None,
+        )
+        assert consumer._mode_monitor.depth_missing == 1

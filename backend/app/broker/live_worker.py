@@ -65,6 +65,12 @@ from app.broker.tick_consumer import (
     _build_token_stock_map,
     _maybe_trigger_signal,
 )
+from app.broker.tick_mode import (
+    MODE_FULL,
+    TickModeMonitor,
+    record_tick_mode_health,
+    tally_tick_modes,
+)
 from app.core.config import settings
 
 log = logging.getLogger(__name__)
@@ -239,6 +245,13 @@ class WorkerState:
             "stale": 0,
             "levels": 0,
             "triggers": 0,
+            # Tick-mode assertion (A25): non-full-mode ticks on our MODE_FULL
+            # subscription, and full-mode ticks whose book was unusable. Both
+            # ride the heartbeat so a silent depth degradation is visible AS it
+            # happens, not in a post-mortem.
+            "mode_degraded": 0,
+            "mode_unknown": 0,
+            "depth_missing": 0,
         }
     )
     # End-to-end (enqueue→published) — THE phase metric — plus its two
@@ -275,6 +288,9 @@ class WorkerState:
     # _publish_ltp into the same pipeline. PROVISIONAL/live — a Redis KEY only,
     # never a candle or a backtest (6.8.1).
     _pending_depth: dict[int, tuple[Depth, int]] = field(init=False, default_factory=dict)
+    # Tick-mode census + rate-limited alarm (A25). Consumer-thread-owned, like
+    # every other counter here; drained into the durable day hash by _publish_ltp.
+    mode_monitor: TickModeMonitor = field(default_factory=TickModeMonitor)
 
     def __post_init__(self) -> None:
         self._stock_to_token = {v: k for k, v in self.token_map.items()}
@@ -311,6 +327,11 @@ class WorkerState:
             return
         batch = self._ffi_batch(payload)
         if not batch:
+            # A25: a batch that yields NOTHING usable is itself the degradation
+            # this counter exists for, and it is the one path that never reaches
+            # _publish_ltp — flush before the early return or the worst case is
+            # the one case never recorded.
+            self._flush_mode_health()
             return
         self.stats["ticks"] += len(batch)
         # Engine FIRST, durable writer queue SECOND, lossy redis LAST (a
@@ -374,6 +395,22 @@ class WorkerState:
             log.exception("recorder flush failed — disabling recording for this run")
             self.recorder = None
 
+    def _flush_mode_health(self) -> None:
+        """Durable tick-mode counters on their OWN pipeline, for the empty-batch
+        path only (the normal path rides _publish_ltp's). No-op on a clean feed,
+        so this costs a dict build and nothing else. Best-effort: the warning has
+        already been logged, so a Redis blip here degrades the record, not the
+        alarm — and it must never abort the tick loop."""
+        counters = self.mode_monitor.counters()
+        if not counters:
+            return
+        try:
+            pipe = self.redis.pipeline(transaction=False)
+            if record_tick_mode_health(pipe, self.session_day, counters):
+                pipe.execute()
+        except Exception:
+            log.debug("tick-mode health write failed (non-fatal)", exc_info=True)
+
     def _publish_ltp(self, batch: list[tuple[int, int, str, int | None, int]]) -> None:
         """Latest-price key + fan-out, one pipeline round trip per batch.
         The KEY is what paper_broker fills from — it is SET on first
@@ -433,13 +470,21 @@ class WorkerState:
             pipe.set(
                 DEPTH_KEY.format(stock_id=stock_id),
                 serialize_depth(
-                    stock_id, token, tob,
+                    stock_id,
+                    token,
+                    tob,
                     ts=datetime.fromtimestamp(ts, tz=UTC).isoformat(),
                 ),
                 ex=DEPTH_KEY_TTL_SECONDS,
             )
             queued = True
         self._pending_depth = {}
+        # Tick-mode health (A25) — cumulative counters into the durable day hash,
+        # on THIS pipeline, and only when there is something to record: a clean
+        # feed costs zero extra round trips. A log line alone is how the
+        # provisional hot-set flood hid for weeks (A26).
+        if record_tick_mode_health(pipe, self.session_day, self.mode_monitor.counters()):
+            queued = True
         if not queued:
             return
         try:
@@ -506,10 +551,26 @@ class WorkerState:
         `_pending_depth` (6.8.1), behind the SAME accept/stale gate as the FFI
         tuple — a stale snapshot echo never overwrites fresh depth; last tick
         per stock wins; _publish_ltp drains it into the same pipeline. Provisional
-        and best-effort (`extract_top_of_book` never raises)."""
+        and best-effort (`extract_top_of_book` never raises).
+
+        And asserts the tick MODE (A25). Kite is documented to send quote-mode
+        ticks on a MODE_FULL subscription; those carry no book, so the depth key
+        would go stale and the spread-aware fill model would fall back to the
+        flat floor with no symptom at all. The census runs over the WHOLE batch
+        (mode is a property of the subscription, not of a tick we happened to
+        keep); the depth miss is counted only for tradable full-mode ticks we
+        actually tried to extract, so an index packet — full mode, no book by
+        design — is never miscounted as a degradation."""
         capture = settings.depth_capture_enabled
         depth: dict[int, tuple[Depth, int]] = {}
         batch: list[tuple[int, int, str, int | None, int]] = []
+        tally = self.mode_monitor.observe(tally_tick_modes(ticks))
+        if tally.degraded:
+            self.stats["mode_degraded"] += tally.degraded
+        if tally.unknown:
+            # Not an alarm (recorded/replayed ticks carry no mode) but visible:
+            # a mode-less LIVE feed would mean the broker's wire format moved.
+            self.stats["mode_unknown"] += tally.unknown
         for tick in ticks:
             ffi = tick_to_ffi(tick, self.token_map)
             if ffi is None:
@@ -523,6 +584,9 @@ class WorkerState:
                 tob = extract_top_of_book(tick)
                 if tob is not None:
                     depth[ffi[0]] = (tob, ffi[1])  # stock_id → (Depth, exchange ts)
+                elif tick.get("mode") == MODE_FULL and tick.get("tradable", True):
+                    self.mode_monitor.note_depth_missing()
+                    self.stats["depth_missing"] += 1
         self._pending_depth = depth
         return batch
 
@@ -895,7 +959,8 @@ async def startup_gap_fill(db: Any, access_token: str, token_map: dict[int, int]
             await db.rollback()
             log.critical(
                 "gap-fill: session token dead at stock_id=%s — aborting the fill "
-                "(worker will fail at ticker connect; re-run kite_login)", stock_id,
+                "(worker will fail at ticker connect; re-run kite_login)",
+                stock_id,
             )
             break
         except Exception:

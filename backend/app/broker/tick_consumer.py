@@ -32,6 +32,7 @@ from kiteconnect import KiteTicker
 from app.broker.candle_aggregator import TIMEFRAME_TABLE, AggregatorRegistry
 from app.broker.depth import extract_top_of_book, write_depth
 from app.broker.kite_client import get_active_token
+from app.broker.tick_mode import MODE_FULL, TickModeMonitor
 from app.core.config import settings
 
 log = logging.getLogger(__name__)
@@ -79,6 +80,10 @@ class TickConsumer:
         # Candle-close signal triggers held until the batch COMMITs — the
         # Celery task reads candles from its own session.
         self._pending_triggers: list[tuple[int, str]] = []
+        # Tick-mode assertion (A25). This v1 path is dormant but still writes
+        # depth:{stock_id}, and a realism check added to one path that produces
+        # a number must be added to every path that produces it (A31).
+        self._mode_monitor = TickModeMonitor()
 
     # ── Public interface ─────────────────────────────────────────────────────
 
@@ -186,6 +191,11 @@ class TickConsumer:
                 await r.aclose()
 
     async def _process_batch(self, ticks: list[dict[str, Any]], r: Any, db: Any) -> None:
+        # A25 — census the batch's tick MODE before anything consumes it: a
+        # quote-mode tick on our MODE_FULL subscription carries no book, so
+        # depth capture below silently yields nothing. Detect-and-shout only;
+        # counting is over the whole batch (mode is a subscription property).
+        self._mode_monitor.observe_ticks(ticks)
         wrote = False
         for tick in ticks:
             wrote = await self._handle_tick(tick, r, db) or wrote
@@ -214,8 +224,32 @@ class TickConsumer:
         for stock_id, timeframe in self._pending_triggers:
             log.error(
                 "Dropped candle-close trigger after failed batch: stock_id=%d tf=%s",
-                stock_id, timeframe,
+                stock_id,
+                timeframe,
             )
+
+    async def _capture_depth(
+        self,
+        tick: dict[str, Any],
+        redis: Any,
+        stock_id: int,
+        instrument_token: int,
+        now_iso: str,
+    ) -> None:
+        """Top-of-book → Redis, plus the A25 depth-miss counter. Isolated
+        best-effort: a bad book or a Redis blip here must never cost the caller
+        its LTP or its candle."""
+        try:
+            tob = extract_top_of_book(tick)
+            if tob is not None:
+                await write_depth(redis, stock_id, instrument_token, tob, ts=now_iso)
+            elif tick.get("mode") == MODE_FULL and tick.get("tradable", True):
+                # Full mode but no usable book — the SYMPTOM the A25 mode
+                # counters explain. Tradable-only: an index tick is full mode
+                # and carries no book by design.
+                self._mode_monitor.note_depth_missing()
+        except Exception:
+            log.debug("Depth capture failed (non-fatal) stock_id=%d", stock_id)
 
     async def _handle_tick(
         self,
@@ -239,9 +273,7 @@ class TickConsumer:
         now_iso = datetime.now(UTC).isoformat()
 
         # Latest-price KEY (read by paper_broker for fills and SL/TP checks) …
-        await redis.set(
-            LTP_KEY.format(stock_id=stock_id), str(ltp), ex=LTP_KEY_TTL_SECONDS
-        )
+        await redis.set(LTP_KEY.format(stock_id=stock_id), str(ltp), ex=LTP_KEY_TTL_SECONDS)
         # … and pub/sub CHANNEL for the live WebSocket fan-out.
         ltp_payload = json.dumps(
             {
@@ -258,12 +290,7 @@ class TickConsumer:
         # candle, never a backtest. Isolated best-effort: a bad book or a Redis
         # blip here must never cost us the LTP set above or the candle below.
         if settings.depth_capture_enabled:
-            try:
-                tob = extract_top_of_book(tick)
-                if tob is not None:
-                    await write_depth(redis, stock_id, instrument_token, tob, ts=now_iso)
-            except Exception:
-                log.debug("Depth capture failed (non-fatal) stock_id=%d", stock_id)
+            await self._capture_depth(tick, redis, stock_id, instrument_token, now_iso)
 
         # Aggregate into candles
         agg = _registry.get_or_create(stock_id)
@@ -301,7 +328,9 @@ class TickConsumer:
             if event.is_closed:
                 log.debug(
                     "Candle closed: stock_id=%d tf=%s time=%s",
-                    stock_id, candle.timeframe, candle.period_start,
+                    stock_id,
+                    candle.timeframe,
+                    candle.period_start,
                 )
                 self._pending_triggers.append((stock_id, candle.timeframe))
 
@@ -363,6 +392,7 @@ def _maybe_trigger_signal(stock_id: int, timeframe: str) -> None:
         return
     try:
         from app.celery_app import celery_app
+
         celery_app.send_task(
             "app.tasks.signal_tasks.live_signal_generation",
             kwargs={"stock_id": stock_id, "timeframe": timeframe},
@@ -429,7 +459,6 @@ async def stop_consumer() -> None:
 async def _build_token_stock_map(db: Any, access_token: str) -> dict[int, int]:
     """Return {instrument_token: stock_id} for all active NSE EQ stocks."""
     from sqlalchemy import text
-
 
     # Join kite_instruments with stocks on tradingsymbol + exchange
     result = await db.execute(

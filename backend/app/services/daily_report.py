@@ -37,6 +37,7 @@ from sqlalchemy import or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.broker.paper_broker import exit_mark
+from app.broker.tick_mode import read_tick_mode_health, render_tick_mode_health
 from app.models.market_data import Ohlcv1m
 from app.models.signal import Signal, SignalOutcome
 from app.models.stock import Stock
@@ -251,6 +252,11 @@ class DailyReport:
     fill_realism: list[FillRealismRow] = field(default_factory=list)
     # Silent-feed-outage alarm (6.8.6) — staleness of each EOD feed vs the calendar.
     feed_health: list[FeedStatus] = field(default_factory=list)
+    # Tick-mode degradation counters for the report day (A25). Empty = a clean
+    # day OR no record at all (older than the 7-day TTL, or Redis unreachable) —
+    # the two are indistinguishable here, which is why the renderer stays silent
+    # rather than printing a green tick it cannot justify.
+    tick_mode_health: dict[str, int] = field(default_factory=dict)
 
 
 # `load_1m_bars` (was `_load_bars`) moved to `app/services/excursion.py`
@@ -511,6 +517,10 @@ async def build_daily_report(
     # Silent-feed-outage alarm (6.8.6) — independent of trading; a loud header when
     # any EOD feed is behind the trading calendar.
     report.feed_health = await check_feed_staleness(db, now=now)
+    # Tick-mode degradation (A25) — did the live feed actually deliver full-mode
+    # ticks on the day whose fills this report is judging? Keyed by the REPORT
+    # day, not by now: a --DATE run must read that day's counters.
+    report.tick_mode_health = await read_tick_mode_health(day.isoformat())
     return report
 
 
@@ -668,6 +678,11 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
     # Feed-staleness alarm (6.8.6) — a loud header ABOVE the scorecard when any EOD
     # feed is behind the trading calendar; a quiet one-liner when all are current.
     out.extend(render_feed_health(r.feed_health))
+
+    # Tick-mode degradation (A25) — silent on a clean day; loud when the depth
+    # path was fed ticks it could not use, because that quietly cheapens the
+    # paper fills this very report scores.
+    out.extend(render_tick_mode_health(r.tick_mode_health))
 
     # 1. Scorecard ---------------------------------------------------------- #
     out.append("## 1. Scorecard")

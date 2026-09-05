@@ -53,6 +53,8 @@ class _SyncRedisSpy:
     def __init__(self) -> None:
         self.set_calls: list[tuple[str, str, int | None]] = []
         self.publish_calls: list[tuple[str, str]] = []
+        self.hset_calls: list[tuple[str, dict]] = []  # A25 tick-mode day hash
+        self.expire_calls: list[tuple[str, int]] = []
         self.pubsub: list[str] = []
         self.pattern_count = 0
         self._buffered: list[tuple] = []
@@ -66,6 +68,12 @@ class _SyncRedisSpy:
     def publish(self, channel: str, payload: str) -> None:
         self._buffered.append(("pub", channel, payload))
 
+    def hset(self, key: str, mapping: dict) -> None:
+        self._buffered.append(("hset", key, dict(mapping)))
+
+    def expire(self, key: str, ttl: int) -> None:
+        self._buffered.append(("expire", key, ttl))
+
     def pubsub_channels(self, pattern: str = "*") -> list[str]:
         prefix = pattern.rstrip("*")
         return [c for c in self.pubsub if c.startswith(prefix)]
@@ -77,6 +85,10 @@ class _SyncRedisSpy:
         for op in self._buffered:
             if op[0] == "set":
                 self.set_calls.append(op[1:])
+            elif op[0] == "hset":
+                self.hset_calls.append(op[1:])
+            elif op[0] == "expire":
+                self.expire_calls.append(op[1:])
             else:
                 self.publish_calls.append(op[1:])
         self._buffered.clear()
@@ -997,3 +1009,111 @@ class TestSignalDispatchGate:
         tc._maybe_trigger_signal(42, "1m")
         assert len(calls) == 1
         assert calls[0][1]["kwargs"] == {"stock_id": 42, "timeframe": "1m"}
+
+
+class TestTickModeAssertion:
+    """A25 — Kite is documented to send quote-mode ticks on a MODE_FULL
+    subscription. Those carry no book, so depth:{stock_id} silently goes stale
+    and 6.8.2's spread-aware fills fall back to the flat floor: paper fills get
+    CHEAPER than reality, with no symptom anywhere. These pin the detector on
+    the LIVE path (live_worker, not the dormant v1 consumer)."""
+
+    def test_quote_mode_batch_is_counted_and_recorded(self, tmp_path) -> None:
+        state, spy, _ = _state(tmp_path)
+        state.session_day = "2026-07-09"
+        _watch_all(state)
+        degraded = _tick(9, 20, "100.00", 1000)
+        degraded["mode"] = "quote"  # no `depth` key — the documented downgrade
+        state.process_item(("ticks", [degraded], None))
+
+        assert state.stats["mode_degraded"] == 1
+        # Durable, not just a log line: the day hash rides the SAME pipeline as
+        # the LTP set (one round trip), with a TTL.
+        assert spy.hset_calls, "degradation must reach tickmode:health:{day}"
+        key, mapping = spy.hset_calls[0]
+        assert key == "tickmode:health:2026-07-09"
+        assert mapping["degraded"] == 1
+        assert mapping["mode:quote"] == 1
+        assert spy.expire_calls[0][0] == key
+
+    def test_clean_full_mode_feed_writes_no_health_key(self, tmp_path) -> None:
+        """The zero-round-trip guarantee — the healthy path must not pay for the
+        alarm, or the alarm becomes a cost we are tempted to remove."""
+        state, spy, _ = _state(tmp_path)
+        state.session_day = "2026-07-09"
+        _watch_all(state)
+        clean = _full_tick(9, 20, "100.00", 1000)
+        clean["mode"] = "full"
+        state.process_item(("ticks", [clean], None))
+        assert state.stats["mode_degraded"] == 0
+        assert spy.hset_calls == []
+        assert spy.expire_calls == []
+
+    def test_mode_less_ticks_are_visible_but_never_alarm(self, tmp_path) -> None:
+        """Recorded/replayed ticks carry no mode. They count in the heartbeat so
+        a mode-less LIVE feed is visible, but they must not write the day hash —
+        otherwise the key means 'we ran', not 'the feed degraded'."""
+        state, spy, _ = _state(tmp_path)
+        state.session_day = "2026-07-09"
+        _watch_all(state)
+        state.process_item(("ticks", [_full_tick(9, 20, "100.00", 1000)], None))
+        assert state.stats["mode_unknown"] == 1
+        assert state.stats["mode_degraded"] == 0
+        assert spy.hset_calls == []
+
+    def test_full_mode_tick_without_a_book_counts_as_a_depth_miss(self, tmp_path) -> None:
+        """The SYMPTOM, distinct from the cause: mode says full, the book is
+        unusable anyway."""
+        state, spy, _ = _state(tmp_path)
+        state.session_day = "2026-07-09"
+        _watch_all(state)
+        bookless = _tick(9, 20, "100.00", 1000)
+        bookless["mode"] = "full"
+        state.process_item(("ticks", [bookless], None))
+        assert state.stats["depth_missing"] == 1
+        assert spy.hset_calls[0][1]["depth_missing"] == 1
+
+    def test_index_tick_is_not_a_depth_miss(self, tmp_path) -> None:
+        """An index packet is full mode and carries no book BY DESIGN. Counting
+        it would put a permanent false number under the alarm."""
+        state, spy, _ = _state(tmp_path)
+        state.session_day = "2026-07-09"
+        _watch_all(state)
+        index_tick = _tick(9, 20, "100.00", 1000)
+        index_tick["mode"] = "full"
+        index_tick["tradable"] = False
+        state.process_item(("ticks", [index_tick], None))
+        assert state.stats["depth_missing"] == 0
+        assert spy.hset_calls == []
+
+    def test_degradation_is_recorded_even_when_the_batch_yields_nothing(
+        self, tmp_path
+    ) -> None:
+        """The empty-batch early return never reaches _publish_ltp, and a batch
+        with nothing usable in it is precisely the worst case — it must not be
+        the one case that goes unrecorded."""
+        state, spy, _ = _state(tmp_path)
+        state.session_day = "2026-07-09"
+        _watch_all(state)
+        unusable = {"instrument_token": 999, "mode": "quote"}  # unknown token
+        state.process_item(("ticks", [unusable], None))
+
+        assert state.stats["mode_degraded"] == 1
+        assert state.stats["ticks"] == 0  # nothing reached the engine
+        assert spy.hset_calls, "the empty-batch path must still record"
+        assert spy.hset_calls[0][1]["degraded"] == 1
+
+    def test_capture_disabled_still_asserts_the_mode(self, tmp_path, monkeypatch) -> None:
+        """Depth capture off is a config choice; a downgraded subscription is a
+        broker fault. Turning the first off must not blind us to the second."""
+        from app.core.config import settings
+
+        monkeypatch.setattr(settings, "depth_capture_enabled", False)
+        state, spy, _ = _state(tmp_path)
+        state.session_day = "2026-07-09"
+        _watch_all(state)
+        degraded = _tick(9, 20, "100.00", 1000)
+        degraded["mode"] = "quote"
+        state.process_item(("ticks", [degraded], None))
+        assert state.stats["mode_degraded"] == 1
+        assert spy.hset_calls[0][1]["degraded"] == 1

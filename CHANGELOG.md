@@ -7,6 +7,66 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(A25): assert the tick mode on the depth path (2026-09-05)
+
+**Bucket A, item 7.** We subscribe `KiteTicker.MODE_FULL` and harvest 5-level depth out of the
+ticks it returns (6.8.1), on both the live path (`live_worker`) and the dormant v1 path
+(`tick_consumer`). **Neither ever checked the tick's `mode` field.** Kite is documented to deliver
+quote-mode ticks on a full-mode subscription — the contrasting library (repo 8) detects exactly
+this and reopens its socket.
+
+**Why that matters here is the chain of fail-opens.** A quote-mode tick has no `depth` key →
+`extract_top_of_book` returns `None` → `depth:{stock_id}` stops being refreshed → the key expires
+after 60 s → 6.8.2's spread-aware fill model finds no book → paper fills fall back to the flat
+`paper_slippage_bps` floor. Every step of that is deliberate, correct fail-open behaviour, which
+is exactly what makes it dangerous: **the only symptom is paper fills getting quietly CHEAPER than
+reality, on the book we use to judge whether a −0.303R expectancy is improving.** Note this is not
+a bug we have observed — it is a documented broker behaviour we had no detector for.
+
+**Detect, count, shout, name the remedy — deliberately not react.** `app/broker/tick_mode.py`
+censuses each batch's `mode`, accumulates it, and raises a rate-limited (1/min, but immediate on
+the first) warning naming the counts, the consequence and the fix. It does *not* reopen the socket:
+we have never observed this against us, re-subscribing from the consumer thread reaches across into
+the ticker's own thread, and a reconnect loop on a misread would cost more than the degradation.
+
+**Two counters, cause and symptom, deliberately separate.** `degraded` = ticks whose mode is not
+`full` (the broker downgrade). `depth_missing` = *tradable full-mode* ticks whose book was unusable
+anyway — the symptom the mode counters cannot explain. Tradable-only because an index packet is
+full mode and carries no book by design; counting those would park a permanent false number under
+the alarm. A one-sided pre-open book is normal, so `depth_missing` counts but never alarms.
+
+**A mode-less tick is NOT a degradation.** Recorded and replayed ticks legitimately carry no `mode`
+field. Those count as `unknown` and ride the heartbeat — where a mode-less *live* feed would show
+up — but they never raise the alarm and never write the durable key. Otherwise every replay run
+would cry wolf, and the day hash would come to mean "we ran" rather than "the feed degraded".
+
+**Three surfaces, cheapest first.** (1) `WorkerState.stats` → the existing live-worker heartbeat and
+shutdown line, so a degradation is visible *as it happens*. (2) The rate-limited warning. (3) A
+durable Redis day hash `tickmode:health:{day}` (7-day TTL) that the daily report reads and renders
+as a loud header beside the 6.8.6 feed-staleness alarm. A log line alone is precisely how the
+provisional hot-set flood hid for weeks (A26).
+
+**The healthy path pays nothing.** `counters()` returns `{}` unless something actionable happened,
+so a clean feed queues no Redis command at all; when there is something to record it rides the
+tick loop's existing pipeline — never a round trip of its own. HSET-overwrite, not HINCRBY: the
+counters are cumulative since worker start, so a restart must re-count, not double-count. The one
+exception is the empty-batch early return, which never reaches `_publish_ltp` — it flushes on its
+own pipeline, because a batch with nothing usable in it is the *worst* case and must not be the one
+case that goes unrecorded.
+
+The dormant v1 consumer got the same check (A31: a realism constraint added to one path that
+produces a number must be added to every path that produces it, in the same change).
+
+- `backend/app/broker/tick_mode.py` — new: `tally_tick_modes`, `TickModeMonitor`,
+  `record_tick_mode_health`, `read_tick_mode_health`, `render_tick_mode_health`
+- `backend/app/broker/live_worker.py` — census in `_ffi_batch`; `mode_degraded` / `mode_unknown` /
+  `depth_missing` on the heartbeat stats; durable flush in `_publish_ltp` + `_flush_mode_health`
+- `backend/app/broker/tick_consumer.py` — census in `_process_batch`; depth capture extracted to
+  `_capture_depth` with the depth-miss counter
+- `backend/app/services/daily_report.py` — `tick_mode_health` on the report, rendered next to 6.8.6
+- Tests: 34 new (`tests/test_tick_mode.py` 25, `tests/test_live_worker.py` +7,
+  `tests/test_tick_consumer.py` +2)
+
 ### feat(A26): the hot-set cap is hard for discovery, soft for committed work (2026-09-05)
 
 **Bucket A, item 6.** The provisional hot set clipped at `live_provisional_hotset_max` by tier

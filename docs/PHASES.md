@@ -631,7 +631,12 @@ to cycle 2").** A 30-repo external review (2026-09-03/04) produced 91 items acro
   charge that is not neutral to position size, and small is the shape live trading will have) · ✅ **A23 DONE 2026-09-05** (effective-dated fee registry; each leg costed on its own
   date, pre-coverage dates refused rather than guessed) · ✅ **A26 DONE 2026-09-05** (hot-set cap now HARD for discovery, SOFT for
   signal/trigger-bound stocks — a committed signal can no longer be dropped to satisfy a CPU
-  budget; overflow escalates with numbers + remedy and is durable in the health record) · A25 tick-mode assert · H6.
+  budget; overflow escalates with numbers + remedy and is durable in the health record) ·
+  ✅ **A25 DONE 2026-09-05** (tick-mode assert on the depth path — both live paths now census each
+  batch's `mode`; a quote-mode tick on our MODE_FULL subscription carries no book, so `depth:` goes
+  stale and spread-aware fills silently fall back to the flat floor, i.e. **paper fills quietly
+  cheaper than reality**. Detect/count/shout + a durable `tickmode:health:{day}` read by the daily
+  report; deliberately does NOT reopen the socket) · H6.
 - **Bucket B — the instruments that read the cycle (~5 d):** H8 noise negative-control · H1 block
   bootstrap · H12 beta/IR · H2 buy-and-hold benchmark · H11 MinTRL as headline · T11 pin PSR ·
   H4 gate register · U4 trials counter · H3 VIX percentile · T7 · A24.

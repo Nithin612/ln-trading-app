@@ -188,6 +188,22 @@ else.
   cosmetic — **82% of live NSE books have a half-spread wider than the flat 2 bps**.
   Paper P&L before and after 2026-08-17 is therefore **not comparable**; the
   30-day clock needs a reset. Backtests are untouched (they never read depth).
+- **The depth feed asserts its own tick MODE since A25 (2026-09-05)** — `app/broker/tick_mode.py`,
+  wired into BOTH live paths (`live_worker._ffi_batch`, `tick_consumer._process_batch`). Kite is
+  documented to send **quote-mode ticks on a MODE_FULL subscription**; such a tick has no `depth`
+  key, so `depth:{stock_id}` stops refreshing, expires at 60 s, and 6.8.2's spread-aware fills fall
+  back to the flat floor — **paper fills quietly CHEAPER than reality**, every step of it our own
+  deliberate fail-open. ⚠ **Never observed against us** — this is a detector for a documented
+  broker behaviour, not a bugfix. **It detects and counts; it does NOT reopen the socket** (repo 8
+  does; we judged a reconnect loop on a misread worse than the degradation). Two counters, cause
+  and symptom, kept separate: `degraded` (mode ≠ full) vs `depth_missing` (**tradable** full-mode
+  tick with an unusable book — index packets are full mode and bookless BY DESIGN and are excluded).
+  ⚠ **A mode-less tick is `unknown`, never an alarm and never a durable write** — recorded/replayed
+  ticks carry no `mode`, and alarming would cry wolf every replay run. Surfaces: heartbeat stats
+  (`mode_degraded`/`mode_unknown`/`depth_missing`) · a rate-limited warning · a durable
+  `tickmode:health:{day}` hash (7-day TTL, HSET-overwrite because counters are cumulative since
+  worker start) rendered by `make analysis` beside the 6.8.6 feed alarm. A clean feed costs **zero**
+  extra Redis round trips.
 - **Two report sections exist because "the engine produced nothing" was once
   indistinguishable from "the engine is broken":** §7 F&O engine health and §8
   intraday shadow layer. Both attribute a zero to a *reason*. When either shows
