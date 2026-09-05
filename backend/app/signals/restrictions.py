@@ -208,6 +208,16 @@ class Restriction:
     #: `requires` is an AND, which skipped the rule entirely whenever only a fill was
     #: supplied — the preview then reported a void setup as CLEAR (quant-verifier HIGH).
     requires_any: frozenset[str] = frozenset()
+    #: `(sub-gate mode key, reported label, context it needs)` for rules that bundle
+    #: independently-moded checks. The label is spelled out rather than derived from the
+    #: mode key, because the reported string is a client-facing contract.
+    #: The rule still RUNS without it — the other half is judged — but that sub-gate is
+    #: reported unassessed when it is ACTIVE and its context is absent. Only
+    #: entry-quality needs this (diversity needs nothing, sl_atr needs an ATR); it is a
+    #: declaration rather than a hardcoded branch so `_unassessed_gates` stays generic
+    #: (bug-hunter LOW, 2026-09-05: the one gate not derived from data was the one that
+    #: most needed to be).
+    sub_requires: tuple[tuple[str, str, frozenset[str]], ...] = ()
     #: `broker_payload` key for the verdict stamp; None = this gate leaves no footprint.
     stamp_key: str | None = None
 
@@ -275,9 +285,14 @@ def _effective_mode(*modes: str) -> str:
     ⚠ Written out rather than `a or b`: **`"off"` is a non-empty string and therefore
     TRUTHY**, so `div or sl` returns `"off"` whenever diversity is off — which tagged the
     judgement off, made `check` drop it, and silently stopped writing the `entry_quality`
-    stamp for the `off`/`shadow` pair. That stamp is the whole forward-evidence mechanism
-    for the sl_atr sidecar, so the gate would have run and recorded nothing
-    (quant-verifier, found by differential fuzz: 1,885 stamp diffs, all in that one class)."""
+    stamp for the `off`/`shadow` pair, so a non-off gate ran and recorded nothing
+    (quant-verifier, found by differential fuzz: 1,885 stamp diffs, all in that one class).
+
+    ⚠ The stamp has no CURRENT reader — `entry_quality_shadow.py` recomputes `eq.evaluate`
+    from `Signal` rows with today's thresholds — so this was an audit-trail defect rather
+    than a live-evidence one. Worth knowing separately: that recomputation means the
+    sl_atr evidence is **not point-in-time**, and retuning `entry_min_sl_atr_mult`
+    silently re-partitions every historical `entry-quality-shadow-<date>.md`."""
     if "active" in modes:
         return "active"
     if "shadow" in modes:
@@ -466,7 +481,8 @@ REGISTRY: tuple[Restriction, ...] = (
     Restriction(GATE_CIRCUIT, frozenset({CTX_CIRCUIT_BAND}), EnforcedBy.OVERLAY,
                 _judge_circuit, stamp_key="circuit_gate"),
     Restriction(GATE_ENTRY_QUALITY, frozenset(), EnforcedBy.OVERLAY, _judge_entry_quality,
-                stamp_key="entry_quality"),
+                stamp_key="entry_quality",
+                sub_requires=((GATE_SL_ATR, "entry_quality.sl_atr", frozenset({CTX_ATR})),)),
     Restriction(GATE_RR, frozenset(), EnforcedBy.OVERLAY, _judge_rr, stamp_key="rr_gate"),
     Restriction(GATE_SECTOR_RS, frozenset({CTX_RS}), EnforcedBy.OVERLAY, _judge_sector_rs,
                 stamp_key="sector_rs"),
@@ -522,13 +538,15 @@ def _unassessed_gates(
 
     This is the enforcement, not a comment: it is derived from `Restriction.requires`, so
     a gate added to the registry is covered automatically and cannot be forgotten."""
-    # sl_atr FIRST: it hides inside entry-quality, whose own `requires` is empty because
-    # the DIVERSITY half needs nothing, so the registry walk cannot surface it. Reported
-    # separately or an ACTIVE sl_atr judged without an ATR reads as clear. (Ordered ahead
-    # of the walk to match the sequence the previous implementation produced.)
+    # Sub-gates FIRST: a bundled check (sl_atr inside entry-quality) cannot be surfaced by
+    # the registry walk, because the bundle's own `requires` is empty — the other half
+    # needs nothing. Without this an ACTIVE sl_atr judged without an ATR reads as clear.
+    # Ordered ahead of the walk to match the sequence the previous implementation produced.
     out: list[str] = []
-    if cfg.mode(GATE_SL_ATR) == "active" and CTX_ATR not in ctx.available:
-        out.append(f"{GATE_ENTRY_QUALITY}.sl_atr")
+    for r in restrictions:
+        for sub_gate, label, needs in r.sub_requires:
+            if cfg.mode(sub_gate) == "active" and not needs <= ctx.available:
+                out.append(label)
     out += [r.gate for r in restrictions if _mode_of(r, cfg) == "active" and not _satisfied(r, ctx)]
     return tuple(out)
 
@@ -561,8 +579,14 @@ def check(
         if j.mode == "off":
             continue  # a true no-op leaves no footprint
         judgements.append(j)
-        if j.blocked and first is None:
+        if j.blocked:
+            # STOP at the first block, as the old preview did by returning. Continuing
+            # meant an exception raised by a LATER rule escaped `preview`, and both
+            # display callers swallow that into a row indistinguishable from "verified
+            # clear" — a blocked signal rendering a live Buy button (bug-hunter LOW). No
+            # caller reads post-block judgements, and the order path raises immediately.
             first = j
+            break
     if first is not None:
         return Outcome(
             blocked=True, gate=first.gate, reason=first.reason,

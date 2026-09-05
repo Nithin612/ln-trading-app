@@ -225,35 +225,72 @@ class TestRegressionsFromReview:
 
 
 class TestTheDisplayPathCannotReachFabricatedThresholds:
-    """`eligibility.preview` supplies stand-in thresholds for the gates it cannot judge.
-    They are unreachable by construction — but "by construction" is worth a test, because
-    the construction is one constant (`LIST_AVAILABLE`) away from changing."""
+    """`eligibility.preview` supplies stand-in thresholds for the gates it cannot judge,
+    set to BLOCK everything so a mistake is loud.
 
-    def test_no_uncovered_restriction_is_satisfiable_from_a_list_row(self) -> None:
-        for r in restrictions.REGISTRY:
-            if r.enforced_by is not EnforcedBy.OVERLAY:
-                continue
-            if r.gate in eligibility.UNCOVERED_GATES:
-                assert not r.requires <= eligibility.LIST_AVAILABLE, (
-                    f"{r.gate} became reachable from a list row; its threshold in "
-                    "eligibility.preview is a stand-in, not the real setting"
-                )
+    ⚠ The first version of this class could not fail. One test asserted
+    `not r.requires <= LIST_AVAILABLE` *guarded by* `if r.gate in UNCOVERED_GATES` — but
+    `UNCOVERED_GATES` is DEFINED by that predicate, so the assertion was a tautology for
+    every possible value of `LIST_AVAILABLE` (bug-hunter proved it across all 128 subsets).
+    The other ran `preview` with every mode `off`, so every judge short-circuited before a
+    threshold was read. Both stayed green under exactly the change they claimed to guard.
+    These assert the ACTUAL partition instead, so widening `LIST_AVAILABLE` fails them."""
 
-    def test_the_stand_ins_would_block_loudly_rather_than_pass_quietly(self) -> None:
-        """If one ever DID become reachable, it must reject every row — visible at once —
-        rather than judge against plausible-looking numbers that are not settings."""
-        from app.signals.eligibility import preview  # noqa: PLC0415 — local, test-only
+    def test_the_reachable_partition_is_pinned_by_name(self) -> None:
+        """Pin WHICH rules a list row can satisfy. Widening `LIST_AVAILABLE` — the change
+        the stand-in comment warns about — changes this set and fails here."""
+        reachable = {
+            r.gate
+            for r in restrictions.REGISTRY
+            if r.enforced_by is EnforcedBy.OVERLAY and r.requires <= eligibility.LIST_AVAILABLE
+        }
+        assert reachable == {
+            restrictions.GATE_REGIME,
+            restrictions.GATE_ENTRY_QUALITY,
+            restrictions.GATE_RR,
+            restrictions.GATE_CHASE,
+        }
 
-        sig = _signal()
-        v = preview(
-            sig,
+    def test_stand_ins_are_unread_with_every_gate_active_not_merely_off(self) -> None:
+        """All-off proves nothing — every judge short-circuits before reading a threshold.
+        Turn everything ON: the uncovered gates must land in `unassessed`, and whatever
+        blocks must never be one of them (which would mean a stand-in was read)."""
+        v = eligibility.preview(
+            _signal(),
+            modes=dict.fromkeys(restrictions.MODED_GATES, "active"),
+            market_price=Decimal("100"),
+            atr=Decimal("2"),
+            min_scoring_factors=2,
+            max_dominant_share=Decimal("0.9"),
+            min_sl_atr_mult=Decimal("0.01"),
+        )
+        assert set(v.unassessed) >= set(eligibility.UNCOVERED_GATES), v.unassessed
+        assert v.gate not in eligibility.UNCOVERED_GATES, (
+            f"{v.gate} was judged on the display path against a stand-in threshold"
+        )
+
+    def test_what_preview_supplies_never_exceeds_what_list_available_claims(self) -> None:
+        """The derivation of COVERED/UNCOVERED assumes these are the same set. If `preview`
+        could declare a key `LIST_AVAILABLE` omits, a rule needing it would be reported as
+        uncovered while actually being judged against a stand-in."""
+        v = eligibility.preview(
+            _signal(),
             modes=dict.fromkeys(restrictions.MODED_GATES, "off"),
             market_price=Decimal("100"),
+            fill_price=Decimal("100"),
+            atr=Decimal("2"),
             min_scoring_factors=2,
             max_dominant_share=Decimal("0.9"),
             min_sl_atr_mult=Decimal("1.0"),
         )
-        assert v.blocked is False  # all off => nothing judged, stand-ins never read
+        assert v.blocked is False
+        # All three of the keys preview can declare must be inside LIST_AVAILABLE.
+        for key in (
+            restrictions.CTX_MARKET_PRICE,
+            restrictions.CTX_FILL_PRICE,
+            restrictions.CTX_ATR,
+        ):
+            assert key in eligibility.LIST_AVAILABLE, key
 
 
 class TestEnforcementSite:
@@ -318,6 +355,47 @@ class TestAssessabilityIsDerivedNotRemembered:
         )
         assert marker in out.unassessed
         assert out.blocked is False
+
+
+class TestCompositionInvariants:
+    def test_check_stops_at_the_first_block(self) -> None:
+        """The old preview `return`ed at the first block and was structurally immune to a
+        later rule raising. Continuing meant an exception from a rule AFTER the blocker
+        escaped `preview`, and both display callers swallow that into a row identical to
+        "verified clear" — a blocked signal rendering a live Buy button (bug-hunter)."""
+        out = restrictions.check(
+            _ctx(market_price=None, available=frozenset(), allow_offmarket=False),
+            _cfg(**{restrictions.GATE_RR: "shadow", restrictions.GATE_CHASE: "shadow"}),
+        )
+        assert out.blocked is True
+        assert out.gate == restrictions.GATE_OFFMARKET
+        # offmarket is first in the registry, so nothing after it should have been judged.
+        assert [j.gate for j in out.judgements] == [restrictions.GATE_OFFMARKET]
+
+    def test_every_context_a_rule_needs_has_an_order_path_loader(self) -> None:
+        """The order path used to key its loads on gate MODES, not on `requires` — so the
+        hand-maintained sequence A38 set out to delete survived one level down. A rule
+        needing an already-existing key was then silently skipped whenever the unrelated
+        gate that owned that key was off. `trading.py` now asserts this at import; this
+        test states the same contract where a reader will find it."""
+        from app.api.v1.trading import _LOADABLE_CONTEXT  # noqa: PLC0415 — test-only
+
+        needed: set[str] = set()
+        for r in restrictions.REGISTRY:
+            if r.enforced_by is not EnforcedBy.OVERLAY:
+                continue
+            needed |= r.requires | r.requires_any
+            for _sub, _label, sub_needs in r.sub_requires:
+                needed |= sub_needs
+        assert needed <= _LOADABLE_CONTEXT, sorted(needed - _LOADABLE_CONTEXT)
+
+    def test_a_sub_gate_context_gap_is_declared_not_hardcoded(self) -> None:
+        """sl_atr's ATR need used to be a hardcoded branch in `_unassessed_gates` — the one
+        gate whose assessability was not derived from data was the one that needed it most."""
+        eq = [r for r in restrictions.REGISTRY if r.gate == restrictions.GATE_ENTRY_QUALITY][0]
+        assert eq.sub_requires == (
+            (restrictions.GATE_SL_ATR, "entry_quality.sl_atr", frozenset({restrictions.CTX_ATR})),
+        )
 
 
 class TestPointInTime:

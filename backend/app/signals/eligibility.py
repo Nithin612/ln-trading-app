@@ -76,7 +76,14 @@ __all__ = [
 #: The context a LIST endpoint can supply per row without per-row I/O. Everything else —
 #: a Redis circuit band, a 20-session traded-value aggregate, index history — is why a
 #: gate is "uncovered".
-LIST_AVAILABLE = frozenset({restrictions.CTX_MARKET_PRICE, restrictions.CTX_ATR})
+#:
+#: ⚠ This is the SAME set `preview` declares from, not a parallel list: the two diverging
+#: meant a rule requiring `CTX_FILL_PRICE` would be classified UNCOVERED (so callers
+#: believed it was reported, not judged) while `check` in fact judged it against the
+#: stand-in thresholds below (bug-hunter LOW, 2026-09-05).
+LIST_AVAILABLE = frozenset(
+    {restrictions.CTX_MARKET_PRICE, restrictions.CTX_FILL_PRICE, restrictions.CTX_ATR}
+)
 
 
 def _moded_ids(gate: str) -> tuple[str, ...]:
@@ -155,6 +162,9 @@ def preview(
         available.add(restrictions.CTX_FILL_PRICE)
     if atr is not None:
         available.add(restrictions.CTX_ATR)
+    # Intersect, so what a list SUPPLIES can never exceed what `LIST_AVAILABLE` claims it
+    # supplies — the derivation of COVERED/UNCOVERED depends on those being the same set.
+    available &= LIST_AVAILABLE
 
     ctx = restrictions.RestrictionContext(
         signal=signal,

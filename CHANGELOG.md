@@ -7,6 +7,79 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### fix(A38): seven bug-hunter findings — including two guard tests that could not fail (2026-09-05)
+
+Second review pass on the A38 registry (`878b7ad`). quant-verifier had already proved block
+decisions identical by differential fuzz; this pass looked for what a behaviour diff *cannot*
+see. Seven confirmed findings, all fixed.
+
+**The worst one is about the tests, not the code.** The two tests cited as pinning "the display
+path's stand-in thresholds are unreachable" **could not fail**:
+- `test_no_uncovered_restriction_is_satisfiable_from_a_list_row` asserted
+  `not r.requires <= LIST_AVAILABLE` *guarded by* `if r.gate in UNCOVERED_GATES` — but
+  `UNCOVERED_GATES` is **defined** by that predicate, so it was a tautology. bug-hunter proved it
+  by replaying the verbatim body against all **2⁷ = 128** possible values of `LIST_AVAILABLE`:
+  zero failures.
+- `test_the_stand_ins_would_block_loudly_rather_than_pass_quietly` ran `preview` with **every mode
+  `off`**, so every judge short-circuited before a threshold was read.
+
+Widening `LIST_AVAILABLE` — the exact change the code comment warns about — left both green while
+the preview began judging circuit against a fabricated `circuit_proximity_pct=100` and blocking
+every listed row. The comment claimed *"`test_restrictions.py` pins the unreachability directly"*.
+It did not. Replaced with tests that pin the **actual** reachable partition by name, and one that
+runs every gate **ACTIVE**; both verified to fail on the widening, where the old form provably
+cannot. This is the repo's own documented failure mode — *tests asserting what was INTENDED* —
+and it landed in the tests written specifically to prevent it.
+
+**A failed context load was recorded as "available", so an unjudgeable ACTIVE gate read as clear.**
+`available` was meant to separate "looked, nothing there" (fail open — correct) from "never
+looked" (unknown). A *failed* load is a third state and was filed under the first: no
+`unassessed` entry, no WARNING, no `⚠ unchecked` badge — and the stamp written to
+`broker_payload` recorded an infra fault as a **data-coverage gap**, which the shadow sidecars
+then counted as evidence. Now a key joins `available` only when its load **succeeded**. Required a
+new `get_circuit_band_checked() -> (band, ok)`, since `get_circuit_band` swallowed every exception
+and could not distinguish Redis-down from no-band.
+
+**The hand-maintained sequence A38 set out to delete had survived one level down.** The order
+path's loads were keyed on gate *modes*, not on the registry's `requires`, so "a new rule lands
+everywhere by construction" held for `check()` but not for `_load_restriction_context`: a new rule
+requiring an **existing** key would be silently skipped whenever the unrelated gate that owned
+that key was `off`. Now `_LOADABLE_CONTEXT` is checked against the registry at **import time** —
+a rule with no loader fails at startup instead of quietly never running.
+
+**`check()` no longer runs past the first block.** It had been judging every remaining rule; on
+the display path an exception from a rule *after* the blocker escaped `preview`, and both callers
+swallow that into a row byte-identical to "verified clear" — a blocked signal rendering a live Buy
+button. The old preview `return`ed at the first block and was structurally immune. Restored.
+
+**Also:** the sl_atr ATR requirement is now **declared** (`Restriction.sub_requires`) instead of a
+hardcoded branch — the one gate whose assessability was not derived from data was the one that
+most needed to be; and `LIST_AVAILABLE` now includes `CTX_FILL_PRICE`, with `preview` intersecting
+against it, so the set that *derives* coverage and the set it *supplies* cannot diverge.
+
+**⚠ A correction to the previous entry, and it matters more than the bug it corrects.** That entry
+called the `entry_quality` stamp *"the entire forward-evidence mechanism for the sl_atr sidecar"*.
+**That is false.** Nothing in the repo reads `broker_payload["entry_quality"]` — only `circuit_gate`
+and `chase_gate` have readers. `entry_quality_shadow.py` **recomputes** `eq.evaluate` from `Signal`
+rows using **today's** `entry_min_sl_atr_mult`. The truthiness fix was right; the reason given for
+it was not, and it had been written into CLAUDE.md, the commit message and memory. **The real
+consequence is worth more than the original claim: the sl_atr evidence is NOT point-in-time.**
+Retuning `entry_min_sl_atr_mult` silently re-partitions the whole historical flagged/passed split
+in every `entry-quality-shadow-<date>.md` — so a threshold tuned against that evidence is graded
+by a yardstick that moved with it. Corrected in all four places.
+
+**Confirmed sound by this pass** (verified with real Postgres faults, not by inspection): savepoint
+discipline — an `UndefinedTable` inside each of the three nested blocks fails open, the order still
+returns 201, and `in_nested_transaction()` is False on both the success and failure paths, no leaks;
+no gate is silently skipped on the order path today; evaluation order byte-identical on both paths;
+`_satisfied`/`requires_any` correct in all four price combinations; no mutable-default or aliasing
+hazard; `RestrictionConfig.mode()`'s deliberate KeyError unreachable from any live caller; Decimal
+money handling, tz-aware `as_of` threading, async boundaries, the frontend contract and both live
+sidecar stamp readers all unchanged.
+
+Tests: `tests/test_restrictions.py` now 32. ruff + mypy clean across 248 files.
+
+
 ### refactor(A38): one composable, point-in-time registry for every tradability rule (2026-09-05)
 
 **Bucket A, item 1.** The eight eligibility gates were written out twice — once in
@@ -47,9 +120,10 @@ by canary tests proven to fail on the old code:**
    `mode = "active" if "active" in (div, sl) else div or sl` — **`"off"` is a non-empty string
    and therefore truthy**, so `div or sl` returned `"off"` whenever diversity was off. The
    judgement was tagged off, `check` dropped it, and for `diversity=off, sl_atr=shadow` the gate
-   ran and recorded nothing. That stamp is the entire forward-evidence mechanism for the sl_atr
-   sidecar. The fuzz found exactly this: 1,885 stamp diffs, all in that one mode class. Replaced
-   with an explicit `_effective_mode(active > shadow > off)`.
+   ran and recorded nothing. The fuzz found exactly this: 1,885 stamp diffs, all in that one
+   mode class. Replaced with an explicit `_effective_mode(active > shadow > off)`.
+   ⚠ **This entry originally claimed the stamp is "the entire forward-evidence mechanism for the
+   sl_atr sidecar". That is FALSE and is corrected below** — see the 2026-09-05 bug-hunter entry.
 2. **`through_stop` could be skipped, reporting a void setup as CLEAR.** `requires` is an AND, so
    declaring `{market_price}` skipped the rule whenever only a modelled fill was supplied — and
    the preview judges the post-slippage fill by design. Added `requires_any`, so the rule needs

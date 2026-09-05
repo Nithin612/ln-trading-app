@@ -182,7 +182,13 @@ else.
   `Restriction` + its context loader; do not add a second sequence anywhere.** ⚠ Context is
   resolved **eagerly** (the price of a pure composer), so a blocked order pays for later gates'
   I/O. ⚠ **`"off"` is a TRUTHY string** — never `mode_a or mode_b`; use `_effective_mode`. That
-  bug silently stopped writing the `entry_quality` stamp, the sl_atr sidecar's only evidence.
+  bug silently stopped writing the `entry_quality` stamp. ⚠ **CORRECTION (2026-09-05): that
+  stamp has NO current reader** — `entry_quality_shadow.py` **recomputes** `eq.evaluate` from
+  `Signal` rows using TODAY's `entry_min_sl_atr_mult`. The bug was real (a non-off gate must
+  leave its verdict) but its stated significance was not. **The consequence is worth more than
+  the bug: the sl_atr evidence is NOT point-in-time — tuning `entry_min_sl_atr_mult` silently
+  re-partitions the whole historical flagged/passed split in every `entry-quality-shadow-<date>.md`.**
+  Only `circuit_gate` and `chase_gate` stamps have readers today.
   ⚠ The **backtest still consults NO gate** and `app/backtest/engine.py` is FROZEN, so wiring it
   to the registry needs sign-off + an §8 regression + regenerated Rust fixtures.
 - **The DISPLAY path is gated since 2026-09-02 — `app/signals/eligibility.py` is the single source

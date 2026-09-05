@@ -137,11 +137,18 @@ async def refresh_bands(
     return written
 
 
-async def get_circuit_band(stock_id: int) -> CircuitBand | None:
-    """Latest cached band from Redis (no fallback). ``None`` means no fresh band —
-    the refresh task hasn't run, the market is closed, or bands are disabled (the
-    key has a TTL). Mirrors ``depth.get_live_depth``; consumed by the circuit gate
-    at order time. Opens its own short-lived connection (order-path read, rare)."""
+async def get_circuit_band_checked(stock_id: int) -> tuple[CircuitBand | None, bool]:
+    """``(band, ok)`` — the band, and whether the READ ITSELF succeeded.
+
+    ``(None, True)`` means "looked, there is no fresh band" (the refresh task hasn't run,
+    the market is closed, bands are disabled — the key has a TTL). ``(None, False)`` means
+    the read FAILED (Redis down, parse error).
+
+    The distinction exists because the two are opposite answers for eligibility: a missing
+    band is a normal fail-open, while a failed read means an ACTIVE circuit gate could not
+    be judged at all and must be reported as unassessed rather than silently clear
+    (bug-hunter, 2026-09-05 — an infra fault was being recorded as a data-coverage gap and
+    then counted as evidence by the shadow sidecar)."""
     try:
         import redis.asyncio as aioredis
 
@@ -152,6 +159,13 @@ async def get_circuit_band(stock_id: int) -> CircuitBand | None:
             # aclose in finally — a raised GET must not leak the connection.
             with contextlib.suppress(Exception):
                 await r.aclose()
-        return parse_band(raw)
+        return parse_band(raw), True
     except Exception:
-        return None
+        return None, False
+
+
+async def get_circuit_band(stock_id: int) -> CircuitBand | None:
+    """Latest cached band from Redis (no fallback), conflating "no band" with "read
+    failed". Prefer `get_circuit_band_checked` on any path that must distinguish them."""
+    band, _ok = await get_circuit_band_checked(stock_id)
+    return band

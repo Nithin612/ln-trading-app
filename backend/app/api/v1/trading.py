@@ -20,7 +20,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.broker.circuit_bands import get_circuit_band
+from app.broker.circuit_bands import get_circuit_band_checked
 from app.broker.paper_broker import (
     PaperOrderError,
     close_position,
@@ -123,6 +123,48 @@ async def _validity_by_signal(
     return {r.id: r.validity_until for r in rows}
 
 
+#: Every context key the ORDER path knows how to resolve. Checked against the registry at
+#: import time, so a `Restriction` added with a context nobody loads fails at startup
+#: instead of being silently skipped whenever the gate that happens to own that key is off
+#: (bug-hunter MEDIUM, 2026-09-05 — the hand-maintained sequence A38 set out to delete had
+#: survived one level down, in this function).
+_LOADABLE_CONTEXT: frozenset[str] = frozenset(
+    {
+        restrictions.CTX_ATR,
+        restrictions.CTX_CIRCUIT_BAND,
+        restrictions.CTX_RS,
+        restrictions.CTX_MARKET,
+        restrictions.CTX_TRADED_VALUES,
+        restrictions.CTX_MARKET_PRICE,
+    }
+)
+
+
+def _assert_every_context_is_loadable() -> None:
+    """Fail at import if a rule needs context this path cannot resolve.
+
+    `check` fails OPEN on unresolved context, which is right for a display list and wrong
+    for the order path: there, an ACTIVE gate that never runs is a gate that silently
+    stopped enforcing. A loud startup error is the only version of this that cannot be
+    missed."""
+    needed: set[str] = set()
+    for r in restrictions.REGISTRY:
+        if r.enforced_by is not restrictions.EnforcedBy.OVERLAY:
+            continue
+        needed |= r.requires | r.requires_any
+        for _sub, _label, sub_needs in r.sub_requires:
+            needed |= sub_needs
+    missing = needed - _LOADABLE_CONTEXT
+    if missing:
+        raise RuntimeError(
+            f"order path has no context loader for {sorted(missing)} — add one to "
+            "_load_restriction_context and _LOADABLE_CONTEXT, or the gate never runs"
+        )
+
+
+_assert_every_context_is_loadable()
+
+
 async def _load_restriction_context(  # noqa: C901 — a flat sequence of INDEPENDENT
     # optional loads, one per context key, each gated on "is any gate that needs this on".
     # The branching is the point: it is what keeps `off` a true no-op (no query, no stamp).
@@ -138,28 +180,30 @@ async def _load_restriction_context(  # noqa: C901 — a flat sequence of INDEPE
     """Resolve, point-in-time, exactly the context the non-off restrictions need.
 
     A38: the RULES live in `app/signals/restrictions.py` and are shared with the display
-    path; this function does only the I/O the order path can afford. It used to also
-    contain the rules, in a second hand-maintained sequence that had to be kept in step
-    with the preview by a contract test and a comment — see that module for why that
-    arrangement is the thing being removed.
+    path; this function does only the I/O the order path can afford.
 
-    Two properties preserved exactly:
+    Three properties, each load-bearing:
 
     * **`off` is a TRUE no-op.** A key is loaded only when a restriction that needs it is
       not off, so an off gate costs no query and leaves no stamp.
     * **Every load fails open, inside its own SAVEPOINT.** A DB fault must never suppress
       a trade, and a nested block that rolls back leaves the session usable for
       `place_paper_order` below (cf. `get_circuit_band`'s except→None).
+    * **A key joins `available` only when its load SUCCEEDED.** "Looked, found nothing"
+      and "the read failed" are opposite answers: the first is a normal fail-open, the
+      second means an ACTIVE gate could not be judged and must surface as `unassessed`.
+      Conflating them recorded an infra fault as a data-coverage gap, which the shadow
+      sidecars then counted as evidence (bug-hunter MEDIUM, 2026-09-05).
 
     ⚠ **One property deliberately NOT preserved: context is resolved EAGERLY.** The old
     inline chain interleaved load-and-judge and raised on the first block, so gates after
     the blocker did no I/O. Here every non-off gate's context is fetched before any
-    judging, so an order rejected by the 3rd gate still pays for the 5th–8th (today, with
-    diversity active and the rest shadow: +3 queries and +1 Redis read on a blocked
-    click). That is the price of a PURE composer — `check` takes a resolved context so it
-    can be shared with the display path and tested without a database — and it is charged
-    per Buy click, not per listed row. Said plainly here rather than left as a docstring
-    claiming an economy the code no longer has (quant-verifier MEDIUM).
+    judging, so an order rejected by an early gate still pays for the later ones' loads
+    (today, with diversity active and the rest shadow: +3 queries and +1 Redis read on a
+    blocked click). That is the price of a PURE composer — `check` takes a resolved
+    context so it can be shared with the display path and tested without a database — and
+    it is charged per Buy click, not per listed row. Said plainly rather than left as a
+    docstring claiming an economy the code no longer has (quant-verifier MEDIUM).
 
     `as_of` is the signal's `created_at`, so every context is the one knowable AT COMMIT —
     the anchoring that keeps these overlays free of look-ahead.
@@ -183,16 +227,22 @@ async def _load_restriction_context(  # noqa: C901 — a flat sequence of INDEPE
             timeframe=atr_timeframe_for(signal.classification),
             before=as_of,
         )
-        # Recorded as available only when a real ATR came back: a None ATR leaves the
-        # sl_atr half genuinely unjudged, which `unassessed` must surface.
+        # Available only on a real ATR: without one the sl_atr half is genuinely unjudged,
+        # which `unassessed` must surface.
         if atr is not None:
             available.add(restrictions.CTX_ATR)
 
     if on(restrictions.GATE_CIRCUIT):
-        band = await get_circuit_band(signal.stock_id)
-        available.add(restrictions.CTX_CIRCUIT_BAND)
+        band, ok = await get_circuit_band_checked(signal.stock_id)
+        if ok:
+            available.add(restrictions.CTX_CIRCUIT_BAND)
 
     if on(restrictions.GATE_SECTOR_RS):
+        # Fail open on ANY DB fault (unmigrated table, JOIN timeout, transient): a
+        # benchmark lookup must never suppress a trade. The read runs in a SAVEPOINT so a
+        # failure rolls back only the nested block and leaves the session usable for
+        # place_paper_order below.
+        ok = True
         try:
             async with db.begin_nested():
                 rs_ctx = await load_rs_context(
@@ -202,10 +252,12 @@ async def _load_restriction_context(  # noqa: C901 — a flat sequence of INDEPE
             log.exception(
                 "sector-RS context load failed; failing open for stock_id=%s", signal.stock_id
             )
-            rs_ctx = None
-        available.add(restrictions.CTX_RS)
+            rs_ctx, ok = None, False
+        if ok:
+            available.add(restrictions.CTX_RS)
 
     if on(restrictions.GATE_MARKET_REGIME):
+        ok = True
         try:
             async with db.begin_nested():
                 mkt_ctx = await load_market_regime_context(
@@ -219,10 +271,12 @@ async def _load_restriction_context(  # noqa: C901 — a flat sequence of INDEPE
                 "market-regime context load failed; failing open for stock_id=%s",
                 signal.stock_id,
             )
-            mkt_ctx = None
-        available.add(restrictions.CTX_MARKET)
+            mkt_ctx, ok = None, False
+        if ok:
+            available.add(restrictions.CTX_MARKET)
 
     if on(restrictions.GATE_LIQUIDITY):
+        ok = True
         try:
             async with db.begin_nested():
                 traded = await load_traded_values(
@@ -232,8 +286,9 @@ async def _load_restriction_context(  # noqa: C901 — a flat sequence of INDEPE
             log.exception(
                 "liquidity context load failed; failing open for stock_id=%s", signal.stock_id
             )
-            traded = []
-        available.add(restrictions.CTX_TRADED_VALUES)
+            traded, ok = None, False
+        if ok:
+            available.add(restrictions.CTX_TRADED_VALUES)
 
     if on(restrictions.GATE_CHASE):
         # get_live_ltp does its own Redis read + fail-to-None, so no savepoint is needed.
