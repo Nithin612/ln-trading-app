@@ -649,8 +649,8 @@ to cycle 2").** A 30-repo external review (2026-09-03/04) produced 91 items acro
   ✅ H8 noise negative-control (2026-09-04) · ✅ **H1 block bootstrap** (2026-09-05) ·
   ✅ **H2 buy-and-hold benchmark** (2026-09-05) · ✅ **H12 beta/IR** (2026-09-05) ·
   ✅ **T11 pin PSR** (2026-09-05) · ✅ **H11 MinTRL as headline** (2026-09-05) ·
-  ✅ **T7 exhaustive-enum tests** (2026-09-05) · **remaining: H4 gate register ·
-  U4 trials counter · H3 VIX percentile · A24.** None of these changes a recorded number, so
+  ✅ **T7 exhaustive-enum tests** (2026-09-05) · ✅ **A24 uncertainty rule** (2026-09-05,
+  `.claude/rules/ui.md`) · **remaining: H4 gate register · U4 trials counter · H3 VIX percentile.** None of these changes a recorded number, so
   they build DURING accrual — Bucket A was the part that had to land first, and it has.
 
 > **⭐⭐ WHAT BUCKET B HAS ALREADY ESTABLISHED — read this before arguing about any gate.**

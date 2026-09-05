@@ -7,6 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(A24): never render a precise figure without its uncertainty (2026-09-05)
+
+**Bucket B, item 7** — a standing rule, written into `.claude/rules/ui.md` where ui-reviewer
+enforces it. A precise number reads as a confidence signal whether or not it is one: two
+decimal places say "this was measured", a calendar date says "this will happen". We are
+specifically exposed, because a 2–3%/day goal invites converting a wish into a timeline.
+
+Six clauses, each anchored to something that actually went wrong somewhere: no bare point
+estimate for anything predictive; **a projection must depend on what it projects** (the
+review's worst example was a "probable exit date" with no volatility term that did not even
+depend on the target price it was the date for — if changing the input does not move the
+number, the number is decoration); round to the precision the evidence supports rather than
+the float; **a sample size travels with its statistic** (H11); **"not assessable" is a
+legitimate rendering** and beats a plausible-looking default, with H6's three cases
+(undefined / off-scale / measured) staying visually distinct; and **a caveat must branch on
+the data** — a fixed hedge that is wrong in some branch is worse than none, per
+`buy_and_hold._deployment_note`.
+
+- `.claude/rules/ui.md`
+
 ### feat(H11): the implied sample is the headline, not a footnote (2026-09-05)
 
 **Bucket B, item 5.** We already compute MinTRL; the missing move was rendering it where it

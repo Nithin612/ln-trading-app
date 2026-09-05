@@ -42,6 +42,34 @@ rules ui-reviewer enforces; UI_GUIDELINES.md sections are cited in reviews.
 - Focus-visible ring on every interactive element; aria-label on icon-only
   buttons; Escape closes any panel; 44px minimum touch targets.
 
+## Uncertainty — never render a precise figure without it (A24)
+
+A precise number reads as a confidence signal whether or not it is one. Two decimal places
+say "this was measured"; a calendar date says "this will happen". The failure mode we are
+specifically exposed to is converting a wish into a timeline — a 2–3%/day goal invites
+exactly that.
+
+- **No bare point estimate for anything predictive** — a date, a target, a "confidence",
+  an expected return, a projected balance. Ship the interval, the sample it rests on, or
+  the assumption it inherits, in the same visual element. Not a tooltip.
+- **A projection must depend on what it projects.** The external review's worst example was
+  a "probable exit date" carrying no volatility term that **did not even depend on the
+  target price it was the date for**. If changing the input does not move the number, the
+  number is decoration.
+- **Round to the precision you actually have.** `+14.7382%` on 44 trades claims six
+  significant figures from a sample that supports one. Match displayed precision to the
+  evidence, not to the float.
+- **A sample size travels with its statistic** (H11): `n=44` is never rendered without
+  `needs ≈N`, and `n/20`-style progress bars must be labelled as process conventions, not
+  statistical thresholds.
+- **"Not assessable" is a legitimate rendering** and beats a plausible-looking default.
+  `—` for undefined, `>50` for a value at its cap (H6) — the three cases (undefined,
+  off-scale, measured) must stay visually distinct.
+- Corollary for copy: a caveat must branch on the data. A fixed hedge that is wrong in some
+  branch is worse than none — see `buy_and_hold._deployment_note`, where "we were
+  under-deployed" excuses a shortfall against a *rising* index and emphatically does not
+  against a falling one.
+
 ## New-component checklist
 
 When adding from shadcn/base-ui: strip `dark:` classes, replace
