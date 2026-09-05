@@ -48,8 +48,10 @@ from app.services import beta_ir as bir
 from app.services import buy_and_hold as bah
 from app.services import fo_analytics as fa
 from app.services import fo_suggestions as fs
+from app.services import gate_register
 from app.services.beta_ir import BetaIr
 from app.services.buy_and_hold import BuyAndHold
+from app.services.deflated_sharpe import DEFAULT_TRIALS
 from app.services.excursion import Excursion, load_1m_bars, tape_excursion
 from app.services.feed_health import FeedStatus, check_feed_staleness, render_feed_health
 from app.services.liquidity import load_median_traded_values_safe
@@ -758,6 +760,10 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
             ),
         )
     )
+    # U4 — the trials counter, beside the bar it is an input to. `N` in E[max SR] is the
+    # deflation's most important input and it has been a hand-picked 20; this makes the
+    # observed count visible without changing the bar.
+    out.extend(gate_register.render_lines(assumed_trials=DEFAULT_TRIALS))
     if r.beta_all is not None or r.beta_by_side:
         out.extend(bir.render_lines(r.beta_all, label="closed book"))
         for side, br in r.beta_by_side.items():
