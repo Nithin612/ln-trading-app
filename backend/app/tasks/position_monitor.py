@@ -98,10 +98,10 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
     # every exit decision below is taken on the live tick.
     from app.broker.depth import get_live_depths
     from app.core.config import settings
-    from app.services.liquidity import load_median_traded_values
+    from app.services.liquidity import load_median_traded_values_safe
 
     books = await get_live_depths([p.stock_id for p in positions])
-    advs = await load_median_traded_values(
+    advs = await load_median_traded_values_safe(
         db, [p.stock_id for p in positions], lookback=settings.paper_participation_lookback
     )
 

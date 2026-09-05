@@ -2,6 +2,7 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Literal
 
+from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 # Resolve .env regardless of the working directory:
@@ -353,10 +354,22 @@ class Settings(BaseSettings):
     #
     # Charge `k × participation²` bps, participation = order value ÷ median daily traded
     # value. Quadratic, following zipline's `VolumeShareSlippage`
-    # (`price × (1 + price_impact × volume_share²)`, `price_impact` 0.1), which is where
-    # the calibration comes from. At k=0.1: 2.5% participation ≈ 0.6 bps, 10% ≈ 10 bps,
-    # 20% ≈ 40 bps, 50% ≈ 250 bps. Small orders are untouched; the cost bites exactly
-    # where the order stops being absorbable.
+    # (`price × (1 + price_impact × volume_share²)`, `price_impact` 0.1). At k=0.1: 2.5%
+    # participation ≈ 0.6 bps, 10% ≈ 10 bps, 20% ≈ 40 bps, 50% ≈ 250 bps. Small orders are
+    # untouched; the cost bites exactly where the order stops being absorbable.
+    #
+    # ⚠⚠ **THE FORM IS ZIPLINE'S; THE CALIBRATION ABOVE 2.5% IS OURS.** Zipline pairs
+    # `price_impact=0.1` with `volume_limit=0.025` — it NEVER fills more than 2.5% of a
+    # bar, so 0.1 was only ever evaluated up to ≈0.6 bps. We apply the same quadratic at
+    # 20% (40 bps) and 50% (250 bps), saturating the 500 bps ceiling at 70.7%
+    # participation. That extrapolation is a JUDGEMENT CALL with no external validation
+    # (quant-verifier; the T12 rule — "our trading layer has fitted constants nobody can
+    # re-derive, mark judgement calls as such").
+    #
+    # What would falsify it: real fills on names where we take >5% of a session. We have
+    # none — the paper book has never traded live — so this stands until Phase 7 supplies
+    # execution data, and any recalibration should come from that, not from a backtest
+    # fitted to the same trades the number is meant to price.
     #
     # ⚠ It OVERLAPS the top-of-book term rather than being orthogonal to it: one measures
     # instantaneous depth, the other daily capacity, and an illiquid name trips both. That
@@ -367,7 +380,11 @@ class Settings(BaseSettings):
     # spills the rest; that needs partial fills, which are Phase 7. This prices the trade
     # honestly rather than rejecting it — no signal is suppressed by this knob.
     paper_participation_enabled: bool = True
-    paper_participation_k: float = 0.1
+    #: Clamped ≥ 0 at the edge: a negative k would drive `slippage_bps` NEGATIVE on the
+    #: spread path — a fill BETTER than the reference, which the module contract forbids.
+    #: Nothing validated it before, and the guard that looked like it did was dead code
+    #: for every k ≥ 0 (quant-verifier).
+    paper_participation_k: float = Field(default=0.1, ge=0.0)
     #: Sessions of history required before participation is charged at all. Fewer than this
     #: is "unknown", and unknown fails OPEN (no impact) — never "infinitely illiquid".
     paper_participation_lookback: int = 20

@@ -26,7 +26,7 @@ from app.core.config import settings
 from app.models.signal import Signal
 from app.models.trading import Order, Position
 from app.models.user import User
-from app.services.liquidity import load_median_traded_values
+from app.services.liquidity import load_median_traded_values_safe
 from app.signals import eligibility
 from app.trading.fees import product_for_classification, roundtrip_charges
 from app.trading.trail_sl import compute_pnl
@@ -192,6 +192,13 @@ def participation_bps(
     small against a deep touch and still be a fifth of the day's volume, which is the SRTL
     shape — ₹1 lakh in a name trading ₹5 lakh a day.
 
+    ⚠ The denominator is not quite zipline's. Theirs is order SHARES ÷ that BAR's shares;
+    ours is order ₹ ÷ the MEDIAN of `close × volume` over 20 sessions. The two coincide
+    only while the 20-session VWAP is near today's price — a name that has doubled inside
+    the window is measured against its older, lower closes and its participation is
+    therefore OVERSTATED (and understated for one that has halved). Second-order and
+    bounded, but real, and it is why the window is a median rather than a mean.
+
     Fails OPEN to zero on missing or unusable data: no ADV means unknown, and unknown must
     not read as infinitely illiquid.
     """
@@ -233,7 +240,7 @@ def simulate_fill(
     part_bps, participation = participation_bps(order_value, adv_value)
     ceiling = Decimal(str(settings.paper_slippage_max_bps))
     if depth is None or not settings.paper_spread_fill_enabled:
-        total = min(max(baseline, baseline + part_bps), ceiling)
+        total = min(baseline + part_bps, ceiling)
         fill = _round_tick(_price_after_bps(base_price, order_side, total), order_side)
         return FillModel(
             model="flat",
@@ -251,7 +258,7 @@ def simulate_fill(
             quantity=quantity,
         )
     total, half_spread, impact = spread_aware_bps(depth, order_side, quantity)
-    total = min(total + part_bps, ceiling)
+    total = min(max(baseline, total + part_bps), ceiling)
     fill = _round_tick(_price_after_bps(base_price, order_side, total), order_side)
     return FillModel(
         model="spread",
@@ -261,6 +268,12 @@ def simulate_fill(
         baseline_bps=baseline,
         half_spread_bps=half_spread,
         impact_bps=impact,
+        # ⚠ These were omitted here while the flat path set them, so `slippage_bps`
+        # included participation but the PAYLOAD reported 0.00 and the parts no longer
+        # summed to the total — a fill that could not be re-derived from its own record,
+        # which is the one thing `FillModel` exists to guarantee (quant-verifier HIGH).
+        participation_bps=part_bps,
+        participation=participation,
         bid=depth.bid,
         ask=depth.ask,
         top_qty=(depth.ask_qty if order_side.upper() == "BUY" else depth.bid_qty),
@@ -474,7 +487,11 @@ def _check_notional_cap(
     )
 
 
-async def place_paper_order(
+async def place_paper_order(  # noqa: C901 — one linear transaction: resolve price →
+    # size → re-price → persist. The branches are the fill-model refinement and the
+    # rejection paths, and each rejection has to name its own reason; splitting them out
+    # would separate the size from the price it was computed against, which is exactly the
+    # coupling that produced the A37 sizing defect.
     db: AsyncSession,
     user: User,
     signal: Signal,
@@ -521,17 +538,18 @@ async def place_paper_order(
     # impact. Absent (too little history) simply charges no participation — unknown must
     # never read as infinitely illiquid.
     adv = (
-        await load_median_traded_values(
+        await load_median_traded_values_safe(
             db, [signal.stock_id], lookback=settings.paper_participation_lookback
         )
     ).get(signal.stock_id)
-    # Size and impact are mutually dependent: sizing is risk-first from the ACTUAL
-    # fill, but the impact term needs the order size. Resolve it in one refinement
-    # pass — price the spread-only fill, size from it, then re-price WITH the
-    # impact that size implies and re-size from the final fill. An adverse fill
-    # always widens |fill − SL|, so the second size is ≤ the first and the impact
-    # we charged is ≥ the impact the final size would imply: the residual error is
-    # conservative by construction, never in our favour.
+    # Size and impact are mutually dependent: sizing is risk-first from the ACTUAL fill,
+    # but the impact term needs the order size. Resolved by refinement — price, size,
+    # re-price at that size, re-size, then price ONCE MORE at the final size so the
+    # recorded price belongs to the quantity actually shipped. There is no fixed point to
+    # iterate to (see the comment at the re-price below); the guarantee is not convergence
+    # but a BOUND: the shipped size was computed against a strictly more adverse fill than
+    # the one recorded, so realised risk is ≤ the budget and the error is never in our
+    # favour.
     fill = simulate_fill(base_price, side, depth=depth, quantity=None, adv_value=adv)
     fill_price = fill.fill
 
@@ -598,6 +616,24 @@ async def place_paper_order(
             fill = simulate_fill(base_price, side, depth=depth, quantity=qty, adv_value=adv)
             fill_price = fill.fill
             qty = _size(fill_price)
+            if qty > 0:
+                # RE-PRICE AT THE FINAL SIZE, and keep that price. Without this the order
+                # records `fill(q1)` while shipping `q2` — and once A37 made the term
+                # QUADRATIC the two diverged badly: the map `q → size(fill(q))` has no
+                # fixed point (it is a period-2 cycle, e.g. 333 ↔ 1538), so one pass lands
+                # on the low branch and stops. Measured: an entry priced for an order
+                # **16.8× larger** than the one placed — ₹1,537 of error on a ₹2,000 risk
+                # budget (quant-verifier HIGH). Pre-A37 the only size-dependent term was
+                # linear and capped at 50 bps, so the gap was never material.
+                #
+                # Keeping the LAST price is strictly better on both axes:
+                #   • `fill(q2) ≤ fill(q1)` adversely, so the recorded price is the one the
+                #     model actually believes for the size traded;
+                #   • `q2` was sized off the MORE adverse `fill(q1)`, so realised risk
+                #     `q2 × |fill(q2) − SL| ≤ q2 × |fill(q1) − SL| ≤ budget` — the budget
+                #     still binds. Conservative, and now bounded rather than merely asserted.
+                fill = simulate_fill(base_price, side, depth=depth, quantity=qty, adv_value=adv)
+                fill_price = fill.fill
     if qty <= 0:
         if existing is not None:
             raise PaperOrderError(
@@ -713,7 +749,7 @@ async def close_position(
         depth=await get_live_depth(position.stock_id),
         quantity=position.quantity,
         adv_value=(
-            await load_median_traded_values(
+            await load_median_traded_values_safe(
                 db, [position.stock_id], lookback=settings.paper_participation_lookback
             )
         ).get(position.stock_id),
@@ -829,7 +865,7 @@ def exit_mark(
     `adv_value` carries A37's participation impact into the mark as well. That is A31, not
     thoroughness: getting out of a fifth of a day's volume costs what getting in cost, so
     charging it on the fill and not on the mark would re-create exactly the optimism A21
-    was written to remove. Batch it with `load_median_traded_values` on any list path.
+    was written to remove. Batch it with `load_median_traded_values_safe` on any list path.
     """
     return simulate_fill(
         reference,

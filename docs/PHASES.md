@@ -641,6 +641,17 @@ of the 30 repos produced one. **The known lever is already on record and is NOT 
 have R:R < 1 by construction** — at a 37.5% win rate the arithmetic needs 1.67R and cannot close.
 That is frozen-engine territory (spec change + §8 regression), not a review finding.
 
+**⚠ PAPER SIZING NOW DEVIATES FROM `SIGNAL_ENGINE.md` §6 ON THIN NAMES (A37, 2026-09-05).**
+§6 specifies `qty = floor(capital × risk% ÷ |entry − SL|)`. Sizing from the actual FILL rather
+than the signal entry is pre-existing and user-sanctioned (CLAUDE.md: *"size risk-first from the
+actual fill"*); what is new is the MAGNITUDE. With a quadratic participation term the fill is
+size-dependent and the size↔price loop has **no fixed point**, so the refinement stops at a
+deliberately conservative point: measured **4,545 → 854 shares (−81%)** at ADV ₹2 lakh with a 1%
+stop, carrying ₹461 of risk against a ₹2,000 budget. Benign on the real book's shape (ADROITINFO:
+1,000 → 930, risk ₹1,953). **Recorded here so the deviation is visible when cycle-2 R statistics
+are read** — an R denominated on a budget the trade never used will understate risk-adjusted
+return on thin names. Not a spec change; the spec's formula is still what the risk budget means.
+
 **⚠ Heat has drifted: 45.3% → 58.0% of capital** (₹58,034 across 29 open positions, 2026-09-04).
 Still no portfolio-level cap. The per-position notional cap is unaffected.
 

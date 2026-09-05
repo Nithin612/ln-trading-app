@@ -7,6 +7,74 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### fix(A37): thirteen quant-verifier findings — a sizing loop with no fixed point (2026-09-05)
+
+Review pass on `bac1bac`. The formula, units, money types, anchoring and fail-open behaviour all
+verified correct, and the feature was confirmed live on the real book. Three HIGH findings against
+it, all fixed.
+
+**The sizing refinement had no fixed point.** Once the impact term became *quadratic*, the map
+`q → size(fill(q))` stopped converging — it is a period-2 cycle (333 ↔ 1538), and one pass simply
+landed on the low branch and stopped. The order then recorded `fill(q1)` while shipping `q2`:
+measured, an entry **priced for an order 16.8× larger than the one placed — ₹1,537 of error on a
+₹2,000 risk budget**. Pre-A37 the only size-dependent term was linear and capped at 50 bps, so the
+gap was never material. Fixed by re-pricing once at the FINAL size and keeping that price. The
+guarantee is now a bound rather than convergence: `q2` was sized against the strictly more adverse
+`fill(q1)`, so realised risk `q2 × |fill(q2) − SL| ≤ budget` still holds. ⚠ **The consequence is
+real and conservative: on thin names we now ship materially fewer shares** — 854 where the naive
+size was 4,545, carrying ₹461 of risk against a ₹2,000 budget. That is the right direction (a name
+where your own size moves the price that much is one to take less of) but it is a sizing change,
+recorded below.
+
+**The spread path never stamped what it charged.** `slippage_bps` included participation, but the
+`FillModel` return omitted the two new fields, so `broker_payload["fill"]` reported
+`participation_bps: "0.00"` and `half_spread + impact + participation ≠ slippage_bps` — a fill that
+could not be re-derived from its own record, which is the single thing that record exists for.
+
+**And the whole feature could be made inert with a green suite.** All 26 tests called the pure
+functions directly and covered **none of the seven wiring sites**. quant-verifier proved it by
+mutation: reverting the sizing gate, nulling the ADV in `place_paper_order`, and dropping
+`adv_value` at all five mark surfaces each left the suite **fully green**. Six seam tests now go
+through the real order path and the real mark path against a real database, and **each mutation was
+re-run to confirm the new tests fail** — M3 and M2 each break two, M4 breaks one. (One of them
+failed first time for an instructive reason: on a ₹39 stock a ₹0.05 tick is 12.8 bps, so a
+participation impact smaller than that rounds to the same tick and the size does not move. The
+fixture was too generous, not the code; it is now ₹1 lakh/day and the reason is in the test.)
+
+**Also fixed:** all seven ADV loads now go through **one** `load_median_traded_values_safe` —
+savepoint plus `except SQLAlchemyError`, matching the liquidity gate's house pattern. A DB fault on
+the ADV query would previously have 500'd the order, and a fail-open written seven times is seven
+chances to forget it. The daily EoD row is **now actually batched** (it was a per-row query — ~29
+windowed scans per report day, ~145 per weekly summary — while the previous entry claimed it was
+batched). `paper_participation_k` is clamped `ge=0.0` at the config edge, because a negative k drove
+`slippage_bps` **negative** on the spread path, and the guard that looked like it prevented that was
+dead code for every k ≥ 0; the baseline floor now applies on both paths. The "shared median" claim
+is **made true** — `liquidity_guard` kept its own private `_median` and never imported the shared
+one, so the definition now lives in the pure layer and the service re-exports it (the windows stay
+deliberately different, and the docstring says so).
+
+**⚠ The calibration is ours, not zipline's, above 2.5%.** Zipline pairs `price_impact=0.1` with
+`volume_limit=0.025` — it never fills more than 2.5% of a bar, so 0.1 was only ever evaluated up to
+≈0.6 bps. We apply the same quadratic at 20% (40 bps) and 50% (250 bps). The *form* is theirs; the
+*extrapolation* is an unvalidated judgement call, now marked as one per T12, with what would falsify
+it recorded: real fills on names where we take >5% of a session, which only Phase 7 can supply.
+
+**⚠ Two further honesty notes.** The denominator is order ₹ ÷ median `close × volume` over 20
+sessions, not zipline's shares ÷ that bar — they diverge when a name has trended inside the window
+(a doubled stock's participation is overstated). And `conftest` now neutralises
+`paper_participation_enabled` alongside `paper_slippage_bps`: the entire 1,789-test suite had been
+running with participation LIVE, staying green only because fixtures seed fewer than 20 daily bars
+and the model fails open. The first fixture to seed 20+ would have moved fill prices in unrelated
+tests with no visible cause.
+
+**⚠ Comparability, stated as the 2026-08-17 precedent requires:** this commit and `bac1bac` change
+**every paper fill and every mark**. Paper P&L before and after 2026-09-05 is not comparable.
+Landing inside Bucket A is what makes that acceptable — **cycle 2's clock has not started**, which
+is the entire reason these items are sequenced ahead of it.
+
+Tests: `tests/test_participation.py` 26 → 32. ruff + mypy clean across 248 files.
+
+
 ### feat(A37+T3): volume-participation impact — size priced against the stock, not just the book (2026-09-05)
 
 **Bucket A, item 3.** The 6.8.2 model charged the real half-spread plus a size-vs-**top-of-book**

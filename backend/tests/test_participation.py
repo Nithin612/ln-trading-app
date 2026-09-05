@@ -12,13 +12,27 @@ resulting fill. That is what `TestParticipationCurve` is.
 
 from __future__ import annotations
 
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 
 import pytest
 from app.broker.depth import Depth
-from app.broker.paper_broker import exit_mark, participation_bps, simulate_fill
+from app.broker.paper_broker import (
+    exit_mark,
+    participation_bps,
+    place_paper_order,
+    simulate_fill,
+    update_position_pnl,
+)
 from app.core.config import settings
-from app.services.liquidity import median_traded_value
+from app.models.market_data import Ohlcv1m, OhlcvDaily
+from app.models.signal import Signal
+from app.models.trading import Position
+from app.services.daily_report import _open_book_mtm
+from app.services.liquidity import load_median_traded_values, median_traded_value
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from tests.helpers import create_test_user, make_stock
 
 #: ₹5 lakh a day — the SRTL shape.
 _THIN_ADV = Decimal("500000")
@@ -181,3 +195,244 @@ class TestMedianHelper:
         reason the liquidity gate uses a median, and why this shares its helper."""
         spiky = [Decimal("1000")] * 19 + [Decimal("100000000")]
         assert median_traded_value(spiky) == Decimal("1000")
+
+
+# ── The SEAMS ───────────────────────────────────────────────────────────────
+# Everything above tests the pure model. quant-verifier showed that was not enough:
+# reverting the sizing refinement, nulling the ADV in `place_paper_order`, and dropping
+# `adv_value` at all five mark surfaces each left the suite fully GREEN — the feature
+# could be made completely inert without a single test noticing. These go through the
+# real order path and the real mark path, against a real database.
+
+
+async def _signal_for(db: AsyncSession, stock_id: int) -> Signal:
+    """A ₹39 BUY with a ₹2 stop — the SRTL price shape. Two scoring factors so the ACTIVE
+    entry-diversity gate does not reject it for an unrelated reason."""
+    now = datetime.now(tz=UTC)
+    sig = Signal(
+        stock_id=stock_id,
+        direction="BUY",
+        classification="swing",
+        timeframe="1d",
+        entry_price="39.0000",
+        stop_loss="37.0000",
+        take_profit="45.0000",
+        suggested_qty=100,
+        confidence_pct=80,
+        factor_scores={
+            "DOW_TREND": {"weight": 20, "score": 0.8, "explanation": "uptrend"},
+            "MACD_CROSS": {"weight": 15, "score": 0.6, "explanation": "bull cross"},
+        },
+        headline="BUY PARTICIPATION TEST",
+        status="active",
+        validity_until=now + timedelta(days=5),
+        created_at=now,
+    )
+    db.add(sig)
+    await db.flush()
+    return sig
+
+
+async def _seed_adv(
+    db: AsyncSession, stock_id: int, close: str, volume: int, *, sessions: int = 20
+) -> None:
+    """`sessions` completed daily bars, so `load_median_traded_values` returns a median
+    instead of treating the stock as unknown. 20 is `paper_participation_lookback`;
+    fewer and the model correctly fails open, which is why no existing fixture triggers
+    it."""
+    start = date(2026, 7, 1)
+    for i in range(sessions):
+        d = start + timedelta(days=i)
+        db.add(
+            OhlcvDaily(
+                time=datetime(d.year, d.month, d.day, 10, 0, tzinfo=UTC),
+                stock_id=stock_id,
+                open=Decimal(close), high=Decimal(close),
+                low=Decimal(close), close=Decimal(close),
+                volume=volume, is_complete=True,
+            )
+        )
+    await db.flush()
+
+
+class TestTheOrderPathSeam:
+    """Kills the `adv = None` and `if fill.model == "spread"` mutations."""
+
+    async def test_a_thin_stock_order_records_participation_and_is_sized_down(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """₹39 stock trading ~₹5 lakh a day, NO live book (so the FLAT path) — the SRTL
+        shape. The order must (a) stamp a non-zero participation on its fill telemetry and
+        (b) ship FEWER shares than the same order in a liquid name, because the impact
+        widens |fill − SL| and risk-first sizing holds the budget."""
+        monkeypatch.setattr(settings, "paper_slippage_bps", 2.0)
+        monkeypatch.setattr(settings, "paper_participation_enabled", True)
+
+        user = await create_test_user(db, email="thin@example.com")
+        thin = await make_stock(db, symbol="THINSRTL")
+        deep = await make_stock(db, symbol="DEEPLIQ")
+        # ⚠ ₹1 lakh/day, not ₹5 lakh: on a ₹39 stock one ₹0.05 tick is 12.8 bps, so a
+        # participation impact SMALLER than that rounds to the same tick and the size does
+        # not move. The first version of this test used ₹5 lakh (≈5.8 bps) and failed for
+        # that reason — the tick grid, not the model.
+        await _seed_adv(db, thin.id, "39", 2_564)         # ≈ ₹1 lakh/day
+        await _seed_adv(db, deep.id, "39", 25_641_025)    # ≈ ₹100 crore/day
+        sig_thin = await _signal_for(db, thin.id)
+        sig_deep = await _signal_for(db, deep.id)
+        await db.commit()
+
+        order_thin, pos_thin = await place_paper_order(db, user, sig_thin, side="BUY")
+        order_deep, pos_deep = await place_paper_order(db, user, sig_deep, side="BUY")
+        await db.commit()
+
+        fill_thin = order_thin.broker_payload["fill"]
+        fill_deep = order_deep.broker_payload["fill"]
+        # (a) the audit trail records it — kills `adv = None`
+        assert Decimal(fill_thin["participation_bps"]) > Decimal("1")
+        assert Decimal(fill_deep["participation_bps"]) < Decimal("0.01")
+        # (b) it reaches the SIZE — kills the `model == "spread"` refinement gate, since
+        #     neither of these orders has a live book at all.
+        assert fill_thin["model"] == "flat"
+        assert pos_thin.quantity < pos_deep.quantity
+
+    async def test_risk_still_respects_the_budget_after_refinement(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The refinement re-prices at the FINAL size, so the recorded entry belongs to the
+        quantity shipped. The invariant that must survive: realised risk ≤ the budget."""
+        monkeypatch.setattr(settings, "paper_slippage_bps", 2.0)
+        monkeypatch.setattr(settings, "paper_participation_enabled", True)
+
+        user = await create_test_user(db, email="budget@example.com")
+        thin = await make_stock(db, symbol="THINBUD")
+        await _seed_adv(db, thin.id, "39", 5_128)  # ≈ ₹2 lakh/day — very thin
+        sig = await _signal_for(db, thin.id)
+        await db.commit()
+
+        _order, pos = await place_paper_order(db, user, sig, side="BUY")
+        await db.commit()
+
+        entry = Decimal(str(pos.avg_entry_price))
+        stop = Decimal(str(pos.current_sl))
+        budget = Decimal("100000") * Decimal("2") / 100
+        assert pos.quantity * (entry - stop) <= budget
+
+    async def test_the_recorded_price_belongs_to_the_recorded_size(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The A37 sizing defect: the order recorded `fill(q1)` while shipping `q2`, so on
+        a thin name the entry was priced for an order up to 16.8× larger. Re-deriving the
+        fill from the SHIPPED quantity must now reproduce the recorded price."""
+        monkeypatch.setattr(settings, "paper_slippage_bps", 2.0)
+        monkeypatch.setattr(settings, "paper_participation_enabled", True)
+
+        user = await create_test_user(db, email="reprice@example.com")
+        thin = await make_stock(db, symbol="THINREP")
+        await _seed_adv(db, thin.id, "39", 5_128)
+        sig = await _signal_for(db, thin.id)
+        await db.commit()
+
+        _order, pos = await place_paper_order(db, user, sig, side="BUY")
+        await db.commit()
+
+        adv = (await load_median_traded_values(db, [thin.id], lookback=20))[thin.id]
+        redone = simulate_fill(
+            Decimal("39"), "BUY", depth=None, quantity=pos.quantity, adv_value=adv
+        )
+        assert Decimal(str(pos.avg_entry_price)) == redone.fill
+
+
+class TestTheMarkSeam:
+    """Kills the "drop adv_value at the mark surfaces" mutation."""
+
+    async def test_unrealized_pnl_charges_participation(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A31: exiting a fifth of a day's volume costs what entering cost. A long in a
+        thin name must mark WORSE than the identical long in a liquid one."""
+        monkeypatch.setattr(settings, "paper_slippage_bps", 2.0)
+        monkeypatch.setattr(settings, "paper_participation_enabled", True)
+
+        user = await create_test_user(db, email="markseam@example.com")
+        thin = await make_stock(db, symbol="THINMARK")
+        deep = await make_stock(db, symbol="DEEPMARK")
+        await _seed_adv(db, thin.id, "39", 12_820)
+        await _seed_adv(db, deep.id, "39", 25_641_025)
+        positions = []
+        for st in (thin, deep):
+            pos = Position(
+                user_id=user.id, stock_id=st.id, mode="paper", side="LONG", quantity=2000,
+                avg_entry_price=Decimal("39"), current_sl=Decimal("37"),
+                trail_state="none", realized_pnl=Decimal("0"),
+                opened_at=datetime(2026, 8, 3, 4, 0, tzinfo=UTC),
+            )
+            db.add(pos)
+            positions.append(pos)
+        await db.commit()
+
+        advs = await load_median_traded_values(db, [thin.id, deep.id], lookback=20)
+        for pos in positions:
+            await update_position_pnl(
+                db, pos, price=Decimal("40"), adv_value=advs.get(pos.stock_id)
+            )
+        thin_pos, deep_pos = positions
+        assert thin_pos.unrealized_pnl is not None and deep_pos.unrealized_pnl is not None
+        assert thin_pos.unrealized_pnl < deep_pos.unrealized_pnl
+
+    async def test_dropping_the_adv_makes_the_mark_more_optimistic(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Directly pins the mutation: the SAME position, marked with and without its ADV.
+        Without it the book reads better than it is."""
+        monkeypatch.setattr(settings, "paper_slippage_bps", 2.0)
+        monkeypatch.setattr(settings, "paper_participation_enabled", True)
+
+        user = await create_test_user(db, email="advdrop@example.com")
+        thin = await make_stock(db, symbol="THINDROP")
+        await _seed_adv(db, thin.id, "39", 12_820)
+        pos = Position(
+            user_id=user.id, stock_id=thin.id, mode="paper", side="LONG", quantity=2000,
+            avg_entry_price=Decimal("39"), current_sl=Decimal("37"),
+            trail_state="none", realized_pnl=Decimal("0"),
+            opened_at=datetime(2026, 8, 3, 4, 0, tzinfo=UTC),
+        )
+        db.add(pos)
+        await db.commit()
+
+        adv = (await load_median_traded_values(db, [thin.id], lookback=20))[thin.id]
+        await update_position_pnl(db, pos, price=Decimal("40"), adv_value=adv)
+        with_adv = pos.unrealized_pnl
+        await update_position_pnl(db, pos, price=Decimal("40"), adv_value=None)
+        without = pos.unrealized_pnl
+        assert with_adv is not None and without is not None
+        assert with_adv < without
+
+    async def test_the_open_book_mtm_charges_participation(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The report surface, through its real entry point."""
+        monkeypatch.setattr(settings, "paper_slippage_bps", 2.0)
+        monkeypatch.setattr(settings, "paper_participation_enabled", True)
+
+        user = await create_test_user(db, email="mtmseam@example.com")
+        thin = await make_stock(db, symbol="THINMTM")
+        await _seed_adv(db, thin.id, "39", 12_820)
+        opened = datetime(2026, 8, 3, 4, 0, tzinfo=UTC)
+        db.add(Position(
+            user_id=user.id, stock_id=thin.id, mode="paper", side="LONG", quantity=2000,
+            avg_entry_price=Decimal("39"), current_sl=Decimal("37"),
+            trail_state="none", realized_pnl=Decimal("0"), opened_at=opened,
+        ))
+        db.add(Ohlcv1m(
+            time=opened + timedelta(minutes=5), stock_id=thin.id,
+            open=Decimal("40"), high=Decimal("40"), low=Decimal("40"),
+            close=Decimal("40"), volume=1, is_complete=True,
+        ))
+        await db.commit()
+
+        cutoff = datetime(2026, 8, 3, 4, 30, tzinfo=UTC)
+        charged = await _open_book_mtm(db, user.id, cutoff)
+        monkeypatch.setattr(settings, "paper_participation_enabled", False)
+        plain = await _open_book_mtm(db, user.id, cutoff)
+        assert charged < plain
+

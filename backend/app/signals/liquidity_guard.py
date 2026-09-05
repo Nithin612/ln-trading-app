@@ -33,13 +33,29 @@ def _pos_side(side: str) -> str:
     return "LONG" if side.upper() in ("BUY", "LONG") else "SHORT"
 
 
-def _median(values: list[Decimal]) -> Decimal:
+def median_traded_value(values: Sequence[Decimal]) -> Decimal:
+    """The canonical median of a traded-value series.
+
+    Lives in the PURE layer and is imported by `services/liquidity.py`, so the liquidity
+    GATE and A37's participation model cannot disagree about what "typical daily volume"
+    means. (The dependency runs pure → service and not the other way, which is why the
+    definition is here rather than beside the SQL that feeds it.)
+
+    ⚠ They still use different WINDOWS on purpose — `liquidity_lookback` for the gate,
+    `paper_participation_lookback` for the fill model. What is shared is the definition,
+    not the sample."""
     s = sorted(values)
     n = len(s)
+    if n == 0:
+        return Decimal(0)
     mid = n // 2
     if n % 2:
         return s[mid]
     return (s[mid - 1] + s[mid]) / Decimal(2)
+
+
+#: Back-compat alias for the module's existing internal callers.
+_median = median_traded_value
 
 
 @dataclass(frozen=True)

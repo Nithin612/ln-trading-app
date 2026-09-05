@@ -46,7 +46,7 @@ from app.services import fo_analytics as fa
 from app.services import fo_suggestions as fs
 from app.services.excursion import Excursion, load_1m_bars, tape_excursion
 from app.services.feed_health import FeedStatus, check_feed_staleness, render_feed_health
-from app.services.liquidity import load_median_traded_values
+from app.services.liquidity import load_median_traded_values_safe
 from app.services.profit_lock_shadow import ShadowComparison, compare_position
 from app.trading.regime import CHOPPY_ER, er_by_stock
 from app.trading.trail_sl import compute_pnl
@@ -297,20 +297,14 @@ async def _build_trade_row(
     user_risk_pct: Decimal,
     report_end: datetime,
     er_map: dict[int, float | None],
+    adv_map: dict[int, Decimal],
 ) -> TradeRow:
     stock = await db.get(Stock, pos.stock_id)
     symbol = stock.symbol if stock is not None else str(pos.stock_id)
     sig = await db.get(Signal, pos.signal_id) if pos.signal_id else None
-    # A37 denominator for this row's EoD mark, anchored to the report's own cutoff.
-    from app.core.config import settings  # local: module-level would cycle (cf. :648)
-
-    adv_value = (
-        await load_median_traded_values(
-            db, [pos.stock_id],
-            lookback=settings.paper_participation_lookback,
-            as_of=report_end,
-        )
-    ).get(pos.stock_id)
+    # A37 denominator for this row's EoD mark — batched by the caller, anchored there to
+    # the report's own cutoff.
+    adv_value = adv_map.get(pos.stock_id)
     outcome = await db.get(SignalOutcome, pos.signal_id) if pos.signal_id else None
 
     chase = None
@@ -479,6 +473,18 @@ async def build_daily_report(
         report_end=report_end,
         daily_loss_cap=(capital * _d(user.daily_loss_limit_pct) / 100).quantize(_Q2),
     )
+    # A37 denominators for the whole day's rows in ONE round trip, hoisted exactly as
+    # `er_map` is above. It was a per-row query — ~29 windowed scans per report day and
+    # ~145 per weekly summary, and the CHANGELOG claimed it was batched when it was not
+    # (quant-verifier).
+    from app.core.config import settings  # local: module-level would cycle (cf. :655)
+
+    adv_map = await load_median_traded_values_safe(
+        db,
+        list({p.stock_id for p in relevant}),
+        lookback=settings.paper_participation_lookback,
+        as_of=report_end,
+    )
     for pos in relevant:
         row = await _build_trade_row(
             db,
@@ -487,6 +493,7 @@ async def build_daily_report(
             user_risk_pct=_d(user.risk_per_trade_pct),
             report_end=report_end,
             er_map=er_map,
+            adv_map=adv_map,
         )
         _place_row(report, row, day_start=day_start, day_end=day_end)
 
@@ -1179,7 +1186,7 @@ async def _open_book_mtm(db: AsyncSession, user_id: int, cutoff: datetime) -> De
     # MARK would re-open exactly the optimism A21 closed (A31).
     from app.core.config import settings  # local: module-level would cycle (cf. :648)
 
-    advs = await load_median_traded_values(
+    advs = await load_median_traded_values_safe(
         db,
         [p.stock_id for p in rows],
         lookback=settings.paper_participation_lookback,

@@ -106,18 +106,28 @@ async def clean_tables() -> None:
 
 
 @pytest.fixture(autouse=True)
-def _neutral_paper_slippage() -> Generator[None, None, None]:
-    """Keep unrelated tests slippage-neutral so fill-price assertions aren't
-    coupled to the production `paper_slippage_bps` calibration knob (default
-    2 bps). Tests that need the haircut set `settings.paper_slippage_bps`
-    themselves (monkeypatch restores it); the dedicated slippage tests exercise
-    the real 2-bps path."""
+def _neutral_fill_calibration() -> Generator[None, None, None]:
+    """Keep unrelated tests fill-neutral so price assertions aren't coupled to production
+    calibration knobs. Tests that need a cost set the knob themselves (monkeypatch
+    restores it); the dedicated fill tests exercise the real values.
+
+    Covers BOTH cost models:
+      * `paper_slippage_bps` (default 2) — the flat haircut.
+      * `paper_participation_enabled` (default True) — A37's volume-participation impact.
+
+    ⚠ The second was added because the whole suite ran with participation LIVE and stayed
+    green only by accident: fixtures seed fewer than `lookback` daily bars, so the ADV is
+    absent and the model fails open. The moment any fixture seeded 20+ bars, fill prices
+    would have moved in unrelated tests with no obvious cause (quant-verifier)."""
     from app.core.config import settings
 
-    original = settings.paper_slippage_bps
+    original_bps = settings.paper_slippage_bps
+    original_part = settings.paper_participation_enabled
     settings.paper_slippage_bps = 0.0
+    settings.paper_participation_enabled = False
     yield
-    settings.paper_slippage_bps = original
+    settings.paper_slippage_bps = original_bps
+    settings.paper_participation_enabled = original_part
 
 
 @pytest.fixture

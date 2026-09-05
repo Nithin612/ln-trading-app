@@ -53,7 +53,7 @@ from app.schemas.trading import (
 )
 from app.services.benchmark import load_market_regime_context, load_rs_context
 from app.services.journal_service import auto_create_journal_entry
-from app.services.liquidity import load_median_traded_values, load_traded_values
+from app.services.liquidity import load_median_traded_values_safe, load_traded_values
 from app.services.profit_lock_shadow import compare_position
 from app.signals import restrictions
 from app.trading.atr import atr_timeframe_for, latest_atr
@@ -400,7 +400,7 @@ async def list_open_positions(
     # book (A21 marks to bid/ask): `get_live_depth` opens its own connection per call, so
     # a per-position read would open ~29 of them per request.
     books = await get_live_depths([p.stock_id for p in positions])
-    advs = await load_median_traded_values(
+    advs = await load_median_traded_values_safe(
         db, [p.stock_id for p in positions], lookback=settings.paper_participation_lookback
     )
     prices: dict[str, Decimal | None] = {}
@@ -592,7 +592,7 @@ async def daily_pnl(
     open_count = len(open_positions)
     total_unrealized = Decimal("0")
     books = await get_live_depths([p.stock_id for p in open_positions])
-    advs = await load_median_traded_values(
+    advs = await load_median_traded_values_safe(
         db, [p.stock_id for p in open_positions],
         lookback=settings.paper_participation_lookback,
     )

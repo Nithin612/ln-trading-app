@@ -8,12 +8,18 @@ median and compares it to the floor.
 
 from __future__ import annotations
 
+import logging
 from collections.abc import Sequence
 from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import text
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.signals.liquidity_guard import median_traded_value as _guard_median
+
+log = logging.getLogger(__name__)
 
 # Completed daily bars only, most-recent first (reversed to chronological below). `{as_of}`
 # is either empty or the fixed literal `AND time <= :as_of` (value bound). Fixed table name
@@ -64,15 +70,10 @@ _BATCH_TRADED_VALUE_SQL = """
 """
 
 
-def median_traded_value(values: Sequence[Decimal]) -> Decimal:
-    """Median of a traded-value series. Shared with `liquidity_guard` so the participation
-    model and the liquidity gate cannot disagree about what "typical daily volume" means."""
-    s = sorted(values)
-    n = len(s)
-    if n == 0:
-        return Decimal(0)
-    mid = n // 2
-    return s[mid] if n % 2 else (s[mid - 1] + s[mid]) / 2
+# Re-exported from the PURE layer so there is exactly ONE definition. The claim that the
+# gate and the fill model "cannot disagree" was previously just a comment — `liquidity_guard`
+# kept its own private `_median` and never imported this one (quant-verifier).
+median_traded_value = _guard_median
 
 
 async def load_median_traded_values(
@@ -113,3 +114,38 @@ async def load_median_traded_values(
         for sid, vals in by_stock.items()
         if len(vals) >= lookback
     }
+
+
+async def load_median_traded_values_safe(
+    db: AsyncSession,
+    stock_ids: Sequence[int],
+    *,
+    lookback: int = 20,
+    as_of: datetime | None = None,
+) -> dict[int, Decimal]:
+    """`load_median_traded_values`, but a DB fault returns `{}` instead of raising.
+
+    The ADV read prices fills and marks on the order path, and a liquidity lookup must
+    never be the reason an order 500s — the sibling liquidity GATE has failed open in a
+    savepoint since MCE 5a and this had no equivalent (quant-verifier). Empty means
+    "unknown", and every consumer already treats a missing stock as *charge no
+    participation*, so the degraded behaviour is exactly the pre-A37 fill model.
+
+    The read runs in a SAVEPOINT so a failure rolls back only the nested block and leaves
+    the session usable for the `place_paper_order` that follows.
+
+    ⚠ Lives here, once, rather than as a `try/except` at each of the seven call sites: a
+    fail-open repeated seven times is seven chances to forget it.
+    """
+    try:
+        async with db.begin_nested():
+            return await load_median_traded_values(
+                db, stock_ids, lookback=lookback, as_of=as_of
+            )
+    except SQLAlchemyError:
+        log.exception(
+            "median-traded-value load failed; charging no participation impact for %s",
+            list(stock_ids)[:10],
+        )
+        return {}
+
