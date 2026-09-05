@@ -645,9 +645,11 @@ to cycle 2").** A 30-repo external review (2026-09-03/04) produced 91 items acro
   ⭐ **Rule: clamp what you REPORT, never what you DECIDE.** Four literals doing three jobs in four
   modules — two disagreeing by 1000× — consolidated without collapsing them).
   **▶ Bucket A is now COMPLETE — every item that changes a recorded number has landed.**
-- **Bucket B — the instruments that read the cycle (~5 d):** H8 noise negative-control · H1 block
-  bootstrap · H12 beta/IR · H2 buy-and-hold benchmark · H11 MinTRL as headline · T11 pin PSR ·
-  H4 gate register · U4 trials counter · H3 VIX percentile · T7 · A24.
+- **▶▶ Bucket B IS THE NEXT WORK — the instruments that read the cycle (~5 d):**
+  ✅ H8 noise negative-control (DONE 2026-09-04) · **H1 block bootstrap ← start here** · H12 beta/IR ·
+  H2 buy-and-hold benchmark · H11 MinTRL as headline · T11 pin PSR · H4 gate register ·
+  U4 trials counter · H3 VIX percentile · T7 · A24. None of these changes a recorded number, so
+  they may be built DURING accrual — Bucket A was the part that had to land first, and it has.
 - **Then:** Phase 7.1–7.4 (the long pole) · MCE 5b (**blocked on a vendor decision, not code**) +
   MCE 6 · CAS-2 · tuning → **then** cycle 2's 45–50 day clock on ₹1L.
 - **Honest sizing: 3–4 months to cycle-2 start**, consistent with "live is 4–6 months out".
