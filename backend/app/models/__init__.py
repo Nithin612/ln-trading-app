@@ -18,7 +18,7 @@ from app.models.profile import StrategyProfile
 from app.models.signal import Signal, SignalOutcome, SrLevel
 from app.models.stock import Index, IndexConstituent, IndexOhlcvDaily, SavedScreen, Stock
 from app.models.strategy import StrategyRun
-from app.models.trading import Order, Position
+from app.models.trading import Order, OrderEventRow, Position
 from app.models.user import User, UserSession
 from app.models.watchlist import Watchlist, WatchlistItem
 
@@ -51,6 +51,7 @@ __all__ = [
     "BrokerToken",
     "KiteInstrument",
     "Order",
+    "OrderEventRow",
     "Position",
     "CorporateAction",
     "PositionCorporateAction",

@@ -114,3 +114,44 @@ class Position(Base):
             f"<Position id={self.id[:8]}… user={self.user_id} "
             f"{self.side} {self.quantity} @ {self.avg_entry_price} [{state}]>"
         )
+
+
+class OrderEventRow(Base):
+    """One append-only fact about an order (Phase 7.3, A33).
+
+    This stream is the source of truth; the `orders` row is its projection. Not the other
+    way round, and not both — two writers to the same truth drift, and the drift surfaces
+    during reconciliation, which is the one moment the record has to be trustworthy.
+
+    ⚠ **No relationship to `Order`, deliberately.** A `submitted` or `denied` event exists
+    for orders that never become an `orders` row at all, which is the entire reason the
+    table was added: before it, every refusal raised an exception and left no trace, so
+    "what did the risk layer refuse, and under which thresholds" was unanswerable.
+
+    The Python-side event object is `app.broker.adapter.OrderEvent`; this is its durable
+    form. They are kept separate because the adapter must be usable without a session —
+    7.2's in-memory sink is what its tests drive.
+    """
+
+    __tablename__ = "order_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    #: gateway-namespaced: "paper:<uuid>" / "kite:<broker_order_id>"
+    client_order_id: Mapped[str] = mapped_column(String(64), nullable=False)
+    #: per-order, monotonic from 1. UNIQUE with client_order_id, so a duplicate is
+    #: impossible and a gap is visible.
+    seq: Mapped[int] = mapped_column(Integer, nullable=False)
+    #: `EventKind.value`
+    kind: Mapped[str] = mapped_column(String(24), nullable=False)
+    at: Mapped[datetime] = mapped_column(TZ, nullable=False)
+    user_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("users.id", ondelete="CASCADE"), nullable=False
+    )
+    stock_id: Mapped[int | None] = mapped_column(
+        BigInteger, ForeignKey("stocks.id", ondelete="SET NULL"), nullable=True
+    )
+    signal_id: Mapped[str | None] = mapped_column(UUID(as_uuid=False), nullable=True)
+    payload: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False, default=dict)
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return f"<OrderEventRow {self.client_order_id} #{self.seq} {self.kind}>"
