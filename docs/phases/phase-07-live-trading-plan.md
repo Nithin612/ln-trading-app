@@ -6,6 +6,13 @@ are fully unblocked**, so they start first. ⚠ Per the external review, **7.0 i
 before any code**: A33 (OMS as a projection of the event stream) + A42 (frozen/available cash)
 + A35 (the `BrokerAdapter` interface) are **one problem, not three**, and must be designed
 together. Buckets A and B — the cycle-2 prerequisites that had to precede this — are COMPLETE.
+**✅ 7.0 DESIGN COMPLETE 2026-09-06 — [`phase-07.0-oms-design.md`](phase-07.0-oms-design.md).**
+Its load-bearing findings: **a refused order is not a row today, it is an exception**, so the
+orders table records only successes and "what did we refuse, and under which thresholds" is not
+answerable from data; **`submit()` must return an `Ack`, never a `Fill`**, or paper's synchronous
+fill leaks into the interface and the abstraction is met on day 1 of live; and **available cash
+is DERIVED from the active-order set, never stored** — a stored balance is a fourth writer to a
+truth three tables already own, and it drifts silently.
 Originally: opens with slice 7.1 (RiskEngine single-gate), per the standing
 Nautilus-review ruling in `docs/PHASES.md`. This doc did not exist before 2026-09-02 (the
 phase row pointed at "—"); it now also carries the **two-cycle go-live governance** decided
