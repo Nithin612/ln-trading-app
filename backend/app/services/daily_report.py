@@ -49,6 +49,7 @@ from app.services import buy_and_hold as bah
 from app.services import fo_analytics as fa
 from app.services import fo_suggestions as fs
 from app.services import gate_register
+from app.services import token_health as th
 from app.services import worker_health as wh
 from app.services.beta_ir import BetaIr
 from app.services.buy_and_hold import BuyAndHold
@@ -281,6 +282,7 @@ class DailyReport:
     # Worker liveness + CAS window coverage (A40). The ONLY surface that can see an
     # ABSENCE, because it runs in a different process from the worker it judges.
     worker_roles: list[RoleStatus] = field(default_factory=list)
+    token_status: th.TokenStatus | None = None
     cas_coverage: CasCoverage | None = None
     # Tick-mode degradation counters for the report day (A25). Empty = a clean
     # day OR no record at all (older than the 7-day TTL, or Redis unreachable) —
@@ -555,6 +557,7 @@ async def build_daily_report(
     # been down since before the last report is still visible here.
     report.worker_roles = await read_statuses(now=now)
     report.cas_coverage = await wh.cas_coverage(db, day=day, now=now)
+    report.token_status = await th.read_token_status(db, now=now)
     # Buy-and-hold benchmark (H2) — the book against doing nothing with the same money,
     # over the SAME dates. The window is the paper clock, never OUTCOME_EPOCH: that
     # spans the 08-17 sizing/fill-model cut and would compare two different books.
@@ -747,6 +750,13 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
     # A40 — worker liveness and the CAS absence alarm, ABOVE the scorecard: if the worker
     # was down, every number below it is suspect and the reader must know that first.
     out.extend(wh.render_lines(r.worker_roles, r.cas_coverage))
+
+    # A3 — broker-token status, beside worker liveness because they answer the same
+    # question: is the machinery that produces these numbers actually alive? A lapsed
+    # token does not merely interrupt the record — it makes paper fills price CHEAPER
+    # than reality, in the direction that flatters us.
+    if r.token_status is not None:
+        out.extend(th.render_lines(r.token_status))
 
     # Tick-mode degradation (A25) — silent on a clean day; loud when the depth
     # path was fed ticks it could not use, because that quietly cheapens the

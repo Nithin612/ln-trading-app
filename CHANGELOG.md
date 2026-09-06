@@ -7,6 +7,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(A3): broker-token status, and what its lapse silently costs
+
+The Kite access token dies **~06:00 IST every day**. Across cycle 2's 45–50 trading days
+that is 45–50 chances for it to lapse unnoticed, and the failure chain is quiet by
+construction:
+
+> token lapses → the tick feed stops → `depth:{stock_id}` expires at its 60 s TTL →
+> 6.8.2's spread-aware fills fall back to the FLAT floor →
+> **paper fills quietly CHEAPER than reality**
+
+⭐ **That last step is why this is a data-QUALITY control, not an ops convenience.** A dead
+feed does not merely *interrupt* the record — it **corrupts** it, in the direction that
+flatters us, and 82% of live NSE books are wider than the flat 2 bps the fallback charges.
+A cycle-2 window read off those fills would overstate the edge. The alarm says exactly that,
+pinned by test, because "token expired" on its own reads as an annoyance and gets
+deprioritised.
+
+**`absent` and `expired` are kept distinct** even though both mean "no usable token now":
+one is a token never obtained, the other one that worked and aged out. Same remedy,
+different diagnosis — and a report that conflates them teaches people to ignore it. A test
+asserts exactly one of {absent, expired, expiring_soon, healthy} holds at any moment, so a
+render branch cannot pick the wrong message.
+
+**A warning is one line; an alarm is a block quote.** Rendering a still-working token as a
+full alarm would train the reader to skip alarm blocks — which is the failure mode that
+makes every *other* alarm in the report worthless.
+
+⚠ **Expiry is a NORMAL lifecycle event, never an error loop** (trading-domain rule), and
+the alarm says so — Kite's login needs a human at a browser, so a retry loop would spin
+forever. The remedy is named in the message.
+
+⚠ **It never raises.** A health probe that can take down the report it appears in has
+inverted its own purpose; a failed read degrades to `absent`. Same rule
+`worker_health.read_statuses` already follows.
+
+Shaped to match `worker_health`'s `render_lines` contract and rendered beside it, rather
+than opening a second health surface (**W2**) — both answer the same question: *is the
+machinery that produced these numbers actually alive?*
+
+- `backend/app/services/token_health.py` — new · `app/services/daily_report.py` (wiring)
+- Tests: 16 new (`tests/test_token_health.py`); report suites re-verified (63 passed)
+
+
 ### feat(A27): config dry-run — what does `.env` say, and which live process has heard it?
 
 **`make config-check`.** `get_settings()` is an `@lru_cache` singleton, so a `.env` edit
