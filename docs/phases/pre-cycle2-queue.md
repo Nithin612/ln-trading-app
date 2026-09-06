@@ -81,8 +81,8 @@ Of those loops, one is **decided** (regime gate → REVERTED 2026-09-02), one is
 
 | # | slice | content |
 |---|---|---|
-| **7.0** | **Design pass first** | A33 OMS-as-projection-of-the-event-stream + A42 frozen/available cash + A35 `BrokerAdapter` interface, designed **together** — the review found these are one problem, not three |
-| **7.1** | RiskEngine single-gate | one pre-trade gate absorbing: daily-loss circuit breaker · the 6 eligibility overlays · notional cap · R:R floor · **the heat cap** (fails CLOSED, `heat = qty × max(0, entry − commit_SL)`, initial risk not MTM). **Equivalence-pinned first** — identical verdicts to today's chain before any refactor |
+| **7.0** ✅ **DONE 2026-09-06** | **Design pass first** | A33 OMS-as-projection-of-the-event-stream + A42 frozen/available cash + A35 `BrokerAdapter` interface, designed **together** — the review found these are one problem, not three |
+| **7.1** ✅ **DONE 2026-09-06** | RiskEngine single-gate | one pre-trade gate absorbing: daily-loss circuit breaker · the 6 eligibility overlays · notional cap · R:R floor · **the heat cap** (fails CLOSED, `heat = qty × max(0, entry − commit_SL)`, initial risk not MTM). **Equivalence-pinned first** — identical verdicts to today's chain before any refactor |
 | **7.2** | BrokerAdapter port | `PaperBrokerAdapter` behind the interface + a **read-only** Kite spike (order-status, margins, positions; **no placement**) so the shape is validated against reality |
 | **7.3** | Order FSM | Denied vs Rejected vs Filled vs Cancelled + A32 event-bus robustness (per-handler isolation, bounded queue, **a dead bus must be loud**) + A22 partial-fill sibling rebalance + A16 lifecycle/repair queue + A34 timer primitive |
 | **7.4** | Reconciliation + kill switch + audit | recover local state on restart · kill switch honoured everywhere · every decision reconstructable · T2 lifecycle-boundary tests (first step, start mid-stream, stop early) |
@@ -95,9 +95,26 @@ record while it is being made.* Everything else in Bucket C stays under the cloc
 
 | # | item | why it cannot wait |
 |---|---|---|
-| **1.7.1b** | **A13** — pin the circuit breaker's **un-suppressibility** | **Rides with 7.1, same commit.** 7.1 refactors the breaker *into* the RiskEngine, which is exactly when a hard constraint can be silently lost. It is enforced today by convention and its call site, not by a test that fails if someone routes around it |
+| **1.7.1b** ✅ **DONE 2026-09-06** | **A13** — pin the circuit breaker's **un-suppressibility** | **Rides with 7.1, same commit.** 7.1 refactors the breaker *into* the RiskEngine, which is exactly when a hard constraint can be silently lost. It is enforced today by convention and its call site, not by a test that fails if someone routes around it |
 | **1.5** | **A27** — config dry-run | `settings` is an `@lru_cache` singleton, so a `.env` change reaches a running process only on re-import. This has bitten repeatedly — it is why CLAUDE.md carries a whole recipe for verifying a gate's live mode. **The cycle-2 reset is itself a config event** (heat cap → enforce, clock → reset); getting it wrong silently invalidates the *window*, not a day |
 | **1.6** | **A3** — broker-token status | The Kite token dies **~6:00 AM IST daily** = 45–50 chances to lapse silently during cycle 2. On lapse the feed stops, `depth:` expires at its 60 s TTL, and spread-aware fills fall back to the flat floor — **paper fills quietly cheaper than reality**. That corrupts the recorded numbers rather than merely interrupting them, which is what makes it a data-quality precondition |
+
+### ▶ Progress — 2026-09-06/07 overnight run
+
+**✅ 7.0 design pass** (`docs/phases/phase-07.0-oms-design.md`) · **✅ 7.1 RiskEngine +
+✅ A13** (`app/trading/risk_engine.py`, 33 tests).
+
+Two findings worth carrying forward:
+
+1. **A refused order is not a row today, it is an exception.** `Order.status` holds exactly
+   two values in the codebase — the `"pending"` column default and `"filled"`. So the orders
+   table records only successes, and *"what did the risk layer refuse last Tuesday, under
+   which thresholds"* is not answerable from data. 7.3 fixes it by writing `submitted`
+   **before** the gates run, so a decision cannot fail to be recorded.
+2. **The equivalence pin earned its keep immediately.** The breaker runs *before* the signal
+   lookup, so an unknown id on a tripped breaker answers **409, not 404** — and the obvious
+   refactor (hoist the lookup so the argument is non-optional) silently inverts that. Caught
+   by the pin, not by review.
 
 ### Q2 — the Phase 6 / 6.8 research track
 

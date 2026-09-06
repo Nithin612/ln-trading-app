@@ -10,7 +10,31 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-09-06) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-09-07) — read this block first
+
+**▶ 2026-09-06/07 (latest) — PHASE 7 HAS STARTED: 7.0 DESIGNED, 7.1 BUILT.** On branch
+`feature/pre-cycle2-hardening`. **7.0** (`docs/phases/phase-07.0-oms-design.md`) settled A33+A42+A35
+together, as the review insisted they must be. Its findings: **a refused order is not a row today,
+it is an exception** — `Order.status` holds exactly two values in the codebase (the `"pending"`
+default and `"filled"`), so the orders table records only successes and *"what did the risk layer
+refuse last Tuesday, under which thresholds"* is **not answerable from data**; **`submit()` must
+return an `Ack`, never a `Fill`**, or paper's synchronous fill leaks into the interface and the
+abstraction is met on day 1 of live; and **available cash is DERIVED from the active-order set,
+never stored** (a stored balance is a fourth writer to a truth three tables already own, and it
+drifts silently). **7.1** shipped `app/trading/risk_engine.py` — ONE gate composing breaker →
+signal existence → signal status → the A38 registry, then notional cap → heat cap; it *composes*
+rather than reimplements, so `restrictions.py` stays the single declaration (W2).
+⭐ **The equivalence pin earned its keep immediately:** the breaker runs *before* the signal
+lookup, so an unknown id on a tripped breaker answers **409, not 404** — and the obvious refactor
+(hoist the lookup so the argument is non-optional) silently inverts that pair. Caught by the pin,
+not by review. **The heat cap is BUILT and `off`** (`heat_cap_mode`) — a 6% cap cuts cycle-1
+entries ~74% and cycle 1 exists to accrue volume, so it flips at the **cycle-2 reset**. Unlike the
+six selection overlays it **FAILS CLOSED**: unmeasurable open risk refuses the next entry rather
+than counting as zero. **A13** rode with it (the breaker runs first, has **no disable knob** — the
+test asserts the *absence* — and still denies with every gate mode forced off). 33 new tests;
+`trials_attempted()` deliberately **stays 15** (the heat cap keeps its counted trial, because it
+did claim an edge and was refuted — dropping it would be the selection bias the deflation corrects).
+
 
 **▶ 2026-09-06 (latest) — BUCKETS A AND B ARE COMPLETE, AND THE PRE-CYCLE-2 QUEUE IS OPEN ON A NEW
 BRANCH.** All 8 Bucket-A items (the ones that change a recorded number) and all 11 Bucket-B items

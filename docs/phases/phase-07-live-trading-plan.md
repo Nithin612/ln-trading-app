@@ -6,15 +6,24 @@ are fully unblocked**, so they start first. ⚠ Per the external review, **7.0 i
 before any code**: A33 (OMS as a projection of the event stream) + A42 (frozen/available cash)
 + A35 (the `BrokerAdapter` interface) are **one problem, not three**, and must be designed
 together. Buckets A and B — the cycle-2 prerequisites that had to precede this — are COMPLETE.
-**✅ 7.0 DESIGN COMPLETE 2026-09-06 — [`phase-07.0-oms-design.md`](phase-07.0-oms-design.md).**
-Its load-bearing findings: **a refused order is not a row today, it is an exception**, so the
+**✅ 7.0 DESIGN COMPLETE + ✅ 7.1 BUILT (2026-09-06/07) — [`phase-07.0-oms-design.md`](phase-07.0-oms-design.md).**
+7.1 shipped as `app/trading/risk_engine.py`: one gate composing breaker → signal existence →
+signal status → the A38 eligibility registry, then notional cap → heat cap. **Equivalence-pinned**
+against a literal transcription of the pre-7.1 chain, and the pin **caught a real ordering
+inversion before it shipped** — the breaker runs before the signal lookup, so an unknown id on a
+tripped breaker answers 409, not 404, and the natural "hoist the lookup so `signal` is
+non-optional" refactor silently flips that. The **heat cap is BUILT and `off`** until the cycle-2
+reset. **A13** rode with it: the breaker runs first, has no disable knob (the test asserts the
+*absence*), and still denies with every gate mode forced off. 33 new tests.
+Its 7.0 design findings: **a refused order is not a row today, it is an exception**, so the
 orders table records only successes and "what did we refuse, and under which thresholds" is not
 answerable from data; **`submit()` must return an `Ack`, never a `Fill`**, or paper's synchronous
 fill leaks into the interface and the abstraction is met on day 1 of live; and **available cash
 is DERIVED from the active-order set, never stored** — a stored balance is a fourth writer to a
 truth three tables already own, and it drifts silently.
-Originally: opens with slice 7.1 (RiskEngine single-gate), per the standing
-Nautilus-review ruling in `docs/PHASES.md`. This doc did not exist before 2026-09-02 (the
+
+(The original ruling that 7.1 opens the phase came from the Nautilus review in
+`docs/PHASES.md`.) This doc did not exist before 2026-09-02 (the
 phase row pointed at "—"); it now also carries the **two-cycle go-live governance** decided
 by the user on 2026-09-02.
 
@@ -72,9 +81,11 @@ are done. Nothing auto-advances.
 - [ ] Reading-derived candidates tested or explicitly dropped (Minervini trend template)
 
 **Runtime (Phase 7 slices — see §3)**
-- [ ] 7.1 RiskEngine single-gate · 7.2 BrokerAdapter port · 7.3 order FSM · 7.4
-      reconciliation + kill switch + audit trail
-- [ ] The portfolio **heat cap**, landed *inside* the RiskEngine (see §4)
+- [x] **7.1 RiskEngine single-gate — DONE 2026-09-06** (equivalence-pinned; heat cap built,
+      mode `off` until the cycle-2 reset) · [ ] 7.2 BrokerAdapter port · [ ] 7.3 order FSM ·
+      [ ] 7.4 reconciliation + kill switch + audit trail
+- [x] **The portfolio heat cap — BUILT inside the RiskEngine 2026-09-06** (see §4). Ships
+      `heat_cap_mode=off`; the remaining step is the FLIP at the cycle-2 reset, not a build.
 
 **Then:** reset the paper clock, set the heat cap to enforce, run 45–50 trading days.
 
