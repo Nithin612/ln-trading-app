@@ -1,6 +1,12 @@
 # Phase 7 — Live-trading hardening, and the TWO-CYCLE paper plan
 
-**Status: planned.** Opens with slice 7.1 (RiskEngine single-gate), per the standing
+**Status: QUEUED TO BUILD (2026-09-06)** — on branch `feature/pre-cycle2-hardening`, whose
+ordered queue is [`pre-cycle2-queue.md`](pre-cycle2-queue.md). **7.1–7.4 are the long pole and
+are fully unblocked**, so they start first. ⚠ Per the external review, **7.0 is a DESIGN PASS
+before any code**: A33 (OMS as a projection of the event stream) + A42 (frozen/available cash)
++ A35 (the `BrokerAdapter` interface) are **one problem, not three**, and must be designed
+together. Buckets A and B — the cycle-2 prerequisites that had to precede this — are COMPLETE.
+Originally: opens with slice 7.1 (RiskEngine single-gate), per the standing
 Nautilus-review ruling in `docs/PHASES.md`. This doc did not exist before 2026-09-02 (the
 phase row pointed at "—"); it now also carries the **two-cycle go-live governance** decided
 by the user on 2026-09-02.

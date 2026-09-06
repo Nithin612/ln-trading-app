@@ -7,6 +7,59 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs: the pre-cycle-2 queue, and a branch to carry it (2026-09-06)
+
+**New working branch `feature/pre-cycle2-hardening`**, cut from
+`feature/phase6-overlay-walkforward-retune` @ `518b84f` with user approval (branch creation
+needs it — working rule W4). It carries everything still owed **before cycle 2's clock
+starts**.
+
+**The entry check was run against artifacts, not checkboxes** (W1), because the plan's own
+Bucket-B table had gone stale against the harvest queue below it — four items showed no ✅
+in one place and DONE in the other:
+
+- **Bucket A — COMPLETE**, 8 items: A38 `restrictions.py` · A21 `exit_mark` · A37+T3
+  `participation_bps` · A29 `dp_charge_per_sell` · A23 `SCHEDULE_HISTORY`/`schedule_for` ·
+  A26 `apply_hotset_cap` · A25 `tick_mode.py` · H6 `ratios.py`. (A30/A31 subsumed by A38.)
+- **Bucket B — COMPLETE**, 11 items: H8 · H1 `block_bootstrap.py` · H2 · H12 · T11 · H11 ·
+  H4 + U4 `gate_register.py` · H3 · T7 · A24.
+- **Bucket C — 7 of ~60**, deliberately: W1–W5 · A11 · A40. The rest builds *under* cycle
+  2's clock, which is what the findings doc's sequence asks for — with **three slices
+  proposed for pulling forward** on the same argument that already moved A11/A40
+  (*"safe to ship mid-cycle" answers whether a change will disturb the record, not what
+  protects the record while it is being made*): **A13** the breaker's un-suppressibility,
+  which must ride in 7.1's own commit because 7.1 refactors the breaker into the RiskEngine;
+  **A27** the config dry-run, because the cycle-2 reset is itself a config event and
+  `settings` is an `@lru_cache` singleton; and **A3** broker-token status, because the Kite
+  token dies daily and a silent lapse makes fills quietly cheaper than reality — corrupting
+  the recorded numbers rather than merely interrupting them.
+
+Every one of those 19 items was confirmed to have **code and tests on disk** — not a doc
+claim. `docs/phases/pre-cycle2-queue.md` records the queue, the dependency order, and the
+**five open decisions** (D1 frozen-engine sign-off for R1 · D2 R2 build-or-drop · D3 the MCE
+market-cap vendor · D4 concentration/sizing · D5 `compute_levels` payoff geometry).
+
+**Three things the ask did not include, now surfaced in the queue:**
+
+1. **"The rest of Phase 6 / 6.8" has no unbuilt slices.** Both phases are GATE PASSED +
+   CLOSED (2026-08-20). What remains is the shared gated research track `R1/R2/F1` plus
+   three forward-evidence loops — one decided, one **stalled** (momentum ×1.5 at 3 minted /
+   0 resolved in 6 days, so forward accrual cannot settle it), one accruing.
+2. **R2 contradicts a standing ruling.** Gating was closed as a programme on 2026-09-04, and
+   Bucket B then measured the book's Sharpe at −0.033 with a 90% interval **[−0.223,
+   +0.118]** — at n=105 even the loss is not established, so any gate partitioning this
+   series is partitioning noise. A ninth gate also adds a trial, raising the deflation bar
+   for everything else. **Recommend drop, or re-scope as a sizing/slippage modifier** — the
+   same reframing already ruled for MCE 5a liquidity.
+3. **The demonstrated lever was not in the ask.** `compute_levels` pairs a structural stop
+   with an absolute-% target, so **94 of 295 swing signals have R:R < 1 by construction**
+   against a 1.67R break-even. It is on the cycle-2 entry checklist and it changes a
+   recorded number.
+
+- `docs/phases/pre-cycle2-queue.md` — new · `docs/PHASES.md` CONTINUE HERE rewritten
+- No code changed; no recorded number moved.
+
+
 ### feat(A40): worker liveness and the absence alarm (2026-09-06)
 
 **Bucket C, pulled forward with A11 as the other half of the same argument.** A11 pushes

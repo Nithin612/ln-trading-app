@@ -1,5 +1,16 @@
 # Phase 6.8 (PROPOSED) — Execution Realism & Exchange-Safety · adjudication + build tracker
 
+> **▶ 2026-09-06 — the gated research track (R1 / R2 / F1) has MOVED to branch
+> `feature/pre-cycle2-hardening`** and is queued in
+> [`pre-cycle2-queue.md`](pre-cycle2-queue.md) as Q2.2 / Q2.3 / Q2.1. Two carry warnings
+> written since this plan was approved: **R2 is recommended for DROP or re-scope** (gating
+> was closed as a programme on 2026-09-04 — eight gates, two refuted promotions, and the
+> book's Sharpe interval [−0.223, +0.118] means there is no measured edge to partition; a
+> ninth gate also adds a trial that raises the deflation bar for everything else), and
+> **F1 now runs FIRST** because it is the input to the MCE market-cap vendor decision.
+> R1 is unchanged in shape and still needs frozen-engine sign-off + §8 + oracle regen.
+
+
 **Status: ✅ GATE PASSED 2026-08-20 (`/phase-gate`, worker stopped for a quiescent dev DB; backend
 1477 · parity 16 · walkforward 9 · replay 19 · frontend 375 · cargo ok; smoke green) — PHASE CLOSED,
 merged to `main` fast-forward, awaiting the user's `git push`. See the "Phase gate — CLOSE REPORT

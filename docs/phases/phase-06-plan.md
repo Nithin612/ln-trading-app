@@ -1,5 +1,15 @@
 # Phase 6 — outcome tracking + entry-selection · LIVE TRACKER
 
+> **▶ 2026-09-06 — the three forward-evidence follow-ups carried past this phase's close now
+> have a home.** They are queued on branch `feature/pre-cycle2-hardening` in
+> [`pre-cycle2-queue.md`](pre-cycle2-queue.md). Current state of each:
+> **(1) regime keep/revert — DECIDED 2026-09-02: REVERTED to shadow** (refuted by its own
+> forward evidence at 88 resolved, ~8R subtracted). **(2) momentum ×1.5 promotion — STALLED**:
+> 3 signals minted, 0 resolved in 6 days at ~0.5/day, so forward accrual cannot settle it;
+> queued as Q2.4 to build a **backtest path** instead. **(3) pair df-vs-adf — accruing**
+> nightly, no build needed, just don't lose it.
+> The gated research track R1/R2/F1 moved with them — see the Phase 6.8 plan's note.
+
 **Status: ✅ GATE PASSED + CLOSED 2026-08-20** (`/phase-gate` — static clean; suites carried from the
 same-day 6.8 gate on the byte-identical code tree: backend 1477 · parity 16 · walkforward 9 · replay 19
 · frontend 375 · cargo ok; §8 drift gate green = frozen engine untouched; smoke green). See the "Phase

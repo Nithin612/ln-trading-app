@@ -10,7 +10,27 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-09-04) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-09-06) — read this block first
+
+**▶ 2026-09-06 (latest) — BUCKETS A AND B ARE COMPLETE, AND THE PRE-CYCLE-2 QUEUE IS OPEN ON A NEW
+BRANCH.** All 8 Bucket-A items (the ones that change a recorded number) and all 11 Bucket-B items
+(the instruments that will read the cycle) have code **and** tests on disk — verified against the
+artifacts, not the checkboxes (**W1**), which is how the findings doc's own Bucket-B table was
+caught four items stale. Bucket C stands at **7 of ~60** (W1–W5 · A11 · A40) and the rest builds
+*under* cycle 2's clock, deliberately. **New working branch `feature/pre-cycle2-hardening`**
+(approved, cut from `feature/phase6-overlay-walkforward-retune` @ `518b84f`) carries what is left:
+**Phase 7.1–7.4 — the long pole, fully unblocked, starting now** · the shared Phase-6/6.8 research
+track R1/R2/F1 · and the cycle-2 entry criteria that were not in the original ask but sit on the
+checklist (MCE 5b+6 · CAS-2 · `compute_levels` · sizing). Queue, dependency order and rationale:
+[`docs/phases/pre-cycle2-queue.md`](phases/pre-cycle2-queue.md).
+⚠ **Five decisions are open and only the user can make them** — **D1** frozen-engine sign-off for
+R1 · **D2** R2 build-or-drop (*recommend drop*: gating is closed as a programme, and a ninth gate
+adds a trial that raises the deflation bar for everything else) · **D3** the MCE market-cap
+**vendor** · **D4** concentration/sizing · **D5** `compute_levels` payoff geometry — **the known
+lever**, and the only queued item that attacks profitability rather than measurement.
+⚠ **"The rest of Phase 6 / 6.8" has no unbuilt slices** — both are GATE PASSED + CLOSED; what
+remains is R1/R2/F1 plus three forward-evidence loops (one decided, one **stalled**, one accruing).
+
 
 **▶ 2026-09-04 (latest) — H8 DONE: THE DEFLATED-SHARPE BAR IS VALIDATED, AND GATING IS CLOSED AS A
 PROGRAMME.** The bar rejects noise (1.10% on best-of-20 zero-edge selection, against a 5% design
@@ -603,7 +623,33 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-09-04.**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-06.**
+
+**▶▶ NEW WORKING BRANCH: `feature/pre-cycle2-hardening`** (created 2026-09-06 with user
+approval, from `feature/phase6-overlay-walkforward-retune` @ `518b84f` — 69 commits ahead of
+`main`, 0 behind). It carries **everything still owed before cycle 2's clock starts**. The
+ordered queue, the entry check and the open decisions live in
+[`docs/phases/pre-cycle2-queue.md`](phases/pre-cycle2-queue.md); the same queue is registered
+as the session task list.
+
+- **✅ ENTRY CHECK PASSED — Buckets A and B are COMPLETE**, verified against the artifacts
+  rather than the checkboxes (W1): all 8 Bucket-A items and all 11 Bucket-B items have code
+  **and** tests on disk. **Bucket C is 7 of ~60** (W1–W5 · A11 · A40) and the rest stays
+  under cycle 2's clock, deliberately.
+- **Scope:** Phase 7.1–7.4 (**the long pole, fully unblocked — start here**) · the shared
+  Phase-6/6.8 research track R1/R2/F1 · and the cycle-2 entry criteria that were not in the
+  original ask but are on the checklist (MCE 5b+6 · CAS-2 · `compute_levels` · sizing).
+- **⚠ "The rest of Phase 6 / 6.8" has no unbuilt slices.** Both are GATE PASSED + CLOSED
+  (2026-08-20). What remains is the gated research track `R1/R2/F1` plus three
+  forward-evidence loops — one **decided** (regime → reverted), one **stalled** (momentum
+  ×1.5: 3 minted / 0 resolved in 6 days), one **accruing** (pair df-vs-adf).
+- **⚠ FIVE DECISIONS ARE OPEN AND ONLY THE USER CAN MAKE THEM** — D1 frozen-engine sign-off
+  for R1 · D2 R2 build-or-drop (**recommend drop**: gating is closed as a programme, and a
+  ninth gate adds a trial that raises the bar for everything else) · D3 the MCE market-cap
+  **vendor** · D4 concentration/sizing · **D5 `compute_levels` payoff geometry — the known
+  lever**. Rationale for each in the queue doc §4.
+
+
 
 **▶ WATCH MODE IS COMPLETE (ran 2026-08-26 → Fri 2026-09-04).** CAS Stage-1 accrual finished
 healthy: **`cas_daily` holds 1,664 rows across 8 sessions, last captured 2026-09-04** (verified by
@@ -933,6 +979,7 @@ survive trimming the tail** and the partition must not be a proxy for something 
 | **pair df-vs-adf** | shadow | nightly minter accruing | when both arms have resolutions | accruing |
 | **profit-lock breakeven** | live rung ₹2,000 | A/B built 09-03; 20 of 99 differ | ADR-denominated variant, pre-registered k | ⛔ ₹800 NOT shipped — 13 runners clipped vs 7 blow-ups prevented; the knob's UNITS are wrong |
 | **deflated-Sharpe bar** | ✅ BUILT 09-03 · ✅ **VALIDATED 09-04 (H8)** | every gate FAILS it — and the bar is now proven sound, so that is a finding about the gates | re-read each `make analysis` | `app/services/deflated_sharpe.py`. **Not one gate's eligible-set Sharpe even exceeds its 20-trial benchmark**, so MinTRL is `None` for all — more data cannot rescue them. market-regime −0.004 vs +0.331 (DSR 2.9%) · chase +0.032 vs +0.266 (4.9%) · sector-RS −0.105 (0.3%) · liquidity −0.150 (0.1%); bar 95%. **The constraint is NOT sample size — the leak is upstream of gating** |
+| **pre-COVID backtest** | held by the user 2026-08-28 | — | **⏰ TRIGGER FIRED — raised 2026-09-06** (was: "hold until after watch mode ends Fri 2026-09-04") | reminder DISCHARGED, queued as Q5 on `feature/pre-cycle2-hardening`. **Does not block cycle 2** (touches no recorded number). ⚠ `ohlcv_1d` starts **2023-07-03**, so 2018/2015 is a DATA-ACQUISITION project, not a query — **first step is a sourcing spike**. Value is VALIDATION, not tuning: the engine is frozen for the current regime |
 | **readiness guards** | ✅ **BUILT 2026-09-03** | market-regime now vetoed | — | `flip_readiness.py`: `side_proxy` · `tail` · `win_rate`, run as a veto BEFORE each sidecar's own test. Every banner also now ships an **evidence-of-record** block (n · resolved · mean · median · **trimmed mean** · win% + guards + DSR). It exposed that market-regime's would-block **trimmed mean is +₹200** against a −₹302 mean — trimming REVERSES the sign |
 
 **▶ POST-WATCH-MODE RESEARCH QUEUE (after Fri 2026-09-04)** — a consolidated "wind it back" list of the

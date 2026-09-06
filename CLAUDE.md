@@ -413,7 +413,23 @@ else.
   because the trades carry no edge to partition. **Selection has been optimised; what GENERATES the
   candidates has not.** The only ACTIVE order-path gate remains `entry_diversity`, which enforces a
   stated hard rule rather than a measured edge — that is why it is exempt from this.
-- **The next build is the execution plan in `docs/quant-agent-findings.md`** — a 30-repo external
+- **✅ BUCKETS A AND B ARE COMPLETE (2026-09-06) — the next build is Phase 7.1–7.4**, queued on
+  branch **`feature/pre-cycle2-hardening`** (approved, cut from `feature/phase6-overlay-walkforward-retune`
+  @ `518b84f`). The ordered queue, its dependency graph and the open decisions live in
+  **`docs/phases/pre-cycle2-queue.md`**. All 8 Bucket-A items and all 11 Bucket-B items have code
+  **and** tests on disk — verified against the artifacts, not the checkboxes (**W1**), which is how
+  the findings doc's own Bucket-B table was caught four items stale. **Bucket C is 7 of ~60**
+  (W1–W5 · A11 · A40); the rest builds *under* cycle 2's clock by design.
+  **Start with 7.0, a DESIGN PASS** — A33 + A42 + A35 are one problem, not three — then 7.1
+  RiskEngine (equivalence-pinned, absorbing the heat cap) → 7.2 BrokerAdapter (+ a READ-ONLY Kite
+  spike) → 7.3 order FSM → 7.4 reconciliation. ⚠ **Five decisions block the rest and only the user
+  can make them:** **D1** frozen-engine sign-off for R1 (VWAP/RVOL) · **D2** R2 build-or-drop
+  (*recommend drop* — gating is closed as a programme and a ninth gate adds a trial) · **D3** the MCE
+  market-cap **vendor** · **D4** concentration/sizing · **D5** `compute_levels` payoff geometry.
+  ⚠ **"The rest of Phase 6 / 6.8" has no unbuilt slices** — both are GATE PASSED + CLOSED; what is
+  left is the gated research track R1/R2/F1 plus three forward-evidence loops (regime **decided**,
+  momentum ×1.5 **stalled** at 3 minted / 0 resolved, pair df-vs-adf accruing).
+- **The plan it came from is `docs/quant-agent-findings.md`** — a 30-repo external
   review (2026-09-03/04, 4,358 lines) producing **91 items in five queues** (analysis · UI ·
   architecture · testing · workbench), bucketed by **when they must land**. Governing rule:
   **anything that changes a recorded number must land BEFORE cycle 2's clock starts** (we already
