@@ -7,6 +7,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(F1): would a market-cap size floor have helped? — the cheap cross-tab says no
+
+**The half of F1 that needs no vendor**, and it changes what D3 is worth. MCE 5b proposes a
+market-cap floor on the junk gate; building it means choosing a fundamentals vendor (D3) and
+paying for an XBRL scraper. The standing instruction was to *cross-tab a cheap proxy first*,
+because 5a already found the illiquid cohort net-**positive** and questioned 5b's premise.
+
+We have no `market_cap` — that is what 5b would build — so the spike tests the two things
+such a floor would be *proxying for*, across all 105 closed positions:
+
+| by median daily traded value | mean return | win |
+|---|---|---|
+| Q1 (₹0.42 Cr — smallest) | **+1.517%** | 67% |
+| Q5 (₹254 Cr — largest) | **−0.443%** | 48% |
+
+| by entry price level | mean return | win |
+|---|---|---|
+| Q1 (₹67 — cheapest) | **−0.703%** | 52% |
+| Q5 (₹3,518 — dearest) | **+0.210%** | 43% |
+
+⭐ **The two proxies point in OPPOSITE directions.** By traded value the smallest names did
+best; by price level the cheapest did worst. If a size effect were driving outcomes, two
+measures of size would agree — two that disagree are not measuring it. Neither is monotonic
+across its own quintiles either.
+
+⭐ **And neither contrast survives its own bootstrap**: traded-value Q1−Q5 is
+`[−0.083%, +3.957%]`, price-level Q1−Q5 is `[−3.220%, +1.473%]` — **both span zero**. So the
+case is doubled: no agreement *and* no significance.
+
+**⇒ Recommendation: DROP MCE 5b. D3 (the vendor decision) becomes moot** until someone
+produces a reason to revisit the premise. Consistent with the 5a ruling, where the liquidity
+floor would have cut a net-*winning* set and the already-ACTIVE diversity gate caught the
+SRTL archetype anyway.
+
+⚠ **What this cannot say:** a proxy result cannot *prove* a market-cap floor would fail. It
+shows the free evidence declines to support one — which is decisive for **sequencing**,
+since paying a vendor to test a hypothesis the cheap data already doubts is the expensive
+way to learn it. Also: n=21 per bucket, traded value is not market cap, and these are the
+names our engine chose rather than a cross-section of the market.
+
+- `backend/scripts/size_proxy_spike.py` — new (deterministic, seeded)
+- `docs/analysis/size-proxy-spike-2026-09-07.md` — the report
+
+
 ### feat(A3): broker-token status, and what its lapse silently costs
 
 The Kite access token dies **~06:00 IST every day**. Across cycle 2's 45–50 trading days

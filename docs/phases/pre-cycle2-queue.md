@@ -140,7 +140,7 @@ Two findings worth carrying forward:
 
 | # | item | state |
 |---|---|---|
-| **2.1** | **F1 `market_cap` spike** | ready — and it is the input to **D3**, so it runs first |
+| **2.1** ✅ **DONE 2026-09-07** | **F1 `market_cap` spike** | ⛔ **the two size proxies DISAGREE and neither contrast survives its bootstrap** ⇒ recommend **DROP 5b**; **D3 becomes moot** until the premise is revisited |
 | **2.2** | **R1 VWAP/RVOL as confluence factors** | ⛔ blocked on **D1**. Frozen engine ⇒ needs §8 regression + regenerated Rust oracle fixtures in the same commit. Changes which signals exist ⇒ **Bucket-A class, must precede the clock** |
 | **2.3** | **R2 weekly spread-width gate** | ⛔ blocked on **D2** — *recommend DROP*, see §4 |
 | **2.4** | momentum ×1.5 retune | forward route is stalled; needs a **backtest path** to decide at all |
