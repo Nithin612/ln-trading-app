@@ -509,6 +509,37 @@ else.
      see the REVIEW CALENDAR in the `docs/PHASES.md` CONTINUE HERE block. Do not wait
      to be asked.
 
+## Working rules (W1–W5 — each earned by an incident here, not borrowed)
+
+1. **Doc/code precedence: the executable content wins, and you fix the doc in the same
+   change.** This is a precedence *rule*, not the value "conflicts are bad" — it tells you
+   what to DO on finding one. A doc that disagrees with the code has already cost real
+   time twice: a stale status block claimed 974 tests and "Phase 3 in progress" weeks after
+   the truth moved, and `market_regime.py` called our VIX history "too shallow (~weeks)"
+   when it held **784 sessions**, which is exactly why its threshold went unexamined for
+   months. Finding a conflict is not a discovery to report, it is a doc edit to make now.
+2. **Do not add a parallel implementation.** Extend the one that exists, or migrate every
+   caller in the same change. The rule with the most evidence behind it here: a review
+   round found **five separate Buy surfaces** (AlertBell · OpportunitiesTable ·
+   DashboardPage · LiveSignalsPage · StylePage), one of them unwired, and eligibility
+   gating had to be retrofitted across all five. Same shape as the gate vocabulary declared
+   **nine times** and tied together nowhere (T7). Grep for the existing one first; if you
+   are about to write a second, that is the signal to unify instead.
+3. **A new config item updates `.env.example` and its docs in the same commit.** The narrow,
+   checkable instance of the doc-sync ritual. Config drift is what bit us when a `.env`
+   gate flip did not reach a running process — `settings` is an `@lru_cache` singleton, so
+   verify a flip in the live process, not just the file.
+4. **The git boundary: commit freely on the working branch, never push.** Push, merge and
+   force-push are the user's. Branch creation needs explicit approval, including worktree
+   branches. Stated rather than inferred, because "reserve push only" is a deliberate
+   choice and a future session should not have to reconstruct it.
+5. **No hardcoded copy of a value that has an owner** — model names, secrets, paths, ports,
+   and *gate modes*. The non-obvious clause is the last one: `STATUS.html` hardcodes gate
+   modes in prose, two tables, an ASCII diagram and the KPI tiles, with no data source, so
+   a mode flip silently falsifies it. It has bitten twice. If a value has an authority,
+   read it from there or accept that every copy must be updated by hand on every change —
+   and say so where the copy lives.
+
 ## The Claude Code workbench (use it)
 
 - **Hooks** (`.claude/settings.json` + `.claude/hooks/`): auto-format on
@@ -584,7 +615,8 @@ closes — or status/behaviour changes — sync the record BEFORE calling it don
 
 If you changed what is true, you are not done until every place that states it
 agrees. When a checkbox disagrees with the artifact or the code, trust the
-artifact and fix the checkbox.
+artifact and fix the checkbox — that is working rule **W1**, and it applies on
+DISCOVERY, not only when you were the one who changed things.
 
 ## Definition of done
 

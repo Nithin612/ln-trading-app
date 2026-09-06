@@ -684,6 +684,21 @@ to cycle 2").** A 30-repo external review (2026-09-03/04) produced 91 items acro
 > cap alone is enough, or sizing needs a second look.**
 - **Then:** Phase 7.1–7.4 (the long pole) · MCE 5b (**blocked on a vendor decision, not code**) +
   MCE 6 · CAS-2 · tuning → **then** cycle 2's 45–50 day clock on ₹1L.
+- **▶ Bucket C — ~60 items, and DELIBERATELY NOT NEXT.** This block used to omit it entirely,
+  which made the plan look 60 items shorter than it is (found 2026-09-06 when the user asked
+  "what about bucket C"). The findings doc's sequence is explicit: Bucket C runs **underneath
+  cycle 2's clock, continuously** — *"build only what must be frozen, start the clock, and let
+  the remaining ~60 items land while the evidence accumulates."* Five groups: **operational
+  safety/alerting** (A11 session notifier · A40 worker-liveness · A27 config dry-run ·
+  A28 retryable classification · A3 broker-token status · A36 calendar-expiry alarm ·
+  H7 Sharpe-decay alarm · A9/A10) — *the largest single win and safe to ship mid-cycle* ·
+  **tests and invariants** (T9 doc-sync as failing tests · T8 · T10 · T13 · T14 · T12 · T4 ·
+  T5 · T6 · A13 · A15 · H5) · **rules and hygiene** (A12 · A5 · A7 · A39 `cargo-deny`) ·
+  **UI** (U1 registry page folding in U2/U3/U5/U6 → the signal-detail trio U10/U15/U17 →
+  U20 → U11 → U19 → polish) · **deployment and misc** (A4 · A14 · A17 · A1 · A41 — A41 only
+  *after* P7 introduces a durable repair queue).
+  ⚠ **The W rules were the exception** — the sequence put them in parallel with Buckets A/B,
+  ~1.5 h total. ✅ **W1–W5 DONE 2026-09-06** (CLAUDE.md "Working rules").
 - **Honest sizing: 3–4 months to cycle-2 start**, consistent with "live is 4–6 months out".
 
 ⚠ **The plan buys evaluation, not edge.** Nothing in the 91 items is a new entry signal, and none

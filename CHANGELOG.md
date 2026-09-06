@@ -7,6 +7,42 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### docs(W1–W5): the five working rules, and Bucket C restored to the plan (2026-09-06)
+
+**The gap first.** `docs/PHASES.md` summarised the execution plan as Bucket A → Bucket B →
+P7/MCE/CAS-2, and **never mentioned Bucket C at all** — roughly 60 items, made invisible in
+the one doc that is supposed to be canonical. Found only because the user asked. That is
+working rule W1 in its own right: the findings doc and the status doc disagreed, and the
+status doc was the wrong one.
+
+Bucket C is now recorded in PHASES **with its sequencing intact**, because the omission
+would otherwise invite doing it next, which the plan explicitly does not want: Bucket C runs
+*underneath cycle 2's clock, continuously* — "build only what must be frozen, start the
+clock, and let the remaining ~60 items land while the evidence accumulates."
+
+**The W rules were the one part genuinely due now** — the plan's sequence puts them in
+parallel with Buckets A and B, ~1.5 h total, and they were missed. All five are written into
+CLAUDE.md as "Working rules", each anchored to an incident in this repo rather than borrowed
+as a generic best practice:
+
+- **W1 doc/code precedence** — the executable content wins and you fix the doc *in the same
+  change*. A precedence rule, not the value "conflicts are bad": it says what to DO on
+  finding one, and it applies on **discovery**, not only when you changed something. Two
+  incidents behind it, including `market_regime.py` calling our VIX history "too shallow
+  (~weeks)" when it held 784 sessions — which is exactly why that threshold went unexamined.
+- **W2 no parallel implementations** — the rule with the most evidence here: five separate
+  Buy surfaces, one unwired, eligibility gating retrofitted across all of them; and the gate
+  vocabulary declared nine times and tied together nowhere.
+- **W3 same-commit config hygiene** — a new config item updates `.env.example` and its docs
+  in the same commit. The narrow checkable instance of the doc-sync ritual.
+- **W4 the git boundary** — commit freely on the working branch, never push; branch creation
+  needs approval. Stated rather than inferred, because "reserve push only" is a choice.
+- **W5 no hardcoded copy of a value that has an owner** — including **gate modes**, the
+  non-obvious clause: `STATUS.html` hardcodes them in prose, two tables, an ASCII diagram and
+  the KPI tiles with no data source, and it has bitten twice.
+
+- `CLAUDE.md` · `docs/PHASES.md` · `docs/quant-agent-findings.md`
+
 ### fix(H12): a market-driven GAIN and a market-driven LOSS are different findings (2026-09-06)
 
 Found by running `make analysis` against the real book rather than by a test: the flag
