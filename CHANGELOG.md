@@ -7,6 +7,48 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(7.3, partial): the order-event stream, the FSM, and the bus
+
+**Machinery, not wiring.** `order_events` (migration applied to dev and verified
+reversible) · `OrderEventRow` · `app/broker/order_fsm.py` · `app/broker/event_bus.py`.
+**The durable event writer and the live-path cutover remain**, so `place_order` still calls
+`place_paper_order` directly and no behaviour or recorded number changes.
+
+**Why the table exists.** Today a refused order is not a row at all — every refusal raises,
+and `Order.status` carries exactly two values in the codebase. So the orders table records
+only successes, and *"what did the risk layer refuse last Tuesday, under which thresholds?"*
+is unanswerable. Writing `submitted` **before** the gates run turns that from a logging gap
+into a structural guarantee: the row exists before the decision is made.
+
+**Two FSM rows worth reading.** `SUBMITTED → DENIED | REJECTED` — both refusals leave the
+same state, which is exactly why they must be distinct *kinds*; the projection cannot
+recover the distinction after the fold. And `CANCEL_REQUESTED → FILLED` is **legal**: a
+cancel losing the race to a fill is a routine market outcome, and making the FSM raise on
+it would invite someone to stop it raising at all.
+
+**Fill quantities are CUMULATIVE, not deltas** — idempotent under replay, which is how the
+projection survives a restart. With deltas, one duplicated event silently doubles a
+position. **A sequence gap raises** rather than returning a state that looks fine.
+
+**The bus does four things and refuses a fifth**: per-handler exception isolation (a
+reporting bug must not fail a fill — errors are *counted and named*, so swallowed ≠
+invisible) · snapshot iteration · a bounded queue with a *stated* policy (`REFUSE` for
+order events, because losing one loses a fill; `DROP_OLDEST` still counts what it drops) ·
+and **a dead bus is LOUD** — publishing to a stopped bus raises, because a bus that died
+early must not look identical to a quiet market. Synchronous by design: the order path is
+already in a transaction when events are emitted, and a handler that persists one must run
+in *that* transaction.
+
+⚠ **When the cutover lands, `orders` becomes a list of INTENTS, not trades.** Both current
+readers were checked and are safe (`max_trades_per_day` counts `Position.id`;
+`daily_report.py:605` filters `status == "filled"`), but every new reader must filter on
+terminal state — the `signals.status` lesson in a new table.
+
+- `backend/alembic/versions/d0e1f2a3b4c5_add_order_events.py` · `app/models/trading.py`
+- `app/broker/order_fsm.py` — new · `app/broker/event_bus.py` — new
+- Tests: 32 new (`tests/test_order_fsm.py`)
+
+
 ### feat(7.2): the BrokerAdapter port, and a read-only Kite spike to check its shape
 
 **One rule the rest follows from: `submit()` returns an `Ack`, NEVER a `Fill`.**
