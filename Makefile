@@ -196,6 +196,10 @@ lint:  ## Lint backend (ruff) + frontend (eslint)
 	@echo "$(BLUE)▶ ESLint$(NC)"
 	@cd frontend && pnpm lint
 
+.PHONY: config-check
+config-check:  ## A27: what does .env say, and which live process has heard it?
+	@cd backend && uv run python scripts/config_dryrun.py
+
 .PHONY: typecheck
 typecheck:  ## Type-check backend (mypy) + frontend (tsc)
 	@echo "$(BLUE)▶ Mypy$(NC)"
