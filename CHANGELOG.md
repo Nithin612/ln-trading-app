@@ -7,6 +7,74 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(7.1 + A13): the RiskEngine single-gate, equivalence-pinned, and the heat cap
+
+**Every pre-trade rule now runs in ONE place** — `app/trading/risk_engine.py`. They were
+scattered across three files and two call sites, which matters because `place_order` is
+not the only way an order can be born: the position monitor closes positions, and 7.2–7.4
+add a broker adapter and a repair queue. A sequence typed out at one call site means every
+new caller re-derives it, and the rules it forgets are the ones that never fire.
+
+**It composes; it does not reimplement.** Each rule keeps exactly one definition and the
+engine knows their ORDER. `restrictions.py` (A38) stays the single declaration of the
+eligibility gates and is *walked*, not copied — a second sequence is what W2 forbids and
+what the display/order drift of 2026-09-02 cost us. `_check_notional_cap` is now the
+broker's *raising wrapper* around `risk_engine.notional_cap_reason`, and a test asserts
+the two produce the same words.
+
+**⭐ The equivalence pin is the point.** `tests/test_risk_engine.py` transcribes the
+pre-7.1 chain literally and diffs the engine against it case by case — a pin that called
+the thing it was pinning would prove nothing.
+
+**⚠ It caught a real ordering inversion before it shipped.** The breaker runs BEFORE the
+signal is looked up, so an unknown id while the breaker is tripped answers **409, not
+404**. The natural refactor — hoist the lookup into the caller so `signal` is
+non-optional — silently flips that. So "does the signal exist" is a RULE inside the engine
+(`RULE_SIGNAL_MISSING`), the caller maps it to 404 and everything else to 409, and the
+pair is pinned by `test_breaker_beats_missing_signal`.
+
+**Two phases, and that is the shape of the problem rather than a compromise.**
+`check_pre_trade()` needs only the signal; `check_sizing()` needs `qty` AND `fill_price`,
+and `qty` does not exist until the fill price resolves — which after A37 itself depends on
+`qty` (the participation term is quadratic, so `q → size(fill(q))` has no fixed point).
+
+**The heat cap ships BUILT and `off`.** `heat = qty × max(0, entry − commit_SL)`, initial
+risk (never mark-to-market — a from-the-mark definition *loosens* as the book
+deteriorates), from the **commit** stop (never the trailed `current_sl`, which would let a
+book gain budget merely by being right; pinned by test). Off is deliberate: a 6% cap cuts
+cycle-1 entries ~74% and cycle 1 exists to accrue volume. It flips at the cycle-2 reset.
+
+**⚠ Unlike the six selection overlays it FAILS CLOSED** — an open position whose risk
+cannot be measured refuses the next entry rather than counting as zero. For a selection
+gate the error to avoid is suppressing a good trade on uncertainty; for a risk rail it is
+taking risk you cannot count.
+
+**A13 — the breaker cannot be suppressed.** 7.1 refactors the daily-loss breaker *into*
+the RiskEngine, which is exactly when a hard constraint can be quietly lost, so it is
+pinned rather than left to whichever call site invokes it: it runs first, no `Settings`
+field can disable it (the absence of a knob IS the guarantee, so the test asserts the
+absence), and it still denies with **every** gate mode forced to `off`.
+
+**A refactor that moved code, correctly.** `_load_restriction_context` was never
+API-layer code — it loads the live state the gates judge, and the RiskEngine needs it
+too. Leaving it in the router forced `app.trading` to import from `app.api`, which is a
+cycle and the wrong direction. Now `app/signals/restriction_context.py`; behaviour
+identical, five tests re-pointed at its new home.
+
+**⚠ The heat cap STAYS a counted trial in the gate register.** Unlike `notional_cap`,
+which never claimed an edge, this hypothesis did make one — "capping aggregate heat
+improves outcomes" — and was tested against the counterfactual and answered no.
+Re-labelling it a pure safety rail because that is how it ships would retroactively drop
+an attempted, failed trial from the count, which is precisely the selection bias the
+deflation corrects. `trials_attempted()` stays 15.
+
+- `backend/app/trading/risk_engine.py` — new · `app/signals/restriction_context.py` — new
+- `app/api/v1/trading.py` · `app/broker/paper_broker.py` · `app/core/config.py` ·
+  `app/services/gate_register.py` · `.env.example`
+- Tests: 33 new (`tests/test_risk_engine.py`); 5 re-pointed after the move
+- `mypy app/ scripts/` clean (259 files); no recorded number moves (heat cap `off`)
+
+
 ### docs: the pre-cycle-2 queue, and a branch to carry it (2026-09-06)
 
 **New working branch `feature/pre-cycle2-hardening`**, cut from

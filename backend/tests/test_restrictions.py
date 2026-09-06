@@ -378,7 +378,9 @@ class TestCompositionInvariants:
         needing an already-existing key was then silently skipped whenever the unrelated
         gate that owned that key was off. `trading.py` now asserts this at import; this
         test states the same contract where a reader will find it."""
-        from app.api.v1.trading import _LOADABLE_CONTEXT  # noqa: PLC0415 — test-only
+        from app.signals.restriction_context import (  # noqa: PLC0415 — test-only
+            _LOADABLE_CONTEXT,
+        )
 
         needed: set[str] = set()
         for r in restrictions.REGISTRY:

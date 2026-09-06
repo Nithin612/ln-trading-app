@@ -429,6 +429,31 @@ class Settings(BaseSettings):
     # the book that will ever be traded live (1–2 positions on ₹1 lakh).
     heat_counterfactual_pct: float = 6.0
 
+    # ── Portfolio HEAT CAP (Phase 7.1, app/trading/risk_engine.py) ─────────
+    # The enforcing sibling of `heat_counterfactual_pct`. Admission risk summed across
+    # OPEN positions: heat = qty × max(0, entry − commit_SL), initial risk (never
+    # mark-to-market — a from-the-mark definition LOOSENS as the book deteriorates,
+    # which is perverse for a risk cap), from the COMMIT stop (never the trailed
+    # `current_sl`, which leaks price action the admission decision could not see).
+    #
+    # ⚠ DEFAULT IS `off`, and that is deliberate rather than timid: a 6% cap cuts
+    # cycle-1 entries by ~74% and cycle 1 exists to accrue evidence VOLUME. The
+    # counterfactual already answers what a cap would answer, with no behaviour change
+    # (admitted 12 / skipped 35; capped −₹13,303 vs full −₹19,093 in TOTAL, but per-trade
+    # WORSE at −₹1,478 vs −₹796 ⇒ a heat cap is a RISK control, NOT a profitability fix).
+    # It flips to `active` at the CYCLE-2 RESET, not before.
+    #
+    # ⚠ Unlike the six selection overlays this rail FAILS CLOSED: an open position whose
+    # risk cannot be measured refuses the next entry rather than counting as zero. For a
+    # selection gate the error to avoid is suppressing a good trade on uncertainty; for a
+    # risk rail it is taking risk you cannot count. Same logic as the daily-loss breaker.
+    #
+    # ⚠ The denominator is `capital_inr` (the LIVE figure), NEVER
+    # `paper_sampling_capital_inr` — that one is reporting-only and 5× larger, so
+    # misapplying it would silently quintuple the cap.
+    heat_cap_mode: Literal["off", "shadow", "active"] = "off"
+    heat_cap_pct: float = 6.0
+
     # ── Profit-lock: absolute-rupee ladder (app/trading/profit_lock.py) ─────
     # When a user opts in (users.profit_lock_enabled), the position monitor
     # governs open PAPER exits with a rupee-denominated profit ladder — the

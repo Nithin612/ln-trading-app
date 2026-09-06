@@ -17,15 +17,12 @@ from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
-from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.broker.circuit_bands import get_circuit_band_checked
 from app.broker.depth import get_live_depths
 from app.broker.paper_broker import (
     PaperOrderError,
     close_position,
-    get_live_ltp,
     place_paper_order,
     update_position_pnl,
 )
@@ -51,12 +48,10 @@ from app.schemas.trading import (
     TradeHistoryResponse,
     UpdateSlRequest,
 )
-from app.services.benchmark import load_market_regime_context, load_rs_context
 from app.services.journal_service import auto_create_journal_entry
-from app.services.liquidity import load_median_traded_values_safe, load_traded_values
+from app.services.liquidity import load_median_traded_values_safe
 from app.services.profit_lock_shadow import compare_position
-from app.signals import restrictions
-from app.trading.atr import atr_timeframe_for, latest_atr
+from app.trading import risk_engine
 from app.trading.circuit_breaker import (
     check_circuit_breaker,
     get_daily_realized_pnl,
@@ -125,192 +120,6 @@ async def _validity_by_signal(
     return {r.id: r.validity_until for r in rows}
 
 
-#: Every context key the ORDER path knows how to resolve. Checked against the registry at
-#: import time, so a `Restriction` added with a context nobody loads fails at startup
-#: instead of being silently skipped whenever the gate that happens to own that key is off
-#: (bug-hunter MEDIUM, 2026-09-05 — the hand-maintained sequence A38 set out to delete had
-#: survived one level down, in this function).
-_LOADABLE_CONTEXT: frozenset[str] = frozenset(
-    {
-        restrictions.CTX_ATR,
-        restrictions.CTX_CIRCUIT_BAND,
-        restrictions.CTX_RS,
-        restrictions.CTX_MARKET,
-        restrictions.CTX_TRADED_VALUES,
-        restrictions.CTX_MARKET_PRICE,
-    }
-)
-
-
-def _assert_every_context_is_loadable() -> None:
-    """Fail at import if a rule needs context this path cannot resolve.
-
-    `check` fails OPEN on unresolved context, which is right for a display list and wrong
-    for the order path: there, an ACTIVE gate that never runs is a gate that silently
-    stopped enforcing. A loud startup error is the only version of this that cannot be
-    missed."""
-    needed: set[str] = set()
-    for r in restrictions.REGISTRY:
-        if r.enforced_by is not restrictions.EnforcedBy.OVERLAY:
-            continue
-        needed |= r.requires | r.requires_any
-        for _sub, _label, sub_needs in r.sub_requires:
-            needed |= sub_needs
-    missing = needed - _LOADABLE_CONTEXT
-    if missing:
-        raise RuntimeError(
-            f"order path has no context loader for {sorted(missing)} — add one to "
-            "_load_restriction_context and _LOADABLE_CONTEXT, or the gate never runs"
-        )
-
-
-_assert_every_context_is_loadable()
-
-
-async def _load_restriction_context(  # noqa: C901 — a flat sequence of INDEPENDENT
-    # optional loads, one per context key, each gated on "is any gate that needs this on".
-    # The branching is the point: it is what keeps `off` a true no-op (no query, no stamp).
-    # Splitting it into per-key helpers would scatter the savepoint/fail-open discipline
-    # that has to be identical across all of them.
-    db: AsyncSession,
-    signal: Signal,
-    side: str,
-    cfg: restrictions.RestrictionConfig,
-    *,
-    allow_offmarket: bool,
-) -> restrictions.RestrictionContext:
-    """Resolve, point-in-time, exactly the context the non-off restrictions need.
-
-    A38: the RULES live in `app/signals/restrictions.py` and are shared with the display
-    path; this function does only the I/O the order path can afford.
-
-    Three properties, each load-bearing:
-
-    * **`off` is a TRUE no-op.** A key is loaded only when a restriction that needs it is
-      not off, so an off gate costs no query and leaves no stamp.
-    * **Every load fails open, inside its own SAVEPOINT.** A DB fault must never suppress
-      a trade, and a nested block that rolls back leaves the session usable for
-      `place_paper_order` below (cf. `get_circuit_band`'s except→None).
-    * **A key joins `available` only when its load SUCCEEDED.** "Looked, found nothing"
-      and "the read failed" are opposite answers: the first is a normal fail-open, the
-      second means an ACTIVE gate could not be judged and must surface as `unassessed`.
-      Conflating them recorded an infra fault as a data-coverage gap, which the shadow
-      sidecars then counted as evidence (bug-hunter MEDIUM, 2026-09-05).
-
-    ⚠ **One property deliberately NOT preserved: context is resolved EAGERLY.** The old
-    inline chain interleaved load-and-judge and raised on the first block, so gates after
-    the blocker did no I/O. Here every non-off gate's context is fetched before any
-    judging, so an order rejected by an early gate still pays for the later ones' loads
-    (today, with diversity active and the rest shadow: +3 queries and +1 Redis read on a
-    blocked click). That is the price of a PURE composer — `check` takes a resolved
-    context so it can be shared with the display path and tested without a database — and
-    it is charged per Buy click, not per listed row. Said plainly rather than left as a
-    docstring claiming an economy the code no longer has (quant-verifier MEDIUM).
-
-    `as_of` is the signal's `created_at`, so every context is the one knowable AT COMMIT —
-    the anchoring that keeps these overlays free of look-ahead.
-    """
-    as_of = signal.created_at
-    available: set[str] = set()
-    atr: Decimal | None = None
-    band = None
-    rs_ctx = None
-    mkt_ctx = None
-    traded: list[Decimal] | None = None
-    ltp: Decimal | None = None
-
-    def on(*gates: str) -> bool:
-        return any(cfg.mode(g) != "off" for g in gates)
-
-    if on(restrictions.GATE_DIVERSITY, restrictions.GATE_SL_ATR):
-        atr = await latest_atr(
-            db,
-            signal.stock_id,
-            timeframe=atr_timeframe_for(signal.classification),
-            before=as_of,
-        )
-        # Available only on a real ATR: without one the sl_atr half is genuinely unjudged,
-        # which `unassessed` must surface.
-        if atr is not None:
-            available.add(restrictions.CTX_ATR)
-
-    if on(restrictions.GATE_CIRCUIT):
-        band, ok = await get_circuit_band_checked(signal.stock_id)
-        if ok:
-            available.add(restrictions.CTX_CIRCUIT_BAND)
-
-    if on(restrictions.GATE_SECTOR_RS):
-        # Fail open on ANY DB fault (unmigrated table, JOIN timeout, transient): a
-        # benchmark lookup must never suppress a trade. The read runs in a SAVEPOINT so a
-        # failure rolls back only the nested block and leaves the session usable for
-        # place_paper_order below.
-        ok = True
-        try:
-            async with db.begin_nested():
-                rs_ctx = await load_rs_context(
-                    db, signal.stock_id, lookback=cfg.sector_rs_lookback, as_of=as_of
-                )
-        except SQLAlchemyError:
-            log.exception(
-                "sector-RS context load failed; failing open for stock_id=%s", signal.stock_id
-            )
-            rs_ctx, ok = None, False
-        if ok:
-            available.add(restrictions.CTX_RS)
-
-    if on(restrictions.GATE_MARKET_REGIME):
-        ok = True
-        try:
-            async with db.begin_nested():
-                mkt_ctx = await load_market_regime_context(
-                    db,
-                    market_symbol=cfg.market_regime_market_symbol,
-                    dma_period=cfg.market_regime_dma_period,
-                    as_of=as_of,
-                )
-        except SQLAlchemyError:
-            log.exception(
-                "market-regime context load failed; failing open for stock_id=%s",
-                signal.stock_id,
-            )
-            mkt_ctx, ok = None, False
-        if ok:
-            available.add(restrictions.CTX_MARKET)
-
-    if on(restrictions.GATE_LIQUIDITY):
-        ok = True
-        try:
-            async with db.begin_nested():
-                traded = await load_traded_values(
-                    db, signal.stock_id, lookback=cfg.liquidity_lookback, as_of=as_of
-                )
-        except SQLAlchemyError:
-            log.exception(
-                "liquidity context load failed; failing open for stock_id=%s", signal.stock_id
-            )
-            traded, ok = None, False
-        if ok:
-            available.add(restrictions.CTX_TRADED_VALUES)
-
-    if on(restrictions.GATE_CHASE):
-        # get_live_ltp does its own Redis read + fail-to-None, so no savepoint is needed.
-        ltp = await get_live_ltp(signal.stock_id)
-        if ltp is not None:
-            available.add(restrictions.CTX_MARKET_PRICE)
-
-    return restrictions.RestrictionContext(
-        signal=signal,
-        side=side,
-        as_of=as_of,
-        allow_offmarket=allow_offmarket,
-        available=frozenset(available),
-        atr=atr,
-        market_price=ltp,
-        circuit_band=band,
-        rs=rs_ctx,
-        market=mkt_ctx,
-        traded_values=traded,
-    )
 
 
 @router.post("/orders", response_model=OrderOut, status_code=status.HTTP_201_CREATED)
@@ -321,32 +130,18 @@ async def place_order(
 ) -> OrderOut:
     """Place a paper BUY order from a signal.
 
-    Circuit breaker is enforced: returns 409 if daily loss limit or max trades exceeded.
+    Every pre-trade rule now runs in ONE place — `app/trading/risk_engine.py` (Phase
+    7.1). This endpoint's job is transport: load the signal, ask the engine, translate
+    its verdict into a status code. It no longer knows the rules or their order, which
+    is what stops the next caller from re-deriving a slightly different sequence.
     """
-    triggered, reason = await check_circuit_breaker(db, user)
-    if triggered:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=reason)
-
     signal = await db.get(Signal, req.signal_id)
-    if not signal:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Signal not found")
-    if signal.status not in ("active",):
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=f"Signal is {signal.status}, not active",
-        )
-
-    # Eligibility restrictions (A38): ONE registry, shared with the display path, walked
-    # in one canonical order. `OVERLAY` only — the paper broker enforces its own
-    # unconditional pre-fill rejections (off-market, through-stop) downstream, and running
-    # them here as well would double-reject. Each gate is a no-op unless its mode is on;
-    # judgements come back for stamping on the order.
-    cfg = restrictions.config_from_settings()
-    ctx = await _load_restriction_context(
-        db, signal, req.side, cfg, allow_offmarket=bool(user.allow_offmarket_entry)
+    verdict = await risk_engine.check_pre_trade(
+        db, user, signal,
+        side=req.side,
+        allow_offmarket=bool(user.allow_offmarket_entry),
     )
-    outcome = restrictions.check(ctx, cfg, enforced_by=restrictions.EnforcedBy.OVERLAY)
-    if outcome.unassessed:
+    if verdict.unassessed:
         # Reachable without any registry change: flip `entry_sl_atr_gate_mode` active and
         # a stock with too little history for an ATR lands here. Otherwise it means a
         # restriction was added without a loader. Either way the behaviour is correct
@@ -354,10 +149,20 @@ async def place_order(
         log.warning(
             "order path could not assess ACTIVE gate(s) %s for signal_id=%s "
             "(no ATR history, or a restriction has no context loader)",
-            ", ".join(outcome.unassessed), signal.id,
+            ", ".join(verdict.unassessed), req.signal_id,
         )
-    if outcome.blocked:
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail=outcome.reason)
+    if verdict.denied:
+        # Only "the signal does not exist" is a 404; every other refusal is a conflict
+        # with the account's current state. This mapping reproduces the pre-7.1 codes
+        # exactly, including the ordering quirk that a tripped breaker answers 409 even
+        # when the signal id is unknown.
+        code = (
+            status.HTTP_404_NOT_FOUND
+            if verdict.rule == risk_engine.RULE_SIGNAL_MISSING
+            else status.HTTP_409_CONFLICT
+        )
+        raise HTTPException(status_code=code, detail=verdict.reason)
+    assert signal is not None  # noqa: S101 — narrowed by RULE_SIGNAL_MISSING above
 
     try:
         order, _pos = await place_paper_order(
@@ -370,9 +175,8 @@ async def place_order(
     # Stamp the restriction verdicts on the order for the shadow reports (shadow +
     # active only; off leaves no footprint). New dict, not in-place, so SQLAlchemy flags
     # the JSONB column dirty.
-    stamps = outcome.stamps()
-    if stamps:
-        order.broker_payload = {**(order.broker_payload or {}), **stamps}
+    if verdict.stamps:
+        order.broker_payload = {**(order.broker_payload or {}), **verdict.stamps}
     await db.commit()
     await db.refresh(order)
 

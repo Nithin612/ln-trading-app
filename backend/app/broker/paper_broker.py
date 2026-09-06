@@ -28,6 +28,7 @@ from app.models.trading import Order, Position
 from app.models.user import User
 from app.services.liquidity import load_median_traded_values_safe
 from app.signals import eligibility
+from app.trading import risk_engine
 from app.trading.fees import product_for_classification, roundtrip_charges
 from app.trading.trail_sl import compute_pnl
 
@@ -453,38 +454,24 @@ def _check_notional_cap(
 ) -> None:
     """Raise `PaperOrderError` when a position would exceed the per-position notional cap.
 
-    `qty = risk_budget / risk_per_share` bounds the trade's RISK but says nothing about its
-    SIZE: a stop a few paise wide sized 50,000 shares = ₹1,18,65,000 on ₹1,00,000 of capital
-    (found 2026-09-02) — 119× the account — and that row then polluted the paper book, the R
-    statistics and the 30-day go-live clock. NSE cash delivery grants no leverage, so the
-    default cap is capital × 1.0: you cannot buy more stock than you have money.
+    The RULE itself now lives in `app.trading.risk_engine.notional_cap_reason` (Phase
+    7.1) — one definition, two callers. This wrapper is the broker's raising form; the
+    RiskEngine returns the same verdict without raising, so the pre-trade path can report
+    it beside the other rules instead of discovering it as an exception.
 
-    Includes any existing position in the same name, so a repeat entry cannot stack past the
-    cap. **Reject, never clamp** (`.claude/rules/trading-domain.md`) — a clamped size would
-    silently change the trade's risk, the one thing sizing exists to hold fixed.
-
-    NOTE this is PER POSITION. Portfolio-wide exposure is the heat cap's job (not built — the
-    book ran at 45.3% risk across 23 positions on 2026-09-02).
+    Kept as a function rather than inlined at the call site so the sizing block stays one
+    readable transaction, and so the failure mode reads the same as the other pre-fill
+    rejections around it.
     """
-    cap = user.capital_inr * Decimal(str(settings.paper_max_notional_leverage))
-    if cap <= 0:
-        return
-    held = (
-        Decimal(existing_qty) * existing_entry
-        if existing_qty > 0 and existing_entry is not None
-        else Decimal(0)
+    reason = risk_engine.notional_cap_reason(
+        user,
+        qty=qty,
+        fill_price=fill_price,
+        existing_qty=existing_qty,
+        existing_entry=existing_entry,
     )
-    wanted = Decimal(qty) * fill_price
-    if held + wanted <= cap:
-        return
-    raise PaperOrderError(
-        f"Position size {qty} × ₹{fill_price} = ₹{wanted:,.0f} exceeds your "
-        f"₹{cap:,.0f} per-position cap (capital ₹{user.capital_inr:,.0f} × "
-        f"{settings.paper_max_notional_leverage})"
-        + (f", with ₹{held:,.0f} already held" if held else "")
-        + ". The stop is so tight that risk-first sizing asks for more stock than the "
-        "account can hold — wait for a setup with a sane stop."
-    )
+    if reason is not None:
+        raise PaperOrderError(reason)
 
 
 async def place_paper_order(  # noqa: C901 — one linear transaction: resolve price →

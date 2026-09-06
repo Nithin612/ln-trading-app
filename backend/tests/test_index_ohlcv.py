@@ -367,7 +367,8 @@ class TestSectorRsWiring:
         # A DB fault in the benchmark read (e.g. the table not yet migrated, a JOIN
         # timeout) must NOT 500 the order nor poison the session: the savepoint rolls
         # back and the overlay fails open, so place_paper_order still runs (201).
-        import app.api.v1.trading as trading_mod
+        # Moved to the context loader in Phase 7.1 — patch it where it now lives.
+        import app.signals.restriction_context as trading_mod
         from sqlalchemy.exc import SQLAlchemyError
 
         async def _boom(*_a: object, **_k: object) -> object:

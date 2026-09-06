@@ -159,7 +159,9 @@ class TestEntryQualityWiring:
         """When sl_atr is flipped active, a HEALTHY (diversity-passing) signal whose
         stop is tighter than 1×ATR must 409 through the endpoint's real `latest_atr`
         fetch — the seam that proves the flip fires. ATR monkeypatched (no candles)."""
-        import app.api.v1.trading as trading_mod
+        # The ATR fetch moved with the context loader in Phase 7.1 — it was never
+        # API-layer code, and the RiskEngine needs it too. Patch it where it lives.
+        import app.signals.restriction_context as trading_mod
 
         async def fake_atr(*_a, **_k):
             return Decimal("5.0")  # |100−97| = 3 < 1.0×5.0 → too tight
@@ -175,7 +177,9 @@ class TestEntryQualityWiring:
     ) -> None:
         """Moding is independent: diversity shadow + sl_atr active must NOT block a
         single-factor signal on the diversity axis (only sl_atr can block)."""
-        import app.api.v1.trading as trading_mod
+        # The ATR fetch moved with the context loader in Phase 7.1 — it was never
+        # API-layer code, and the RiskEngine needs it too. Patch it where it lives.
+        import app.signals.restriction_context as trading_mod
 
         async def fake_atr(*_a, **_k):
             return Decimal("0.1")  # wide vs ATR → sl passes too

@@ -267,9 +267,19 @@ REGISTER: tuple[Hypothesis, ...] = (
         stands_at="admitted 12 / skipped 35",
         verdict=(
             "a RISK control, NOT a profitability fix — total is better (+₹5,790) but per-trade is "
-            "WORSE (−₹1,478 vs −₹796); chronological admission selects by arrival time, not quality"
+            "WORSE (−₹1,478 vs −₹796); chronological admission selects by arrival time, not quality. "
+            "BUILT into the RiskEngine 2026-09-06 (`heat_cap_mode`, `heat_cap_pct`) and shipped "
+            "mode=OFF: a 6% cap cuts cycle-1 entries ~74% and cycle 1 exists to accrue volume. "
+            "Unlike the selection overlays it FAILS CLOSED — unmeasurable open risk refuses the "
+            "next entry rather than counting as zero"
         ),
-        review_due="belongs inside Phase 7.1's RiskEngine",
+        # ⚠ STAYS a trial (unlike `notional_cap`, which never claimed an edge). This
+        # hypothesis DID make one — "capping aggregate heat improves outcomes" — and was
+        # tested against the counterfactual and answered no. Re-labelling it a pure safety
+        # rail now, because that is how it ships, would retroactively drop an attempted and
+        # failed trial from the count. That is precisely the selection bias the deflation
+        # corrects: failures COUNT.
+        review_due="flip to `active` at the CYCLE-2 RESET, not before",
     ),
     Hypothesis(
         key="notional_cap",

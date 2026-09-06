@@ -216,7 +216,8 @@ class TestWiring:
         assert await _order(client, headers, sig.id) == 201
 
     async def test_active_fails_open_when_load_raises(self, client, db, monkeypatch) -> None:  # type: ignore[no-untyped-def]
-        import app.api.v1.trading as trading_mod
+        # Moved to the context loader in Phase 7.1 — patch it where it now lives.
+        import app.signals.restriction_context as trading_mod
         from sqlalchemy.exc import SQLAlchemyError
 
         async def _boom(*_a: object, **_k: object) -> object:
