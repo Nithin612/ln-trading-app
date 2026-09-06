@@ -267,7 +267,8 @@ REGISTER: tuple[Hypothesis, ...] = (
         stands_at="admitted 12 / skipped 35",
         verdict=(
             "a RISK control, NOT a profitability fix — total is better (+₹5,790) but per-trade is "
-            "WORSE (−₹1,478 vs −₹796); chronological admission selects by arrival time, not quality. "
+            "WORSE (−₹1,478 vs −₹796); chronological admission selects by arrival time, not "
+            "quality. "
             "BUILT into the RiskEngine 2026-09-06 (`heat_cap_mode`, `heat_cap_pct`) and shipped "
             "mode=OFF: a 6% cap cuts cycle-1 entries ~74% and cycle 1 exists to accrue volume. "
             "Unlike the selection overlays it FAILS CLOSED — unmeasurable open risk refuses the "

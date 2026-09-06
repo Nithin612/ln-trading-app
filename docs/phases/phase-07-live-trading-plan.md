@@ -82,8 +82,13 @@ are done. Nothing auto-advances.
 
 **Runtime (Phase 7 slices — see §3)**
 - [x] **7.1 RiskEngine single-gate — DONE 2026-09-06** (equivalence-pinned; heat cap built,
-      mode `off` until the cycle-2 reset) · [ ] 7.2 BrokerAdapter port · [ ] 7.3 order FSM ·
-      [ ] 7.4 reconciliation + kill switch + audit trail
+      mode `off` until the cycle-2 reset) · [x] **7.2 BrokerAdapter port — DONE 2026-09-07**
+      (`submit()` returns an `Ack`, never a `Fill`; read-only Kite spike shipped) ·
+      [x] **7.3 order FSM — DONE 2026-09-07** (`order_events` is the durable record and the
+      order path writes `submitted` BEFORE the gates run) · [x] **7.4 reconciliation + kill
+      switch — DONE 2026-09-07** (recovery is idempotent; reconciliation reports and never
+      repairs, and names what it could not check).
+      **▶▶ PHASE 7.1–7.4 COMPLETE — the cycle-2 RUNTIME prerequisite is met.**
 - [x] **The portfolio heat cap — BUILT inside the RiskEngine 2026-09-06** (see §4). Ships
       `heat_cap_mode=off`; the remaining step is the FLIP at the cycle-2 reset, not a build.
 

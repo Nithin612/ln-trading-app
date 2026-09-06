@@ -12,6 +12,29 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ## ▶ STATE AT A GLANCE (updated 2026-09-07) — read this block first
 
+**▶▶ 2026-09-07 (latest) — PHASE 7.1–7.4 IS COMPLETE. The cycle-2 RUNTIME prerequisite is met.**
+On branch `feature/pre-cycle2-hardening`; full suite green throughout. **7.2** shipped the
+`BrokerAdapter` port whose one rule is that **`submit()` returns an `Ack`, never a `Fill`** — paper
+gives up its own synchrony so the abstraction is not met on day 1 of live — plus a **read-only Kite
+spike** (`ThrottledKite` deliberately has **no `place_order` method**; the absence is the
+safeguard). **7.3** made the order path record its own decisions: `order_events` is durable and
+`submitted` is written **BEFORE the gates run**, so a decision can no longer fail to be recorded.
+⭐ **The defect it nearly shipped with:** `get_db` rolls back when a handler raises, so without an
+explicit commit *before* `raise HTTPException` the denial row is written and discarded — the record
+vanishing in exactly the branch it exists to capture, with every other test still green.
+**7.4** added the **kill switch** (the FIRST rule, ahead of the breaker — and it deliberately
+**does NOT block exits**, because a switch that traps you in open positions is a hazard dressed as
+a safety feature), **idempotent restart recovery**, and **reconciliation that reports and never
+repairs** — and that **names what it could not check**, since the paper gateway's
+`fetch_open_orders()` is structurally empty and a bare "clean" would read as evidence when it is
+the absence of evidence.
+⚠ **Still open: the strategy/evidence half of the cycle-2 checklist** (CAS-2 · MCE 5b+6 ·
+`compute_levels` · Minervini) **and the five decisions D1–D5**, plus **D6** newly raised by the
+Kite spike: **Kite has no client-order-id field** (`tag` is 20 chars, not guaranteed unique) and
+our namespaced ids do not fit — reconciliation's matching key needs a decision before
+`KiteBrokerAdapter` is written.
+
+
 **▶ 2026-09-06/07 (latest) — PHASE 7 HAS STARTED: 7.0 DESIGNED, 7.1 BUILT.** On branch
 `feature/pre-cycle2-hardening`. **7.0** (`docs/phases/phase-07.0-oms-design.md`) settled A33+A42+A35
 together, as the review insisted they must be. Its findings: **a refused order is not a row today,

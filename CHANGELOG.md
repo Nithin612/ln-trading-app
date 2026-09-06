@@ -7,6 +7,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(7.4): kill switch, restart recovery, and reconciliation
+
+**Phase 7.1–7.4 are now complete** — the cycle-2 runtime prerequisite.
+
+**The kill switch is the first rule the RiskEngine runs**, ahead of even the daily-loss
+breaker: someone who has hit stop should not have to reason about which *other* rule might
+still let an order through.
+
+⭐ **It deliberately does NOT block exits**, and that is the property that makes it safe to
+use. A switch that halts new risk *and* traps you in what you already hold is a hazard
+dressed as a safety feature — the moment you most want to stop trading is often the moment
+you most need to close something. Asserted end-to-end (`test_it_does_not_block_exits`) so a
+future refactor routing exits through the RiskEngine cannot silently make it a trap.
+
+⚠ **It is a plain bool with no `shadow` mode**, pinned by test. A kill switch you can set
+to measure-only is not a kill switch, and the three-valued gate vocabulary would invite
+exactly that.
+
+**Recovery and reconciliation are kept apart**, because conflating them hides which one
+found something. *Recovery* rebuilds our view from our own durable record
+(`load_events → project`) — deterministic, needs no broker, and **idempotent**, which is
+what makes it safe to run unconditionally at startup rather than behind a "have we
+recovered yet" flag that would itself need recovering. *Reconciliation* compares our view
+against the broker's.
+
+⭐ **Reconciliation reports what it could NOT check, even on a clean run.** Every paper
+submit ends terminal inside one transaction, so `fetch_open_orders()` is structurally empty
+and the order-matching half verifies **nothing**. A run saying "clean" without that caveat
+would read as evidence that reconciliation works when it is evidence there was nothing to
+reconcile — so `Reconciliation.caveats` travels with the result and `summary()` prints it.
+
+**It reports; it never repairs.** A reconciler that "fixes" a disagreement it does not
+understand can turn a reporting discrepancy into a real position, and the disagreements
+worth having are the ones nobody anticipated. A16's durable repair queue is where a
+human-approved fix belongs. `unknown_to_us` and `unknown_to_broker` stay separate and
+neither is called an "error" — they mean opposite things and demand opposite responses.
+
+**T2 lifecycle boundaries** cover the seams a restart actually lands on: first step on an
+empty world, start mid-stream (between `accepted` and `filled` — the case that decides
+whether a restart loses a fill), and stop early (a `submitted`-but-undecided order is still
+ACTIVE and must surface, not be dropped).
+
+- `backend/app/broker/reconcile.py` — new · `app/trading/risk_engine.py` (kill switch) ·
+  `app/core/config.py` · `.env.example`
+- Tests: 19 new (`tests/test_reconcile.py`)
+
+
 ### feat(7.3): the order-event stream, the FSM, the bus, and the live-path cutover
 
 **COMPLETE.** (The first half below shipped as machinery; the cutover followed in the same

@@ -32,7 +32,6 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.helpers import make_stock
 
-
 # ── fixtures ──────────────────────────────────────────────────────────────────
 
 

@@ -76,6 +76,7 @@ Of those loops, one is **decided** (regime gate → REVERTED 2026-09-02), one is
 | **D3** | MCE 5b market-cap **vendor** | Q3.1 |
 | **D4** | Concentration/sizing — is the notional cap enough? | Q3.4 |
 | **D5** | `compute_levels` payoff geometry — fix, or consciously keep a tourniquet | Q3.5 |
+| **D6** | **Reconciliation's matching key** — Kite has no client-order-id field | `KiteBrokerAdapter` (post-cycle-2, but decide first) |
 
 ### Q1 — Phase 7.1–7.4 — **the long pole, fully unblocked, starts now**
 
@@ -85,7 +86,7 @@ Of those loops, one is **decided** (regime gate → REVERTED 2026-09-02), one is
 | **7.1** ✅ **DONE 2026-09-06** | RiskEngine single-gate | one pre-trade gate absorbing: daily-loss circuit breaker · the 6 eligibility overlays · notional cap · R:R floor · **the heat cap** (fails CLOSED, `heat = qty × max(0, entry − commit_SL)`, initial risk not MTM). **Equivalence-pinned first** — identical verdicts to today's chain before any refactor |
 | **7.2** ✅ **DONE 2026-09-07** | BrokerAdapter port | `PaperBrokerAdapter` behind the interface + a **read-only** Kite spike (order-status, margins, positions; **no placement**) so the shape is validated against reality |
 | **7.3** ✅ **DONE 2026-09-07** | Order FSM | Denied vs Rejected vs Filled vs Cancelled + A32 event-bus robustness (per-handler isolation, bounded queue, **a dead bus must be loud**) + A22 partial-fill sibling rebalance + A16 lifecycle/repair queue + A34 timer primitive |
-| **7.4** | Reconciliation + kill switch + audit | recover local state on restart · kill switch honoured everywhere · every decision reconstructable · T2 lifecycle-boundary tests (first step, start mid-stream, stop early) |
+| **7.4** ✅ **DONE 2026-09-07** | Reconciliation + kill switch + audit | recover local state on restart · kill switch honoured everywhere · every decision reconstructable · T2 lifecycle-boundary tests (first step, start mid-stream, stop early) |
 
 ### Q1b — Bucket C slices **pulled forward** (proposed)
 
@@ -106,7 +107,14 @@ record while it is being made.* Everything else in Bucket C stays under the cloc
 (`app/broker/adapter.py` + `paper_adapter.py` + a read-only Kite spike, 27 tests) ·
 ✅ **7.3 DONE** — `order_events` (migration applied + reversible), `order_fsm.py`,
 `event_bus.py`, `event_store.py`, and **the order path cut over**: `submitted` is written
-BEFORE the gates run, so a decision can no longer fail to be recorded. 42 tests.
+BEFORE the gates run, so a decision can no longer fail to be recorded. 42 tests ·
+✅ **7.4 DONE** — kill switch (first rule, **does not block exits**), idempotent restart
+recovery, and reconciliation that **reports without repairing** and names what it could not
+check. 19 tests.
+
+**▶▶ PHASE 7.1–7.4 IS COMPLETE.** The cycle-2 *runtime* prerequisite is met; what remains
+before the clock is the strategy/evidence half (CAS-2, MCE 5b+6, `compute_levels`, Minervini)
+plus the five open decisions.
 
 Two findings worth carrying forward:
 
@@ -196,6 +204,16 @@ expectancy as an **upper bound** until this is addressed — also frozen-engine 
 **(e) Heat has drifted to 58.0%** of capital (₹58,034, 29 open positions, 2026-09-04) with
 still no portfolio cap. The cap lands in 7.1 and must **not** be set to enforce until cycle
 2 — a 6% cap cuts cycle-1 entries ~74% and cycle 1's purpose is evidence volume.
+
+**(g) D6 — the matching key, raised by the 7.2 spike.** `BrokerOrder.client_order_id` is how
+reconciliation matches a broker row back to ours. **Kite has no such field**; the nearest is
+`tag`, **20 characters** and not broker-guaranteed unique, and our namespaced ids
+(`paper:<uuid>`) do not fit. Three options: short live ids that fit a tag · match on
+`(symbol, side, quantity, timestamp)`, which is ambiguous exactly when two identical orders
+go out together · or a local `broker_order_id → client_order_id` map written at ack time,
+accepting that an order lost *before* its ack is unmatchable. **(3) plus a short tag looks
+right.** It only binds when `KiteBrokerAdapter` is written (post-cycle-2), but deciding late
+means discovering it on live day 1.
 
 **(f) `main` has not been pushed.** Phase 6 + 6.8 merged fast-forward and are awaiting a
 manual push. Push remains the user's (working rule W4).

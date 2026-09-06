@@ -454,6 +454,22 @@ class Settings(BaseSettings):
     heat_cap_mode: Literal["off", "shadow", "active"] = "off"
     heat_cap_pct: float = 6.0
 
+    # ── KILL SWITCH (Phase 7.4) ────────────────────────────────────────────
+    # The human's stop. `true` halts all NEW ENTRIES immediately, at the first rule the
+    # RiskEngine runs — ahead of even the daily-loss breaker, because someone who has hit
+    # stop should not have to reason about which other rule might still let an order
+    # through.
+    #
+    # ⚠ IT DOES NOT BLOCK EXITS, deliberately. A switch that traps you in open positions
+    # is a hazard dressed as a safety feature: the moment you most want to halt new risk
+    # is often the moment you most need to close what you are already holding. Exits run
+    # through `close_position`, which does not consult the RiskEngine's entry path.
+    #
+    # ⚠ It is a plain bool with no "shadow" mode. A kill switch you can set to
+    # measure-only is not a kill switch, and the three-valued gate vocabulary would invite
+    # exactly that.
+    trading_kill_switch: bool = False
+
     # ── Profit-lock: absolute-rupee ladder (app/trading/profit_lock.py) ─────
     # When a user opts in (users.profit_lock_enabled), the position monitor
     # governs open PAPER exits with a rupee-denominated profit ladder — the

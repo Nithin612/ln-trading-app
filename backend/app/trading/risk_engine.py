@@ -50,6 +50,7 @@ if TYPE_CHECKING:  # pragma: no cover
 # Rule names. These are the vocabulary the audit trail and the daily report speak, so
 # they are declared once here and never spelled inline — the T7 lesson, where the gate
 # mode `Literal` was written out NINE times and tied together nowhere.
+RULE_KILL_SWITCH = "kill_switch"
 RULE_BREAKER = "circuit_breaker"
 RULE_SIGNAL_MISSING = "signal_missing"
 RULE_SIGNAL_STATUS = "signal_status"
@@ -58,6 +59,10 @@ RULE_NOTIONAL_CAP = "notional_cap"
 RULE_HEAT_CAP = "heat_cap"
 
 PRE_TRADE_RULES: tuple[str, ...] = (
+    # FIRST, ahead of even the breaker: the kill switch is the human's stop, and a human
+    # who has hit stop should not have to reason about which other rule might let an order
+    # through. Nothing precedes it.
+    RULE_KILL_SWITCH,
     RULE_BREAKER,
     RULE_SIGNAL_MISSING,
     RULE_SIGNAL_STATUS,
@@ -94,6 +99,14 @@ class RiskVerdict:
 
 
 ALLOWED = RiskVerdict(allowed=True)
+
+#: One sentence, one place. A kill switch whose message varies by call site invites the
+#: reader to wonder whether they hit a different switch.
+KILL_SWITCH_REASON = (
+    "Trading is halted by the kill switch (TRADING_KILL_SWITCH=true). No new entries "
+    "will be accepted. Exits are deliberately still allowed — a switch that traps you "
+    "in open positions is a hazard, not a safety feature."
+)
 
 
 def _deny(rule: str, reason: str) -> RiskVerdict:
@@ -286,6 +299,10 @@ async def check_pre_trade(
     refactor is supposed to not make. The caller maps this rule to 404 and the rest to
     409, so the HTTP surface is unchanged.
     """
+    # 0. The kill switch — the human's stop, ahead of everything.
+    if get_settings().trading_kill_switch:
+        return _deny(RULE_KILL_SWITCH, KILL_SWITCH_REASON)
+
     # 1. Daily-loss circuit breaker. NEVER disableable — not for tests, not on request.
     triggered, reason = await check_circuit_breaker(db, user)
     if triggered:
