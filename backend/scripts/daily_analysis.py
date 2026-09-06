@@ -301,7 +301,26 @@ def main() -> None:
     ist_today = now.astimezone(ZoneInfo("Asia/Kolkata")).date()
     day = date.fromisoformat(args.date) if args.date else ist_today
     week_of = date.fromisoformat(args.week_of) if args.week_of else None
-    raise SystemExit(asyncio.run(_run(day, args.user, week_of, now)))
+
+    # A11 — notify on failure only. THE ARTIFACT IS THE CONFIRMATION: the written report is
+    # the evidence this ran, so a "completed successfully" push would be pure noise. The
+    # `finally` shape matters because this is the run most likely to be launched from cron
+    # and never looked at.
+    from app.services.notifier import notify_exception
+
+    try:
+        code = asyncio.run(_run(day, args.user, week_of, now))
+    except BaseException as exc:  # noqa: BLE001 — SystemExit included, then re-raised
+        notify_exception("daily_analysis", "make analysis failed", exc, day=day.isoformat())
+        raise
+    if code != 0:
+        notify_exception(
+            "daily_analysis",
+            "make analysis exited non-zero",
+            RuntimeError(f"exit code {code}"),
+            day=day.isoformat(),
+        )
+    raise SystemExit(code)
 
 
 if __name__ == "__main__":

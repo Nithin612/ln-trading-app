@@ -7,6 +7,56 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(A11): session notifier with a noise policy (2026-09-06)
+
+**Bucket C**, and the item the external review called *"the most actionable in this whole
+document"*. We have standing **manual daily human checks that exist only because nothing
+pushes**: CAS capture — the worker must be up 15:15–15:33 IST and **a missed window cannot
+be back-filled** — and provisional health, which has no scheduler at all. Both are detected
+today by someone remembering.
+
+`app/services/notifier.py` is the policy plus a vendor-neutral transport. The policy is the
+valuable part, so it is pure and tested separately from delivery:
+
+- **Silence is the default for routine success.** The CAS task fires every minute of the
+  market day and returns `skipped: outside CAS window` ~1,400 times; `INFO` never sends.
+  Verified end-to-end against the real task: it returned `skipped` and produced nothing.
+- **The artifact is the confirmation.** `make analysis` notifies on failure only — the
+  written report is the evidence it ran, so a "completed" push would be pure noise.
+- **Any exception ALWAYS notifies, bypassing every rule including the throttle.** A crash is
+  the one thing no noise rule written for routine traffic may silence.
+- **Repeats are throttled and the suppressed count rides the next message** — `(+37
+  suppressed)`. Never a silent throttle: a growing count *is* the signal that something is
+  worsening while being suppressed.
+- **A missing channel is a silent no-op and delivery failure is swallowed.** Unset is the
+  default and not a degraded mode — the policy still runs and still logs at the level it
+  chose.
+
+**⚠ A defect this found in itself, and the test that pins it.** The never-raises contract was
+enforced inside `notify()` but **not in the wrappers callers actually use from a `finally`**.
+Building the message is caller-supplied work — `str(exc)`, `str(value)` — and can raise
+*before* `notify` is reached. An exception whose `__str__` raises escaped straight through a
+`finally` and would have masked the original error: exactly the failure mode that gets
+notifiers deleted. It now degrades to the exception's **type** and still sends, because the
+type is the half that distinguishes a bug from an outage.
+
+**⚠ What this cannot see: an ABSENCE.** Wiring into `finally` reports what *ran*. The CAS
+alarm we actually want — the window passing with the worker down — is a thing that did not
+happen, and no `finally` fires for it. That is A40's job. **A quiet channel must not be read
+as "the capture worked"**, and the module, the setting and `.env.example` all say so.
+
+Wired: CAS capture (`finally`, catching `BaseException` so a wrapper kill still pushes) ·
+`make analysis` · provisional health, which now pushes the two conditions it was written to
+find — no health key across the window (the worker did not run) and A26's protected hot-set
+overflow.
+
+Per **W3**, the new `NOTIFIER_WEBHOOK_URL` lands with its `.env.example` entry in this commit.
+
+- `backend/app/services/notifier.py` — new · `app/core/config.py` · `.env.example`
+- `backend/app/tasks/cas_tasks.py` · `scripts/daily_analysis.py` ·
+  `scripts/provisional_health.py`
+- Tests: 20 new (`tests/test_notifier.py`)
+
 ### docs(W1–W5): the five working rules, and Bucket C restored to the plan (2026-09-06)
 
 **The gap first.** `docs/PHASES.md` summarised the execution plan as Bucket A → Bucket B →

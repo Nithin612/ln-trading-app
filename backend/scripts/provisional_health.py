@@ -38,6 +38,12 @@ from app.broker.provisional import (  # noqa: E402
     read_cycle_stats,
 )
 from app.core.config import settings  # noqa: E402
+from app.services.notifier import (  # noqa: E402
+    Level,
+    Notification,
+    notify,
+    notify_exception,
+)
 from sqlalchemy import text  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine  # noqa: E402
 
@@ -213,9 +219,39 @@ async def main() -> None:
                 f"      ⛔ the hot-set cap ({overflow} over) could not hold every "
                 "signal/trigger-bound stock. REMEDY: raise `live_provisional_hotset_max`."
             )
+            # A26's escalation, now pushed rather than only printed — a signal-bound stock
+            # that is never scored is a signal that silently does not exist, and the
+            # original incident hid in a log line for weeks.
+            notify(
+                Notification(
+                    event="provisional_overflow",
+                    level=Level.WARNING,
+                    title="Hot-set cap exceeded by protected stocks",
+                    lines=[
+                        f"day={day} protected_overflow={overflow}",
+                        f"cap={settings.live_provisional_hotset_max}",
+                        "REMEDY: raise `live_provisional_hotset_max`",
+                    ],
+                )
+            )
     if not days:
         print(f"  (no {HEALTH_KEY.format(day='<day>')} key in the last {args.days} days")
         print("   — the worker did not run, or ran before this build)")
+        # A11 — THE alarm this script exists for. No health key across the whole window
+        # means the provisional layer has not run, and today that is discovered only by
+        # someone remembering to run this script (it has no scheduler at all).
+        notify(
+            Notification(
+                event="provisional_health",
+                level=Level.ERROR,
+                title="Provisional layer silent",
+                lines=[
+                    f"no {HEALTH_KEY.format(day='<day>')} key in the last {args.days} days",
+                    "the live-worker's provisional layer did not run",
+                    "REMEDY: check `make live-worker` is up; keys carry a 7-day TTL",
+                ],
+            )
+        )
 
     print("\nINDEPENDENT (hot-set input recomputed now)")
     async with AsyncSession(engine) as db:
@@ -246,4 +282,10 @@ async def main() -> None:
 
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    # A11 — an exception here always notifies. This script is the forward watch for a
+    # failure that degrades silently, so it failing quietly would be the worst case.
+    try:
+        asyncio.run(main())
+    except BaseException as exc:  # noqa: BLE001 — notified, then re-raised
+        notify_exception("provisional_health", "provisional-health check failed", exc)
+        raise

@@ -24,6 +24,11 @@ class Settings(BaseSettings):
 
     # ── Redis ───────────────────────────────────────────────────────────────
     redis_url: str = "redis://localhost:6379/0"
+    # Session notifier (A11). Unset ⇒ log-only, which is the DEFAULT and not a degraded
+    # mode: the policy still runs and still logs at the level it chose. Set it and the same
+    # messages also POST as JSON. Vendor-neutral on purpose — Slack/Discord accept the
+    # shape directly, Telegram/ntfy want a small relay.
+    notifier_webhook_url: str | None = None
     # live-worker tick/pulse JSONL recording (Phase 3; empty = off)
     live_record_path: str | None = None
     # Per-candle Celery signal-regeneration dispatch. OFF by default: with

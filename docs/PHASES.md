@@ -699,6 +699,14 @@ to cycle 2").** A 30-repo external review (2026-09-03/04) produced 91 items acro
   *after* P7 introduces a durable repair queue).
   ⚠ **The W rules were the exception** — the sequence put them in parallel with Buckets A/B,
   ~1.5 h total. ✅ **W1–W5 DONE 2026-09-06** (CLAUDE.md "Working rules").
+  ✅ **A11 DONE 2026-09-06** — the session notifier (`app/services/notifier.py`), pulled forward
+  out of Bucket C on the argument that **A11/A40 are preconditions for an UNATTENDED accrual,
+  not work to do during one**: "safe to ship mid-cycle" answers *will it disturb the record*,
+  not *what protects the record while it is being made*. Retires the CAS and provisional-health
+  manual checks. ⚠ **A quiet channel does NOT mean the capture worked** — this reports what RAN;
+  the CAS alarm is an ABSENCE and needs **A40** (still open, and the other half of this
+  argument).
+  **▶ Everything else in Bucket C stays under cycle 2's clock, deliberately.**
 - **Honest sizing: 3–4 months to cycle-2 start**, consistent with "live is 4–6 months out".
 
 ⚠ **The plan buys evaluation, not edge.** Nothing in the 91 items is a new entry signal, and none

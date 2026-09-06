@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 from app.celery_app import celery_app
 from app.core.config import settings
+from app.services.notifier import notify_exception, notify_task_result
 from app.tasks._runner import run_db_task
 
 log = logging.getLogger(__name__)
@@ -32,8 +33,28 @@ def _within_cas_window() -> bool:
     name="app.tasks.cas_tasks.capture_cas_window", bind=True, max_retries=0
 )
 def capture_cas_window(self: object) -> dict[str, object]:  # noqa: ARG001
-    """One CAS-capture pass. Beat fires it each minute in the market window; it self-guards."""
-    return run_db_task(_run_capture_cas)
+    """One CAS-capture pass. Beat fires it each minute in the market window; it self-guards.
+
+    A11: the notifier is wired in the `finally`, so a crash reports even if the task dies on
+    the way out. `ok` and `skipped` are silent by policy — this fires ~1,400 times a day and
+    the captured rows are their own confirmation.
+
+    ⚠ The failure this task is most exposed to is an ABSENCE — the window passing with the
+    worker down, which cannot be back-filled and which no `finally` here can observe,
+    because nothing runs. That alarm is A40's, not this one's.
+    """
+    result: dict[str, object] = {"status": "unknown"}
+    try:
+        result = run_db_task(_run_capture_cas)
+        return result
+    except BaseException as exc:  # noqa: BLE001 — including SystemExit; see below
+        # BaseException, not Exception: a wrapper kill still produces a push before the
+        # process dies, which is the whole point of notifying from a `finally`.
+        notify_exception("cas_capture", "CAS capture failed", exc)
+        raise
+    finally:
+        if result.get("status") != "unknown":
+            notify_task_result("cas_capture", "CAS capture", result)
 
 
 async def _run_capture_cas() -> dict[str, object]:
