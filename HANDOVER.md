@@ -47,6 +47,8 @@
 | **7.2** BrokerAdapter port + Kite spike | ✅ DONE — `app/broker/adapter.py`, `paper_adapter.py`, `scripts/kite_readonly_spike.py`, 27 tests |
 | **7.3** order FSM + event bus + cutover | ✅ **DONE** — migration, model, FSM, bus, event store, and the order path cut over. 42 tests. |
 | **7.4** kill switch + recovery + reconciliation | ✅ **DONE** — 19 tests |
+| **CAS Stage 2** (#12) | ✅ **DONE** — ρ −0.272, CI [−0.478, −0.088] excludes zero. Sign robust, magnitude not. NOT promotable at 7 days |
+| **A27** config dry-run (#18) | ✅ **DONE** — `make config-check`, 21 tests |
 
 **Full backend suite after 7.1+7.2: 2028 passed, 1 skipped, 0 failed.** (7.3's 32 tests
 came after that run — re-run the suite before calling 7.3 done.)
@@ -64,29 +66,25 @@ own message already said the right thing ("before every PER-SIGNAL rule"). Now p
 two assertions so a future reordering cannot hoist a per-signal rule above the account
 rails.
 
-### ▶▶ RESUME HERE — PHASE 7 IS DONE; what remains is the strategy half
+### ▶▶ RESUME HERE — next unblocked work, ranked
 
-**7.0–7.4 are complete.** The cycle-2 *runtime* prerequisite is met. What still stands
-between here and the cycle-2 clock, from `phase-07-live-trading-plan.md` §2:
+**Phase 7.1–7.4 is COMPLETE.** CAS-2 and A27 are done. Remaining unblocked:
 
-| item | task | state |
+| # | task | note |
 |---|---|---|
-| CAS Stage 2 | #12 | **unblocked, no decision needed — best next build** |
-| MCE 6 news veto | #11 | unblocked |
-| Minervini | #14 | unblocked (an explicit DROP is a legitimate resolution) |
-| momentum retune backtest | #8 | unblocked |
-| A27 config dry-run | #18 | unblocked |
-| A3 broker-token status | #19 | unblocked |
-| Q5 pre-COVID backtest spike | #20 | unblocked (does not block cycle 2) |
-| MCE 5b · R1 · R2 · sizing · `compute_levels` | #10 #7 #9 #15 #13 | ⛔ **blocked on D1–D5** |
+| **#19** | A3 broker-token status | small; protects cycle-2 data quality (token dies ~06:00 IST daily, and a silent lapse makes fills quietly cheaper than reality) |
+| **#14** | Minervini trend template | an explicit, recorded DROP is a legitimate resolution |
+| **#8** | momentum ×1.5 backtest path | forward accrual is stalled at 3 minted / 0 resolved |
+| **#11** | MCE 6 news veto | Google News RSS + FinBERT, shadow-first |
+| **#20** | pre-COVID backtest sourcing spike | does NOT block cycle 2 |
+| **#6** | F1 market_cap spike | feeds decision D3 |
 
-**Suggested order:** #12 (CAS-2, the largest unblocked evidence item) → #18/#19 (small,
-they protect the accrual) → #14 → #8.
+⛔ **Blocked on the user: #7 #9 #10 #13 #15** (D1–D5), plus **D6** (Kite has no
+client-order-id field — reconciliation's matching key).
 
-⚠ **A limit found in 7.2 and still true:** the paper gateway returns an empty
-`fetch_open_orders()`, so **paper cannot exercise reconciliation's main path at all.** 7.4
-already reports this as a caveat on every run — do not read a green paper reconciliation as
-evidence that reconciliation works.
+⚠ **A limit from 7.2 that still stands:** the paper gateway's `fetch_open_orders()` is
+structurally empty, so **paper cannot exercise reconciliation's main path**. 7.4 already
+reports this as a caveat on every run — never read a green paper reconciliation as evidence.
 
 ### ⚠ Dev-environment notes for the resumed session
 
