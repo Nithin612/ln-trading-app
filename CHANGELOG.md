@@ -7,6 +7,47 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(CAS-2): the overnight-reversal study — a real signal, and its honest limits
+
+**The auction move REVERSES overnight, cross-sectionally.** Spearman **ρ = −0.272**
+(Pearson −0.320), 90% day-block interval **[−0.478, −0.088]** — **excludes zero** — 6 of 7
+days negative, monotonic quintiles, **Q1−Q5 spread +1.27%**.
+
+**This is the first clean directional signal the programme has produced** after eight
+refuted gates, which is precisely why it gets the strictest reading available rather than
+the friendliest.
+
+**The control is cross-sectional, and that is what makes it worth anything.** Both series
+are demeaned *within* each day, which removes the market factor exactly rather than
+approximately — the standing *"control for the oversold regime"* warning. A naive
+correlation on a market that sagged into the close and bounced next morning would measure
+beta and call it an auction edge. ⚠ By construction it therefore says **nothing** about a
+market-wide auction effect; it answers the relative question only.
+
+**The independent unit is the DAY, not the row.** 1,664 rows looks like a lot and is not:
+208 names on one afternoon share one market, so there are **7 usable blocks**. Every
+interval resamples **whole days** — resampling rows would treat correlated observations as
+independent and make the interval roughly **√208 ≈ 14× too narrow**. `block_bootstrap.py`
+is deliberately not reused: it bootstraps a *Sharpe* from a return series, and this
+statistic is a cross-sectional correlation over day-groups.
+
+**⭐ The tail check (constraint #8) splits, and the split is the finding:**
+- **SIGN survives every single-day removal** — all 7 leave-one-out values negative.
+- **MAGNITUDE does not.** Dropping 2026-08-31 takes ρ from −0.272 to **−0.125**, about 46%
+  of the full-sample estimate — so **roughly half the measured effect rests on one
+  afternoon**, and that day carries ~5× the cross-sectional dispersion of every other.
+  Direction is consistent; size is not. Anything sized off the full-sample number would be
+  sized off that one day.
+
+⚠ **NOT a promotion signal**, and the report says so itself. 7 independent days cannot
+clear the t ≈ 3.6 hurdle however clean the sign looks, and **that hurdle is flat in n** —
+more data does not lower the bar, it only moves the estimate. Keep the Stage-1 capture
+running (it costs nothing) and re-run at ≥30 days.
+
+- `backend/scripts/cas_stage2_study.py` — new (deterministic, seeded, rerunnable)
+- `docs/analysis/cas-stage2-2026-09-07.md` — the report
+
+
 ### feat(7.4): kill switch, restart recovery, and reconciliation
 
 **Phase 7.1–7.4 are now complete** — the cycle-2 runtime prerequisite.

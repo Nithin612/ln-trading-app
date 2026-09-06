@@ -12,6 +12,25 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ## ▶ STATE AT A GLANCE (updated 2026-09-07) — read this block first
 
+**▶▶ 2026-09-07 (latest) — CAS STAGE 2 IS DONE, AND IT FOUND SOMETHING.** The closing-auction
+move **REVERSES overnight, cross-sectionally**: Spearman **ρ = −0.272**, 90% **day-block**
+interval **[−0.478, −0.088]** (excludes zero), **6 of 7 days negative**, monotonic quintiles,
+**Q1−Q5 spread +1.27%**. This is the **first clean directional signal the programme has
+produced** after eight refuted gates — which is why it got the strictest available reading.
+⭐ **The control is cross-sectional demeaning within each day**, which removes the market factor
+*exactly* and discharges the standing "control for the oversold regime" warning; ⚠ it therefore
+says **nothing about a market-wide auction effect**, by construction.
+⭐ **The independent unit is the DAY, not the row** — 1,664 rows are **7 usable blocks**, and
+resampling rows would have shrunk the interval ~**14×** and manufactured significance.
+⚠ **The tail check SPLITS:** the **sign survives every leave-one-out** (all 7 negative), but the
+**magnitude does not** — dropping 2026-08-31 takes ρ to **−0.125 (46% of full sample)**, so ~half
+the effect rests on one afternoon that carries ~5× the usual dispersion.
+⚠ **NOT PROMOTABLE, and the report says so itself:** 7 days cannot clear **t ≈ 3.6**, and that
+hurdle is **flat in n**. **Keep the Stage-1 capture running and re-run at ≥30 days.**
+Script: `scripts/cas_stage2_study.py` (seeded, rerunnable) · report:
+`docs/analysis/cas-stage2-2026-09-07.md`.
+
+
 **▶▶ 2026-09-07 (latest) — PHASE 7.1–7.4 IS COMPLETE. The cycle-2 RUNTIME prerequisite is met.**
 On branch `feature/pre-cycle2-hardening`; full suite green throughout. **7.2** shipped the
 `BrokerAdapter` port whose one rule is that **`submit()` returns an `Ack`, never a `Fill`** — paper

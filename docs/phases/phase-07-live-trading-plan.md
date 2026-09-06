@@ -71,7 +71,14 @@ Cycle 2 must rehearse the **finished** system, so it starts only when all of the
 are done. Nothing auto-advances.
 
 **Strategy / evidence**
-- [ ] CAS Stage 2 — the overnight-reversal study (Stage 1 accruing; `cas_daily`)
+- [x] **CAS Stage 2 — DONE 2026-09-07.** The auction move **REVERSES overnight**
+      cross-sectionally: ρ = **−0.272**, 90% day-block interval **[−0.478, −0.088]**
+      (excludes zero), 6 of 7 days negative, monotonic quintiles, Q1−Q5 spread **+1.27%**.
+      ⚠ **Sign survives every leave-one-out; MAGNITUDE does not** — dropping 2026-08-31
+      halves it to −0.125, so ~half the effect rests on one afternoon.
+      ⚠ **NOT a promotion signal**: 7 independent days cannot clear t ≈ 3.6, and that
+      hurdle is flat in n. Keep capturing; re-run at ≥30 days.
+      Report: `docs/analysis/cas-stage2-2026-09-07.md`
 - [ ] MCE slice 5b (`market_cap` writer) and slice 6 (news veto)
 - [ ] The deflated-Sharpe / multiple-testing bar **built and applied** — two gates already
       sit at a ✅ READY banner that should not be trusted without it
