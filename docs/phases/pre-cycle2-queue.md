@@ -83,7 +83,7 @@ Of those loops, one is **decided** (regime gate → REVERTED 2026-09-02), one is
 |---|---|---|
 | **7.0** ✅ **DONE 2026-09-06** | **Design pass first** | A33 OMS-as-projection-of-the-event-stream + A42 frozen/available cash + A35 `BrokerAdapter` interface, designed **together** — the review found these are one problem, not three |
 | **7.1** ✅ **DONE 2026-09-06** | RiskEngine single-gate | one pre-trade gate absorbing: daily-loss circuit breaker · the 6 eligibility overlays · notional cap · R:R floor · **the heat cap** (fails CLOSED, `heat = qty × max(0, entry − commit_SL)`, initial risk not MTM). **Equivalence-pinned first** — identical verdicts to today's chain before any refactor |
-| **7.2** | BrokerAdapter port | `PaperBrokerAdapter` behind the interface + a **read-only** Kite spike (order-status, margins, positions; **no placement**) so the shape is validated against reality |
+| **7.2** ✅ **DONE 2026-09-07** | BrokerAdapter port | `PaperBrokerAdapter` behind the interface + a **read-only** Kite spike (order-status, margins, positions; **no placement**) so the shape is validated against reality |
 | **7.3** | Order FSM | Denied vs Rejected vs Filled vs Cancelled + A32 event-bus robustness (per-handler isolation, bounded queue, **a dead bus must be loud**) + A22 partial-fill sibling rebalance + A16 lifecycle/repair queue + A34 timer primitive |
 | **7.4** | Reconciliation + kill switch + audit | recover local state on restart · kill switch honoured everywhere · every decision reconstructable · T2 lifecycle-boundary tests (first step, start mid-stream, stop early) |
 
@@ -102,7 +102,8 @@ record while it is being made.* Everything else in Bucket C stays under the cloc
 ### ▶ Progress — 2026-09-06/07 overnight run
 
 **✅ 7.0 design pass** (`docs/phases/phase-07.0-oms-design.md`) · **✅ 7.1 RiskEngine +
-✅ A13** (`app/trading/risk_engine.py`, 33 tests).
+✅ A13** (`app/trading/risk_engine.py`, 33 tests) · **✅ 7.2 BrokerAdapter port**
+(`app/broker/adapter.py` + `paper_adapter.py` + a read-only Kite spike, 27 tests).
 
 Two findings worth carrying forward:
 
@@ -111,7 +112,15 @@ Two findings worth carrying forward:
    table records only successes, and *"what did the risk layer refuse last Tuesday, under
    which thresholds"* is not answerable from data. 7.3 fixes it by writing `submitted`
    **before** the gates run, so a decision cannot fail to be recorded.
-2. **The equivalence pin earned its keep immediately.** The breaker runs *before* the signal
+2. **⚠ A DECISION IS WAITING (7.2, and it is the user's).** Reconciliation matches a broker
+   row back to ours via `client_order_id` — and **Kite has no such field.** The nearest is
+   `tag`, **20 characters**, not broker-guaranteed unique; our `paper:<uuid>` ids do not fit.
+   Options: short live ids that fit a tag · match on `(symbol, side, quantity, timestamp)`
+   (ambiguous exactly when two identical orders are placed together) · a local
+   `broker_order_id → client_order_id` map written at ack time, accepting that an order lost
+   *before* its ack is unmatchable. **(3) plus a short tag looks right**, but it is a call to
+   make before `KiteBrokerAdapter` exists, and it would otherwise be found on live day 1.
+3. **The equivalence pin earned its keep immediately.** The breaker runs *before* the signal
    lookup, so an unknown id on a tripped breaker answers **409, not 404** — and the obvious
    refactor (hoist the lookup so the argument is non-optional) silently inverts that. Caught
    by the pin, not by review.

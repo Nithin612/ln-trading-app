@@ -7,6 +7,59 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(7.2): the BrokerAdapter port, and a read-only Kite spike to check its shape
+
+**One rule the rest follows from: `submit()` returns an `Ack`, NEVER a `Fill`.**
+
+Paper *can* fill synchronously — it does today, inside `place_paper_order`'s transaction —
+and `PaperBrokerAdapter` still returns an `Ack` and then emits `FILLED` on the same event
+channel a real broker will use. **The asynchrony is imposed on the paper side rather than
+papered over on the Kite side**, because the alternative is that every caller gets written
+against a synchronous world and the abstraction is discovered to be wrong on day 1 of
+live — the exact failure the two-cycle plan exists to prevent. A structural test asserts
+`Ack` carries no fill fields at all.
+
+**A refusal is an `Ack`, not an exception.** A through-stop or notional-cap rejection comes
+back as `AckStatus.REJECTED` with a reason and a `REJECTED` event, rather than as something
+the caller must catch. That is the distinction 7.3's FSM is built on — and without it a
+refusal leaves no trace, which is the hole 7.0 identified.
+
+**`DENIED` and `REJECTED` stay separate**, pinned by test: *denied* is our own risk layer
+and entirely within our control, so a rising denial rate is a finding about our thresholds;
+*rejected* is the broker's. One "failed" bucket destroys the only signal separating "our
+rules are too tight" from "the exchange said no".
+
+**`is_active()` is declared once** with an exhaustiveness test that every `EventKind` is
+active-or-terminal exactly once — the T7 shape, where a mis-filed state would make A42's
+available-cash derivation quietly wrong rather than loud.
+
+**The read-only Kite spike** (`scripts/kite_readonly_spike.py` + three read-only methods on
+the existing `ThrottledKite`) validates the interface against reality before
+`KiteBrokerAdapter` is written from the docs alone. ⚠ **`ThrottledKite` deliberately has no
+`place_order` method** — placement is post-cycle-2, and the *absence of the method* is the
+safeguard rather than a flag on the script.
+
+**⭐ The spike already surfaced the interface question that matters**, without needing to
+run: `BrokerOrder.client_order_id` is how reconciliation matches a broker row back to ours,
+and **Kite has no client-order-id field** — the nearest thing is `tag`, **capped at 20
+characters** and not broker-guaranteed unique. Our namespaced ids (`paper:<uuid>`) do not
+fit. Three options, and the choice is the user's: short live ids that fit a tag · match on
+`(symbol, side, quantity, timestamp)` (ambiguous exactly when two identical orders are
+placed close together) · or a local `broker_order_id → client_order_id` map written at ack
+time, accepting that an order lost *before* its ack is unmatchable. **(3) plus a short tag
+is the likely answer.** This is precisely what would otherwise have been found on live day 1.
+
+⚠ **Nothing is wired into the live order path.** `place_order` still calls
+`place_paper_order` directly. No behaviour, no recorded number changes.
+⚠ The spike's own report says so, but it bears repeating: **a clean run on an account with
+no orders and no positions verifies almost nothing** — the shapes stay unverified until it
+runs on a day with at least one order.
+
+- `backend/app/broker/adapter.py` — new · `app/broker/paper_adapter.py` — new
+- `backend/scripts/kite_readonly_spike.py` — new · `app/broker/kite_rest.py` (read-only)
+- Tests: 27 new (`tests/test_broker_adapter.py`); full suite **2028 passed / 0 failed**
+
+
 ### feat(7.1 + A13): the RiskEngine single-gate, equivalence-pinned, and the heat cap
 
 **Every pre-trade rule now runs in ONE place** — `app/trading/risk_engine.py`. They were

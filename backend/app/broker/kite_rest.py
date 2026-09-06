@@ -121,5 +121,48 @@ class ThrottledKite:
         data = await self._call(self._kc.quote, instruments)
         return dict(data)
 
+    # ── Phase 7.2: READ-ONLY order-book surface ───────────────────────────
+    # These three exist to de-risk the BrokerAdapter interface (A35) BEFORE a
+    # KiteBrokerAdapter is written against the docs alone. Designing that
+    # interface having never called Kite risks getting its shape wrong and
+    # discovering it on live day 1 — so the plan's mitigation is a read-only
+    # spike, and this is its surface.
+    #
+    # ⚠ THERE IS DELIBERATELY NO `place_order` HERE. Order PLACEMENT is
+    # post-cycle-2 work (only reality validates it), and the absence is the
+    # safeguard: a method that does not exist cannot be called by mistake, by
+    # a future caller or by me. Adding one is a Phase-7-after-cycle-2 decision
+    # with the user, not a convenience.
+
+    async def orders(self) -> list[dict[str, Any]]:
+        """Today's order book, as the broker sees it (7.4 reconciliation input).
+
+        Read-only. Kite returns the full day's orders, not only working ones,
+        so callers filter by status themselves — the adapter maps Kite's own
+        status vocabulary rather than this layer guessing at it.
+        """
+        return list(await self._call(self._kc.orders))
+
+    async def positions(self) -> dict[str, Any]:
+        """Net and day positions (7.4 reconciliation input). Read-only.
+
+        Kite returns `{"net": [...], "day": [...]}`. `net` is the carry-forward
+        view a delivery book cares about; `day` includes intraday legs that
+        already closed.
+        """
+        return dict(await self._call(self._kc.positions))
+
+    async def margins(self, segment: str | None = None) -> dict[str, Any]:
+        """Funds and margin (A42's ground truth to reconcile against). Read-only.
+
+        A42 DERIVES available cash from our own active-order set; this is the
+        independent number that derivation is checked against. Two numbers that
+        must agree is the point — a single stored balance would have nothing to
+        disagree with.
+        """
+        if segment is None:
+            return dict(await self._call(self._kc.margins))
+        return dict(await self._call(self._kc.margins, segment))
+
 
 __all__ = ["KiteException", "NetworkException", "ThrottledKite", "TokenException"]
