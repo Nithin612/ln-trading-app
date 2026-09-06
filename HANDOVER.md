@@ -49,16 +49,18 @@
 | **7.4** kill switch + recovery + reconciliation | ✅ **DONE** — 19 tests |
 | **CAS Stage 2** (#12) | ✅ **DONE** — ρ −0.272, CI [−0.478, −0.088] excludes zero. Sign robust, magnitude not. NOT promotable at 7 days |
 | **A27** config dry-run (#18) | ✅ **DONE** — `make config-check`, 21 tests |
+| **A3** broker-token status (#19) | ✅ **DONE** — 16 tests, wired into the daily report |
+| **F1** size-proxy spike (#6) | ✅ **DONE** — proxies DISAGREE, both intervals span zero ⇒ **recommend DROP 5b, D3 moot** |
 
 **Full backend suite after 7.1+7.2: 2028 passed, 1 skipped, 0 failed.** (7.3's 32 tests
 came after that run — re-run the suite before calling 7.3 done.)
 
 ### ✅ Full suite GREEN through ALL of Phase 7
 
-**2137 passed, 1 skipped, 44 deselected, 0 failed** (34:49). Exactly
-**1995 baseline + 33 (7.1) + 27 (7.2) + 42 (7.3) + 19 (7.4) + 21 (A27)** — every new test
-accounted for, no regression anywhere. `ruff` + `mypy app/ scripts/` clean.
-Log: `/home/nithin/.claude/jobs/74d5bb2c/tmp/pytest_a27.log`.
+**2153 passed, 1 skipped, 44 deselected, 0 failed** (35:09). Exactly
+**1995 baseline + 33 (7.1) + 27 (7.2) + 42 (7.3) + 19 (7.4) + 21 (A27) + 16 (A3)** — every
+new test accounted for, no regression anywhere. `ruff` + `mypy app/ scripts/` clean.
+Log: `/home/nithin/.claude/jobs/74d5bb2c/tmp/pytest_a3.log`.
 
 ⚠ **One real failure was caught on the way and is worth remembering:** A13 asserted
 `PRE_TRADE_RULES[0] == RULE_BREAKER`, and 7.4 legitimately broke it by putting the kill
