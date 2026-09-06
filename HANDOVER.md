@@ -46,7 +46,7 @@
 | **A13** breaker un-suppressibility | ✅ DONE (rode with 7.1) |
 | **7.2** BrokerAdapter port + Kite spike | ✅ DONE — `app/broker/adapter.py`, `paper_adapter.py`, `scripts/kite_readonly_spike.py`, 27 tests |
 | **7.3** order FSM + event bus + cutover | ✅ **DONE** — migration, model, FSM, bus, event store, and the order path cut over. 42 tests. |
-| **7.4** reconciliation | ⬜ not started |
+| **7.4** kill switch + recovery + reconciliation | ✅ **DONE** — 19 tests |
 
 **Full backend suite after 7.1+7.2: 2028 passed, 1 skipped, 0 failed.** (7.3's 32 tests
 came after that run — re-run the suite before calling 7.3 done.)
@@ -57,18 +57,29 @@ came after that run — re-run the suite before calling 7.3 done.)
 **1995 baseline + 33 (7.1) + 27 (7.2) + 32 (7.3)** — every new test accounted for and no
 regression anywhere. Log: `/home/nithin/.claude/jobs/74d5bb2c/tmp/pytest_73.log`.
 
-### ▶▶ RESUME HERE — 7.4 (reconciliation + kill switch + audit trail)
+### ▶▶ RESUME HERE — PHASE 7 IS DONE; what remains is the strategy half
 
-7.0–7.3 are done. 7.4 is the last Phase-7 slice before cycle 2, and 7.3 left it two
-things to build on: `event_store.load_events → order_fsm.project` IS restart recovery
-(already round-tripped end-to-end by a test), and `refusals_between()` is the audit
-query. What 7.4 adds is recovery on startup, a kill switch honoured everywhere, and
-T2 lifecycle-boundary tests (first step, start mid-stream, stop early).
+**7.0–7.4 are complete.** The cycle-2 *runtime* prerequisite is met. What still stands
+between here and the cycle-2 clock, from `phase-07-live-trading-plan.md` §2:
 
-⚠ **A real limit found in 7.2 and still true:** the paper gateway returns an empty
-`fetch_open_orders()` because every paper submit ends terminal. So **paper cannot
-exercise reconciliation's main path at all** — 7.4 must not read a green paper run as
-evidence that reconciliation works. That is what the read-only Kite spike is for.
+| item | task | state |
+|---|---|---|
+| CAS Stage 2 | #12 | **unblocked, no decision needed — best next build** |
+| MCE 6 news veto | #11 | unblocked |
+| Minervini | #14 | unblocked (an explicit DROP is a legitimate resolution) |
+| momentum retune backtest | #8 | unblocked |
+| A27 config dry-run | #18 | unblocked |
+| A3 broker-token status | #19 | unblocked |
+| Q5 pre-COVID backtest spike | #20 | unblocked (does not block cycle 2) |
+| MCE 5b · R1 · R2 · sizing · `compute_levels` | #10 #7 #9 #15 #13 | ⛔ **blocked on D1–D5** |
+
+**Suggested order:** #12 (CAS-2, the largest unblocked evidence item) → #18/#19 (small,
+they protect the accrual) → #14 → #8.
+
+⚠ **A limit found in 7.2 and still true:** the paper gateway returns an empty
+`fetch_open_orders()`, so **paper cannot exercise reconciliation's main path at all.** 7.4
+already reports this as a caveat on every run — do not read a green paper reconciliation as
+evidence that reconciliation works.
 
 ### ⚠ Dev-environment notes for the resumed session
 
