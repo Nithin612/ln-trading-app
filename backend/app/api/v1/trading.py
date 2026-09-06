@@ -10,6 +10,7 @@ GET  /trading/shadow-compare       — profit-lock shadow comparator (read-only)
 """
 
 import logging
+import uuid as _uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Annotated
@@ -19,6 +20,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.broker import adapter, event_store
 from app.broker.depth import get_live_depths
 from app.broker.paper_broker import (
     PaperOrderError,
@@ -134,8 +136,26 @@ async def place_order(
     7.1). This endpoint's job is transport: load the signal, ask the engine, translate
     its verdict into a status code. It no longer knows the rules or their order, which
     is what stops the next caller from re-deriving a slightly different sequence.
+
+    ⭐ **The intent is recorded BEFORE the gates run** (Phase 7.3). Until this, a refused
+    order was not a row at all — it raised, and `orders` therefore recorded only
+    successes, so *"what did the risk layer refuse last Tuesday, and under which
+    thresholds?"* could not be answered from data. Writing `submitted` first makes that
+    structural rather than diligent: a decision cannot fail to be recorded, because the
+    row exists before the decision is made.
     """
     signal = await db.get(Signal, req.signal_id)
+    client_order_id = adapter.namespaced_id(adapter.GATEWAY_PAPER, str(_uuid.uuid4()))
+    await event_store.append(
+        db,
+        client_order_id=client_order_id,
+        kind=adapter.EventKind.SUBMITTED,
+        user_id=user.id,
+        stock_id=signal.stock_id if signal is not None else None,
+        signal_id=req.signal_id,
+        payload={"side": req.side, "quantity": req.quantity},
+    )
+
     verdict = await risk_engine.check_pre_trade(
         db, user, signal,
         side=req.side,
@@ -152,6 +172,28 @@ async def place_order(
             ", ".join(verdict.unassessed), req.signal_id,
         )
     if verdict.denied:
+        await event_store.append(
+            db,
+            client_order_id=client_order_id,
+            kind=adapter.EventKind.DENIED,
+            user_id=user.id,
+            stock_id=signal.stock_id if signal is not None else None,
+            signal_id=req.signal_id,
+            payload={
+                "rule": verdict.rule,
+                "reason": verdict.reason,
+                # The thresholds in force AT THE TIME. Without these the record answers
+                # "what was refused" but not "under what settings", and the second half
+                # is what makes an old refusal re-interpretable — the same gap that makes
+                # the sl_atr shadow evidence non-point-in-time today.
+                **({"stamps": verdict.stamps} if verdict.stamps else {}),
+            },
+        )
+        # ⚠ COMMIT BEFORE RAISING. `get_db` rolls the session back when the handler
+        # raises, so without this the denial row is written, discarded, and the entire
+        # point of recording refusals is lost — silently, and only in the failure case
+        # nobody tests. Pinned by `test_denial_survives_the_exception`.
+        await db.commit()
         # Only "the signal does not exist" is a 404; every other refusal is a conflict
         # with the account's current state. This mapping reproduces the pre-7.1 codes
         # exactly, including the ordering quirk that a tripped breaker answers 409 even
@@ -169,6 +211,20 @@ async def place_order(
             db, user, signal, side=req.side, quantity=req.quantity
         )
     except (PaperOrderError, ValueError) as exc:
+        # REJECTED, not DENIED — the broker's own unconditional pre-fill refusals
+        # (through-stop, off-market, zero size, notional cap) are the paper analogue of
+        # an exchange saying no. Keeping the two kinds apart is what lets a rising rate
+        # be attributed to our thresholds or to the market, rather than to "failures".
+        await event_store.append(
+            db,
+            client_order_id=client_order_id,
+            kind=adapter.EventKind.REJECTED,
+            user_id=user.id,
+            stock_id=signal.stock_id,
+            signal_id=req.signal_id,
+            payload={"reason": str(exc), "error_class": adapter.ErrorClass.TERMINAL.value},
+        )
+        await db.commit()  # same reason as the denial branch — the raise would roll back
         raise HTTPException(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(exc)
         ) from exc
@@ -177,6 +233,28 @@ async def place_order(
     # the JSONB column dirty.
     if verdict.stamps:
         order.broker_payload = {**(order.broker_payload or {}), **verdict.stamps}
+
+    # Paper fills synchronously, but the stream still records both states a real broker
+    # would produce — so a projection built from these events has the same shape whatever
+    # gateway produced them, which is what makes 7.4's restart recovery gateway-agnostic.
+    broker_order_id = adapter.namespaced_id(adapter.GATEWAY_PAPER, str(order.id))
+    await event_store.append(
+        db, client_order_id=client_order_id, kind=adapter.EventKind.ACCEPTED,
+        user_id=user.id, stock_id=order.stock_id, signal_id=req.signal_id,
+        payload={"broker_order_id": broker_order_id},
+    )
+    await event_store.append(
+        db, client_order_id=client_order_id, kind=adapter.EventKind.FILLED,
+        user_id=user.id, stock_id=order.stock_id, signal_id=req.signal_id,
+        payload={
+            "broker_order_id": broker_order_id,
+            # CUMULATIVE, never a delta — idempotent under the replay 7.4 rebuilds from.
+            "filled_qty": order.filled_qty,
+            "filled_price": (
+                str(order.filled_price) if order.filled_price is not None else None
+            ),
+        },
+    )
     await db.commit()
     await db.refresh(order)
 

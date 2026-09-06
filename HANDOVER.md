@@ -51,12 +51,11 @@
 **Full backend suite after 7.1+7.2: 2028 passed, 1 skipped, 0 failed.** (7.3's 32 tests
 came after that run — re-run the suite before calling 7.3 done.)
 
-### ▶ A full-suite run was started at ~03:47 IST and spans the token reset
+### ✅ Full suite GREEN through 7.3's FSM/bus commit
 
-Result lands in `/home/nithin/.claude/jobs/74d5bb2c/tmp/pytest_73.log` — **read its tail
-first thing on resume.** It covers everything through 7.3's FSM/bus commit. Expected
-≈2060 passed (2028 after 7.2, plus 32 from `tests/test_order_fsm.py`); anything less means
-a regression to chase before continuing.
+**2087 passed, 1 skipped, 44 deselected, 0 failed** (34:02). That is exactly
+**1995 baseline + 33 (7.1) + 27 (7.2) + 32 (7.3)** — every new test accounted for and no
+regression anywhere. Log: `/home/nithin/.claude/jobs/74d5bb2c/tmp/pytest_73.log`.
 
 ### ▶▶ RESUME HERE — what 7.3 still needs
 
