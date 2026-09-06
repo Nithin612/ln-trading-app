@@ -49,6 +49,7 @@ from app.services import buy_and_hold as bah
 from app.services import fo_analytics as fa
 from app.services import fo_suggestions as fs
 from app.services import gate_register
+from app.services import worker_health as wh
 from app.services.beta_ir import BetaIr
 from app.services.buy_and_hold import BuyAndHold
 from app.services.deflated_sharpe import DEFAULT_TRIALS
@@ -56,6 +57,7 @@ from app.services.excursion import Excursion, load_1m_bars, tape_excursion
 from app.services.feed_health import FeedStatus, check_feed_staleness, render_feed_health
 from app.services.liquidity import load_median_traded_values_safe
 from app.services.profit_lock_shadow import ShadowComparison, compare_position
+from app.services.worker_health import CasCoverage, RoleStatus, read_statuses
 from app.trading.regime import CHOPPY_ER, er_by_stock
 from app.trading.trail_sl import compute_pnl
 
@@ -276,6 +278,10 @@ class DailyReport:
     # market?" — the axis beside H1 (is it stable?) and H8 (does the bar reject noise?).
     beta_all: BetaIr | None = None
     beta_by_side: dict[str, BetaIr | None] = field(default_factory=dict)
+    # Worker liveness + CAS window coverage (A40). The ONLY surface that can see an
+    # ABSENCE, because it runs in a different process from the worker it judges.
+    worker_roles: list[RoleStatus] = field(default_factory=list)
+    cas_coverage: CasCoverage | None = None
     # Tick-mode degradation counters for the report day (A25). Empty = a clean
     # day OR no record at all (older than the 7-day TTL, or Redis unreachable) —
     # the two are indistinguishable here, which is why the renderer stays silent
@@ -545,6 +551,10 @@ async def build_daily_report(
     # ticks on the day whose fills this report is judging? Keyed by the REPORT
     # day, not by now: a --DATE run must read that day's counters.
     report.tick_mode_health = await read_tick_mode_health(day.isoformat())
+    # A40 — liveness read from a process the worker does not control, so a worker that has
+    # been down since before the last report is still visible here.
+    report.worker_roles = await read_statuses(now=now)
+    report.cas_coverage = await wh.cas_coverage(db, day=day, now=now)
     # Buy-and-hold benchmark (H2) — the book against doing nothing with the same money,
     # over the SAME dates. The window is the paper clock, never OUTCOME_EPOCH: that
     # spans the 08-17 sizing/fill-model cut and would compare two different books.
@@ -733,6 +743,10 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
     # Feed-staleness alarm (6.8.6) — a loud header ABOVE the scorecard when any EOD
     # feed is behind the trading calendar; a quiet one-liner when all are current.
     out.extend(render_feed_health(r.feed_health))
+
+    # A40 — worker liveness and the CAS absence alarm, ABOVE the scorecard: if the worker
+    # was down, every number below it is suspect and the reader must know that first.
+    out.extend(wh.render_lines(r.worker_roles, r.cas_coverage))
 
     # Tick-mode degradation (A25) — silent on a clean day; loud when the depth
     # path was fed ticks it could not use, because that quietly cheapens the

@@ -33,6 +33,7 @@ celery_app = Celery(
         "app.tasks.circuit_tasks",
         "app.tasks.corporate_action_tasks",
         "app.tasks.cas_tasks",
+        "app.tasks.health_tasks",
     ],
 )
 
@@ -94,6 +95,19 @@ celery_app.conf.beat_schedule = {
     "capture-cas-window": {
         "task": "app.tasks.cas_tasks.capture_cas_window",
         "schedule": crontab(minute="*/1", hour="9,10", day_of_week="1-5"),
+    },
+    # A40 — the ABSENCE alarm. 10:10 UTC = 15:40 IST, seven minutes after the window closes,
+    # so a zero row-count is a MISS rather than "not finished yet". Runs a few times so a
+    # worker that comes back late still reports; the notifier's throttle collapses repeats.
+    "check-cas-coverage": {
+        "task": "app.tasks.cas_tasks.check_cas_coverage",
+        "schedule": crontab(minute="10,40", hour="10,11,12", day_of_week="1-5"),
+    },
+    # A40 — role heartbeat. Absence of the key IS the signal, so this only has to be more
+    # frequent than HEARTBEAT_TTL_S; it is deliberately cheap.
+    "worker-heartbeat": {
+        "task": "app.tasks.health_tasks.worker_heartbeat",
+        "schedule": crontab(minute="*/2"),
     },
     # Option-chain snapshots every minute in the market window (task itself
     # re-checks 9:15–15:30 IST and idles without a Kite token)

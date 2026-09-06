@@ -7,6 +7,58 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(A40): worker liveness and the absence alarm (2026-09-06)
+
+**Bucket C, pulled forward with A11 as the other half of the same argument.** A11 pushes
+from `finally` blocks, so it reports what **ran**. The failure that costs us is the opposite
+shape — **the window passed and nothing ran** — and no `finally` fires for a task that never
+started, so a silent worker produces a silent channel and a quiet channel gets read as
+"fine". A11 could not close that by construction; this does.
+
+Two standing human rituals were this failure in costume, and both are now alarms: CAS
+capture (**a missed window cannot be back-filled**; the protocol was "check the row count
+each morning") and provisional health (no scheduler at all).
+
+**A staleness check, not a metrics stack** — the same ruling that kept 6.8.6 from becoming a
+Prometheus deployment. Heartbeats are Redis keys with a TTL; **absence is the signal**, so
+there is no counter to scrape.
+
+**Three layers, and each one states what it cannot see:**
+
+1. **Heartbeat** — `worker:heartbeat:{role}`, written by the Celery worker (a beat task) and
+   by `live_worker`'s monitor loop, which is the thing that actually proves ticks are being
+   processed. *Blind to:* a role that dies mid-window and restarts before anyone looks.
+2. **CAS window coverage** — after 15:33 IST, did the day produce rows? This is the alarm
+   A11 structurally could not give, because it fires on an absence. *Blind to:* a worker
+   down continuously past the check, since it is itself a beat task and needs the worker
+   back up to report. It catches "died during the window, returned later" — the common case.
+3. **The daily-report section**, rendered **above** the scorecard because if the worker was
+   down every number below it is suspect. This runs in a different process from the worker,
+   which is what closes layer 2's blind spot.
+
+**⚠ No layer is self-sufficient, on purpose.** A checker living inside the thing it checks
+cannot report its own death. That asymmetry is why layer 3 exists and why `make analysis` is
+the surface that must not be skipped.
+
+**⚠ A real defect found while wiring it: `app.tasks.health_tasks` was missing from Celery's
+`include`**, so the heartbeat beat entry named a task that would never register — the alarm
+would have been **silently dead**, which is precisely the failure mode A40 exists to
+prevent. A contract test now imports every module in `include` and asserts every beat entry
+resolves to a registered task, so no future beat entry can point at nothing.
+
+Verified against the real database: 2026-09-04 reads `trading=True, closed=True, rows=208 →
+not missed`; the weekend days correctly read as non-trading; both roles render the loud
+alarm because no worker is currently running.
+
+Also, unlike A11, **this section speaks when everything is fine** — "✅ all roles current".
+The opposite policy, deliberately: it is the only place an absence can be seen, so its
+silence has to be a positive statement rather than nothing at all.
+
+- `backend/app/services/worker_health.py` — new · `app/tasks/health_tasks.py` — new
+- `backend/app/tasks/cas_tasks.py` · `app/celery_app.py` · `app/broker/live_worker.py` ·
+  `app/services/daily_report.py`
+- Tests: 16 new (`tests/test_worker_health.py`)
+
 ### feat(A11): session notifier with a noise policy (2026-09-06)
 
 **Bucket C**, and the item the external review called *"the most actionable in this whole

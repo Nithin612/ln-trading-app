@@ -704,8 +704,16 @@ to cycle 2").** A 30-repo external review (2026-09-03/04) produced 91 items acro
   not work to do during one**: "safe to ship mid-cycle" answers *will it disturb the record*,
   not *what protects the record while it is being made*. Retires the CAS and provisional-health
   manual checks. ⚠ **A quiet channel does NOT mean the capture worked** — this reports what RAN;
-  the CAS alarm is an ABSENCE and needs **A40** (still open, and the other half of this
-  argument).
+  the CAS alarm is an ABSENCE and needs A40 — ✅ **A40 DONE 2026-09-06**
+  (`app/services/worker_health.py`), the other half of the same argument. Three layers, each
+  stating what it cannot see: heartbeat (`worker:heartbeat:{role}`, absence IS the signal) ·
+  a post-window CAS coverage check that fires on the absence · a daily-report section
+  rendered ABOVE the scorecard, in a different process from the worker it judges — which is
+  what closes the beat task's blind spot. ⚠ **`app.tasks.health_tasks` was missing from
+  Celery's `include`**, so the heartbeat would have been silently dead; a contract test now
+  asserts every beat entry resolves to a registered task.
+  **⛔ The CAS + provisional-health MANUAL DAILY CHECKS ARE RETIRED — do not carry them
+  forward.**
   **▶ Everything else in Bucket C stays under cycle 2's clock, deliberately.**
 - **Honest sizing: 3–4 months to cycle-2 start**, consistent with "live is 4–6 months out".
 

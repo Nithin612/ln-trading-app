@@ -14,7 +14,13 @@ from zoneinfo import ZoneInfo
 
 from app.celery_app import celery_app
 from app.core.config import settings
-from app.services.notifier import notify_exception, notify_task_result
+from app.services.notifier import (
+    Level,
+    Notification,
+    notify,
+    notify_exception,
+    notify_task_result,
+)
 from app.tasks._runner import run_db_task
 
 log = logging.getLogger(__name__)
@@ -55,6 +61,53 @@ def capture_cas_window(self: object) -> dict[str, object]:  # noqa: ARG001
     finally:
         if result.get("status") != "unknown":
             notify_task_result("cas_capture", "CAS capture", result)
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="app.tasks.cas_tasks.check_cas_coverage", bind=True, max_retries=0
+)
+def check_cas_coverage(self: object) -> dict[str, object]:  # noqa: ARG001
+    """A40 — after the window closes, did it actually produce anything?
+
+    THE ALARM A11 STRUCTURALLY COULD NOT GIVE. A11 pushes from `finally` blocks, so it
+    reports what ran; a window that passed with the worker down produces no `finally` and
+    therefore no message. This fires on the ABSENCE.
+
+    ⚠ It is itself a beat task, so it needs the worker back up to report — it catches
+    "died during the window, returned later", which is the common case. A worker down
+    continuously past this check is caught by the daily report's own liveness section,
+    which runs in a different process. No layer is self-sufficient; that is the design.
+    """
+    return run_db_task(_run_check_cas_coverage)
+
+
+async def _run_check_cas_coverage() -> dict[str, object]:
+    from app.db.session import AsyncSessionFactory
+    from app.services.worker_health import cas_coverage
+
+    now_ist = datetime.now(UTC).astimezone(_IST)
+    async with AsyncSessionFactory() as db:
+        cov = await cas_coverage(db, day=now_ist.date())
+    if not cov.is_trading_day:
+        return {"status": "skipped", "message": "not a trading day"}
+    if not cov.window_closed:
+        return {"status": "skipped", "message": "CAS window has not closed yet"}
+    if cov.is_missed:
+        notify(
+            Notification(
+                event="cas_window_missed",
+                level=Level.ERROR,
+                title="CAS window MISSED — unrecoverable",
+                lines=[
+                    f"trade_date={cov.day}",
+                    "the 15:15–15:33 IST window closed with ZERO rows captured",
+                    "the closing auction cannot be replayed — this day is permanently absent",
+                    "REMEDY: ensure `make worker` is up before the next session",
+                ],
+            )
+        )
+        return {"status": "missed", "trade_date": str(cov.day), "rows": 0}
+    return {"status": "ok", "trade_date": str(cov.day), "rows": cov.rows}
 
 
 async def _run_capture_cas() -> dict[str, object]:

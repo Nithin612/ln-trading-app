@@ -72,6 +72,7 @@ from app.broker.tick_mode import (
     tally_tick_modes,
 )
 from app.core.config import settings
+from app.services.worker_health import beat_sync
 
 log = logging.getLogger(__name__)
 
@@ -880,6 +881,10 @@ def run_monitor(
     in_q or writer_q here names a stall AS it happens. Depth near
     _QUEUE_MAX ⇒ the consumer or writer is falling behind."""
     while not stop.wait(interval_s):
+        # A40 — the live path reports its own liveness here rather than in a task, because
+        # this loop is the thing that actually proves the worker is processing. Best-effort
+        # by construction: a heartbeat failure must never take down what it reports on.
+        beat_sync(state.redis, "live_worker")
         lat = state.latency.summary()
         log.info(
             "live-worker heartbeat: in_q=%d/%d writer_q=%d/%d stats=%s "
