@@ -84,7 +84,7 @@ Of those loops, one is **decided** (regime gate → REVERTED 2026-09-02), one is
 | **7.0** ✅ **DONE 2026-09-06** | **Design pass first** | A33 OMS-as-projection-of-the-event-stream + A42 frozen/available cash + A35 `BrokerAdapter` interface, designed **together** — the review found these are one problem, not three |
 | **7.1** ✅ **DONE 2026-09-06** | RiskEngine single-gate | one pre-trade gate absorbing: daily-loss circuit breaker · the 6 eligibility overlays · notional cap · R:R floor · **the heat cap** (fails CLOSED, `heat = qty × max(0, entry − commit_SL)`, initial risk not MTM). **Equivalence-pinned first** — identical verdicts to today's chain before any refactor |
 | **7.2** ✅ **DONE 2026-09-07** | BrokerAdapter port | `PaperBrokerAdapter` behind the interface + a **read-only** Kite spike (order-status, margins, positions; **no placement**) so the shape is validated against reality |
-| **7.3** 🔶 **PARTIAL 2026-09-07** (migration + model + FSM + bus done; durable writer and live-path cutover remain) | Order FSM | Denied vs Rejected vs Filled vs Cancelled + A32 event-bus robustness (per-handler isolation, bounded queue, **a dead bus must be loud**) + A22 partial-fill sibling rebalance + A16 lifecycle/repair queue + A34 timer primitive |
+| **7.3** ✅ **DONE 2026-09-07** | Order FSM | Denied vs Rejected vs Filled vs Cancelled + A32 event-bus robustness (per-handler isolation, bounded queue, **a dead bus must be loud**) + A22 partial-fill sibling rebalance + A16 lifecycle/repair queue + A34 timer primitive |
 | **7.4** | Reconciliation + kill switch + audit | recover local state on restart · kill switch honoured everywhere · every decision reconstructable · T2 lifecycle-boundary tests (first step, start mid-stream, stop early) |
 
 ### Q1b — Bucket C slices **pulled forward** (proposed)
@@ -104,9 +104,9 @@ record while it is being made.* Everything else in Bucket C stays under the cloc
 **✅ 7.0 design pass** (`docs/phases/phase-07.0-oms-design.md`) · **✅ 7.1 RiskEngine +
 ✅ A13** (`app/trading/risk_engine.py`, 33 tests) · **✅ 7.2 BrokerAdapter port**
 (`app/broker/adapter.py` + `paper_adapter.py` + a read-only Kite spike, 27 tests) ·
-🔶 **7.3 PARTIAL** — `order_events` migration (applied + reversible), `OrderEventRow`,
-`order_fsm.py`, `event_bus.py`, 32 tests. **Remaining: the durable event writer and the
-live-path cutover**, so nothing is wired yet and no recorded number has moved.
+✅ **7.3 DONE** — `order_events` (migration applied + reversible), `order_fsm.py`,
+`event_bus.py`, `event_store.py`, and **the order path cut over**: `submitted` is written
+BEFORE the gates run, so a decision can no longer fail to be recorded. 42 tests.
 
 Two findings worth carrying forward:
 

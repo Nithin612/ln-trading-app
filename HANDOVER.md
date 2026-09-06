@@ -45,7 +45,7 @@
 | **7.1** RiskEngine + heat cap | ✅ DONE — `app/trading/risk_engine.py`, 33 tests |
 | **A13** breaker un-suppressibility | ✅ DONE (rode with 7.1) |
 | **7.2** BrokerAdapter port + Kite spike | ✅ DONE — `app/broker/adapter.py`, `paper_adapter.py`, `scripts/kite_readonly_spike.py`, 27 tests |
-| **7.3** order FSM + event bus | 🔶 **PARTIAL** — migration + model + FSM + bus done (32 tests). **REMAINING: the durable event WRITER and the live-path cutover.** |
+| **7.3** order FSM + event bus + cutover | ✅ **DONE** — migration, model, FSM, bus, event store, and the order path cut over. 42 tests. |
 | **7.4** reconciliation | ⬜ not started |
 
 **Full backend suite after 7.1+7.2: 2028 passed, 1 skipped, 0 failed.** (7.3's 32 tests
@@ -57,19 +57,18 @@ came after that run — re-run the suite before calling 7.3 done.)
 **1995 baseline + 33 (7.1) + 27 (7.2) + 32 (7.3)** — every new test accounted for and no
 regression anywhere. Log: `/home/nithin/.claude/jobs/74d5bb2c/tmp/pytest_73.log`.
 
-### ▶▶ RESUME HERE — what 7.3 still needs
+### ▶▶ RESUME HERE — 7.4 (reconciliation + kill switch + audit trail)
 
-1. **A durable event writer**: persist `adapter.OrderEvent` → `OrderEventRow`, allocating
-   `seq` per order. The `UNIQUE(client_order_id, seq)` constraint is the integrity rule;
-   let it raise rather than working around it.
-2. **The live-path cutover**: `place_order` writes `submitted` **before** the RiskEngine
-   runs, then `denied` on refusal. That is the whole point — a decision cannot fail to be
-   recorded if the row exists before the decision is made.
-3. ⚠ **When the cutover lands, `orders` stops being a list of trades and becomes a list of
-   INTENTS.** Two readers were already checked and are safe (`max_trades_per_day` counts
-   `Position.id`; `daily_report.py:605` filters `status == "filled"`), but **every new
-   `orders` reader must filter on terminal state** — the `signals.status` lesson in a new
-   table.
+7.0–7.3 are done. 7.4 is the last Phase-7 slice before cycle 2, and 7.3 left it two
+things to build on: `event_store.load_events → order_fsm.project` IS restart recovery
+(already round-tripped end-to-end by a test), and `refusals_between()` is the audit
+query. What 7.4 adds is recovery on startup, a kill switch honoured everywhere, and
+T2 lifecycle-boundary tests (first step, start mid-stream, stop early).
+
+⚠ **A real limit found in 7.2 and still true:** the paper gateway returns an empty
+`fetch_open_orders()` because every paper submit ends terminal. So **paper cannot
+exercise reconciliation's main path at all** — 7.4 must not read a green paper run as
+evidence that reconciliation works. That is what the read-only Kite spike is for.
 
 ### ⚠ Dev-environment notes for the resumed session
 

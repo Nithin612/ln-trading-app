@@ -116,10 +116,21 @@ Writing the intent **before** the gates run is what turns 1.1 from a logging gap
 structural guarantee: **a decision cannot fail to be recorded, because the row exists before the
 decision is made.** A denial then appends `denied`; it does not "fail to create" anything.
 
-⚠ This means the orders table stops being a list of trades and becomes a list of *intents*.
-Every count, join and report that reads `orders` today must be re-checked against
-`is_active()` / a terminal-state filter — **grep before assuming**, exactly as the
-`is_shadow IS FALSE` lesson taught with `signals.status`.
+⚠ **CORRECTION — 2026-09-07, as built.** This section originally said the `orders` table
+would *become* a list of intents, and every reader would have to be re-checked. **That is
+not what shipped, and the built version is safer.** The intent lives in `order_events`
+only; `orders` still gets a row exactly when a fill happens, so **no existing `orders`
+reader changed meaning at all** and the "grep before assuming" hazard never materialised.
+
+The projection direction in §2.1 is unchanged — `order_events` is the source of truth for
+what an order *did* — but the `orders` row remains the projection of the *filled* subset
+rather than of every intent. Reconstructing the full intent history means reading
+`order_events`, which is where `event_store.refusals_between()` points.
+
+⚠ The original hazard returns the moment anyone *does* start writing `orders` rows for
+non-fills. If that ever happens, every count, join and report reading `orders` must be
+re-checked against a terminal-state filter — the `is_shadow IS FALSE` lesson from
+`signals.status`, in a new table.
 
 ### 2.4 One `is_active()` predicate
 

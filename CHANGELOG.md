@@ -7,9 +7,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
-### feat(7.3, partial): the order-event stream, the FSM, and the bus
+### feat(7.3): the order-event stream, the FSM, the bus, and the live-path cutover
 
-**Machinery, not wiring.** `order_events` (migration applied to dev and verified
+**COMPLETE.** (The first half below shipped as machinery; the cutover followed in the same
+session — see the addendum at the end of this entry.)
+
+**Machinery first.** `order_events` (migration applied to dev and verified
 reversible) · `OrderEventRow` · `app/broker/order_fsm.py` · `app/broker/event_bus.py`.
 **The durable event writer and the live-path cutover remain**, so `place_order` still calls
 `place_paper_order` directly and no behaviour or recorded number changes.
@@ -39,14 +42,37 @@ early must not look identical to a quiet market. Synchronous by design: the orde
 already in a transaction when events are emitted, and a handler that persists one must run
 in *that* transaction.
 
-⚠ **When the cutover lands, `orders` becomes a list of INTENTS, not trades.** Both current
-readers were checked and are safe (`max_trades_per_day` counts `Position.id`;
-`daily_report.py:605` filters `status == "filled"`), but every new reader must filter on
-terminal state — the `signals.status` lesson in a new table.
+**▶ Addendum — the cutover, same session.** `place_order` now writes `submitted` **before
+the RiskEngine runs**, then `denied` (with the RULE that refused) or `rejected` (the paper
+broker's own unconditional pre-fill refusals, `error_class=terminal`), or
+`accepted` + `filled` on success.
+
+⭐ **The defect this could easily have shipped with.** `get_db` rolls the session back when
+a handler raises. Without an explicit commit **before** `raise HTTPException`, the denial
+row is written and then discarded — the record vanishes in precisely the branch it exists
+to capture, and every other test still passes. Both refusal branches now commit first, and
+`test_denial_survives_the_exception` is the test that file exists for.
+
+⚠ **CORRECTION to the 7.0 design, which said `orders` would become a list of intents.**
+It does not, and the built version is safer: intents live in `order_events` only, `orders`
+still gets a row exactly when a fill happens, so **no existing `orders` reader changed
+meaning**. The design doc has been fixed on discovery (W1).
+
+⚠ **`next_seq` is read-then-write and therefore NOT a lock.** Correct under the
+single-writer order path we have; the `UNIQUE(client_order_id, seq)` constraint is what
+catches the day that stops being true, which is why `append()` raises a named
+`DuplicateSequenceError` rather than letting an opaque DB error surface.
+⚠ **`append()` flushes but does not commit** — the caller owns the transaction, because
+`submitted` and `denied` belong to the same unit of work as the decision itself.
+⚠ **There is deliberately no DB `EventSink`**: a sink is synchronous and persisting needs
+an await, so routing it through the bus would mean an orphan task writing *outside* the
+caller's transaction.
 
 - `backend/alembic/versions/d0e1f2a3b4c5_add_order_events.py` · `app/models/trading.py`
-- `app/broker/order_fsm.py` — new · `app/broker/event_bus.py` — new
-- Tests: 32 new (`tests/test_order_fsm.py`)
+- `app/broker/order_fsm.py` · `event_bus.py` · `event_store.py` — new ·
+  `app/api/v1/trading.py` (cutover)
+- Tests: 42 new (`test_order_fsm.py` 32, `test_order_events_wiring.py` 10); order-path
+  regression 212 passed; `mypy app/ scripts/` clean (265 files)
 
 
 ### feat(7.2): the BrokerAdapter port, and a read-only Kite spike to check its shape
