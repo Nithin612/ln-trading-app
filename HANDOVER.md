@@ -51,11 +51,18 @@
 **Full backend suite after 7.1+7.2: 2028 passed, 1 skipped, 0 failed.** (7.3's 32 tests
 came after that run — re-run the suite before calling 7.3 done.)
 
-### ✅ Full suite GREEN through 7.3's FSM/bus commit
+### ✅ Full suite GREEN through ALL of Phase 7
 
-**2087 passed, 1 skipped, 44 deselected, 0 failed** (34:02). That is exactly
-**1995 baseline + 33 (7.1) + 27 (7.2) + 32 (7.3)** — every new test accounted for and no
-regression anywhere. Log: `/home/nithin/.claude/jobs/74d5bb2c/tmp/pytest_73.log`.
+**2116 passed, 1 skipped, 44 deselected, 0 failed** (34:34). Exactly
+**1995 baseline + 33 (7.1) + 27 (7.2) + 42 (7.3) + 19 (7.4)** — every new test accounted
+for, no regression anywhere. `ruff` + `mypy app/ scripts/` clean (266 files).
+
+⚠ **One real failure was caught on the way and is worth remembering:** A13 asserted
+`PRE_TRADE_RULES[0] == RULE_BREAKER`, and 7.4 legitimately broke it by putting the kill
+switch first. Index 0 was a stricter proxy than the invariant A13 actually defends — its
+own message already said the right thing ("before every PER-SIGNAL rule"). Now pinned as
+two assertions so a future reordering cannot hoist a per-signal rule above the account
+rails.
 
 ### ▶▶ RESUME HERE — PHASE 7 IS DONE; what remains is the strategy half
 
