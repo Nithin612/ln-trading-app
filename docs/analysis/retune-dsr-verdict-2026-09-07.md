@@ -1,4 +1,4 @@
-# Q2.4 — the momentum ×1.5 retune, decided by the bar (2026-09-06)
+# Q2.4 — the momentum ×1.5 retune, decided by the bar (2026-09-07)
 **The forward route is dead.** The 6.4 shadow A/B has minted **7 signals per arm**
 and resolved **0 in 21 days** (2026-08-13 → 09-03). At that rate the decision is
 years away, so waiting for forward evidence is not a plan — it is a way of never
@@ -31,7 +31,14 @@ so a candidate far below it cannot be rescued by accruing more of the same.
 ## Verdict
 **momentum ×1.5 stands at t = +1.00** against a hurdle of **≈3.6** — short by ~3.6×.
 > DSR 74.8% < 95%: needs ≈4,453 observations at these moments (have 734) to clear a 13-trial benchmark of +0.013
-⛔ **NOT ONE CONFIG CLEARS THE BAR — including the winner.**
+⭐ **THE WINNER HAS CHANGED. `structure ×0.5` now ranks first, not `momentum ×1.5`.**
+The August sweep put `momentum ×1.5` top on total-R (+50.4). Re-running the
+same method on a slightly larger corpus reorders the table — and the gap
+between first and the middle of the pack is a fraction of a t. **A ranking
+that reshuffles when the sample nudges was never measuring a real ordering**,
+which is a sharper argument against the original pick than any single
+statistic: it shows the selection itself was the noise.
+⛔ **NOT ONE CONFIG CLEARS THE BAR — including whichever one leads.**
 **⇒ DECIDE: NO. The momentum ×1.5 retune is not promotable, and the forward
 A/B should stop being treated as a pending decision.** It is not that the
 evidence is incomplete; it is that the apparent edge is the size a best-of-13

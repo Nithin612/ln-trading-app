@@ -7,6 +7,51 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(Q2.4): the momentum ×1.5 retune — DECIDED NO, without waiting for forward evidence
+
+**The forward route was dead.** The 6.4 shadow A/B has minted **7 signals per arm and
+resolved 0 in 21 days** (worse than the "3 minted / 0 resolved in 6 days" on file). At that
+rate the decision is years away — "wait for forward evidence" was a way of never deciding.
+
+⚠ **The queued task was misframed and the correction matters:** it asked to *build* a
+backtest path. One already existed — `scripts/weight_retune.py`, the 6.4 sweep. Building a
+second would have been the parallel implementation W2 forbids. What was actually missing was
+an **instrument**: the original picked best-of-12 on the full corpus and said so in its own
+verdict, with `folds+` as its only guard against a lucky pick.
+
+So `scripts/retune_dsr_verdict.py` runs the **existing** sweep through the deflated-Sharpe
+bar — built 09-03, validated by H8 on 09-04, and made for exactly this shape of problem.
+Two refinements over the original: the trial count is honest (**13** = baseline + 12), and
+the trial dispersion is **measured** from the configs we actually ran rather than the bar's
+conservative `1/√n` fallback.
+
+**Result: not one config clears the bar.** `momentum ×1.5` stands at **t = +1.00 against a
+≈3.6 hurdle** — DSR 74.8% vs a 95% bar, needing ≈4,453 observations against the 734 it has.
+
+⭐ **And the sharper finding, which no single statistic gives you: THE WINNER MOVED.** August
+put `momentum ×1.5` top on total-R (+50.4). Re-running the *same method* on a slightly larger
+corpus puts **`structure ×0.5` first**, with the whole table separated by fractions of a t.
+**A ranking that reshuffles when the sample nudges was never measuring an ordering** — which
+shows the original pick *was* the selection, not an edge under it.
+
+**⇒ DECIDE: NO.** The retune is not promotable and the forward A/B stops being carried as a
+pending decision. Same shape as `sl_atr` (t ≈ 0.41, decided NO 09-04): **the instrument
+working, not failing.** `gate_register` updated to `DECIDED_NO`.
+
+⚠ **Limits kept in the report:** deflation prices the *selection*, not the missing holdout —
+this is still in-sample, and a pass would have meant "worth a real out-of-sample test", never
+"promote". And the lever is per-**GROUP** while the 6.2 leak is per-**FACTOR**, so a null here
+argues for per-factor weights (a larger, frozen-engine change) rather than closing the
+question.
+
+**Also fixed:** the script stamped its report in **UTC** where every other analysis script
+uses **IST** — which labelled an early-morning IST run with yesterday's date and would have
+put it out of order beside its siblings.
+
+- `backend/scripts/retune_dsr_verdict.py` — new · `app/services/gate_register.py`
+- `docs/analysis/retune-dsr-verdict-2026-09-07.md` — the report
+
+
 ### feat(F1): would a market-cap size floor have helped? — the cheap cross-tab says no
 
 **The half of F1 that needs no vendor**, and it changes what D3 is worth. MCE 5b proposes a

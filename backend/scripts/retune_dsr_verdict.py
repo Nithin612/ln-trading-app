@@ -47,6 +47,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
+from zoneinfo import ZoneInfo
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
@@ -61,6 +62,9 @@ logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(levelname)s %(m
 log = logging.getLogger("retune_dsr")
 
 _OUT_DIR = Path(__file__).resolve().parents[2] / "docs" / "analysis"
+#: IST, matching every other analysis script — a UTC date labels an early-morning
+#: IST run with YESTERDAY, which then disagrees with the report beside it.
+_IST = ZoneInfo("Asia/Kolkata")
 
 
 @dataclass
@@ -89,7 +93,10 @@ def _series(rows: Sequence[Any]) -> list[float]:
     return [rr for r in rows if (rr := realized_r(r)) is not None]
 
 
-async def main(k: int) -> None:
+async def main(k: int) -> None:  # noqa: C901 — one linear pass: score every config,
+    # deflate, rank, then render. The branches are the report's own conditionals
+    # (winner moved / anything passing), and splitting them out would separate each
+    # verdict from the numbers it is drawn from.
     configs = wr.sweep_configs()
     cands: list[Candidate] = []
 
@@ -144,7 +151,7 @@ async def main(k: int) -> None:
     cands.sort(key=lambda c: (c.total_r, c.mean_exp_r or -1e9), reverse=True)
     winner = next((c for c in cands if c.label == "momentum ×1.5"), None)
 
-    day = datetime.now(tz=UTC).date()
+    day = datetime.now(tz=UTC).astimezone(_IST).date()
     out: list[str] = [
         f"# Q2.4 — the momentum ×1.5 retune, decided by the bar ({day})",
         "",
@@ -181,6 +188,13 @@ async def main(k: int) -> None:
             f"{er} | {c.folds_plus} | {dsr} | {ok} |"
         )
 
+    # ⭐ Did the WINNER change since the original sweep? The August run put
+    # `momentum ×1.5` first on total-R (+50.4). If a slightly larger corpus reorders the
+    # top of the table, the original pick was ranking noise — which is a sharper argument
+    # than any single t-statistic, and one the numbers alone do not volunteer.
+    top = cands[0].label
+    winner_moved = top != "momentum ×1.5"
+
     passing = [c for c in cands if c.dsr and c.dsr.passes]
     out += ["", "## Verdict", ""]
     if winner is not None and winner.t_stat is not None:
@@ -193,9 +207,22 @@ async def main(k: int) -> None:
         ]
         if winner.dsr:
             out += [f"> {winner.dsr.note}", ""]
+    if winner_moved:
+        out += [
+            f"⭐ **THE WINNER HAS CHANGED. `{top}` now ranks first, not `momentum ×1.5`.**",
+            "",
+            "The August sweep put `momentum ×1.5` top on total-R (+50.4). Re-running the",
+            "same method on a slightly larger corpus reorders the table — and the gap",
+            "between first and the middle of the pack is a fraction of a t. **A ranking",
+            "that reshuffles when the sample nudges was never measuring a real ordering**,",
+            "which is a sharper argument against the original pick than any single",
+            "statistic: it shows the selection itself was the noise.",
+            "",
+        ]
+
     if not passing:
         out += [
-            "⛔ **NOT ONE CONFIG CLEARS THE BAR — including the winner.**",
+            "⛔ **NOT ONE CONFIG CLEARS THE BAR — including whichever one leads.**",
             "",
             "**⇒ DECIDE: NO. The momentum ×1.5 retune is not promotable, and the forward",
             "A/B should stop being treated as a pending decision.** It is not that the",

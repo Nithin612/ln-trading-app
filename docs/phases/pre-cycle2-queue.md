@@ -143,7 +143,7 @@ Two findings worth carrying forward:
 | **2.1** ✅ **DONE 2026-09-07** | **F1 `market_cap` spike** | ⛔ **the two size proxies DISAGREE and neither contrast survives its bootstrap** ⇒ recommend **DROP 5b**; **D3 becomes moot** until the premise is revisited |
 | **2.2** | **R1 VWAP/RVOL as confluence factors** | ⛔ blocked on **D1**. Frozen engine ⇒ needs §8 regression + regenerated Rust oracle fixtures in the same commit. Changes which signals exist ⇒ **Bucket-A class, must precede the clock** |
 | **2.3** | **R2 weekly spread-width gate** | ⛔ blocked on **D2** — *recommend DROP*, see §4 |
-| **2.4** | momentum ×1.5 retune | forward route is stalled; needs a **backtest path** to decide at all |
+| **2.4** ✅ **DECIDED NO 2026-09-07** | momentum ×1.5 retune | t = **+1.00** vs a 3.6 hurdle; **not one config clears the bar**, and ⭐ **the winner MOVED** (`structure ×0.5` now leads) — the original best-of-12 pick was the selection itself |
 | **2.5** | pair df-vs-adf | accruing nightly — **no build**, just don't lose it |
 
 ### Q3 — remaining cycle-2 entry criteria (not named in the ask, but on the checklist)

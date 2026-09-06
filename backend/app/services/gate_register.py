@@ -205,15 +205,20 @@ REGISTER: tuple[Hypothesis, ...] = (
     Hypothesis(
         key="momentum_retune",
         name="Momentum weight ×1.5 retune",
-        status=Status.SHADOW,
+        status=Status.DECIDED_NO,
         prediction="up-weighting momentum lifts the confluence's hit rate",
-        bar="forward evidence from minted signals",
-        stands_at="3 minted, 0 resolved in 6 days",
+        bar="t >= 3.6 on the trade series, deflated for the best-of-13 selection",
+        stands_at="t = +1.00 over 734 corpus trades (forward arm: 7 minted, 0 resolved in 21 days)",
         verdict=(
-            "STALLED — at ~0.5 signals/day this decision is years away by this route; needs a "
-            "backtest path"
+            "DECIDED NO 2026-09-07. Short of the bar by ~3.6x; DSR 74.8% vs a 95% bar, needing "
+            "~4,453 observations against 734 held. ⭐ And the WINNER MOVED: re-running the same "
+            "sweep on a slightly larger corpus puts `structure x0.5` first, not momentum x1.5 — "
+            "a ranking that reshuffles when the sample nudges was never measuring an ordering, "
+            "so the original best-of-12 pick was the selection itself. The forward A/B is no "
+            "longer a pending decision. ⚠ Still in-sample (deflation prices the selection, not "
+            "the missing holdout), and the lever is per-GROUP while the 6.2 leak is per-FACTOR"
         ),
-        review_due="needs a backtest path, not accrual",
+        review_due=None,
     ),
     Hypothesis(
         key="pair_df",
