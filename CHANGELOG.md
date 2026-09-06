@@ -7,6 +7,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(Q3.6): the Minervini trend template — disjoint from our engine, and that is the finding
+
+⭐ **NOT ONE of the 91 evaluable closed positions passes all seven conditions.**
+
+That is not an uninformative split, it is a **disjoint** one — the template and our engine
+select from effectively non-overlapping sets. This book therefore cannot test it: there is
+no passing cohort to compare a failing one against.
+
+**The conditions that bind hardest are the trend-structure ones:**
+
+| condition | entries passing |
+|---|---|
+| `SMA150 > SMA200` | **25 of 91** |
+| `SMA200 rising` | **29 of 91** |
+| `≥30% above the 52-week low` | 45 of 91 |
+
+⭐ **Read that as a finding about OUR engine, not about Minervini.** A large majority of the
+names we entered were in a structural **downtrend** on his definition — trading below or
+against their own long moving averages. Our selection is not a weaker version of this
+template; it is close to its opposite. Those 91 positions made **−₹18,950**.
+
+**⇒ Neither a clean drop nor a gate.** The template makes a claim about which names should
+be *eligible*, and the only honest test is a **universe-level corpus rerun** — does applying
+it change what the engine generates, and is that set better? That is real work, not a shadow
+gate, and it is the correct next step for anyone pursuing it.
+
+⚠ **It must NOT be shipped as a ninth selection gate.** On this book it would block **100%
+of entries** — not a filter, but a different strategy wearing a filter's clothes. That is
+also exactly the move closed as a programme on 2026-09-04.
+
+⚠ **A verdict-logic bug caught on first output.** The script's first draft branched
+"does not partition ⇒ DROP", which conflates *an uninformative split* with *an empty
+cohort*. A 0-of-91 result says something far stronger than "tells us nothing", and reporting
+it as a routine drop would have thrown away the most interesting thing in the run.
+
+⚠ **No look-ahead:** every condition is computed from bars strictly BEFORE the entry date
+(constraint #3). ⚠ **Condition 8 (relative strength) is approximated** within the traded set
+and reported separately, since Minervini ranks against the whole market from a vendor.
+
+- `backend/scripts/minervini_template.py` — new
+- `docs/analysis/minervini-template-2026-09-07.md` — the report
+
+
 ### feat(Q2.4): the momentum ×1.5 retune — DECIDED NO, without waiting for forward evidence
 
 **The forward route was dead.** The 6.4 shadow A/B has minted **7 signals per arm and

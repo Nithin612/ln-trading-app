@@ -155,7 +155,7 @@ Two findings worth carrying forward:
 | **3.3** ✅ **DONE 2026-09-07** | CAS Stage 2 — the overnight-reversal study | ρ = **−0.272**, 90% interval **[−0.478, −0.088]** excludes zero — the first clean directional signal in the programme. ⚠ Sign survives leave-one-out, **magnitude does not** (~half rests on 2026-08-31). NOT promotable at 7 days |
 | **3.4** | Concentration/sizing decision | ⛔ **D4** |
 | **3.5** | `compute_levels` payoff geometry | ⛔ **D5** — *the known lever* |
-| **3.6** | Minervini trend template | test **or explicitly drop** — the checklist accepts either |
+| **3.6** ✅ **TESTED 2026-09-07** | Minervini trend template | ⭐ **0 of 91 entries pass** — DISJOINT from our selection, not an uninformative split. Binding conditions are trend-structure: **we systematically trade names in structural downtrends**. Needs a universe-level corpus rerun, NOT a gate |
 
 ### Q5 — a review-calendar item that came due (⏰ raised unprompted)
 
