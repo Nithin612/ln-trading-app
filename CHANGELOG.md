@@ -7,6 +7,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(A27): config dry-run — what does `.env` say, and which live process has heard it?
+
+**`make config-check`.** `get_settings()` is an `@lru_cache` singleton, so a `.env` edit
+reaches a running backend or worker only when that process re-imports `app.core.config`.
+Editing the file and assuming it took effect has bitten this project repeatedly — it is why
+CLAUDE.md carries a hand-run recipe for the same question. This is that recipe as a command.
+
+**Why it earns being pulled out of Bucket C:** the **cycle-2 reset is itself a config
+event** (heat cap → `active`, paper clock → restart). Getting that wrong silently does not
+cost a day, it invalidates the *window* — 45–50 trading days.
+
+**It never reads `.env` and never prints a credential.** Values arrive through pydantic's
+own loader; the file is only ever `stat`-ed for its mtime. Masking is **name-based**, so a
+conventionally named secret is covered without anyone remembering to add it — and the test
+that matters runs over the **real** `Settings` model with a sentinel substituted for every
+field, rather than over a handful of examples. A companion test asserts the rule actually
+*matches* the known credentials, because an `_is_secret` that classified nothing would make
+the leak test pass vacuously.
+
+**It splits uvicorn's parent from its `--reload` child**, which is the specific error the
+manual recipe warns about: the parent never re-imports config, so its start time says
+nothing about which values are live.
+
+**Three honesty fixes made after seeing its first real output:**
+- it said *"Rails at their CODE DEFAULT (nothing in .env)"* — but the script deliberately
+  does not open `.env`, so it cannot tell *absent* from *set to the same value*;
+- it printed a green tick when there was **no `.env` at all** — the case where it knew
+  *least*;
+- ⭐ **exit `1` (could not check) is deliberately not exit `0` (checked and clean).**
+  Sharing a code would let a CI check pass on a box with no `.env` — precisely the
+  configuration most likely to be wrong.
+
+⚠ **The staleness verdict is over-sensitive on purpose.** `.env` being newer than a process
+start proves the process *may* hold old values, not that the knob you care about changed.
+The failure it guards is silent, so a false alarm costs a re-read and a miss costs a window.
+
+⚠ **The `.env`-present path is not yet exercised end to end** — this branch is an isolated
+worktree, which has no `.env`, so only the "could not check" path ran for real.
+
+- `backend/scripts/config_dryrun.py` — new · `Makefile` (`config-check`)
+- Tests: 21 new (`tests/test_config_dryrun.py`)
+
+
 ### feat(CAS-2): the overnight-reversal study — a real signal, and its honest limits
 
 **The auction move REVERSES overnight, cross-sectionally.** Spearman **ρ = −0.272**
