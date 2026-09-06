@@ -298,10 +298,28 @@ class TestBreakerUnsuppressible:
     call site that happens to invoke it today.
     """
 
-    def test_breaker_runs_first(self) -> None:
-        assert rx.PRE_TRADE_RULES[0] == rx.RULE_BREAKER, (
-            "the account-level rail must precede every per-signal rule — when it has "
-            "tripped, nothing about this particular signal matters"
+    def test_breaker_precedes_every_per_signal_rule(self) -> None:
+        """The breaker is an ACCOUNT-level rail: when it has tripped, nothing about this
+        particular signal matters, so no per-signal rule may be consulted first.
+
+        ⚠ This assertion used to read `PRE_TRADE_RULES[0] == RULE_BREAKER`, and 7.4
+        legitimately broke it by putting the KILL SWITCH first. That was the test doing
+        its job — but index 0 was a stricter proxy than the invariant this class is
+        actually defending, which its own message already stated. Only another
+        account-level rail may precede the breaker; a per-signal rule never may, and the
+        second assertion below is what pins that as the ordering evolves.
+        """
+        account_level = {rx.RULE_KILL_SWITCH, rx.RULE_BREAKER}
+        per_signal = [r for r in rx.PRE_TRADE_RULES if r not in account_level]
+
+        idx = rx.PRE_TRADE_RULES.index(rx.RULE_BREAKER)
+        for rule in per_signal:
+            assert rx.PRE_TRADE_RULES.index(rule) > idx, (
+                f"{rule} is a per-signal rule and must not be consulted before the "
+                "account-level breaker"
+            )
+        assert set(rx.PRE_TRADE_RULES[:idx]) <= account_level, (
+            "only another account-level rail may precede the breaker"
         )
 
     def test_no_setting_can_disable_it(self) -> None:
