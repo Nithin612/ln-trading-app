@@ -22,7 +22,24 @@ buys a smaller position, so a constant-qty replay tests bet size, not stop place
 error inverted the first pass)."* The same class of error, one layer over: reading ₹ peaks
 and inferring giveback.
 
-So this script reports everything **normalised by R** = `|entry − commit_SL| × qty`.
+So this script reports everything **normalised by R**.
+
+## ⚠ Correction, 2026-09-07 — the first version of THIS file got R wrong twice
+
+1. **R was measured from the signal's intended entry, while P&L is measured from the
+   actual fill.** Those are different numbers whenever the fill slipped or chased, and
+   mixing them manufactures fake R. It made GEOJITFSL read as a 3.03R peak that gave back
+   2.5R; measured from the fill it never reached 2R. **R is now
+   `|avg_entry_price − commit_SL| × qty` — the risk actually taken.**
+2. **`abs()` hid the known wrong-side row.** SPARC is a LONG filled at ₹204.60 with a
+   ₹205.00 stop (the `size_for_fill` side-blind bug, fixed forward-only). Under `abs()`
+   its four-paise "risk" produced a 2.31R peak and a −3.09R loss out of pure arithmetic.
+   The risk expression is now SIGNED and non-positive rows are excluded and counted.
+
+The correction **reversed a conclusion**: with signal-entry R the ≥2R bucket appeared to
+capture only 20%, i.e. "the biggest winners give back the most". Measured from the fill
+it captures 65%, in line with every other bucket. The original verdict — *the exits are
+working* — is unchanged and now rests on consistent arithmetic.
 
 ## What it actually found
 
@@ -57,15 +74,18 @@ _OUT_DIR = Path(__file__).resolve().parents[2] / "docs" / "analysis"
 _SQL = text(
     """
     SELECT p.id, s.symbol, sg.classification AS cls, p.exit_reason, p.trail_state,
-           p.quantity, p.avg_entry_price, p.current_sl, sg.stop_loss AS commit_sl,
-           p.peak_pnl, p.realized_pnl,
-           (ABS(sg.entry_price - sg.stop_loss) * p.quantity) AS r_inr
+           p.side, p.quantity, p.avg_entry_price, p.current_sl,
+           sg.stop_loss AS commit_sl, p.peak_pnl, p.realized_pnl,
+           -- ⭐ Risk per share measured from the ACTUAL FILL, not the signal's
+           -- intended entry. Direction-aware, and deliberately SIGNED so a
+           -- wrong-side row surfaces as <= 0 instead of being rescued by abs().
+           (CASE WHEN p.side = 'LONG' THEN p.avg_entry_price - sg.stop_loss
+                 ELSE sg.stop_loss - p.avg_entry_price END) AS risk_per_share
     FROM positions p
     JOIN signals sg ON sg.id = p.signal_id
     JOIN stocks s ON s.id = p.stock_id
     WHERE p.mode = 'paper' AND p.closed_at IS NOT NULL
       AND p.peak_pnl IS NOT NULL AND sg.stop_loss IS NOT NULL
-      AND sg.entry_price IS NOT NULL
     """
 )
 
@@ -110,16 +130,17 @@ async def _run() -> int:
     async with AsyncSessionFactory() as db:
         rows = list((await db.execute(_SQL)).all())
 
+    excluded = [r for r in rows if r.risk_per_share is None or float(r.risk_per_share) <= 0]
     trades = [
         Trade(
             symbol=r.symbol, cls=r.cls, exit_reason=r.exit_reason,
-            peak_r=float(r.peak_pnl) / float(r.r_inr),
-            real_r=float(r.realized_pnl) / float(r.r_inr),
+            peak_r=float(r.peak_pnl) / (float(r.risk_per_share) * r.quantity),
+            real_r=float(r.realized_pnl) / (float(r.risk_per_share) * r.quantity),
             pnl=float(r.realized_pnl),
             moved=r.current_sl is not None and r.current_sl != r.commit_sl,
         )
         for r in rows
-        if r.r_inr and float(r.r_inr) > 0
+        if r.risk_per_share is not None and float(r.risk_per_share) > 0
     ]
     if not trades:
         print("no evaluable closed positions")
@@ -161,48 +182,51 @@ async def _run() -> int:
         g = grouped[label]
         if not g:
             continue
-        mean_peak = statistics.fmean(t.peak_r for t in g)
-        caps = [c for t in g if (c := t.capture) is not None]
-        # ⚠ Capture is only meaningful against a peak worth capturing. Averaging it over a
-        # bucket whose mean peak is ~0 produced "-610%" in the first run — the same
-        # divide-by-a-non-existent-peak artefact the per-trade guard catches, reappearing
-        # one level up because the guard was per-trade only.
-        cap = (
-            f"{statistics.fmean(caps) * 100:.0f}%"
-            if caps and mean_peak >= 0.5
-            else "— (no peak to capture)"
-        )
+        sum_peak = sum(t.peak_r for t in g)
+        sum_real = sum(t.real_r for t in g)
+        # ⚠ AGGREGATE capture (sum realised / sum peak), not the mean of per-trade
+        # ratios. The mean-of-ratios version weights a trade that peaked at 0.06R
+        # the same as one that peaked at 3R, and it is the ratio-of-sums that
+        # corresponds to money. Still suppressed when the bucket has no peak worth
+        # capturing — dividing by ~0 produced the "-610%" an earlier pass printed.
+        cap = f"{100 * sum_real / sum_peak:.0f}%" if sum_peak >= 0.5 * len(g) else "— (no peak)"
         out.append(
             f"| **{label}** | {len(g)} | {statistics.fmean(t.peak_r for t in g):.2f} | "
             f"{statistics.fmean(t.real_r for t in g):+.2f} | "
-            f"{sum(t.real_r for t in g):+.1f}R | ₹{sum(t.pnl for t in g):,.0f} | {cap} |"
+            f"{sum_real:+.1f}R | ₹{sum(t.pnl for t in g):,.0f} | {cap} |"
         )
 
     dead = [t for t in trades if t.peak_r < 0.5]
-    live = [t for t in trades if t.peak_r >= 1.0]
     dead_pct = 100 * len(dead) / len(trades)
     dead_inr = sum(t.pnl for t in dead)
     dead_r = sum(t.real_r for t in dead)
-    live_caps = [c for t in live if (c := t.capture) is not None]
-    live_cap = statistics.fmean(live_caps) * 100 if live_caps else 0.0
+    worked = [t for t in trades if t.peak_r >= 0.5]
+    worked_peak = sum(t.peak_r for t in worked)
+    worked_real = sum(t.real_r for t in worked)
     out += [
         "",
         "## Verdict",
         "",
-        f"⭐ **{len(dead)} of {len(trades)} trades ({dead_pct:.0f}%) never got meaningfully "
-        f"into profit**, and they account for **₹{dead_inr:,.0f}** ({dead_r:+.1f}R).",
+        f"⭐ **{len(dead)} of {len(trades)} trades ({dead_pct:.0f}%) never reached 0.5R**, "
+        f"and they account for **₹{dead_inr:,.0f}** ({dead_r:+.1f}R). **No exit rule can "
+        "touch these** — there was never a profit to protect.",
         "",
-        f"⭐ **The trades that DID work captured most of their move.** The {len(live)} that "
-        f"reached ≥1R realised {statistics.fmean(t.real_r for t in live):+.2f}R against a "
-        f"{statistics.fmean(t.peak_r for t in live):.2f}R peak — **{live_cap:.0f}% capture.**",
+        f"⭐ **The {len(worked)} trades that DID work kept most of their move**: "
+        f"{worked_real:.1f}R realised of a {worked_peak:.1f}R combined peak = "
+        f"**{100 * worked_real / worked_peak:.0f}% capture**, and capture is roughly flat "
+        "across buckets rather than collapsing on the big winners.",
+        "",
+        f"⭐ **The entire addressable pool for a better exit is {worked_peak - worked_real:.1f}R** "
+        "— the total giveback on trades that got into profit, most of which is irreducible "
+        "(nothing exits at the exact peak). Set that against the "
+        f"{abs(dead_r):.1f}R lost by trades that never worked.",
         "",
         "**⇒ This is NOT an exit problem. The exit machinery is working.** It is the same",
         "diagnosis CLAUDE.md recorded months ago on 15 trades — *\"the exit machinery was",
         "correct but had nothing to protect\"* — now confirmed on "
         f"{len(trades)}.",
         "",
-        "**The loss is made at ENTRY**: roughly half of all trades go nowhere and pay ~0.7R",
-        "for the privilege. No exit rule can fix a trade that never moves in your favour.",
+        "**The loss is made at ENTRY.**",
         "",
         "## ⚠ And the ratchet does NOT explain the difference",
         "",
@@ -234,6 +258,9 @@ async def _run() -> int:
         "## ⚠ Limits",
         "",
         f"- **n = {len(trades)}**, one broad regime, ~2 months of entries.",
+        f"- **{len(excluded)} position(s) excluded** for a non-positive risk distance (a"
+        "  stop on the wrong side of the fill). Excluded and counted, never `abs()`-ed"
+        "  into a plausible-looking tiny R — that is how a −3.09R artefact was born.",
         "- **`peak_pnl` is updated on live monitor ticks**, so it is only as complete as the",
         "  monitor's uptime — a peak reached while the worker was down is not recorded, which",
         "  biases peaks DOWNWARD and would, if anything, understate giveback.",
