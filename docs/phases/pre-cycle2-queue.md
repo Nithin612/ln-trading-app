@@ -151,7 +151,7 @@ Two findings worth carrying forward:
 | # | item | state |
 |---|---|---|
 | **3.1** | MCE 5b `market_cap` writer + T1 PIT test | ⛔ blocked on **D3** (a vendor decision, not a build task) |
-| **3.2** | MCE 6 news veto — Google News RSS + FinBERT | ready |
+| **3.2** ⛔ **DEFERRED 2026-09-07** | MCE 6 news veto | **none of its 3 preconditions holds**: 0/322 rating rows carry direction · no forward earnings calendar · **0 of 559 signals hit the existing guard, which has NEVER fired**. RSS+FinBERT is a separate DECISION (locked-stack change) |
 | **3.3** ✅ **DONE 2026-09-07** | CAS Stage 2 — the overnight-reversal study | ρ = **−0.272**, 90% interval **[−0.478, −0.088]** excludes zero — the first clean directional signal in the programme. ⚠ Sign survives leave-one-out, **magnitude does not** (~half rests on 2026-08-31). NOT promotable at 7 days |
 | **3.4** | Concentration/sizing decision | ⛔ **D4** |
 | **3.5** | `compute_levels` payoff geometry | ⛔ **D5** — *the known lever* |

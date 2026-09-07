@@ -7,6 +7,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(MCE 6): the news veto is NOT buildable from the data we hold — checked, then deferred
+
+**Checked before building, and the check is the deliverable.** The phase doc specifies slice
+6 as *earnings-blackout + rating-**DOWNGRADE** veto + severity/decay*. Each clause assumes a
+fact about `corporate_filings`. Against the live table (**23,174 filings**, ~6 weeks), none
+of the three holds:
+
+| precondition | result |
+|---|---|
+| rating **direction** recoverable | ⛔ **0 of 322** `rating_change` rows say "downgrade" (8 say upgrade); the headline is a bare `Credit Rating` and the `body` is a **PDF URL we never parse** |
+| earnings timing known **in advance** | ⛔ `board_meeting` rows are *"Outcome of Board Meeting"* (post-facto); `earnings` rows are *"Clarification – Financial Results"* (administrative). **No forward earnings calendar** |
+| filings and signals **coincide** | ⛔ **0 of 559** signals hit the existing 1-hour guard. A **3-day** window — 72× wider — reaches **4 (0.7%)** |
+
+⭐ **The existing 60-minute `event_guard` has never fired.** Not once since the filings feed
+started. That was invisible until counted, and it is the exact failure this check exists to
+prevent: a veto built on an unsupported assumption does not fail loudly — it silently never
+fires and then *looks like protection* wherever it is rendered.
+
+**⇒ DEFER slice 6.** Two of its three clauses are **unimplementable** (a downgrade veto would
+match zero rows; a blackout has no forward dates to anticipate) and the third has nothing to
+act on. **Building severity/decay on a gate that fires zero times is decoration** — it would
+add a knob, a shadow sidecar and a daily-report line, all reporting an event that does not
+occur.
+
+**What would change the answer:** a forward earnings calendar · parsed rating documents (or
+a feed carrying direction as a field) · more history — re-run the script as it deepens, and
+watch the coincidence rate.
+
+⚠ **On the RSS + FinBERT alternative (review item A18) — this needs a DECISION, not a build.**
+It is a different and much larger proposal than the phase doc's slice 6: `transformers` +
+`torch` is a **locked-stack change** (~2 GB) against a standing "adopt no new deps" posture,
+and it puts a live third-party feed on the signal path. **And precondition 3 still applies to
+it** — if filings never coincide with our signals, whether *news* does is measurable far more
+cheaply than by installing a language model. Answer the cheap question first.
+
+- `backend/scripts/news_veto_feasibility.py` — new (re-runnable as history deepens)
+- `docs/analysis/news-veto-feasibility-2026-09-07.md` — the report
+
+
 ### feat(Q3.6): the Minervini trend template — disjoint from our engine, and that is the finding
 
 ⭐ **NOT ONE of the 91 evaluable closed positions passes all seven conditions.**
