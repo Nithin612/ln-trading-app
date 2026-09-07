@@ -7,6 +7,61 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(R1 pre-screen): VWAP looks real, and the EXISTING volume factor appears mis-signed
+
+**Run before the frozen-engine work, not after** — adding a confluence factor costs a Python
+impl **plus a byte-identical Rust impl**, 7 regenerated golden fixtures, exact parity on
+scores/confidence/decisions, an §8 regression and a hook-protected spec change. Days. So the
+cheap question came first: on the 105 trades we actually took, does either quantity separate
+winners from losers?
+
+**Two findings reshaped R1 before a line was written:**
+
+⭐ **RVOL already exists.** `volume_factor` computes `current / 20-day average` — that *is*
+relative volume, merely **binarised** at `≥1.5 → +0.5`. "Add RVOL" is really "grade the
+existing binary".
+⭐ **VWAP is intraday.** Session VWAP does not exist on a daily bar; anchored VWAP does, and
+**choosing the anchor is a spec decision**, not an implementation detail.
+
+**⛔ The volume factor fires on the trades that do WORSE:**
+
+| RVOL cohort | n | mean return | win | total |
+|---|---|---|---|---|
+| **≥ 1.5 — the factor FIRES, +0.5 confidence** | 18 | **−0.708%** | 50% | −₹2,821 |
+| < 1.5 — silent | 87 | **+0.608%** | 52% | −₹7,397 |
+
+The graded quintiles agree: Q5 (RVOL 3.64×) is **−1.384% at 43% win**; Q1 (0.35×) is +0.419%
+at 57%. **So the engine adds confidence precisely where outcomes were worse.** That is a
+finding about the *existing frozen engine*, not about a proposed factor — and it is the
+opposite of R1's premise that more volume confirmation is better.
+
+**✅ The VWAP gap is the cleanest gradient this project has produced:**
+
+| price vs 20-day anchored VWAP | n | mean return | win |
+|---|---|---|---|
+| Q1 (−4.41%, price below) | 21 | +0.020% | 43% |
+| Q2 (−1.67%) | 21 | +0.452% | 43% |
+| Q3 (−0.26%) | 21 | +0.271% | 48% |
+| Q4 (+2.31%) | 21 | +0.322% | 52% |
+| **Q5 (+4.96%, price above)** | 21 | **+0.845%** | **71%** |
+
+Win rate climbs monotonically 43 → 43 → 48 → 52 → **71%**, and the direction **agrees with an
+independent finding**: Minervini showed we systematically enter names in structural
+downtrends. Buying strength rather than weakness shows up twice, from two unrelated tests.
+
+⚠ **n ≈ 21 per quintile — this is a SCREEN, not a test.** Nothing here approaches t ≈ 3.6.
+It exists to decide whether the expensive engine change is worth starting.
+
+⚠ **The pre-registered prediction was partly WRONG, recorded rather than quietly dropped.**
+Before running I predicted t between 0.5 and 1.5 and **<5%** odds of anything clearing the
+bar, on the reasoning that VWAP/RVOL are momentum/volume-family factors and that whole group
+moves expectancy by ~±0.02R. The bar part still looks right. What I did not predict was a
+**monotonic VWAP gradient** or that **RVOL would point the opposite way to how the engine
+already uses it**.
+
+- `backend/scripts/r1_factor_prescreen.py` — new · `docs/analysis/r1-factor-prescreen-2026-09-07.md`
+
+
 ### decision(D2): R2 weekly spread-width gate — DROPPED (user sign-off 2026-09-07)
 
 **Dropped, and the reasoning is recorded rather than assumed** so a future session does not
