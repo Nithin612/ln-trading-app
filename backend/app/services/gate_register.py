@@ -288,6 +288,27 @@ REGISTER: tuple[Hypothesis, ...] = (
         review_due="flip to `active` at the CYCLE-2 RESET, not before",
     ),
     Hypothesis(
+        key="spread_width_r2",
+        name="Weekly spread-width gate (R2)",
+        status=Status.DECIDED_NO,
+        prediction="a spread-width floor lifts outcomes by skipping hard-to-exit weeks",
+        bar="never tested — dropped before becoming a trial",
+        stands_at="n/a",
+        verdict=(
+            "DROPPED 2026-09-07 by user sign-off, BEFORE it became a trial. Three independent "
+            "reasons: (1) the reading (Aronson, Lopez de Prado) is explicit that every gate is "
+            "a trial and a 9th RAISES the deflation bar for the other 8 — U4 already counts 15 "
+            "and calls that a lower bound; (2) H1's bootstrap puts the book's Sharpe at -0.033, "
+            "90% CI [-0.223, +0.118], so at n=105 even the LOSS is unestablished and any "
+            "partition slices noise; (3) both gates ever promoted were refuted (regime: 44 -> "
+            "88, ~8R; R:R>=1: blocked the only profitable cohort). ⚠ The IDEA is not forbidden, "
+            "its SHAPE is — it may return as a sizing/slippage MODIFIER (the MCE 5a reframing), "
+            "which claims no edge and so costs no trial"
+        ),
+        counts_as_trial=False,
+        review_due=None,
+    ),
+    Hypothesis(
         key="notional_cap",
         name="Per-position notional cap",
         status=Status.ACTIVE,

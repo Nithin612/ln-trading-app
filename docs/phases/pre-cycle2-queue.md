@@ -142,7 +142,7 @@ Two findings worth carrying forward:
 |---|---|---|
 | **2.1** ✅ **DONE 2026-09-07** | **F1 `market_cap` spike** | ⛔ **the two size proxies DISAGREE and neither contrast survives its bootstrap** ⇒ recommend **DROP 5b**; **D3 becomes moot** until the premise is revisited |
 | **2.2** | **R1 VWAP/RVOL as confluence factors** | ⛔ blocked on **D1**. Frozen engine ⇒ needs §8 regression + regenerated Rust oracle fixtures in the same commit. Changes which signals exist ⇒ **Bucket-A class, must precede the clock** |
-| **2.3** | **R2 weekly spread-width gate** | ⛔ blocked on **D2** — *recommend DROP*, see §4 |
+| **2.3** ⛔ **DROPPED 2026-09-07** (D2, user sign-off) | **R2 weekly spread-width gate** | a 9th gate raises the deflation bar for the other 8 (U4: 15 trials, a lower bound) · the book's Sharpe CI **[−0.223, +0.118]** leaves nothing to partition · both prior promotions were refuted. **May return as a sizing/slippage MODIFIER, never as a gate** |
 | **2.4** ✅ **DECIDED NO 2026-09-07** | momentum ×1.5 retune | t = **+1.00** vs a 3.6 hurdle; **not one config clears the bar**, and ⭐ **the winner MOVED** (`structure ×0.5` now leads) — the original best-of-12 pick was the selection itself |
 | **2.5** | pair df-vs-adf | accruing nightly — **no build**, just don't lose it |
 

@@ -7,6 +7,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### decision(D2): R2 weekly spread-width gate — DROPPED (user sign-off 2026-09-07)
+
+**Dropped, and the reasoning is recorded rather than assumed** so a future session does not
+re-propose it as a fresh idea.
+
+**What R2 was:** a weekly spread-width eligibility gate, approved into the Phase-6.8 research
+track on 2026-08-17 as one of three gated items (R1/R2/F1).
+
+**Why it is dropped — three independent reasons, any one sufficient:**
+
+**1. The reading says every gate is a TRIAL, and we now count them.** The e-book review's
+centre of gravity was our own biggest risk — overfitting and self-deception. Aronson
+(*Evidence-Based TA*: data-mining bias, out-of-sample discipline) and López de Prado (*AFML*:
+**deflated Sharpe = discount by number of trials**) both make the same point: a ninth gate is
+not free even if it looks promising, because **it raises the deflation bar for the other
+eight**. The U4 trials counter makes that concrete — it already stands at **15 observed
+trials, and calls that a LOWER BOUND** because threshold variants are not yet recorded.
+
+**2. Our own data says there is nothing left to partition.** H1's moving-block bootstrap on
+all 105 closed positions: **Sharpe −0.033, 90% interval [−0.223, +0.118]**. At n=105 *even the
+loss is not statistically established* — so any gate slicing this series is slicing noise.
+That is not an argument about R2 specifically; it is why gating was closed as a programme on
+2026-09-04.
+
+**3. The empirical record of this exact move is 0-for-2.** Both gates ever promoted were
+refuted: the **regime gate** (promoted on 44 observations, refuted by 88, subtracted ~8R) and
+the **R:R ≥ 1 floor** (promoted on an "identity, no evidence needed" argument, refuted within
+a week — it blocked the book's only profitable cohort, +₹10,585 at 63% win). The best
+surviving candidate, `sl_atr`, sits at **t ≈ 0.41 against a 3.6 hurdle**.
+
+**⇒ Dropped.** ⚠ **The idea is not forbidden — its SHAPE is.** If spread width matters it
+should return as a **position-sizing / slippage MODIFIER**, exactly the reframing already
+ruled for the MCE 5a liquidity gate: a modifier claims no edge, so it needs no DSR bar and
+costs no trial. A21/A37 already price spread and participation into fills, which is where a
+spread-width insight naturally belongs.
+
+
 ### feat(Q5): pre-COVID backtest — the data-sourcing spike, and it reframes the request
 
 **Calendar item discharged** (asked 2026-08-28, held until after watch mode). This is the
