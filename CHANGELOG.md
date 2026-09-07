@@ -7,6 +7,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### analysis: the book without the trades that were never really chosen
+
+Asked to omit the positions that were "entered wildly without looking at the signal" or
+mis-clicked, so the rest would show the real P&L. `backend/scripts/clean_book_study.py`
+(+ `docs/analysis/clean-book-2026-09-07.md`). Three findings, in order of how much they
+change the answer.
+
+**1. No mis-click is recorded anywhere.** Nothing in `CHANGELOG.md`, `docs/`, the phase
+docs or the memory files marks a position as unintended, and `positions` has no intent
+field. The exclusion is therefore a forensic reconstruction from execution signatures,
+not a record of what was meant.
+
+**2. The "wrong button" class is empty.** 0 of 106 closed positions opened a LONG on a
+SELL signal or the reverse. One entered through its own stop (SPARC — the side-blind
+`size_for_fill` bug, fixed forward-only); 3 were off-market; 0 on a weekend. Nobody
+bought a sell signal.
+
+**3. What IS detectable is displacement from the signal's own entry, and the numbers are
+large.** Excluding the 12 trades filled more than `settings.chase_max_r` (0.33R) past
+their signal entry, plus the one broken row:
+
+    as recorded   106 trades   -Rs 12,369
+    clean          93 trades   +Rs 13,262   +18.8R   55% win
+    excluded       13 trades   -Rs 25,631
+
+**⚠ But "chased" is largely a PROXY for "tight stop", and that is a finding about the
+instrument.** Displacement is measured in units of the stop distance, so a tight stop
+mechanically inflates it: a stock that ran Rs 1 past its entry is 0.1R chased on a Rs 10
+stop and 1.0R chased on a Rs 1 stop — same price action, opposite verdict. The chased set
+averages a 2.13% stop against 5.33% for the rest, with 8 of 12 inside the already-known
+tight-stop leak. The cross-tab is printed; chasing survives inside the wide-stop group
+(4 trades, 0% win) but the cells are far too small to separate the two effects. This is
+the third instance here of the partition-is-a-proxy trap (market-regime for *side*,
+`stop moved` for *went into profit*).
+
+**The exit verdict is robust to the exclusion.** On the clean set the exits still keep
+63% of peak on the 43 trades that reached 0.5R, and 43 of 86 still never got there
+(-Rs 47,751). Removing the badly-entered trades makes the entry problem smaller without
+moving where it lives.
+
+**What this does NOT license:** flipping `chase_gate_mode` active (n=12 against a t ~ 3.6
+bar that is flat in n), or reading +Rs 13,262 as a P&L we could have had — removing the
+worst 12% of any book improves it. The one thing that makes this cut legitimate rather
+than hindsight is that displacement is knowable BEFORE the order: `chase_guard` computes
+it from the live LTP at order time.
+
+Also fixed while writing it: the bucket table silently dropped the 10 trades whose
+`peak_pnl` is NEGATIVE (best mark never cleared entry) because the first bucket floored
+at 0.0, so the rows added to 76 against a stated 86. Floor is now -inf and an assertion
+pins the partition.
+
 ### feat: the exit/giveback study — commissioned on a wrong hypothesis, and that IS the finding
 
 **The exit machinery is working. The loss is made at entry.** Confirmed on 96 closed
