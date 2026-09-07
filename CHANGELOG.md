@@ -7,6 +7,60 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat: the factor sweep harness — and it REFUTES the R1 pre-screen's VWAP finding
+
+**Built to the standing instruction** (*"always try different possibilities... what if we
+change the period, how does it behave? Similarly 150 SMA > 200 SMA, 20 DMA > 200 DMA, or
+in-betweens"*) — with the one thing that stops a sweep becoming an overfitting machine
+**built in rather than bolted on**.
+
+`scripts/factor_sweep.py` sweeps volume ratios at 4 lookbacks, every SMA pair, price against
+3 references and 52-week position, against forward returns over the full daily history:
+**212,129 observations on 156 non-overlapping dates, 17 configurations.**
+
+**Three guards, each closing a specific way this could lie:**
+1. **Non-overlapping dates** — a 5-day forward return on consecutive days overlaps 80% with
+   its neighbour; ignoring that inflates significance ~√5×.
+2. **Day-block bootstrap** — every stock on one date shares that date's market move, so the
+   independent unit is the DATE, not the row (the CAS-2 lesson).
+3. **Trial count reported and charged** — `momentum ×1.5` was best-of-12 and its ranking did
+   not survive a larger corpus. That is the failure this exists to catch.
+
+**⛔ Result: nothing survives.** All 17 intervals span zero; max |IC| = 0.0224; no
+configuration is monotone 4/4. **The period choice in `volume_factor` is not where the
+problem is, and neither is the SMA pair.** That is a real answer to a real question.
+
+**⚠⚠ CORRECTION — this refutes the R1 pre-screen's headline, and the earlier enthusiasm was
+wrong.** Two messages ago the pre-screen was reported as *"the cleanest gradient this project
+has produced"* (win rate 43 → 71% as price rose above its 20-day anchored VWAP, n=21 per
+quintile). On **212,129** observations with a day-block bootstrap, the same relationship runs
+the **other way**:
+
+| feature | Q5 − Q1 spread |
+|---|---|
+| `close_over_sma20` | **−0.313%** |
+| `sma150_over_sma200` | **−0.309%** |
+| `close_over_vwap20` | **−0.265%** |
+| `close_over_sma200` | **−0.257%** |
+
+Stocks further **above** their averages had **lower** 5-day forward returns — mean reversion,
+not trend continuation. **The pre-screen finding should be treated as noise**, and the
+enthusiasm for it as a lesson: n=21 per quintile is exactly the sample size that has
+produced two refuted promotions in this project already.
+
+⭐ **What is now the most interesting open question: on our trades, both signals run OPPOSITE
+to the broad universe.** High RVOL did *worse* for us but ranks mildly *positive* in the
+universe; price-above-average did *better* for us but ranks *negative* there. Either our 105
+trades are too few to mean anything (most likely), or **our entry timing is systematically
+late** — buying extended, high-volume names after the move. The Minervini result (we enter
+structural downtrends) is a third observation in the same area.
+
+⚠ **Forward return is not our P&L** — no costs, no stops, no sizing. A feature can rank
+forward returns and still lose money once 22–62 bps round-trip and a stop are applied.
+
+- `backend/scripts/factor_sweep.py` — new · `docs/analysis/factor-sweep-h5-2026-09-07.md`
+
+
 ### feat: entry-cohort (vintage) attribution — "were that day's PICKS any good?"
 
 **The daily report has always grouped P&L by EXIT date.** That answers "what did today
