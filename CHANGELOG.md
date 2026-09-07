@@ -7,6 +7,54 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat: the exit/giveback study — commissioned on a wrong hypothesis, and that IS the finding
+
+**The exit machinery is working. The loss is made at entry.** Confirmed on 96 closed
+positions, in **R**, not ₹.
+
+| peak bucket | n | avg peak R | avg realised R | total R | total ₹ | capture |
+|---|--:|--:|--:|--:|--:|--:|
+| **peak < 0.25R — never worked** | **33** | **0.00** | −0.83 | **−27.4R** | **−₹50,669** | — |
+| peak 0.25–0.5R | 17 | 0.36 | −0.61 | −10.3R | −₹15,111 | — |
+| peak 0.5–1R | 19 | 0.77 | +0.26 | +5.0R | +₹11,978 | 34% |
+| **peak 1–2R** | 21 | 1.39 | **+1.03** | **+21.7R** | +₹45,933 | **75%** |
+| peak ≥ 2R | 6 | 2.62 | +0.53 | +3.2R | +₹8,962 | 14% |
+
+**50 of 96 trades (52%) never got meaningfully into profit** — they account for **−₹65,779
+(−37.8R)**. The 27 that reached ≥1R realised **+0.92R of a 1.67R peak: 62% capture.**
+
+**⇒ Not an exit problem.** This is the same diagnosis CLAUDE.md recorded months ago on 15
+trades — *"the exit machinery was correct but had nothing to protect"* — now confirmed on 96.
+**No exit rule can fix a trade that never moves in your favour.**
+
+**⚠⚠ THE CORRECTION THIS STUDY EXISTS TO RECORD.** It was commissioned on the reading that
+*25 of 30 stop-outs had been in profit and gave it all back, for −₹59,785* — an apparent exit
+defect. **In ₹ that is what it looks like. In R it evaporates:** the `sl_hit` group's average
+peak of +₹1,229 is, against the risk actually taken, approximately **zero**. Those trades
+wobbled a few hundred rupees above entry on positions whose 1R was thousands.
+
+**That is this project's own standing rule, broken by the agent that wrote it down** —
+*"measure stop-width counterfactuals in R, never ₹… that error inverted the first pass"*.
+Same class of error, one layer over.
+
+**⚠ A second correction in the same pass: "the stop moved" is NOT evidence the ratchet
+works.** Splitting on it showed +₹43,395 vs −₹42,301, which looks conclusive. It is a
+**proxy** — the profit-lock ladder only arms once a trade is up, so `stop moved` ≈ `went
+into profit` (peak 1.63R vs 0.41R). Controlling for peak R the difference **vanishes**:
+1–2R bucket realises +1.035R moved vs +1.032R unchanged. The partition-is-a-proxy trap the
+market-regime gate already taught, where it was a proxy for *side*.
+
+**⚠ And a defect in the study's own first output:** the capture column printed **−610%** for
+the dead buckets — dividing by a peak that never existed. The per-trade guard existed but
+was not applied at bucket level, so the artefact reappeared one layer up. Now suppressed
+with `— (no peak to capture)`.
+
+⚠ `peak_pnl` updates on live monitor ticks, so it is only as complete as the monitor's
+uptime — which biases peaks **downward** and would, if anything, *understate* giveback.
+
+- `backend/scripts/exit_giveback_study.py` — new · `docs/analysis/exit-giveback-2026-09-07.md`
+
+
 ### feat(MCE 6 follow-up): the news-drift study — and it contradicts the shorting hypothesis
 
 **The honest version of "check before scrapping".** The slice-6 feasibility check tested
