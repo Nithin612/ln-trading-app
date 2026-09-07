@@ -7,6 +7,66 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(MCE 6 follow-up): the news-drift study — and it contradicts the shorting hypothesis
+
+**The honest version of "check before scrapping".** The slice-6 feasibility check tested
+`corporate_filings` against the *veto* design. This tests the question that actually
+matters — **news as a directional signal**.
+
+⭐ **And it needs no news feed.** A large abrupt move on heavy volume **is the footprint of
+news**, so drift is measurable from bars we already hold. `scripts/news_drift_study.py`:
+|1-day move| ≥ 6% on ≥1.5× average volume, in liquid names — **29,352 events across ~773
+dates**, forward returns at t+1/3/5/10, split by direction and day-block bootstrapped.
+
+**Drift IS detectable** — three cells' intervals exclude zero. But two things invert how it
+reads:
+
+**⚠⚠ 1. Every UP-jump cell is TAIL-DRIVEN.** Positive mean, *negative median*, under half
+positive:
+
+| cell | mean | median | % positive |
+|---|---|---|---|
+| UP t+1 | **+0.355%** | **−0.142%** | 48% |
+| UP t+5 | +0.242% | **−0.608%** | 46% |
+| UP t+10 | **+0.551%** | **−0.820%** | 47% |
+
+**A positive mean with a negative median is a lottery-ticket distribution, not an edge.**
+You lose on most trades and depend on rare large winners — which a ₹1 lakh book cannot
+fund and **a stop-loss destroys**, because the stop cuts exactly the tail you are relying
+on. This is the market-regime lesson repeating: that gate's would-block set had a −₹302 mean
+and a **+₹200 trimmed mean**; mean alone would have recommended it. The script now computes
+and prints this divergence itself.
+
+**⭐ 2. DOWN jumps BOUNCE — they do not continue down.** Mean *and* median positive at
+t+3/t+5/t+10 with >50% of events positive, the most internally consistent result in the
+study (t+10: mean +1.846%, median +0.297%, interval [+0.008, +3.658]%).
+
+**That is the opposite of the shorting hypothesis.** On 6,792 large adverse moves, **buying
+the fall beat shorting it**. The TCS-style narrative (bad news → down for a week) is a real
+*story*; it is not what the population does on average — and that gap between a vivid case
+and the base rate is the entire reason to measure.
+
+⚠ **Detectable ≠ tradeable**, and the report says why: costs (22–62 bps + ₹15.34 DP) can
+exceed the drift · we could act only from the jump day's CLOSE, the intraday move gone ·
+a DOWN-continuation short needs futures (cash delivery cannot short) · 8 cells were examined
+and any survivor must be charged for that.
+
+### feat: factor sweep at the 20-day horizon — same answer, stronger reversion
+
+**Nothing survives** here either (17 configs, 52,830 non-overlapping observations). The
+mean-reversion pattern is *stronger* at 20 days: `sma50_over_sma200` spreads **−1.369%**,
+`close_over_sma200` **−1.139%**, all with 3/4 monotone steps — stocks further above their
+long averages did worse over the following month.
+
+⚠ **A limitation worth recording:** `close_over_vwap20` flips *positive* at 20 days
+(+0.974%) and carries the **highest |IC| of either sweep (+0.0330)** — but it ranked 9th by
+spread, and the harness only bootstraps the top 6, so it never got an interval. **Ranking by
+spread rather than by IC is a design choice that can hide the strongest rank-correlation.**
+
+- `backend/scripts/news_drift_study.py` — new · `docs/analysis/news-drift-2026-09-07.md`
+- `docs/analysis/factor-sweep-h20-2026-09-07.md`
+
+
 ### feat: the factor sweep harness — and it REFUTES the R1 pre-screen's VWAP finding
 
 **Built to the standing instruction** (*"always try different possibilities... what if we
