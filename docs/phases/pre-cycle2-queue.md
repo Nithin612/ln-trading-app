@@ -157,7 +157,16 @@ Two findings worth carrying forward:
 | **3.5** | `compute_levels` payoff geometry | ⛔ **D5** — *the known lever* |
 | **3.6** ✅ **TESTED 2026-09-07** | Minervini trend template | ⭐ **0 of 91 entries pass** — DISJOINT from our selection, not an uninformative split. Binding conditions are trend-structure: **we systematically trade names in structural downtrends**. Needs a universe-level corpus rerun, NOT a gate |
 
-### Q5 — a review-calendar item that came due (⏰ raised unprompted)
+### Q5 — ✅ **SPIKE DONE 2026-09-07** (a review-calendar item that came due)
+
+> ⭐ **The archive starts ~October 2019.** 2015/2018 return **404**; 2019-10-01 and the
+> COVID low (2020-03-23) return **200**. So the request *as asked* is a NO — but an
+> Oct-2019 start **contains the crash itself**, takes us from 3.2 to ~7 years, and serves
+> the purpose better than 2018 would. **The survivorship fix is free**: a bhavcopy lists
+> what traded *that day*, so the point-in-time universe reconstructs itself.
+> **Sizing: days, not weeks.** ⇒ **Not started — sequencing:** settle D1/D5 first, since a
+> regime test is only meaningful against an engine somebody still believes in.
+> Report: `docs/analysis/historical-data-spike-2026-09-07.md`
 
 **The pre-COVID regime-robustness backtest.** The user asked for this on 2026-08-28 and
 **held it until after watch mode ended Fri 2026-09-04**. Watch mode is complete, so the

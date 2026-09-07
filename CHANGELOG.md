@@ -7,6 +7,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat(Q5): pre-COVID backtest — the data-sourcing spike, and it reframes the request
+
+**Calendar item discharged** (asked 2026-08-28, held until after watch mode). This is the
+sourcing spike the hold specified, deliberately **not** the backtest.
+
+⭐ **The archive starts around October 2019.** Probed to the boundary against NSE's public
+archive — the same host `bhavcopy_service` already uses daily:
+
+| date | `sec_bhavdata_full` |
+|---|---|
+| 2015-01-02 / 2018-01-02 | **404** |
+| 2019-09-02 (a Monday — not a holiday artefact) | **404** |
+| 2019-10-01 | **200** |
+| 2020-03-23 (the COVID low) | **200** |
+
+The older compact `.zip` format 404s throughout, so `sec_bhavdata_full` is the only path and
+it does not reach the requested era.
+
+**⇒ The request as asked (2015/2018) is a NO — but what IS available is arguably better.**
+The purpose behind it was *does the edge survive a different regime, including a crash*. An
+October-2019 start **contains the crash itself** — the fastest drawdown in NSE's modern
+history — where 2018 would have offered a credit-cycle wobble. It takes us from **3.2 years
+to ~7**.
+
+⭐ **The survivorship fix turns out to be free.** Our `stocks` table is a *today* snapshot
+(2,365 active), so every name that delisted between 2019 and now is simply absent —
+backtesting against it would silently exclude the failures, biased in the flattering
+direction. **But a bhavcopy is the day's trading record**: it lists what traded *that day*,
+delisted names included. A point-in-time universe is not a second dataset to find — **it
+falls out of ingesting the bhavcopies themselves.** That materially lowers the project's
+cost versus the "data-acquisition project" the original hold assumed.
+
+**Rough sizing:** ~1,480 trading days at the existing polite cadence ≈ **20 minutes of
+downloading**, plus the real work — schema drift across eras, corporate-action adjustment on
+names we hold no CA history for, and symbol-churn reconciliation. **Days, not weeks.**
+
+**⇒ Recommendation: do not start the ingestion yet — sequencing, not doubt.** The most
+likely outcome is *a wider confidence interval around approximately zero* (corpus base
+expectancy is +0.05R; the live book's Sharpe is −0.033 with a 90% interval
+[−0.223, +0.118]). Meanwhile the demonstrated leak is upstream and untouched: **the book
+lost 15% while NIFTY fell 2%.** Settle the generation-side question (D1/D5) first — a regime
+test is only meaningful against an engine somebody still believes in.
+
+⚠ **Validation, not tuning.** The engine is FROZEN for the current regime. Older data may say
+whether the edge survives another one; using it to search for parameters that fit 2020 would
+be the largest overfitting surface this project has ever opened.
+
+- `backend/scripts/historical_data_spike.py` — new (`--probe` for reachability)
+- `docs/analysis/historical-data-spike-2026-09-07.md` — the report
+
+
 ### feat(MCE 6): the news veto is NOT buildable from the data we hold — checked, then deferred
 
 **Checked before building, and the check is the deliverable.** The phase doc specifies slice
