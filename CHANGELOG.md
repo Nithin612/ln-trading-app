@@ -7,6 +7,89 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### ⛔ INCIDENT 2026-09-07 — the dev database was destroyed, and the guards that came out of it
+
+**What happened.** A `pytest` run was invoked with `DATABASE_URL` pointed at
+`trading_platform` instead of `trading_platform_test`. `tests/conftest.py` set that variable
+with `os.environ.setdefault`, so the externally-supplied URL was taken as-is, and the autouse
+`clean_tables` fixture ran `TRUNCATE ... RESTART IDENTITY CASCADE` against every table before
+each of 11 tests. The variable was being passed by hand because a worktree carries no `.env`,
+which is what made a normally-dormant trap live.
+
+`archive_mode` was off, there was no PITR, and there was no backup of any kind on the machine.
+
+**Cost — permanent, not recoverable:**
+
+- **138 paper positions** (106 closed, 32 open) — the entire cycle-1 paper book, roughly
+  seven weeks of accrual. Original observational data.
+- `signals` and `signal_outcomes` — point-in-time levels, confidence, factor rationale, MFE/MAE.
+- **`cas_daily` — 1,664 rows across 8 sessions.** Unrecoverable by design: the capture reads
+  Kite `/quote` live during 15:15–15:33 IST and a missed window cannot be back-filled.
+- `orders`, `order_events`, `watchlists`, `watchlist_items`, `journal_entries`,
+  `saved_screens`, `mf_holdings`, `manual_assets`.
+
+**Recovered:** `stocks` (2,886, via `seed_stocks.py` — public NSE CSVs, no auth required),
+`ohlcv_1d` (1.63M bars re-ingested from the NSE bhavcopy archive), `users`.
+`corporate_filings` survived untouched because its model is not registered in conftest's
+`Base.metadata`. The schema was never damaged — `alembic_version` remained at head.
+
+**Not reconstructed, by user ruling.** The 24 daily reports under `docs/analysis/` do carry
+per-trade detail (plan, fill, chase, MFE/MAE), but exit coverage is only ~25% and realised
+P&L would have to be recomputed under fee models that landed 2026-09-05. A half-real book
+flowing into the paper clock and every future study is worse than the loss. The ledger stands
+as written; accrual restarts from day 1.
+
+**Mitigating context, stated without spin:** cycle 1's 30-day clock was already informational
+and cycle 2's had not started, so no go-live milestone moved. The findings survive in
+`docs/analysis/` because each report carries its numbers; the raw rows do not.
+
+### fix: the test suite now refuses any database not named `*_test`
+
+`tests/conftest.py` fails at import time — before any fixture, engine or migration — if
+`DATABASE_URL` or `DATABASE_URL_SYNC` names a database whose name does not end in `_test`.
+`setdefault` is still correct (CI and other harnesses legitimately inject a URL) but it must
+not be able to aim the truncation at production-shaped data. The project already enforced
+exactly this rule for Redis (*"never point them at dev db 0"*); for Postgres it was written
+in a docstring and enforced nowhere. Verified in both directions.
+
+### feat: daily database backups, with a restore that is actually proven
+
+`scripts/backup_db.sh` + cron `0 11 * * 1-5` (11:00 IST, Mon–Fri) to
+`/home/nithin/code/back_ups/trading_platform/{dev,test}/`, retaining the 3 most recent dumps
+per database. `pg_dump -Fc` captures **the entire database** — all 52 tables: positions,
+orders, holdings, filings, watchlists, journal, saved screens, signals and the hypertable bars.
+
+Two properties are what make it a backup rather than a file:
+
+- ⭐ **Pruning happens only after a dump that passes `pg_restore --list`.** Pruning first is
+  how a backup system silently eats its own history: each failing run deletes one more good
+  copy while writing nothing. A failed run leaves every existing backup untouched, exit 1.
+- ⭐ **`make backup-verify` performs a REAL restore** into a scratch database and diffs every
+  table's row count, rather than checksumming. Two stack-specific hazards would otherwise
+  produce an unrestorable dump with no visible sign: TimescaleDB hypertables keep their rows
+  in `_timescaledb_internal` chunks and need `timescaledb_pre_restore()`/`post_restore()`
+  around the restore, and the host's pg_dump is 17.x against a 16.x server. Everything runs
+  inside the container so client and server always match.
+
+Verified on install: 52/52 tables restore, `pg_restore` clean, counts identical bar four rows
+a scraper inserted during the check itself. Targets: `make backup`, `make backup-list`,
+`make backup-verify`, `make install-backup`. Documented in `RUNBOOK.md` §9, including the full
+restore procedure and the rule to restore into a NEW database and swap, never over a live one.
+
+⚠ Redis is deliberately not covered — it is all TTL'd cache the live worker rebuilds.
+
+### feat: survivorship-safe historical bar backfill
+
+`app/services/bhavcopy_service.py` gains a `historical` mode and
+`scripts/backfill_ohlcv_history.py` walks the NSE archive resumably. In historical mode a
+symbol the bhavcopy names but `stocks` has never seen is CREATED as an **inactive** stock, so
+a multi-year backfill reconstructs the point-in-time universe instead of a survivor-only one —
+`stocks` is a today-snapshot from Kite instruments, and every company that delisted would
+otherwise be silently absent. The default path is unchanged: unknown and inactive names still
+get no bars, per the T2T ruling. Insert is chunked (a backfill is ~2,300 rows/day over ~950
+days). 11 tests pin the contract. This is also what made the `ohlcv_1d` recovery possible.
+
+
 ### analysis: the book without the trades that were never really chosen
 
 Asked to omit the positions that were "entered wildly without looking at the signal" or

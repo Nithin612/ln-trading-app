@@ -144,23 +144,34 @@ def parse_bhavcopy_csv(fileobj: IO[str]) -> list[BhavRow]:
     return rows
 
 
-async def download_bhavcopy(trade_date: date) -> str | None:
+async def download_bhavcopy(
+    trade_date: date, *, client: httpx.AsyncClient | None = None
+) -> str | None:
     """
     Download the NSE bhavcopy CSV for *trade_date* and return its text content.
 
     Returns None if NSE returns a non-200 status (e.g., market holiday / weekend).
+
+    Pass `client` to reuse one session across many dates. A backfill walks ~950 dates and
+    a fresh client each time re-primes cookies and re-handshakes TLS every single day;
+    it also loses the cookie NSE sets, which is what the priming GET exists to obtain.
     """
     date_str = trade_date.strftime("%d%m%Y")
     url = _BHAV_URL_PATTERN.format(date=date_str)
 
-    async with httpx.AsyncClient(headers=_NSE_HEADERS, timeout=30, follow_redirects=True) as c:
-        # NSE requires a prior visit to nseindia.com to set cookies.
-        try:
-            await c.get("https://www.nseindia.com/", timeout=10)
-        except httpx.HTTPError:
-            pass  # best-effort cookie priming
+    if client is not None:
+        resp = await client.get(url)
+    else:
+        async with httpx.AsyncClient(
+            headers=_NSE_HEADERS, timeout=30, follow_redirects=True
+        ) as c:
+            # NSE requires a prior visit to nseindia.com to set cookies.
+            try:
+                await c.get("https://www.nseindia.com/", timeout=10)
+            except httpx.HTTPError:
+                pass  # best-effort cookie priming
 
-        resp = await c.get(url)
+            resp = await c.get(url)
 
     if resp.status_code != 200:
         log.info("Bhavcopy not available for %s (HTTP %s)", trade_date, resp.status_code)
@@ -174,68 +185,131 @@ async def download_bhavcopy(trade_date: date) -> str | None:
     return resp.text
 
 
+_CHUNK = 500
+
+
+async def _ensure_historical_stocks(db: AsyncSession, symbols: list[str]) -> int:
+    """Create `stocks` rows for symbols the bhavcopy names but we have never seen.
+
+    ⭐ **This is what makes a historical backfill survivorship-safe.** Our `stocks` table
+    is a TODAY snapshot built from Kite instruments, so every company that delisted,
+    merged or was wound up is simply absent from it. Backtesting old data against it
+    would silently drop the failures — the textbook survivorship bias, biased in exactly
+    the direction that flatters results. A bhavcopy is the day's trading record and lists
+    what traded THAT day, so ingesting it reconstructs the point-in-time universe.
+
+    ⚠ Created **inactive**. These names are not tradeable today and must never enter live
+    scanning, sizing or signal generation; they exist so that historical bars have
+    somewhere to attach. `ON CONFLICT DO NOTHING` means an existing ACTIVE row is never
+    touched — this can only add, never deactivate.
+
+    ⚠ `company_name` is set to the symbol. The bhavcopy carries no company name, and
+    inventing one would be worse than an obviously-placeholder value.
+    """
+    if not symbols:
+        return 0
+    created = 0
+    for i in range(0, len(symbols), _CHUNK):
+        chunk = symbols[i : i + _CHUNK]
+        result = await db.execute(
+            text(
+                "INSERT INTO stocks (symbol, exchange, company_name, is_active)"
+                " SELECT s, 'NSE', s, false FROM unnest(CAST(:syms AS varchar[])) AS s"
+                " ON CONFLICT (symbol, exchange) DO NOTHING"
+                " RETURNING id"
+            ),
+            {"syms": chunk},
+        )
+        created += len(result.fetchall())
+    return created
+
+
 async def upsert_bhavcopy_rows(
     db: AsyncSession,
     rows: list[BhavRow],
+    *,
+    historical: bool = False,
 ) -> tuple[int, int]:
     """
     Upsert parsed BhavRow records into ohlcv_1d.
 
     Returns (inserted, skipped).
-    Skips symbols not present in the stocks table.
     Uses ON CONFLICT DO NOTHING so re-running is always idempotent.
+
+    `historical=False` (the default, and what daily ingestion uses) attaches bars only to
+    stocks that are **active today**, skipping everything else. That is deliberate: the
+    T2T ruling says deactivated names get no EOD bars, and a live path must not
+    resurrect them.
+
+    `historical=True` switches to backfill semantics — unknown symbols are CREATED as
+    inactive historical stocks and inactive stocks DO receive bars. Without this a
+    multi-year backfill would silently reconstruct a survivor-only universe.
     """
     if not rows:
         return 0, 0
 
-    # Build a symbol → stock_id map for all symbols we need.
-    symbols = list({r.symbol for r in rows})
+    symbols = sorted({r.symbol for r in rows})
+    if historical:
+        await _ensure_historical_stocks(db, symbols)
+
+    active_only = "" if historical else " AND is_active = true"
     result = await db.execute(
         text(
             "SELECT symbol, id FROM stocks "
-            "WHERE symbol = ANY(:syms) AND exchange = 'NSE' AND is_active = true"
+            f"WHERE symbol = ANY(:syms) AND exchange = 'NSE'{active_only}"
         ),
         {"syms": symbols},
     )
     sym_to_id: dict[str, int] = {row.symbol: row.id for row in result}
 
-    inserted = 0
+    # One statement per chunk rather than per row: a backfill runs ~2,300 rows a day
+    # across ~950 days, and a round trip each would be 2.2 million of them.
+    payload: list[dict[str, object]] = []
     skipped = 0
-
     for row in rows:
         stock_id = sym_to_id.get(row.symbol)
         if stock_id is None:
             skipped += 1
             continue
-
-        # Store as UTC midnight of the trade date.
-        candle_time = datetime(
-            row.trade_date.year, row.trade_date.month, row.trade_date.day, tzinfo=UTC
-        )
-
-        result = await db.execute(
-            text(
-                "INSERT INTO ohlcv_1d"
-                " (time, stock_id, open, high, low, close, volume, is_complete)"
-                " VALUES (:t, :sid, :o, :h, :l, :c, :v, true)"
-                " ON CONFLICT (time, stock_id) DO NOTHING"
-                " RETURNING time"
-            ),
+        payload.append(
             {
-                "t": candle_time,
+                # Storage is UTC midnight of the trade date (storage UTC, market IST).
+                "t": datetime(
+                    row.trade_date.year, row.trade_date.month, row.trade_date.day, tzinfo=UTC
+                ),
                 "sid": stock_id,
                 "o": row.open,
                 "h": row.high,
                 "l": row.low,
                 "c": row.close,
                 "v": row.volume,
-            },
+            }
         )
-        if result.fetchone():
-            inserted += 1
-        else:
-            skipped += 1
 
+    inserted = 0
+    for i in range(0, len(payload), _CHUNK):
+        chunk = payload[i : i + _CHUNK]
+        values = ", ".join(
+            f"(:t{j}, :sid{j}, :o{j}, :h{j}, :l{j}, :c{j}, :v{j}, true)"
+            for j in range(len(chunk))
+        )
+        params: dict[str, object] = {}
+        for j, item in enumerate(chunk):
+            for k, v in item.items():
+                params[f"{k}{j}"] = v
+        result = await db.execute(
+            text(
+                "INSERT INTO ohlcv_1d"
+                " (time, stock_id, open, high, low, close, volume, is_complete)"
+                f" VALUES {values}"
+                " ON CONFLICT (time, stock_id) DO NOTHING"
+                " RETURNING time"
+            ),
+            params,
+        )
+        inserted += len(result.fetchall())
+
+    skipped += len(payload) - inserted
     await db.commit()
     return inserted, skipped
 
@@ -244,14 +318,18 @@ async def ingest_bhavcopy_date(
     db: AsyncSession,
     trade_date: date,
     csv_text: str | None = None,
+    *,
+    historical: bool = False,
+    client: httpx.AsyncClient | None = None,
 ) -> IngestionResult:
     """
     Download (if csv_text is None) and ingest bhavcopy for a single trade date.
 
     Pass csv_text to skip the download step (useful for tests and manual imports).
+    `historical=True` uses backfill semantics — see `upsert_bhavcopy_rows`.
     """
     if csv_text is None:
-        csv_text = await download_bhavcopy(trade_date)
+        csv_text = await download_bhavcopy(trade_date, client=client)
 
     if csv_text is None:
         return IngestionResult(
@@ -273,7 +351,7 @@ async def ingest_bhavcopy_date(
             message="CSV parsed but contained no valid EQ rows",
         )
 
-    inserted, skipped = await upsert_bhavcopy_rows(db, rows)
+    inserted, skipped = await upsert_bhavcopy_rows(db, rows, historical=historical)
 
     log.info(
         "Bhavcopy %s: %d inserted, %d skipped (unknown symbol)",

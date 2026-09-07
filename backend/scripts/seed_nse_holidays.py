@@ -38,6 +38,55 @@ FUTURE_HOLIDAYS: dict[date, str] = {
 }
 
 
+# Longest run of consecutive missing weekdays still credible as a market closure.
+# NSE's longest is a festival abutting a weekend; anything longer is a hole in our data.
+_MAX_CLOSURE_RUN = 5
+
+
+def derive_closures(
+    lo: date, hi: date, session_dates: set[date]
+) -> tuple[dict[date, str], list[tuple[date, date, int]]]:
+    """Split missing weekdays in [lo, hi] into real closures and data gaps.
+
+    Returns `(closures, skipped_gaps)`. A run of missing weekdays counts as a market
+    closure only when it is at most `_MAX_CLOSURE_RUN` long; anything longer is a hole in
+    OUR data and is reported instead of recorded.
+
+    ⚠ The naive version — mark every missing weekday — corrupted the calendar on
+    2026-09-07. After the dev database was restored, `ohlcv_1d` held 2020-03-20→27 (a
+    backfill smoke run) plus 2023-07-03→today, with a 3.3-year hole between, and every
+    weekday in that hole became a "holiday": **896 of them against a real rate of ~13 a
+    year.** 850 rows had to be deleted by hand. Trading-day arithmetic drives signal
+    validity windows, so a fabricated holiday is a correctness bug, not a cosmetic one.
+
+    The historical backfill (`scripts/backfill_ohlcv_history.py`) makes partial spans
+    normal, so this is now the expected case rather than an oddity.
+    """
+    closures: dict[date, str] = {}
+    skipped: list[tuple[date, date, int]] = []
+    d = lo
+    while d <= hi:
+        if d.weekday() > 4 or d in session_dates:
+            d += timedelta(days=1)
+            continue
+
+        # Collect the WHOLE consecutive run before judging it — a run is only
+        # classifiable once you know how long it is.
+        run_start = d
+        run: list[date] = []
+        while d <= hi and (d.weekday() > 4 or d not in session_dates):
+            if d.weekday() <= 4:
+                run.append(d)
+            d += timedelta(days=1)
+
+        if len(run) <= _MAX_CLOSURE_RUN:
+            for h in run:
+                closures[h] = "derived from bhavcopy session gap"
+        else:
+            skipped.append((run_start, run[-1], len(run)))
+    return closures, skipped
+
+
 async def main() -> int:
     async with AsyncSessionFactory() as db:
         span = (
@@ -56,12 +105,13 @@ async def main() -> int:
             ).all()
         }
 
-        derived: dict[date, str] = {}
-        d = span.lo
-        while d <= span.hi:
-            if d.weekday() <= 4 and d not in session_dates:
-                derived[d] = "derived from bhavcopy session gap"
-            d += timedelta(days=1)
+        derived, skipped_gaps = derive_closures(span.lo, span.hi, session_dates)
+        for lo, hi, n in skipped_gaps:
+            print(
+                f"⚠ SKIPPED {lo} → {hi} ({n} weekdays): too long to be a market closure —"
+                " this is a gap in ohlcv_1d, not a holiday. Backfill it, then re-run.",
+                flush=True,
+            )
 
         rows = [(k, v, "derived") for k, v in sorted(derived.items())] + [
             (k, v, "published") for k, v in sorted(FUTURE_HOLIDAYS.items()) if k > span.hi

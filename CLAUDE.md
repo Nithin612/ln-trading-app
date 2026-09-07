@@ -470,6 +470,22 @@ else.
   isolated Redis logical DB (15), flushed per test — never point them at dev
   db 0. Options math + F&O suggestions run behind the `tradecore` wheel: run
   `make engine-build` after pulling engine changes.
+- **⛔ NEVER pass `DATABASE_URL` to `pytest`, `make test` or `make check`. On 2026-09-07
+  doing exactly that DESTROYED the dev database** — `conftest.py` used
+  `os.environ.setdefault`, so the supplied URL was taken as-is and the autouse
+  `clean_tables` fixture `TRUNCATE`d every table before each test. **Cost: 138 paper
+  positions (the whole cycle-1 book), all signals + outcomes, 1,664 `cas_daily` rows across
+  8 sessions (unrecoverable by design — the window cannot be back-filled), orders,
+  watchlists, journal, saved screens, holdings.** No PITR, no backup existed. Recovered:
+  `stocks` via `seed_stocks.py` (public CSVs, no auth) and 1.63M `ohlcv_1d` bars from the
+  bhavcopy archive. **A worktree isolates FILES, not the database.** If a worktree needs
+  env vars because it has no `.env`, pass **only `JWT_SECRET_KEY`** — analysis scripts get a
+  DB URL, the test suite never does. Two guards now exist: `conftest.py` refuses at import
+  time any database not named `*_test`, and **backups run `0 11 * * 1-5`** to
+  `/home/nithin/code/back_ups/trading_platform/{dev,test}/` (3 retained, all 52 tables,
+  pruning only after a verified dump). `make backup` · `make backup-verify` (a REAL restore
+  — TimescaleDB hypertables need `timescaledb_pre_restore()`/`post_restore()`) — details in
+  `RUNBOOK.md` §9. **Ask before anything that writes to, truncates or migrates live data.**
 
 ## Tech stack (locked in — ask before substituting)
 

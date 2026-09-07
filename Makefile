@@ -4,6 +4,13 @@
 .DEFAULT_GOAL := help
 SHELL := /bin/bash
 
+# Where database backups live. The cron entry calls the copy under $(BACKUP_ROOT)/bin
+# rather than this checkout on purpose: a backup must not stop running because the
+# repo is mid-rebase, on a feature branch, or in a worktree that got deleted.
+# `make install-backup` re-syncs that copy from scripts/backup_db.sh, which stays
+# the single source of truth.
+BACKUP_ROOT ?= /home/nithin/code/back_ups/trading_platform
+
 # Rust toolchain lives in ~/.cargo (rustup); make targets must find it even
 # when the invoking shell hasn't sourced cargo env.
 export PATH := $(HOME)/.cargo/bin:$(PATH)
@@ -217,3 +224,23 @@ walkforward:  ## Walk-forward golden harness (§8 drift gate; skips cleanly with
 
 .PHONY: check
 check: lint typecheck engine-lint engine-test test parity walkforward replay  ## Full CI gate (python + rust + frontend)
+
+.PHONY: backup
+backup:  ## Back up both databases now (dev + test), keeping the 3 most recent each
+	@./scripts/backup_db.sh
+
+.PHONY: backup-list
+backup-list:  ## Show which database backups are currently retained
+	@./scripts/backup_db.sh --list
+
+.PHONY: install-backup
+install-backup:  ## (Re)install the backup script + the weekday-11:00 cron entry
+	@mkdir -p $(BACKUP_ROOT)/bin
+	@install -m 0755 scripts/backup_db.sh $(BACKUP_ROOT)/bin/backup_db.sh
+	@echo "installed $(BACKUP_ROOT)/bin/backup_db.sh"
+	@echo "cron entry currently scheduled:"
+	@crontab -l 2>/dev/null | grep backup_db.sh || echo "  (none — see docs/RUNBOOK.md)"
+
+.PHONY: backup-verify
+backup-verify:  ## Prove the newest backup actually restores (real restore + row-count diff)
+	@./scripts/verify_backup.sh dev

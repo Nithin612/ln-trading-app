@@ -295,5 +295,63 @@ you do want a clean cycle:
 
 ---
 
+## 9. Database backups
+
+**Installed 2026-09-07, after the dev database was destroyed** — a pytest run was pointed at
+`trading_platform` instead of `trading_platform_test`, the suite's autouse fixture TRUNCATEs
+every table before every test, and 138 paper positions, every signal and 1,664 `cas_daily`
+rows went with it. `archive_mode` was off and there was no backup of any kind. Two guards
+came out of that day: `tests/conftest.py` now **refuses at import time** any database whose
+name does not end in `_test`, and the backups below exist so the next mistake costs one day.
+
+| what | value |
+|---|---|
+| location | `/home/nithin/code/back_ups/trading_platform/{dev,test}/` |
+| schedule | `0 11 * * 1-5` — 11:00 IST, Monday–Friday (cron) |
+| retention | the **3 most recent** dumps per database |
+| format | `pg_dump -Fc` (custom) — compressed, selectively restorable |
+| coverage | **the entire database**, all 52 tables — positions, orders, holdings, filings, watchlists, journal, saved screens, signals, hypertable bars |
+| log | `backup.log` and `cron.log` in the backup root |
+
+```
+make backup          # run one now
+make backup-list     # what is currently retained
+make backup-verify   # PROVE the newest dump restores (real restore + row-count diff)
+make install-backup  # re-sync the cron copy from scripts/backup_db.sh
+```
+
+**Two properties worth knowing, because they are what make it a backup rather than a file:**
+
+- ⭐ **Pruning happens only after a dump that passes `pg_restore --list`.** Pruning first is
+  how a backup system silently eats its own history: each failing run deletes one more good
+  copy while writing nothing. A failed run here leaves every existing backup untouched and
+  exits non-zero.
+- ⭐ **`make backup-verify` does a real restore into a scratch database**, not a checksum.
+  Two things specific to this stack could otherwise produce an unrestorable dump with no
+  visible sign: TimescaleDB hypertables keep their rows in `_timescaledb_internal` chunks and
+  need `timescaledb_pre_restore()`/`post_restore()` around the restore; and the host's
+  pg_dump is 17.x against a 16.x server. Everything runs inside the container so client and
+  server always match. Verified on install: 52 tables, `pg_restore` clean, counts identical
+  bar four rows a scraper inserted during the check.
+
+**Restoring for real:**
+
+```
+docker exec tp_postgres createdb -U tpuser trading_platform_restored
+docker exec tp_postgres psql -U tpuser -d trading_platform_restored \
+  -c "CREATE EXTENSION IF NOT EXISTS timescaledb;" -c "SELECT timescaledb_pre_restore();"
+docker cp <dump> tp_postgres:/tmp/r.dump
+docker exec tp_postgres pg_restore -U tpuser -d trading_platform_restored --no-owner /tmp/r.dump
+docker exec tp_postgres psql -U tpuser -d trading_platform_restored -c "SELECT timescaledb_post_restore();"
+```
+
+Restore into a **new** database first and check it, then swap. Never restore over a live one.
+
+⚠ **The backup does not cover Redis** (`ltp:`, `depth:`, `circuit:`, the provisional health
+hashes). All of it is TTL'd cache rebuilt by the live worker, so that is deliberate — but it
+means a restore brings back the record, not the in-flight session state.
+
+---
+
 *Soak-specific details (recording, replay goldens): `docs/RUNBOOK-soak.md`.
 Engine-parity shadow week: `backend/scripts/shadow_day.sh` → `shadow_week.log`.*

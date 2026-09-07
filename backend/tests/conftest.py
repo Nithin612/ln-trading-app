@@ -13,6 +13,7 @@ import subprocess
 import sys
 from collections.abc import AsyncGenerator, Generator
 from pathlib import Path
+from urllib.parse import urlsplit
 
 import psycopg
 import pytest
@@ -29,6 +30,40 @@ os.environ.setdefault("DATABASE_URL", f"{_ASYNC_BASE}/trading_platform_test")
 os.environ.setdefault("DATABASE_URL_SYNC", f"{_SYNC_BASE}/trading_platform_test".replace(
     "postgresql://", "postgresql+psycopg://"
 ))
+
+
+# ── ⛔ The guard that must run before anything else touches a database ────────
+def _refuse_non_test_database() -> None:
+    """Abort the run unless every DB URL names a database ending in `_test`.
+
+    ⚠ **This exists because the suite destroyed a real database on 2026-09-07.**
+    The two lines above use `os.environ.setdefault`, so a `DATABASE_URL` already
+    present in the environment is taken AS-IS — and `clean_tables` then issues
+    `TRUNCATE ... CASCADE` against every table in whatever database that names. A
+    session running pytest with `DATABASE_URL=...:5433/trading_platform` (supplied by
+    hand, because a git worktree has no `.env`) wiped the dev database: 138 paper
+    positions, 559 signals, 1,664 `cas_daily` rows and 1.38M bars, with
+    `archive_mode=off` so there was no PITR to recover from.
+
+    `setdefault` is still right — CI and other harnesses legitimately inject a URL —
+    but it must not be able to point the truncation at production-shaped data. The
+    project already applies exactly this rule to Redis ("never point them at dev db
+    0"); Postgres had the rule written in a docstring and enforced nowhere.
+
+    Fails loudly at import time, before any fixture, engine or migration runs.
+    """
+    for var in ("DATABASE_URL", "DATABASE_URL_SYNC"):
+        url = os.environ.get(var, "")
+        name = urlsplit(url).path.lstrip("/").split("?")[0]
+        if not name.endswith("_test"):
+            raise RuntimeError(
+                f"REFUSING TO RUN: {var} points at database {name!r}, which does not end "
+                f"in '_test'. The suite TRUNCATEs every table in it. Unset {var} to use "
+                f"the default test database, or point it at '{name}_test'."
+            )
+
+
+_refuse_non_test_database()
 
 # Isolate the test Redis to a dedicated logical DB (15) so `ltp:`/stream/cache
 # keys can't leak into — or across — tests via the shared dev Redis (db 0). The

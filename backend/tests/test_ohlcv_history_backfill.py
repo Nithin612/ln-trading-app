@@ -1,0 +1,191 @@
+"""Historical `ohlcv_1d` backfill — the survivorship-safety contract.
+
+The assertions that matter are the ones stopping a multi-year backfill from quietly
+reconstructing a **survivor-only** universe:
+
+- an unknown symbol in `historical` mode becomes a stock, so a company that has since
+  delisted still gets its bars — this is the whole point of the mode;
+- it is created **inactive**, so it can never reach live scanning or sizing;
+- an existing ACTIVE stock is never touched, in either direction;
+- the DEFAULT (daily-ingestion) path is unchanged and still skips unknown and inactive
+  names, because the T2T ruling says deactivated names get no EOD bars.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, date, datetime
+from decimal import Decimal
+
+from app.models.stock import Stock
+from app.services import bhavcopy_service as bs
+from sqlalchemy import select, text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from tests.helpers import make_stock
+
+_DAY = date(2020, 3, 23)  # the COVID low — a date only the backfill can reach
+
+
+def _row(symbol: str, *, close: str = "100.00", d: date = _DAY) -> bs.BhavRow:
+    return bs.BhavRow(
+        symbol=symbol,
+        trade_date=d,
+        open=Decimal("99.00"),
+        high=Decimal("101.00"),
+        low=Decimal("98.00"),
+        close=Decimal(close),
+        volume=12345,
+    )
+
+
+async def _bars_for(db: AsyncSession, stock_id: int) -> int:
+    return int(
+        (
+            await db.execute(
+                text("SELECT count(*) FROM ohlcv_1d WHERE stock_id = :sid"),
+                {"sid": stock_id},
+            )
+        ).scalar_one()
+    )
+
+
+class TestSurvivorshipSafety:
+    async def test_unknown_symbol_gets_a_stock_and_its_bars(self, db: AsyncSession) -> None:
+        """⭐ The point of the mode. A name that traded in 2020 and has since delisted is
+        absent from our Kite-derived `stocks` snapshot; without this it would vanish from
+        history and the reconstructed universe would contain only survivors."""
+        inserted, _ = await bs.upsert_bhavcopy_rows(db, [_row("DELISTEDCO")], historical=True)
+        assert inserted == 1
+
+        stock = (
+            await db.execute(select(Stock).where(Stock.symbol == "DELISTEDCO"))
+        ).scalar_one()
+        assert await _bars_for(db, stock.id) == 1
+
+    async def test_created_stock_is_inactive(self, db: AsyncSession) -> None:
+        """It is not tradeable today. An active row would leak a dead company into live
+        scanning, sizing and signal generation."""
+        await bs.upsert_bhavcopy_rows(db, [_row("GONECO")], historical=True)
+        stock = (
+            await db.execute(select(Stock).where(Stock.symbol == "GONECO"))
+        ).scalar_one()
+        assert stock.is_active is False
+
+    async def test_existing_active_stock_is_never_deactivated(
+        self, db: AsyncSession
+    ) -> None:
+        """⭐ The backfill can only ADD names. If it could flip an existing row it would
+        silently disable a live stock halfway through a 7-year run."""
+        live = await make_stock(db, symbol="LIVECO", is_active=True)
+        await bs.upsert_bhavcopy_rows(db, [_row("LIVECO")], historical=True)
+
+        await db.refresh(live)
+        assert live.is_active is True
+        assert live.company_name == "Test Company Ltd", "name must not be overwritten"
+
+    async def test_inactive_stock_receives_bars_in_historical_mode(
+        self, db: AsyncSession
+    ) -> None:
+        dead = await make_stock(db, symbol="DEADCO", is_active=False)
+        inserted, _ = await bs.upsert_bhavcopy_rows(db, [_row("DEADCO")], historical=True)
+        assert inserted == 1
+        assert await _bars_for(db, dead.id) == 1
+
+
+class TestDailyPathUnchanged:
+    """The default path is what daily ingestion runs. It must not have moved."""
+
+    async def test_unknown_symbol_is_skipped_not_created(self, db: AsyncSession) -> None:
+        inserted, skipped = await bs.upsert_bhavcopy_rows(db, [_row("NEVERHEARDOF")])
+        assert (inserted, skipped) == (0, 1)
+        assert (
+            await db.execute(select(Stock).where(Stock.symbol == "NEVERHEARDOF"))
+        ).scalar_one_or_none() is None
+
+    async def test_inactive_stock_gets_no_bars(self, db: AsyncSession) -> None:
+        """The T2T ruling: a deactivated name gets no EOD bars on the live path."""
+        dead = await make_stock(db, symbol="T2TCO", is_active=False)
+        inserted, skipped = await bs.upsert_bhavcopy_rows(db, [_row("T2TCO")])
+        assert (inserted, skipped) == (0, 1)
+        assert await _bars_for(db, dead.id) == 0
+
+    async def test_active_stock_still_ingests(self, db: AsyncSession) -> None:
+        live = await make_stock(db, symbol="ACTIVECO", is_active=True)
+        inserted, _ = await bs.upsert_bhavcopy_rows(db, [_row("ACTIVECO")])
+        assert inserted == 1
+        assert await _bars_for(db, live.id) == 1
+
+
+class TestIdempotence:
+    async def test_rerunning_the_same_day_inserts_nothing(self, db: AsyncSession) -> None:
+        """A 950-day run gets interrupted. Re-running must be free, not duplicated."""
+        rows = [_row("REPEATCO")]
+        first, _ = await bs.upsert_bhavcopy_rows(db, rows, historical=True)
+        second, skipped = await bs.upsert_bhavcopy_rows(db, rows, historical=True)
+
+        assert first == 1
+        assert second == 0, "ON CONFLICT DO NOTHING"
+        assert skipped == 1
+
+        stock = (
+            await db.execute(select(Stock).where(Stock.symbol == "REPEATCO"))
+        ).scalar_one()
+        assert await _bars_for(db, stock.id) == 1
+
+    async def test_existing_bar_is_not_overwritten(self, db: AsyncSession) -> None:
+        """Today's ingested data must survive a backfill that overlaps it — the run is
+        bounded by date, but a mis-typed --end must not rewrite live bars."""
+        live = await make_stock(db, symbol="KEEPCO")
+        await db.execute(
+            text(
+                "INSERT INTO ohlcv_1d (time, stock_id, open, high, low, close, volume,"
+                " is_complete) VALUES (:t, :sid, 1, 1, 1, :c, 1, true)"
+            ),
+            {
+                "t": datetime(_DAY.year, _DAY.month, _DAY.day, tzinfo=UTC),
+                "sid": live.id,
+                "c": Decimal("777.00"),
+            },
+        )
+        await db.commit()
+
+        await bs.upsert_bhavcopy_rows(db, [_row("KEEPCO", close="100.00")], historical=True)
+
+        close = (
+            await db.execute(
+                text("SELECT close FROM ohlcv_1d WHERE stock_id = :sid"), {"sid": live.id}
+            )
+        ).scalar_one()
+        assert Decimal(str(close)) == Decimal("777.0000"), "the pre-existing bar wins"
+
+
+class TestBatching:
+    async def test_more_rows_than_one_chunk(self, db: AsyncSession) -> None:
+        """The insert is chunked; a run spanning a chunk boundary must not lose or
+        duplicate rows. A real bhavcopy day is ~2,300 rows against a 500 chunk."""
+        n = bs._CHUNK + 7
+        rows = [_row(f"BULK{i:04d}") for i in range(n)]
+        inserted, skipped = await bs.upsert_bhavcopy_rows(db, rows, historical=True)
+
+        assert inserted == n
+        assert skipped == 0
+        total = int(
+            (
+                await db.execute(
+                    text(
+                        "SELECT count(*) FROM ohlcv_1d o JOIN stocks s ON s.id = o.stock_id"
+                        " WHERE s.symbol LIKE 'BULK%'"
+                    )
+                )
+            ).scalar_one()
+        )
+        assert total == n
+
+    async def test_mixed_known_and_unknown_counts_correctly(
+        self, db: AsyncSession
+    ) -> None:
+        await make_stock(db, symbol="KNOWNCO")
+        inserted, skipped = await bs.upsert_bhavcopy_rows(
+            db, [_row("KNOWNCO"), _row("UNKNOWNCO")], historical=False
+        )
+        assert (inserted, skipped) == (1, 1)

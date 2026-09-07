@@ -226,3 +226,32 @@ means discovering it on live day 1.
 
 **(f) `main` has not been pushed.** Phase 6 + 6.8 merged fast-forward and are awaiting a
 manual push. Push remains the user's (working rule W4).
+
+---
+
+## ⛔ 2026-09-07 — the dev database was destroyed, and what it changes here
+
+A `pytest` run pointed at `trading_platform` instead of `trading_platform_test` truncated
+every table. Full account in `CHANGELOG.md` and `RUNBOOK.md` §9. What it does to this queue:
+
+**Unchanged — the build queue is code, and no code was lost.** Phase 7.0–7.4, every script,
+every test and every report in `docs/analysis/` are committed. D1/D3/D4/D5/D6 are still
+decisions. The historical-backfill capability was BUILT during the recovery and is proven
+against the real archive.
+
+**Restarted:**
+
+| item | effect |
+|---|---|
+| **Q4 — cycle-2 gate** | needs a fresh book; cycle-1 accrual (138 positions, ~7 weeks) is gone |
+| **CAS Stage-2 re-accrual** | 8 of the ≥30 needed sessions lost — ~2 weeks, on a clock that had not started |
+| **2.5 pair df-vs-adf**, momentum ×1.5 forward evidence | restart from zero |
+
+**No go-live milestone moved.** Cycle 1's 30-day clock was ruled *informational* on
+2026-09-02 and cycle 2's had not started — see `docs/phases/phase-07-live-trading-plan.md`.
+
+**User ruling: the lost rows are NOT reconstructed** from the daily reports. Exit coverage
+there is only ~25%, and realised P&L would have to be recomputed under fee models that landed
+2026-09-05, so a rebuilt book would look real while disagreeing with what was recorded. The
+ledger stands as written; accrual restarts from day 1.
+
