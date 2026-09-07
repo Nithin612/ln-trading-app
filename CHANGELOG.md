@@ -7,6 +7,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### feat: entry-cohort (vintage) attribution — "were that day's PICKS any good?"
+
+**The daily report has always grouped P&L by EXIT date.** That answers "what did today
+realise" — what accounting needs — and it makes one question structurally unanswerable:
+*we picked 5 names on Aug 26, were those picks good?* Under exit grouping those five
+decisions land on five different report days, mixed with decisions from five other days.
+Selection quality is smeared until invisible.
+
+**Grouping by ENTRY day makes it legible immediately.** On the live book:
+
+| entry day | picks | resolved | realised | win% |
+|---|---|---|---|---|
+| 2026-08-26 | 5 | 4 | **−₹8,835** | **25%** |
+| 2026-08-27 | 5 | 4 | **−₹4,574** | **25%** |
+| 2026-08-28 | 5 | 2 | **+₹5,215** | **100%** |
+
+Two bad selection days next to a good one — **none of which the exit-date view can show.**
+Given the entry leak is the demonstrated problem, this is the view that speaks to it.
+
+**⭐ The one rule that keeps it honest: a cohort is not final until every pick resolves.**
+A day whose five trades are all still open has realised ₹0, and printing that as "flat"
+would be a lie about a cohort sitting at −₹4,593 unrealised. So realised and open are
+**always separate columns**, in-flight rows carry `⏳`, and best/worst superlatives consider
+**settled cohorts only** — an in-flight number is not final, so ranking on it would churn as
+marks moved.
+
+**A cohort with nothing resolved has NO win rate — `—`, not `0%`.** "No data" and
+"everything lost" must not render identically; the same undefined-vs-measured distinction
+`app/core/ratios.py` draws for degenerate ratios.
+
+⚠ **No schema change.** `positions.opened_at` already exists — this is a grouping, not new
+data. Nothing about how a trade is recorded or priced changes. It *does* change a recorded
+number's **presentation**, so it lands before cycle 2's clock by the standing rule.
+
+⚠ **A test bug caught on first run, worth recording:** the best/worst assertion used a
+single settled cohort, where `best == worst` and the block is correctly suppressed — so it
+would have passed without testing anything. Rewritten with two settled cohorts plus an
+extreme in-flight one.
+
+- `backend/app/services/entry_cohort.py` — new · `app/services/daily_report.py` (wiring)
+- Tests: 13 new (`tests/test_entry_cohort.py`); report suite re-verified (31 passed)
+
+
 ### feat(R1 pre-screen): VWAP looks real, and the EXISTING volume factor appears mis-signed
 
 **Run before the frozen-engine work, not after** — adding a confluence factor costs a Python

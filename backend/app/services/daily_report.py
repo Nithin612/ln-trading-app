@@ -46,6 +46,7 @@ from app.models.trading import Order, Position
 from app.models.user import User
 from app.services import beta_ir as bir
 from app.services import buy_and_hold as bah
+from app.services import entry_cohort as ec
 from app.services import fo_analytics as fa
 from app.services import fo_suggestions as fs
 from app.services import gate_register
@@ -283,6 +284,7 @@ class DailyReport:
     # ABSENCE, because it runs in a different process from the worker it judges.
     worker_roles: list[RoleStatus] = field(default_factory=list)
     token_status: th.TokenStatus | None = None
+    entry_cohorts: list[ec.Cohort] = field(default_factory=list)
     cas_coverage: CasCoverage | None = None
     # Tick-mode degradation counters for the report day (A25). Empty = a clean
     # day OR no record at all (older than the 7-day TTL, or Redis unreachable) —
@@ -558,6 +560,11 @@ async def build_daily_report(
     report.worker_roles = await read_statuses(now=now)
     report.cas_coverage = await wh.cas_coverage(db, day=day, now=now)
     report.token_status = await th.read_token_status(db, now=now)
+    # Vintage attribution: group by the day picks were MADE. The entry leak is the
+    # demonstrated problem, so this is the view that speaks to it.
+    report.entry_cohorts = await ec.load_cohorts(
+        db, since=day - timedelta(days=30), user_id=user_id
+    )
     # Buy-and-hold benchmark (H2) — the book against doing nothing with the same money,
     # over the SAME dates. The window is the paper clock, never OUTCOME_EPOCH: that
     # spans the 08-17 sizing/fill-model cut and would compare two different books.
@@ -788,6 +795,9 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
     # deflation's most important input and it has been a hand-picked 20; this makes the
     # observed count visible without changing the bar.
     out.extend(gate_register.render_lines(assumed_trials=DEFAULT_TRIALS))
+    # Vintage attribution — the view that asks whether the SELECTION was good, which
+    # exit-date grouping structurally cannot answer.
+    out.extend(ec.render_lines(r.entry_cohorts))
     if r.beta_all is not None or r.beta_by_side:
         out.extend(bir.render_lines(r.beta_all, label="closed book"))
         for side, br in r.beta_by_side.items():
