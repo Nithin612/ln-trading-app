@@ -56,6 +56,7 @@ RULE_SIGNAL_MISSING = "signal_missing"
 RULE_SIGNAL_STATUS = "signal_status"
 RULE_ELIGIBILITY = "eligibility"
 RULE_NOTIONAL_CAP = "notional_cap"
+RULE_POSITION_COUNT = "position_count"
 RULE_HEAT_CAP = "heat_cap"
 
 PRE_TRADE_RULES: tuple[str, ...] = (
@@ -68,7 +69,7 @@ PRE_TRADE_RULES: tuple[str, ...] = (
     RULE_SIGNAL_STATUS,
     RULE_ELIGIBILITY,
 )
-SIZING_RULES: tuple[str, ...] = (RULE_NOTIONAL_CAP, RULE_HEAT_CAP)
+SIZING_RULES: tuple[str, ...] = (RULE_NOTIONAL_CAP, RULE_POSITION_COUNT, RULE_HEAT_CAP)
 ALL_RULES: tuple[str, ...] = PRE_TRADE_RULES + SIZING_RULES
 
 
@@ -273,6 +274,36 @@ def heat_cap_reason(
 
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Rule: portfolio position-count cap
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def position_count_reason(*, held: OpenHeat, is_new_position: bool) -> str | None:
+    """Why a NEW position would breach the max-concurrent-position cap, or `None`.
+
+    At cycle-2 scale (₹1L, the live 1–2 book) a heat PERCENTAGE barely binds — two
+    positions at 2% risk ≈ 4% heat, under the 6% cap — so the COUNT is the concentration
+    rail that actually bites and enforces the 1–2 design intent. A HARD design rail (like
+    `entry_diversity`), NOT a measured-edge gate, so it faces no deflated-Sharpe bar.
+
+    Adding to an EXISTING position (`is_new_position=False`) opens no new concurrent slot
+    and is exempt — this is a *concentration* rail, not a per-name size rail (the notional
+    cap already bounds that). Always measurable, so unlike the heat cap it has no
+    fail-closed branch. `max_concurrent_positions <= 0` disables it.
+    """
+    cap = get_settings().max_concurrent_positions
+    if cap <= 0 or not is_new_position:
+        return None
+    if held.positions + 1 <= cap:
+        return None
+    return (
+        f"{held.positions} position(s) already open; a new entry would make "
+        f"{held.positions + 1}, over your max of {cap} concurrent positions. Cycle 2 "
+        "rehearses the live 1–2 book — wait for one to resolve."
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
 # The phases
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -351,14 +382,15 @@ async def check_sizing(
     existing_qty: int = 0,
     existing_entry: Decimal | None = None,
 ) -> RiskVerdict:
-    """Rules that need a size: notional cap → heat cap.
+    """Rules that need a size: notional cap → position-count cap → heat cap.
 
     `side` is the POSITION side (LONG/SHORT), matching `admission_risk`.
 
-    The heat cap is moded and defaults **off**, so this is byte-for-byte the previous
-    behaviour until someone turns it on. That default is not timidity: a 6% cap cuts
-    cycle-1 entries by ~74%, and cycle 1 exists to accrue evidence volume. It flips to
-    enforce at the cycle-2 reset, not before.
+    The two portfolio-state rails (position-count, heat) are moded and default **off**, so
+    this is byte-for-byte the previous behaviour until someone turns one on. That default
+    is not timidity: both would throttle the cycle-1 sampler (a 6% heat cap cuts entries
+    ~74%; a 3-position count cuts a ~25-position book far harder), and cycle 1 exists to
+    accrue evidence volume. They flip to enforce at the cycle-2 reset, not before.
     """
     reason = notional_cap_reason(
         user,
@@ -370,30 +402,45 @@ async def check_sizing(
     if reason is not None:
         return _deny(RULE_NOTIONAL_CAP, reason)
 
-    mode = get_settings().heat_cap_mode
-    # `"off"` is a TRUTHY string — never `mode or other`. That exact bug silently
-    # stopped the entry_quality stamp being written (2026-09-05).
-    if mode == "off":
+    settings = get_settings()
+    count_mode = settings.position_count_cap_mode
+    heat_mode = settings.heat_cap_mode
+    # `"off"` is a TRUTHY string — never `mode or other`. That exact bug silently stopped
+    # the entry_quality stamp being written (2026-09-05). Both off ⇒ no open-book read.
+    if count_mode == "off" and heat_mode == "off":
         return ALLOWED
 
-    held = await open_heat(db, user)
-    incoming = admission_risk(side, fill_price, stop_loss, qty)
-    reason = heat_cap_reason(user, held=held, incoming_risk=incoming)
-    if reason is None:
-        return ALLOWED
-    if mode == "shadow":
-        # Measure-only: the verdict is stamped for the sidecar, nothing is suppressed.
-        return RiskVerdict(
-            allowed=True,
-            stamps={
-                "heat_cap": {
-                    "mode": "shadow",
-                    "would_block": True,
-                    "reason": reason,
-                    "held_inr": str(held.total),
-                    "incoming_inr": str(incoming),
-                    "open_positions": held.positions,
-                }
-            },
-        )
-    return _deny(RULE_HEAT_CAP, reason)
+    held = await open_heat(db, user)  # one read serves both portfolio-state rails
+    stamps: dict[str, object] = {}
+
+    # Position-count cap first — the concentration rail that actually binds at cycle-2 scale.
+    if count_mode != "off":
+        reason = position_count_reason(held=held, is_new_position=(existing_qty == 0))
+        if reason is not None:
+            if count_mode == "active":
+                return _deny(RULE_POSITION_COUNT, reason)
+            stamps["position_count"] = {
+                "mode": "shadow",
+                "would_block": True,
+                "reason": reason,
+                "open_positions": held.positions,
+                "max": settings.max_concurrent_positions,
+            }
+
+    # Portfolio heat cap.
+    if heat_mode != "off":
+        incoming = admission_risk(side, fill_price, stop_loss, qty)
+        reason = heat_cap_reason(user, held=held, incoming_risk=incoming)
+        if reason is not None:
+            if heat_mode == "active":
+                return _deny(RULE_HEAT_CAP, reason)
+            stamps["heat_cap"] = {
+                "mode": "shadow",
+                "would_block": True,
+                "reason": reason,
+                "held_inr": str(held.total),
+                "incoming_inr": str(incoming),
+                "open_positions": held.positions,
+            }
+
+    return RiskVerdict(allowed=True, stamps=stamps) if stamps else ALLOWED

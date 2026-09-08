@@ -612,6 +612,135 @@ class TestHeatCap:
         assert verdict.denied, "the cap must use capital_inr, never the sampling scale"
 
 
+# ── 4b. the portfolio position-count cap (D4) ─────────────────────────────────
+
+
+class TestPositionCountReason:
+    """The pure primitive — a hard design rail, no capital/heat dependency."""
+
+    def test_new_over_cap_is_blocked(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(get_settings(), "max_concurrent_positions", 3, raising=False)
+        held = rx.OpenHeat(total=Decimal(0), positions=3, unmeasurable=0)
+        reason = rx.position_count_reason(held=held, is_new_position=True)
+        assert reason is not None
+        assert "max of 3" in reason
+
+    def test_new_within_cap_is_allowed(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(get_settings(), "max_concurrent_positions", 3, raising=False)
+        held = rx.OpenHeat(total=Decimal(0), positions=2, unmeasurable=0)
+        assert rx.position_count_reason(held=held, is_new_position=True) is None
+
+    def test_adding_to_existing_is_exempt(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        """Adding to an OPEN position opens no new slot — the notional cap bounds its size."""
+        monkeypatch.setattr(get_settings(), "max_concurrent_positions", 3, raising=False)
+        held = rx.OpenHeat(total=Decimal(0), positions=5, unmeasurable=0)
+        assert rx.position_count_reason(held=held, is_new_position=False) is None
+
+    def test_zero_cap_disables(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(get_settings(), "max_concurrent_positions", 0, raising=False)
+        held = rx.OpenHeat(total=Decimal(0), positions=99, unmeasurable=0)
+        assert rx.position_count_reason(held=held, is_new_position=True) is None
+
+
+class TestPositionCountCap:
+    async def test_off_is_a_true_no_op(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Default `off` (both rails) must not even query — cycle-1 behaviour unchanged."""
+        monkeypatch.setattr(get_settings(), "position_count_cap_mode", "off", raising=False)
+        monkeypatch.setattr(get_settings(), "heat_cap_mode", "off", raising=False)
+        user = await _make_user(db, capital=Decimal("100000"))
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id)
+        for _ in range(5):  # far past a 3-position cap
+            await _open_position(db, user, stock, signal)
+        await db.commit()
+
+        verdict = await rx.check_sizing(
+            db, user, side="LONG", qty=100, fill_price=Decimal("500"),
+            stop_loss=Decimal("480"),
+        )
+        assert verdict.allowed
+        assert verdict.stamps == {}
+
+    async def test_active_denies_a_new_position_over_cap(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(get_settings(), "position_count_cap_mode", "active", raising=False)
+        monkeypatch.setattr(get_settings(), "max_concurrent_positions", 3, raising=False)
+        user = await _make_user(db, capital=Decimal("100000"))
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id)
+        for _ in range(3):
+            await _open_position(db, user, stock, signal)
+        await db.commit()
+
+        verdict = await rx.check_sizing(
+            db, user, side="LONG", qty=100, fill_price=Decimal("500"),
+            stop_loss=Decimal("480"), existing_qty=0,  # a NEW position
+        )
+        assert verdict.denied
+        assert verdict.rule == rx.RULE_POSITION_COUNT
+        assert "max of 3" in (verdict.reason or "")
+
+    async def test_active_allows_within_cap(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(get_settings(), "position_count_cap_mode", "active", raising=False)
+        monkeypatch.setattr(get_settings(), "max_concurrent_positions", 3, raising=False)
+        user = await _make_user(db, capital=Decimal("100000"))
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id)
+        for _ in range(2):
+            await _open_position(db, user, stock, signal)
+        await db.commit()
+
+        verdict = await rx.check_sizing(
+            db, user, side="LONG", qty=100, fill_price=Decimal("500"),
+            stop_loss=Decimal("480"), existing_qty=0,
+        )
+        assert verdict.allowed
+
+    async def test_adding_to_existing_is_exempt(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Over the cap, but a repeat entry into an OPEN name opens no new slot ⇒ allowed."""
+        monkeypatch.setattr(get_settings(), "position_count_cap_mode", "active", raising=False)
+        monkeypatch.setattr(get_settings(), "max_concurrent_positions", 3, raising=False)
+        user = await _make_user(db, capital=Decimal("100000"))
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id)
+        for _ in range(3):
+            await _open_position(db, user, stock, signal)
+        await db.commit()
+
+        verdict = await rx.check_sizing(
+            db, user, side="LONG", qty=100, fill_price=Decimal("500"),
+            stop_loss=Decimal("480"), existing_qty=100, existing_entry=Decimal("500"),
+        )
+        assert verdict.allowed
+
+    async def test_shadow_allows_but_stamps(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(get_settings(), "position_count_cap_mode", "shadow", raising=False)
+        monkeypatch.setattr(get_settings(), "max_concurrent_positions", 3, raising=False)
+        user = await _make_user(db, capital=Decimal("100000"))
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id)
+        for _ in range(3):
+            await _open_position(db, user, stock, signal)
+        await db.commit()
+
+        verdict = await rx.check_sizing(
+            db, user, side="LONG", qty=100, fill_price=Decimal("500"),
+            stop_loss=Decimal("480"), existing_qty=0,
+        )
+        assert verdict.allowed, "shadow must never suppress"
+        assert verdict.stamps["position_count"]["would_block"] is True  # type: ignore[index]
+        assert verdict.stamps["position_count"]["mode"] == "shadow"  # type: ignore[index]
+
+
 # ── 5. the notional cap keeps ONE definition ──────────────────────────────────
 
 

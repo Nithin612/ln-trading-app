@@ -454,6 +454,17 @@ class Settings(BaseSettings):
     heat_cap_mode: Literal["off", "shadow", "active"] = "off"
     heat_cap_pct: float = 6.0
 
+    # ── Portfolio position-count cap (D4, 2026-09-08) ──────────────────────────
+    # Max CONCURRENT open positions. At cycle-2 scale (₹1L, the live 1–2 book) a heat
+    # PERCENTAGE barely binds — 2 positions at 2% risk ≈ 4% heat, under the 6% cap — so a
+    # COUNT is the concentration rail that actually bites and directly enforces the design
+    # intent. A HARD design rail (like entry_diversity), NOT a measured-edge gate: no
+    # deflated-Sharpe bar. Adding to an EXISTING position opens no new slot and is exempt.
+    # `off` during the cycle-1 sampler (which runs ~25 concurrent BY DESIGN); flips to
+    # `active` at the CYCLE-2 RESET alongside the heat cap. 0 or negative = disabled.
+    position_count_cap_mode: Literal["off", "shadow", "active"] = "off"
+    max_concurrent_positions: int = 3
+
     # ── KILL SWITCH (Phase 7.4) ────────────────────────────────────────────
     # The human's stop. `true` halts all NEW ENTRIES immediately, at the first rule the
     # RiskEngine runs — ahead of even the daily-loss breaker, because someone who has hit
