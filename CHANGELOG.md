@@ -7,6 +7,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### A39 (2026-09-09) — cargo-deny supply-chain gate on the engine/ workspace [Bucket C]
+
+- **`engine/deny.toml`** + **`make engine-audit`** add the missing supply-chain gate on the
+  Rust engine: RustSec advisories, a permissive-license **allow-list** (a copyleft dep now
+  fails the gate rather than sneaking in — a non-issue for personal use but a real problem at
+  productization, per the external-libs review), and **crates.io-only** sources. The allow-list
+  was derived from the real tree (`cargo metadata`): all 39 crates are MIT/Apache-2.0/
+  Unicode-3.0/Unlicense; our own 3 crates (`UNLICENSED`, `publish=false`) are `private.ignore`.
+- On-demand, not part of `make check`: `cargo-deny` is **not vendored** (needs
+  `cargo install cargo-deny`); the make target prints that hint and exits if the tool is
+  absent. Noted in `.claude/rules/rust.md` as a gate to run after any `Cargo.toml`/`.lock`
+  change. `deny.toml` validated as well-formed; run-verification pends installing the tool.
+
 ### H7 (2026-09-09) — shadow-gate decay alarm [Bucket C]
 
 - **`app/services/sharpe_decay.py`** alarms when a shadow gate's readiness banner **regresses**:

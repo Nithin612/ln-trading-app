@@ -3,6 +3,12 @@
 Workspace: `engine-core` (pure logic, no I/O) · `engine-py` (PyO3/maturin
 wheel `tradecore`) · `engine-cli` (native replay/bench binary).
 Gate: `cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`.
+Supply-chain gate (A39, on-demand — the tool is not vendored): `make engine-audit`
+runs `cargo deny check` against `engine/deny.toml` (RustSec advisories · a
+permissive-license allow-list · crates.io-only sources). Run it after any change to
+`Cargo.toml`/`Cargo.lock`; a copyleft dep must be a conscious decision surfaced by
+this gate, never a silent transitive surprise (it becomes a licensing problem at
+productization — see the external-libs review). Install with `cargo install cargo-deny`.
 
 ## Library discipline (engine-core)
 

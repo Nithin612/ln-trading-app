@@ -174,6 +174,13 @@ engine-lint:  ## cargo fmt --check + clippy -D warnings
 	@echo "$(BLUE)▶ cargo clippy$(NC)"
 	@cd engine && cargo clippy --workspace --all-targets -- -D warnings
 
+.PHONY: engine-audit
+engine-audit:  ## A39 supply-chain gate: cargo-deny (advisories + licenses + sources)
+	@command -v cargo-deny >/dev/null 2>&1 || { \
+		echo "$(YELLOW)cargo-deny not installed — run: cargo install cargo-deny$(NC)"; exit 1; }
+	@echo "$(BLUE)▶ cargo deny check$(NC)"
+	@cd engine && cargo deny check
+
 .PHONY: engine-bench
 engine-bench:  ## Run criterion benches (record results in docs/PERFORMANCE.md)
 	@cd engine && RAYON_NUM_THREADS=6 cargo bench
