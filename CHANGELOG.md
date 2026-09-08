@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### A28 (2026-09-09) — retryable delivery classification in the session notifier [Bucket C]
+
+- **`app/services/notifier.py`** now classifies every webhook delivery outcome by whether
+  **retrying can help** — repo 9's `ChannelAttemptResult.retryable`, applied to our transport.
+  New `DeliveryOutcome` (`sent`/`attempts`/`retryable`/`status_code`/`error`) and a structured
+  `DispatchResult` returned by a new `dispatch()`; `notify()` is now a thin bool wrapper over it,
+  so callers and their `finally` blocks are unchanged.
+- **Closes a real silent gap:** the POST did not check its response, so a webhook returning **404
+  / 401 read as success** and a misconfigured channel looked healthy forever. A non-2xx is now a
+  failure; a **permanent** one (4xx auth/not-found/bad-URL) is logged at **WARNING** naming the
+  likely cause (a human must fix config), while a **retryable** one (429, 5xx, network/timeout) is
+  retried up to `WEBHOOK_MAX_ATTEMPTS=2` and, if still failing, logged at debug — "a receiver
+  outage must never affect trading". Still **never raises** into a caller.
+- 14 new tests (`tests/test_notifier.py`, 34 total green): status + exception classification, the
+  bounded retry (one backoff, exhausts budget, stops on success), permanent-vs-retryable log level,
+  structured-result shape, and the backward-compat `notify()==True`-on-delivery-failure contract.
+
 ### D2 parked (2026-09-08) — R2 gate decision deferred to cycle-2 end
 
 - User ruling: hold the final R2 (weekly spread-width gate) build-or-drop call until **cycle 2

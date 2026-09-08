@@ -179,3 +179,124 @@ class TestTaskResultPolicy:
 
     def test_a_missing_status_is_treated_as_unanticipated(self) -> None:
         assert nf.notify_task_result("cas_capture", "CAS", {"written": 0}) is True
+
+
+class _Resp:
+    """Minimal stand-in for an httpx.Response — only `.status_code` is read."""
+
+    def __init__(self, status_code: int) -> None:
+        self.status_code = status_code
+
+
+class TestDeliveryClassification:
+    """A28 — a delivery failure is classified by whether retrying can help, and returned as
+    a structured result instead of vanishing into a swallowed boolean."""
+
+    @pytest.fixture(autouse=True)
+    def _wire(self, monkeypatch):
+        # A configured webhook + an instant, counted sleep so the retry path costs no time.
+        monkeypatch.setattr(nf.settings, "notifier_webhook_url", "http://hook.example/x")
+        self.sleeps: list[float] = []
+        monkeypatch.setattr(nf, "_sleep", lambda s: self.sleeps.append(s))
+        self.monkeypatch = monkeypatch
+
+    def _patch_post(self, fn):
+        import httpx
+
+        self.monkeypatch.setattr(httpx, "post", fn)
+
+    def test_a_2xx_is_sent_on_the_first_attempt(self) -> None:
+        self._patch_post(lambda *a, **k: _Resp(200))
+        out = nf._post_webhook(nf.Notification(event="e", level=Level.WARNING, title="t"), "x")
+        assert (out.sent, out.attempts, out.retryable) == (True, 1, False)
+        assert self.sleeps == []  # a success never sleeps
+
+    def test_a_404_is_a_permanent_failure_and_is_not_retried(self) -> None:
+        """The gap A28 closes: the POST does not raise, so before this a 404 read as
+        success. It is now a failure — and one retrying cannot fix, so no retry."""
+        calls = []
+        self._patch_post(lambda *a, **k: (calls.append(1), _Resp(404))[1])
+        out = nf._post_webhook(nf.Notification(event="e", level=Level.WARNING, title="t"), "x")
+        assert (out.sent, out.retryable, out.status_code, out.attempts) == (False, False, 404, 1)
+        assert len(calls) == 1 and self.sleeps == []
+
+    def test_a_401_is_permanent(self) -> None:
+        self._patch_post(lambda *a, **k: _Resp(401))
+        out = nf._post_webhook(nf.Notification(event="e", level=Level.WARNING, title="t"), "x")
+        assert out.retryable is False and out.attempts == 1
+
+    def test_a_503_is_retryable_and_exhausts_the_budget(self) -> None:
+        calls = []
+        self._patch_post(lambda *a, **k: (calls.append(1), _Resp(503))[1])
+        out = nf._post_webhook(nf.Notification(event="e", level=Level.WARNING, title="t"), "x")
+        assert (out.sent, out.retryable) == (False, True)
+        assert out.attempts == nf.WEBHOOK_MAX_ATTEMPTS
+        assert len(calls) == nf.WEBHOOK_MAX_ATTEMPTS
+        assert self.sleeps == [nf.WEBHOOK_RETRY_BACKOFF_S]  # one backoff between two attempts
+
+    def test_a_429_is_retryable(self) -> None:
+        self._patch_post(lambda *a, **k: _Resp(429))
+        out = nf._post_webhook(nf.Notification(event="e", level=Level.WARNING, title="t"), "x")
+        assert out.retryable is True and out.attempts == nf.WEBHOOK_MAX_ATTEMPTS
+
+    def test_a_retryable_error_that_then_succeeds_stops_retrying(self) -> None:
+        seq = iter([_Resp(503), _Resp(200)])
+        self._patch_post(lambda *a, **k: next(seq))
+        out = nf._post_webhook(nf.Notification(event="e", level=Level.WARNING, title="t"), "x")
+        assert (out.sent, out.attempts) == (True, 2)
+
+    def test_a_network_error_is_retryable(self) -> None:
+        import httpx
+
+        def _boom(*a, **k):
+            raise httpx.ConnectError("connection refused")
+
+        self._patch_post(_boom)
+        out = nf._post_webhook(nf.Notification(event="e", level=Level.WARNING, title="t"), "x")
+        assert (out.sent, out.retryable, out.attempts) == (False, True, nf.WEBHOOK_MAX_ATTEMPTS)
+        assert "ConnectError" in (out.error or "")
+
+    def test_a_bad_url_is_permanent_and_not_retried(self) -> None:
+        import httpx
+
+        def _boom(*a, **k):
+            raise httpx.InvalidURL("not a url")
+
+        self._patch_post(_boom)
+        out = nf._post_webhook(nf.Notification(event="e", level=Level.WARNING, title="t"), "x")
+        assert (out.sent, out.retryable, out.attempts) == (False, False, 1)
+        assert self.sleeps == []
+
+    def test_no_webhook_configured_is_not_attempted_not_failed(self, monkeypatch) -> None:
+        monkeypatch.setattr(nf.settings, "notifier_webhook_url", None)
+        out = nf._post_webhook(nf.Notification(event="e", level=Level.WARNING, title="t"), "x")
+        assert (out.attempts, out.sent, out.error) == (0, False, None)
+
+    def test_a_permanent_failure_warns_because_a_human_must_fix_config(self, caplog) -> None:
+        self._patch_post(lambda *a, **k: _Resp(404))
+        with caplog.at_level(logging.WARNING, logger="app.services.notifier"):
+            nf.dispatch(nf.Notification(event="cas", level=Level.WARNING, title="t"))
+        assert "retrying cannot help" in caplog.text
+
+    def test_a_retryable_outage_does_not_warn(self, caplog) -> None:
+        """'A receiver outage must never affect trading' — and it should not train a human to
+        mute the channel either. Nothing to fix ⇒ no WARNING."""
+        self._patch_post(lambda *a, **k: _Resp(503))
+        with caplog.at_level(logging.WARNING, logger="app.services.notifier"):
+            nf.dispatch(nf.Notification(event="cas", level=Level.WARNING, title="t"))
+        assert "retrying cannot help" not in caplog.text
+
+    def test_dispatch_returns_the_structured_result(self) -> None:
+        self._patch_post(lambda *a, **k: _Resp(200))
+        res = nf.dispatch(nf.Notification(event="e", level=Level.ERROR, title="t"))
+        assert res.notified is True and res.delivery is not None and res.delivery.sent is True
+
+    def test_dispatch_delivery_is_none_when_policy_suppresses(self) -> None:
+        res = nf.dispatch(nf.Notification(event="e", level=Level.INFO, title="t"))
+        assert res.notified is False and res.delivery is None
+
+    def test_notify_still_returns_true_on_a_delivery_failure(self) -> None:
+        """Backward-compat: `notify()` reports the policy decision, never the wire — a
+        delivery failure must not surface to a caller in a `finally`."""
+        self._patch_post(lambda *a, **k: _Resp(500))
+        assert nf.notify(nf.Notification(event="e", level=Level.WARNING, title="t")) is True

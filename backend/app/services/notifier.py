@@ -72,6 +72,19 @@ DEFAULT_THROTTLE_S = 900.0
 #: hung notifier delaying a task is a worse outcome than a dropped message.
 WEBHOOK_TIMEOUT_S = 5.0
 
+#: Total delivery attempts for a RETRYABLE failure (A28). Deliberately tiny: this runs in a
+#: `finally`, so the whole budget is `WEBHOOK_MAX_ATTEMPTS × (WEBHOOK_TIMEOUT_S + backoff)`
+#: and must stay well under any task's own tolerance. A *permanent* failure is never retried.
+WEBHOOK_MAX_ATTEMPTS = 2
+
+#: Fixed pause between retryable attempts. A short constant, not exponential backoff — with a
+#: 2-attempt budget there is nothing to back off from, and a longer pause just delays a
+#: `finally`.
+WEBHOOK_RETRY_BACKOFF_S = 0.5
+
+#: Test seam — patched in tests so the retry path costs no wall-clock. Real code sleeps.
+_sleep = time.sleep
+
 
 class Level(StrEnum):
     """How loud, and — via the policy — whether it sends at all."""
@@ -110,6 +123,72 @@ def describe_exception(exc: BaseException) -> str:
         return f"{type(exc).__name__}: {exc}"[:MAX_EXC_CHARS]
     except Exception:
         return f"{type(exc).__name__}: <unprintable>"
+
+
+@dataclass(frozen=True)
+class DeliveryOutcome:
+    """The result of trying to put one notification on the wire (A28).
+
+    ⭐ The point of this type is the distinction the old boolean could not make: a delivery
+    failure that **retrying can fix** (a receiver blip, a 503, a timeout) versus one that it
+    **cannot** (a wrong URL, a revoked token → 401/404). Before A28 a webhook returning 404
+    was treated as success — the POST did not raise, so a misconfigured channel looked
+    healthy forever. `retryable` is exactly repo 9's `ChannelAttemptResult.retryable`.
+
+    - `attempts == 0` ⇒ **not attempted** (no webhook configured — log-only mode, the
+      default; NOT a failure).
+    - `sent` ⇒ a 2xx was received.
+    - `not sent and not retryable` ⇒ **a human must fix config** — the one case worth a
+      WARNING, because it is silent and permanent.
+    """
+
+    sent: bool
+    attempts: int
+    retryable: bool
+    status_code: int | None
+    error: str | None
+
+
+@dataclass(frozen=True)
+class DispatchResult:
+    """The structured result of one `dispatch()` — repo 9's `NotificationDispatchResult`.
+
+    `notified` is the policy+throttle decision (did this deserve, and get, a send?), kept
+    separate from `delivery` (did the wire accept it?) because they answer different
+    questions and a caller might care about either. `delivery is None` when the policy or
+    throttle suppressed the notification, so nothing was ever put on the wire.
+
+    One channel today (a generic webhook), so this wraps a single `DeliveryOutcome`; the
+    shape is a list-of-channels away from multi-channel without changing callers.
+    """
+
+    notified: bool
+    suppressed: int
+    delivery: DeliveryOutcome | None
+
+
+def _classify_status(status_code: int) -> tuple[bool, bool]:
+    """`(sent, retryable)` for an HTTP status. 2xx delivered; 429 and 5xx are transient and
+    worth a retry; every other 4xx (auth, not-found, malformed) is permanent — retrying an
+    authorization or a typo cannot help, and looping on it just burns the `finally`."""
+    if 200 <= status_code < 300:
+        return True, False
+    if status_code == 429 or 500 <= status_code < 600:
+        return False, True
+    return False, False
+
+
+def _classify_exc(exc: BaseException) -> bool:
+    """Is a raised delivery error worth retrying? Network/timeout transports are transient;
+    a bad URL or unsupported scheme is a config mistake and is not. Anything unexpected is
+    treated as permanent so a bug cannot spin the retry loop."""
+    try:
+        import httpx
+    except Exception:  # pragma: no cover — httpx is a hard dep, defensive only
+        return False
+    if isinstance(exc, (httpx.UnsupportedProtocol, httpx.InvalidURL)):
+        return False
+    return isinstance(exc, httpx.TransportError)
 
 
 class _Throttle:
@@ -156,32 +235,41 @@ def should_notify(n: Notification) -> bool:
     return n.level is not Level.INFO
 
 
-def notify(n: Notification) -> bool:
-    """Deliver if the policy and throttle allow. Returns whether anything was sent.
+def dispatch(n: Notification) -> DispatchResult:
+    """Apply the policy + throttle, then deliver, returning the full structured result (A28).
 
-    NEVER raises. This is called from `finally` blocks, where an exception would replace
-    the error the caller was already handling — the failure mode that makes people remove
-    notifiers.
+    NEVER raises. This is reached from `finally` blocks, where an exception would replace the
+    error the caller was already handling — the failure mode that makes people remove
+    notifiers. `notify()` is the thin bool wrapper most callers use.
     """
     try:
         if not should_notify(n):
             log.debug("notifier: suppressed by policy event=%s level=%s", n.event, n.level)
-            return False
+            return DispatchResult(notified=False, suppressed=0, delivery=None)
         send, suppressed = _throttle.admit(n)
         if not send:
-            return False
+            return DispatchResult(notified=False, suppressed=0, delivery=None)
         text = n.render()
         if suppressed:
             # Never a silent throttle: a growing count IS the signal that something is
             # getting worse while being suppressed.
             text += f"\n(+{suppressed} suppressed since the last message)"
         _log_it(n, text)
-        _post_webhook(n, text)
-        return True
+        delivery = _post_webhook(n, text)
+        _log_delivery(n, delivery)
+        return DispatchResult(notified=True, suppressed=suppressed, delivery=delivery)
     except Exception:
         # Including the logging and the POST. Nothing here is worth failing a task over.
         log.debug("notifier failed (non-fatal)", exc_info=True)
-        return False
+        return DispatchResult(notified=False, suppressed=0, delivery=None)
+
+
+def notify(n: Notification) -> bool:
+    """Deliver if the policy and throttle allow. Returns whether the notification was
+    admitted (policy + throttle) and handled — **not** whether the wire accepted it, which
+    is deliberately swallowed so a receiver outage never affects a caller. For the delivery
+    result, call `dispatch()` and read `.delivery`. NEVER raises."""
+    return dispatch(n).notified
 
 
 def _log_it(n: Notification, text: str) -> None:
@@ -189,29 +277,81 @@ def _log_it(n: Notification, text: str) -> None:
     log.log(level, "notify[%s]: %s", n.event, text.replace("\n", " | "))
 
 
-def _post_webhook(n: Notification, text: str) -> None:
+def _post_webhook(n: Notification, text: str) -> DeliveryOutcome:
+    """Try to deliver, classifying every outcome (A28). NEVER raises.
+
+    A retryable failure is retried up to `WEBHOOK_MAX_ATTEMPTS`; a permanent one (a config
+    error — wrong URL, 401/404) is recorded and NOT retried, because retrying a typo only
+    delays the `finally` it runs in. A non-2xx response is a failure even though the POST did
+    not raise — the gap A28 closes, since before this a 404 read as success.
+    """
     url = settings.notifier_webhook_url
     if not url:
-        return  # unset ⇒ silent no-op, and callers never branch on it
+        # unset ⇒ silent no-op, and callers never branch on it. NOT a failure.
+        return DeliveryOutcome(
+            sent=False, attempts=0, retryable=False, status_code=None, error=None
+        )
     try:
         import httpx
-
-        httpx.post(
-            url,
-            json={
-                "event": n.event,
-                "level": n.level.value,
-                "title": n.title,
-                # `text` for Slack-shaped receivers, `content` for Discord-shaped ones.
-                "text": text,
-                "content": text,
-            },
-            timeout=WEBHOOK_TIMEOUT_S,
+    except Exception:  # pragma: no cover — httpx is a hard dep, defensive only
+        return DeliveryOutcome(
+            sent=False, attempts=0, retryable=False, status_code=None, error="httpx missing"
         )
-    except Exception:
-        # "A Telegram outage must never affect trading" — the rule that made the reference
-        # implementation trustworthy enough to wire into a `finally`.
-        log.debug("notifier webhook delivery failed (non-fatal)", exc_info=True)
+    payload = {
+        "event": n.event,
+        "level": n.level.value,
+        "title": n.title,
+        # `text` for Slack-shaped receivers, `content` for Discord-shaped ones.
+        "text": text,
+        "content": text,
+    }
+    attempts = 0
+    retryable = False
+    last_status: int | None = None
+    last_error: str | None = None
+    while attempts < WEBHOOK_MAX_ATTEMPTS:
+        attempts += 1
+        try:
+            resp = httpx.post(url, json=payload, timeout=WEBHOOK_TIMEOUT_S)
+            sent, retryable = _classify_status(resp.status_code)
+            last_status = resp.status_code
+            if sent:
+                return DeliveryOutcome(
+                    sent=True, attempts=attempts, retryable=False,
+                    status_code=resp.status_code, error=None,
+                )
+            last_error = f"HTTP {resp.status_code}"
+        except Exception as exc:  # noqa: BLE001 — "an outage must never affect trading"
+            retryable = _classify_exc(exc)
+            last_error = describe_exception(exc)
+            last_status = None
+        if not retryable or attempts >= WEBHOOK_MAX_ATTEMPTS:
+            break
+        _sleep(WEBHOOK_RETRY_BACKOFF_S)
+    return DeliveryOutcome(
+        sent=False, attempts=attempts, retryable=retryable,
+        status_code=last_status, error=last_error,
+    )
+
+
+def _log_delivery(n: Notification, d: DeliveryOutcome) -> None:
+    """Turn the classification into the right log level. A PERMANENT failure is the one that
+    was invisible before A28 and needs a human — so it is a WARNING that names the likely
+    cause. A retryable one that exhausted its budget is a transient outage — debug, because
+    "a receiver outage must never affect trading" and there is nothing for a human to fix."""
+    if d.attempts == 0 or d.sent:
+        return
+    if d.retryable:
+        log.debug(
+            "notifier[%s]: delivery failed after %d attempt(s), retryable (%s)",
+            n.event, d.attempts, d.error,
+        )
+    else:
+        log.warning(
+            "notifier[%s]: delivery FAILED and retrying cannot help — check "
+            "notifier_webhook_url (%s)",
+            n.event, d.error,
+        )
 
 
 def notify_exception(event: str, title: str, exc: BaseException, **extra: object) -> bool:
