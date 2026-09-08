@@ -39,6 +39,13 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   deferred as a follow-up. Test-only — no engine logic changed, so no fixture regeneration.
   `cargo test -p engine-core` 71 passed; fmt + clippy clean.
 
+### T10 (2026-09-09) — negative-space assertions on the notifier [Bucket C]
+
+- Two `ExplodingObject`-style tests (`tests/test_notifier.py::TestNegativeSpace`) assert what must
+  NOT happen: a policy-suppressed (INFO) notification and a throttled repeat both short-circuit
+  **before** the webhook — proven by an exploding/counting `_post_webhook` that the suppressed path
+  never reaches (and the throttled repeat hits the wire exactly once, not twice).
+
 ### T9 + A15 (2026-09-09) — doc-sync ritual and a schedule invariant, as failing tests [Bucket C]
 
 - **T9 (`backend/tests/test_doc_sync.py`)** promotes the mechanically-checkable half of the

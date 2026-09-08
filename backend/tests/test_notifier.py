@@ -300,3 +300,30 @@ class TestDeliveryClassification:
         delivery failure must not surface to a caller in a `finally`."""
         self._patch_post(lambda *a, **k: _Resp(500))
         assert nf.notify(nf.Notification(event="e", level=Level.WARNING, title="t")) is True
+
+
+class TestNegativeSpace:
+    """T10 — assert what MUST NOT happen. A policy/throttle suppression must short-circuit
+    BEFORE the wire, so an exploding transport in the suppressed path is never reached."""
+
+    def test_a_policy_suppressed_info_never_touches_the_wire(self, monkeypatch) -> None:
+        def _must_not_run(*_a, **_k):
+            raise AssertionError("suppressed notification must not reach the webhook")
+
+        monkeypatch.setattr(nf, "_post_webhook", _must_not_run)
+        # INFO is suppressed by policy → returns False, and the exploding sink proves the
+        # delivery path was never entered (no AssertionError escaped).
+        assert nf.notify(nf.Notification(event="e", level=Level.INFO, title="t")) is False
+
+    def test_a_throttled_repeat_never_touches_the_wire(self, monkeypatch) -> None:
+        calls = {"n": 0}
+
+        def _count(*_a, **_k):
+            calls["n"] += 1
+            return nf.DeliveryOutcome(True, 1, False, 200, None)
+
+        monkeypatch.setattr(nf, "_post_webhook", _count)
+        n = nf.Notification(event="dup", level=Level.WARNING, title="t")
+        assert nf.notify(n) is True  # first admits and delivers
+        assert nf.notify(n) is False  # second throttled → suppressed
+        assert calls["n"] == 1  # the wire was hit exactly once, not twice
