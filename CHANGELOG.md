@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### H7 (2026-09-09) — shadow-gate decay alarm [Bucket C]
+
+- **`app/services/sharpe_decay.py`** alarms when a shadow gate's readiness banner **regresses**:
+  the regime gate ran seven NOT-READY report days before it was reverted (net-positive suppressed
+  set, ~8R subtracted), and the signal was on disk every day — nothing turned detection into an
+  alarm. H7 is a **second reader** of the dated `<gate>-shadow-<date>.md` banners the sidecars
+  already write.
+- **Fires on a regression, not on accrual** — the load-bearing distinction: every shadow gate is
+  NOT READY now and will be for weeks, so `decaying ⟺ trailing NOT-READY run ≥ DECAY_STREAK_DAYS
+  (5) AND (was READY in-window OR ACTIVE per the gate_register)`. A perpetually-accruing gate never
+  alarms. Leans on H4's register (`gate_register.get`) to catch a gate promoted before the window.
+- **Wired into `make analysis`** as a diagnostics step (after the gate sidecars so today's banners
+  are on disk): writes `gate-decay-<date>.md` and pushes via the notifier when a gate is decaying.
+  Smoke-run flagged a genuine case (sector-RS READY→NOT-READY for 5 days).
+- 16 tests (`tests/test_sharpe_decay.py`): banner parsing precedence, the accrual-vs-decay
+  distinction, the active-gate arm, streak recovery, file scan with gaps, notification + render.
+
 ### A9/A10 (2026-09-09) — a progress envelope for long-running jobs [Bucket C]
 
 - **`app/core/progress.py`** — a dependency-free, framework-agnostic progress protocol:

@@ -355,6 +355,12 @@ def by_status(status: Status) -> tuple[Hypothesis, ...]:
     return tuple(h for h in REGISTER if h.status is status)
 
 
+def get(key: str) -> Hypothesis | None:
+    """One hypothesis by key, or None. Used by H7 (sharpe_decay) to tell an ACTIVE gate
+    losing its edge apart from a shadow gate that is merely still accruing."""
+    return next((h for h in REGISTER if h.key == key), None)
+
+
 def due_for_review() -> tuple[Hypothesis, ...]:
     """Everything still carrying a trigger. Constraint #8 requires raising these unprompted."""
     return tuple(h for h in REGISTER if h.review_due is not None)

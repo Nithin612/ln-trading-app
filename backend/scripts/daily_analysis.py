@@ -106,7 +106,7 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
     # A9 — a progress envelope for this opaque multi-stage job. Emitted to STDERR so the
     # "wrote …" lines on stdout stay clean and pipeable; a watcher sees which of the N stages
     # is running and how long it has taken, instead of silence until the run finishes or wedges.
-    n_stages = 11 + (1 if week_of is not None else 0)
+    n_stages = 12 + (1 if week_of is not None else 0)
     prog = ProgressReporter(n_stages, label="analysis")
 
     async with AsyncSessionFactory() as db:
@@ -289,6 +289,31 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
             print(mrr.summary_line(regime), flush=True)
         except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
             print(f"market-regime step skipped: {exc!r}", flush=True)
+
+        # H7 — shadow-gate decay alarm. A SECOND READER of the readiness banners the sidecars
+        # above just wrote: it PUSHES if a gate that was READY (or is ACTIVE per the register)
+        # has regressed to NOT READY for >= DECAY_STREAK_DAYS. The regime gate ran seven such
+        # days unremedied before the revert; this fires before a human would notice. Must run
+        # AFTER the gate sidecars so today's banners are on disk. Read-only, never blocks.
+        try:
+            prog.step("gate-decay alarm (H7)", phase="diagnostics")
+            from app.services import sharpe_decay as sd
+            from app.services.notifier import notify
+
+            decays = sd.scan(_ANALYSIS_DIR, today=day)
+            sd_path = _ANALYSIS_DIR / f"gate-decay-{day.isoformat()}.md"
+            sd_path.write_text(sd.render_markdown(decays, day))
+            print(f"wrote {sd_path.relative_to(_REPO_ROOT)}", flush=True)
+            decay_note = sd.to_notification(decays)
+            if decay_note is not None:
+                notify(decay_note)
+                print(f"⚠ [gate-decay] {decay_note.title}", flush=True)
+            else:
+                print(
+                    "[gate-decay] no gate is decaying — shadow gates still accruing", flush=True
+                )
+        except Exception as exc:  # noqa: BLE001 - never block the daily report; surface, don't swallow
+            print(f"gate-decay step skipped: {exc!r}", flush=True)
 
         if week_of is not None:
             prog.step("weekly roll-up", phase="report")
