@@ -116,6 +116,29 @@ check. 19 tests.
 before the clock is the strategy/evidence half (CAS-2, MCE 5b+6, `compute_levels`, Minervini)
 plus the five open decisions.
 
+### ▶ Progress — 2026-09-09 overnight run (Bucket C, builds DURING accrual)
+
+Eight Bucket-C items shipped, all touching **no recorded number** (safe mid-cycle), each with
+tests + CHANGELOG; the operational-safety cluster (the findings doc's "largest single win") is
+now largely done. **Bucket C now stands at ~15 of ~60** (prior 7 = W1–W5 · A11 · A40).
+
+| item | what | tests |
+|---|---|---|
+| **A28** | notifier delivery classified retryable-vs-permanent (`DeliveryOutcome`/`DispatchResult` + bounded retry; a 404/401 no longer reads as success) | +14 (34 total) |
+| **A36** | proactive NSE calendar-coverage expiry alarm (`calendar_health.py` + daily beat + report line; optional XNSE cross-check) | 15 |
+| **A9/A10** | progress envelope for long jobs (`app/core/progress.py`) wired into `make analysis` (stderr, 12 stages) | 14 |
+| **H7** | shadow-gate decay alarm (`sharpe_decay.py`) — **only an ACTIVE gate's regression pushes** (bug-hunter MEDIUM fix); shadow regressions recorded, never pushed | 18 |
+| **A39** | `cargo-deny` supply-chain gate (`engine/deny.toml` + `make engine-audit`; on-demand, tool not vendored) | TOML valid |
+| **T9** | doc-sync ritual as a failing test (`test_doc_sync.py`) — W3 config drift, report-all-at-once, T8 shrinking-debt baseline | 8 |
+| **A15** | schedule invariant (`test_schedule_invariants.py`) — CAS window ≥ beat tick; coverage-close == capture-end | 3 |
+| **T13/T14** | T13 tautological here (batch ≡ incremental by construction — recorded); T14 external hand-computed RSI+ATR anchors independent of pandas-ta (ADX deferred) | +3 (engine) |
+
+**Not started in Bucket C:** A27/A3/A13 already done pre-09-09; remaining = A5/A7/A12/T12 (rules/
+hygiene), T4/T5/T6/T8/T10 (more test invariants), the **U1 UI registry cluster** (the big one),
+and A4/A14/A17/A1/A41 (deployment/misc). None attacks profitability — all harden the platform and
+its evidence while cycle 2 accrues. bug-hunter reviewed the ops-safety cluster: A28/A36/A9/A10
+sound, one H7 MEDIUM fixed same-day.
+
 Two findings worth carrying forward:
 
 1. **A refused order is not a row today, it is an exception.** `Order.status` holds exactly
