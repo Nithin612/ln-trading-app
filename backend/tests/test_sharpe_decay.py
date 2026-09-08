@@ -40,9 +40,16 @@ class TestAnalyze:
         d = sd.analyze("g", _hist(False, False, False, False, False, False), is_active=False)
         assert d.not_ready_streak == 6 and d.was_ready is False and d.decaying is False
 
-    def test_was_ready_then_a_long_not_ready_run_is_a_decay(self) -> None:
+    def test_a_shadow_gate_that_was_ready_regresses_but_does_not_alarm(self) -> None:
+        """⭐ Review fix 2026-09-09: a SHADOW gate flipping READY→NOT-READY is a criteria change
+        or small-sample oscillation, NOT decay — it is recorded but never pushed."""
         d = sd.analyze("g", _hist(True, True, False, False, False, False, False), is_active=False)
-        assert d.was_ready is True and d.not_ready_streak == 5 and d.decaying is True
+        assert d.was_ready is True and d.not_ready_streak == 5
+        assert d.shadow_regressed is True and d.decaying is False
+
+    def test_an_active_gate_that_was_ready_and_regressed_is_decaying(self) -> None:
+        d = sd.analyze("g", _hist(True, True, False, False, False, False, False), is_active=True)
+        assert d.decaying is True and d.shadow_regressed is False
 
     def test_a_short_not_ready_run_after_ready_is_not_yet_a_decay(self) -> None:
         d = sd.analyze("g", _hist(True, True, False, False, False), is_active=False)
@@ -77,13 +84,17 @@ class TestScanFiles:
         hist = sd.read_history(tmp_path, "regime-gate-shadow", today=today)
         assert [h.ready for h in hist] == [True, True, False]
 
-    def test_scan_flags_a_decayed_gate_from_files(self, tmp_path) -> None:
+    def test_scan_records_a_shadow_regression_but_does_not_alarm(self, tmp_path) -> None:
         today = date(2026, 9, 8)
-        # regime gate: 2 READY then 5 NOT-READY → decay via was_ready
+        # regime gate: 2 READY then 5 NOT-READY. Its register status is REVERTED (not ACTIVE),
+        # so this is a SHADOW regression — recorded, but NOT a push (the review fix).
         for i, r in enumerate([True, True, False, False, False, False, False]):
             self._write(today, "regime-gate-shadow", today - timedelta(days=6 - i), r, tmp_path)
-        decays = {d.gate: d for d in sd.scan(tmp_path, today=today)}
-        assert decays["regime gate (ADX)"].decaying is True
+        decays_list = sd.scan(tmp_path, today=today)
+        decays = {d.gate: d for d in decays_list}
+        assert decays["regime gate (ADX)"].shadow_regressed is True
+        assert decays["regime gate (ADX)"].decaying is False
+        assert sd.to_notification(decays_list) is None  # no shadow gate ever pushes
         # a gate with no files is present but not decaying
         assert decays["liquidity"].latest_ready is None and decays["liquidity"].decaying is False
 
@@ -94,20 +105,28 @@ class TestNotificationAndRender:
         assert sd.to_notification(decays) is None
         assert sd.render_lines(decays) == []
 
-    def test_decay_pushes_a_warning_naming_the_gate(self) -> None:
+    def test_an_active_gate_decay_pushes_a_warning_naming_the_gate(self) -> None:
         h = _hist(True, False, False, False, False, False)
-        decays = [sd.analyze("regime", h, is_active=False)]
+        decays = [sd.analyze("regime", h, is_active=True)]
         n = sd.to_notification(decays)
         assert n is not None and n.level is Level.WARNING and n.event == "gate_decay"
         assert "regime" in "\n".join(n.lines)
+
+    def test_a_shadow_regression_is_recorded_but_not_pushed(self) -> None:
+        """The review fix: the table shows it, the notifier stays silent."""
+        h = _hist(True, False, False, False, False, False)
+        decays = [sd.analyze("sector RS", h, is_active=False)]
+        assert decays[0].shadow_regressed is True
+        assert sd.to_notification(decays) is None and sd.render_lines(decays) == []
+        assert "regressed (shadow" in sd.render_markdown(decays, date(2026, 9, 8))
 
     def test_markdown_always_has_a_status_table(self) -> None:
         decays = [sd.analyze("g", _hist(False), is_active=False)]
         md = sd.render_markdown(decays, date(2026, 9, 8))
         assert "| gate | state |" in md and "H7" in md
 
-    def test_markdown_shows_the_loud_block_when_decaying(self) -> None:
+    def test_markdown_shows_the_loud_block_when_an_active_gate_decays(self) -> None:
         h = _hist(True, False, False, False, False, False)
-        decays = [sd.analyze("regime", h, is_active=False)]
+        decays = [sd.analyze("regime", h, is_active=True)]
         md = sd.render_markdown(decays, date(2026, 9, 8))
         assert "DECAY ALARM" in md and "DECAYING" in md

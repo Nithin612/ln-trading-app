@@ -27,15 +27,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
   set, ~8R subtracted), and the signal was on disk every day — nothing turned detection into an
   alarm. H7 is a **second reader** of the dated `<gate>-shadow-<date>.md` banners the sidecars
   already write.
-- **Fires on a regression, not on accrual** — the load-bearing distinction: every shadow gate is
-  NOT READY now and will be for weeks, so `decaying ⟺ trailing NOT-READY run ≥ DECAY_STREAK_DAYS
-  (5) AND (was READY in-window OR ACTIVE per the gate_register)`. A perpetually-accruing gate never
-  alarms. Leans on H4's register (`gate_register.get`) to catch a gate promoted before the window.
+- **The PUSH fires only for an ACTIVE gate that regressed** — the load-bearing distinction:
+  `decaying ⟺ trailing NOT-READY run ≥ DECAY_STREAK_DAYS (5) AND the gate is ACTIVE per the
+  gate_register`. That is the regime-gate incident exactly (a gate we adopted losing its edge). A
+  perpetually-accruing gate never alarms; a **SHADOW** gate flipping READY→NOT-READY (criteria
+  change or small-sample oscillation) is `shadow_regressed` — recorded in the durable table, never
+  pushed (the notifier's "never train a human to mute the channel" rule). Leans on H4's register
+  (`gate_register.get`) for adoption status. ⭐ **The shadow-vs-active distinction was a bug-hunter
+  MEDIUM finding, fixed the same day** — the first cut pushed on any READY→NOT-READY flip and would
+  have cried wolf daily for sector-RS/market-regime.
 - **Wired into `make analysis`** as a diagnostics step (after the gate sidecars so today's banners
-  are on disk): writes `gate-decay-<date>.md` and pushes via the notifier when a gate is decaying.
-  Smoke-run flagged a genuine case (sector-RS READY→NOT-READY for 5 days).
-- 16 tests (`tests/test_sharpe_decay.py`): banner parsing precedence, the accrual-vs-decay
-  distinction, the active-gate arm, streak recovery, file scan with gaps, notification + render.
+  are on disk): writes `gate-decay-<date>.md` (full status table, shadow regressions included) and
+  pushes via the notifier only when an ACTIVE gate is decaying.
+- 18 tests (`tests/test_sharpe_decay.py`): banner parsing precedence, accrual-vs-shadow-regression-
+  vs-active-decay, streak recovery, file scan with gaps, and the "shadow regression records but
+  never pushes" contract.
 
 ### A9/A10 (2026-09-09) — a progress envelope for long-running jobs [Bucket C]
 

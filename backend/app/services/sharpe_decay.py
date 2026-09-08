@@ -16,15 +16,23 @@ would be pure noise: every shadow gate is NOT READY right now and will be for we
 none has reached its resolved-trade bar (the leak is upstream of gating). "Still accruing" is
 not decay.
 
-A decay is a **regression**: a gate that was READY (or is ACTIVE — adopted on the money path)
-and whose readiness has since deteriorated to NOT READY, sustained. That is exactly the
-regime-gate shape and it is what this alarms on:
+A decay worth a PUSH is a regression of a gate we ADOPTED: an **ACTIVE** gate whose readiness
+has deteriorated to NOT READY, sustained. That is exactly the regime-gate shape — a gate on
+the money path losing its edge — and it is the only thing that pushes:
 
-    decaying  ⟺  trailing NOT-READY run ≥ DECAY_STREAK_DAYS  AND  (was READY in-window OR ACTIVE)
+    decaying  ⟺  trailing NOT-READY run ≥ DECAY_STREAK_DAYS  AND  the gate is ACTIVE
 
-The ACTIVE arm is why this leans on H4's `gate_register` (the finding says H7 is "partly
-subsumed by H4"): a gate promoted *before* the scan window shows no in-window READY→NOT-READY
-transition, so its adoption is read from the register instead.
+⚠ **A SHADOW gate flipping READY→NOT-READY is NOT a push.** (Caught in review, 2026-09-09: an
+earlier version pushed on any in-window READY→NOT-READY flip and would have cried wolf daily
+for sector-RS and market-regime — whose banners oscillate on shifting relative P&L, or flip
+because a *readiness criterion* was tightened, not because an edge decayed.) A shadow
+regression is real information but not actionable in the notifier sense, so it is RECORDED in
+the durable table (`shadow_regressed`) and never pushed — the notifier's "never train a human
+to mute the channel" rule.
+
+ACTIVE-ness is read from H4's `gate_register` (the finding says H7 is "partly subsumed by
+H4"): a gate promoted before the scan window shows no in-window READY→NOT-READY transition, so
+its adoption is read from the register rather than inferred from the files.
 
 ## Why read the sidecar files rather than re-plumb every gate
 
@@ -88,8 +96,21 @@ class GateDecay:
 
     @property
     def decaying(self) -> bool:
-        """A regression, not mere accrual — see the module docstring."""
-        return self.not_ready_streak >= DECAY_STREAK_DAYS and (self.was_ready or self.is_active)
+        """The PUSH-worthy alarm: an ACTIVE gate (adopted on the money path) that has
+        regressed to NOT READY for the streak — the regime-gate incident exactly. A SHADOW
+        gate flipping READY→NOT-READY is NOT this (see `shadow_regressed`)."""
+        return self.not_ready_streak >= DECAY_STREAK_DAYS and self.is_active
+
+    @property
+    def shadow_regressed(self) -> bool:
+        """A SHADOW gate that was READY and has gone NOT READY for the streak. Worth RECORDING
+        (it may be a real change, a tightened readiness criterion, or small-sample noise) but
+        NOT worth a push — recorded in the table, never alarmed."""
+        return (
+            self.not_ready_streak >= DECAY_STREAK_DAYS
+            and self.was_ready
+            and not self.is_active
+        )
 
 
 def extract_readiness(text: str) -> bool | None:
@@ -172,7 +193,11 @@ def scan(analysis_dir: Path, *, today: date, lookback_days: int = LOOKBACK_DAYS)
 
 
 def _why(d: GateDecay) -> str:
-    reason = "was READY, now decayed" if d.was_ready else "ACTIVE gate losing its edge"
+    reason = (
+        "ACTIVE gate was READY and has decayed"
+        if d.was_ready
+        else "ACTIVE gate losing its edge (adopted before this window)"
+    )
     return (
         f"**{d.gate}** — {d.not_ready_streak} consecutive NOT-READY report days "
         f"({reason}; {d.days_observed} days observed)"
@@ -222,7 +247,9 @@ def _state(d: GateDecay) -> str:
     if d.latest_ready is None:
         return "— no observations"
     if d.decaying:
-        return "⚠️ DECAYING"
+        return "⚠️ DECAYING (active)"
+    if d.shadow_regressed:
+        return "· regressed (shadow, not alarmed)"
     if d.latest_ready:
         return "✅ ready"
     return "⏳ accruing"
