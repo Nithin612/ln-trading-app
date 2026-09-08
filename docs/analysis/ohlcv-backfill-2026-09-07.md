@@ -17,6 +17,12 @@ Requested **2023-07-03 → 2026-09-05**; 830 weekdays fetched this run.
 - 2,001 inactive stocks (delisted/historical names carrying the point-in-time
   universe — see `_ensure_historical_stocks`)
 
+> **Update 2026-09-08** — a subsequent run extended coverage past this recovery
+> snapshot all the way to the archive floor. Live `ohlcv_1d` now spans
+> **2019-10-01 → 2026-09-04** — 1,093 trading days, **2,076,769 bars** across
+> **3,373 names** (2,070 inactive/historical). The full ~7-year Q5 target is met;
+> the pre-COVID regime backtest that consumes it is still sequenced after D1/D5.
+
 ## ⚠ Carry these into any study built on this data
 
 - **Prices are UNADJUSTED for corporate actions.** Over 7 years every split and

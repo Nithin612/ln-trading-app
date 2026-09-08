@@ -7,6 +7,81 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### D2 parked (2026-09-08) — R2 gate decision deferred to cycle-2 end
+
+- User ruling: hold the final R2 (weekly spread-width gate) build-or-drop call until **cycle 2
+  completes**, and decide it on cycle-2 forward evidence. R2 stays provisionally dropped (09-07); the
+  decision does **not** block cycle-2 start. Recorded as a **review-calendar item** in the PHASES top
+  block with trigger "WHEN CYCLE 2 COMPLETES" — Claude owns raising it unprompted at that point.
+  Reconciled a prior doc inconsistency (Q2.3 read "DROPPED 2026-09-07 (user sign-off)" while Q0 still
+  listed D2 open): both now read "provisionally dropped; final call parked to cycle-2 end."
+
+### D3 resolved (2026-09-08) — free-source spike: the market-cap vendor question is moot, no vendor needed
+
+- **Spike (`docs/analysis/market-cap-source-spike-2026-09-08.md`), read-only.** The "`market_cap`
+  has no writer → pick a vendor" keystone is **retired**: no free *bulk* file carries per-stock market
+  cap (bhavcopy = OHLCV+delivery; `ind_close_all` = per-index), but a **free per-symbol path exists on
+  the NSE `/api/` surface the app already uses in production** (`fii_dii_service` → `fiidiiTradeReact`):
+  `quote-equity` returns `issuedSize` (shares outstanding) and `trade_info` returns `totalMarketCap`/
+  `ffmc`, so `market_cap = issuedSize × price` is computable daily from stored OHLCV after only a
+  one-time + corporate-action-triggered shares fetch — far lighter than MCE 5b's XBRL scraper, and $0.
+- ⚠ NSE `/api/` 403s from a datacenter IP, so the exact field names / rate limit must be confirmed from
+  the app's own IP before building. **Build deferred:** nothing needs `market_cap` now (F1 dropped the
+  size floor; cycle 2 doesn't use it; only the inert screener filter consumes it). No code changed.
+
+### D4 decided (2026-09-08) — concentration/sizing: minimal rails; max-concurrent-position cap BUILT
+
+- **Ruling:** keep the per-position notional cap (leverage 1.0) and the 6% portfolio heat cap
+  unchanged; **add a max-concurrent-position cap** as the concentration rail that actually binds at
+  cycle-2 scale; **defer** correlation/sector-aware heat (over-engineering for a 1–2 position book).
+  Rationale: the 45–58% heat figures are a *cycle-1 sampler artifact* (~25–29 concurrent positions);
+  cycle 2's ₹1L / 1–2-position book can't structurally over-concentrate, so a heat *percentage*
+  barely binds while a *count* directly enforces the 1–2 design intent.
+- **Built (`app/trading/risk_engine.py`):** `RULE_POSITION_COUNT` + `position_count_reason()`, wired
+  into `check_sizing` alongside the heat cap (both portfolio-state rails now share one `open_heat`
+  read). New settings `position_count_cap_mode` (off/shadow/active, default **off**) and
+  `max_concurrent_positions` (default **3**) — `.env.example` updated (W3). A **hard design rail**
+  (like `entry_diversity`), so no deflated-Sharpe bar; adding to an existing position is exempt (opens
+  no new slot — the notional cap bounds per-name size); always measurable, so no fail-closed branch.
+  `off` during the cycle-1 sampler, flips `active` at the cycle-2 reset alongside the heat cap. 42
+  RiskEngine tests green (9 new); existing heat/notional tests unchanged (equivalence preserved).
+
+### D1 declined (2026-09-08) — R1's RVOL half refuted, VWAP untestable; frozen engine untouched
+
+- **Added `backend/scripts/rvol_factor_study.py`** — a read-only R1 counterfactual. It injects a
+  research graded-RVOL confirmation factor through the frozen `score_from_factors` (monkeypatching the
+  one `run_all_factors` seam), so it changes which signals mint **without editing frozen code or moving
+  a recorded number**. Two analyses: §1 design-agnostic (does RVOL-at-entry predict outcome among
+  signals already minted?) and §2 the injected-factor effect (with the dropped set, since normalization
+  makes "add a factor" non-additive).
+- **Result (`docs/analysis/rvol-factor-study-2026-09-08.md`, 1,152 baseline signals, 150 liquid names):**
+  §1 — RVOL-at-entry is mildly **inverse** (elevated buckets worst: 1.5–2.0× −0.237R t=−1.71; ≥2.0×
+  −0.157R), so no factor design can extract edge from it. §2 — injecting a graded RVOL factor makes the
+  book significantly **worse** (augmented −0.095R vs baseline −0.026R; the 294 it newly admits average
+  −0.291R at t=−2.91) via scorer dilution. VWAP is untestable (no intraday data). ⇒ **R1-RVOL dropped,
+  D1 declined, no frozen change.** Notable: the existing binary VOLUME factor already encodes RVOL at
+  1.5× and appears to over-capture it. **With selection, exit geometry (D5) and this generation lever
+  (R1) all now refuted, no queued item attacks profitability** — the edge question is unresolved.
+
+### D5 decided (2026-09-08) — take-profit geometry is NOT the profit lever; `compute_levels` stays frozen
+
+- **Added `backend/scripts/tp_geometry_study.py`** — a read-only counterfactual for D5, riding the
+  sanctioned `BacktestConfig.tp_rule` freeze-extension (`tp_rule=None` byte-identical to frozen), so
+  it **touches no frozen code and moves no recorded number**. Holds every frozen entry+stop fixed,
+  varies only the target across a constant-R:R family (1.0–3.0R), and does a **paired** per-signal
+  comparison (`stock, entry_date`) measured in **R**, segmented by stop-width cohort. Factors are
+  computed once per stock (baseline run) and the alternative targets re-simulated through the frozen
+  `_simulate_trade` — verified byte-faithful to full re-runs.
+- **Result (`docs/analysis/tp-geometry-study-2026-09-08.md`, 1,152 swing+positional signals, 150
+  liquid names, CA-clean 2023-07-03+):** no constant-R:R geometry beats the frozen absolute-% target
+  — every candidate's paired ΔR is negative (−0.012 to −0.025R, |t| ≤ 0.65), the baseline itself is
+  −0.026R, and a higher R:R **damages the wide-stop majority** (547 trades: rr_3.0 −0.110R), the exact
+  R:R-reversal mechanism. ⇒ **D5 closed as "keep the tourniquet"**; the leak is upstream in candidate
+  generation (R1). Untested: a structural next-S/R target. Also surfaced: the post-wipe reseed left the
+  stock membership/classification flags sparse (`is_fno` 45, `is_nifty50` 5, `sector` 165/1322,
+  `market_cap_cr` 0) — a separate metadata-restore task; the study is unaffected (universe from
+  `ohlcv_1d` traded value, not flags).
+
 ### ⛔ INCIDENT 2026-09-07 — the dev database was destroyed, and the guards that came out of it
 
 **What happened.** A `pytest` run was invoked with `DATABASE_URL` pointed at

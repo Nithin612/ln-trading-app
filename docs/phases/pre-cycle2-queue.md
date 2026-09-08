@@ -71,11 +71,11 @@ Of those loops, one is **decided** (regime gate → REVERTED 2026-09-02), one is
 
 | id | decision | blocks |
 |---|---|---|
-| **D1** | Sign-off to touch the frozen engine for R1 | Q2.2 |
-| **D2** | R2 weekly spread-width gate — build or drop | Q2.3 |
-| **D3** | MCE 5b market-cap **vendor** | Q3.1 |
-| **D4** | Concentration/sizing — is the notional cap enough? | Q3.4 |
-| **D5** | `compute_levels` payoff geometry — fix, or consciously keep a tourniquet | Q3.5 |
+| ~~**D1**~~ ✅ **DECLINED 2026-09-08** | Sign-off to touch the frozen engine for R1 — **NO**: R1-RVOL refuted read-only (VWAP untestable), so no frozen change is warranted | Q2.2 |
+| ⏸ **D2** **PARKED 2026-09-08 → cycle-2 end** | R2 weekly spread-width gate — build or drop. R2 stays provisionally DROPPED (09-07); the FINAL call is deferred until cycle 2 completes, decided on its forward evidence. **Does NOT block cycle-2 start.** Claude owns the flag (review calendar). | Q2.3 |
+| ~~**D3**~~ ✅ **RESOLVED 2026-09-08** | MCE 5b market-cap **vendor** — **NO vendor needed**: free-source spike found a free NSE-`/api/` path (`issuedSize × price`, the surface the app already uses for FII/DII); keystone retired, build deferred until a consumer. `docs/analysis/market-cap-source-spike-2026-09-08.md` | Q3.1 |
+| ~~**D4**~~ ✅ **DECIDED 2026-09-08** | Concentration/sizing — **minimal rails**: notional cap kept, 6% heat cap unchanged, a max-concurrent-position cap (=3) BUILT in the RiskEngine (`off` → flips at cycle-2 reset), correlation/sector deferred | Q3.4 |
+| ~~**D5**~~ ✅ **DECIDED 2026-09-08** | `compute_levels` payoff geometry — **KEEP THE TOURNIQUET** (the R-scored counterfactual showed geometry is not the lever) | Q3.5 |
 | **D6** | **Reconciliation's matching key** — Kite has no client-order-id field | `KiteBrokerAdapter` (post-cycle-2, but decide first) |
 
 ### Q1 — Phase 7.1–7.4 — **the long pole, fully unblocked, starts now**
@@ -140,9 +140,9 @@ Two findings worth carrying forward:
 
 | # | item | state |
 |---|---|---|
-| **2.1** ✅ **DONE 2026-09-07** | **F1 `market_cap` spike** | ⛔ **the two size proxies DISAGREE and neither contrast survives its bootstrap** ⇒ recommend **DROP 5b**; **D3 becomes moot** until the premise is revisited |
-| **2.2** | **R1 VWAP/RVOL as confluence factors** | ⛔ blocked on **D1**. Frozen engine ⇒ needs §8 regression + regenerated Rust oracle fixtures in the same commit. Changes which signals exist ⇒ **Bucket-A class, must precede the clock** |
-| **2.3** ⛔ **DROPPED 2026-09-07** (D2, user sign-off) | **R2 weekly spread-width gate** | a 9th gate raises the deflation bar for the other 8 (U4: 15 trials, a lower bound) · the book's Sharpe CI **[−0.223, +0.118]** leaves nothing to partition · both prior promotions were refuted. **May return as a sizing/slippage MODIFIER, never as a gate** |
+| **2.1** ✅ **DONE 2026-09-07** | **F1 `market_cap` spike** | ⛔ **the two size proxies DISAGREE and neither contrast survives its bootstrap** ⇒ recommend **DROP 5b**. **D3 since RESOLVED 2026-09-08** by a free-source spike (no vendor; free NSE-`/api/` path) — see Q3.1 |
+| **2.2** ✅ **DROPPED 2026-09-08** (D1 declined) | **R1 VWAP/RVOL as confluence factors** | **REFUTED read-only.** RVOL-at-entry is mildly INVERSE (§1) and injecting a graded RVOL factor makes the book significantly worse (−0.291R at t=−2.91 on the 294 it admits, via scorer dilution); the existing binary VOLUME factor already encodes RVOL and over-captures it. VWAP untestable (no intraday data). No frozen edit made. Report: `docs/analysis/rvol-factor-study-2026-09-08.md` |
+| **2.3** ⛔ DROPPED 2026-09-07 · ⏸ **final call PARKED 2026-09-08 → cycle-2 end** (D2) | **R2 weekly spread-width gate** | a 9th gate raises the deflation bar for the other 8 (U4: 15 trials, a lower bound) · the book's Sharpe CI **[−0.223, +0.118]** leaves nothing to partition · both prior promotions were refuted. R2 stays dropped for now; **user 2026-09-08: don't finalise until cycle 2's evidence is in** — Claude flags it at cycle-2 end (review calendar). **May return as a sizing/slippage MODIFIER, never as a gate** |
 | **2.4** ✅ **DECIDED NO 2026-09-07** | momentum ×1.5 retune | t = **+1.00** vs a 3.6 hurdle; **not one config clears the bar**, and ⭐ **the winner MOVED** (`structure ×0.5` now leads) — the original best-of-12 pick was the selection itself |
 | **2.5** | pair df-vs-adf | accruing nightly — **no build**, just don't lose it |
 
@@ -150,23 +150,30 @@ Two findings worth carrying forward:
 
 | # | item | state |
 |---|---|---|
-| **3.1** | MCE 5b `market_cap` writer + T1 PIT test | ⛔ blocked on **D3** (a vendor decision, not a build task) |
+| **3.1** ✅ **UNBLOCKED 2026-09-08** (D3 resolved) | MCE 5b `market_cap` writer + T1 PIT test | **No vendor** — free NSE-`/api/` path (`issuedSize × price`, once + CA-triggered; verify fields from the app IP first, `/api/` 403s from a datacenter IP). But **5b itself is DROPPED** (F1: no size signal) and nothing else needs `market_cap` yet, so BUILD only when a consumer appears (screener filter / a fundamentals feature). Spike: `docs/analysis/market-cap-source-spike-2026-09-08.md` |
 | **3.2** ⛔ **DEFERRED 2026-09-07** | MCE 6 news veto | **none of its 3 preconditions holds**: 0/322 rating rows carry direction · no forward earnings calendar · **0 of 559 signals hit the existing guard, which has NEVER fired**. RSS+FinBERT is a separate DECISION (locked-stack change) |
 | **3.3** ✅ **DONE 2026-09-07** | CAS Stage 2 — the overnight-reversal study | ρ = **−0.272**, 90% interval **[−0.478, −0.088]** excludes zero — the first clean directional signal in the programme. ⚠ Sign survives leave-one-out, **magnitude does not** (~half rests on 2026-08-31). NOT promotable at 7 days |
-| **3.4** | Concentration/sizing decision | ⛔ **D4** |
-| **3.5** | `compute_levels` payoff geometry | ⛔ **D5** — *the known lever* |
+| **3.4** ✅ **DONE 2026-09-08** (D4) | Concentration/sizing decision | **Minimal rails.** Concentration is a cycle-1 sampling artifact (45–58% heat = ~25–29 sampler positions); cycle 2's ₹1L/1–2-position book can't over-concentrate, so a heat % barely binds and a COUNT is the binding rail. BUILT: `max_concurrent_positions=3` + `position_count_cap_mode` (off/shadow/active) in `risk_engine.py`, a hard design rail (no DSR bar), adding-to-existing exempt, both portfolio rails share one open-book read; `off` now, flips `active` at the cycle-2 reset. Notional cap (1.0) + 6% heat kept; correlation/sector deferred. 42 tests green (9 new) |
+| **3.5** ✅ **CLOSED 2026-09-08** | `compute_levels` payoff geometry | **NOT the lever.** Read-only R-scored counterfactual (`scripts/tp_geometry_study.py`, sanctioned `tp_rule`, no frozen edit) on 1,152 swing+positional signals: no constant-R:R geometry (1.0–3.0R) beats frozen — every paired ΔR negative (|t| ≤ 0.65), baseline itself −0.026R, and higher R:R damages the wide-stop majority (the R:R-reversal trap). `compute_levels` stays frozen; the leak is upstream (R1). Report: `docs/analysis/tp-geometry-study-2026-09-08.md`. Untested: a *structural* next-S/R target |
 | **3.6** ✅ **TESTED 2026-09-07** | Minervini trend template | ⭐ **0 of 91 entries pass** — DISJOINT from our selection, not an uninformative split. Binding conditions are trend-structure: **we systematically trade names in structural downtrends**. Needs a universe-level corpus rerun, NOT a gate |
 
-### Q5 — ✅ **SPIKE DONE 2026-09-07** (a review-calendar item that came due)
+### Q5 — ✅ **SPIKE DONE 2026-09-07 · DATA BACKFILLED 2026-09-08** (a review-calendar item that came due)
 
 > ⭐ **The archive starts ~October 2019.** 2015/2018 return **404**; 2019-10-01 and the
 > COVID low (2020-03-23) return **200**. So the request *as asked* is a NO — but an
 > Oct-2019 start **contains the crash itself**, takes us from 3.2 to ~7 years, and serves
 > the purpose better than 2018 would. **The survivorship fix is free**: a bhavcopy lists
 > what traded *that day*, so the point-in-time universe reconstructs itself.
-> **Sizing: days, not weeks.** ⇒ **Not started — sequencing:** settle D1/D5 first, since a
-> regime test is only meaningful against an engine somebody still believes in.
-> Report: `docs/analysis/historical-data-spike-2026-09-07.md`
+> **Sizing: days, not weeks.** ✅ **DATA DONE 2026-09-08:** `backfill_ohlcv_history.py`
+> run to the archive floor — `ohlcv_1d` now spans **2019-10-01 → 2026-09-04** (~7 yrs ·
+> 1,093 trading days · 2.08M bars · 3,373 names, 2,070 inactive/historical carrying a
+> point-in-time universe). ⚠ **Bars are CA-UNADJUSTED** — every 7-yr split/bonus is a fake
+> overnight gap; a multi-year study MUST adjust first (no historical CA table for these
+> names). **The backtest STUDY is still NOT run**, but its blockers **D1/D5 are BOTH RESOLVED
+> 2026-09-08** (D5 closed, D1 declined — the engine stays frozen as-is), so it is now clear to run;
+> the binding precondition that remains is **CA-adjusting the historical bars** (above).
+> Reports: `docs/analysis/historical-data-spike-2026-09-07.md` (spike) ·
+> `docs/analysis/ohlcv-backfill-2026-09-07.md` (backfill)
 
 **The pre-COVID regime-robustness backtest.** The user asked for this on 2026-08-28 and
 **held it until after watch mode ended Fri 2026-09-04**. Watch mode is complete, so the
@@ -194,16 +201,27 @@ Building a ninth gate also **adds a trial**, which raises the deflation bar for 
 else. **Recommendation: drop R2**, or re-scope it as a *sizing/slippage modifier* (the same
 reframing already ruled for MCE 5a liquidity), which claims no edge and needs no bar.
 
-**(b) R1 is the one item here that attacks the actual leak** — it changes what *generates*
-candidates rather than what selects among them, and selection is the part already
-demonstrated to be exhausted. That makes it the highest-value item in Q2 **and** the one
-needing the most ceremony: hard constraint #1 (protected spec) + §8 regression + oracle
-fixture regen.
+**(b) ~~R1 is the one item that attacks the actual leak~~ — ✅ TESTED 2026-09-08: R1 is REFUTED (D1
+DECLINED).** It was the one item changing what *generates* candidates rather than selecting among
+them — but its only backtestable half, RVOL, carries no edge. Read-only study (`scripts/rvol_factor_study.py`,
+1,152 baseline signals, injects a research factor through the frozen scorer — no frozen edit): **§1
+RVOL-at-entry is mildly INVERSE** (elevated buckets worst: 1.5–2.0× −0.237R t=−1.71; ≥2.0× −0.157R),
+so no factor design extracts edge from it; **§2 injecting a graded RVOL factor makes the book
+significantly WORSE** (augmented −0.095R vs baseline −0.026R; the 294 newly-admitted signals −0.291R
+at t=−2.91, because the scorer normalizes → dilutes). **VWAP is untestable** (no intraday data →
+forward-capture only, Q7). ⇒ **R1-RVOL DROPPED, no frozen-engine sign-off.** The existing binary VOLUME
+factor already over-captures volume confirmation. Report: `docs/analysis/rvol-factor-study-2026-09-08.md`.
 
-**(c) The demonstrated lever is D5, and it was not in the ask.** `compute_levels` pairs a
-**structural** stop with an **absolute-%** target, so R:R is an accident: **94 of 295 swing
-signals have R:R < 1 by construction**, and at a 37.5% win rate the arithmetic needs 1.67R
-and cannot close. It is on the cycle-2 entry checklist and it changes a recorded number.
+**(c) ~~The demonstrated lever is D5~~ — ✅ TESTED 2026-09-08: D5 is NOT the lever.** `compute_levels`
+pairs a **structural** stop with an **absolute-%** target, so R:R is an accident (**94 of 295 swing
+signals R:R < 1 by construction**). The natural "fix" — a constant-R:R target — was measured
+read-only (`scripts/tp_geometry_study.py`, 1,152 swing+positional signals): **it does not help**
+(every paired ΔR negative, |t| ≤ 0.65) and forcing a higher R:R **damages the wide-stop majority**,
+the exact mechanism that reverted the R:R≥1 gate. The premise ("fix the geometry ⇒ expectancy
+improves") is false — you can't manufacture edge at the exit from edgeless entries. **D5 closed as
+"keep the tourniquet"; `compute_levels` stays frozen.** ~~The real lever is generation (R1)~~ — **R1
+was tested the same day and REFUTED (see (b))**, so with selection, exit geometry AND the queued
+generation lever all spent, no queued item now attacks profitability; finding a new lever is the open problem.
 
 **(d) The backtest models no trading costs at all.** Backtest P&L is **GROSS**, paper is
 **NET** (22–62 bps round-trip + the flat ₹15.34 DP charge). Any R1 §8 regression, and Q2.4's
@@ -235,8 +253,9 @@ A `pytest` run pointed at `trading_platform` instead of `trading_platform_test` 
 every table. Full account in `CHANGELOG.md` and `RUNBOOK.md` §9. What it does to this queue:
 
 **Unchanged — the build queue is code, and no code was lost.** Phase 7.0–7.4, every script,
-every test and every report in `docs/analysis/` are committed. D1/D3/D4/D5/D6 are still
-decisions. The historical-backfill capability was BUILT during the recovery and is proven
+every test and every report in `docs/analysis/` are committed. D3/D4/D6 are still
+decisions (**D5 closed + D1 declined 2026-09-08 — both profitability levers spent**). The historical-backfill capability
+was BUILT during the recovery and is proven
 against the real archive.
 
 **Restarted:**
@@ -254,4 +273,19 @@ against the real archive.
 there is only ~25%, and realised P&L would have to be recomputed under fee models that landed
 2026-09-05, so a rebuilt book would look real while disagreeing with what was recorded. The
 ledger stands as written; accrual restarts from day 1.
+
+**▶ Q7 — OUTSTANDING RECOVERY GAP (queued 2026-09-08, deferred "later" by the user) — stock
+membership/classification flags are sparse.** The reseed (`seed_stocks.py`, public CSVs) restored
+symbol identity but almost none of the metadata: `is_fno` **45** (true ~180–220) · `is_nifty50`
+**5** · `is_banknifty` **0** · `is_finnifty` **4** · `sector`/`industry` **165 of 1,322** ·
+`market_cap_cr` **0** · all intraday OHLCV tables (`ohlcv_1m/5m/15m/1h`) **empty**. Consequences:
+the screener and any flag-scoped bench/backtest silently shrink (a "NIFTY50" backtest runs on **5**
+names), §7 F&O engine-health is under-counted, MCE sector-RS has no membership to benchmark against,
+and **anything VWAP/intraday cannot be backtested at all** (bears directly on R1 — see Q2.2). **Not a
+recorded-number change** (the frozen engine reads none of these flags), so it does NOT block cycle 2,
+but it must be restored before any flag-scoped or intraday study is trusted. `market_cap_cr` now has a
+known **free** path (**D3 resolved 2026-09-08** — NSE-`/api/` `issuedSize × price`, no vendor; build
+deferred until a consumer). Fix the flags: re-derive index/F&O membership + sector from a source (the
+NSE indices CSVs already used by `vix_service`/`backfill_indices`; F&O from the Kite instruments dump or
+the NSE F&O list); intraday history has no free archive (forward-capture only).
 

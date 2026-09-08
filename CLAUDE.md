@@ -113,12 +113,14 @@ else.
   median + win-rate; and **SRTL is the sole illiquid+diversity-flagged trade — the ACTIVE diversity
   gate already catches it**, so liquidity is redundant for that archetype AND would cut a net-winning
   set. **DECISION (user): keep 5a shadow; reframe liquidity later as a position-sizing / slippage
-  MODIFIER (execution-realism), not an entry P&L gate.** The finding also QUESTIONS 5b (a market-cap
-  *size* floor may be no better — cross-tab a cheap proxy before paying the XBRL-scraper cost).
-  **NEXT = run the deep backfill**
-  (`scripts/backfill_indices.py 2023-07-01 <today>`) so the 200-DMA + sector-RS get history; then
-  **slice 5b = the XBRL market_cap writer** (greenfield scraper) + a market-cap floor on the junk gate;
-  slice 6 = news veto. Shadow→active flips need the R-track (§8-on-≥2y + sign-off). Plan in the phase-MCE doc.
+  MODIFIER (execution-realism), not an entry P&L gate.** The finding also QUESTIONED 5b — and **F1
+  (2026-09-07) then CONFIRMED it: no size signal in the book, so 5b's market-cap floor is DROPPED.**
+  **⛔ slice 5b (the market-cap floor + writer) is DROPPED**; **slice 6 (news veto) is DEFERRED**
+  (2026-09-07 — none of its 3 preconditions holds). **D3 RESOLVED 2026-09-08: the `market_cap` writer
+  needs NO vendor and NO XBRL scraper** — a free NSE-`/api/` `issuedSize × price` path exists (the
+  surface the app already uses for FII/DII); build it only when a consumer appears
+  (`docs/analysis/market-cap-source-spike-2026-09-08.md`). The index backfill is already done
+  (see the MCE memory). Shadow→active flips need the R-track (§8-on-≥2y + sign-off). Plan in the phase-MCE doc.
 - **The provisional breadth-flood fix is MERGED on the Phase-6 branch (`c1b4752`,
   cherry-picked 2026-08-20 — the source branch had diverged so `--ff-only` was impossible).**
   `live-worker`'s hot set no longer floods with breadth alerts (near-trigger = signal-bound
@@ -246,7 +248,8 @@ else.
   0.33–1R −₹12,789/22%) — the signal-age sidecar reports NO stale penalty, so `conviction.ts`'s
   age-decay rationale is not evidence-backed. Also: **overlays gate the ORDER path, not the DISPLAY
   path** (41 of 204 listed signals 409 on click); **portfolio heat 45.3%** of ₹1L over 23 positions
-  with no heat cap in code (Elder 6% / Tharp 6–10%); the **entry price is literally yesterday's close**
+  (a CYCLE-1 sampler artifact; the 6% heat cap + a max-concurrent-position cap of 3 are BUILT in the
+  RiskEngine, `off` now, flip at the cycle-2 reset — D4, 2026-09-08); the **entry price is literally yesterday's close**
   (`signal_service.py:236`) and the live entry zone is **symmetric ±0.5%**, so a BUY drifting DOWN
   into entry fires "Entered zone". Fix queue in the PHASES CONTINUE HERE block; **items 1, 2 and 7
   shipped 2026-09-02** (see the next bullet).
@@ -334,8 +337,10 @@ else.
   four defects were exactly plumbing (`.claude/rules/testing.md`: "test the SEAMS"). Kite placement ·
   GTT · real partial fills · broker-book reconciliation wait until AFTER (only reality validates
   them); mitigate designing the adapter blind with a READ-ONLY Kite spike in 7.2. Plan:
-  `docs/phases/phase-07-live-trading-plan.md`. **The heat cap is DESIGNED, NOT BUILT** — it belongs
-  inside 7.1's RiskEngine, and it must not throttle cycle 1 (a 6% cap cuts entries ~74%).
+  `docs/phases/phase-07-live-trading-plan.md`. **The heat cap is BUILT** inside 7.1's RiskEngine
+  (6%, fails closed, `off`), **joined by a max-concurrent-position cap (=3) built for D4 2026-09-08**;
+  both must not throttle cycle 1 (a 6% cap cuts entries ~74%, a 3-count cuts a ~25-position book far
+  more), so both are `off` now and flip `active` at the cycle-2 reset.
 - **Exposure now reports against BOTH denominators (2026-09-02).** `paper_sampling_capital_inr`
   (**reporting only** — never touches sizing) declares the notional scale the sampler represents, so
   the same 23 positions read as *45.3% of the ₹1L LIVE capital* and *9.1% of the ₹5L sampling scale*.
@@ -352,7 +357,8 @@ else.
   risk-first sizing bounds a trade's RISK but **not its SIZE** — `qty = budget/risk_per_share` had no
   ceiling on `qty × price`, so a four-paise stop sized **50,000 shares = ₹1.19cr on ₹1L capital** and
   returned 201. Cap = capital × leverage, existing position counted, **reject never clamp**. ⚠ PER
-  POSITION — portfolio-wide is the **unbuilt heat cap** (45.3% across 23 positions vs Elder's 6%).
+  POSITION — portfolio-wide is the **heat cap** (now BUILT, `off`) plus the **max-concurrent-position
+  cap (=3, D4 2026-09-08, `off`)** — both flip at the cycle-2 reset (45.3% heat was a cycle-1 artifact vs Elder's 6%).
   **This replaced the proposed `paper_min_risk_pct`**: a %-of-price stop floor is the wrong instrument
   (2% is comfortable on HDFC, a knife-edge on a ₹39 micro-cap) and `sl_atr` already measures it in
   ATRs at 17/20. (2) **R:R floor overlay** (`app/signals/rr_guard.py`, `rr_min=1.0`) — rejects a
@@ -371,7 +377,16 @@ else.
   our 37.5% win rate). **R:R and `sl_atr` are STRUCTURALLY DISJOINT — never deduplicate them** (a
   tight stop yields a LARGE ratio; R:R<1 needs a WIDE stop — 11 vs 21 signals, zero overlap, pinned
   by a test). Root cause stays `compute_levels` pairing a structural stop with an absolute-% target
-  — a §6 spec change, not done.
+  — but **D5 TESTED + CLOSED 2026-09-08: the geometry is NOT the lever.** A read-only, R-scored
+  counterfactual (`scripts/tp_geometry_study.py`, riding the sanctioned `tp_rule` freeze-extension,
+  no frozen edit, 1,152 swing+positional signals) showed **no constant-R:R target (1.0–3.0R) beats
+  the frozen absolute-% target** (every paired ΔR negative, |t| ≤ 0.65; baseline itself −0.026R),
+  and a higher R:R **damages the wide-stop majority** — the exact R:R-reversal mechanism. You can't
+  manufacture edge at the exit from edgeless entries ⇒ `compute_levels` stays frozen, the leak is
+  upstream in candidate generation — **but the queued generation lever R1 was tested the same day and
+  REFUTED (D1 declined; see the R1/RVOL bullet below), so no queued item now attacks profitability.**
+  Report: `docs/analysis/tp-geometry-study-2026-09-08.md`. Untested: a *structural* next-S/R target
+  (strong prior it won't change the verdict). No §6 spec change.
 - **HOW TO VERIFY A GATE'S LIVE MODE (recipe, since `.env` is hook-protected and unreadable).**
   `settings` is an `@lru_cache` singleton, so a `.env` edit reaches a process only when that process
   re-imports `app.core.config`. You cannot read `.env`; you do not need to. Three steps:
@@ -422,13 +437,25 @@ else.
   (W1–W5 · A11 · A40); the rest builds *under* cycle 2's clock by design.
   **Start with 7.0, a DESIGN PASS** — A33 + A42 + A35 are one problem, not three — then 7.1
   RiskEngine (equivalence-pinned, absorbing the heat cap) → 7.2 BrokerAdapter (+ a READ-ONLY Kite
-  spike) → 7.3 order FSM → 7.4 reconciliation. ⚠ **Five decisions block the rest and only the user
-  can make them:** **D1** frozen-engine sign-off for R1 (VWAP/RVOL) · **D2** R2 build-or-drop
-  (*recommend drop* — gating is closed as a programme and a ninth gate adds a trial) · **D3** the MCE
-  market-cap **vendor** · **D4** concentration/sizing · **D5** `compute_levels` payoff geometry.
+  spike) → 7.3 order FSM → 7.4 reconciliation. ⚠ **NO decision blocks cycle-2 start.** **D2** (R2
+  build-or-drop) is **PARKED to cycle-2 end** (user 2026-09-08 — R2 provisionally dropped; final call
+  waits on cycle-2 forward evidence; **Claude flags it at cycle-2 end via the PHASES review calendar**).
+  **D6** (reconciliation matching key) is post-cycle-2. ✅ **D3 RESOLVED 2026-09-08** —
+  free-source spike: NO vendor needed (free NSE-`/api/` `issuedSize × price` path, the surface the app
+  already uses for FII/DII; keystone retired; build deferred until a consumer —
+  `docs/analysis/market-cap-source-spike-2026-09-08.md`).
+  ✅ **D4 DECIDED 2026-09-08** — minimal rails: notional cap (1.0) + 6% heat kept, and a
+  **max-concurrent-position cap (=3) BUILT** in the RiskEngine (`position_count_cap_mode`,
+  `max_concurrent_positions`; `off` → flips `active` at the cycle-2 reset; hard design rail, no DSR bar,
+  adding-to-existing exempt); concentration is a cycle-1 artifact so a count, not a heat %, binds;
+  correlation/sector deferred. ✅ **D5 CLOSED + D1 DECLINED 2026-09-08 — both profitability levers spent.**
+  D5: `compute_levels` geometry is NOT the lever (keep the tourniquet). D1: R1-RVOL refuted read-only
+  (elevated RVOL mildly inverse; injecting it −0.291R at t=−2.91) and VWAP untestable ⇒ R1 dropped, no
+  frozen change. **With selection, exit geometry AND the queued generation lever all spent, no queued
+  item attacks profitability — finding a new lever is the open problem.**
   ⚠ **"The rest of Phase 6 / 6.8" has no unbuilt slices** — both are GATE PASSED + CLOSED; what is
-  left is the gated research track R1/R2/F1 plus three forward-evidence loops (regime **decided**,
-  momentum ×1.5 **stalled** at 3 minted / 0 resolved, pair df-vs-adf accruing).
+  left is the gated research track R2/F1 (**R1 dropped 09-08**) plus three forward-evidence loops
+  (regime **decided**, momentum ×1.5 **stalled** at 3 minted / 0 resolved, pair df-vs-adf accruing).
 - **The plan it came from is `docs/quant-agent-findings.md`** — a 30-repo external
   review (2026-09-03/04, 4,358 lines) producing **91 items in five queues** (analysis · UI ·
   architecture · testing · workbench), bucketed by **when they must land**. Governing rule:
@@ -439,8 +466,10 @@ else.
   refusal · A25 tick-mode assert. **Bucket B** (~5 d, the instruments): H8 noise control · H1 block
   bootstrap · H12 beta/IR · H2 benchmark · H11 MinTRL headline · T11 · H4 · U4 · H3.
   **Zero external code adopted**; six findings were about *our* code, plus one validation (our PSR
-  is correct where QuantStats' is wrong). ⚠ **The plan buys evaluation, not edge** — the known lever
-  is still `compute_levels`, above.
+  is correct where QuantStats' is wrong). ⚠ **The plan buys evaluation, not edge** — and BOTH named
+  levers are now spent: `compute_levels`/exit geometry (D5) and the queued generation lever R1/RVOL
+  (D1) were **both tested and refuted 2026-09-08**. No queued item attacks profitability; the edge
+  question is unresolved and finding a new lever is the open problem.
 - **The HORIZON / stop-width finding (2026-08-25, `docs/analysis/horizon-recovery-2026-08-25.md`)** —
   from the desk observation that stopped-out names "failed for the day then recovered". **11 of 16
   stop-out losers traded back through their entry, median 1 trading day** — but "just hold" is far
@@ -565,6 +594,12 @@ else.
    force-push are the user's. Branch creation needs explicit approval, including worktree
    branches. Stated rather than inferred, because "reserve push only" is a deliberate
    choice and a future session should not have to reconstruct it.
+   **⛔ HARD RULE (user, 2026-09-07): NEVER work in a git worktree — check the branch out in
+   the MAIN checkout (`/home/nithin/code/agent/Claude/trading-platform`) and work there.**
+   Worktrees have caused an error every time: they have no `.env` (so scripts need a DB URL
+   passed inline, which is exactly how the dev DB was destroyed 2026-09-07), and they can't
+   merge into a branch already checked out in main. If a branch is held by a worktree, commit
+   any WIP first, `git worktree remove` it, then `git checkout` in main.
 5. **No hardcoded copy of a value that has an owner** — model names, secrets, paths, ports,
    and *gate modes*. The non-obvious clause is the last one: `STATUS.html` hardcodes gate
    modes in prose, two tables, an ASCII diagram and the KPI tiles, with no data source, so

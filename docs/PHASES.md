@@ -10,9 +10,70 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-09-07) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-09-08) — read this block first
 
-**▶▶ 2026-09-07 (latest) — CAS STAGE 2 IS DONE, AND IT FOUND SOMETHING.** The closing-auction
+**▶▶ 2026-09-08 (latest) — D3 RESOLVED by a free-source spike: NO vendor needed. The Q0 decision queue is CLEARED for cycle-2 start — D2's final call is PARKED to cycle-2 end (user 2026-09-08), D6 is post-cycle-2.**
+The long-standing "`market_cap` has no writer → pick a vendor" **keystone is RETIRED.** Spike
+(`docs/analysis/market-cap-source-spike-2026-09-08.md`): no free BULK file carries per-stock market cap
+(bhavcopy = OHLCV+delivery, `ind_close_all` = per-index), **but a free per-symbol path exists on the NSE
+`/api/` surface the app ALREADY uses in production** (`fii_dii_service` → `fiidiiTradeReact`) —
+`quote-equity` returns `issuedSize` (shares outstanding) + `trade_info.totalMarketCap`/`ffmc`, so
+`market_cap = issuedSize × price` is computable daily from stored OHLCV after only an occasional
+(CA-triggered) shares-outstanding fetch — far lighter than MCE 5b's XBRL scraper, and **$0**. ⚠ NSE
+`/api/` 403s from a datacenter IP, so confirm the field names from the app's own IP before building.
+**Build DEFERRED — nothing needs `market_cap` now** (F1 killed the size floor ⇒ 5b dropped; cycle 2
+doesn't use it; only the inert screener filter consumes it); build from this free path when a real
+consumer appears.
+
+**▶▶ 2026-09-08 — D4 DECIDED (concentration/sizing) + the max-concurrent-position cap BUILT.**
+Ruling: **minimal rails.** Keep the per-position notional cap (leverage 1.0); the 6% heat cap stays
+as-is (built, `off`, fails closed, flips at the cycle-2 reset); and a NEW **max-concurrent-position
+cap** is BUILT in the RiskEngine (`position_count_cap_mode` off/shadow/active + `max_concurrent_positions=3`,
+`off` now → flips `active` at the cycle-2 reset alongside the heat cap). ⭐ **Rationale: concentration
+is a CYCLE-1 sampling artifact** — the 45–58% heat came from ~25–29 sampler positions; cycle 2's
+₹1L / 1–2-position book can't structurally over-concentrate, so a heat *percentage* barely binds and a
+**count** is the rail that actually enforces the 1–2 intent. It is a HARD design rail (like
+`entry_diversity`), **no deflated-Sharpe bar**; adding to an existing position is exempt; both
+portfolio-state rails share one open-book read. Correlation/sector-aware heat DEFERRED (over-engineering
+for 1–2 positions). Empirically a heat cap is a RISK control, not a profitability fix (counterfactual:
+per-trade −₹1,478 vs −₹796). 42 risk-engine tests green (9 new). **Open decisions now: D2 (R2 — recommend
+drop) · D3 (MCE vendor), plus D6 (post-cycle-2).**
+
+**▶▶ 2026-09-08 — D1 DECLINED: R1's testable half (RVOL) is refuted, VWAP is untestable — and with it, the LAST queued profitability lever is spent.**
+No frozen-engine sign-off. `scripts/rvol_factor_study.py` (read-only — injects a research factor
+through the frozen scorer, so **no frozen edit, no recorded number moved**) on **1,152 baseline
+swing+positional signals** (150 liquid names): **§1 (design-free): RVOL-at-entry carries NO positive
+outcome signal and is mildly INVERSE** — the two *elevated* buckets are the worst (1.5–2.0× −0.237R,
+t=−1.71; ≥2.0× −0.157R), exactly where the existing VOLUME factor fires. **§2: injecting a graded RVOL
+factor makes the book significantly WORSE** (augmented −0.095R vs baseline −0.026R; the 294 signals it
+newly admits average **−0.291R at t=−2.91**) — the scorer normalizes, so a graded confirmation dilutes
+and re-shuffles rather than adds. **VWAP has no intraday data to test on** (deferred to forward-capture,
+Q7). ⇒ **R1-RVOL DROPPED**; the existing binary VOLUME factor already over-captures volume confirmation.
+Report: `docs/analysis/rvol-factor-study-2026-09-08.md`. **(D3 + D4 have since been resolved too — see
+the top entries; D2's final call is parked to cycle-2 end and D6 is post-cycle-2 — no decision blocks cycle-2 start.)** ⭐ **With selection (gating — closed as a programme), exit geometry (D5)
+and the queued generation lever (R1) ALL now spent, no queued item attacks profitability.** The edge
+question is unresolved and the remaining pre-cycle-2 work is *entry criteria* (MCE 5b+6/D3, sizing/D4,
+CAS-2 re-accrual) + the (built) Phase 7 — not a new lever. Finding one is now the real open problem.
+
+**▶▶ 2026-09-08 — D5 DECIDED: the take-profit geometry is NOT the lever; the tourniquet stays.**
+The BANKED CAUTION's own prescription — a read-only, **R-scored** target-rule counterfactual — was
+built (`scripts/tp_geometry_study.py`, riding the sanctioned `tp_rule` freeze-extension, so **no
+frozen code was touched and no recorded number moved**) and run on **1,152 swing+positional signals**
+(150 liquid names by traded value, CA-clean 2023-07-03+; paired on `(stock, entry_date)`, entries+stops
+held fixed, only the target varied). **No constant-R:R geometry (1.0–3.0R) improves expectancy:** every
+candidate's paired ΔR vs frozen is *negative* (−0.012 to −0.025R, |t| ≤ 0.65, wrong sign), the baseline
+itself is −0.026R, and the only cohort a higher R:R helps is the tight-stop *minority* (199/1,152) — at
+the cost of the **wide-stop majority** (547 trades: rr_2.0 −0.090, rr_3.0 −0.110R), the exact
+R:R-reversal mechanism that reverted the R:R≥1 gate. ⇒ **`compute_levels` stays frozen; D5 is CLOSED as
+"keep the tourniquet".** You cannot manufacture edge at the *exit* from entries that carry none — the
+leak is upstream in candidate *generation* (R1 — **since REFUTED too, see the D1 entry above**). Report:
+`docs/analysis/tp-geometry-study-2026-09-08.md`. Untested: a *structural* (next-S/R) target rather than
+the constant-R:R family — a genuinely different hypothesis, but a strong prior says re-slicing an edgeless
+set won't rescue it. ⚠ Separately surfaced: the post-wipe reseed left the membership/classification
+flags sparse (`is_fno` 45, `is_nifty50` 5, `is_banknifty` 0, `sector` 165/1322, `market_cap_cr` 0) — a
+metadata-restore task, harmless to this study (universe derived from `ohlcv_1d` traded value, not flags).
+
+**▶▶ 2026-09-07 — CAS STAGE 2 IS DONE, AND IT FOUND SOMETHING.** The closing-auction
 move **REVERSES overnight, cross-sectionally**: Spearman **ρ = −0.272**, 90% **day-block**
 interval **[−0.478, −0.088]** (excludes zero), **6 of 7 days negative**, monotonic quintiles,
 **Q1−Q5 spread +1.27%**. This is the **first clean directional signal the programme has
@@ -48,7 +109,8 @@ repairs** — and that **names what it could not check**, since the paper gatewa
 `fetch_open_orders()` is structurally empty and a bare "clean" would read as evidence when it is
 the absence of evidence.
 ⚠ **Still open: the strategy/evidence half of the cycle-2 checklist** (CAS-2 · MCE 5b+6 ·
-`compute_levels` · Minervini) **and the five decisions D1–D5**, plus **D6** newly raised by the
+Minervini; **D5/`compute_levels` CLOSED + D1/R1 DECLINED 09-08 — both profitability levers spent**)
+**and the decisions D2–D4**, plus **D6** newly raised by the
 Kite spike: **Kite has no client-order-id field** (`tag` is 20 chars, not guaranteed unique) and
 our namespaced ids do not fit — reconciliation's matching key needs a decision before
 `KiteBrokerAdapter` is written.
@@ -87,15 +149,22 @@ caught four items stale. Bucket C stands at **7 of ~60** (W1–W5 · A11 · A40)
 (approved, cut from `feature/phase6-overlay-walkforward-retune` @ `518b84f`) carries what is left:
 **Phase 7.1–7.4 — the long pole, fully unblocked, starting now** · the shared Phase-6/6.8 research
 track R1/R2/F1 · and the cycle-2 entry criteria that were not in the original ask but sit on the
-checklist (MCE 5b+6 · CAS-2 · `compute_levels` · sizing). Queue, dependency order and rationale:
+checklist (MCE 5b+6 · CAS-2 · sizing; `compute_levels`/D5 + R1/D1 both closed 09-08). Queue, deps, rationale:
 [`docs/phases/pre-cycle2-queue.md`](phases/pre-cycle2-queue.md).
-⚠ **Five decisions are open and only the user can make them** — **D1** frozen-engine sign-off for
-R1 · **D2** R2 build-or-drop (*recommend drop*: gating is closed as a programme, and a ninth gate
-adds a trial that raises the deflation bar for everything else) · **D3** the MCE market-cap
-**vendor** · **D4** concentration/sizing · **D5** `compute_levels` payoff geometry — **the known
-lever**, and the only queued item that attacks profitability rather than measurement.
+⚠ **NO decision blocks cycle-2 start.** **D2** (R2 build-or-drop) is **PARKED to cycle-2 end** (user
+2026-09-08 — R2 stays provisionally dropped; the final keep-or-revive call waits on cycle-2 forward
+evidence; Claude flags it at cycle-2 end via the review calendar). **D6** (reconciliation matching key)
+is post-cycle-2. ✅ **D3 RESOLVED 2026-09-08** — free-source spike: no
+vendor needed (free NSE-`/api/` `issuedSize × price` path; keystone retired; build deferred until a
+consumer). ✅ **D4 DECIDED 2026-09-08** — minimal rails: notional + 6% heat kept, a max-concurrent-position
+cap (=3) BUILT in the RiskEngine (`off`, flips at cycle-2 reset); concentration is a cycle-1 artifact so a
+count binds, not a heat %. ✅ **D1 DECLINED 2026-09-08** — R1-RVOL refuted (elevated RVOL mildly inverse;
+injecting it −0.291R at t=−2.91), VWAP untestable. ✅ **D5 CLOSED 2026-09-08** — no constant-R:R geometry
+beats frozen; `compute_levels` stays frozen. **Both profitability levers (exit geometry + generation) are
+spent** — see the D1 top entry.
 ⚠ **"The rest of Phase 6 / 6.8" has no unbuilt slices** — both are GATE PASSED + CLOSED; what
-remains is R1/R2/F1 plus three forward-evidence loops (one decided, one **stalled**, one accruing).
+remains is R2/F1 (**R1 DROPPED 09-08 — refuted**) plus three forward-evidence loops (one decided,
+one **stalled**, one accruing).
 
 
 **▶ 2026-09-04 (latest) — H8 DONE: THE DEFLATED-SHARPE BAR IS VALIDATED, AND GATING IS CLOSED AS A
@@ -704,16 +773,21 @@ as the session task list.
   under cycle 2's clock, deliberately.
 - **Scope:** Phase 7.1–7.4 (**the long pole, fully unblocked — start here**) · the shared
   Phase-6/6.8 research track R1/R2/F1 · and the cycle-2 entry criteria that were not in the
-  original ask but are on the checklist (MCE 5b+6 · CAS-2 · `compute_levels` · sizing).
+  original ask but are on the checklist (MCE 5b+6 · CAS-2 · sizing; **`compute_levels`/D5 CLOSED
+  09-08 — geometry is not the lever**).
 - **⚠ "The rest of Phase 6 / 6.8" has no unbuilt slices.** Both are GATE PASSED + CLOSED
-  (2026-08-20). What remains is the gated research track `R1/R2/F1` plus three
-  forward-evidence loops — one **decided** (regime → reverted), one **stalled** (momentum
-  ×1.5: 3 minted / 0 resolved in 6 days), one **accruing** (pair df-vs-adf).
-- **⚠ FIVE DECISIONS ARE OPEN AND ONLY THE USER CAN MAKE THEM** — D1 frozen-engine sign-off
-  for R1 · D2 R2 build-or-drop (**recommend drop**: gating is closed as a programme, and a
-  ninth gate adds a trial that raises the bar for everything else) · D3 the MCE market-cap
-  **vendor** · D4 concentration/sizing · **D5 `compute_levels` payoff geometry — the known
-  lever**. Rationale for each in the queue doc §4.
+  (2026-08-20). What remains is the gated research track `R2/F1` (**R1 DROPPED 09-08 —
+  refuted**) plus three forward-evidence loops — one **decided** (regime → reverted), one
+  **stalled** (momentum ×1.5: 3 minted / 0 resolved in 6 days), one **accruing** (pair df-vs-adf).
+- **⚠ NO DECISION BLOCKS CYCLE-2 START.** **D2** (R2 build-or-drop) is **PARKED to cycle-2 end**
+  (user 2026-09-08 — R2 provisionally dropped; final call waits on cycle-2 evidence; Claude flags it
+  at cycle-2 end, review calendar). **D6** (reconciliation matching key) is post-cycle-2.
+  ✅ **D3 RESOLVED 2026-09-08** — free-source
+  spike: no vendor needed (free NSE-`/api/` `issuedSize × price` path; keystone retired; build
+  deferred until a consumer). ✅ **D4 DECIDED 2026-09-08** — minimal rails; max-concurrent-position
+  cap (=3) BUILT (`off`, flips at cycle-2 reset), notional + 6% heat kept, correlation/sector deferred.
+  ✅ **D1 DECLINED 2026-09-08** — R1-RVOL refuted, VWAP untestable. ✅ **D5 CLOSED 2026-09-08** — no
+  constant-R:R geometry beats frozen. **Both profitability levers are spent.** Rationale in queue §4.
 
 
 
@@ -961,7 +1035,13 @@ cluster by regime, so specificity is if anything optimistic; `trials = 20` is st
 until **U4** counts them; and the power arm plants a *constant* edge, so a regime-dependent one is
 harder to see than these curves suggest.
 
-**▶ BANKED CAUTION — do NOT act on "`compute_levels` is the known lever" without measuring first.**
+**▶ BANKED CAUTION — ✅ MEASURED + RESOLVED 2026-09-08. The caution held: geometry is NOT the lever.**
+The prescription below (a read-only, R-scored target-rule counterfactual, run before any spec change)
+was executed — `scripts/tp_geometry_study.py` on 1,152 swing+positional signals — and **confirmed the
+caution**: no constant-R:R geometry beats the frozen absolute-% target (paired ΔR negative, |t| ≤ 0.65),
+and forcing a higher R:R damages the wide-stop majority exactly as the reversal predicted. **D5 closed
+as "keep the tourniquet".** Report: `docs/analysis/tp-geometry-study-2026-09-08.md`. The original
+caution, preserved:
 The standing line (94/295 swing signals at R:R<1 by construction) has acquired **counter-evidence**:
 the R:R revert showed that cohort was the *profitable* one (+₹10,585, 63% win) and that **nearer
 targets hit twice as often** (33% vs 16% tp_hit), while the tight-stop and horizon findings both say
@@ -1045,8 +1125,9 @@ survive trimming the tail** and the partition must not be a proxy for something 
 | **pair df-vs-adf** | shadow | nightly minter accruing | when both arms have resolutions | accruing |
 | **profit-lock breakeven** | live rung ₹2,000 | A/B built 09-03; 20 of 99 differ | ADR-denominated variant, pre-registered k | ⛔ ₹800 NOT shipped — 13 runners clipped vs 7 blow-ups prevented; the knob's UNITS are wrong |
 | **deflated-Sharpe bar** | ✅ BUILT 09-03 · ✅ **VALIDATED 09-04 (H8)** | every gate FAILS it — and the bar is now proven sound, so that is a finding about the gates | re-read each `make analysis` | `app/services/deflated_sharpe.py`. **Not one gate's eligible-set Sharpe even exceeds its 20-trial benchmark**, so MinTRL is `None` for all — more data cannot rescue them. market-regime −0.004 vs +0.331 (DSR 2.9%) · chase +0.032 vs +0.266 (4.9%) · sector-RS −0.105 (0.3%) · liquidity −0.150 (0.1%); bar 95%. **The constraint is NOT sample size — the leak is upstream of gating** |
-| **pre-COVID backtest** | held by the user 2026-08-28 | — | **⏰ TRIGGER FIRED — raised 2026-09-06** (was: "hold until after watch mode ends Fri 2026-09-04") | reminder DISCHARGED, queued as Q5 on `feature/pre-cycle2-hardening`. **Does not block cycle 2** (touches no recorded number). ⚠ `ohlcv_1d` starts **2023-07-03**, so 2018/2015 is a DATA-ACQUISITION project, not a query — **first step is a sourcing spike**. Value is VALIDATION, not tuning: the engine is frozen for the current regime |
+| **pre-COVID backtest** | held by the user 2026-08-28 | — | **⏰ TRIGGER FIRED — raised 2026-09-06** (was: "hold until after watch mode ends Fri 2026-09-04") | reminder DISCHARGED, queued as Q5 on `feature/pre-cycle2-hardening`. **Does not block cycle 2** (touches no recorded number). ✅ **DATA ACQUIRED 2026-09-08:** `ohlcv_1d` now spans **2019-10-01 → 2026-09-04** (~7 yrs · 1,093 trading days · 2.08M bars · 3,373 names incl. 2,070 inactive/historical for a point-in-time survivorship-safe universe) — back to the bhavcopy archive floor (2019-09-02 = 404). ⚠ **Bars are CA-UNADJUSTED** — 7 yrs of splits/bonuses read as fake gaps and MUST be handled first. **The backtest STUDY is NOT run** — its blockers D1/D5 are both RESOLVED 2026-09-08 (engine stays frozen), so it is now clear to run; the remaining precondition is CA-adjusting the historical bars. Value is VALIDATION, not tuning: the engine is frozen for the current regime |
 | **readiness guards** | ✅ **BUILT 2026-09-03** | market-regime now vetoed | — | `flip_readiness.py`: `side_proxy` · `tail` · `win_rate`, run as a veto BEFORE each sidecar's own test. Every banner also now ships an **evidence-of-record** block (n · resolved · mean · median · **trimmed mean** · win% + guards + DSR). It exposed that market-regime's would-block **trimmed mean is +₹200** against a −₹302 mean — trimming REVERSES the sign |
+| **D2 / R2 spread-width gate** | provisionally DROPPED 2026-09-07 (user sign-off); **final call PARKED 2026-09-08** | R2 not built — the drop stands for now | ⏰ **WHEN CYCLE 2 COMPLETES — Claude MUST raise it then** | User 2026-09-08: hold the final keep-dropped-or-revive decision until cycle 2's forward evidence is in; **do not re-litigate before then, and do NOT let it block cycle-2 start.** Prior lean is DROP (a 9th gate adds a deflation trial and gating is closed as a programme) unless cycle-2 data changes the picture |
 
 **▶ POST-WATCH-MODE RESEARCH QUEUE (after Fri 2026-09-04)** — a consolidated "wind it back" list of the
 analysis threads parked during watch mode lives in the **`post-watchmode-research-queue`** memory
