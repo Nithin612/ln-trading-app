@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### A36 (2026-09-09) — proactive NSE calendar-coverage expiry alarm [Bucket C]
+
+- **`app/services/calendar_health.py`** turns the calendar's silent query-time warning into a
+  proactive alarm. The `nse_holidays` table has a horizon (its last seeded circular); past it,
+  trading-day arithmetic drops to **weekday-only** and silently miscounts every validity window
+  (SIGNAL_ENGINE.md §5) around an unknown holiday. `read_calendar_status` (never raises, mirrors
+  `token_health`) reports coverage state — **absent / expired / expiring-soon / healthy** — with
+  the trading-days of runway remaining.
+- **A daily beat task** (`health_tasks.check_calendar_coverage`, 09:30 IST weekdays) PUSHES via
+  the notifier when runway is short (`< WARN_BELOW_TRADING_DAYS = 20`, WARNING) or gone (ERROR),
+  and the **daily report** carries the same horizon as a human-read line beside worker/token
+  health — so a quiet channel is never the only evidence.
+- **Optional cheap second opinion:** cross-checks upcoming weekdays against `exchange_calendars`'
+  XNSE *when that library is present* — never a dependency, never a hard failure (absent ⇒ silent).
+- 15 tests (`tests/test_calendar_health.py`); the existing beat-schedule contract test confirms
+  the new entry resolves to a registered task. No new settings, no migration.
+
 ### A28 (2026-09-09) — retryable delivery classification in the session notifier [Bucket C]
 
 - **`app/services/notifier.py`** now classifies every webhook delivery outcome by whether

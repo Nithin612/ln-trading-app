@@ -47,6 +47,7 @@ from app.models.user import User
 from app.services import beta_ir as bir
 from app.services import buy_and_hold as bah
 from app.services import entry_cohort as ec
+from app.services import calendar_health as ch
 from app.services import fo_analytics as fa
 from app.services import fo_suggestions as fs
 from app.services import gate_register
@@ -284,6 +285,8 @@ class DailyReport:
     # ABSENCE, because it runs in a different process from the worker it judges.
     worker_roles: list[RoleStatus] = field(default_factory=list)
     token_status: th.TokenStatus | None = None
+    # NSE holiday-calendar coverage horizon (A36). None = not yet gathered.
+    calendar_status: ch.CalendarStatus | None = None
     entry_cohorts: list[ec.Cohort] = field(default_factory=list)
     cas_coverage: CasCoverage | None = None
     # Tick-mode degradation counters for the report day (A25). Empty = a clean
@@ -560,6 +563,7 @@ async def build_daily_report(
     report.worker_roles = await read_statuses(now=now)
     report.cas_coverage = await wh.cas_coverage(db, day=day, now=now)
     report.token_status = await th.read_token_status(db, now=now)
+    report.calendar_status = await ch.read_calendar_status(db, now=now)
     # Vintage attribution: group by the day picks were MADE. The entry leak is the
     # demonstrated problem, so this is the view that speaks to it.
     report.entry_cohorts = await ec.load_cohorts(
@@ -764,6 +768,11 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
     # than reality, in the direction that flatters us.
     if r.token_status is not None:
         out.extend(th.render_lines(r.token_status))
+
+    # A36 — NSE calendar coverage horizon, beside the other liveness surfaces: a lapsed
+    # holiday calendar silently miscounts every trading-day validity window below.
+    if r.calendar_status is not None:
+        out.extend(ch.render_lines(r.calendar_status))
 
     # Tick-mode degradation (A25) — silent on a clean day; loud when the depth
     # path was fed ticks it could not use, because that quietly cheapens the

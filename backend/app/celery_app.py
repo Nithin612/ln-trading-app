@@ -109,6 +109,13 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.health_tasks.worker_heartbeat",
         "schedule": crontab(minute="*/2"),
     },
+    # A36 — calendar-coverage expiry alarm. Once per trading morning (4:00 UTC = 9:30 IST);
+    # the horizon moves slowly, so a daily read with lead time is enough, and the notifier's
+    # 15-min throttle collapses any repeat within a day.
+    "check-calendar-coverage": {
+        "task": "app.tasks.health_tasks.check_calendar_coverage",
+        "schedule": crontab(hour=4, minute=0, day_of_week="1-5"),
+    },
     # Option-chain snapshots every minute in the market window (task itself
     # re-checks 9:15–15:30 IST and idles without a Kite token)
     "record-option-chains": {
