@@ -118,9 +118,10 @@ plus the five open decisions.
 
 ### ▶ Progress — 2026-09-09 overnight run (Bucket C, builds DURING accrual)
 
-Eight Bucket-C items shipped, all touching **no recorded number** (safe mid-cycle), each with
+Twelve Bucket-C items shipped, all touching **no recorded number** (safe mid-cycle), each with
 tests + CHANGELOG; the operational-safety cluster (the findings doc's "largest single win") is
-now largely done. **Bucket C now stands at ~15 of ~60** (prior 7 = W1–W5 · A11 · A40).
+done, and the U1 registry page/API landed. **Bucket C now stands at ~17 of ~60** (prior 7 =
+W1–W5 · A11 · A40; A27/A3/A13 done pre-09-09).
 
 | item | what | tests |
 |---|---|---|
@@ -132,12 +133,19 @@ now largely done. **Bucket C now stands at ~15 of ~60** (prior 7 = W1–W5 · A1
 | **T9** | doc-sync ritual as a failing test (`test_doc_sync.py`) — W3 config drift, report-all-at-once, T8 shrinking-debt baseline | 8 |
 | **A15** | schedule invariant (`test_schedule_invariants.py`) — CAS window ≥ beat tick; coverage-close == capture-end | 3 |
 | **T13/T14** | T13 tautological here (batch ≡ incremental by construction — recorded); T14 external hand-computed RSI+ATR anchors independent of pandas-ta (ADX deferred) | +3 (engine) |
+| **T10** | notifier negative-space: a policy-suppressed / throttled notification never reaches the wire | +2 |
+| **U1** | Gate Register page (`/analytics/registry`) + `GET /analytics/gate-register` — shadow-gate evidence as data+UI; reverted/decided kept visible (U6); ui-reviewer PASS (contrast fix via hardened `--color-loss`) | 4 api + 5 vitest |
 
-**Not started in Bucket C:** A27/A3/A13 already done pre-09-09; remaining = A5/A7/A12/T12 (rules/
-hygiene), T4/T5/T6/T8/T10 (more test invariants), the **U1 UI registry cluster** (the big one),
-and A4/A14/A17/A1/A41 (deployment/misc). None attacks profitability — all harden the platform and
-its evidence while cycle 2 accrues. bug-hunter reviewed the ops-safety cluster: A28/A36/A9/A10
-sound, one H7 MEDIUM fixed same-day.
+**Reviews:** bug-hunter on the ops-safety cluster (A28/A36/A9/A10 sound, one H7 MEDIUM fixed
+same-day); ui-reviewer PASS-WITH-NOTES on U1 (all notes fixed).
+
+**Remaining Bucket C, with an honest read:** **T4/T5/T6/T8** are already satisfied by the Bucket
+A/B numeric-test discipline (ratios/block-bootstrap/etc.) — adding more would be hollow; **A5/A7/A12**
+are largely covered by the existing dated-incident doc practice (W1–W5, CLAUDE.md truth bullets). So
+the meaningful remainder is the **U1 detail/cohort sub-items** (U10 arithmetic · U15 named evidence ·
+U17 distribution bar · U20 would-block cohort · U11 · U19 — these need a DSR/benchmark API slice and
+are design-sensitive, best done with the user), plus lower-priority **deployment/misc** (A4/A14/A17/
+A1/A41). **None attacks profitability** (both levers spent); all harden the platform and its evidence.
 
 Two findings worth carrying forward:
 

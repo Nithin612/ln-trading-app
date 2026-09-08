@@ -12,7 +12,7 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ## ▶ STATE AT A GLANCE (updated 2026-09-09) — read this block first
 
-**▶▶ 2026-09-09 (latest) — BUCKET C OPERATIONAL-SAFETY + TESTS/INVARIANTS BATCH: 8 items shipped, none touching a recorded number.**
+**▶▶ 2026-09-09 (latest) — BUCKET C OPERATIONAL-SAFETY + TESTS/INVARIANTS + U1 BATCH: 12 items shipped, none touching a recorded number.**
 Built during accrual, exactly as the findings-doc plan prescribes (Bucket C runs *underneath* cycle 2's
 clock). The findings doc's "largest single win" — operational safety/alerting — is now largely done:
 **A28** (notifier delivery classified retryable-vs-permanent — a 404/401 no longer reads as success) ·
@@ -25,12 +25,17 @@ sector-RS/market-regime). Plus tests/invariants + hygiene: **T9** (doc-sync ritu
 W3 config drift, report-all-at-once, T8 shrinking-debt baseline) · **A15** (CAS window ≥ beat tick) ·
 **T13/T14** (T13 is tautological here — batch ≡ incremental by construction, recorded as the finding;
 **T14** external hand-computed RSI+ATR anchors independent of pandas-ta, ADX deferred) · **A39**
-(`cargo-deny` supply-chain gate, on-demand). **Bucket C now ~15 of ~60.** bug-hunter clean bar the one
-H7 fix; per-item tests green. Details: CHANGELOG (Unreleased) + `docs/phases/pre-cycle2-queue.md`
-(2026-09-09 progress block). Remaining Bucket C: A5/A7/A12/T12, T4/T5/T6/T8/T10, the **U1 UI registry
-cluster** (the big one), A4/A14/A17/A1/A41 — **none attacks profitability** (both levers spent); they
-harden the platform and its evidence. **No decision blocks cycle-2 start; nothing here changes a recorded
-number, so no clock reset.**
+(`cargo-deny` supply-chain gate, on-demand) · **T10** (notifier negative-space: suppressed path never
+hits the wire) · **U1** (the **Gate Register** page `/analytics/registry` + `GET /analytics/gate-register`
+— the shadow-gate evidence, reverted/decided candidates kept visible per U6; ui-reviewer PASS, contrast
+fix via hardened `--color-loss`). **Bucket C now ~17 of ~60.** bug-hunter clean bar the one H7 fix;
+ui-reviewer PASS on U1; per-item tests green (backend + vitest + cargo). Details: CHANGELOG (Unreleased)
++ `docs/phases/pre-cycle2-queue.md` (2026-09-09 progress block). **Honest note:** T4/T5/T6/T8 turned out
+already satisfied by the Bucket A/B test discipline (adding more = hollow), and A5/A7/A12 are largely
+covered by the existing dated-incident doc practice — so the meaningful remainder is the U1 *detail/cohort*
+sub-items (U10/U15/U17/U20/U11/U19 — DSR benchmarks, need more API) + lower-priority deployment (A4/A14/A17/
+A1/A41). **None attacks profitability** (both levers spent). **No decision blocks cycle-2 start; nothing
+here changes a recorded number, so no clock reset.**
 
 **▶▶ 2026-09-08 — D3 RESOLVED by a free-source spike: NO vendor needed. The Q0 decision queue is CLEARED for cycle-2 start — D2's final call is PARKED to cycle-2 end (user 2026-09-08), D6 is post-cycle-2.**
 The long-standing "`market_cap` has no writer → pick a vendor" **keystone is RETIRED.** Spike
@@ -164,7 +169,7 @@ did claim an edge and was refuted — dropping it would be the selection bias th
 BRANCH.** All 8 Bucket-A items (the ones that change a recorded number) and all 11 Bucket-B items
 (the instruments that will read the cycle) have code **and** tests on disk — verified against the
 artifacts, not the checkboxes (**W1**), which is how the findings doc's own Bucket-B table was
-caught four items stale. Bucket C stands at **~15 of ~60** (W1–W5 · A11 · A40 · A27/A3/A13 · and the
+caught four items stale. Bucket C stands at **~17 of ~60** (W1–W5 · A11 · A40 · A27/A3/A13 · and the
 2026-09-09 batch A28/A36/A9/A10/H7/A39/T9/A15/T13-T14) and the rest builds
 *under* cycle 2's clock, deliberately. **New working branch `feature/pre-cycle2-hardening`**
 (approved, cut from `feature/phase6-overlay-walkforward-retune` @ `518b84f`) carries what is left:
@@ -790,7 +795,7 @@ as the session task list.
 
 - **✅ ENTRY CHECK PASSED — Buckets A and B are COMPLETE**, verified against the artifacts
   rather than the checkboxes (W1): all 8 Bucket-A items and all 11 Bucket-B items have code
-  **and** tests on disk. **Bucket C is ~15 of ~60** (W1–W5 · A11 · A40 · A27/A3/A13 · the 2026-09-09
+  **and** tests on disk. **Bucket C is ~17 of ~60** (W1–W5 · A11 · A40 · A27/A3/A13 · the 2026-09-09
   ops-safety+tests batch) and the rest stays
   under cycle 2's clock, deliberately.
 - **Scope:** Phase 7.1–7.4 (**the long pole, fully unblocked — start here**) · the shared
