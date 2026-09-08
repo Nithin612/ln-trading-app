@@ -7,6 +7,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### T13/T14 (2026-09-09) — external hand-computed anchors for the Wilder family [Bucket C]
+
+- **T13 does not apply as written here, and that is the finding (W1).** T13 asked for
+  `incremental_equals_batch` across the Wilder family — but in this engine **every batch fn is
+  the incremental state looped** (`sma`/`rsi`/`atr`/`adx` all `map(state.update)`), so batch ≡
+  incremental *by construction* and such a test is tautological (the existing SMA/EMA ones are
+  too). There is no second algorithm to diverge; T13 collapses into T14 here.
+- **T14 — the anchor that was actually missing.** RSI/ATR carry in-module reference tests, but
+  those values came **from pandas-ta**, so the chain (Rust ← Python ← pandas-ta) is
+  self-referential — a pandas-ta convention bug would be encoded green forever. Added
+  `hand_computed_reference_anchor` tests to `engine/crates/engine-core/src/indicators/{rsi,atr}.rs`
+  pinning values derived **independently of pandas-ta** (the documented ewm-seeded-first-diff /
+  SMA-seed recursions worked out from scratch in Python on a short n=3 series, with the
+  hand-derivation shown in comments). Three independent implementations agree to 1e-9. Also added
+  ATR's first-ever unit test module (warmup-NaN + non-negativity). ADX's multi-stage seeding is
+  deferred as a follow-up. Test-only — no engine logic changed, so no fixture regeneration.
+  `cargo test -p engine-core` 71 passed; fmt + clippy clean.
+
 ### T9 + A15 (2026-09-09) — doc-sync ritual and a schedule invariant, as failing tests [Bucket C]
 
 - **T9 (`backend/tests/test_doc_sync.py`)** promotes the mechanically-checkable half of the

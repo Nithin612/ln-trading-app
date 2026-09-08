@@ -158,4 +158,40 @@ mod tests {
         let out = rsi(&flat, 14);
         assert!(out.iter().skip(1).all(|v| v.is_nan()));
     }
+
+    // ── T14 — external hand-computed anchor ──────────────────────────────────────────────
+    // The `matches_pandas_ta_reference` values above came FROM pandas-ta, so they cannot catch
+    // a pandas-ta convention bug our golden fixtures would faithfully encode (rust rules: the
+    // chain is Rust ← Python ← pandas-ta, self-referential). This pins values derived
+    // INDEPENDENTLY of pandas-ta — the ewm(alpha=1/n, adjust=False) recursion seeded with the
+    // first diff, worked out by hand on a short series (n=3). Three independent implementations
+    // (this arithmetic, pandas-ta, the engine) agreeing is the anchor.
+    //
+    // closes = [44.0, 44.5, 43.8, 44.2, 44.9, 45.1, 44.7], alpha = 1/3.
+    //   i1: diff +0.5 → seed avg_gain=0.5, avg_loss=0     → avg_loss 0, avg_gain≠0 → RSI 100
+    //   i2: diff −0.7 → g=0,l=0.7; ag=⅔·0.5=0.333…, al=⅓·0.7=0.233…; RS=1.4286 → 58.8235…
+    //   i3: diff +0.4 → g=0.4;    ag=⅔·0.333…+⅓·0.4=0.3556, al=⅔·0.233…=0.1556; RS=2.2857 → 69.5652…
+    // (remaining values continue the same recursion.)
+    #[test]
+    fn hand_computed_reference_anchor() {
+        let closes = [44.0, 44.5, 43.8, 44.2, 44.9, 45.1, 44.7];
+        let expected = [
+            f64::NAN,
+            100.0,
+            58.82352941176462,
+            69.56521739130437,
+            81.93548387096767,
+            84.6153846153846,
+            58.55513307984801,
+        ];
+        let out = rsi(&closes, 3);
+        assert_eq!(out.len(), expected.len());
+        for (i, (got, want)) in out.iter().zip(expected.iter()).enumerate() {
+            if want.is_nan() {
+                assert!(got.is_nan(), "index {i}: expected NaN, got {got}");
+            } else {
+                assert_relative_eq!(got, want, max_relative = 1e-9);
+            }
+        }
+    }
 }
