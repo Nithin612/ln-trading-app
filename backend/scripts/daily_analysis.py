@@ -30,6 +30,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from app.core.config import settings  # noqa: E402
+from app.core.progress import ProgressReporter  # noqa: E402
 from app.db.session import AsyncSessionFactory  # noqa: E402
 from app.services.daily_report import (  # noqa: E402
     DailyReport,
@@ -102,7 +103,14 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
     logging.disable(logging.INFO)
     _ANALYSIS_DIR.mkdir(parents=True, exist_ok=True)
 
+    # A9 — a progress envelope for this opaque multi-stage job. Emitted to STDERR so the
+    # "wrote …" lines on stdout stay clean and pipeable; a watcher sees which of the N stages
+    # is running and how long it has taken, instead of silence until the run finishes or wedges.
+    n_stages = 11 + (1 if week_of is not None else 0)
+    prog = ProgressReporter(n_stages, label="analysis")
+
     async with AsyncSessionFactory() as db:
+        prog.step("daily report", phase="report")
         report = await build_daily_report(db, day=day, user_id=user_id, now=now)
         path = _ANALYSIS_DIR / f"{day.isoformat()}.md"
         path.write_text(render_markdown(report))
@@ -115,6 +123,7 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
         # reminder printed below). Read-only; guarded so it can never block the
         # primary daily report — a failure prints a visible line, not a silent skip.
         try:
+            prog.step("regime-gate shadow", phase="shadow gates")
             from app.services import regime_gate_shadow as rgs
 
             shadow = await rgs.compute_regime_gate_shadow(db)
@@ -130,6 +139,7 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
         # band), with a readiness banner. Same read-only, never-block discipline as
         # the regime-gate sidecar above.
         try:
+            prog.step("circuit-gate shadow", phase="shadow gates")
             from app.services import circuit_gate_shadow as cgs
 
             cshadow = await cgs.compute_circuit_gate_shadow(db)
@@ -146,6 +156,7 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
         # go-live gate) is otherwise measuring a book that will never be traded. Same
         # read-only, never-block discipline as the gate sidecars.
         try:
+            prog.step("heat counterfactual", phase="counterfactuals")
             from app.services import heat_counterfactual as hcf
 
             hres = await hcf.compute_heat_counterfactual(
@@ -169,6 +180,7 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
         # cohort, with flagged-vs-passed outcomes + an sl_atr flip-readiness banner.
         # Same read-only, never-block discipline as the gate sidecars above.
         try:
+            prog.step("entry-quality shadow", phase="shadow gates")
             from app.services import entry_quality_shadow as eqs
 
             eshadow = await eqs.compute_entry_quality_shadow(db)
@@ -192,6 +204,7 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
         # the MCE requirement to never trade blind to sector leadership. Same read-only,
         # never-block discipline as the gate sidecars above.
         try:
+            prog.step("sector-RS shadow", phase="shadow gates")
             from app.services import sector_rs_shadow as srs
 
             rshadow = await srs.compute_sector_rs_shadow(db)
@@ -207,6 +220,7 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
         # into an up-trending one), with a per-entry context table (+ VIX) and a flip banner.
         # Same read-only, never-block discipline as the gate sidecars above.
         try:
+            prog.step("market-regime shadow", phase="shadow gates")
             from app.services import market_regime_shadow as mrs
 
             mshadow = await mrs.compute_market_regime_shadow(db)
@@ -222,6 +236,7 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
         # with a per-entry table + a flip-readiness banner. Same read-only, never-block
         # discipline as the gate sidecars above.
         try:
+            prog.step("liquidity shadow", phase="shadow gates")
             from app.services import liquidity_shadow as lqs
 
             lshadow = await lqs.compute_liquidity_shadow(db)
@@ -236,6 +251,7 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
         # (orders that filled too far past entry — chase_r above the ceiling), with a per-entry
         # table + flip-readiness banner. Same read-only, never-block discipline.
         try:
+            prog.step("anti-chase shadow", phase="shadow gates")
             from app.services import chase_shadow as chs
 
             ch_shadow = await chs.compute_chase_shadow(db)
@@ -249,6 +265,7 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
         # Signal-age-at-entry diagnostic: how far into each signal's validity window we entered
         # (the stale ~day-25-of-30 leak) + P&L by age bucket. Read-only, never blocks.
         try:
+            prog.step("signal-age", phase="diagnostics")
             from app.services import signal_age_report as sar
 
             age_rep = await sar.compute_signal_age(db)
@@ -262,6 +279,7 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
         # Market-regime diagnostic: NIFTY vs 200-DMA AND 20-DMA + breadth + VIX, flagging when the
         # level and the breadth disagree (the two-window-autopsy finding). Read-only.
         try:
+            prog.step("market-regime report", phase="diagnostics")
             from app.services import market_regime_report as mrr
 
             regime = await mrr.compute_market_regime(db, as_of=now)
@@ -273,6 +291,7 @@ async def _run(  # noqa: C901 — a linear sequence of independent, each-try/exc
             print(f"market-regime step skipped: {exc!r}", flush=True)
 
         if week_of is not None:
+            prog.step("weekly roll-up", phase="report")
             monday = week_of - timedelta(days=week_of.weekday())
             wk = await build_week_summary(db, monday=monday, user_id=user_id, now=now)
             wpath = _ANALYSIS_DIR / f"WEEK-{monday.isoformat()}.md"

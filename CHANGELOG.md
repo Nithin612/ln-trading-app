@@ -7,6 +7,22 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### A9/A10 (2026-09-09) — a progress envelope for long-running jobs [Bucket C]
+
+- **`app/core/progress.py`** — a dependency-free, framework-agnostic progress protocol:
+  `ProgressReporter.step()` emits `ProgressEvent`s carrying `{label, phase, step, total_steps,
+  pct, message, elapsed_s, result, timestamp}` (A9), with a mid-flight `result()` for a running
+  tally that updates between stage boundaries (A10). Renders a compact human line or one JSON
+  object per line (`json_mode`) to any stream; emission failures are swallowed so a progress
+  line can never break the job it reports on.
+- **Wired into `make analysis`** (`scripts/daily_analysis.py`), which was opaque across its 11
+  stages until it finished or wedged. Progress now goes to **stderr** — e.g.
+  `[analysis 7/11 64% · 4.2s] shadow gates: market-regime shadow` — so stdout stays the clean,
+  pipeable "wrote …" report lines. Backtests / walk-forward / EOD can adopt the same reporter.
+- 14 tests (`tests/test_progress.py`): envelope arithmetic (percent, unknown-total, clamp),
+  both renderings, stepping + elapsed via an injected clock, mid-flight result, and the
+  broken-sink-never-breaks-the-job guarantee. Smoke-run confirmed clean stderr/stdout split.
+
 ### A36 (2026-09-09) — proactive NSE calendar-coverage expiry alarm [Bucket C]
 
 - **`app/services/calendar_health.py`** turns the calendar's silent query-time warning into a
