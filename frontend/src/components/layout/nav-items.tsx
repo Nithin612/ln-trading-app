@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, TrendingUp, SlidersHorizontal, ListChecks, Tags, Building2,
   FileText, Briefcase, History, FlaskConical, BookOpen, Wallet, Zap, Users, Settings,
-  Activity, Layers, Landmark, Rocket, PieChart, BellRing,
+  Activity, Layers, Landmark, Rocket, PieChart, BellRing, ClipboardList,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -54,6 +54,7 @@ export const NAV_GROUPS: NavGroup[] = [
     items: [
       { to: '/strategy',           icon: <FlaskConical size={18} />, label: 'Strategy Lab' },
       { to: '/analytics/outcomes', icon: <PieChart size={18} />,     label: 'Outcomes' },
+      { to: '/analytics/registry', icon: <ClipboardList size={18} />, label: 'Gate Register' },
       { to: '/journal',            icon: <BookOpen size={18} />,     label: 'Journal' },
       { to: '/portfolio',          icon: <Wallet size={18} />,       label: 'Portfolio' },
     ],

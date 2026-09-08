@@ -21,8 +21,33 @@ export interface OutcomeAnalyticsResponse {
   styles: OutcomeStyleStats[]
 }
 
+// U1 — the gate / hypothesis register (H4) as data.
+export interface GateHypothesis {
+  key: string
+  name: string
+  status: 'active' | 'shadow' | 'reverted' | 'decided_no' | 'research'
+  prediction: string
+  bar: string
+  stands_at: string
+  verdict: string
+  counts_as_trial: boolean
+  review_due: string | null
+}
+
+export interface GateRegisterResponse {
+  as_of: string
+  trials_attempted: number // observed — a LOWER BOUND on N (variants not yet counted)
+  assumed_trials: number // DEFAULT_TRIALS used in the deflation bar
+  counts: Record<string, number> // status → count
+  due_for_review: string[]
+  hypotheses: GateHypothesis[]
+}
+
 export const analyticsApi = {
   getOutcomes(token: string): Promise<OutcomeAnalyticsResponse> {
     return api.get<OutcomeAnalyticsResponse>('/analytics/outcomes', token)
+  },
+  getGateRegister(token: string): Promise<GateRegisterResponse> {
+    return api.get<GateRegisterResponse>('/analytics/gate-register', token)
   },
 }

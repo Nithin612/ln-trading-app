@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### U1 (page) (2026-09-09) — "Gate Register" page [Bucket C]
+
+- **`frontend/src/features/analytics/RegistryPage.tsx`** (route `/analytics/registry`, nav "Gate
+  Register") renders `GET /analytics/gate-register`: a summary panel (observed vs assumed trials
+  with the A24 "observed is a lower bound" caveat in the same element + status-count pills) and a
+  table of every hypothesis (name/key · status · trial? · verdict · review-due), sorted
+  active→shadow→reverted→decided→research so the **reverted/decided candidates stay visible** (U6).
+  Loading/empty/error states; follows the `OutcomesPage` template.
+- **ui-reviewer PASS-WITH-NOTES, all fixed:** status uses **token-backed pills (StatusPill
+  pattern), not the generic `destructive` Badge** — that maps to `--color-error` (red-600) which
+  fails WCAG AA in daybreak/carbon; `reverted` now uses `--color-loss` (hardened red-700, 5.30:1),
+  the exact CLAUDE.md contrast trap. Added the empty state, gave `research` a real resting style
+  (the `ghost` badge had hover-only styles), dropped a redundant `overflow-x-auto`. Zebra striping
+  skipped to match the app's other tables (pre-existing primitive behaviour).
+- 5 Vitest tests (`src/test/RegistryPage.test.tsx`): data + trials/A24, U6 visibility, empty,
+  loading, error. typecheck + eslint clean.
+
 ### U1 (data layer) (2026-09-09) — gate/hypothesis register exposed as an API [Bucket C]
 
 - **`GET /api/v1/analytics/gate-register`** exposes H4's gate register as data — today it is
