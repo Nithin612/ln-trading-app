@@ -120,3 +120,70 @@ async def outcome_analytics(
     return OutcomeAnalyticsResponse(
         epoch=OUTCOME_EPOCH, total_outcomes=total_outcomes, styles=styles
     )
+
+
+# --------------------------------------------------------------------------- #
+# U1 (data layer) — the gate / hypothesis register as an API                  #
+# --------------------------------------------------------------------------- #
+# The register (H4) is the failed-hypothesis archive + the U4 trial counter that gives the
+# deflation bar its N. Today it is readable only inside the daily-report markdown. This exposes
+# it as data so the registry PAGE (U1: current status · U6: rejected/reverted candidates kept
+# visible · U4: observed-vs-assumed trials) can render it. Read-only, no DB — the register is
+# static, curated Python data. Money-path untouched.
+
+
+class GateHypothesisOut(BaseModel):
+    key: str
+    name: str
+    status: str  # active | shadow | reverted | decided_no | research
+    prediction: str
+    bar: str
+    stands_at: str
+    verdict: str
+    counts_as_trial: bool
+    review_due: str | None
+
+
+class GateRegisterResponse(BaseModel):
+    as_of: str
+    #: OBSERVED multiple-testing trials — a LOWER BOUND on N (variants not yet counted), so
+    #: `observed < assumed` does NOT license calling the bar conservative (see gate_register).
+    trials_attempted: int
+    assumed_trials: int  # DEFAULT_TRIALS used in the deflation
+    counts: dict[str, int]  # status → count
+    due_for_review: list[str]  # keys still carrying a review trigger (constraint #8)
+    hypotheses: list[GateHypothesisOut]
+
+
+@router.get("/gate-register", response_model=GateRegisterResponse)
+async def gate_register_view(
+    _user: Annotated[User, Depends(get_current_user)],
+) -> GateRegisterResponse:
+    """The gate/hypothesis register as data (U1). Every partition we have searched, decided or
+    shipped — including the reverted and decided-no ones, kept visible on purpose (U6), because
+    a register that quietly drops its failures is the selection bias the deflation corrects."""
+    from app.services import gate_register as gr
+    from app.services.deflated_sharpe import DEFAULT_TRIALS
+
+    counts = {s.value: len(gr.by_status(s)) for s in gr.Status}
+    return GateRegisterResponse(
+        as_of=gr.AS_OF,
+        trials_attempted=gr.trials_attempted(),
+        assumed_trials=DEFAULT_TRIALS,
+        counts=counts,
+        due_for_review=[h.key for h in gr.due_for_review()],
+        hypotheses=[
+            GateHypothesisOut(
+                key=h.key,
+                name=h.name,
+                status=h.status.value,
+                prediction=h.prediction,
+                bar=h.bar,
+                stands_at=h.stands_at,
+                verdict=h.verdict,
+                counts_as_trial=h.counts_as_trial,
+                review_due=h.review_due,
+            )
+            for h in gr.REGISTER
+        ],
+    )

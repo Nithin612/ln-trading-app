@@ -7,6 +7,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### U1 (data layer) (2026-09-09) — gate/hypothesis register exposed as an API [Bucket C]
+
+- **`GET /api/v1/analytics/gate-register`** exposes H4's gate register as data — today it is
+  readable only inside the daily-report markdown. Returns every hypothesis (status · prediction ·
+  bar · stands-at · verdict · `counts_as_trial` · `review_due`), the **observed vs assumed trial
+  counts** (U4), per-status counts, and the `due_for_review` keys (constraint #8). Read-only, no DB
+  (the register is static curated Python data), money-path untouched.
+- **Rejected/reverted candidates stay visible** (U6): the regime gate (reverted, −8R) and R:R≥1
+  (reverted) are in the response — a register that drops its failures is the selection bias the
+  deflation corrects. This is the **data layer for the U1 registry page**; the page itself
+  (folding in U2/U3/U5 DSR benchmarks) is design-sensitive and left for a review-together pass.
+- 4 tests in `tests/test_analytics.py` (auth, shape + trial/count invariants, U6 visibility,
+  `due_for_review` matches the service).
+
 ### T13/T14 (2026-09-09) — external hand-computed anchors for the Wilder family [Bucket C]
 
 - **T13 does not apply as written here, and that is the finding (W1).** T13 asked for

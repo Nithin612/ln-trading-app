@@ -124,3 +124,53 @@ class TestOutcomeAnalytics:
         r = await client.get("/api/v1/analytics/outcomes", headers=headers)
         styles = {s["style"]: s for s in r.json()["styles"]}
         assert styles["swing"]["total"] == 0  # excluded by the cohort filter
+
+
+class TestGateRegister:
+    """U1 (data layer) — the gate/hypothesis register exposed as an API."""
+
+    async def test_requires_auth(self, client: AsyncClient) -> None:
+        r = await client.get("/api/v1/analytics/gate-register")
+        assert r.status_code == 401
+
+    async def test_returns_the_register_with_trials_and_counts(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        from app.services import gate_register as gr
+        from app.services.deflated_sharpe import DEFAULT_TRIALS
+
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        r = await client.get("/api/v1/analytics/gate-register", headers=headers)
+        assert r.status_code == 200
+        body = r.json()
+        assert body["as_of"] == gr.AS_OF
+        assert body["assumed_trials"] == DEFAULT_TRIALS
+        assert body["trials_attempted"] == gr.trials_attempted() > 0
+        assert len(body["hypotheses"]) == len(gr.REGISTER)
+        # the status counts sum to the full register
+        assert sum(body["counts"].values()) == len(gr.REGISTER)
+
+    async def test_reverted_and_decided_candidates_stay_visible(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """U6 — a register that drops its failures is the selection bias the deflation
+        corrects. The regime gate (reverted, −8R) and R:R≥1 (reverted) must be present."""
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        r = await client.get("/api/v1/analytics/gate-register", headers=headers)
+        by_key = {h["key"]: h for h in r.json()["hypotheses"]}
+        assert by_key["regime_adx"]["status"] == "reverted"
+        assert by_key["rr_min"]["status"] == "reverted"
+        # a hard rule / safety rail does not consume a multiple-testing trial
+        assert by_key["entry_diversity"]["counts_as_trial"] is False
+
+    async def test_due_for_review_matches_the_service(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        from app.services import gate_register as gr
+
+        await create_test_user(db)
+        headers = await get_auth_headers(client)
+        r = await client.get("/api/v1/analytics/gate-register", headers=headers)
+        assert set(r.json()["due_for_review"]) == {h.key for h in gr.due_for_review()}
