@@ -28,10 +28,17 @@ Two design choices carried from the findings:
 from __future__ import annotations
 
 import re
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from pathlib import Path
+from zoneinfo import ZoneInfo
 
 from app.core.config import Settings
+
+# Docs are stamped in IST (market logic is IST throughout the project), so the freshness
+# check must compare against IST's today — not UTC's, which lags 5.5h and would flag a
+# same-day IST stamp as "in the future" every evening (the exact date-boundary trap the
+# trading-domain rules warn about; caught by this very test on 2026-09-09).
+_IST = ZoneInfo("Asia/Kolkata")
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 _ENV_EXAMPLE = _REPO_ROOT / ".env.example"
@@ -156,7 +163,7 @@ def collect_problems() -> list[str]:
     """Every doc-sync problem on the real tree, in one pass."""
     problems = env_drift_problems(settings_fields(), env_example_keys(_ENV_EXAMPLE.read_text()))
     problems += _phases_stamp_problems(
-        _PHASES.read_text(), today=datetime.now(tz=UTC).date()
+        _PHASES.read_text(), today=datetime.now(tz=_IST).date()
     )
     return problems
 
