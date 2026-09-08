@@ -7,6 +7,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### T9 + A15 (2026-09-09) — doc-sync ritual and a schedule invariant, as failing tests [Bucket C]
+
+- **T9 (`backend/tests/test_doc_sync.py`)** promotes the mechanically-checkable half of the
+  doc-sync ritual from "a procedure Claude must remember" to a test that fails — our own lesson
+  ("a documented safety net is worth nothing without a test that fails when it lapses") applied to
+  *process*. `collect_problems()` reports **every** violation in one pass (W3 config drift):
+  a `.env.example` key with no `Settings` field (stale/renamed), and a new `Settings` field missing
+  from `.env.example`. Carries a **monotonically-shrinking debt baseline** (T8-flavored): the 49
+  currently-undocumented fields are frozen in `KNOWN_UNDOCUMENTED` — not a claim they're fine, a
+  claim the debt cannot GROW; documenting one is free, adding an undocumented one fails. The 4
+  docker-compose-only env keys are exempt. Also flags a missing/future PHASES `(updated …)` stamp.
+  (The STATUS.html gate-mode check is deliberately deferred — matching modes out of hand-written
+  prose is itself drift-prone; the durable fix is giving STATUS.html a data source.)
+- **A15 (`backend/tests/test_schedule_invariants.py`)** pins that the CAS capture window (18 min)
+  is ≥ its beat's tick interval (1 min) — a tick can fall outside a window narrower than the
+  interval, and a missed closing-auction window is **unrecoverable**; a future edit coarsening the
+  beat would otherwise silently never fire. Also pins that the coverage-check's close time equals
+  the capture-window end (so the "window missed" alarm judges the same window it captured).
+
 ### A39 (2026-09-09) — cargo-deny supply-chain gate on the engine/ workspace [Bucket C]
 
 - **`engine/deny.toml`** + **`make engine-audit`** add the missing supply-chain gate on the
