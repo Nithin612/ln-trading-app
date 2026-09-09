@@ -7,6 +7,60 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### U20 (2026-09-09) — the would-block cohort as a contact sheet [Bucket C]
+
+- **`backend/app/services/gate_cohort.py`** (NEW, read-only) + **`GET /api/v1/analytics/cohort/{gate_key}`**:
+  the committed signals a gate WOULD block, each with its levels, realized outcome (status + R), and
+  a daily OHLC window around entry. The would-block set is NOT a parallel predicate (W2) — it reuses
+  the order path's single source of truth `eligibility.preview` with the target gate forced ACTIVE and
+  every other moded gate OFF, so the cohort is exactly what the order path would 409 on that gate.
+  Supported for the signal-only gates (**regime · diversity · R:R**); others (chase/circuit/liquidity/
+  market-regime/sector-RS need live state, sl_atr needs an ATR) return `supported=False` + a reason,
+  never a fabricated set. ⚠ subtlety handled: diversity's verdict returns under the combined
+  `entry_quality` badge, so `_RETURNED_GATE` maps it. `realized_r = pnl% ÷ (|entry−SL|/entry·100)`.
+- **`GET /analytics/gate-register`** gains a `has_cohort` flag (derived from `REGISTER_KEY_TO_GATE` —
+  single owner, no duplicated list) so the registry links only the rows that have a cohort.
+- **`frontend` `CohortPage` (`/analytics/registry/:gateKey`)** — a light-SVG (Decision C) candlestick
+  contact sheet: each blocked trade is a mini price panel with entry/SL/TP levels, the outcome glyph,
+  and its R; a cohort summary carries the count + Σ-R with its sample size (H11/A24). Registry rows now
+  link to it. "Statistics say whether a gate separates winners from losers; a contact sheet says what."
+- ⚠ **Renders empty against the current dev DB** (signals were wiped 09-07) — by design it returns an
+  empty cohort, not an error; tests seed their own signals + OHLC + outcomes.
+- **quant-verifier PASS-WITH-NOTES, fixed:** `scanned` now counts every signal EVALUATED (the loop no
+  longer breaks early at the cohort limit — only the OHLC payload is capped, so `cohort_count/scanned`
+  is an honest block rate); `SUPPORTED_GATES` now DERIVES from `REGISTER_KEY_TO_GATE` (single owner, so
+  `has_cohort` can't disagree with `supported`). Isolation/realized-R/read-only all confirmed correct.
+- **ui-reviewer PASS-WITH-NOTES, in-scope fixed:** the entry/SL/TP level lines were distinguished by
+  colour alone (CVD-unsafe for the safety-critical SL-vs-TP) → now distinct **dash + text label** (E/SL/TP)
+  + colour; direction text moved `bull/bear` → the AA-tuned `profit/loss` tokens; focus-visible rings on
+  the new links; the loading-skeleton grid matches the content grid. ⚠ **Left as a noted follow-up
+  (pre-existing, app-wide):** daybreak `--color-profit`/`--color-bull` were never hardened the way
+  `--color-loss` was (→red-700), so gain-coloured TEXT is ~3.4:1 in daybreak — a token-hardening pass
+  (→emerald-700) is the right fix, out of scope here.
+- Tests: `tests/test_gate_cohort.py` (7 — R:R blocks low-R:R + excludes healthy, diversity blocks the
+  single-factor SRTL archetype, honest count + bounded payload, unsupported gate → supported=False,
+  empty when no signals, auth), Vitest `CohortPage.test.tsx` (3) + a RegistryPage link test. Backend
+  49 (touched set) · full Vitest 427 green · mypy/ruff/eslint/tsc clean.
+
+### U11 (2026-09-09) — NIFTY buy-and-hold benchmark on the backtest equity curve [Bucket C]
+
+- **`backend/app/services/benchmark_curve.py`** (NEW, read-only) + **`GET /api/v1/analytics/benchmark-curve?run_id=`**:
+  a NIFTY buy-and-hold series aligned to a run's equity curve. The curve is per-TRADE and the engine
+  is FROZEN (no dates), so each equity point is dated at its trade's `exit_date` and the benchmark is
+  `NIFTY_close(date_i)/NIFTY_close(window_start)·100` — the two series start together at 100 and the
+  benchmark's endpoint is the full-window buy-and-hold return (the H2 comparison). **Fails closed**
+  (`available=False` + reason) rather than substituting a nearby date; `strategy_return_pct` is still
+  reported. **quant-verifier PASS** (alignment/no-look-ahead/fail-closed all confirmed via REPL).
+- **`frontend` `EquityCurveChart`** gains an optional benchmark series — a dashed line in
+  `--color-text-secondary` (distinguished by dash + `┄` glyph, not colour) with a legend; a new
+  `RunEquityWithBenchmark` fetches it lazily when a run row is expanded and falls back to the bare
+  curve when unavailable. **ui-reviewer FAIL→fixed:** a benchmark-return `toFixed(2)` now goes through
+  `formatPct` (and two pre-existing `toFixed` on touched lines swept to `formatPct`/`formatScore`).
+- ⚠ **`index_ohlcv_1d` is EMPTY in the dev DB** (09-07 wipe) so it renders "unavailable" until an
+  index backfill; tests seed their own index data and prove the aligned series + the fail-closed path.
+- Tests: `tests/test_benchmark_curve.py` (6 — aligned series + returns, non-trading-date as-of,
+  fail-closed with no index data / window before first bar, 404), Vitest `EquityCurveChart.test.tsx` (2).
+
 ### U10/U15/U17 (2026-09-09) — the signal-detail trio: how a confidence was built [Bucket C]
 
 - **`backend/app/signals/confidence_explain.py`** (NEW, read-only reporting) reconstructs a

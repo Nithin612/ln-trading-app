@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query'
+import { Link } from 'react-router-dom'
 import { useAuth } from '@/hooks/useAuth'
 import { analyticsApi, type GateHypothesis } from '@/lib/api/analytics'
 import { PageHeader } from '@/components/layout/PageHeader'
@@ -163,7 +164,18 @@ export function RegistryPage() {
                   {rows.map((h) => (
                     <TableRow key={h.key}>
                       <TableCell>
-                        <div className="font-medium text-(--color-text)">{h.name}</div>
+                        {h.has_cohort ? (
+                          // U20 — drill into the would-block cohort (only gates that have one).
+                          <Link
+                            to={`/analytics/registry/${h.key}`}
+                            className="font-medium text-(--color-info) hover:underline rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-accent) focus-visible:ring-offset-2 focus-visible:ring-offset-(--color-bg)"
+                            title="View the would-block cohort"
+                          >
+                            {h.name}
+                          </Link>
+                        ) : (
+                          <div className="font-medium text-(--color-text)">{h.name}</div>
+                        )}
                         <div className="text-[11px] text-(--color-text-muted) font-mono">
                           {h.key}
                         </div>

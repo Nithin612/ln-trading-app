@@ -157,9 +157,15 @@ unit-less values, direction in the bar aria-label. **W1:** fixed the stale `Side
 counts the U1 nav link had left behind. Reporting-only ⇒ **no recorded number, no clock reset.**
 Backend 28 green · full Vitest 421 · mypy/ruff/eslint/tsc clean. **Bucket C now ~18 of ~60.**
 
-**Remaining U1 cluster: U11 · U19 · U20** — each needs a small NEW analytics endpoint (benchmark
-series · horizon separation · would-block cohort + OHLC), U20 the heavy/design-sensitive one;
-propose + sign-off per the plan doc.
+**U11 + U20 also shipped 2026-09-09** (same session): **U11** = `benchmark_curve.py` +
+`GET /analytics/benchmark-curve` + a dashed benchmark series on `EquityCurveChart` (aligned to the
+frozen per-trade equity curve by exit date, fails closed; quant-verifier PASS, ui-reviewer one
+`toFixed` fixed). **U20** = `gate_cohort.py` + `GET /analytics/cohort/{gate_key}` (would-block set via
+`eligibility.preview`, one gate active — W2) + `has_cohort` on the register + `CohortPage` light-SVG
+contact sheet at `/analytics/registry/:gateKey` (quant-verifier PASS-WITH-NOTES: honest scanned/count +
+single-owner supported set fixed). ⚠ **Both render EMPTY in the current dev DB** (index_ohlcv_1d +
+signals wiped 09-07) — test-backed; a browser smoke needs a dev-DB backfill (user deferred).
+**Remaining U1 cluster: U19 only** (horizon/lag chart — a small new analytics endpoint).
 
 **Remaining Bucket C, with an honest read:** **T4/T5/T6/T8** are already satisfied by the Bucket
 A/B numeric-test discipline (ratios/block-bootstrap/etc.) — adding more would be hollow; **A5/A7/A12**

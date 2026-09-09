@@ -16,6 +16,7 @@ import { DateRangePicker } from '@/components/ui/date-range-picker'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { useToast } from '@/hooks/useToast'
+import { analyticsApi } from '@/lib/api/analytics'
 import { EquityCurveChart } from './EquityCurveChart'
 
 const FACTOR_GROUPS = [
@@ -155,6 +156,29 @@ function sharpeColor(v: string | null): string {
   return 'var(--color-bear)'
 }
 
+// U11 — the run's equity curve with a NIFTY buy-and-hold overlay. Only mounts when the row is
+// expanded (so the benchmark fetch is lazy), and falls back to the bare curve when the benchmark
+// is unavailable (e.g. no index data for the window) — never blocks the curve.
+function RunEquityWithBenchmark({ run }: { run: StrategyRunOut }) {
+  const { accessToken } = useAuth()
+  const { data } = useQuery({
+    queryKey: ['benchmark-curve', run.id],
+    queryFn: () => analyticsApi.getBenchmarkCurve(run.id, accessToken ?? ''),
+    enabled: accessToken != null,
+    staleTime: 60_000,
+  })
+  const available = data?.available ?? false
+  return (
+    <EquityCurveChart
+      data={run.equity_curve!}
+      label={run.name}
+      benchmark={available ? data!.points : undefined}
+      benchmarkLabel={available ? `${data!.symbol} buy & hold` : undefined}
+      benchmarkReturnPct={available ? data!.benchmark_return_pct ?? undefined : undefined}
+    />
+  )
+}
+
 function RunRow({
   run,
   onDelete,
@@ -214,7 +238,7 @@ function RunRow({
           <td colSpan={8} className="px-4 py-3">
             <div className="flex flex-col gap-3">
               {run.equity_curve && run.equity_curve.length > 1 && (
-                <EquityCurveChart data={run.equity_curve} label={run.name} />
+                <RunEquityWithBenchmark run={run} />
               )}
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
                 <div>

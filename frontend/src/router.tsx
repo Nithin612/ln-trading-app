@@ -4,7 +4,7 @@ import { RequireAdmin, RequireAuth } from '@/components/auth/ProtectedRoute'
 import { LoginPage } from '@/pages/LoginPage'
 // The shell + auth load eagerly; every page is a lazy chunk (see lazyPages).
 import {
-  CategoriesPage, DashboardPage, FiiDiiPage, FilingsPage, FoPage, GoLivePage, JournalPage,
+  CategoriesPage, CohortPage, DashboardPage, FiiDiiPage, FilingsPage, FoPage, GoLivePage, JournalPage,
   KiteConnectPage, LiveSignalsPage, OutcomesPage, PortfolioPage, PositionsPage, ProfilePage, RegistryPage, ScreenerPage,
   SettingsPage, StockDetailPage, StocksPage, StrategyLabPage, StylePage, TradeHistoryPage,
   UsersPage, WatchlistsPage,
@@ -49,6 +49,7 @@ export const router = createBrowserRouter([
       { path: 'portfolio',             element: <PortfolioPage /> },
       { path: 'analytics/outcomes',    element: <OutcomesPage /> },
       { path: 'analytics/registry',    element: <RegistryPage /> },
+      { path: 'analytics/registry/:gateKey', element: <CohortPage /> },
       {
         path: 'broker/kite',
         element: <RequireAdmin><KiteConnectPage /></RequireAdmin>,

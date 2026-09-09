@@ -7,16 +7,21 @@ never touches scoring, sizing, gating, or backtests.
 """
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Annotated
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from pydantic import BaseModel
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.core.deps import get_current_user, get_db
+from app.models.strategy import StrategyRun
 from app.models.user import User
 from app.schemas.profile import PROFILE_STYLES
+from app.services import benchmark_curve as bc_service
+from app.services import gate_cohort as cohort_service
 from app.services.signal_outcomes import OUTCOME_EPOCH
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -142,6 +147,8 @@ class GateHypothesisOut(BaseModel):
     verdict: str
     counts_as_trial: bool
     review_due: str | None
+    #: U20 — whether a would-block cohort (the /cohort/{key} drill-down) exists for this gate.
+    has_cohort: bool
 
 
 class GateRegisterResponse(BaseModel):
@@ -183,7 +190,152 @@ async def gate_register_view(
                 verdict=h.verdict,
                 counts_as_trial=h.counts_as_trial,
                 review_due=h.review_due,
+                has_cohort=h.key in cohort_service.REGISTER_KEY_TO_GATE,
             )
             for h in gr.REGISTER
+        ],
+    )
+
+
+# --------------------------------------------------------------------------- #
+# U11 — the NIFTY buy-and-hold benchmark as a series on a backtest equity curve #
+# --------------------------------------------------------------------------- #
+# H2/U2: a benchmark in its own section gets skipped; one on the same curve cannot be. The equity
+# curve is per-trade and the engine is FROZEN (no dates), so the benchmark is aligned to each
+# trade's exit date (see app/services/benchmark_curve). Read-only; fails CLOSED to available=False
+# rather than substituting a nearby date. Empty until index_ohlcv_1d is populated.
+
+
+class BenchmarkCurveResponse(BaseModel):
+    run_id: int
+    symbol: str
+    available: bool
+    #: Why the benchmark could not be built (index absent, no bar before the window start, …).
+    reason: str | None
+    #: Benchmark equity indexed to 100 at the window start, PARALLEL to the run's `equity_curve`.
+    #: Empty when `available` is False.
+    points: list[float]
+    benchmark_return_pct: float | None
+    strategy_return_pct: float | None
+
+
+@router.get("/benchmark-curve", response_model=BenchmarkCurveResponse)
+async def benchmark_curve_view(
+    run_id: int,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_user)],
+) -> BenchmarkCurveResponse:
+    """NIFTY buy-and-hold aligned to a backtest run's equity curve (U11). 404 if the run is unknown;
+    otherwise a series (or an honest `available=False` + reason when it can't be made)."""
+    run = await db.get(StrategyRun, run_id)
+    if run is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Run not found")
+    bc = await bc_service.compute_benchmark_curve(
+        db, equity_curve=run.equity_curve, trades_json=run.trades_json
+    )
+    return BenchmarkCurveResponse(
+        run_id=run_id,
+        symbol=bc.symbol,
+        available=bc.available,
+        reason=bc.reason,
+        points=bc.points,
+        benchmark_return_pct=bc.benchmark_return_pct,
+        strategy_return_pct=bc.strategy_return_pct,
+    )
+
+
+# --------------------------------------------------------------------------- #
+# U20 — the would-block cohort of a gate, as chartable trades                   #
+# --------------------------------------------------------------------------- #
+# Statistics say WHETHER a gate separates winners from losers; a contact sheet says WHAT. The
+# cohort reuses the order path's own verdict (eligibility.preview, one gate active) — no parallel
+# predicate (W2). Read-only; empty when signals are absent (the current dev DB). See gate_cohort.
+
+
+class CohortBar(BaseModel):
+    t: str  # ISO date
+    o: float
+    h: float
+    low: float
+    c: float
+
+
+class CohortTradeOut(BaseModel):
+    signal_id: str
+    symbol: str
+    direction: str
+    entry: float
+    stop_loss: float
+    take_profit: float
+    confidence_pct: int
+    reason: str
+    outcome_status: str | None
+    realized_pnl_pct: float | None
+    realized_r: float | None
+    entry_date: str
+    bars: list[CohortBar]
+
+
+class GateCohortResponse(BaseModel):
+    gate_key: str            # the gate_register key requested
+    gate: str                # the eligibility gate slug ("" when unsupported)
+    gate_status: str | None  # the register status (reverted / shadow / …), if the key is known
+    supported: bool
+    reason: str | None
+    scanned: int
+    cohort_count: int
+    cohort_realized_r: float | None
+    cohort_realized_pnl_pct: float | None
+    trades: list[CohortTradeOut]
+
+
+@router.get("/cohort/{gate_key}", response_model=GateCohortResponse)
+async def gate_cohort_view(
+    gate_key: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_user)],
+    limit: Annotated[int, Query(ge=1, le=60)] = 24,
+) -> GateCohortResponse:
+    """The trades a gate WOULD block, each with levels, outcome, and an OHLC window (U20). Supported
+    for the signal-only gates (regime · diversity · R:R); others return supported=False."""
+    from app.services import gate_register as gr
+
+    hyp = gr.get(gate_key)
+    gate_status = hyp.status.value if hyp is not None else None
+    slug = cohort_service.REGISTER_KEY_TO_GATE.get(gate_key)
+    if slug is None:
+        return GateCohortResponse(
+            gate_key=gate_key, gate="", gate_status=gate_status, supported=False,
+            reason=(
+                "no signal-only would-block cohort for this gate "
+                "(needs live state, or unknown key)"
+            ),
+            scanned=0, cohort_count=0, cohort_realized_r=None, cohort_realized_pnl_pct=None,
+            trades=[],
+        )
+
+    cohort = await cohort_service.compute_gate_cohort(
+        db, gate=slug, limit=limit,
+        rr_min=Decimal(str(settings.rr_min)),
+        min_scoring_factors=settings.entry_min_scoring_factors,
+        max_dominant_share=Decimal(str(settings.entry_max_dominant_factor_share)),
+        min_sl_atr_mult=Decimal(str(settings.entry_min_sl_atr_mult)),
+    )
+    return GateCohortResponse(
+        gate_key=gate_key, gate=slug, gate_status=gate_status,
+        supported=cohort.supported, reason=cohort.reason,
+        scanned=cohort.scanned, cohort_count=cohort.cohort_count,
+        cohort_realized_r=cohort.cohort_realized_r,
+        cohort_realized_pnl_pct=cohort.cohort_realized_pnl_pct,
+        trades=[
+            CohortTradeOut(
+                signal_id=t.signal_id, symbol=t.symbol, direction=t.direction,
+                entry=t.entry, stop_loss=t.stop_loss, take_profit=t.take_profit,
+                confidence_pct=t.confidence_pct, reason=t.reason,
+                outcome_status=t.outcome_status, realized_pnl_pct=t.realized_pnl_pct,
+                realized_r=t.realized_r, entry_date=t.entry_date,
+                bars=[CohortBar(t=b.t, o=b.o, h=b.h, low=b.low, c=b.c) for b in t.bars],
+            )
+            for t in cohort.trades
         ],
     )

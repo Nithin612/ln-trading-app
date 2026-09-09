@@ -17,7 +17,7 @@ const mockUser = {
 function hyp(o: Partial<GateHypothesis> & { key: string; name: string }): GateHypothesis {
   return {
     status: 'shadow', prediction: 'p', bar: 'b', stands_at: 's', verdict: 'v',
-    counts_as_trial: true, review_due: null, ...o,
+    counts_as_trial: true, review_due: null, has_cohort: false, ...o,
   }
 }
 
@@ -29,7 +29,7 @@ function makeResponse(o: Partial<GateRegisterResponse> = {}): GateRegisterRespon
     counts: { active: 1, shadow: 3, reverted: 2 },
     due_for_review: ['spread_width_r2'],
     hypotheses: [
-      hyp({ key: 'regime_adx', name: 'Regime gate', status: 'reverted', verdict: 'blocked the only profitable cohort' }),
+      hyp({ key: 'regime_adx', name: 'Regime gate', status: 'reverted', verdict: 'blocked the only profitable cohort', has_cohort: true }),
       hyp({ key: 'entry_diversity', name: 'Entry diversity', status: 'active', counts_as_trial: false }),
     ],
     ...o,
@@ -63,6 +63,16 @@ describe('RegistryPage', () => {
     expect(screen.getByText(/blocked the only profitable cohort/)).toBeInTheDocument()
     // a hard rule shows as not consuming a trial
     expect(screen.getByText('rule / rail')).toBeInTheDocument()
+  })
+
+  it('links a gate with a would-block cohort to its drill-down (U20), plain otherwise', async () => {
+    vi.spyOn(analyticsApiModule.analyticsApi, 'getGateRegister').mockResolvedValue(makeResponse())
+    setup()
+    await waitFor(() => expect(screen.getByText('Regime gate')).toBeInTheDocument())
+    const link = screen.getByRole('link', { name: 'Regime gate' })
+    expect(link).toHaveAttribute('href', '/analytics/registry/regime_adx')
+    // entry_diversity has no cohort in this mock → not a link
+    expect(screen.queryByRole('link', { name: 'Entry diversity' })).not.toBeInTheDocument()
   })
 
   it('shows an empty state when the register has no hypotheses', async () => {

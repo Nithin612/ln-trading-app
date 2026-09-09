@@ -1,7 +1,10 @@
 # U1 detail/cohort cluster — API + layout proposal (for sign-off)
 
 **Status:** APPROVED (A/B/C/D as recommended, user 2026-09-09) · branch `feature/pre-cycle2-hardening`
-**Progress:** ✅ Trio (U10/U15/U17) BUILT 2026-09-09 (Decision A = backend helper). U11 · U19 · U20 pending.
+**Progress:** ✅ Trio (U10/U15/U17) BUILT · ✅ U11 BUILT (Decision B = backtest curve) · ✅ U20 BUILT
+(Decision C = light SVG contact sheet) — all 2026-09-09. **U19 is the only remaining item.**
+⚠ U11/U20 render empty against the current dev DB (index_ohlcv_1d + signals wiped 09-07); code is
+fully test-backed (tests seed their own data), a browser smoke waits on a dev-DB backfill (user deferred).
 **Scope:** U10 · U15 · U17 (signal-detail trio) · U20 (would-block cohort as charts) ·
 U11 (benchmark on every curve) · U19 (horizon/lag). The U1 *page* already shipped
 (`/analytics/registry` + `GET /analytics/gate-register`); this is the explorable half.
@@ -190,9 +193,13 @@ Mean R by holding day — flagged vs passed
 1. **Trio (U10+U15+U17)** — ✅ DONE 2026-09-09. `app/signals/confidence_explain.py` (read-only) +
    `confidence_breakdown` on `GET /signals/{id}` + the redesigned `SignalDetailModal`. Tests green
    (backend 26 · Vitest 421); quant-verifier + ui-reviewer run at build.
-2. **U11** — ~0.5–1 d (+0.5 d if the book curve, Decision B). benchmark-curve endpoint + a Line.
-3. **U19** — ~0.5–1 d. horizon endpoint + Recharts, on the gate drill-down.
-4. **U20** — ~1.5–2 d. Heaviest/design-sensitive (Decision C). cohort endpoint + contact-sheet.
+2. **U11** — ✅ DONE 2026-09-09. `app/services/benchmark_curve.py` + `GET /analytics/benchmark-curve`
+   + a dashed benchmark series on `EquityCurveChart` (lazy fetch on run-row expand). quant-verifier PASS;
+   ui-reviewer fixed (`toFixed`→`formatPct`). Backtest curve only (book curve not built — Decision B).
+3. **U19** — ~0.5–1 d (REMAINING). horizon endpoint + Recharts, on the gate drill-down.
+4. **U20** — ✅ DONE 2026-09-09. `app/services/gate_cohort.py` (reuses `eligibility.preview`, W2) +
+   `GET /analytics/cohort/{gate_key}` + `has_cohort` on the register + `CohortPage` light-SVG contact
+   sheet at `/analytics/registry/:gateKey`. Supported for regime/diversity/rr (signal-only gates).
 
 Each ships with tests + CHANGELOG + the doc-sync ritual; no recorded number moves.
 

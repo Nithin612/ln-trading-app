@@ -31,3 +31,4 @@ export const LiveSignalsPage = lazy(() => named(import('@/features/alerts/LiveSi
 export const GoLivePage = lazy(() => named(import('@/features/golive/GoLivePage'), 'GoLivePage'))
 export const OutcomesPage = lazy(() => named(import('@/features/analytics/OutcomesPage'), 'OutcomesPage'))
 export const RegistryPage = lazy(() => named(import('@/features/analytics/RegistryPage'), 'RegistryPage'))
+export const CohortPage = lazy(() => named(import('@/features/analytics/CohortPage'), 'CohortPage'))
