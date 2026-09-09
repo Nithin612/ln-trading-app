@@ -37,8 +37,8 @@ sub-items (U10/U15/U17/U20/U11/U19 — DSR benchmarks, need more API) + lower-pr
 A1/A41). **None attacks profitability** (both levers spent). **No decision blocks cycle-2 start; nothing
 here changes a recorded number, so no clock reset.**
 
-**▶▶ 2026-09-09 (later, user-directed) — U1 detail/cohort cluster: TRIO + U11 + U20 BUILT + reviewed;
-only U19 remains** (plan + sign-off: [`phase-U1-detail-cohort-plan.md`](phases/phase-U1-detail-cohort-plan.md)).
+**▶▶ 2026-09-09 (later, user-directed) — ✅ U1 detail/cohort cluster COMPLETE: TRIO + U11 + U20 + U19
+all BUILT + reviewed** (plan + sign-off: [`phase-U1-detail-cohort-plan.md`](phases/phase-U1-detail-cohort-plan.md)).
 **Trio (U10/U15/U17):** `confidence_explain.py` (read-only, frozen engine untouched) →
 `confidence_breakdown` on `GET /signals/{id}` → redesigned `SignalDetailModal` (arithmetic w/ the
 abstainer-divisor SRTL surface · vote bar · named evidence + horizon). quant-verifier PASS (1 HIGH fixed:
@@ -49,9 +49,17 @@ quant-verifier PASS · ui-reviewer (1 `toFixed` fixed). **U20:** `gate_cohort.py
 `GET /analytics/cohort/{gate_key}` (would-block set via `eligibility.preview`, one gate active — W2;
 diversity→`entry_quality` badge mapped) + `has_cohort` on the register + `CohortPage` light-SVG contact
 sheet at `/analytics/registry/:gateKey`. quant-verifier PASS-WITH-NOTES (honest scanned/count + single-owner
-supported set fixed). ⚠ **U11/U20 render EMPTY against the current dev DB** (`index_ohlcv_1d` + `signals`
-wiped 09-07) — fully test-backed; a browser smoke waits on a dev-DB backfill (user deferred). All
-reporting-only ⇒ **no recorded number, no clock reset.** **Bucket C now ~20 of ~60.**
+supported set fixed) · ui-reviewer PASS-WITH-NOTES (level lines no longer colour-alone, direction→profit/loss,
+focus rings). **U19:** `gate_horizon.py` + `GET /analytics/cohort/{gate_key}/horizon` (reuses the extracted
+`gate_cohort.split_signals` — W2) + a `CohortPage` horizon section: mean-R + %-reached-+1R **by holding day,
+flagged vs passed** (Decision D — the horizon-finding reading). quant-verifier PASS-WITH-NOTES (⚠ horizon
+starts at **N+1** — the entry candle is excluded, a nightly entry being its close; OHLC filtered
+`is_complete`) · ui-reviewer PASS. ⚠ **U11/U20/U19 render EMPTY against the current dev DB** (`index_ohlcv_1d`
++ `signals` wiped 09-07) — fully test-backed; a browser smoke waits on a dev-DB backfill (user deferred).
+All reporting-only ⇒ **no recorded number, no clock reset. Bucket C now ~21 of ~60.**
+⚠ **Two pre-existing app-wide token-hardening follow-ups surfaced (not fixed — out of scope):** daybreak
+`--color-profit`/`--color-bull` (~3.4:1 as text) and `--color-chart-text` axis ticks (~3.3–4.3:1) are
+sub-AA; each wants a token bump (mirroring the `--color-loss`→red-700 precedent), app-wide not per-component.
 
 **▶▶ 2026-09-08 — D3 RESOLVED by a free-source spike: NO vendor needed. The Q0 decision queue is CLEARED for cycle-2 start — D2's final call is PARKED to cycle-2 end (user 2026-09-08), D6 is post-cycle-2.**
 The long-standing "`market_cap` has no writer → pick a vendor" **keystone is RETIRED.** Spike
@@ -816,25 +824,28 @@ the calendar beat + H7/progress changes apply on the next `make worker` / `make 
 smoke-tested). Detail: CHANGELOG (Unreleased) + the 2026-09-09 block in `pre-cycle2-queue.md` + the
 `bucket_c_batch_2026-09-09` memory.
 
-**▶▶ 2026-09-09 (later, user-directed) — U1 DETAIL/COHORT: TRIO + U11 + U20 BUILT + reviewed; only U19 left.**
+**▶▶ 2026-09-09 (later, user-directed) — ✅ U1 DETAIL/COHORT CLUSTER COMPLETE: trio + U11 + U20 + U19.**
 Plan: [`docs/phases/phase-U1-detail-cohort-plan.md`](phases/phase-U1-detail-cohort-plan.md) (A/B/C/D approved).
-Shipped this session: **trio** (`confidence_explain.py` → `confidence_breakdown` on `GET /signals/{id}` → the
-redesigned `SignalDetailModal`: U10 arithmetic/abstainer-divisor · U17 vote bar · U15 evidence+horizon);
-**U11** (`benchmark_curve.py` + `GET /analytics/benchmark-curve` + a dashed benchmark series on
-`EquityCurveChart`); **U20** (`gate_cohort.py` + `GET /analytics/cohort/{gate_key}` reusing
-`eligibility.preview` — W2 — + `has_cohort` on the register + `CohortPage` light-SVG contact sheet at
-`/analytics/registry/:gateKey`). Reviews: quant-verifier PASS ×3 (trio HIGH `sum()` parity fixed; U20
-scanned/count + single-owner supported-set fixed) · ui-reviewer (trio PASS; U11 one `toFixed` fixed; U20
-pending as of this write). Backend + full Vitest 427 green · mypy/ruff/eslint/tsc clean. **All reporting-only
-⇒ no recorded number, no clock reset.** ⚠ **U11/U20 render EMPTY against the current dev DB** (index_ohlcv_1d
-+ signals wiped 09-07) — code is test-backed; a browser smoke needs a dev-DB backfill (user deferred).
-**Remaining in the cluster: U19 only** (a horizon endpoint + a Recharts chart on the gate drill-down).
+Shipped: **trio** (`confidence_explain.py` → `confidence_breakdown` on `GET /signals/{id}` → redesigned
+`SignalDetailModal`); **U11** (`benchmark_curve.py` + `GET /analytics/benchmark-curve` + a dashed benchmark
+series on `EquityCurveChart`); **U20** (`gate_cohort.py` + `GET /analytics/cohort/{gate_key}` reusing
+`eligibility.preview` — W2, extracted to `split_signals` — + `has_cohort` on the register + `CohortPage`
+contact sheet at `/analytics/registry/:gateKey`); **U19** (`gate_horizon.py` +
+`GET /analytics/cohort/{gate_key}/horizon` + a `CohortPage` horizon section — mean-R + %-reached-+1R by
+holding day, flagged vs passed). Reviews: quant-verifier PASS ×4 (trio HIGH `sum()` parity; U20 scanned/count
++ single-owner set; U19 horizon N+1 + `is_complete`) · ui-reviewer PASS ×4 (U11 `toFixed`; U20 colour-alone
+lines + direction tokens + focus rings; U19 clean). **All reporting-only ⇒ no recorded number, no clock
+reset.** ⚠ **U11/U20/U19 render EMPTY against the current dev DB** (index_ohlcv_1d + signals wiped 09-07) —
+fully test-backed; a browser smoke needs a dev-DB backfill (user deferred). ⚠ **Two pre-existing app-wide
+token-hardening follow-ups surfaced (out of scope, not fixed): daybreak `--color-profit`/`--color-bull` and
+`--color-chart-text` are sub-AA as text — a token bump each (mirroring `--color-loss`→red-700).**
 
-**▶▶ WHAT'S NEXT — the safe/non-design Bucket C is exhausted; the U1 cluster is all but U19 done.**
-T4/T5/T6/T8 are already covered by the Bucket A/B numeric-test discipline; A5/A7/A12 by the existing
-dated-incident doc practice; A1/A17 need an LLM (none exists); A41 waits on P7; A14/A4 are low-value/risky.
-**The remaining U1 value is U19** (a horizon/lag correlation chart — a small new analytics endpoint, design
-per the plan doc). Otherwise it is Phase-7 / cycle-2-entry territory (CAS-2 re-accrual, MCE 5b+6, tuning).
+**▶▶ WHAT'S NEXT — Bucket C's design-sensitive UI is DONE; the safe/non-design remainder is exhausted.**
+The whole U1 detail/cohort cluster is shipped. T4/T5/T6/T8 are already covered by the Bucket A/B numeric-test
+discipline; A5/A7/A12 by the existing dated-incident doc practice; A1/A17 need an LLM (none exists); A41 waits
+on P7; A14/A4 are low-value/risky. **The only cheap UI follow-ups left are the two app-wide AA token bumps
+above** (daybreak profit/bull, chart-text). Otherwise it is **Phase-7 / cycle-2-entry territory** (CAS-2
+re-accrual, MCE 5b+6, tuning, the dev-DB backfill that would make these analytics surfaces show real data).
 Nothing left attacks profitability (both levers spent, D1/D5).
 
 **▶▶ NEW WORKING BRANCH: `feature/pre-cycle2-hardening`** (created 2026-09-06 with user

@@ -1,9 +1,9 @@
 # U1 detail/cohort cluster — API + layout proposal (for sign-off)
 
 **Status:** APPROVED (A/B/C/D as recommended, user 2026-09-09) · branch `feature/pre-cycle2-hardening`
-**Progress:** ✅ Trio (U10/U15/U17) BUILT · ✅ U11 BUILT (Decision B = backtest curve) · ✅ U20 BUILT
-(Decision C = light SVG contact sheet) — all 2026-09-09. **U19 is the only remaining item.**
-⚠ U11/U20 render empty against the current dev DB (index_ohlcv_1d + signals wiped 09-07); code is
+**Progress:** ✅ COMPLETE — Trio (U10/U15/U17) · U11 (Decision B) · U20 (Decision C) · U19 (Decision D)
+all BUILT + reviewed 2026-09-09. **The whole detail/cohort cluster is done.**
+⚠ U11/U20/U19 render empty against the current dev DB (index_ohlcv_1d + signals wiped 09-07); code is
 fully test-backed (tests seed their own data), a browser smoke waits on a dev-DB backfill (user deferred).
 **Scope:** U10 · U15 · U17 (signal-detail trio) · U20 (would-block cohort as charts) ·
 U11 (benchmark on every curve) · U19 (horizon/lag). The U1 *page* already shipped
@@ -196,7 +196,10 @@ Mean R by holding day — flagged vs passed
 2. **U11** — ✅ DONE 2026-09-09. `app/services/benchmark_curve.py` + `GET /analytics/benchmark-curve`
    + a dashed benchmark series on `EquityCurveChart` (lazy fetch on run-row expand). quant-verifier PASS;
    ui-reviewer fixed (`toFixed`→`formatPct`). Backtest curve only (book curve not built — Decision B).
-3. **U19** — ~0.5–1 d (REMAINING). horizon endpoint + Recharts, on the gate drill-down.
+3. **U19** — ✅ DONE 2026-09-09 (Decision D). `app/services/gate_horizon.py` (reuses the extracted
+   `gate_cohort.split_signals`, W2) + `GET /analytics/cohort/{gate_key}/horizon` + a horizon section
+   on `CohortPage` (mean-R-by-day + %-reached-+1R, flagged vs passed, zero ref). Traces R forward from
+   entry over daily bars, winsorized ±WINSOR_R.
 4. **U20** — ✅ DONE 2026-09-09. `app/services/gate_cohort.py` (reuses `eligibility.preview`, W2) +
    `GET /analytics/cohort/{gate_key}` + `has_cohort` on the register + `CohortPage` light-SVG contact
    sheet at `/analytics/registry/:gateKey`. Supported for regime/diversity/rr (signal-only gates).

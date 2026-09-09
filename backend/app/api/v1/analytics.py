@@ -22,6 +22,7 @@ from app.models.user import User
 from app.schemas.profile import PROFILE_STYLES
 from app.services import benchmark_curve as bc_service
 from app.services import gate_cohort as cohort_service
+from app.services import gate_horizon as horizon_service
 from app.services.signal_outcomes import OUTCOME_EPOCH
 
 router = APIRouter(prefix="/analytics", tags=["analytics"])
@@ -337,5 +338,76 @@ async def gate_cohort_view(
                 bars=[CohortBar(t=b.t, o=b.o, h=b.h, low=b.low, c=b.c) for b in t.bars],
             )
             for t in cohort.trades
+        ],
+    )
+
+
+# --------------------------------------------------------------------------- #
+# U19 — the holding-day horizon at which a gate separates winners from losers   #
+# --------------------------------------------------------------------------- #
+# Decision D: mean R (and %-reaching-+1R) BY HOLDING DAY, flagged vs passed. Renders the horizon
+# finding (we grade multi-day trades on a one-day clock) per gate. Reuses the cohort's isolation
+# split (W2). Read-only; empty when signals are absent.
+
+
+class HorizonPointOut(BaseModel):
+    day: int
+    flagged_mean_r: float | None
+    passed_mean_r: float | None
+    flagged_hit_ge_1r: float | None
+    passed_hit_ge_1r: float | None
+    flagged_n: int
+    passed_n: int
+
+
+class GateHorizonResponse(BaseModel):
+    gate_key: str
+    gate: str
+    gate_status: str | None
+    supported: bool
+    reason: str | None
+    flagged_total: int
+    passed_total: int
+    points: list[HorizonPointOut]
+
+
+@router.get("/cohort/{gate_key}/horizon", response_model=GateHorizonResponse)
+async def gate_horizon_view(
+    gate_key: str,
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_user)],
+) -> GateHorizonResponse:
+    """Flagged-vs-passed mean R + %-reaching-+1R by holding day for a gate (U19). Supported for the
+    signal-only gates; others return supported=False."""
+    from app.services import gate_register as gr
+
+    hyp = gr.get(gate_key)
+    gate_status = hyp.status.value if hyp is not None else None
+    slug = cohort_service.REGISTER_KEY_TO_GATE.get(gate_key)
+    if slug is None:
+        return GateHorizonResponse(
+            gate_key=gate_key, gate="", gate_status=gate_status, supported=False,
+            reason="no signal-only horizon for this gate (needs live state, or unknown key)",
+            flagged_total=0, passed_total=0, points=[],
+        )
+
+    h = await horizon_service.compute_gate_horizon(
+        db, gate=slug,
+        rr_min=Decimal(str(settings.rr_min)),
+        min_scoring_factors=settings.entry_min_scoring_factors,
+        max_dominant_share=Decimal(str(settings.entry_max_dominant_factor_share)),
+        min_sl_atr_mult=Decimal(str(settings.entry_min_sl_atr_mult)),
+    )
+    return GateHorizonResponse(
+        gate_key=gate_key, gate=slug, gate_status=gate_status,
+        supported=h.supported, reason=h.reason,
+        flagged_total=h.flagged_total, passed_total=h.passed_total,
+        points=[
+            HorizonPointOut(
+                day=p.day, flagged_mean_r=p.flagged_mean_r, passed_mean_r=p.passed_mean_r,
+                flagged_hit_ge_1r=p.flagged_hit_ge_1r, passed_hit_ge_1r=p.passed_hit_ge_1r,
+                flagged_n=p.flagged_n, passed_n=p.passed_n,
+            )
+            for p in h.points
         ],
     )

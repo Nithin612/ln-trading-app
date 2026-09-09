@@ -7,6 +7,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### U19 (2026-09-09) — the holding-day horizon: does a gate separate winners from losers? [Bucket C]
+
+- **`backend/app/services/gate_horizon.py`** (NEW, read-only) + **`GET /api/v1/analytics/cohort/{gate_key}/horizon`**:
+  for a gate, split the scanned signals into the set it would BLOCK (flagged) vs LET THROUGH (passed) —
+  reusing the cohort's isolation split — then trace each signal's realized R forward day by day from
+  entry: `R_d = direction·(close_{entry+d} − entry)/|entry−SL|` (winsorized ±`WINSOR_R`), and
+  "reached +1R by day d" from the favourable excursion. Reports **mean R and %-reaching-+1R by holding
+  day, flagged vs passed** (Decision D). Renders the horizon finding (we grade multi-day trades on a
+  one-day clock — entry-day ≥1R 12% vs +1R typically d+3) as a per-gate chart.
+- **`gate_cohort.py` refactor (W2):** the would-block predicate is now one function, `split_signals`
+  (+ `SplitResult`), shared by U20's cohort and U19's horizon — so there is a single implementation of
+  "which signals would this gate block". The cohort's honest-count/bounded-payload behaviour is
+  preserved (verified: U20's 7 tests still green).
+- **`frontend` `CohortPage`** gains a **horizon section** on the gate drill-down: two Recharts line
+  charts (mean R by holding day; % reaching +1R by holding day), each **flagged vs passed** —
+  distinguished by colour AND dash (passed is dashed) with a shared AA-neutral legend, and a zero
+  reference line on the R chart. Sample sizes travel with the statistic (H11/A24).
+- ⚠ **Renders empty against the current dev DB** (signals wiped 09-07) — points come back with `None`
+  means; tests seed their own signals + forward OHLC.
+- **quant-verifier PASS-WITH-NOTES, both MEDIUMs fixed:** the horizon now starts at the first
+  **tradeable** session (N+1) — the entry candle was N and a nightly entry is its close, so day-0 R was
+  structurally 0 and day-0 "+1R" peeked at the entry bar's own high/low (a same-bar artifact); and the
+  OHLC load now filters `is_complete` so a forming daily bar can't enter the horizon (matching the
+  excursion loader's no-repaint convention). R math / hit convention / read-only / the refactor all
+  confirmed correct (REPL). Denominator conventions documented (`flagged_total` vs per-day `n`).
+- **ui-reviewer PASS** — no diff-failing findings (tokens, color+dash+label distinction, contrast,
+  formatters, states all clean); added `min-w-0` for narrow-viewport Recharts shrink. ⚠ Surfaced a
+  SECOND pre-existing app-wide token gap (`--color-chart-text` axis ticks ~3.3–4.3:1, sub-AA) — like
+  the daybreak `profit`/`bull` gap, a token-hardening pass, out of scope here.
+- Tests: `tests/test_gate_horizon.py` (4 — a deterministic flagged-vs-passed R-by-day path from the
+  first post-entry session incl. the +1R-hit day, unsupported gate, empty), Vitest `CohortPage.test.tsx`
+  (+1 horizon-section test). **U19 completes the U1 detail/cohort cluster.**
+
 ### U20 (2026-09-09) — the would-block cohort as a contact sheet [Bucket C]
 
 - **`backend/app/services/gate_cohort.py`** (NEW, read-only) + **`GET /api/v1/analytics/cohort/{gate_key}`**:

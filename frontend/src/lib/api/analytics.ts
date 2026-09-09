@@ -93,6 +93,28 @@ export interface GateCohortResponse {
   trades: CohortTrade[]
 }
 
+// U19 — holding-day horizon: mean R + %-reaching-+1R by day, flagged vs passed.
+export interface HorizonPoint {
+  day: number
+  flagged_mean_r: number | null
+  passed_mean_r: number | null
+  flagged_hit_ge_1r: number | null // fraction (0-1)
+  passed_hit_ge_1r: number | null
+  flagged_n: number
+  passed_n: number
+}
+
+export interface GateHorizonResponse {
+  gate_key: string
+  gate: string
+  gate_status: string | null
+  supported: boolean
+  reason: string | null
+  flagged_total: number
+  passed_total: number
+  points: HorizonPoint[]
+}
+
 export const analyticsApi = {
   getOutcomes(token: string): Promise<OutcomeAnalyticsResponse> {
     return api.get<OutcomeAnalyticsResponse>('/analytics/outcomes', token)
@@ -105,5 +127,11 @@ export const analyticsApi = {
   },
   getGateCohort(gateKey: string, token: string): Promise<GateCohortResponse> {
     return api.get<GateCohortResponse>(`/analytics/cohort/${encodeURIComponent(gateKey)}`, token)
+  },
+  getGateHorizon(gateKey: string, token: string): Promise<GateHorizonResponse> {
+    return api.get<GateHorizonResponse>(
+      `/analytics/cohort/${encodeURIComponent(gateKey)}/horizon`,
+      token,
+    )
   },
 }

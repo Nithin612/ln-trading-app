@@ -165,7 +165,13 @@ frozen per-trade equity curve by exit date, fails closed; quant-verifier PASS, u
 contact sheet at `/analytics/registry/:gateKey` (quant-verifier PASS-WITH-NOTES: honest scanned/count +
 single-owner supported set fixed). ⚠ **Both render EMPTY in the current dev DB** (index_ohlcv_1d +
 signals wiped 09-07) — test-backed; a browser smoke needs a dev-DB backfill (user deferred).
-**Remaining U1 cluster: U19 only** (horizon/lag chart — a small new analytics endpoint).
+**U19 also shipped 2026-09-09** (completing the cluster): `gate_horizon.py` +
+`GET /analytics/cohort/{gate_key}/horizon` (reuses the extracted `gate_cohort.split_signals`, W2) + a
+`CohortPage` horizon section — mean-R + %-reached-+1R by holding day, flagged vs passed. quant-verifier
+PASS-WITH-NOTES (horizon starts at N+1, the entry candle excluded; OHLC filtered `is_complete`) ·
+ui-reviewer PASS. **✅ The whole U1 detail/cohort cluster is DONE.** ⚠ Two pre-existing app-wide AA
+token-hardening follow-ups surfaced (daybreak `--color-profit`/`--color-bull`, `--color-chart-text`) —
+out of scope, each a token bump mirroring `--color-loss`→red-700.
 
 **Remaining Bucket C, with an honest read:** **T4/T5/T6/T8** are already satisfied by the Bucket
 A/B numeric-test discipline (ratios/block-bootstrap/etc.) — adding more would be hollow; **A5/A7/A12**

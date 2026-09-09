@@ -110,6 +110,51 @@ def _realized_r(pnl_pct: Decimal | None, entry: Decimal, stop: Decimal) -> float
     return round(float(pnl_pct / risk_pct), 3)
 
 
+@dataclass(frozen=True)
+class SplitResult:
+    """The scanned signal universe split by whether ONE isolated gate would block it. Shared by the
+    cohort (U20) and the horizon (U19), so the would-block predicate has ONE implementation (W2)."""
+
+    scanned: int
+    flagged: list[tuple[Signal, str]]   # (signal, verbatim order-path reason)
+    passed: list[Signal]                # the complement — the gate would let these through
+
+
+async def split_signals(
+    db: AsyncSession,
+    *,
+    gate: str,
+    rr_min: Decimal,
+    min_scoring_factors: int,
+    max_dominant_share: Decimal,
+    min_sl_atr_mult: Decimal,
+) -> SplitResult:
+    """Split the most-recent `_SCAN_LIMIT` committed signals into the set `gate` would block vs let
+    through, via the order path's verdict (`eligibility.preview`, this gate active + others off)."""
+    modes = _modes_isolating(gate)
+    expected_gate = _RETURNED_GATE.get(gate, gate)
+    sigs = list(
+        (
+            await db.execute(
+                select(Signal).order_by(Signal.created_at.desc()).limit(_SCAN_LIMIT)
+            )
+        ).scalars()
+    )
+    flagged: list[tuple[Signal, str]] = []
+    passed: list[Signal] = []
+    for s in sigs:
+        v = eligibility.preview(
+            s, modes=modes, atr=None, market_price=None, fill_price=None, allow_offmarket=True,
+            rr_min=rr_min, min_scoring_factors=min_scoring_factors,
+            max_dominant_share=max_dominant_share, min_sl_atr_mult=min_sl_atr_mult,
+        )
+        if v.blocked and v.gate == expected_gate:
+            flagged.append((s, v.reason or ""))
+        else:
+            passed.append(s)
+    return SplitResult(scanned=len(sigs), flagged=flagged, passed=passed)
+
+
 async def compute_gate_cohort(
     db: AsyncSession,
     *,
@@ -132,25 +177,11 @@ async def compute_gate_cohort(
             scanned=0, cohort_count=0, cohort_realized_r=None, cohort_realized_pnl_pct=None,
         )
 
-    modes = _modes_isolating(gate)
-    expected_gate = _RETURNED_GATE.get(gate, gate)
-    sigs = list(
-        (
-            await db.execute(
-                select(Signal).order_by(Signal.created_at.desc()).limit(_SCAN_LIMIT)
-            )
-        ).scalars()
+    split = await split_signals(
+        db, gate=gate, rr_min=rr_min, min_scoring_factors=min_scoring_factors,
+        max_dominant_share=max_dominant_share, min_sl_atr_mult=min_sl_atr_mult,
     )
-
-    blocked: list[tuple[Signal, str]] = []
-    for s in sigs:
-        v = eligibility.preview(
-            s, modes=modes, atr=None, market_price=None, fill_price=None, allow_offmarket=True,
-            rr_min=rr_min, min_scoring_factors=min_scoring_factors,
-            max_dominant_share=max_dominant_share, min_sl_atr_mult=min_sl_atr_mult,
-        )
-        if v.blocked and v.gate == expected_gate:
-            blocked.append((s, v.reason or ""))
+    blocked = split.flagged
 
     # EVERY loaded signal is evaluated (no early break), so `scanned` = the true evaluated
     # denominator and `cohort_count / scanned` is an honest block rate (quant-verifier A24). Only
@@ -169,7 +200,7 @@ async def compute_gate_cohort(
     trades = await _attach(db, blocked[:limit])
     return GateCohort(
         gate=gate, supported=True, reason=None,
-        scanned=len(sigs), cohort_count=len(blocked),
+        scanned=split.scanned, cohort_count=len(blocked),
         cohort_realized_r=round(sum(r_vals), 3) if r_vals else None,
         cohort_realized_pnl_pct=round(sum(pnl_vals), 3) if pnl_vals else None,
         trades=trades,

@@ -1,8 +1,18 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link, useParams } from 'react-router-dom'
+import {
+  CartesianGrid,
+  Line,
+  LineChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 
 import { useAuth } from '@/hooks/useAuth'
-import { analyticsApi, type CohortTrade } from '@/lib/api/analytics'
+import { analyticsApi, type CohortTrade, type HorizonPoint } from '@/lib/api/analytics'
 import { PageHeader } from '@/components/layout/PageHeader'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Button } from '@/components/ui/button'
@@ -143,6 +153,143 @@ function TradeCard({ trade }: { trade: CohortTrade }) {
   )
 }
 
+// U19 — one metric's line chart across holding days: flagged vs passed. Distinguished by colour AND
+// dash (passed is dashed); the shared legend lives in HorizonSection.
+function HorizonChart({
+  points,
+  flaggedKey,
+  passedKey,
+  title,
+  pct,
+}: {
+  points: HorizonPoint[]
+  flaggedKey: 'flagged_mean_r' | 'flagged_hit_ge_1r'
+  passedKey: 'passed_mean_r' | 'passed_hit_ge_1r'
+  title: string
+  pct?: boolean
+}) {
+  const fmt = (v: number) => (pct ? formatPct(v * 100, { signed: false }) : `${formatScore(v, 2)}R`)
+  return (
+    // min-w-0 lets the ResponsiveContainer shrink inside the grid cell at narrow viewports.
+    <div className="flex flex-col gap-1 min-w-0">
+      <span className="text-[11px] text-(--color-text-secondary)">{title}</span>
+      <div style={{ height: 168 }}>
+        <ResponsiveContainer width="100%" height="100%">
+          <LineChart data={points} margin={{ top: 6, right: 8, bottom: 0, left: -6 }}>
+            <CartesianGrid strokeDasharray="3 3" stroke="var(--color-chart-grid)" />
+            <XAxis
+              dataKey="day"
+              tick={{ fill: 'var(--color-chart-text)', fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v) => `+${v}`}
+            />
+            <YAxis
+              width={46}
+              domain={pct ? [0, 1] : ['auto', 'auto']}
+              tick={{ fill: 'var(--color-chart-text)', fontSize: 11 }}
+              axisLine={false}
+              tickLine={false}
+              tickFormatter={(v) => fmt(v as number)}
+            />
+            {!pct && <ReferenceLine y={0} stroke="var(--color-text-muted)" strokeDasharray="2 2" />}
+            <Tooltip
+              contentStyle={{
+                background: 'var(--color-surface-2)',
+                border: '1px solid var(--color-border)',
+                borderRadius: 6,
+                fontSize: 11,
+                color: 'var(--color-text)',
+              }}
+              formatter={(v: unknown, name: unknown) => [
+                v == null ? '—' : fmt(v as number),
+                name === flaggedKey ? 'Flagged' : 'Passed',
+              ]}
+              labelFormatter={(l: unknown) => `Holding day +${String(l)}`}
+            />
+            <Line
+              type="monotone"
+              dataKey={flaggedKey}
+              stroke="var(--color-warning)"
+              strokeWidth={1.5}
+              dot={false}
+              connectNulls
+              isAnimationActive={false}
+            />
+            <Line
+              type="monotone"
+              dataKey={passedKey}
+              stroke="var(--color-info)"
+              strokeWidth={1.5}
+              strokeDasharray="4 3"
+              dot={false}
+              connectNulls
+              isAnimationActive={false}
+            />
+          </LineChart>
+        </ResponsiveContainer>
+      </div>
+    </div>
+  )
+}
+
+function HorizonSection({ gateKey }: { gateKey: string }) {
+  const { accessToken } = useAuth()
+  const { data } = useQuery({
+    queryKey: ['gate-horizon', gateKey],
+    queryFn: () => analyticsApi.getGateHorizon(gateKey, accessToken!),
+    enabled: !!accessToken,
+    staleTime: 60_000,
+  })
+  if (!data || !data.supported) return null
+  const hasData = data.points.some((p) => p.flagged_mean_r != null || p.passed_mean_r != null)
+  return (
+    <div className="rounded-lg border border-(--color-border) bg-(--color-surface-2) p-4 flex flex-col gap-3">
+      <div>
+        <p className="text-sm font-medium text-(--color-text)">
+          Does this gate separate winners from losers, and when?
+        </p>
+        <p className="text-[11px] text-(--color-text-secondary)">
+          Mean R and %-reaching-+1R by holding day — flagged (would-block) n={data.flagged_total} vs
+          passed (would-allow) n={data.passed_total}.
+        </p>
+      </div>
+      {/* Shared legend — colour + dash, text kept AA-neutral (not the line colour). */}
+      <div className="flex flex-wrap gap-4 text-[11px] text-(--color-text-secondary)">
+        <span className="flex items-center gap-1.5">
+          <span style={{ width: 14, height: 2, background: 'var(--color-warning)' }} />
+          Flagged (would-block)
+        </span>
+        <span className="flex items-center gap-1.5">
+          <span style={{ width: 14, borderTop: '2px dashed var(--color-info)' }} />
+          Passed (would-allow)
+        </span>
+      </div>
+      {hasData ? (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <HorizonChart
+            points={data.points}
+            flaggedKey="flagged_mean_r"
+            passedKey="passed_mean_r"
+            title="Mean R by holding day"
+          />
+          <HorizonChart
+            points={data.points}
+            flaggedKey="flagged_hit_ge_1r"
+            passedKey="passed_hit_ge_1r"
+            title="Reached +1R by holding day"
+            pct
+          />
+        </div>
+      ) : (
+        <p className="text-[11px] text-(--color-text-secondary)">
+          No outcome paths yet — no OHLC after entry for the scanned signals.
+        </p>
+      )}
+    </div>
+  )
+}
+
 export function CohortPage() {
   const { gateKey = '' } = useParams()
   const { accessToken } = useAuth()
@@ -214,6 +361,9 @@ export function CohortPage() {
               <span className="text-(--color-text-secondary)">{formatPct(data.cohort_realized_pnl_pct)} P&amp;L</span>
             )}
           </div>
+
+          {/* U19 — the horizon: does this gate's flagged set underperform, and at what holding day? */}
+          <HorizonSection gateKey={gateKey} />
 
           {data.trades.length === 0 ? (
             <EmptyState
