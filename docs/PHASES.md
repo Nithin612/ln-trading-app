@@ -784,7 +784,28 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-09-06.**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-09.**
+
+**▶▶ 2026-09-09 OVERNIGHT AUTONOMOUS RUN — 14 commits on `feature/pre-cycle2-hardening`, UNPUSHED
+(push is the user's, W4).** A Bucket-C batch that touches **no recorded number** (no clock reset):
+ops-safety/alerting **A28** (notifier retryable classification) · **A36** (calendar-expiry alarm) ·
+**A9/A10** (progress envelope in `make analysis`) · **H7** (shadow-gate decay alarm — only an ACTIVE
+gate's regression pushes); tests/invariants **T9** (doc-sync as a test) · **A15** (schedule invariant)
+· **T10** (notifier negative-space) · **T13/T14** (T13 tautological here; T14 external RSI+ATR anchors);
+hygiene **A39** (`cargo-deny`); and **U1** (Gate Register page `/analytics/registry` + `GET
+/analytics/gate-register`). Reviews: bug-hunter (sound, 1 H7 MEDIUM fixed) + ui-reviewer (U1 PASS,
+contrast fixed). Green: 161 backend (touched set) · 71 cargo · 5 vitest · mypy/ruff/eslint/typecheck.
+**Bucket C now ~17 of ~60.** ⚠ **Nothing needs a process restart** (no gate flip, no `.env` change) —
+the calendar beat + H7/progress changes apply on the next `make worker` / `make analysis` (both
+smoke-tested). Detail: CHANGELOG (Unreleased) + the 2026-09-09 block in `pre-cycle2-queue.md` + the
+`bucket_c_batch_2026-09-09` memory.
+
+**▶▶ WHAT'S NEXT — the safe/non-design Bucket C is exhausted.** T4/T5/T6/T8 are already covered by the
+Bucket A/B numeric-test discipline; A5/A7/A12 by the existing dated-incident doc practice; A1/A17 need
+an LLM (none exists); A41 waits on P7; A14/A4 are low-value/risky. **The remaining real value is the U1
+detail/cohort cluster** (U10/U15/U17/U20/U11/U19 — DSR/benchmark charts) — **design-sensitive + needs a
+new benchmark API slice, best built WITH the user.** Otherwise it is Phase-7 / cycle-2-entry territory
+(CAS-2 re-accrual, MCE 5b+6, tuning). Nothing left attacks profitability (both levers spent, D1/D5).
 
 **▶▶ NEW WORKING BRANCH: `feature/pre-cycle2-hardening`** (created 2026-09-06 with user
 approval, from `feature/phase6-overlay-walkforward-retune` @ `518b84f` — 69 commits ahead of
