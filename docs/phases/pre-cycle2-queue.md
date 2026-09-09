@@ -139,13 +139,35 @@ W1–W5 · A11 · A40; A27/A3/A13 done pre-09-09).
 **Reviews:** bug-hunter on the ops-safety cluster (A28/A36/A9/A10 sound, one H7 MEDIUM fixed
 same-day); ui-reviewer PASS-WITH-NOTES on U1 (all notes fixed).
 
+### ▶ Progress — 2026-09-09 (later, user-directed): U1 detail/cohort TRIO (U10/U15/U17) shipped
+
+Plan + sign-off in [`phase-U1-detail-cohort-plan.md`](phase-U1-detail-cohort-plan.md) (decisions
+A/B/C/D as recommended). The trio needed **almost no new API** — `Signal.factor_scores` already
+carries every factor incl. score-0 abstainers. Built:
+
+| Item | Landed | Tests |
+|---|---|---|
+| **U10/U15/U17** | `app/signals/confidence_explain.py` (read-only reconstruction of the confluence arithmetic; frozen engine untouched) → `confidence_breakdown` on `GET /signals/{id}` (detail-only) → redesigned `SignalDetailModal` (U10 arithmetic w/ the abstainer-divisor SRTL surface · U17 one-bar vote · U15 named evidence + horizon) + a `formatScore` helper | 11 (incl. an 800-panel parity sweep) + 3 api + 3 vitest |
+
+quant-verifier PASS — **1 HIGH fixed same-day:** naive `+=` accumulation ≠ frozen `sum()`
+(Python 3.12 compensated summation) → off-by-one confidence at truncation edges; now sums via
+`sum()` in engine order, bit-identical (0 mismatches over the sweep). ui-reviewer PASS-WITH-NOTES,
+actioned: explanatory copy → `--color-text-secondary` (AA in all 5 themes), `formatScore` for the
+unit-less values, direction in the bar aria-label. **W1:** fixed the stale `Sidebar.test.tsx` link
+counts the U1 nav link had left behind. Reporting-only ⇒ **no recorded number, no clock reset.**
+Backend 28 green · full Vitest 421 · mypy/ruff/eslint/tsc clean. **Bucket C now ~18 of ~60.**
+
+**Remaining U1 cluster: U11 · U19 · U20** — each needs a small NEW analytics endpoint (benchmark
+series · horizon separation · would-block cohort + OHLC), U20 the heavy/design-sensitive one;
+propose + sign-off per the plan doc.
+
 **Remaining Bucket C, with an honest read:** **T4/T5/T6/T8** are already satisfied by the Bucket
 A/B numeric-test discipline (ratios/block-bootstrap/etc.) — adding more would be hollow; **A5/A7/A12**
 are largely covered by the existing dated-incident doc practice (W1–W5, CLAUDE.md truth bullets). So
-the meaningful remainder is the **U1 detail/cohort sub-items** (U10 arithmetic · U15 named evidence ·
-U17 distribution bar · U20 would-block cohort · U11 · U19 — these need a DSR/benchmark API slice and
-are design-sensitive, best done with the user), plus lower-priority **deployment/misc** (A4/A14/A17/
-A1/A41). **None attacks profitability** (both levers spent); all harden the platform and its evidence.
+the meaningful remainder is the **U1 detail/cohort sub-items still open** (U20 would-block cohort ·
+U11 · U19 — these need a small analytics API each and are design-sensitive, best done with the user),
+plus lower-priority **deployment/misc** (A4/A14/A17/A1/A41). **None attacks profitability** (both
+levers spent); all harden the platform and its evidence.
 
 Two findings worth carrying forward:
 

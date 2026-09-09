@@ -37,6 +37,15 @@ sub-items (U10/U15/U17/U20/U11/U19 — DSR benchmarks, need more API) + lower-pr
 A1/A41). **None attacks profitability** (both levers spent). **No decision blocks cycle-2 start; nothing
 here changes a recorded number, so no clock reset.**
 
+**▶▶ 2026-09-09 (later, user-directed) — U1 detail/cohort TRIO (U10/U15/U17) BUILT + reviewed** (plan +
+sign-off: [`phase-U1-detail-cohort-plan.md`](phases/phase-U1-detail-cohort-plan.md)). `confidence_explain.py`
+(read-only, frozen engine untouched) → `confidence_breakdown` on `GET /signals/{id}` → the redesigned
+`SignalDetailModal` (U10 arithmetic incl. the abstainer-divisor SRTL surface · U17 vote bar · U15 named
+evidence + horizon). quant-verifier PASS (1 HIGH fixed: `sum()` compensated-summation parity, now bit-exact
+over an 800-panel sweep) · ui-reviewer PASS (AA copy fix). Backend 28 · Vitest 421 · lint/types clean.
+Reporting-only ⇒ no recorded number, no clock reset. **Remaining cluster: U11 · U19 · U20** (small new
+analytics endpoints each; see the plan doc). **Bucket C now ~18 of ~60.**
+
 **▶▶ 2026-09-08 — D3 RESOLVED by a free-source spike: NO vendor needed. The Q0 decision queue is CLEARED for cycle-2 start — D2's final call is PARKED to cycle-2 end (user 2026-09-08), D6 is post-cycle-2.**
 The long-standing "`market_cap` has no writer → pick a vendor" **keystone is RETIRED.** Spike
 (`docs/analysis/market-cap-source-spike-2026-09-08.md`): no free BULK file carries per-stock market cap
@@ -800,12 +809,26 @@ the calendar beat + H7/progress changes apply on the next `make worker` / `make 
 smoke-tested). Detail: CHANGELOG (Unreleased) + the 2026-09-09 block in `pre-cycle2-queue.md` + the
 `bucket_c_batch_2026-09-09` memory.
 
-**▶▶ WHAT'S NEXT — the safe/non-design Bucket C is exhausted.** T4/T5/T6/T8 are already covered by the
-Bucket A/B numeric-test discipline; A5/A7/A12 by the existing dated-incident doc practice; A1/A17 need
-an LLM (none exists); A41 waits on P7; A14/A4 are low-value/risky. **The remaining real value is the U1
-detail/cohort cluster** (U10/U15/U17/U20/U11/U19 — DSR/benchmark charts) — **design-sensitive + needs a
-new benchmark API slice, best built WITH the user.** Otherwise it is Phase-7 / cycle-2-entry territory
-(CAS-2 re-accrual, MCE 5b+6, tuning). Nothing left attacks profitability (both levers spent, D1/D5).
+**▶▶ 2026-09-09 (later, user-directed) — U1 DETAIL/COHORT: the TRIO (U10/U15/U17) is BUILT + reviewed.**
+The plan for the whole cluster is [`docs/phases/phase-U1-detail-cohort-plan.md`](phases/phase-U1-detail-cohort-plan.md)
+(approved A/B/C/D as recommended). Shipped this session: `app/signals/confidence_explain.py` (read-only
+reconstruction of the confluence arithmetic from stored `factor_scores`, frozen engine untouched) →
+`confidence_breakdown` on `GET /signals/{id}` (detail-only) → the redesigned `SignalDetailModal` showing
+**U10** the arithmetic (abstainers drop out of the divisor — the SRTL surface), **U17** the one-bar vote
+(single-indicator tell), **U15** named evidence + horizon. **quant-verifier PASS** (1 HIGH fixed:
+naive `+=` fold ≠ frozen `sum()`'s compensated summation → off-by-one confidence; now bit-identical, proven
+by an 800-panel sweep). **ui-reviewer PASS** (explanatory copy → `--color-text-secondary` for AA). Backend
+28 green · full Vitest 421 green · mypy/ruff/eslint/tsc clean. **Touches no recorded number** (reporting-only)
+— no clock reset. **Remaining in the cluster: U11 (benchmark-curve endpoint + a Line) · U19 (horizon
+endpoint) · U20 (would-block cohort contact sheet, the heavy/design-sensitive one)** — each needs a small
+new analytics endpoint; propose + sign-off per the plan doc.
+
+**▶▶ WHAT'S NEXT — the safe/non-design Bucket C is exhausted; the U1 trio is done.** T4/T5/T6/T8 are already
+covered by the Bucket A/B numeric-test discipline; A5/A7/A12 by the existing dated-incident doc practice;
+A1/A17 need an LLM (none exists); A41 waits on P7; A14/A4 are low-value/risky. **The remaining U1 value is
+U11 · U19 · U20** (benchmark/horizon/cohort charts — each a small new analytics endpoint, design per the plan
+doc). Otherwise it is Phase-7 / cycle-2-entry territory (CAS-2 re-accrual, MCE 5b+6, tuning). Nothing left
+attacks profitability (both levers spent, D1/D5).
 
 **▶▶ NEW WORKING BRANCH: `feature/pre-cycle2-hardening`** (created 2026-09-06 with user
 approval, from `feature/phase6-overlay-walkforward-retune` @ `518b84f` — 69 commits ahead of

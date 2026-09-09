@@ -162,14 +162,16 @@ describe('DashboardPage', () => {
       total: 1,
       signals: [makeSignal()],
     })
+    vi.spyOn(signalsApiModule.signalsApi, 'getById').mockResolvedValue(makeSignal())
     wrap(<DashboardPage />)
     await waitFor(() => screen.getByText('RELIANCE'))
 
     const row = screen.getAllByRole('row').find((r) => r.textContent?.includes('RELIANCE'))
     fireEvent.click(row!)
 
+    // The modal's confidence section header (U10) is a stable open-marker.
     await waitFor(() => {
-      expect(screen.getByText('Factor breakdown')).toBeInTheDocument()
+      expect(screen.getByText(/how this 82% was built/i)).toBeInTheDocument()
     })
   })
 
@@ -178,16 +180,17 @@ describe('DashboardPage', () => {
       total: 1,
       signals: [makeSignal()],
     })
+    vi.spyOn(signalsApiModule.signalsApi, 'getById').mockResolvedValue(makeSignal())
     wrap(<DashboardPage />)
     await waitFor(() => screen.getByText('RELIANCE'))
 
     const row = screen.getAllByRole('row').find((r) => r.textContent?.includes('RELIANCE'))
     fireEvent.click(row!)
-    await waitFor(() => screen.getByText('Factor breakdown'))
+    await waitFor(() => screen.getByText(/how this 82% was built/i))
 
-    fireEvent.click(screen.getByText('×'))
+    fireEvent.click(screen.getByLabelText('Close'))
     await waitFor(() => {
-      expect(screen.queryByText('Factor breakdown')).not.toBeInTheDocument()
+      expect(screen.queryByText(/how this 82% was built/i)).not.toBeInTheDocument()
     })
   })
 

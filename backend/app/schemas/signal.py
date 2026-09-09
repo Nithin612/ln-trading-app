@@ -13,6 +13,34 @@ class FactorScoreSchema(BaseModel):
     explanation: str
 
 
+# U10/U15/U17 — the confluence arithmetic reconstructed for the detail view. Read-only
+# (app/signals/confidence_explain), populated on GET /signals/{id} only. Reproduces the frozen
+# formula so the detail card can show HOW the confidence was built — chiefly that abstaining
+# factors (score 0) drop OUT of the divisor, the SRTL surface.
+class FactorContributionOut(BaseModel):
+    name: str
+    weight: float
+    score: float
+    contribution: float  # weight × score (signed)
+    explanation: str
+
+
+class FactorAbstentionOut(BaseModel):
+    name: str
+    weight: float
+    explanation: str
+
+
+class ConfidenceBreakdownOut(BaseModel):
+    numerator: float
+    denominator: float
+    normalized: float
+    confidence_pct: int
+    direction: str
+    scoring: list[FactorContributionOut]
+    abstained: list[FactorAbstentionOut]
+
+
 class SignalOut(BaseModel):
     id: str
     stock_id: int
@@ -56,6 +84,9 @@ class SignalOut(BaseModel):
     # assessed clear, so the invariant lived in a log file and not where the wasted
     # clicks happen (quant-verifier, 2026-09-02).
     unassessed: list[str] = []
+    # U10/U15/U17 — the reconstructed confluence arithmetic. Detail endpoint only (None on the
+    # list, which stays lean); None too when the payload is malformed (the card is then omitted).
+    confidence_breakdown: ConfidenceBreakdownOut | None = None
 
     model_config = {"from_attributes": True}
 

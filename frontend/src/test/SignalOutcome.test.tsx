@@ -3,12 +3,16 @@ import { render, screen, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import { SignalDetailModal } from '@/features/dashboard/SignalDetailModal'
-import { outcomeApi } from '@/lib/api/signals'
-import type { SignalOut, SignalOutcome } from '@/lib/api/signals'
+import { outcomeApi, signalsApi } from '@/lib/api/signals'
+import type { ConfidenceBreakdown, SignalOut, SignalOutcome } from '@/lib/api/signals'
 
 vi.mock('@/lib/api/signals', async (importOriginal) => {
   const mod = await importOriginal<typeof import('@/lib/api/signals')>()
-  return { ...mod, outcomeApi: { getOutcome: vi.fn() } }
+  return {
+    ...mod,
+    outcomeApi: { getOutcome: vi.fn() },
+    signalsApi: { ...mod.signalsApi, getById: vi.fn() },
+  }
 })
 
 vi.mock('@/hooks/useAuth', () => ({
@@ -73,6 +77,10 @@ function renderModal() {
 
 beforeEach(() => {
   vi.mocked(outcomeApi.getOutcome).mockReset()
+  // Default: detail fetch returns the signal with no breakdown, so the outcome-section tests
+  // never touch the network and the card degrades gracefully.
+  vi.mocked(signalsApi.getById).mockReset()
+  vi.mocked(signalsApi.getById).mockResolvedValue(SIGNAL)
 })
 
 describe('SignalDetailModal outcome section', () => {
@@ -119,5 +127,78 @@ describe('SignalDetailModal outcome section', () => {
       expect(vi.mocked(outcomeApi.getOutcome)).toHaveBeenCalled(),
     )
     expect(screen.queryByText('Outcome')).not.toBeInTheDocument()
+  })
+})
+
+function breakdown(overrides: Partial<ConfidenceBreakdown> = {}): ConfidenceBreakdown {
+  return {
+    numerator: 26,
+    denominator: 30,
+    normalized: 0.8667,
+    confidence_pct: 86,
+    direction: 'BUY',
+    scoring: [
+      { name: 'DOW_TREND', weight: 20, score: 0.9, contribution: 18, explanation: 'uptrend' },
+      { name: 'RSI_DIVERGENCE', weight: 10, score: 0.8, contribution: 8, explanation: 'divergence' },
+    ],
+    abstained: [{ name: 'ADX', weight: 15, explanation: 'no trend' }],
+    ...overrides,
+  }
+}
+
+describe('SignalDetailModal confidence breakdown (U10/U15/U17)', () => {
+  beforeEach(() => {
+    vi.mocked(outcomeApi.getOutcome).mockResolvedValue(null)
+  })
+
+  it('renders the arithmetic, the vote distribution, and the abstainer note', async () => {
+    vi.mocked(signalsApi.getById).mockResolvedValue({
+      ...SIGNAL,
+      confidence_pct: 86,
+      confidence_breakdown: breakdown(),
+    })
+    renderModal()
+
+    // U10 — the division is shown, and both scoring factors are named.
+    expect(await screen.findByText('How this 86% was built')).toBeInTheDocument()
+    expect(screen.getByText('dow trend')).toBeInTheDocument()
+    expect(screen.getByText('rsi divergence')).toBeInTheDocument()
+    // U17 — the vote caption counts scoring vs total.
+    expect(screen.getByText(/2 of 3 factors voted/)).toBeInTheDocument()
+    // The abstainer is called out as excluded from the divisor (the SRTL mechanism).
+    expect(screen.getByText(/drops out of the divisor/i)).toBeInTheDocument()
+    expect(screen.getByText(/adx/i)).toBeInTheDocument()
+  })
+
+  it('flags a single-indicator signal as carrying the whole score (the SRTL tell)', async () => {
+    vi.mocked(signalsApi.getById).mockResolvedValue({
+      ...SIGNAL,
+      confidence_pct: 80,
+      confidence_breakdown: breakdown({
+        numerator: 12,
+        denominator: 15,
+        normalized: 0.8,
+        confidence_pct: 80,
+        scoring: [
+          { name: 'RSI_DIVERGENCE', weight: 15, score: 0.8, contribution: 12, explanation: 'div' },
+        ],
+        abstained: [
+          { name: 'ADX', weight: 15, explanation: 'flat' },
+          { name: 'EMA_STACK', weight: 12, explanation: 'flat' },
+        ],
+      }),
+    })
+    renderModal()
+    expect(
+      await screen.findByText(/a single indicator carries the entire score/i),
+    ).toBeInTheDocument()
+  })
+
+  it('falls back gracefully when the detail fetch has no breakdown', async () => {
+    vi.mocked(signalsApi.getById).mockResolvedValue(SIGNAL) // no confidence_breakdown
+    renderModal()
+    expect(await screen.findByText('RELIANCE')).toBeInTheDocument()
+    // Wait for the detail query to settle out of its loading state.
+    expect(await screen.findByText(/factor breakdown unavailable/i)).toBeInTheDocument()
   })
 })

@@ -6,6 +6,33 @@ export interface FactorScore {
   explanation: string
 }
 
+// U10/U15/U17 — the confluence arithmetic reconstructed server-side for the detail card
+// (app/signals/confidence_explain). Detail endpoint only; null on list rows and when the
+// stored factor payload is malformed.
+export interface FactorContribution {
+  name: string
+  weight: number
+  score: number
+  contribution: number // weight × score (signed: BUY positive, SELL negative)
+  explanation: string
+}
+
+export interface FactorAbstention {
+  name: string
+  weight: number
+  explanation: string
+}
+
+export interface ConfidenceBreakdown {
+  numerator: number // Σ weight·score over ALL factors
+  denominator: number // Σ weight over scoring factors (score ≠ 0)
+  normalized: number // numerator / denominator ∈ [-1, 1]
+  confidence_pct: number
+  direction: string
+  scoring: FactorContribution[] // dominant contribution first
+  abstained: FactorAbstention[] // present at evaluation, excluded from the divisor
+}
+
 export interface SignalOut {
   id: string
   stock_id: number
@@ -37,6 +64,7 @@ export interface SignalOut {
   blocked_by: string | null     // stable gate slug ("regime" | "entry_quality")
   block_reason: string | null   // the exact message the order path would reject with
   unassessed: string[]          // ACTIVE gates not judged on this path — UNKNOWN, not clear
+  confidence_breakdown?: ConfidenceBreakdown | null // detail endpoint only (U10/U15/U17)
 }
 
 export interface SignalListResponse {

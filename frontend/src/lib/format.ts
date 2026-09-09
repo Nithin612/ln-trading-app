@@ -73,6 +73,15 @@ export const formatGreek = (n: number, dp = 4) => n.toFixed(dp)
  */
 export const formatRatio = (n: number) => (Number.isFinite(n) ? n.toFixed(1) : "—")
 
+/**
+ * Unit-less analytical values that are neither money, percent, nor a ratio —
+ * confluence contributions and weighted scores on the signal-detail card. Fixed
+ * decimals, no grouping, no unit. Lives here so feature code never reaches for
+ * `toFixed` (.claude/rules/ui.md). Non-finite → "—".
+ */
+export const formatScore = (n: number, dp = 1) =>
+  Number.isFinite(n) ? n.toFixed(dp) : "—"
+
 /** "▲ +2.34%" / "▼ -1.12%" / "— 0.00%" — directional glyph included */
 export const formatChange = (n: number) => {
   const epsilon = 0.005

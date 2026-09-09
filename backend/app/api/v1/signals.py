@@ -24,8 +24,15 @@ from app.core.ratios import MAX_RR, safe_ratio
 from app.models.signal import Signal, SignalOutcome
 from app.models.stock import Stock
 from app.models.user import User
-from app.schemas.signal import SignalListResponse, SignalOut, SignalOutcomeOut
-from app.signals import eligibility
+from app.schemas.signal import (
+    ConfidenceBreakdownOut,
+    FactorAbstentionOut,
+    FactorContributionOut,
+    SignalListResponse,
+    SignalOut,
+    SignalOutcomeOut,
+)
+from app.signals import confidence_explain, eligibility
 from app.signals.event_guard import is_signal_suppressed
 from app.trading.atr import atr_timeframe_for, latest_atr
 from app.trading.regime import CHOPPY_ER, er_by_stock
@@ -54,6 +61,34 @@ async def _enrich(signal: Signal, db: AsyncSession) -> SignalOut:
     out = SignalOut.model_validate(signal)
     out.symbol = stock.symbol if stock else ""
     return out
+
+
+def _confidence_breakdown(factor_scores: object) -> ConfidenceBreakdownOut | None:
+    """Map the read-only confluence reconstruction (U10/U15/U17) to its response schema.
+
+    Detail endpoint only. Fail-open: a malformed `factor_scores` yields None (the card is
+    omitted), never a 500 — matching this path's fail-open philosophy."""
+    b = confidence_explain.explain(factor_scores)
+    if b is None:
+        return None
+    return ConfidenceBreakdownOut(
+        numerator=b.numerator,
+        denominator=b.denominator,
+        normalized=b.normalized,
+        confidence_pct=b.confidence_pct,
+        direction=b.direction,
+        scoring=[
+            FactorContributionOut(
+                name=c.name, weight=c.weight, score=c.score,
+                contribution=c.contribution, explanation=c.explanation,
+            )
+            for c in b.scoring
+        ],
+        abstained=[
+            FactorAbstentionOut(name=a.name, weight=a.weight, explanation=a.explanation)
+            for a in b.abstained
+        ],
+    )
 
 
 def _apply_eligibility(
@@ -286,6 +321,9 @@ async def get_signal(
     if not signal:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Signal not found")
     out = await _enrich(signal, db)
+    # U10/U15/U17 — reconstruct the confluence arithmetic for the detail card (detail only).
+    # Set BEFORE the non-active early return so a superseded/expired signal still explains itself.
+    out.confidence_breakdown = _confidence_breakdown(signal.factor_scores)
     # One signal, so one ATR query is affordable — this path's preview covers every
     # gate the preview module can judge, sl_atr included. AlertBell reads this endpoint.
     atr = await latest_atr(

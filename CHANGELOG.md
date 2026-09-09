@@ -7,6 +7,51 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### U10/U15/U17 (2026-09-09) — the signal-detail trio: how a confidence was built [Bucket C]
+
+- **`backend/app/signals/confidence_explain.py`** (NEW, read-only reporting) reconstructs a
+  committed signal's confluence arithmetic from its STORED `factor_scores`: numerator
+  `Σ weight·score` (all factors), divisor `Σ weight` over **scoring factors only** (score ≠ 0 —
+  abstainers DROP OUT), `normalized = num/div`, `confidence = int(|normalized|·100)`. It mirrors
+  the FROZEN `confluence.score_from_factors` (lines 159-166) but never scores, sizes, gates, or
+  writes; the frozen engine is untouched. Fails OPEN (malformed/empty/all-abstained → `None`).
+  The point it makes visible: a 0-score factor is *removed* from the divisor, which is exactly how
+  SRTL entered on one 0.8 factor reading 80% and clearing the ≥70% gate.
+- **`GET /api/v1/signals/{id}`** now returns `confidence_breakdown` (detail endpoint only — `None`
+  on the list, which stays lean; `None` too on a malformed payload). New schemas
+  `ConfidenceBreakdownOut` / `FactorContributionOut` / `FactorAbstentionOut`.
+- **`frontend` signal-detail modal (`SignalDetailModal.tsx`)** replaces the single factor bar with
+  the trio: **U10** an arithmetic card (weight × score = contribution, the Σ/Σ division → %, and an
+  abstainer note), **U17** a one-bar vote distribution (each scoring factor's share; a single tall
+  segment is flagged "a single indicator carries the entire score"), **U15** a named-evidence line
+  ("MACD bullish crossover · RSI divergence · …") + a forecast-horizon label per classification.
+  The breakdown is fetched lazily via `getById` (enrichment only — never blocks the modal). New
+  `formatScore` helper in `lib/format.ts` (unit-less analytical values; keeps `toFixed` out of
+  features per rules/ui.md).
+- **ui-reviewer PASS-WITH-NOTES, actioned:** the load-bearing explanatory copy (abstainer note,
+  vote caption, table header/Σ rows) moved `--color-text-muted` → `--color-text-secondary` (was
+  2.08–3.48:1 on daybreak/etc, now AA in all 5 themes); `formatGreek` → `formatScore` for the
+  unit-less score/normalized values; the bar's `aria-label` now names the direction. The
+  direction-coloured contribution numbers keep the sanctioned `bull`/`bear` tokens (direction is
+  redundantly carried by the +/− sign and the "N% BUY/SELL" line, so not colour-alone) — their
+  sub-AA-on-surface is a known **app-wide** token weakness (the pre-existing metric cards are
+  worse: accent 2.45:1) flagged for a separate token-hardening pass, not fixed locally.
+- **W1 fix (pre-existing drift):** the U1 nav link added last night left `Sidebar.test.tsx` link
+  counts stale (19/22 → 20/23) — corrected.
+- **quant-verifier PASS (1 HIGH fixed same-day):** the reconstruction first accumulated the sums
+  with a naive `+=` fold, but the frozen scorer uses `sum()` (Python 3.12 compensated/Neumaier
+  summation) — the ~1e-14 disagreement flipped int()-truncated confidence by 1 on ~0.27% of panels
+  (and direction at an exact-zero crossing). Now sums via `sum()` in the engine's factor order →
+  bit-identical (verifier: 0 mismatches over a 1500-signal sweep). Also fixed: a non-finite stored
+  score now fails open BEFORE the `int()` (LOW), and a randomized parity sweep was added (the
+  regression canary the single hand-picked case couldn't be).
+- Tests: `tests/test_confidence_explain.py` (11 — unit + a hand-picked parity test + a randomized
+  800-panel sweep through `score_from_factors` asserting `confidence_pct`/`direction` match on
+  every non-gated result + a non-finite fail-open case), `tests/test_signals.py` (3 new — detail
+  returns the breakdown, list omits it, malformed → None), Vitest `SignalOutcome.test.tsx` (3 new —
+  arithmetic/vote/abstainer render, the single-indicator SRTL tell, graceful fallback). Backend 28
+  green · full Vitest 421 green · mypy/ruff/eslint/tsc clean.
+
 ### U1 (page) (2026-09-09) — "Gate Register" page [Bucket C]
 
 - **`frontend/src/features/analytics/RegistryPage.tsx`** (route `/analytics/registry`, nav "Gate

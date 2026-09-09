@@ -313,6 +313,85 @@ class TestSignalDetail:
         assert "factor_scores" in data
         assert data["symbol"] == "TATAMOTORS"
 
+    async def test_confidence_breakdown_reconstructs_arithmetic(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """U10 — the detail endpoint returns the confluence arithmetic, dominant factor first."""
+        await create_admin(db)
+        token = await get_token(client, "admin@example.com", "adminpass123")
+        stock = await _make_stock(db)
+        now = datetime.now(tz=UTC)
+        sig = Signal(
+            stock_id=stock.id, direction="BUY", classification="swing", timeframe="1d",
+            entry_price="490.0000", stop_loss="482.0000", take_profit="506.0000",
+            suggested_qty=250, confidence_pct=86,
+            factor_scores={
+                "DOW_TREND": {"weight": 20, "score": 0.9, "explanation": "uptrend"},      # 18
+                "RSI_DIVERGENCE": {"weight": 10, "score": 0.8, "explanation": "divergence"},  # 8
+                "ADX": {"weight": 15, "score": 0.0, "explanation": "no trend"},           # abstain
+            },
+            headline="BUY", status="active",
+            validity_until=now + timedelta(days=5), created_at=now,
+        )
+        db.add(sig)
+        await db.flush()
+        await db.commit()
+
+        r = await client.get(
+            f"/api/v1/signals/{sig.id}", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert r.status_code == 200
+        cb = r.json()["confidence_breakdown"]
+        assert cb is not None
+        assert cb["numerator"] == 26.0
+        assert cb["denominator"] == 30.0            # ADX (score 0) excluded from the divisor
+        assert cb["confidence_pct"] == 86
+        assert cb["direction"] == "BUY"
+        assert [c["name"] for c in cb["scoring"]] == ["DOW_TREND", "RSI_DIVERGENCE"]
+        assert cb["scoring"][0]["contribution"] == 18.0
+        assert [a["name"] for a in cb["abstained"]] == ["ADX"]
+
+    async def test_confidence_breakdown_none_on_malformed_payload(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """Fail-open — an empty/malformed factor_scores omits the card, never 500s the read."""
+        await create_admin(db)
+        token = await get_token(client, "admin@example.com", "adminpass123")
+        stock = await _make_stock(db)
+        now = datetime.now(tz=UTC)
+        sig = Signal(
+            stock_id=stock.id, direction="BUY", classification="swing", timeframe="1d",
+            entry_price="490.0000", stop_loss="482.0000", take_profit="506.0000",
+            suggested_qty=250, confidence_pct=80, factor_scores={},
+            headline="BUY", status="active",
+            validity_until=now + timedelta(days=5), created_at=now,
+        )
+        db.add(sig)
+        await db.flush()
+        await db.commit()
+
+        r = await client.get(
+            f"/api/v1/signals/{sig.id}", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert r.status_code == 200
+        assert r.json()["confidence_breakdown"] is None
+
+    async def test_list_omits_confidence_breakdown(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """The list stays lean — the breakdown is a detail-only enrichment."""
+        await create_admin(db)
+        token = await get_token(client, "admin@example.com", "adminpass123")
+        stock = await _make_stock(db)
+        await _make_signal(db, stock.id)
+        await db.commit()
+
+        r = await client.get(
+            "/api/v1/signals/active", headers={"Authorization": f"Bearer {token}"}
+        )
+        assert r.status_code == 200
+        assert r.json()["signals"][0]["confidence_breakdown"] is None
+
     async def test_not_found(self, client: AsyncClient, db: AsyncSession) -> None:
         await create_admin(db)
         token = await get_token(client, "admin@example.com", "adminpass123")
