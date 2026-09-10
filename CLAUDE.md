@@ -456,6 +456,25 @@ else.
   ⚠ **"The rest of Phase 6 / 6.8" has no unbuilt slices** — both are GATE PASSED + CLOSED; what is
   left is the gated research track R2/F1 (**R1 dropped 09-08**) plus three forward-evidence loops
   (regime **decided**, momentum ×1.5 **stalled** at 3 minted / 0 resolved, pair df-vs-adf accruing).
+- **⚠ THE WEIGHT-20 `DOW_TREND` FACTOR IS UNREACHABLE ON THE DAILY TIMEFRAME (2026-09-10).** Measured
+  by `backend/scripts/engine_selectivity_probe.py` (read-only, rerunnable) over **4,511 daily panels**:
+  the spec's heaviest factor — "the macro context", weight 20 — scores on **3 of 4,511 windows (0.07%)**
+  and **cannot score by construction**. `run_all_factors` calls `dow_trend_factor(lookback=20,
+  swing_n=5)`; in a 20-bar window an n=5 pivot can only sit at index 5…14, any two differ by ≤9 < 11 so
+  their windows overlap and both can be the max only on an exact tie — yet the function needs **two**
+  highs AND **two** lows. A synthetic HH+HL staircase returns `0.0 — "Not enough swing points"`. ⇒ **the
+  tradeable swing engine carries NO trend-structure input**, and the absence is SILENT because the
+  confidence denominator counts only scoring factors. Corroborated by **Minervini 0/91** and the closed
+  book's **beta +0.92 / alpha +0.0010**. ⚠ **SPEC defect, not an implementation bug** (§2.4 specifies
+  both parameters) — `SIGNAL_ENGINE.md` is hook-protected, **nothing was changed**. Act on it with the
+  **read-only injection test that refuted RVOL** (no frozen edit, no sign-off needed); prior is guarded
+  — an injected graded factor can DILUTE through the normalisation. Full write-up +
+  the rest of the probe (a "≥70%" signal is a median of **3 of 15 factors worth 30 of 160 weight
+  points**; gate pass rate 4.19%; the swing stop is the last n=5 pivot ANYWHERE in 300 bars, p90 16%
+  away and 18% of the time ABOVE the entry, so **52% of gate-passing signals die at the level stage**;
+  and **cost in R is a hyperbola in stop width** — 0.05–0.11R at the median 5% stop, **0.40–0.83R at
+  the p10 0.65% stop**) in **`docs/SYSTEM_REVIEW_FOR_QUANT.md`**, the standalone document for presenting the
+  system to an external quant.
 - **⛔ THE `security_analysis` READING STUDY IS CLOSED — FIVE NEGATIVES, NOTHING BUILT (2026-09-10).**
   All 14 PDFs in `docs/reading/security_analysis/` read against the user's entry/alert-timing question;
   synthesis + citations in `docs/reading/security-analysis-folder-takeaways-2026-09-09.md` (§1 rates each

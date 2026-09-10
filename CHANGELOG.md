@@ -7,6 +7,70 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Review doc + engine-selectivity probe (2026-09-10) — ⚠ the weight-20 Dow-trend factor is UNREACHABLE on the daily timeframe
+
+User asked for a standalone technical/functional document explaining the system to an
+external quant: how a stock becomes a signal, how the entry is chosen for swing, whether an
+EOD signal is validated against the next trading day, how marks/patterns/indicators/sector
+combine, how R:R and the S&R stop and target are set, what the system has produced, why it
+loses, and what options remain. Deliverable:
+**`docs/SYSTEM_REVIEW_FOR_QUANT.md`** — mechanism, measured results, diagnosis, options,
+every figure either cited to a code path or reproducible by a committed script.
+
+**New: `backend/scripts/engine_selectivity_probe.py`** (SELECT-only; the FROZEN engine is
+imported and called exactly as the nightly job calls it, never edited or subclassed). It
+measures what the daily reports structurally cannot see — the panels that were scored and
+**discarded**. 4,511 daily panels: 239 liquid names × 30 decision dates 25 sessions apart,
+trailing 300 completed bars each.
+
+⭐ **THE FINDING: `DOW_TREND` — weight 20, the heaviest factor in the spec, described there as
+"the macro context" — scores on 3 of 4,511 daily windows (0.07%), and cannot score by
+construction.** `run_all_factors` calls `dow_trend_factor(candles, lookback=20, swing_n=5)` for
+every non-intraday timeframe. In a 20-bar window a pivot at width n=5 can only sit at index
+5…14; any two of those differ by at most 9 < 11, so their pivot windows overlap and both can be
+the maximum only on an exact float tie. The function needs **two** swing highs AND **two** swing
+lows. A synthetic staircase uptrend with higher highs and higher lows *by construction* returns
+`0.0 — "Not enough swing points: 1 highs, 0 lows"`. Both demonstrations ship inside the script.
+⇒ **the tradeable swing engine has no trend-structure input at all.** Because the confidence
+denominator counts only factors that scored, the absence is silent: no number is depressed and
+nothing is logged. Two independent observations corroborate the consequence — **0 of 91 paper
+entries pass Minervini's trend conditions** (binding constraints: SMA150>SMA200 25/91, SMA200
+rising 29/91) and the closed book carries **beta +0.92 with per-trade alpha +0.0010**.
+⚠ **This is a SPECIFICATION defect, not an implementation bug** — `SIGNAL_ENGINE.md` §2.4
+specifies both the 20-bar lookback and N=5 for daily and the code implements exactly that; the
+two parameters are mutually inconsistent. The file is hook-protected: **nothing was changed**,
+and the fix (if any) needs explicit instruction + a §8 regression + regenerated Rust fixtures.
+The cheap first move is the read-only injection test that refuted RVOL — no frozen edit needed
+to get the answer.
+
+**Also measured, and new:**
+- **What "≥70% confidence" actually selects.** Median **3 of 15 factors score**, worth **30 of a
+  possible 160 weight points**; 18.4% of panels have ≤1 scoring factor. Gate pass rate **4.19%**
+  of stock-days (108 SELL / 81 BUY). Of *passing* signals the 10th percentile rests on a
+  **single** factor, and `SR_ZONE` is present in **69.8%** with a candlestick pattern in most of
+  the rest — the engine is, at the decision point, a "candle pattern at an S/R zone" detector.
+- **The ADX branch is not an edge case:** 39.9% of panels take the weak-trend path (gate raised
+  to 75), 8.9% the strong path (lowered to 65).
+- **Pivot geometry.** The swing stop is the most recent n=5 pivot **anywhere in the 300-bar
+  window**: distance entry→pivot p50 4.91%, **p90 16.17%**, and **18.2% of the time the pivot sits
+  at or ABOVE the entry close**. Only **47.4%** of daily windows yield a usable BUY-swing stop
+  (38.1% rejected by the 8% class cap, 14.5% wrong-side/degenerate); among gate-passing signals
+  **98 of 189 (51.9%) die at the level stage**. ⇒ the book is selected on *pivot proximity*, and
+  near stops are independently the losing cohort.
+- **Level geometry of the survivors:** stop width p10 0.65% · p50 5.00% · p90 7.11% (17.6% under
+  2%); R:R p50 1.58 with **27.5% below 1.0**; notional at ₹1L/2% p50 ₹38,965 (a single position
+  is ~39% of the account) with 15.4% above the 1.0× notional cap.
+- **Cost in R is a hyperbola in stop width** (derived from the measured charge schedule + the
+  6.8.2 fill telemetry, not a new measurement): at the median 5% stop the round trip costs
+  **0.05–0.11R**; at the p10 0.65% stop it costs **0.40–0.83R** (the span is charges-only vs
+  charges plus the measured median slippage of 14.0 bps per leg). Stop width is set by pivot geography and
+  cost is set by stop width, so neither is set by anything to do with the trade's merit. This
+  links the tight-stop ₹ sink, the "chased" cohort (avg stop 2.13% vs 5.33%) and the −1.70R
+  overshoot into one mechanism.
+
+**Nothing was built, no gate flipped, no knob touched, no recorded number changed, no clock
+reset.** `ruff` + `mypy --strict` clean on the new script.
+
 ### Reading study (2026-09-09) — `docs/reading/security_analysis/`: four pre-registered tests, five negative results
 
 Read all 14 PDFs in `docs/reading/security_analysis/` against a user question: can the books

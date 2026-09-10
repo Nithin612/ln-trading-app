@@ -12,7 +12,40 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ## ▶ STATE AT A GLANCE (updated 2026-09-10) — read this block first
 
-**▶▶ 2026-09-10 (latest) — READING STUDY CLOSED: five negatives, NOTHING BUILT — plus THREE MEASUREMENT
+**▶▶ 2026-09-10 (latest) — QUANT REVIEW DOC + AN ENGINE-SELECTIVITY PROBE, AND IT FOUND A DEAD FACTOR.**
+User asked for a standalone document to present the system to an external quant. Deliverable:
+**`docs/SYSTEM_REVIEW_FOR_QUANT.md`** (mechanism → measured results → diagnosis → options; every
+figure cited to a code path or reproducible). Its measurements come from a NEW read-only script,
+**`backend/scripts/engine_selectivity_probe.py`** (SELECT-only, frozen engine imported and called,
+never edited), over **4,511 daily panels** (239 liquid names × 30 dates 25 sessions apart).
+⭐ **`DOW_TREND` — weight 20, the spec's "macro context", the heaviest factor — scores on 3 of 4,511
+daily windows (0.07%) and CANNOT score by construction.** The daily call is
+`dow_trend_factor(lookback=20, swing_n=5)`; in a 20-bar window a n=5 pivot can only sit at index
+5…14, any two differ by ≤9 < 11, so their windows overlap and both can be the max only on an exact
+tie — yet the function needs TWO highs AND TWO lows. A synthetic staircase uptrend (HH+HL by
+construction) returns `0.0 — "Not enough swing points: 1 highs, 0 lows"`. ⇒ **the tradeable swing
+engine has NO trend-structure input**, and because the confidence denominator counts only scoring
+factors the absence is SILENT. Corroborated independently by **0/91 entries passing Minervini's
+trend conditions** and by the closed book's **beta +0.92 / alpha +0.0010**. ⚠ **SPECIFICATION defect,
+not an implementation bug** — §2.4 specifies both the 20-bar lookback and N=5 for daily and the code
+implements exactly that. `SIGNAL_ENGINE.md` is hook-protected: **nothing changed**; a fix needs
+explicit instruction + §8 regression + regenerated Rust fixtures, and the cheap first move is the
+read-only injection test that refuted RVOL. **This is now the leading Tier-1 candidate in the doc's
+options list — the only item on it that is a DEFECT rather than a hypothesis.**
+**Also newly measured:** a "≥70% confidence" signal is a median of **3 of 15 factors worth 30 of 160
+weight points** (p10 of *passing* signals = ONE factor; `SR_ZONE` in 69.8% of them ⇒ the engine is a
+"candle pattern at an S/R zone" detector) · gate pass rate **4.19%** of stock-days · the ADX branch is
+no edge case (**39.9% weak / 8.9% strong**) · the swing stop is the last n=5 pivot ANYWHERE in the
+300-bar window (p90 **16.17%** away, **18.2% at or ABOVE the entry close**) so only **47.4%** of windows
+yield a usable BUY-swing stop and **98 of 189 gate-passing signals (51.9%) die at the level stage** —
+the book is selected on *pivot proximity* · survivors: stop width p50 5.00% (17.6% under 2%), R:R p50
+1.58 with **27.5% below 1.0**, notional p50 ₹38,965 on ₹1L · and **cost in R is a hyperbola in stop
+width** (**0.05–0.11R** at the median 5% stop, **0.40–0.83R at the p10 0.65% stop**), which links the tight-stop ₹
+sink, the "chased" cohort and the −1.70R overshoot into ONE mechanism.
+**Nothing built, no gate flipped, no knob touched, no recorded number changed, no clock reset.**
+ruff + mypy strict clean.
+
+**▶▶ 2026-09-10 — READING STUDY CLOSED: five negatives, NOTHING BUILT — plus THREE MEASUREMENT
 DEFECTS in our research harness, two of which touch the closed D1/D5.**
 User asked whether the 14 PDFs in `docs/reading/security_analysis/` solve entry/stock selection, next-day
 validation of an EOD signal, or alert timing. All read. Synthesis:
@@ -843,6 +876,26 @@ which is what Phase-6 expectancy calibration is for.
 > class of bug that gave v1 Phase 7 its four integration defects).
 
 **▶ CONTINUE HERE (next session, any account) — updated 2026-09-10.**
+
+**▶▶ 2026-09-10 (later) — THE QUANT REVIEW DOC IS WRITTEN AND IT SURFACED A DEAD FACTOR. START HERE.**
+Deliverable `docs/SYSTEM_REVIEW_FOR_QUANT.md` + `backend/scripts/engine_selectivity_probe.py`
+(read-only, rerunnable, ruff+mypy clean). **Nothing was built and nothing changed** — no gate, no knob,
+no recorded number, no clock.
+
+⭐ **The new item for the queue: `DOW_TREND` (weight 20) is unreachable on the daily timeframe** —
+3 of 4,511 panels, and a synthetic HH+HL uptrend returns "Not enough swing points". `lookback=20`
+with `swing_n=5` admits at most one pivot per side; the factor needs two of each. So the tradeable
+swing engine carries **no trend-structure input**, silently, because the confidence denominator only
+counts scoring factors. ⚠ **It is a SPEC defect (§2.4 specifies both parameters), and
+`SIGNAL_ENGINE.md` is hook-protected — do NOT edit it.** The user's call is needed on two questions
+the doc states explicitly: (a) is repairing it a bugfix or a new hypothesis that must clear t ≈ 3.6,
+and (b) may the read-only injection test be run first. **The injection test needs no frozen edit and
+no sign-off** — it is the same method that refuted RVOL (`scripts/rvol_factor_study.py` is the
+template): inject a reachable trend factor through the frozen scorer over the 2023-07→2026-09 corpus
+and report the paired ΔR. ⚠ **Prior is guarded, not optimistic** — the RVOL test showed a graded
+injected factor can DILUTE through the normalisation and make the book worse.
+This slots in as **Tier-1 item 1** in the doc's options list, ahead of the Minervini universe rerun
+and 12-month price momentum. It does **not** displace any of the 6 follow-ups below, all still open.
 
 **▶▶ 2026-09-10 READING STUDY — CLOSED, five negatives, NO build queued. START A FRESH SESSION HERE.**
 Full detail: the STATE block above · `docs/reading/security-analysis-folder-takeaways-2026-09-09.md` ·
