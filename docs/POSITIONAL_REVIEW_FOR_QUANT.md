@@ -126,7 +126,7 @@ boundary, which is why they are measured read-only here rather than fixed.
 | `ohlcv_5m / 15m / 1h` | **empty** | lost 2026-09-07; re-accrues only in real time |
 | `signals` / `positions` | **30 / 0** | **the trading record was destroyed on 2026-09-07** and is not recoverable |
 | `strategy_profiles` | **0** | same event — the profile definitions are gone from the database |
-| `index_ohlcv_1d` · `india_vix_daily` | 48 · 16 rows | broad-index and VIX history not restored |
+| `index_ohlcv_1d` · `india_vix_daily` | 48 · 16 rows | broad-index and VIX history **not restored**. These accrue ~3 rows/session, so a later read is higher — the *history* stays ~3 weeks either way |
 
 Three consequences that shape this document:
 
@@ -423,7 +423,7 @@ The question "do you do sector analysis?" has a short answer for this class:
 | Sector relative strength (`app/signals/sector_rs.py`) | exists; **shadow**; never active |
 | Market regime — index 200-DMA + India VIX (`app/signals/market_regime.py`) | exists; **shadow**; standing instruction is *do not act on it* (it would block 74% of the book and its blocked set has the **higher** win rate) |
 | `stocks.sector` | populated on 500 rows overall, but on only **165 of the 1,322 active** names — 12.5% of the tradeable universe |
-| `index_ohlcv_1d` | **48 rows across 3 indices, 2026-08-19 → 2026-09-09** — three weeks of three broad indices |
+| `index_ohlcv_1d` | **48 rows across 3 indices, 2026-08-19 → 2026-09-09** when measured — three weeks of three broad indices. It gains ~3 rows/session, so the count rises while the usable history does not |
 | `india_vix_daily` | **16 rows** (was 784 sessions before 2026-09-07) |
 | Fundamentals (`market_cap_cr`) | **0 rows populated.** No writer exists; a free source was identified in a 2026-09-08 spike and the build deferred for want of a consumer |
 | News veto | deferred — none of its three preconditions holds (0 of 322 rating rows carry a direction; no forward earnings calendar; the existing guard has never fired) |
@@ -431,8 +431,9 @@ The question "do you do sector analysis?" has a short answer for this class:
 Two consequences specific to positional:
 
 - **There is no sector benchmark to compute relative strength against.** Only three
-  *broad* indices were ever ingested, and only three weeks of them survive. Sector
-  RS is not merely inactive — it is currently unmeasurable.
+  *broad* indices were ever ingested, and only about three weeks of them survive.
+  Sector RS is not merely inactive — it is currently unmeasurable, and forward
+  accrual alone will take months to make it so.
 - **The class is the one that would benefit most from a market filter, and has
   none.** Positional is long-only (§5.1) and holds for six calendar weeks, so it is
   maximally exposed to a market downtrend and cannot express the opposite view. The
@@ -1030,7 +1031,7 @@ and cannot offset the swing book's shorts. Combined with beta +0.92 all-class, a
 positional allocation is close to a levered long index position with extra costs.
 The overlay built precisely for this exposure — the 200-DMA market-regime gate — is
 in shadow, carries a do-not-act instruction, and **cannot currently be evaluated at
-all** because the index history it reads is 48 rows (§5.5).
+all** because the index history it reads is ~3 weeks long (§5.5).
 
 ### 10.7 One in five positional signals is a single indicator
 
