@@ -62,6 +62,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from app.backtest.engine import BacktestConfig, BacktestEngine, TradeRecord  # noqa: E402
+from app.core.ratios import WINSOR_R, clamp_ratio_f  # noqa: E402
 from app.db.session import AsyncSessionFactory  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 
@@ -102,6 +103,18 @@ class Row:
     @property
     def r(self) -> float:
         return self.pnl_pct / self.actual_risk_pct
+
+    @property
+    def wr(self) -> float:
+        """R winsorized at the project's owned bound for AVERAGING R into an expectancy.
+
+        `app.core.ratios.WINSOR_R` exists precisely because a structural stop can land a few
+        basis points from entry, and that trade's R then carries the mean on its own. This
+        study found the hazard the hard way: its ten largest |R| trades all have stops of
+        0.23%-0.86% and contribute +128R against a total of -90R, so the UNwinsorized mean is
+        a statement about ten trades, not about 1,975. Read the winsorized column.
+        """
+        return clamp_ratio_f(self.r, WINSOR_R)
 
 
 async def _load_frames(
@@ -293,15 +306,17 @@ def _cohort(risk_pct: float) -> str:
 
 def _fmt_set(name: str, rows: list[Row], baseline_n: int) -> str:
     if not rows:
-        return f"| {name} | 0 | - | - | - | - | - | - | - |"
+        return f"| {name} | 0 | - | - | - | - | - | - | - | - |"
     rs = [r.r for r in rows]
-    mean, med, t, n = _mean_t(rs)
+    ws = [r.wr for r in rows]
+    wmean, wmed, wt, n = _mean_t(ws)
+    rmean, _, _, _ = _mean_t(rs)
     win = sum(1 for r in rows if r.pnl_pct > 0) / n * 100
     tp = sum(1 for r in rows if r.hit_target) / n * 100
     kept = n / baseline_n * 100 if baseline_n else 0.0
     return (
-        f"| {name} | {n} | {kept:.0f}% | {mean:+.3f} | {med:+.3f} | "
-        f"{sum(rs):+.1f} | {win:.0f}% | {tp:.0f}% | {t:+.2f} |"
+        f"| {name} | {n} | {kept:.0f}% | {wmean:+.3f} | {wmed:+.3f} | "
+        f"{sum(ws):+.1f} | {rmean:+.3f} | {win:.0f}% | {tp:.0f}% | {wt:+.2f} |"
     )
 
 
@@ -461,12 +476,19 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
     a(
         "`kept` = share of the baseline's trades this rule still takes. R is measured against "
         "the risk ACTUALLY taken (`|fill - SL|`), so a worse fill is already charged for. "
+        "**R is winsorized at the project's owned bound (`ratios.WINSOR_R` = "
+        f"{WINSOR_R:.0f}R)** wherever it is averaged - a structural stop can land 23 bps from "
+        "entry and that one trade then carries the mean (see section 6). The raw mean is shown "
+        "beside it; where the two differ the tails are doing the talking. "
         "`tp_hit` is a target touch; `win` is pnl > 0. They differ by right-edge marks that "
         "happen to be positive AND by the rare case where the trigger sits ABOVE the frozen "
         "target (signal-bar high already past it), which books a target touch AT A LOSS.\n"
     )
-    a("\n| entry rule | n | kept | mean R | median R | total R | win | tp_hit | t |")
-    a("|---|---|---|---|---|---|---|---|---|")
+    a(
+        "\n| entry rule | n | kept | mean R (wins.) | median R | total R (wins.) | "
+        "mean R (raw) | win | tp_hit | t |"
+    )
+    a("|---|---|---|---|---|---|---|---|---|---|")
     a(_fmt_set("baseline: fill at next open (frozen)", list(base.values()), bn))
     for w in windows:
         a(_fmt_set(f"stop @ prior-bar extreme, {w}d", list(variants[f"stop_w{w}"].values()), bn))
@@ -517,7 +539,10 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
         "Left block = the baseline restricted to the trades this rule also took (pure "
         "selection). Right = paired mean dR on that same intersection (pure fill cost).\n"
     )
-    a("\n| entry rule | n_int | baseline R on int | variant R on int | paired dR | t(dR) |")
+    a(
+        "\n_All four columns are winsorized R._\n"
+        "\n| entry rule | n_int | baseline R on int | variant R on int | paired dR | t(dR) |"
+    )
     a("|---|---|---|---|---|---|")
     for w in windows:
         for label, pretty in (
@@ -529,9 +554,9 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
             if not keys:
                 a(f"| {pretty} | 0 | - | - | - | - |")
                 continue
-            b = [base[k].r for k in keys]
-            v = [variants[label][k].r for k in keys]
-            d = [variants[label][k].r - base[k].r for k in keys]
+            b = [base[k].wr for k in keys]
+            v = [variants[label][k].wr for k in keys]
+            d = [variants[label][k].wr - base[k].wr for k in keys]
             dm, _, dt, _ = _mean_t(d)
             a(
                 f"| {pretty} | {len(keys)} | {statistics.mean(b):+.3f} | "
@@ -593,7 +618,7 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
         "stop-width mix. A rule that only wins by shifting the mix is the same trap.\n"
     )
     w_focus = windows[-1]
-    a(f"\n| cohort | baseline n / mean R | stop+cap+sl {w_focus}d n / mean R | delta |")
+    a(f"\n| cohort | baseline n / mean R | stop+cap+samebar {w_focus}d, mean R | delta |")
     a("|---|---|---|---|")
     for cname, _, _ in _COHORTS:
         bb = [r.r for r in base.values() if _cohort(r.planned_risk_pct) == cname]
@@ -607,7 +632,7 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
         a(f"| {cname} | {len(bb)} / {bm:+.3f} | {len(vv)} / {vm:+.3f} | {vm - bm:+.3f} |")
 
     a("\n## 3b. By classification\n")
-    a(f"\n| class | baseline n / mean R | stop+cap+sl {w_focus}d n / mean R | delta |")
+    a(f"\n| class | baseline n / mean R | stop+cap+samebar {w_focus}d, mean R | delta |")
     a("|---|---|---|---|")
     classes = sorted({r.classification for r in base.values()})
     for cl in classes:
@@ -622,7 +647,7 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
         a(f"| {cl} | {len(bb)} / {bm:+.3f} | {len(vv)} / {vm:+.3f} | {vm - bm:+.3f} |")
 
     a("\n## 3c. By direction\n")
-    a(f"\n| side | baseline n / mean R | stop+cap+sl {w_focus}d n / mean R | delta |")
+    a(f"\n| side | baseline n / mean R | stop+cap+samebar {w_focus}d, mean R | delta |")
     a("|---|---|---|---|")
     for side in ("BUY", "SELL"):
         bb = [r.r for r in base.values() if r.direction == side]
@@ -668,8 +693,13 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
     a(
         "Unadjusted corporate actions are already excluded, but the check that matters is "
         "whether the totals rest on a handful of extreme trades. A -80% split gap would book "
-        "roughly -16R on a 5% stop against a baseline total near -40R, so a single survivor "
-        "would be visible here. Cross-check the dates against any known split/bonus.\n"
+        "roughly -16R on a 5% stop, so a single survivor would be visible here. Cross-check "
+        "the dates against any known split/bonus.\n\n"
+        "⚠ What this table actually found is a DIFFERENT hazard: every one of these trades has "
+        f"a stop a fraction of a percent from entry, so its R denominator is tiny and its R "
+        f"explodes. That is the documented tiny-SL artifact, and it is why every averaged R in "
+        f"this report is winsorized at {WINSOR_R:.0f}R. The raw totals below are printed "
+        "unwinsorized on purpose, to show the size of the problem.\n"
     )
     a("\n| rank | stock | entry date | direction | risk% | R |")
     a("|---|---|---|---|---|---|")

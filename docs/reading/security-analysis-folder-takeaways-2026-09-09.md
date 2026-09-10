@@ -444,59 +444,73 @@ Two things worth keeping anyway:
   though note it is now a thread suggested by a *control variable that killed something*, which
   is weaker evidence than it first appeared.
 
-### 6.5 The rule applied to our own signals — refuted again — `entry-confirmation-study-2026-09-09.md`
+### 6.5 The rule applied to our own signals — refuted again, harder — `entry-confirmation-study-2026-09-09.md`
 
 The one channel §6.1 cannot see: the base-rate test has no stops, so confirmation might pay by
 avoiding immediate stop-outs rather than by adding drift. The frozen `run_single_stock` minted
-**1,979 resolved trades** over the 250-stock corpus with real SL/TP geometry; the exit walk is a
-replica of the frozen `_simulate_trade`, **asserted trade-for-trade against the original on 400
-trades** (exit date, exit price and both flags identical) before any number was read.
+**1,975 resolved trades** with real SL/TP geometry (4 dropped for a corporate action inside the
+holding span); the exit walk is a replica of the frozen `_simulate_trade`, **asserted
+trade-for-trade against the original on 400 trades** before any number was read.
 
 | entry rule | n | kept | mean R | total R | win | t |
 |---|---|---|---|---|---|---|
-| baseline: fill at next open (frozen) | 1979 | 100% | −0.020 | −40.3 | 36% | −0.51 |
-| stop @ prior-bar extreme, 1d | 1189 | 60% | −0.015 | −17.3 | 44% | −0.37 |
-| … + 0.33R ceiling (Weinstein's stop-limit), 1d | 1154 | 58% | −0.016 | −18.6 | 45% | −0.41 |
-| … + 0.33R ceiling, 3d | 1434 | 72% | −0.050 | −71.4 | 45% | −1.48 |
-| … + 0.33R ceiling, 5d | 1540 | 78% | −0.061 | −93.3 | 45% | −1.89 |
-| … + **dead if the stop was hit first**, 1d | 1086 | 55% | **+0.046** | **+49.4** | 48% | +1.11 |
-| … + dead if stop hit first, 5d | 1366 | 69% | +0.015 | +20.4 | 48% | +0.43 |
+| baseline: fill at next open (frozen) | 1975 | 100% | −0.045 | −89.7 | 36% | −1.20 |
+| stop @ prior-bar extreme, 1d | 1182 | 60% | −0.044 | −52.4 | 44% | −1.27 |
+| … + 0.33R ceiling (Weinstein's stop-limit), 1d | 1151 | 58% | −0.047 | −53.6 | 45% | −1.34 |
+| … + 0.33R ceiling, 3d | 1431 | 72% | −0.074 | −106.5 | 45% | **−2.45** |
+| … + 0.33R ceiling, 5d | 1537 | 78% | −0.084 | −128.4 | 45% | **−2.87** |
+| … + dead if the stop was touched in the SAME BAR, 1d | 1083 | 55% | +0.013 | +14.4 | 47% | +0.37 |
+| … + same-bar rule, 5d | 1363 | 69% | −0.011 | −14.6 | 48% | −0.34 |
 
-**The same structure as §6.1, on a completely different sample.** Section 2 of the report
-separates the two effects, and the separation is unambiguous:
+**Same structure as §6.1, independent sample.** Section 2 separates the two effects:
 
 | | value | t |
 |---|---|---|
-| SELECTION — baseline R on just the trades that confirm | **+0.16 to +0.32** (vs −0.020 for the whole book) | — |
-| FILL COST — paired ΔR on that same intersection | **−0.22 to −0.30** | **−7.3 to −9.5** |
+| SELECTION — baseline R on just the trades that confirm | **+0.133 to +0.286** (vs −0.045 for the whole book) | — |
+| FILL COST — paired ΔR on that same intersection | **−0.216 to −0.292** | **−7.2 to −9.4** |
 
-Confirmation genuinely picks the better trades. Paying the trigger price costs about a quarter of
-an R, and the two roughly cancel. **Note which of the two is statistically solid: the cost is
-t ≈ −8; every benefit figure is t ≤ 1.2.** The cost is certain, the benefit is not.
+Confirmation genuinely picks the better trades; paying the trigger costs about a quarter of an R
+and cancels it. **Note which of the two is statistically solid: the cost is t ≈ −8; every benefit
+figure is t ≤ 0.4.** And at the 3- and 5-day windows the rule is now *significantly worse* than
+the baseline (t −2.45, −2.87).
 
-⚠ **The one positive variant is biased in its own favour, and the bias is unmeasurable here.**
-"Dead if the stop was hit first" declines any trade whose triggering bar *also* traded through
-the stop. Daily bars cannot resolve intrabar order, so that rule silently excludes two different
-cases: the setup that fell to the stop before triggering (correctly declined — a live watcher
-could cancel the resting order) **and** the setup that triggered first and was then stopped out
-(a real −1R that a live implementation would have taken, and that this variant simply deletes
-from the sample). Every unambiguous variant — plain stop, and stop+ceiling — is **negative at
-every window**. So the honest reading is: the confirmation trigger does not help our signals
-either, and the only column that looks like it does is the column that needs intraday data we no
-longer hold in order to be believed.
+Three things the correction pass changed here, all in the same direction:
 
-Three things in the report are worth keeping regardless:
+- **The corporate-action filter removed only 4 trades but ~49R of fake profit** — those four
+  _(the "before" figures in this and the next bullet are from the pre-correction run, preserved
+  only in git history at `b143a4f`; everything else here is from the cited report)_
+  unadjusted split gaps were worth more than the study's entire original loss (baseline went
+  −40.3R → −89.7R, mean −0.020 → −0.045). Exactly the failure mode the reviewer predicted.
+- **The one positive column collapsed to nothing.** With CA gaps excluded, the same-bar variant
+  goes +0.046 → **+0.013** at 1d and +0.015 → **−0.011** at 5d. The last trace of a positive
+  result was a data artifact.
+- **The fill cost is NOT target truncation.** The variants keep the frozen target anchored to the
+  planned entry while the fill moves toward it, which charges the premium twice. Re-anchoring the
+  target to the actual fill (§2b) barely moves the paired ΔR: **−0.262 → −0.268** at 1d. The
+  conclusion survives its own strongest methodological objection.
 
-- **The alert-timing answer, directly.** Of the signals that ever confirm: **60% do so on day 1,
-  70% by day 2, 80% by day 5 — and 20% never confirm within five sessions.** Any "wait for
-  confirmation" alert design has to decide what to do with that last fifth, and a 1-day window is
-  a materially different product from a 5-day one.
-- **It is not a cohort-mix artifact.** The effect holds inside tight (+0.068) and mid (+0.080)
-  stop-width cohorts and is flat-to-negative in the wide cohort (−0.015) — so unlike the R:R≥1
-  gate it is not just re-sorting the stop-width mix. It is simply too small and too uncertain.
-- **BUY signals are net-negative (−0.103 mean R, n=1115) and SELL net-positive (+0.087, n=864)**
-  over a corpus window that was a strong bull market. That is odd enough to deserve its own look,
-  and it is not something any of the fourteen books would have told us.
+⚠ **And the study's own disclosure table found a hazard nobody was looking for.** Its ten largest
+|R| trades **all** have stops between **0.23% and 0.86%** of price, all are positive, and together
+they contribute **+128.4R against a total of −89.7R**. That is the documented tiny-SL artifact
+(`ratios.MAX_RR`'s reason for existing) dominating an R-based average. R is therefore now
+winsorized at the project's owned `WINSOR_R = 10R` wherever it is averaged — the convention
+`entry_attribution.py` already follows and this study should have used from the start. **The
+robust summaries are the median (−1.000 — the modal outcome is a full stop-out) and the paired
+ΔR, which is computed on identical signals and does not depend on the tails.**
+
+Three things worth keeping regardless:
+
+- **The alert-timing answer, directly.** Of all 1,975 signals: **60% confirm on day 1, 70% by day
+  2, 80% by day 5 — and 20% never confirm within five sessions.** Any "wait for confirmation"
+  alert design has to decide what to do with that last fifth, and a 1-day window is a materially
+  different product from a 5-day one.
+- **It is not a cohort-mix artifact.** The effect holds inside tight (+0.068) and mid (+0.075)
+  stop-width cohorts and is flat-to-negative in the wide cohort (−0.008) — unlike the R:R≥1 gate
+  it is not merely re-sorting the stop-width mix. It is simply too small and too uncertain.
+- **BUY signals are net-negative (−0.103 mean R, n=1115) and SELL net-positive (+0.030, n=860)**
+  over a bull-market window. The reviewer predicted this might be a CA artifact; with CA gaps now
+  excluded it persists, though the SELL side shrank (+0.087 → +0.030). Worth its own look, and
+  note that a cash-equity delivery short is not actually executable for us.
 
 ## 7. What is worth building, and what is not
 
