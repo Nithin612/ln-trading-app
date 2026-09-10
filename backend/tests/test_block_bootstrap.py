@@ -10,7 +10,9 @@ reject noise, does it accept a real edge, and — the property that justifies *b
 than an iid resample at all — does it actually widen when the series is autocorrelated.
 """
 
+import math
 import random
+import statistics
 
 import pytest
 from app.services.block_bootstrap import (
@@ -19,6 +21,7 @@ from app.services.block_bootstrap import (
     MIN_N,
     block_length,
     moving_block_bootstrap,
+    newey_west_t,
     render_lines,
 )
 
@@ -74,11 +77,7 @@ class TestRefusals:
         assert moving_block_bootstrap(series) is None
         # Canary on the old behaviour: if degenerate draws are kept and simply skipped,
         # a result comes back at all — and it looks confident.
-        kept = [
-            s
-            for s in _sharpes_of_resamples(series)
-            if s is not None
-        ]
+        kept = [s for s in _sharpes_of_resamples(series) if s is not None]
         assert len(kept) / 2000 < 1 - MAX_DEGENERATE_SHARE, (
             "this series must be mostly-degenerate, or the test proves nothing"
         )
@@ -161,9 +160,7 @@ class TestCalibrationAndPower:
     def _survives_rate(self, mu: float, base_seed: int, trials: int = 200) -> float:
         hits = 0
         for i in range(trials):
-            r = moving_block_bootstrap(
-                _normal(44, mu, base_seed + i), resamples=400, seed=99
-            )
+            r = moving_block_bootstrap(_normal(44, mu, base_seed + i), resamples=400, seed=99)
             if r is not None and r.observed_sharpe > 0 and r.sign_survives:
                 hits += 1
         return hits / trials
@@ -212,3 +209,85 @@ class TestRender:
         assert "negative sign SURVIVES" in out
         assert "90% interval" in out
         assert "SAMPLING uncertainty only" in out  # the honest limit rides along
+
+
+# --------------------------------------------------------------- newey_west_t (H1 sibling)
+
+
+class TestNeweyWestT:
+    """The overlap-aware t for the MEAN of a daily series.
+
+    Added 2026-09-10 after a quant-verifier HIGH: the reading-study scripts averaged each
+    day's cross-section and then t-tested that series, which removes same-day correlation
+    but NOT the overlap between day t and day t+1 when both measure a k-session forward
+    return. The naive t was inflated ~sqrt(k).
+    """
+
+    def test_iid_series_matches_the_naive_t_at_lag_zero(self) -> None:
+        """lag=0 is the ordinary t (population sd), so the correction is opt-in, not hidden."""
+        xs = [1.0, -2.0, 3.0, 0.5, -1.5, 2.5, -0.5, 1.0]
+        n = len(xs)
+        mean = sum(xs) / n
+        var = sum((x - mean) ** 2 for x in xs) / n
+        expected = mean / math.sqrt(var / n)
+        got = newey_west_t(xs, lag=0)
+        assert got is not None
+        assert got == pytest.approx(expected, rel=1e-12)
+
+    def test_positive_autocorrelation_shrinks_the_t(self) -> None:
+        """The whole point: a persistent series carries less information than its length."""
+        # A strongly persistent series: each value repeats the previous one's sign and size.
+        xs = [1.0, 1.0, 1.0, 1.0, -1.0, -1.0, -1.0, -1.0] * 6
+        xs = [x + 0.4 for x in xs]  # non-zero mean so a t exists
+        naive = newey_west_t(xs, lag=0)
+        corrected = newey_west_t(xs, lag=3)
+        assert naive is not None and corrected is not None
+        assert abs(corrected) < abs(naive), (
+            f"lag=3 t {corrected} should be smaller in magnitude than naive {naive}"
+        )
+
+    def test_overlapping_windows_under_null_are_no_longer_significant(self) -> None:
+        """The canary for the defect itself, on a synthetic panel with a KNOWN null.
+
+        Build daily means of a k-session forward return from iid noise: consecutive days
+        share k-1 sessions, exactly the study's shape. The naive t routinely clears 2 on a
+        series with no edge at all; the corrected t must be far tamer. Asserting on the
+        MEDIAN over many trials keeps this deterministic-ish without a fixed-seed illusion.
+        """
+        rng = random.Random(20260910)
+        k = 10
+        naive_ts: list[float] = []
+        corrected_ts: list[float] = []
+        for _ in range(40):
+            daily_noise = [rng.gauss(0.0, 1.0) for _ in range(400)]
+            # day t's observation is the sum of the next k daily moves -> overlap of k-1
+            series = [sum(daily_noise[t : t + k]) for t in range(len(daily_noise) - k)]
+            nt = newey_west_t(series, lag=0)
+            ct = newey_west_t(series, lag=k - 1)
+            if nt is not None and ct is not None:
+                naive_ts.append(abs(nt))
+                corrected_ts.append(abs(ct))
+        assert len(naive_ts) == 40
+        naive_med = statistics.median(naive_ts)
+        corrected_med = statistics.median(corrected_ts)
+        # Under H0 a correct |t| has median ~0.67. The naive one is inflated by ~sqrt(k).
+        assert corrected_med < naive_med, (
+            f"corrected median |t| {corrected_med:.2f} should be below naive {naive_med:.2f}"
+        )
+        assert corrected_med < 1.5, (
+            f"under H0 the corrected median |t| should stay near 0.67, got {corrected_med:.2f}"
+        )
+        assert naive_med > 1.5, (
+            "the synthetic panel is meant to REPRODUCE the inflation; if the naive median "
+            f"|t| is only {naive_med:.2f} the canary is not exercising the defect"
+        )
+
+    def test_degenerate_inputs_return_none_rather_than_a_number(self) -> None:
+        assert newey_west_t([], lag=0) is None
+        assert newey_west_t([1.0, 2.0], lag=0) is None  # n < 3
+        assert newey_west_t([2.0, 2.0, 2.0, 2.0], lag=1) is None  # zero variance
+
+    def test_lag_is_clamped_to_the_series_length(self) -> None:
+        xs = [1.0, -1.0, 2.0, 0.0, 1.5]
+        assert newey_west_t(xs, lag=999) is not None
+        assert newey_west_t(xs, lag=-5) == newey_west_t(xs, lag=0)

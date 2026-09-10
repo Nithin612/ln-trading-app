@@ -33,8 +33,14 @@ Risk-first sizing means a worse fill buys a SMALLER position; measuring in rupee
 qty would test bet size instead of entry timing (the error that inverted the first pass of the
 horizon/stop-width study, 2026-08-25).
 
-Corpus: the CA-clean window only. `ohlcv_1d` is CA-UNADJUSTED and a split gap would manufacture
-BOTH a fake upside trigger and a fake stop.
+CORPUS (corrected 2026-09-10, quant-verifier HIGH). `ohlcv_1d` is CA-UNADJUSTED and the
+2023-07-03 window is NOT "CA-clean" as this file previously claimed: 49 unadjusted corporate
+actions sit inside this exact 250-stock universe, 35 of them >=40% halvings. That matters more
+here than in any other study: a single unadjusted -80% gap exits at the open and, on a 5% stop,
+books about -16R against a total baseline of roughly -40R. Trades whose fill->exit span contains
+a |close-to-close| jump greater than `_CA_JUMP` are therefore DROPPED from every variant alike,
+and the report prints both the count and the largest surviving |R| trades so a reader can see
+that no single event is carrying a conclusion.
 """
 
 from __future__ import annotations
@@ -53,6 +59,7 @@ from typing import Any
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
+import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from app.backtest.engine import BacktestConfig, BacktestEngine, TradeRecord  # noqa: E402
 from app.db.session import AsyncSessionFactory  # noqa: E402
@@ -61,6 +68,8 @@ from sqlalchemy import text  # noqa: E402
 _OUT_DIR = Path(__file__).resolve().parents[2] / "docs" / "analysis"
 _CLEAN_SINCE = datetime(2023, 7, 3, tzinfo=UTC)
 _TICK = 0.05
+# A close-to-close move this large in a liquid name is a split/bonus, not a trade.
+_CA_JUMP = 0.25
 
 _COHORTS: list[tuple[str, float, float]] = [
     ("tight <2%", 0.0, 2.0),
@@ -87,6 +96,8 @@ class Row:
     hit_sl: bool
     day_offset: int
     right_edge: bool
+    stock: str = "?"
+    entry_ts: Any = None
 
     @property
     def r(self) -> float:
@@ -187,15 +198,25 @@ def _walk_exit(
 
 
 def _row_from(
-    t: TradeRecord, candles: pd.DataFrame, fill: Fill, planned_entry: float
+    t: TradeRecord,
+    candles: pd.DataFrame,
+    fill: Fill,
+    planned_entry: float,
+    is_ca: Any = None,
+    tp_override: float | None = None,
 ) -> Row | None:
     planned_risk = abs(planned_entry - t.stop_loss) / planned_entry * 100.0
     actual_risk = abs(fill.price - t.stop_loss) / fill.price * 100.0
     if planned_risk <= 0 or actual_risk <= 0:
         return None
-    _, exit_price, hit_sl, hit_tp, right_edge = _walk_exit(
-        candles, fill.idx, t.direction, t.stop_loss, t.take_profit
+    take_profit = t.take_profit if tp_override is None else tp_override
+    exit_idx, exit_price, hit_sl, hit_tp, right_edge = _walk_exit(
+        candles, fill.idx, t.direction, t.stop_loss, take_profit
     )
+    if is_ca is not None and bool(is_ca[fill.idx : exit_idx + 1].any()):
+        # An unadjusted split inside the holding span is a fake -80% "loss" (or gain) that the
+        # honest-fill walker will exit at the open. Drop the trade from every variant alike.
+        return None
     sign = 1 if t.direction == "BUY" else -1
     pnl_pct = sign * (exit_price - fill.price) / fill.price * 100.0
     return Row(
@@ -208,6 +229,8 @@ def _row_from(
         hit_sl=hit_sl,
         day_offset=fill.day_offset,
         right_edge=right_edge,
+        stock=t.stock,
+        entry_ts=candles.index[fill.idx],
     )
 
 
@@ -224,7 +247,11 @@ def _confirm_fill(
     buy = direction == "BUY"
     sig = candles.iloc[sidx]
     trigger = float(sig["high"]) + _TICK if buy else float(sig["low"]) - _TICK
-    risk_at_trigger = abs(trigger - stop_loss)
+    # DIRECTIONAL, not abs(): a BUY trigger at or below its own stop is not a trade with a
+    # small risk, it is a trade already through its stop. abs() would price a ceiling off a
+    # negative distance and could book a stop-out as a POSITIVE R. Same defect class as the
+    # `size_for_fill` side-blindness fixed on 2026-09-02.
+    risk_at_trigger = (trigger - stop_loss) if buy else (stop_loss - trigger)
     if risk_at_trigger <= 0:
         return None
     ceiling = None
@@ -303,14 +330,25 @@ def _verify_walker(engine: BacktestEngine, frames: dict[str, pd.DataFrame], limi
 
 def _collect(  # noqa: C901 - one pass per stock: mint, classify the gap, then every variant
     frames: dict[str, pd.DataFrame], windows: list[int], cap_r: float
-) -> tuple[dict[str, dict[tuple[str, Any], Row]], Counter[str], list[tuple[str, float, bool]]]:
+) -> tuple[
+    dict[str, dict[tuple[str, Any], Row]],
+    Counter[str],
+    list[tuple[str, float, bool]],
+    int,
+]:
     engine = BacktestEngine(BacktestConfig())
     names = ["baseline_open"]
     for w in windows:
-        names += [f"stop_w{w}", f"stop_cap_w{w}", f"stop_cap_sl_w{w}"]
+        names += [
+            f"stop_w{w}",
+            f"stop_cap_w{w}",
+            f"stop_cap_slsamebar_w{w}",
+            f"retp_w{w}",
+        ]
     variants: dict[str, dict[tuple[str, Any], Row]] = {n: {} for n in names}
     gap_census: Counter[str] = Counter()
     gap_rows: list[tuple[str, float, bool]] = []
+    n_dropped = [0]
     wmax = max(windows)
 
     done = 0
@@ -328,14 +366,21 @@ def _collect(  # noqa: C901 - one pass per stock: mint, classify the gap, then e
                 flush=True,
             )
         pos = {ts: i for i, ts in enumerate(candles.index)}
+        closes = candles["close"].to_numpy()
+        is_ca = np.concatenate([[0.0], np.abs(np.diff(closes) / closes[:-1])]) > _CA_JUMP
         for t in engine.run_single_stock(stock, candles):
             fidx = pos[t.entry_date]
             sidx = fidx - 1
             key = (stock, candles.index[sidx])
             base = _row_from(
-                t, candles, Fill(idx=fidx, price=t.entry_price, day_offset=1), t.entry_price
+                t,
+                candles,
+                Fill(idx=fidx, price=t.entry_price, day_offset=1),
+                t.entry_price,
+                is_ca,
             )
             if base is None:
+                n_dropped[0] += 1
                 continue
             variants["baseline_open"][key] = base
 
@@ -356,18 +401,33 @@ def _collect(  # noqa: C901 - one pass per stock: mint, classify the gap, then e
                 for label, cap, inval in (
                     (f"stop_w{w}", None, False),
                     (f"stop_cap_w{w}", cap_r, False),
-                    (f"stop_cap_sl_w{w}", cap_r, True),
+                    (f"stop_cap_slsamebar_w{w}", cap_r, True),
                 ):
                     fill = _confirm_fill(candles, sidx, t.direction, t.stop_loss, w, cap, inval)
                     if fill is None:
                         continue
-                    row = _row_from(t, candles, fill, t.entry_price)
+                    row = _row_from(t, candles, fill, t.entry_price, is_ca)
                     if row is not None:
                         variants[label][key] = row
                         if label == f"stop_w{wmax}":
                             confirmed_any = True
+                    # Sensitivity (quant-verifier HIGH #5): the variants above keep the FROZEN
+                    # target, anchored to the planned entry, while the fill moves toward it -
+                    # so a worse fill both widens the risk AND truncates the reward, charging
+                    # the premium twice. Re-anchoring the target to the actual fill keeps the
+                    # frozen GEOMETRY (same +% distance) and isolates the risk-side cost.
+                    if label == f"stop_cap_slsamebar_w{w}" and fill is not None:
+                        tp_pct = abs(t.take_profit - t.entry_price) / t.entry_price
+                        re_tp = (
+                            fill.price * (1 + tp_pct)
+                            if t.direction == "BUY"
+                            else fill.price * (1 - tp_pct)
+                        )
+                        r2 = _row_from(t, candles, fill, t.entry_price, is_ca, re_tp)
+                        if r2 is not None:
+                            variants[f"retp_w{w}"][key] = r2
             gap_rows.append((f"{t.direction} {gap}", base.r, confirmed_any))
-    return variants, gap_census, gap_rows
+    return variants, gap_census, gap_rows, n_dropped[0]
 
 
 def _report(  # noqa: C901 - a linear report builder; splitting it would only scatter it
@@ -379,6 +439,7 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
     universe: str,
     n_stocks: int,
     verified: int,
+    n_ca: int,
 ) -> str:
     base = variants["baseline_open"]
     bn = len(base)
@@ -387,7 +448,8 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
     a("# Entry-confirmation study - does the market have to prove it first?\n")
     a(
         f"_Generated {datetime.now(tz=UTC).date()} - universe `{universe}` - {n_stocks} stocks - "
-        f"CA-clean window from {_CLEAN_SINCE.date()} - {bn} resolved baseline trades._\n"
+        f"window from {_CLEAN_SINCE.date()} - {bn} resolved baseline trades "
+        f"({n_ca} dropped for an unadjusted corporate action inside the holding span)._\n"
     )
     a(
         f"\nWalker verified against the frozen `_simulate_trade` on **{verified}** trades "
@@ -399,8 +461,9 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
     a(
         "`kept` = share of the baseline's trades this rule still takes. R is measured against "
         "the risk ACTUALLY taken (`|fill - SL|`), so a worse fill is already charged for. "
-        "`tp_hit` is a target touch; `win` also counts a right-edge mark that happens to be "
-        "positive. They diverge only by those marks - see the robustness table.\n"
+        "`tp_hit` is a target touch; `win` is pnl > 0. They differ by right-edge marks that "
+        "happen to be positive AND by the rare case where the trigger sits ABOVE the frozen "
+        "target (signal-bar high already past it), which books a target touch AT A LOSS.\n"
     )
     a("\n| entry rule | n | kept | mean R | median R | total R | win | tp_hit | t |")
     a("|---|---|---|---|---|---|---|---|---|")
@@ -416,8 +479,8 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
         )
         a(
             _fmt_set(
-                f"... + dead if stop hit first, {w}d",
-                list(variants[f"stop_cap_sl_w{w}"].values()),
+                f"... + dead if the stop was touched in the SAME BAR, {w}d",
+                list(variants[f"stop_cap_slsamebar_w{w}"].values()),
                 bn,
             )
         )
@@ -445,7 +508,7 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
 
     a(_resolved(list(base.values()), "baseline: fill at next open (frozen)"))
     for w in windows:
-        a(_resolved(list(variants[f"stop_cap_sl_w{w}"].values()), f"stop+cap+sl, {w}d"))
+        a(_resolved(list(variants[f"stop_cap_slsamebar_w{w}"].values()), f"stop+cap+samebar, {w}d"))
     n_marks = sum(1 for r in base.values() if r.right_edge)
     a(f"\n_Right-edge marks in the baseline: {n_marks} of {bn} ({n_marks / bn * 100:.1f}%)._\n")
 
@@ -460,7 +523,7 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
         for label, pretty in (
             (f"stop_w{w}", f"stop, {w}d"),
             (f"stop_cap_w{w}", f"stop+cap, {w}d"),
-            (f"stop_cap_sl_w{w}", f"stop+cap+sl, {w}d"),
+            (f"stop_cap_slsamebar_w{w}", f"stop+cap+samebar, {w}d"),
         ):
             keys = set(variants[label]) & set(base)
             if not keys:
@@ -475,6 +538,55 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
                 f"{statistics.mean(v):+.3f} | {dm:+.3f} | {dt:+.2f} |"
             )
 
+    a("\n### 2b. Is the fill cost real, or is it target truncation? (sensitivity)\n")
+    a(
+        "The variants above keep the FROZEN target, anchored to the planned entry, while the "
+        "fill moves toward it - so a worse fill widens the risk AND truncates the reward, "
+        "charging the premium twice. `retp` re-anchors the target to the actual fill, keeping "
+        "the frozen GEOMETRY (the same +% distance) and isolating the risk-side cost. If the "
+        "paired dR roughly halves here, the headline overstates the cost; if it barely moves, "
+        "the conclusion is bulletproof.\n"
+    )
+    a("\n| window | n | frozen-TP dR | re-anchored-TP dR | mean R (frozen) | mean R (retp) |")
+    a("|---|---|---|---|---|---|")
+    for w in windows:
+        fro = variants[f"stop_cap_slsamebar_w{w}"]
+        ret = variants.get(f"retp_w{w}", {})
+        keys = set(fro) & set(ret) & set(base)
+        if not keys:
+            a(f"| {w}d | 0 | - | - | - | - |")
+            continue
+        d_fro = statistics.mean([fro[k].r - base[k].r for k in keys])
+        d_ret = statistics.mean([ret[k].r - base[k].r for k in keys])
+        a(
+            f"| {w}d | {len(keys)} | {d_fro:+.3f} | {d_ret:+.3f} | "
+            f"{statistics.mean([fro[k].r for k in keys]):+.3f} | "
+            f"{statistics.mean([ret[k].r for k in keys]):+.3f} |"
+        )
+
+    a("\n### 2c. What the same-bar rule actually deletes\n")
+    a(
+        "`stop+cap+samebar` declines a trade whose triggering bar ALSO traded through the "
+        "stop. Daily bars cannot say which came first, so this deletes both the setup that "
+        "fell to the stop before triggering (legitimately cancellable live) and the setup "
+        "that triggered and was then stopped - a real -1R a live implementation would have "
+        "taken. The mean R of what it removes is the tell: at -1.000 exactly it is deleting "
+        "nothing but stop-outs.\n"
+    )
+    a("\n| window | fills kept by stop+cap | kept by +samebar | deleted | mean R deleted |")
+    a("|---|---|---|---|---|")
+    for w in windows:
+        cap = variants[f"stop_cap_w{w}"]
+        sb = variants[f"stop_cap_slsamebar_w{w}"]
+        gone = set(cap) - set(sb)
+        if not gone:
+            a(f"| {w}d | {len(cap)} | {len(sb)} | 0 | - |")
+            continue
+        a(
+            f"| {w}d | {len(cap)} | {len(sb)} | {len(gone)} | "
+            f"{statistics.mean([cap[k].r for k in gone]):+.3f} |"
+        )
+
     a("\n## 3. Does it survive inside every stop-width cohort?\n")
     a(
         "The mandatory check: the R:R>=1 gate looked good in aggregate because it re-sorted the "
@@ -487,7 +599,7 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
         bb = [r.r for r in base.values() if _cohort(r.planned_risk_pct) == cname]
         vv = [
             r.r
-            for r in variants[f"stop_cap_sl_w{w_focus}"].values()
+            for r in variants[f"stop_cap_slsamebar_w{w_focus}"].values()
             if _cohort(r.planned_risk_pct) == cname
         ]
         bm = statistics.mean(bb) if bb else 0.0
@@ -500,7 +612,11 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
     classes = sorted({r.classification for r in base.values()})
     for cl in classes:
         bb = [r.r for r in base.values() if r.classification == cl]
-        vv = [r.r for r in variants[f"stop_cap_sl_w{w_focus}"].values() if r.classification == cl]
+        vv = [
+            r.r
+            for r in variants[f"stop_cap_slsamebar_w{w_focus}"].values()
+            if r.classification == cl
+        ]
         bm = statistics.mean(bb) if bb else 0.0
         vm = statistics.mean(vv) if vv else 0.0
         a(f"| {cl} | {len(bb)} / {bm:+.3f} | {len(vv)} / {vm:+.3f} | {vm - bm:+.3f} |")
@@ -510,7 +626,9 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
     a("|---|---|---|---|")
     for side in ("BUY", "SELL"):
         bb = [r.r for r in base.values() if r.direction == side]
-        vv = [r.r for r in variants[f"stop_cap_sl_w{w_focus}"].values() if r.direction == side]
+        vv = [
+            r.r for r in variants[f"stop_cap_slsamebar_w{w_focus}"].values() if r.direction == side
+        ]
         bm = statistics.mean(bb) if bb else 0.0
         vm = statistics.mean(vv) if vv else 0.0
         a(f"| {side} | {len(bb)} / {bm:+.3f} | {len(vv)} / {vm:+.3f} | {vm - bm:+.3f} |")
@@ -545,6 +663,26 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
         cf = sum(1 for x in by_gap[g] if x[1]) / len(by_gap[g]) * 100
         a(f"| {g} | {len(rs)} | {statistics.mean(rs):+.3f} | {cf:.0f}% |")
     a(f"\n_Census check: {sum(gap_census.values())} classified._\n")
+
+    a("\n## 6. The largest surviving trades (is one event carrying a conclusion?)\n")
+    a(
+        "Unadjusted corporate actions are already excluded, but the check that matters is "
+        "whether the totals rest on a handful of extreme trades. A -80% split gap would book "
+        "roughly -16R on a 5% stop against a baseline total near -40R, so a single survivor "
+        "would be visible here. Cross-check the dates against any known split/bonus.\n"
+    )
+    a("\n| rank | stock | entry date | direction | risk% | R |")
+    a("|---|---|---|---|---|---|")
+    ranked = sorted(base.values(), key=lambda x: -abs(x.r))
+    for i, row in enumerate(ranked[:10], start=1):
+        ts = row.entry_ts.date() if hasattr(row.entry_ts, "date") else row.entry_ts
+        a(
+            f"| {i} | {row.stock} | {ts} | {row.direction} | "
+            f"{row.actual_risk_pct:.2f}% | {row.r:+.2f} |"
+        )
+    tot = sum(row.r for row in base.values())
+    top10 = sum(row.r for row in ranked[:10])
+    a(f"\n_Top-10 |R| trades contribute {top10:+.1f}R of the baseline's {tot:+.1f}R total._\n")
     return "\n".join(out)
 
 
@@ -573,9 +711,17 @@ def main() -> None:
         verified = _verify_walker(engine, frames, args.verify_walker)
         print(f"walker verified on {verified} frozen trades", file=sys.stderr)
 
-    variants, census, gap_rows = _collect(frames, windows, args.cap_r)
+    variants, census, gap_rows, n_ca = _collect(frames, windows, args.cap_r)
     md = _report(
-        variants, census, gap_rows, windows, args.cap_r, args.universe, len(frames), verified
+        variants,
+        census,
+        gap_rows,
+        windows,
+        args.cap_r,
+        args.universe,
+        len(frames),
+        verified,
+        n_ca,
     )
     out = (
         Path(args.out)

@@ -226,9 +226,7 @@ def render_lines(r: BootstrapResult | None, *, label: str) -> list[str]:
             "the outlier)"
         ]
     sign = "positive" if r.observed_sharpe > 0 else "negative"
-    verdict = (
-        f"✅ the {sign} sign SURVIVES" if r.sign_survives else "⏳ the sign does NOT survive"
-    )
+    verdict = f"✅ the {sign} sign SURVIVES" if r.sign_survives else "⏳ the sign does NOT survive"
     return [
         f"- **{label} — block bootstrap ({r.resamples:,} resamples, "
         f"blocks of {r.block_len}):** {verdict} resampling",
@@ -238,3 +236,50 @@ def render_lines(r: BootstrapResult | None, *, label: str) -> list[str]:
         "  - ⚠ prices SAMPLING uncertainty only, not selection (that is DSR's job), and "
         "assumes the series was passed in chronological order.",
     ]
+
+
+def newey_west_t(series: Sequence[float], *, lag: int) -> float | None:
+    """t-statistic for the MEAN of an autocorrelated series (Newey-West, Bartlett kernel).
+
+    ## Why this sits here and is not a second bootstrap
+
+    `moving_block_bootstrap` above prices dependence in a *trade* series and reports a
+    *Sharpe* interval. This prices dependence in a *daily* series and corrects the *mean*'s
+    standard error. Same problem — short-range dependence makes an iid statistic overconfident
+    — different statistic, so the two are complements, not duplicates.
+
+    ## The specific defect it fixes (quant-verifier HIGH, 2026-09-10)
+
+    A study that measures a k-session forward return on every day produces DAILY OBSERVATIONS
+    THAT OVERLAP: day t and day t+1 share k−1 sessions of the same future. Averaging across
+    the cross-section each day removes the same-day correlation but leaves that overlap
+    untouched, so a naive `mean / (sd/sqrt(n))` on the daily series is inflated by roughly
+    `sqrt(k)`. Measured under H0 on a full panel the naive t had sd 0.98 at k=1 but **3.32 at
+    k=10 and 4.45 at k=20** — i.e. an apparent "t of 9" at a 20-session horizon is about 1.9
+    sigma. Reporting the naive t made a never-significant gradient look decisive.
+
+    `lag` should be `k − 1` for a k-session forward window (the number of overlapping
+    sessions). Bartlett weights `1 − l/(lag+1)` guarantee a non-negative variance estimate.
+
+    Returns ``None`` when the series is too short or has no variance — absence is the honest
+    answer, never a fabricated statistic.
+    """
+    xs = [float(x) for x in series]
+    n = len(xs)
+    if n < 3:
+        return None
+    mean = sum(xs) / n
+    dev = [x - mean for x in xs]
+    gamma0 = sum(d * d for d in dev) / n
+    if gamma0 <= 0.0:
+        return None
+    lag = max(0, min(int(lag), n - 1))
+    var = gamma0
+    for lg in range(1, lag + 1):
+        cov = sum(dev[i] * dev[i - lg] for i in range(lg, n)) / n
+        var += 2.0 * (1.0 - lg / (lag + 1.0)) * cov
+    if var <= 0.0:
+        # Bartlett weights make this rare but not impossible in tiny samples; refuse rather
+        # than emit a t from a negative variance.
+        return None
+    return mean / math.sqrt(var / n)

@@ -62,6 +62,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from app.db.session import AsyncSessionFactory  # noqa: E402
+from app.services.block_bootstrap import newey_west_t  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 
 _OUT_DIR = Path(__file__).resolve().parents[2] / "docs" / "analysis"
@@ -70,6 +71,10 @@ _LOOKBACK = 250
 _TARGET_PCT = 0.06  # the frozen swing target
 _HORIZONS = (5, 10, 20)
 _QUINTILES = 5
+# A close-to-close move this large in a liquid name is a split/bonus, not a trade.
+_CA_JUMP = 0.25
+# The downside counterpart to the +6% target: the frozen swing SL cap (SIGNAL_ENGINE.md §6).
+_STOP_PCT = 0.08
 
 
 async def _load(max_stocks: int, min_rows: int) -> dict[str, pd.DataFrame]:
@@ -88,7 +93,7 @@ async def _load(max_stocks: int, min_rows: int) -> dict[str, pd.DataFrame]:
         rows = (
             await db.execute(
                 text(
-                    "SELECT s.symbol, o.time, o.open, o.high, o.close, o.volume "
+                    "SELECT s.symbol, o.time, o.open, o.high, o.low, o.close, o.volume "
                     "FROM ohlcv_1d o JOIN stocks s ON s.id=o.stock_id "
                     "WHERE s.symbol = ANY(:syms) AND o.time >= :since "
                     "ORDER BY s.symbol, o.time"
@@ -105,6 +110,7 @@ async def _load(max_stocks: int, min_rows: int) -> dict[str, pd.DataFrame]:
                 "time": [r.time for r in rs],
                 "open": [float(r.open) for r in rs],
                 "high": [float(r.high) for r in rs],
+                "low": [float(r.low) for r in rs],
                 "close": [float(r.close) for r in rs],
                 "volume": [float(r.volume) for r in rs],
             }
@@ -113,14 +119,23 @@ async def _load(max_stocks: int, min_rows: int) -> dict[str, pd.DataFrame]:
     }
 
 
-def _daily_t(per_day: dict[Any, list[float]]) -> tuple[float, float, int]:
+def _daily_t(per_day: dict[Any, list[float]], horizon: int) -> tuple[float, float, float, int]:
+    """Mean, Newey-West t (lag = horizon-1), naive t, n of the daily mean series.
+
+    ⚠ Corrected 2026-09-10 (quant-verifier HIGH). This study's cohorts are PERSISTENT full
+    panels, the worst shape for overlap: under H0 the naive t here has sd 3.32 at k=10 and
+    4.45 at k=20, so the previously reported "t of 9" at +20d was about 1.9 sigma and was
+    never significant. The Newey-West t is the one to read.
+    """
     series = [statistics.mean(v) for v in per_day.values() if v]
     n = len(series)
     if n < 3:
-        return 0.0, 0.0, n
+        return 0.0, 0.0, 0.0, n
     m = statistics.mean(series)
     sd = statistics.stdev(series)
-    return m, (m / (sd / n**0.5) if sd > 0 else 0.0), n
+    naive = m / (sd / n**0.5) if sd > 0 else 0.0
+    nw = newey_west_t(series, lag=horizon - 1)
+    return m, (nw if nw is not None else 0.0), naive, n
 
 
 def main() -> None:  # noqa: C901 - one linear pass: load, benchmark, accumulate, render
@@ -134,7 +149,10 @@ def main() -> None:  # noqa: C901 - one linear pass: load, benchmark, accumulate
     print(f"loaded {len(frames)} stocks", file=sys.stderr)
 
     # observation: (date, overhead, vol, momentum, {k: reached}, {k: fwd_ret})
-    obs: list[tuple[Any, float, float, float, dict[int, bool], dict[int, float]]] = []
+    obs: list[
+        tuple[Any, float, float, float, dict[int, bool], dict[int, bool], dict[int, float]]
+    ] = []
+    n_ca_dropped = 0
     bench: dict[int, dict[Any, list[float]]] = {k: defaultdict(list) for k in _HORIZONS}
 
     for _sym, df in frames.items():
@@ -146,6 +164,8 @@ def main() -> None:  # noqa: C901 - one linear pass: load, benchmark, accumulate
         m = len(df)
         if m < _LOOKBACK + max(_HORIZONS) + 2:
             continue
+        low = df["low"].to_numpy()
+        is_ca = np.concatenate([[0.0], np.abs(np.diff(c) / c[:-1])]) > _CA_JUMP
         rets = np.concatenate([[np.nan], np.diff(c) / c[:-1]])
         vol60 = pd.Series(rets).rolling(60).std(ddof=0).to_numpy()
         for t in range(_LOOKBACK, m - max(_HORIZONS) - 1):
@@ -154,6 +174,7 @@ def main() -> None:  # noqa: C901 - one linear pass: load, benchmark, accumulate
                 continue
             mom12 = (c[t] - c[t - _LOOKBACK]) / c[t - _LOOKBACK]  # ~12m price momentum
             lo, hi = c[t], c[t] * (1 + _TARGET_PCT)
+            stop_lvl = c[t] * (1 - _STOP_PCT)
             win_c = c[t - _LOOKBACK : t]
             win_v = v[t - _LOOKBACK : t]
             tot = win_v.sum()
@@ -161,13 +182,22 @@ def main() -> None:  # noqa: C901 - one linear pass: load, benchmark, accumulate
                 continue
             overhead = float(win_v[(win_c > lo) & (win_c <= hi)].sum() / tot)
             reached: dict[int, bool] = {}
+            stopped: dict[int, bool] = {}
             fwd: dict[int, float] = {}
+            skip = False
             for k in _HORIZONS:
+                if bool(is_ca[t + 1 : t + 1 + k].any()):
+                    skip = True
+                    break
                 reached[k] = bool(h[t + 1 : t + 1 + k].max() >= hi)
+                stopped[k] = bool(low[t + 1 : t + 1 + k].min() <= stop_lvl)
                 r = (c[t + k] - entry) / entry * 100.0
                 fwd[k] = r
                 bench[k][idx[t + 1]].append(r)
-            obs.append((idx[t + 1], overhead, float(vol60[t]), float(mom12), reached, fwd))
+            if skip:
+                n_ca_dropped += 1
+                continue
+            obs.append((idx[t + 1], overhead, float(vol60[t]), float(mom12), reached, stopped, fwd))
 
     bench_mean = {
         k: {d: statistics.mean(vals) for d, vals in per.items() if vals} for k, per in bench.items()
@@ -192,17 +222,24 @@ def main() -> None:  # noqa: C901 - one linear pass: load, benchmark, accumulate
     mom_cuts = np.quantile(moms, [1 / 3, 2 / 3])
 
     reach: dict[tuple[int, int], dict[Any, list[float]]] = defaultdict(lambda: defaultdict(list))
+    stop_hit: dict[tuple[int, int], dict[Any, list[float]]] = defaultdict(lambda: defaultdict(list))
+    ctrl_reach: dict[tuple[str, int, int, int], dict[Any, list[float]]] = defaultdict(
+        lambda: defaultdict(list)
+    )
     excess: dict[tuple[int, int], dict[Any, list[float]]] = defaultdict(lambda: defaultdict(list))
     # controls: (control name, control tercile, overhead quintile, horizon)
     ctrl: dict[tuple[str, int, int, int], dict[Any, list[float]]] = defaultdict(
         lambda: defaultdict(list)
     )
-    for date, share, vol, mom, reached, fwd in obs:
+    for date, share, vol, mom, reached, stopped, fwd in obs:
         qi = q_of(share)
         vt = int(np.searchsorted(vol_cuts, vol, side="right"))
         mt = int(np.searchsorted(mom_cuts, mom, side="right"))
         for k in _HORIZONS:
             reach[(qi, k)][date].append(100.0 if reached[k] else 0.0)
+            stop_hit[(qi, k)][date].append(100.0 if stopped[k] else 0.0)
+            ctrl_reach[("vol60", vt, qi, k)][date].append(100.0 if reached[k] else 0.0)
+            ctrl_reach[("mom12", mt, qi, k)][date].append(100.0 if reached[k] else 0.0)
             bm = bench_mean[k].get(date)
             if bm is not None:
                 ex = fwd[k] - bm
@@ -214,8 +251,10 @@ def main() -> None:  # noqa: C901 - one linear pass: load, benchmark, accumulate
     a = lines.append
     a("# Overhead supply - is the +6% swing target reachable?\n")
     a(
-        f"_Generated {datetime.now(tz=UTC).date()} - {len(frames)} liquid stocks - CA-clean "
-        f"window from {_CLEAN_SINCE.date()} - {len(obs):,} stock-days._\n"
+        f"_Generated {datetime.now(tz=UTC).date()} - {len(frames)} liquid stocks - "
+        f"window from {_CLEAN_SINCE.date()} - {len(obs):,} stock-days "
+        f"({n_ca_dropped:,} dropped for an unadjusted corporate action in the forward "
+        f"window)._\n"
     )
     a(
         f"\n`overhead` = share of the trailing {_LOOKBACK}-session traded volume that changed "
@@ -225,25 +264,40 @@ def main() -> None:  # noqa: C901 - one linear pass: load, benchmark, accumulate
     )
     a(f"\nQuintile cuts: {', '.join(f'{c:.3f}' for c in cuts)}\n")
 
-    a("\n## O-1: P(the +6% target is touched within k sessions)\n")
-    a("\n| overhead quintile | horizon | n | P(reach) | t (daily) |")
-    a("|---|---|---|---|---|")
+    a("\n## O-1: P(the +6% target is touched within k sessions) - and its downside twin\n")
+    a(
+        f"⚠ A reachability gradient is NOT an opportunity gradient. The same volatility that "
+        f"makes the +{_TARGET_PCT * 100:.0f}% target easier to touch makes the "
+        f"−{_STOP_PCT * 100:.0f}% stop easier to touch too, so `P(stop)` is reported beside it "
+        "and the spread between them is the only number that could mean anything. (Neither is "
+        "a trade: a real trade stops at whichever comes FIRST, which daily bars cannot "
+        "resolve.)\n"
+    )
+    a("\n| overhead quintile | horizon | n | P(+6% touched) | P(−8% touched) | spread |")
+    a("|---|---|---|---|---|---|")
     for k in _HORIZONS:
         for qi in range(_QUINTILES):
             per = reach[(qi, k)]
             n = sum(len(x) for x in per.values())
-            p_reach, tstat, ndays = _daily_t(per)
-            a(f"| Q{qi} | +{k}d | {n:,} | {p_reach:.1f}% | {tstat:+.1f} ({ndays}d) |")
+            p_reach, _tnw, _tn, ndays = _daily_t(per, k)
+            pstop, _s1, _s2, _s3 = _daily_t(stop_hit[(qi, k)], k)
+            a(
+                f"| Q{qi} | +{k}d | {n:,} | {p_reach:.1f}% | {pstop:.1f}% | "
+                f"{p_reach - pstop:+.1f}pp |"
+            )
 
     a("\n## O-2: forward excess return, market-demeaned\n")
-    a("\n| overhead quintile | horizon | n | mean excess % | t (daily) |")
-    a("|---|---|---|---|---|")
+    a("\n| overhead quintile | horizon | n | mean excess % | t (Newey-West) | naive t |")
+    a("|---|---|---|---|---|---|")
     for k in _HORIZONS:
         for qi in range(_QUINTILES):
             per = excess[(qi, k)]
             n = sum(len(x) for x in per.values())
-            mean_pct, tstat, ndays = _daily_t(per)
-            a(f"| Q{qi} | +{k}d | {n:,} | {mean_pct:+.3f}% | {tstat:+.2f} ({ndays}d) |")
+            mean_pct, tstat, naive, ndays = _daily_t(per, k)
+            a(
+                f"| Q{qi} | +{k}d | {n:,} | {mean_pct:+.3f}% | {tstat:+.2f} ({ndays}d) | "
+                f"{naive:+.2f} |"
+            )
 
     a("\n## O-3 (the proxy check): the same gradient WITHIN a control tercile\n")
     a(
@@ -256,8 +310,8 @@ def main() -> None:  # noqa: C901 - one linear pass: load, benchmark, accumulate
     a("\n| control | tercile | n | Q0 excess | Q4 excess | spread (Q0-Q4) |")
     a("|---|---|---|---|---|---|")
     k_focus = 10
-    q0_all, _, _ = _daily_t(excess[(0, k_focus)])
-    q4_all, _, _ = _daily_t(excess[(_QUINTILES - 1, k_focus)])
+    q0_all, _, _, _ = _daily_t(excess[(0, k_focus)], k_focus)
+    q4_all, _, _, _ = _daily_t(excess[(_QUINTILES - 1, k_focus)], k_focus)
     n_all = sum(len(x) for x in excess[(0, k_focus)].values()) + sum(
         len(x) for x in excess[(_QUINTILES - 1, k_focus)].values()
     )
@@ -270,11 +324,32 @@ def main() -> None:  # noqa: C901 - one linear pass: load, benchmark, accumulate
             p0 = ctrl[(cname, ti, 0, k_focus)]
             p4 = ctrl[(cname, ti, _QUINTILES - 1, k_focus)]
             n = sum(len(x) for x in p0.values()) + sum(len(x) for x in p4.values())
-            m0, _, _ = _daily_t(p0)
-            m4, _, _ = _daily_t(p4)
+            m0, _, _, _ = _daily_t(p0, k_focus)
+            m4, _, _, _ = _daily_t(p4, k_focus)
             if n == 0:
                 continue
             a(f"| {label} | {tname} | {n:,} | {m0:+.3f}% | {m4:+.3f}% | **{m0 - m4:+.3f}%** |")
+
+    a("\n### O-3b: the proxy check on O-1 too (reachability, not just return)\n")
+    a(
+        "O-1 is the outcome most mechanically driven by volatility, and Q0 IS the volatile "
+        "end. If the reachability gradient is a volatility artefact it should shrink sharply "
+        "once volatility is held roughly fixed.\n"
+    )
+    a("\n| control | tercile | Q0 P(reach) | Q4 P(reach) | spread |")
+    a("|---|---|---|---|---|")
+    p0a, _, _, _ = _daily_t(reach[(0, k_focus)], k_focus)
+    p4a, _, _, _ = _daily_t(reach[(_QUINTILES - 1, k_focus)], k_focus)
+    a(f"| (none) | whole sample | {p0a:.1f}% | {p4a:.1f}% | **{p0a - p4a:+.1f}pp** |")
+    for cname, label in (("vol60", "volatility"), ("mom12", "12m momentum")):
+        for ti, tname in enumerate(("low", "mid", "high")):
+            r0 = ctrl_reach[(cname, ti, 0, k_focus)]
+            r4 = ctrl_reach[(cname, ti, _QUINTILES - 1, k_focus)]
+            if not r0 or not r4:
+                continue
+            m0, _, _, _ = _daily_t(r0, k_focus)
+            m4, _, _, _ = _daily_t(r4, k_focus)
+            a(f"| {label} | {tname} | {m0:.1f}% | {m4:.1f}% | **{m0 - m4:+.1f}pp** |")
 
     a("\n## Reading it\n")
     a(

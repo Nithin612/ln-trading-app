@@ -7,8 +7,12 @@ confirmation rule can only work through SELECTION of our signals, never through 
 distinction decides whether the rule generalises or is fitted to our signal set.
 
 Three pre-registered hypotheses, one per author. No sweeping.
-  H-A (Elder/Weinstein/Brooks/Livermore)  entry at max(open, prior high + tick) on days that
-        trade through the prior high beats entry at the open on all days.
+  H-A  (Elder/Brooks/Livermore)  entry at max(open, prior high + tick) on days that trade
+        through the prior high beats entry at the open on all days.
+  H-A2 (Weinstein specifically)  the same, but REFUSING a fill worse than the trigger plus
+        `_CEILING_PCT` - his "Buy 1,000 XYZ at 12 1/8 stop - 12 3/8 limit", i.e. confirm but do
+        not chase a gap. H-A alone does NOT test Weinstein: it buys any gap, however large,
+        which is the exact failure his stop-limit exists to prevent.
   H-B (Weinstein, 30-week MA / Stage 2)   H-A is stronger when the prior close is above a
         rising 150-day MA, and absent or negative below it.
   H-C (Elder, Market Thermometer)         entering on a QUIET bar (today's extension beyond
@@ -23,11 +27,20 @@ any cohort correlated with same-day drift. So every conditional split is reporte
 The headline H-A comparison is unaffected in the direction that matters: the contamination
 FAVOURS the confirmed-at-trigger cohort, so a negative result there is conservative.
 
-INFERENCE. Forward-return windows overlap heavily across days AND stocks, so a naive per-trade
-t-statistic is badly inflated. Everything below is therefore tested on the DAILY CROSS-SECTIONAL
-MEAN: average the per-stock value within each trading day, then t-test that one series across
-days (n = trading days). That neutralises the dominant dependence (same-day market moves) and is
-the only t we report.
+INFERENCE (corrected 2026-09-10 after a quant-verifier HIGH). Forward-return windows overlap
+across days AND stocks. Averaging the cross-section within each trading day removes the SAME-DAY
+dependence but leaves the ACROSS-DAY overlap untouched: day t and day t+1 share k-1 sessions of
+the same future. A naive t on that daily series is inflated by roughly sqrt(k) - measured under
+H0 on this panel shape its sd is 0.98 at k=1 but 3.32 at k=10 and 4.45 at k=20. So the reported
+t is Newey-West with Bartlett weights at lag = k-1 (`app.services.block_bootstrap.newey_west_t`),
+and the naive t is printed beside it so the size of the correction stays visible.
+
+CORPUS (corrected 2026-09-10). `ohlcv_1d` is CA-UNADJUSTED and the 2023-07-03 window is NOT
+"CA-clean" as this file previously claimed: 49 unadjusted corporate actions sit inside this exact
+250-stock universe, 35 of them >=40% halvings (SHRIRAMFIN -81.1%, COFORGE -79.7%, ANGELONE
+-90.1%, ...). A split gap is not noise here - it is a fake -80% return that no filter downstream
+can distinguish from a crash. Observations whose forward window contains a |close-to-close| jump
+greater than `_CA_JUMP` are therefore DROPPED, and the count is printed in the report header.
 """
 
 from __future__ import annotations
@@ -46,12 +59,17 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 import numpy as np  # noqa: E402
 import pandas as pd  # noqa: E402
 from app.db.session import AsyncSessionFactory  # noqa: E402
+from app.services.block_bootstrap import newey_west_t  # noqa: E402
 from sqlalchemy import text  # noqa: E402
 
 _OUT_DIR = Path(__file__).resolve().parents[2] / "docs" / "analysis"
 _CLEAN_SINCE = datetime(2023, 7, 3, tzinfo=UTC)
 _TICK = 0.05
 _HORIZONS = (1, 3, 5, 10)
+# A close-to-close move this large in a liquid name is a split/bonus, not a trade.
+_CA_JUMP = 0.25
+# Weinstein's limit sits 1/4 point above a ~12 breakout ~= 2%; 1/2 point (~4%) for a thin name.
+_CEILING_PCT = 0.02
 
 
 async def _load(max_stocks: int, min_rows: int) -> dict[str, pd.DataFrame]:
@@ -97,15 +115,23 @@ async def _load(max_stocks: int, min_rows: int) -> dict[str, pd.DataFrame]:
     }
 
 
-def _daily_t(per_day: dict[pd.Timestamp, list[float]]) -> tuple[float, float, int]:
-    """Mean and t of the DAILY CROSS-SECTIONAL mean series (the only honest t here)."""
+def _daily_t(
+    per_day: dict[pd.Timestamp, list[float]], horizon: int
+) -> tuple[float, float, float, int]:
+    """Mean, Newey-West t, naive t, and n of the DAILY CROSS-SECTIONAL mean series.
+
+    The NW t (lag = horizon-1) is the one to read; the naive t is returned only so the report
+    can show how large the overlap correction is.
+    """
     series = [statistics.mean(v) for v in per_day.values() if v]
     n = len(series)
     if n < 3:
-        return 0.0, 0.0, n
+        return 0.0, 0.0, 0.0, n
     m = statistics.mean(series)
     sd = statistics.stdev(series)
-    return m, (m / (sd / n**0.5) if sd > 0 else 0.0), n
+    naive = m / (sd / n**0.5) if sd > 0 else 0.0
+    nw = newey_west_t(series, lag=horizon - 1)
+    return m, (nw if nw is not None else 0.0), naive, n
 
 
 def main() -> None:  # noqa: C901 - one linear pass: load, accumulate, render
@@ -124,6 +150,7 @@ def main() -> None:  # noqa: C901 - one linear pass: load, accumulate, render
     )
     n_bars = 0
     n_conf = 0
+    n_ca_dropped = 0
 
     for _sym, df in frames.items():
         o = df["open"].to_numpy()
@@ -134,6 +161,10 @@ def main() -> None:  # noqa: C901 - one linear pass: load, accumulate, render
         m = len(df)
         if m < 160 + max(_HORIZONS):
             continue
+
+        # A CA bar is one whose close-to-close move is impossibly large for a liquid name.
+        c2c = np.concatenate([[0.0], np.abs(np.diff(c) / c[:-1])])
+        is_ca = c2c > _CA_JUMP
 
         ma150 = pd.Series(c).rolling(150).mean().to_numpy()
         ma150_up = np.concatenate([[np.nan], np.diff(ma150)]) > 0
@@ -151,12 +182,22 @@ def main() -> None:  # noqa: C901 - one linear pass: load, accumulate, render
             date = idx[t]
 
             for k in _HORIZONS:
+                # Drop the observation at THIS horizon if an unadjusted corporate action
+                # falls inside its forward window: the "return" would be a split, not a move.
+                if bool(is_ca[t : t + k + 1].any()):
+                    n_ca_dropped += 1
+                    continue
                 base_ret = (c[t + k] - o[t]) / o[t] * 100.0
                 acc["all: enter at open"][k][date].append(base_ret)
                 if confirmed:
                     conf_ret = (c[t + k] - entry_conf) / entry_conf * 100.0
                     acc["confirmed: enter at trigger"][k][date].append(conf_ret)
                     acc["confirmed: enter at open (same days)"][k][date].append(base_ret)
+                    # H-A2: Weinstein's stop-LIMIT - the fill is refused if the open gapped
+                    # more than the ceiling past the trigger. A refused fill is not a trade,
+                    # so it contributes nothing (it is not a zero).
+                    if entry_conf <= trigger * (1 + _CEILING_PCT):
+                        acc["confirmed + under a 2% ceiling (Weinstein)"][k][date].append(conf_ret)
                     # H-B: Weinstein stage filter
                     above = c[t - 1] > ma150[t - 1] if not np.isnan(ma150[t - 1]) else False
                     rising = bool(ma150_up[t - 1])
@@ -178,20 +219,25 @@ def main() -> None:  # noqa: C901 - one linear pass: load, accumulate, render
     a = lines.append
     a("# Confirmation base rate - does breaking yesterday's high pay, on its own?\n")
     a(
-        f"_Generated {datetime.now(tz=UTC).date()} - 250 liquid stocks - CA-clean window from "
+        f"_Generated {datetime.now(tz=UTC).date()} - 250 liquid stocks - window from "
         f"{_CLEAN_SINCE.date()} - {n_bars:,} stock-days, {n_conf:,} ({n_conf / n_bars * 100:.1f}%) "
-        f"traded through the prior high._\n"
+        f"traded through the prior high. **{n_ca_dropped:,} stock-day/horizon observations "
+        f"dropped** because an unadjusted corporate action (|close-to-close| > "
+        f"{_CA_JUMP * 100:.0f}%) fell inside the forward window._\n"
     )
     a(
         "\nForward return in %, from the stated entry price to the close k sessions later. "
-        "**t is computed on the daily cross-sectional mean series** (n = trading days), never "
-        "per trade - overlapping windows across days and stocks would inflate a per-trade t by "
-        "roughly an order of magnitude.\n"
+        "**`t` is Newey-West at lag k-1 on the daily cross-sectional mean series**; `naive t` "
+        "is the uncorrected one, shown only so the size of the overlap correction is visible. "
+        "Averaging the cross-section removes same-day dependence but NOT the overlap between "
+        "day t and day t+1, which share k-1 sessions of the same future - under H0 that "
+        "inflates the naive t by ~sqrt(k) (sd 3.32 at k=10, 4.45 at k=20).\n"
     )
     order = [
         "all: enter at open",
         "confirmed: enter at open (same days)",
         "confirmed: enter at trigger",
+        "confirmed + under a 2% ceiling (Weinstein)",
         "not confirmed: enter at open",
         "confirmed + above rising 150DMA [from trigger]",
         "confirmed + NOT above rising 150DMA [from trigger]",
@@ -204,15 +250,63 @@ def main() -> None:  # noqa: C901 - one linear pass: load, accumulate, render
     ]
     for k in _HORIZONS:
         a(f"\n## Horizon: close in +{k} session(s)\n")
-        a("\n| cohort | stock-days | mean fwd % | t (daily x-sec) |")
-        a("|---|---|---|---|")
+        a("\n| cohort | stock-days | mean fwd % | t (Newey-West) | naive t |")
+        a("|---|---|---|---|---|")
         for label in order:
             if label not in acc:
                 continue
             per_day = acc[label][k]
             total = sum(len(v) for v in per_day.values())
-            mean_pct, tstat, ndays = _daily_t(per_day)
-            a(f"| {label} | {total:,} | {mean_pct:+.3f}% | {tstat:+.2f} ({ndays}d) |")
+            mean_pct, tstat, naive, ndays = _daily_t(per_day, k)
+            a(
+                f"| {label} | {total:,} | {mean_pct:+.3f}% | {tstat:+.2f} ({ndays}d) | "
+                f"{naive:+.2f} |"
+            )
+
+    a("\n## The hypotheses, actually tested\n")
+    a(
+        "Every table above reports the t of a LEVEL. A hypothesis is a DIFFERENCE, so each row "
+        "here builds the daily series `mean(A) - mean(B)` over the days both cohorts occupy and "
+        "reports the Newey-West t of that one series. This is the only place H-A/H-A2/H-B/H-C "
+        "are decided; the level t's above cannot do it.\n"
+    )
+    a("\n| hypothesis | A - B | horizon | days | mean diff | t (Newey-West) |")
+    a("|---|---|---|---|---|---|")
+    hyps = [
+        (
+            "H-A",
+            "confirmed: enter at trigger",
+            "all: enter at open",
+        ),
+        (
+            "H-A2",
+            "confirmed + under a 2% ceiling (Weinstein)",
+            "all: enter at open",
+        ),
+        (
+            "H-B",
+            "confirmed + above rising 150DMA [from close]",
+            "confirmed + NOT above rising 150DMA [from close]",
+        ),
+        (
+            "H-C",
+            "confirmed + QUIET bar [from close]",
+            "confirmed + HOT bar [from close]",
+        ),
+    ]
+    for name, a_lbl, b_lbl in hyps:
+        for k in _HORIZONS:
+            pa, pb = acc.get(a_lbl, {}).get(k, {}), acc.get(b_lbl, {}).get(k, {})
+            shared = sorted(set(pa) & set(pb))
+            diffs = [statistics.mean(pa[d]) - statistics.mean(pb[d]) for d in shared]
+            if len(diffs) < 3:
+                a(f"| {name} | {a_lbl} - {b_lbl} | +{k}d | {len(diffs)} | - | - |")
+                continue
+            nw = newey_west_t(diffs, lag=k - 1)
+            a(
+                f"| {name} | `{a_lbl}` - `{b_lbl}` | +{k}d | {len(diffs)} | "
+                f"{statistics.mean(diffs):+.3f}% | {nw if nw is None else f'{nw:+.2f}'} |"
+            )
 
     a("\n## Reading it\n")
     a(

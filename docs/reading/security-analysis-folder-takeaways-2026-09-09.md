@@ -305,127 +305,144 @@ positions, all signal outcomes and all intraday bars. What survived is `ohlcv_1d
 bars) and `fo_bhavcopy`. Every test below therefore runs on daily bars — a **larger** sample than
 the lost 99-trade book, but see §7.3 for what that costs.
 
+⚠ **Two corrections applied 2026-09-10 after a quant-verifier review; both are in the numbers
+below.** (1) The window is **not** "CA-clean" — `ohlcv_1d` is CA-unadjusted and **49 unadjusted
+corporate actions, 35 of them ≥40% halvings, sit inside this exact 250-stock universe**
+(SHRIRAMFIN −81.1%, COFORGE −79.7%, ANGELONE −90.1%). I inherited that claim from an existing
+script and repeated it without checking. Observations whose forward window contains a
+|close-to-close| jump > 25% are now dropped and the count is printed. (2) **The t-statistics were
+inflated.** Averaging each day's cross-section removes same-day dependence but *not* the overlap
+between day t and day t+1, which share k−1 sessions of the same future; under H0 that inflates
+the naive t by ~√k (sd 3.32 at k=10, 4.45 at k=20). Every t below is now **Newey-West at lag
+k−1** (`app.services.block_bootstrap.newey_west_t`, added with its own H0 canary test), with the
+naive t printed beside it. **Both corrections made the negatives stronger, not weaker.**
+
 ### 6.1 Does breaking yesterday's high pay? — `confirmation-base-rate-2026-09-09.md`
 
-108,506 stock-days; 45.2% trade through the prior session's high. Forward return in %, t computed
-on the **daily cross-sectional mean series** (n ≈ 628 trading days), never per trade — overlapping
-forward windows across days *and* stocks would inflate a per-trade t by about an order of
-magnitude.
+108,506 stock-days; 45.2% trade through the prior session's high. 841 stock-day/horizon
+observations dropped for an unadjusted corporate action in the forward window.
 
 | cohort | +1d | +3d | +5d | +10d |
 |---|---|---|---|---|
-| all: enter at open *(implementable)* | −0.088% | +0.032% | +0.145% | +0.410% |
-| **confirmed: enter at trigger** *(implementable)* | **−0.208%** | **−0.087%** | **−0.022%** | **+0.211%** |
-| confirmed: enter at open — *decomposition only, not a strategy* | +0.985% | +1.109% | +1.177% | +1.415% |
-| not confirmed: enter at open — *decomposition only* | −0.924% | −0.789% | −0.665% | −0.378% |
+| all: enter at open *(implementable)* | -0.070% | +0.087% | +0.236% | +0.591% |
+| **confirmed: enter at trigger** *(implementable)* | -0.176% | -0.020% | +0.083% | +0.426% |
+| confirmed + under a 2% ceiling — *Weinstein's stop-limit* | -0.172% | -0.010% | +0.086% | +0.419% |
+| confirmed: enter at open — *decomposition only, not a strategy* | +1.018% | +1.177% | +1.284% | +1.632% |
+| not confirmed: enter at open — *decomposition only* | -0.915% | -0.744% | -0.586% | -0.238% |
 
-**H-A is refuted, and instructively.** The *selection* signal is real and enormous: days a stock
-trades through its prior high average **+0.99%** the next session against **−0.92%** for days it
-does not — a 1.9pp spread at t = 13.4. But that information is **completely priced into the
-trigger**. Entering at the trigger instead of the open costs ~1.19pp, which is more than the
-0.99pp it buys, and the confirmed-at-trigger row is worse than simply entering at the open **at
-every horizon out to +10 sessions.**
+**And now the hypotheses are actually tested.** My first pass reported only the *level* t of each
+cohort and then compared two levels by eye — which is not a test of anything. Each hypothesis is
+a **difference**, so the report now builds the daily series `mean(A) − mean(B)` over the days both
+cohorts occupy and reports the Newey-West t of that one series:
 
-The two middle rows are *not* strategies — they use the fact that the day *would* confirm, which
-does not exist at the open. They are there to split the rule into its two parts, and the split is
-the finding: **confirmation's edge is entirely same-day and already realised by the time you can
-act on it.** Entering at the confirming day's *close* instead does not rescue it either (+0.04%
-to +0.36% forward, i.e. market drift).
+| hypothesis | difference | +1d | +3d | +5d | +10d |
+|---|---|---|---|---|---|
+| **H-A** (Elder/Brooks/Livermore) | confirmed@trigger − all@open | **−3.46** | **−2.94** | **−3.51** | **−3.00** |
+| **H-A2** (Weinstein's ceiling) | capped@trigger − all@open | **−3.24** | −2.55 | **−3.35** | **−3.06** |
+
+**H-A is not merely un-helpful — it is significantly WORSE, at every horizon**, by −0.107% to
+−0.165% per trade. The selection signal is real and enormous (confirming days average +1.018% next
+session against −0.915% for days that don't, naive t 13.8) and it is **completely priced into the
+trigger**.
+
+Two things my first pass got wrong here, both now fixed:
+
+- **It never tested Weinstein.** The rule as originally coded bought *any* gap, however large —
+  precisely the failure his stop-limit exists to prevent. H-A2 adds his 2% ceiling and it changes
+  nothing: −3.24 to −3.06. The ceiling does not rescue the trigger.
+- The two middle rows are *not* strategies. They use the fact that the day *would* confirm, which
+  does not exist at the open. They are there to split the rule into selection and fill cost, and
+  the split is the finding: **confirmation's edge is entirely same-day and already realised by
+  the time you can act on it.**
 
 This is Brooks' trader's equation (§4.1) measured on 108k Indian stock-days. You cannot buy the
 information for free; the trigger price *is* where the market charges you for it.
 
-### 6.2 Weinstein's 30-week MA and Elder's Thermometer — both refuted
+### 6.2 Weinstein's 30-week MA and Elder's Thermometer — both refuted, now as differences
 
-Measured strictly forward of the entry day (see the caveat below):
+| hypothesis | difference | +1d | +3d | +5d | +10d |
+|---|---|---|---|---|---|
+| **H-B** (Weinstein 150-DMA) | above-rising − not-above, from close | −0.35 | +0.68 | +1.15 | +2.20 |
+| **H-C** (Elder Thermometer) | quiet − hot, from close | −1.44 | +2.70 | +1.35 | +1.06 |
 
-| split | +1d | +5d | +10d |
-|---|---|---|---|
-| confirmed + above a **rising 150-DMA** | −0.029% (t −0.46) | +0.145% (t +1.00) | +0.487% (t +2.54) |
-| confirmed + not above a rising 150-DMA | +0.043% (t +0.79) | +0.170% (t +1.26) | +0.239% (t +1.30) |
-| confirmed + **QUIET** bar (Thermometer < its EMA) | −0.002% (t −0.05) | +0.238% (t +1.86) | +0.477% (t +2.71) |
-| confirmed + **HOT** bar | +0.039% (t +0.73) | +0.147% (t +1.15) | +0.361% (t +2.04) |
+Neither clears anything like the t ≈ 3.6 bar, and both flip sign across horizons — the signature
+of noise rather than a horizon effect.
 
-**H-B (Weinstein):** no forward edge. There is a faint hint at +10d (t 2.54 vs 1.30) but it is
-horizon-dependent and nowhere near the t ≈ 3.6 bar. **H-C (Elder):** no forward edge either way.
-
-⚠ **And H-C nearly became a false lever.** Measured from the *trigger* price — the intuitive
-thing to do — the split reads **QUIET −1.056% vs HOT +0.736%**, a 1.8pp spread at t = −17.8 /
-+9.5, which would have looked like a spectacular discovery *pointing the opposite way to Elder*.
-It is an artifact: a return measured from the trigger spans the remainder of the entry day, so a
-bar that has already run far past the trigger books that run as "forward" return. Measured from
-the entry day's close the effect vanishes entirely. **Both bases are printed in the report so
-this cannot be quietly re-discovered.**
+⚠ **H-C nearly became a false lever, and it is worth recording how.** Measured from the *trigger*
+price — the intuitive thing to do — the split reads **QUIET −1.028% vs HOT +0.775%**, a 1.8pp
+spread at t = −17.8 / +10.1, which looks like a spectacular discovery *pointing the opposite way
+to Elder*. It is an artifact: a return measured from the trigger spans the remainder of the entry
+day, so a bar that has already run far past the trigger books that run as "forward" return.
+Measured from the entry day's close the effect vanishes. **Both bases are printed in the report
+so this cannot be quietly re-discovered.**
 
 ### 6.3 Carter's squeeze as a generation lever — no edge — `squeeze-study-2026-09-09.md`
 
 Generation is the open problem (D5 and D1 both spent), and the squeeze is the only fully
 mechanical *generation* idea in the folder. BB(20,2) inside KC(20,1.5), fire when compression
-ends, direction from 12-period momentum, entry at the next session's open. **3,610 fires.**
+ends, direction from 12-period momentum, entry at the next session's open. **3,609 fires.**
 Returns are excess over that day's cross-sectional universe mean, signed so a short earns the
 negative of drift — the window is a strong Indian bull market and a long-biased rule would
 otherwise look free.
 
-| cohort | +1d | +5d | +20d |
-|---|---|---|---|
-| squeeze fire (all) | −0.025% (t −0.53) | −0.074% (t −0.57) | −0.060% (t −0.23) |
-| + weekly aligned (Carter's own filter) | +0.007% (t +0.12) | +0.038% (t +0.26) | −0.131% (t −0.44) |
-| + weekly opposed | −0.135% (t −1.80) | −0.377% (t −1.69) | +0.325% (t +0.80) |
-
-**No edge.** |t| < 1 at every horizon for the headline. The one interpretable sub-result supports
-Carter's *alignment* rule — firing against the weekly is mildly harmful — but the aligned cohort
-still has no edge, so the filter removes a negative rather than revealing a positive.
-
-### 6.4 Overhead supply — a real gradient that **fails the proxy check** — `overhead-supply-study-2026-09-09.md`
-
-The one test that produced a positive result, and the one where the mandatory check earned its
-keep. `overhead` = the share of the trailing 250 sessions' volume that traded between today's
-close and +6% above it (where the frozen swing target sits). 82,431 stock-days, quintiled.
-
-| overhead quintile | P(+6% touched ≤5d) | P(≤10d) | fwd excess +10d | fwd excess +20d |
+| cohort | +1d | +5d | +10d | +20d |
 |---|---|---|---|---|
-| Q0 (least overhead) | **34.3%** | 49.3% | +0.461% (t +6.9) | +0.857% (t +9.2) |
-| Q1 | 30.8% | 45.8% | +0.166% | +0.260% |
-| Q2 | 29.1% | 43.8% | −0.017% | −0.104% |
-| Q3 | 25.3% | 39.7% | −0.292% | −0.321% |
-| Q4 (most overhead) | **21.5%** | 35.4% | −0.351% (t −4.5) | −0.679% (t −6.2) |
+| squeeze fire (all) | −0.023% (t −0.49) | +0.051% (t +0.44) | +0.163% (t +0.90) | +0.108% (t +0.41) |
+| + weekly aligned (Carter's own filter) | +0.007% (t +0.12) | +0.128% (t +0.94) | +0.207% (t +1.09) | −0.041% (t −0.16) |
 
-Monotone on both outcomes, at all horizons, market-demeaned, with a +0.71pp Q0−Q4 return spread
-at +10d. On its own that looks like the lever.
+**No edge.** |t| ≤ 1.09 at every horizon. This study's cohorts are sparse (~5.5 fires/day), so
+the overlap correction barely moved it (+1.05 → +0.90 at +10d) — its t's were honest to begin
+with, unlike §6.4's.
 
-**Then the proxy check (hard constraint #8: "check the partition isn't a proxy for something
-else" — market-regime turned out to be a proxy for *side*).** A 6%-wide band captures a large
-share of a *low-volatility* stock's volume and little of a volatile one's; and low overhead means
-the trailing volume traded *below* today's price, i.e. the stock has **risen**. So the two nulls
-to beat are volatility and 12-month price momentum:
+### 6.4 Overhead supply — the apparent lever, and why it is not one — `overhead-supply-study-2026-09-09.md`
 
-| control held roughly fixed | Q0−Q4 spread at +10d |
-|---|---|
-| (none) — whole sample | **+0.711%** |
-| volatility — low tercile | **−0.229%** ← sign flip |
-| volatility — mid | +0.490% |
-| volatility — high | +1.253% |
-| 12m momentum — low tercile | +0.855% |
-| 12m momentum — mid | **+0.086%** ← collapses |
-| 12m momentum — high | +0.706% |
+`overhead` = the share of the trailing 250 sessions' volume that traded between today's close and
++6% above it (where the frozen swing target sits). 81,567 stock-days, quintiled (645 dropped for an unadjusted corporate action in the forward window).
 
-**It does not survive.** The gradient inverts inside the low-volatility third and collapses inside
-the middle momentum third. A whole-sample t of 9 that behaves like that is the signature of a
-volatility-and-momentum compound, not an independent supply effect. **Not promotable.**
+**My first pass reported this as "a monotone gradient at t +9.2" and rejected it on the proxy
+check. Two of those three things were wrong.** The numbers I quoted came from an earlier run than
+the report I cited (a W1 violation of my own making), and the t was never significant in the
+first place. Corrected:
 
-Two things worth keeping from it anyway:
+| overhead quintile | P(+6% touched ≤10d) | P(−8% touched ≤10d) | spread | fwd excess +10d, NW t | naive t |
+|---|---|---|---|---|---|
+| Q0 (least overhead) | 49.1% | 31.3% | +17.8pp | +0.386% (**t +3.92**) | +6.38 |
+| Q1 | 45.9% | 30.1% | +15.8pp | +0.084% (t +1.07) | +1.43 |
+| Q2 | 43.9% | 27.7% | +16.2pp | -0.021% (t -0.27) | -0.38 |
+| Q3 | 39.8% | 25.7% | +14.0pp | -0.261% (t -3.25) | -4.55 |
+| Q4 (most overhead) | 35.3% | 21.4% | +13.9pp | -0.312% (t -2.32) | -4.51 |
 
-- **The reachability result is real even if its cause is mundane.** A flat +6% target is touched
-  within 5 sessions 34% of the time in the low-overhead quintile and 21% in the high — i.e. the
-  frozen target's reachability varies ~1.6× across the universe and is predictable in advance.
+Three corrections, each of which weakens the finding:
+
+1. **The t was inflated.** Naive +6.38 → Newey-West **+3.92** at +10d for Q0; Q4's −4.51 → −2.32. An independent
+   Monte-Carlo of the naive statistic's own H0 distribution on this panel shape puts it lower
+   still (~1.9σ). Either way, **"a whole-sample t of 9" was never true** — the gradient did not
+   need a proxy check to fail.
+2. **A reachability gradient is not an opportunity gradient.** The same volatility that makes
+   +6% easier to touch makes the −8% stop easier to touch too. Adding the missing downside twin:
+   the up/down spread only moves +17.8pp → +13.9pp across the whole quintile range, against a
+   raw reachability move of 49.1% → 35.3%. **Roughly three-quarters of the apparent edge is
+   matched by more stop-outs.**
+3. **The proxy check, now run on reachability too.** The Q0−Q4 reachability spread collapses from
+   **+13.8pp whole-sample to +4.2pp inside the low-volatility tercile** (and +6.8pp in
+   mid-momentum). On the return side the spread inverts under low volatility (−0.153%) and
+   collapses in mid-momentum (−0.029%).
+
+**Not promotable, and for a simpler reason than I first gave: it was never significant.**
+
+Two things worth keeping anyway:
+
+- **The reachability result is real even if mostly mechanical.** A flat +6% target is touched
+  within 10 sessions 49% of the time in the low-overhead quintile and 35% in the high — the
+  frozen target's reachability varies ~1.4× across the universe and is predictable in advance.
   That is a genuine critique of an *absolute-%* target. It is **not** an invitation to re-open
-  `compute_levels`: D5 tested constant-R:R targets and every paired ΔR was negative. A
-  *volatility-scaled* target is a third geometry neither D5 nor this touched — with a strong prior
-  against it from §4.1, since scaling the target trades probability for reward at fair odds.
+  `compute_levels`: D5 tested constant-R:R targets and every paired ΔR was negative, and §4.1
+  explains why a volatility-scaled target is unlikely to pay either.
 - **We have never tested price momentum as a selection filter.** D1 refuted *volume* (RVOL); 12m
-  price momentum is a different and far better-documented factor, and it shows up here as strong
-  enough to absorb an apparent effect. That is the most promising thread this reading produced,
-  and it is not from the books — it is from the control variable.
+  price momentum is a different and far better-documented factor, and it was strong enough here
+  to absorb an apparent effect. That remains the most promising thread this reading produced —
+  though note it is now a thread suggested by a *control variable that killed something*, which
+  is weaker evidence than it first appeared.
 
 ### 6.5 The rule applied to our own signals — refuted again — `entry-confirmation-study-2026-09-09.md`
 
