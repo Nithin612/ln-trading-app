@@ -8,24 +8,24 @@ Walker verified against the frozen `_simulate_trade` on **400** trades (exit dat
 
 ## 1. What the whole book looks like under each entry rule
 
-`kept` = share of the baseline's trades this rule still takes. R is measured against the risk ACTUALLY taken (`|fill - SL|`), so a worse fill is already charged for. `tp_hit` is a target touch; `win` is pnl > 0. They differ by right-edge marks that happen to be positive AND by the rare case where the trigger sits ABOVE the frozen target (signal-bar high already past it), which books a target touch AT A LOSS.
+`kept` = share of the baseline's trades this rule still takes. R is measured against the risk ACTUALLY taken (`|fill - SL|`), so a worse fill is already charged for. **R is winsorized at the project's owned bound (`ratios.WINSOR_R` = 10R)** wherever it is averaged - a structural stop can land 23 bps from entry and that one trade then carries the mean (see section 6). The raw mean is shown beside it; where the two differ the tails are doing the talking. `tp_hit` is a target touch; `win` is pnl > 0. They differ by right-edge marks that happen to be positive AND by the rare case where the trigger sits ABOVE the frozen target (signal-bar high already past it), which books a target touch AT A LOSS.
 
 
-| entry rule | n | kept | mean R | median R | total R | win | tp_hit | t |
-|---|---|---|---|---|---|---|---|---|
-| baseline: fill at next open (frozen) | 1975 | 100% | -0.045 | -1.000 | -89.7 | 36% | 35% | -1.20 |
-| stop @ prior-bar extreme, 1d | 1182 | 60% | -0.044 | -1.000 | -52.4 | 44% | 43% | -1.27 |
-| ... + 0.33R ceiling (stop-limit), 1d | 1151 | 58% | -0.047 | -1.000 | -53.6 | 45% | 44% | -1.34 |
-| ... + dead if the stop was touched in the SAME BAR, 1d | 1083 | 55% | +0.013 | -1.000 | +14.4 | 47% | 46% | +0.37 |
-| stop @ prior-bar extreme, 2d | 1376 | 70% | -0.056 | -1.000 | -77.4 | 45% | 44% | -1.79 |
-| ... + 0.33R ceiling (stop-limit), 2d | 1339 | 68% | -0.057 | -1.000 | -76.9 | 45% | 44% | -1.82 |
-| ... + dead if the stop was touched in the SAME BAR, 2d | 1234 | 62% | +0.008 | -0.709 | +9.4 | 48% | 47% | +0.23 |
-| stop @ prior-bar extreme, 3d | 1469 | 74% | -0.074 | -1.000 | -108.1 | 44% | 44% | -2.43 |
-| ... + 0.33R ceiling (stop-limit), 3d | 1431 | 72% | -0.074 | -1.000 | -106.5 | 45% | 44% | -2.45 |
-| ... + dead if the stop was touched in the SAME BAR, 3d | 1298 | 66% | -0.006 | -1.000 | -8.3 | 48% | 47% | -0.20 |
-| stop @ prior-bar extreme, 5d | 1578 | 80% | -0.083 | -1.000 | -130.5 | 44% | 44% | -2.86 |
-| ... + 0.33R ceiling (stop-limit), 5d | 1537 | 78% | -0.084 | -1.000 | -128.4 | 45% | 44% | -2.87 |
-| ... + dead if the stop was touched in the SAME BAR, 5d | 1363 | 69% | -0.011 | -1.000 | -14.6 | 48% | 47% | -0.34 |
+| entry rule | n | kept | mean R (wins.) | median R | total R (wins.) | mean R (raw) | win | tp_hit | t |
+|---|---|---|---|---|---|---|---|---|---|
+| baseline: fill at next open (frozen) | 1975 | 100% | -0.065 | -1.000 | -128.4 | -0.045 | 36% | 35% | -1.94 |
+| stop @ prior-bar extreme, 1d | 1182 | 60% | -0.044 | -1.000 | -52.4 | -0.044 | 44% | 43% | -1.27 |
+| ... + 0.33R ceiling (stop-limit), 1d | 1151 | 58% | -0.047 | -1.000 | -53.6 | -0.047 | 45% | 44% | -1.34 |
+| ... + dead if the stop was touched in the SAME BAR, 1d | 1083 | 55% | +0.013 | -1.000 | +14.4 | +0.013 | 47% | 46% | +0.37 |
+| stop @ prior-bar extreme, 2d | 1376 | 70% | -0.056 | -1.000 | -77.4 | -0.056 | 45% | 44% | -1.79 |
+| ... + 0.33R ceiling (stop-limit), 2d | 1339 | 68% | -0.057 | -1.000 | -76.9 | -0.057 | 45% | 44% | -1.82 |
+| ... + dead if the stop was touched in the SAME BAR, 2d | 1234 | 62% | +0.008 | -0.709 | +9.4 | +0.008 | 48% | 47% | +0.23 |
+| stop @ prior-bar extreme, 3d | 1469 | 74% | -0.074 | -1.000 | -108.1 | -0.074 | 44% | 44% | -2.43 |
+| ... + 0.33R ceiling (stop-limit), 3d | 1431 | 72% | -0.074 | -1.000 | -106.5 | -0.074 | 45% | 44% | -2.45 |
+| ... + dead if the stop was touched in the SAME BAR, 3d | 1298 | 66% | -0.006 | -1.000 | -8.3 | -0.006 | 48% | 47% | -0.20 |
+| stop @ prior-bar extreme, 5d | 1578 | 80% | -0.083 | -1.000 | -130.5 | -0.083 | 44% | 44% | -2.86 |
+| ... + 0.33R ceiling (stop-limit), 5d | 1537 | 78% | -0.084 | -1.000 | -128.4 | -0.084 | 45% | 44% | -2.87 |
+| ... + dead if the stop was touched in the SAME BAR, 5d | 1363 | 69% | -0.011 | -1.000 | -14.6 | -0.011 | 48% | 47% | -0.34 |
 
 ### 1b. Robustness: resolved trades only (right-edge marks dropped)
 
@@ -48,20 +48,22 @@ _Right-edge marks in the baseline: 40 of 1975 (2.0%)._
 Left block = the baseline restricted to the trades this rule also took (pure selection). Right = paired mean dR on that same intersection (pure fill cost).
 
 
+_All four columns are winsorized R._
+
 | entry rule | n_int | baseline R on int | variant R on int | paired dR | t(dR) |
 |---|---|---|---|---|---|
-| stop, 1d | 1182 | +0.196 | -0.044 | -0.240 | -7.16 |
-| stop+cap, 1d | 1151 | +0.200 | -0.047 | -0.246 | -7.16 |
-| stop+cap+samebar, 1d | 1083 | +0.275 | +0.013 | -0.262 | -7.17 |
-| stop, 2d | 1376 | +0.181 | -0.056 | -0.237 | -7.84 |
-| stop+cap, 2d | 1339 | +0.185 | -0.057 | -0.243 | -7.84 |
-| stop+cap+samebar, 2d | 1234 | +0.286 | +0.008 | -0.279 | -8.45 |
-| stop, 3d | 1469 | +0.154 | -0.074 | -0.228 | -7.77 |
-| stop+cap, 3d | 1431 | +0.159 | -0.074 | -0.233 | -7.76 |
-| stop+cap+samebar, 3d | 1298 | +0.278 | -0.006 | -0.284 | -8.86 |
-| stop, 5d | 1578 | +0.133 | -0.083 | -0.216 | -7.60 |
-| stop+cap, 5d | 1537 | +0.136 | -0.084 | -0.219 | -7.54 |
-| stop+cap+samebar, 5d | 1363 | +0.282 | -0.011 | -0.292 | -9.35 |
+| stop, 1d | 1182 | +0.163 | -0.044 | -0.207 | -10.57 |
+| stop+cap, 1d | 1151 | +0.166 | -0.047 | -0.213 | -10.59 |
+| stop+cap+samebar, 1d | 1083 | +0.239 | +0.013 | -0.226 | -10.62 |
+| stop, 2d | 1376 | +0.153 | -0.056 | -0.209 | -10.88 |
+| stop+cap, 2d | 1339 | +0.156 | -0.057 | -0.214 | -10.93 |
+| stop+cap+samebar, 2d | 1234 | +0.255 | +0.008 | -0.247 | -12.20 |
+| stop, 3d | 1469 | +0.128 | -0.074 | -0.202 | -10.30 |
+| stop+cap, 3d | 1431 | +0.132 | -0.074 | -0.206 | -10.34 |
+| stop+cap+samebar, 3d | 1298 | +0.248 | -0.006 | -0.254 | -12.46 |
+| stop, 5d | 1578 | +0.109 | -0.083 | -0.192 | -9.66 |
+| stop+cap, 5d | 1537 | +0.111 | -0.084 | -0.194 | -9.61 |
+| stop+cap+samebar, 5d | 1363 | +0.253 | -0.011 | -0.264 | -12.84 |
 
 ### 2b. Is the fill cost real, or is it target truncation? (sensitivity)
 
@@ -92,7 +94,7 @@ The variants above keep the FROZEN target, anchored to the planned entry, while 
 The mandatory check: the R:R>=1 gate looked good in aggregate because it re-sorted the stop-width mix. A rule that only wins by shifting the mix is the same trap.
 
 
-| cohort | baseline n / mean R | stop+cap+sl 5d n / mean R | delta |
+| cohort | baseline n / mean R | stop+cap+samebar 5d, mean R | delta |
 |---|---|---|---|
 | tight <2% | 313 / -0.119 | 100 / -0.052 | +0.068 |
 | mid 2-5% | 701 / -0.010 | 500 / +0.066 | +0.075 |
@@ -101,7 +103,7 @@ The mandatory check: the R:R>=1 gate looked good in aggregate because it re-sort
 ## 3b. By classification
 
 
-| class | baseline n / mean R | stop+cap+sl 5d n / mean R | delta |
+| class | baseline n / mean R | stop+cap+samebar 5d, mean R | delta |
 |---|---|---|---|
 | positional | 333 / -0.162 | 246 / -0.151 | +0.011 |
 | swing | 1642 / -0.022 | 1117 / +0.020 | +0.042 |
@@ -109,7 +111,7 @@ The mandatory check: the R:R>=1 gate looked good in aggregate because it re-sort
 ## 3c. By direction
 
 
-| side | baseline n / mean R | stop+cap+sl 5d n / mean R | delta |
+| side | baseline n / mean R | stop+cap+samebar 5d, mean R | delta |
 |---|---|---|---|
 | BUY | 1115 / -0.103 | 737 / -0.059 | +0.044 |
 | SELL | 860 / +0.030 | 626 / +0.046 | +0.017 |
@@ -147,7 +149,9 @@ _Census check: 1975 classified._
 
 ## 6. The largest surviving trades (is one event carrying a conclusion?)
 
-Unadjusted corporate actions are already excluded, but the check that matters is whether the totals rest on a handful of extreme trades. A -80% split gap would book roughly -16R on a 5% stop against a baseline total near -40R, so a single survivor would be visible here. Cross-check the dates against any known split/bonus.
+Unadjusted corporate actions are already excluded, but the check that matters is whether the totals rest on a handful of extreme trades. A -80% split gap would book roughly -16R on a 5% stop, so a single survivor would be visible here. Cross-check the dates against any known split/bonus.
+
+⚠ What this table actually found is a DIFFERENT hazard: every one of these trades has a stop a fraction of a percent from entry, so its R denominator is tiny and its R explodes. That is the documented tiny-SL artifact, and it is why every averaged R in this report is winsorized at 10R. The raw totals below are printed unwinsorized on purpose, to show the size of the problem.
 
 
 | rank | stock | entry date | direction | risk% | R |

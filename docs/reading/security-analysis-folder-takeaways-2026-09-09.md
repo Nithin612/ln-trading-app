@@ -454,7 +454,7 @@ trade-for-trade against the original on 400 trades** before any number was read.
 
 | entry rule | n | kept | mean R | total R | win | t |
 |---|---|---|---|---|---|---|
-| baseline: fill at next open (frozen) | 1975 | 100% | −0.045 | −89.7 | 36% | −1.20 |
+| baseline: fill at next open (frozen) | 1975 | 100% | −0.065 | −128.4 | 36% | −1.94 |
 | stop @ prior-bar extreme, 1d | 1182 | 60% | −0.044 | −52.4 | 44% | −1.27 |
 | … + 0.33R ceiling (Weinstein's stop-limit), 1d | 1151 | 58% | −0.047 | −53.6 | 45% | −1.34 |
 | … + 0.33R ceiling, 3d | 1431 | 72% | −0.074 | −106.5 | 45% | **−2.45** |
@@ -466,13 +466,20 @@ trade-for-trade against the original on 400 trades** before any number was read.
 
 | | value | t |
 |---|---|---|
-| SELECTION — baseline R on just the trades that confirm | **+0.133 to +0.286** (vs −0.045 for the whole book) | — |
-| FILL COST — paired ΔR on that same intersection | **−0.216 to −0.292** | **−7.2 to −9.4** |
+| SELECTION — baseline R on just the trades that confirm | **+0.109 to +0.255** (vs −0.065 for the whole book) | — |
+| FILL COST — paired ΔR on that same intersection | **−0.192 to −0.264** | **−9.6 to −12.8** |
 
 Confirmation genuinely picks the better trades; paying the trigger costs about a quarter of an R
-and cancels it. **Note which of the two is statistically solid: the cost is t ≈ −8; every benefit
-figure is t ≤ 0.4.** And at the 3- and 5-day windows the rule is now *significantly worse* than
-the baseline (t −2.45, −2.87).
+and cancels it. **Note which of the two is statistically solid: the cost is t ≈ −10 to −13; every
+benefit figure is t ≤ 0.4.** And at the 3- and 5-day windows the rule is now *significantly worse*
+than the baseline (t −2.45, −2.87).
+
+All figures above are **winsorized at `ratios.WINSOR_R` = 10R**, the project's convention for
+averaging R. Winsorizing moved *only the baseline* (mean −0.045 → −0.065, t −1.20 → −1.94) —
+every variant row is unchanged, because the tiny-stop outliers are trades the confirmation rule
+either skips or enters at a wider risk. It made the paired fill cost **more** significant
+(t −7.2…−9.4 → **−9.6…−12.8**), so bounding the tails strengthens the finding rather than
+rescuing it.
 
 Three things the correction pass changed here, all in the same direction:
 
@@ -491,10 +498,10 @@ Three things the correction pass changed here, all in the same direction:
 
 ⚠ **And the study's own disclosure table found a hazard nobody was looking for.** Its ten largest
 |R| trades **all** have stops between **0.23% and 0.86%** of price, all are positive, and together
-they contribute **+128.4R against a total of −89.7R**. That is the documented tiny-SL artifact
-(`ratios.MAX_RR`'s reason for existing) dominating an R-based average. R is therefore now
-winsorized at the project's owned `WINSOR_R = 10R` wherever it is averaged — the convention
-`entry_attribution.py` already follows and this study should have used from the start. **The
+they contribute **+128.4R against an unwinsorized total of −89.7R**. That is the documented
+tiny-SL artifact (`ratios.MAX_RR`'s reason for existing) dominating an R-based average. R is
+therefore winsorized at the project's owned `WINSOR_R = 10R` wherever averaged — the convention
+`entry_attribution.py` already follows and this study should have used from the start (W5). **The
 robust summaries are the median (−1.000 — the modal outcome is a full stop-out) and the paired
 ΔR, which is computed on identical signals and does not depend on the tails.**
 

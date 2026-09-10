@@ -74,6 +74,62 @@ no-real-time-data variant) instead. Restoring intraday capture is a prerequisite
 version and accrues only in real time.
 
 
+### Research-harness fixes (2026-09-10) — three measurement defects found by quant-verifier
+
+Found while reviewing the reading study above; **they are about the instruments, so every analysis
+script is exposed, and two of them touch decisions this project has already closed.** All three made
+a *negative* result look better than it was.
+
+- **`app/services/block_bootstrap.py` — NEW `newey_west_t(series, lag=k-1)`** (Bartlett kernel) +
+  5 tests in `tests/test_block_bootstrap.py`, including an **H0 canary that first REPRODUCES the
+  inflation** on a synthetic overlapping panel and then shows the correction removes it. A daily
+  cross-sectional t removes SAME-DAY dependence but not the overlap between day t and t+1, which
+  share k−1 sessions of the same forward return: under H0 the naive t has sd **0.98 at k=1, 2.08 at
+  k=5, 3.32 at k=10, 4.45 at k=20**, so a naive "t = 9" at a 20-session horizon is ≈**1.9σ**. One
+  gradient in the reading study looked decisive at t=9 and **was never significant at all.** Sits
+  beside `moving_block_bootstrap` deliberately: that module is this project's overlap-aware
+  inference instrument, and this is the *mean's* standard error where the bootstrap is the *Sharpe's*
+  — complements, not a parallel implementation (W2).
+- **⛔ "The CA-clean window from 2023-07-03" is a FALSE claim.** `ohlcv_1d` is CA-UNADJUSTED
+  throughout; **49 unadjusted corporate actions sit inside the top-250-liquid universe, 35 of them
+  ≥40% halvings** (SHRIRAMFIN −81.1% 2025-01-10, COFORGE −79.7% 2025-06-04, ANGELONE −90.1%,
+  DIACABS +3118.6%). Measured cost: dropping **4 of 1,979 trades removed ~+49R of FAKE PROFIT** —
+  more than that study's entire original loss (baseline mean R −0.020 → −0.045). All four new
+  scripts now drop any observation whose forward window (or a trade's fill→exit span) contains a
+  |close-to-close| jump > 25%, and print the count.
+  ⚠ **`scripts/tp_geometry_study.py` (which closed D5, exit geometry) and
+  `scripts/rvol_factor_study.py` (which closed D1, RVOL) assert the same false claim and have NOT
+  been re-run.** The phrase originated in `tp_geometry_study.py` and was copied forward. Check
+  before either is cited again; re-running restates two closed decisions, so it needs a ruling.
+- **Averaged R must be winsorized.** The entry study's ten largest |R| trades **all** had stops of
+  **0.23%–0.86%** of price, all positive, contributing **+128.4R against a −89.7R total**. That is
+  the documented tiny-SL artifact dominating a mean. R is now winsorized at the project's owned
+  `app.core.ratios.WINSOR_R` (10.0) via `clamp_ratio_f` wherever averaged — the convention
+  `entry_attribution.py` already follows (W5: no hardcoded copy of a value that has an owner).
+  It moved **only the baseline** (mean −0.045 → −0.065, t −1.20 → −1.94) and made the paired fill
+  cost **more** significant (t −7.2…−9.4 → **−9.6…−12.8**), so bounding the tails strengthened the
+  finding. Robust alternatives that need no winsor: the **median** R and a **paired** ΔR on
+  identical signals.
+
+⭐ **The generalisable rule: an instrument that has never been run against a known null, a
+known-contaminated input and a known tail artifact has not been validated** — the
+`instrument_self_validation` discipline applied to the measurement harness rather than to a metric.
+The entry study's "largest surviving trades" disclosure table found the third defect on its own,
+which nobody had gone looking for.
+
+Also in this pass, from the same review: the hypotheses in `confirmation_base_rate.py` are now
+tested as **differences** (`mean(A) − mean(B)` day by day, Newey-West) rather than by eyeballing two
+level t's — which turned H-A from "nominally worse" into **significantly worse (t −2.94…−3.51)**;
+a **2% ceiling cohort** was added because the rule as first coded bought any gap however large and
+therefore never tested Weinstein at all (it changes nothing: t −2.55…−3.35); a **re-anchored-target
+sensitivity** shows the fill cost is not target truncation (ΔR −0.262 → −0.268); the same-bar rule
+is renamed with an honest label and now prints **exactly what it deletes** (68 fills of mean R
+−1.000 at 1d — nothing but stop-outs, which is why it flipped the sign); a **stop-side twin**
+`P(−8% touched)` was added to the overhead study; the proxy check now runs on **reachability** as
+well as return; `risk_at_trigger` is **directional, not `abs()`** (the `size_for_fill` defect class);
+and both synthesis tables that had drifted are now **generated from the report files** rather than
+typed.
+
 ### U19 (2026-09-09) — the holding-day horizon: does a gate separate winners from losers? [Bucket C]
 
 - **`backend/app/services/gate_horizon.py`** (NEW, read-only) + **`GET /api/v1/analytics/cohort/{gate_key}/horizon`**:
