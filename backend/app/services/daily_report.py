@@ -46,8 +46,8 @@ from app.models.trading import Order, Position
 from app.models.user import User
 from app.services import beta_ir as bir
 from app.services import buy_and_hold as bah
-from app.services import entry_cohort as ec
 from app.services import calendar_health as ch
+from app.services import entry_cohort as ec
 from app.services import fo_analytics as fa
 from app.services import fo_suggestions as fs
 from app.services import gate_register

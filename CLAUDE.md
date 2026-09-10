@@ -456,6 +456,37 @@ else.
   ⚠ **"The rest of Phase 6 / 6.8" has no unbuilt slices** — both are GATE PASSED + CLOSED; what is
   left is the gated research track R2/F1 (**R1 dropped 09-08**) plus three forward-evidence loops
   (regime **decided**, momentum ×1.5 **stalled** at 3 minted / 0 resolved, pair df-vs-adf accruing).
+- **⛔ THE `security_analysis` READING STUDY IS CLOSED — FIVE NEGATIVE RESULTS, NO BUILD (2026-09-10).**
+  All 14 PDFs in `docs/reading/security_analysis/` read against the user's entry/alert-timing question;
+  synthesis + citations in `docs/reading/security-analysis-folder-takeaways-2026-09-09.md`. **The books
+  agree on a REAL gap:** we have SETUP → MANAGE with **no TRIGGER stage** — `signal_service.py:236` sets
+  `entry = last completed close`, `compute_levels` derives SL+TP from it, and `live_levels.py:217` alerts
+  on a **symmetric ±0.5% band**, so a BUY drifting *DOWN* fires "Entered zone". **Their remedy was
+  MEASURED, not adopted, and it loses — twice, on independent samples.** (1) Market-wide, 108,506
+  stock-days: the selection signal is real and large (+0.99% vs −0.92% next-day, t 13.4) but **fully
+  priced into the trigger** — entering at the trigger returns −0.208% vs −0.088% for the open, worse at
+  every horizon to +10d. (2) On **1,979 of our own minted signals** with real SL/TP: SELECTION +0.16…+0.32R
+  vs FILL COST −0.22…−0.30R — ⚠ **the cost is t −7.3…−9.5 while every benefit is t ≤ 1.2.** Also refuted:
+  Weinstein's 150-DMA stage filter, Elder's Market Thermometer, Carter's squeeze (3,610 fires, |t|<1
+  market-neutral). Weinstein's overhead-supply was the ONE positive (monotone, t +9.2/−6.2) and **FAILED
+  THE PROXY CHECK** — inverts in the low-vol tercile, collapses in mid-momentum ⇒ a volatility/momentum
+  compound. ⭐ **What the reading actually yielded: (a) Brooks' trader's equation EXPLAINS the R:R reversal
+  STRUCTURALLY** — "whenever one of risk/reward/probability is unusually good it is offset by the others"
+  ⇒ the R:R≥1 floor blocked the high-probability cohort *by construction*, this is not bad luck, and it
+  independently explains D5; **never re-promote the floor on the identity argument.** (b) Five faith-based
+  builds pre-empted. (c) **The alert-timing number: 60% of signals confirm on day 1, 70% by day 2, 80% by
+  day 5, 20% never within five sessions.** (d) **ONE new untested thread — 12-month PRICE momentum**
+  (D1 refuted *volume*/RVOL; price momentum absorbed an apparent t=9 effect here and has never been tested).
+  ⚠ **A methods trap this produced, worth remembering:** measuring a forward return **from the trigger
+  price** spans the rest of the entry day and mechanically rewards a bar that already ran — it manufactured
+  a 1.8pp "effect" (t −17.8/+9.5) that vanished when measured from the close. Both bases are printed in
+  the report so it cannot be re-discovered. ⚠ **Every opening-range idea is UNTESTABLE** — `ohlcv_5m/15m/1h`
+  died on 09-07; restoring intraday capture is a prerequisite and accrues only in real time.
+  **Only actionable item: make the entry zone DIRECTIONAL** (`live_levels._signal_levels`; the
+  direction-aware PDH/PDL `cross_up`/`cross_down` machinery is already in that file, just unwired) — a
+  **correctness fix to an alert, explicitly NOT a P&L claim.** Scripts: `entry_confirmation_study.py` ·
+  `confirmation_base_rate.py` · `squeeze_study.py` · `overhead_supply_study.py` (all read-only, frozen
+  engine untouched; the entry study's walker is asserted trade-for-trade against `_simulate_trade`).
 - **The plan it came from is `docs/quant-agent-findings.md`** — a 30-repo external
   review (2026-09-03/04, 4,358 lines) producing **91 items in five queues** (analysis · UI ·
   architecture · testing · workbench), bucketed by **when they must land**. Governing rule:

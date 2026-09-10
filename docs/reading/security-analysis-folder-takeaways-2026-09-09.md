@@ -1,0 +1,589 @@
+# `docs/reading/security_analysis/` — what 14 books say about our entry problem
+
+_Read 2026-09-09. 14 PDFs, ~1.5M words. Written against a specific question from the user:_
+
+> _"check whether we can find a solution for our entry or stock selection, or how we can
+> validate our previous day EOD signal with current day live market and only if it
+> confirms/double confirms we can show in alerts … or alert the user only on the correct time
+> to trade, not sooner or later, by checking it with changing live price."_
+
+This is the right question to be asking. As of 2026-09-08 **both** queued profitability levers
+are spent: D5 showed exit geometry is not the lever, D1 showed the RVOL generation lever is not
+either. No queued item attacks profitability. So: is there a new lever in these books?
+
+**Short answer: no — but the reading was still worth it, and not for the reason expected.**
+
+The folder points unanimously at one architectural gap in our pipeline, and the gap is real.
+Its remedy is not: tested against 108,506 stock-days and again against 1,979 of our own minted
+signals, it does not pay. Four more levers extracted from the same books are refuted or fail the
+proxy check. §6 is the evidence; §8 is what the reading actually yielded.
+
+---
+
+## 0. The gap the books identify — real, and worth fixing for its own sake
+
+Every trading author in this folder builds an entry in **three** stages:
+
+```
+   SETUP                    TRIGGER                        MANAGE
+   "this is a candidate" →  "the market has now proved it" →  "size, stop, target"
+   (evening homework)       (next session, on live price)      (after the fill)
+```
+
+**We have no TRIGGER stage.** Our pipeline is SETUP → MANAGE. The confluence engine finds a
+candidate at the close, stamps `entry = yesterday's close`
+(`backend/app/services/signal_service.py:236` — verified, not quoted from docs), derives SL and
+TP from that number (`app/analysis/risk.py:56 compute_levels`), and the live layer then fires an
+alert when price merely *touches* a **symmetric ±0.5% band** around it
+(`app/broker/live_levels.py:217`, `settings.live_entry_zone_pct`). Nothing in that chain ever
+asks the market to demonstrate anything. A BUY drifting *down* into the band fires the same
+"Entered zone" alert as a BUY breaking *up* through it.
+
+That is not a small omission — it is the one stage all fourteen books consider *the* entry, and
+the missing direction check is a plain defect worth fixing on its own terms.
+
+**But "we lack the stage they all have" is an argument, and an argument is exactly what hard
+constraint #8 forbids acting on.** So §6 measures the stage instead of installing it. The result
+is that adding it does not improve outcomes: the trades that confirm really are better trades,
+and the price of the confirmation consumes the difference. Fix the alert because it is wrong;
+do not expect it to make money.
+
+---
+
+## 1. The folder, honestly
+
+Not all 14 bear on the question. Recording which do — and which do not — so a future session
+doesn't re-read the whole shelf.
+
+| # | Book | What it is | Bears on our question? |
+|---|---|---|---|
+| 1 | **Carter — Mastering the Trade** (654pp) | Working intraday/swing playbook with explicit rules | **Yes, heavily.** Ch7 opening gap · Ch5 day-type classification from the first six 5-min bars · Ch11 the squeeze (a real compression lever) · Ch8 floor pivots |
+| 2 | **Elder — Come Into My Trading Room** (322pp) | Method + money management | **Yes.** Screen 3 IS the answer to the user's question. Impulse System = a veto. Market Thermometer = a volatility-scaled entry-zone width we can actually compute |
+| 3 | **Brooks — Trading Price Action: Ranges** (617pp) | Bar-by-bar, deepest treatment of entry mechanics | **Yes.** "Need Two Reasons to Take a Trade" · Entering on Stops vs Limits (regime-conditional) · the trader's equation, which *explains our own R:R reversal* |
+| 4 | **Weinstein — Secrets for Profiting…** (430pp) | Stage analysis + relative strength | **Yes.** The buy-stop-with-a-limit is the single most directly implementable idea in the folder. Stage 2 filter + RS veto + "minimum resistance overhead" |
+| 5 | **Damir — Price Action Breakdown** (83pp, image-only scan) | Market-profile-derived: value area, control price, excess, initiative vs responsive | **Yes.** Gives the *regime* axis that reconciles the contradiction in §3, plus a principled overhead-supply test |
+| 6 | **Murphy — Technical Analysis of the Financial Markets** (494pp) | The reference text | **Partly.** Corrects Carter for single stocks: "gaps are always filled" is a myth; gap type is structural. Dow's confirmation/volume tenets |
+| 7 | **Teo — Price Action Trading Secrets** (137pp) | Practical retail-facing framework | **Partly.** MAEE (Market structure → Area of value → **Entry trigger** → Exits) names our missing stage cleanly |
+| 8 | **Lefèvre — Reminiscences of a Stock Operator** (690pp) | Livermore, narrative | **Partly.** "Line of least resistance" is the same rule, stated best. Also the source of the "pay up" idea that needs bounding — see §3 |
+| 9 | **Johnson — Day Trading** / **…Day Trading King** (234pp total) | Lead-magnet tier; mostly derivative | **One useful thing:** the full-gap vs partial-gap taxonomy, and an explicit "wait for the first hour, then trigger off its extreme" rule. Its claim that "fills always happen because the market prefers a stable state" is simply wrong — Murphy debunks it directly |
+| 10 | **Graham & Dodd — Security Analysis** (818pp) | The book the folder is named after | **No — and it says so.** See §4.5. It is about paying less than intrinsic value over years; it explicitly rejects confirmation-buying as *speculation*. Useful later for MCE fundamentals, not for this |
+| 11–13 | **DEFIN576 / FMG_304 / IARE SAPM** (627pp) | University lecture notes: CAPM, Markowitz, EMH, Dow theory summaries | **No.** Nothing operational we don't already have. Profiled and set aside |
+
+Two are pirated OceanofPDF rips, consistent with the earlier `~/Documents/e-books/` review. Same
+note applies: read them, don't build a dependency on the source.
+
+⚠ **On the quotations.** Weinstein's PDF is a low-quality OCR and Damir's is an image-only scan
+read page by page, so fractions and symbols in those two are normalised from OCR artifacts (the
+Weinstein stop-limit line reads `"Buy 1,000 XY Z at IZVB stop—l23/s limit"` in the raw text; the
+surrounding paragraph fixes the prices as 12⅛ and 12⅜). Quotes from the other twelve are verbatim
+from `pdftotext -layout` output. The two load-bearing ones — Brooks' trader's equation (§4.1) and
+Weinstein's bracket (§2) — were re-checked against the source text after being written.
+
+---
+
+## 2. The convergent rule — five authors, five vocabularies, one mechanism
+
+This is not one author's opinion. It is the closest thing to consensus in the folder, and it
+answers the user's question directly.
+
+**Elder** (Screen 3, p137) — the cleanest statement of exactly what was asked:
+
+> "When the first two screens give you a buy signal … **place a buy order at the high of the
+> previous day or a tick higher.** We expect the major uptrend to reassert itself and catch a
+> breakout in its direction. **Place a buy order, good for one day only.** … You do not have to
+> watch prices intraday."
+>
+> And with live data: "follow a breakout from the **opening range**, when prices rally above the
+> high of the first 15 to 30 minutes of trading."
+
+**Weinstein** (p65–67) — and he adds the half Elder leaves out:
+
+> "What a buy-stop order does is tell the specialist that you want to buy stock XYZ. But — and
+> this is an incredibly important but — **only if the stock breaks out above a certain level.**"
+>
+> Then the failure mode: "right before the market opens good news is announced and it opens much
+> higher at 15. Instead of getting in at your perfect entry price of 12⅛, you are now the proud
+> owner of XYZ at 15. … **the reward/risk ratio is now far less favorable than it was at 12⅛.**"
+>
+> And the fix — one order carrying both halves:
+> **"Buy 1,000 XYZ at 12⅛ stop — 12⅜ limit — GTC."**
+
+**Brooks** (Ch27, p491):
+
+> "One of the best ways to trade using price action is to **enter on a stop, because you are
+> being carried into the trade by the market's momentum** and therefore are trading in the
+> direction of at least a tiny trend (at least one tick long). **This is the single most reliable
+> entry approach**, and beginners should restrict themselves to it until they become consistently
+> profitable."
+
+**Livermore** (via Lefèvre, ch10):
+
+> "The thing to do is … make up your mind that **you will not take an interest until the price
+> breaks through the limit** in either direction."
+>
+> — "Why not buy it now, at $1.14?"
+> — **"Because I don't know yet that it is going up at all."**
+
+**Johnson** (gap chapter) — the same rule with an explicit clock:
+
+> "look to the short timeframe charts **post 10 am** before setting a long stop that is roughly
+> **2 ticks over the high that was achieved during the first hour** of the day."
+
+So: **the trigger is a level the market has not yet traded through, in the signal's direction,
+with a ceiling on how much you'll pay for it, alive for a bounded time.** Four of the five
+authors put that level at the prior bar's extreme or the opening range's extreme.
+
+---
+
+## 3. The apparent contradiction, and its resolution (this part matters)
+
+Damir says the *opposite* of Livermore, in plain terms (p52):
+
+> "**As a rule, seek to buy in excess below value or in the bottom value area**, between the
+> value area low and the control. … **Definitely do not buy when price is in excess territory
+> above value.**"
+
+And Brooks says both, explicitly conditioned (Ch28, p493):
+
+> "When the market is in a **strong trend**, entering on **stops** is a reasonable approach. When
+> it is in more of a **channel**, they will be more inclined to look to enter on **limit
+> orders**. … after the channel has gone on for a while, many experienced traders will switch to
+> entering on limit orders at and below the low of the prior bar instead of on stop orders above
+> the high of the prior bar."
+
+**Resolution: the entry MECHANISM is regime-conditional, not universal.**
+
+| regime | entry mechanism | why |
+|---|---|---|
+| trend / imbalance (initiative move) | **STOP** above the prior extreme — pay up for proof | the move is real and continuation is the base rate |
+| range / balance (inside a value area) | **LIMIT** at the lower half of value — buy the dip toward control | price is *attracted* to the control price; a breakout is probably false |
+
+And the worst option is the one we currently run: **a market-style fill at yesterday's close,
+which is an arbitrary point inside whichever regime happens to hold.** In a trend it under-pays
+for a fill that never comes on our terms; in a range it buys mid-value where Damir's "control
+price gravity" pulls price nowhere.
+
+Note also what "pay up" actually means for Livermore: his trigger was $1.20 and he bought at
+**$1.20½** — a 0.4% premium for confirmation. Not a 5% chase. That reconciles the folder with our
+own hardest-won finding (displacement, not age, is the discriminator: at-entry +₹9,830/55% vs
+chased 0.33–1R −₹12,789/22%). **Confirmation and anti-chase are not in tension — the ceiling is
+what separates them**, and Weinstein's stop-limit is precisely that ceiling.
+
+Two more converging statements of "don't take the first poke":
+
+- **Brooks:** "the only other time only one reason is needed … is when there is a **second
+  entry**. By definition there was a first entry, so the second entry is the second reason."
+- **Weinstein:** "after a stock breaks out … there is usually at least one profit-taking
+  correction that brings the price back close to the initial breakout point. **This is an ideal
+  second chance** to do further buying."
+- **Damir:** "We do not enter a trade when the initiative move breaks the value limit because
+  there are many false breakouts. … **We trade if the initiative move is confirmed by a
+  responsive move back to value followed by a subsequent initiative move in the same
+  direction.**"
+
+Three vocabularies, one rule: **take the second push, not the first.**
+
+---
+
+## 4. What the books say about decisions we have already made
+
+### 4.1 ⭐ Brooks explains our R:R reversal — theoretically, not just empirically
+
+This is the most valuable single paragraph in the folder for us (Ch25, p438):
+
+> "Edges are rarely large, so **whenever one of the three variables is unusually good, it will be
+> offset by one or both of the other variables being bad.** For example, if the potential reward
+> is much larger than the risk, meaning that the risk is relatively small, the probability is
+> usually small. If the probability is high, the reward is small and the risk is often high."
+
+We reverted the R:R≥1 gate on 2026-09-03 because the blocked cohort was the book's *only*
+profitable one (24 trades, +₹10,585, 63% win, 33% tp_hit vs 77 trades, −₹26,792, 48% win, 16%
+tp_hit). We recorded that as an empirical surprise. **It was not a surprise; it is the structural
+trade-off.** R:R and win-rate are priced against each other by the market. Our gate tried to buy
+a better R:R for free and got charged in win rate.
+
+Consequences worth writing down:
+
+- The R:R floor must **never** be re-promoted on the identity argument. The identity ("R:R<1
+  needs >50% win to break even") is true and irrelevant, because the market supplies the >50%.
+- It independently explains **D5**: no constant-R:R target beat the frozen absolute-% target
+  because moving the target trades probability for reward at roughly fair odds. Every paired ΔR
+  was negative and |t| ≤ 0.65 — that is what "fair odds" looks like in data.
+- **Corollary, and it is the whole reason this document exists:** expectancy can only be improved
+  by moving the **probability** curve — i.e. by *when and whether* you enter — not by re-cutting
+  risk and reward. Which is exactly the stage we don't have.
+
+### 4.2 Carter corroborates the horizon/stop-width finding, from the other side
+
+> "**In general, wider stops produce more winning trades.** … one of the reasons many traders fail
+> to make it in this business is that they are using **stops that are too tight**. … Note that one
+> of the best signs of an amateur trader is a person who uses only tight stops **or a 3:1
+> risk/reward ratio on every trade**."
+
+Our own numbers (2026-08-25): 14 trades with stops <2% of price lost ₹25,951 at 29% win; stop
+width ÷ average daily range <1.0× → 8/8 recovered *after* being stopped at −1.45R. And D5 tested
+the fixed-ratio target and refuted it. Carter names both failure modes in one paragraph, written
+in 2005. Our `sl_atr` shadow gate measures exactly this and sits at t ≈ 0.41 against a 3.6 bar —
+**the mechanism is real and our sample cannot prove it.** That is a sample problem, not a
+disagreement.
+
+### 4.3 Brooks corroborates `entry_diversity` — our only ACTIVE gate
+
+> "One of the most important rules is that **you need two reasons to take a trade**, and any two
+> reasons are good enough."
+
+Our diversity gate enforces "≥2 scoring factors, and no single factor >90% of the confluence".
+Same rule, arrived at independently, and it is the one gate we exempted from the DSR bar because
+it encodes a stated hard rule rather than a measured edge. Brooks agrees that is the right
+category for it.
+
+### 4.4 Weinstein corroborates the MCE gate-not-additive design
+
+> "As long as this [relative-strength] line is in a downtrend, **don't consider buying the stock
+> even if it breaks out** on the price chart."
+
+That is a veto over a price signal, never a term added to a score — which is the MCE's founding
+design constraint ("top-down as GATES/MODIFIERS, never additive"). Elder puts the same
+architectural point in general terms: the Impulse System is used as a *negative* rule, and
+"**such 'negative rules', designed to keep you out of trouble, are among the most useful for
+serious traders.**" Our whole overlay pattern is that idea. Good.
+
+### 4.5 Graham & Dodd dissent — and it should be recorded, not hidden
+
+The book the folder is named after argues *against* the central rule above:
+
+> "we cannot avoid the conclusion that **the most generally accepted principle of timing — viz.,
+> that purchases should be made only after an upswing has definitely announced itself — is
+> basically opposed to the essential nature of investment.** … If the investor is now to hold back
+> until the market itself encourages him, how will he distinguish himself from the speculator?"
+
+He is right, and he is answering a different question. Graham's holding period is years and his
+edge is price-vs-intrinsic-value. Our system holds 5 trading days (swing) to 30 (positional) and
+has no intrinsic-value input at all — in Graham's taxonomy it is speculation, and confirmation is
+the correct discipline *for speculation*. Worth stating plainly rather than quietly siding with
+the technicians. Where Graham *will* matter is the MCE's fundamentals slice, if it is ever built.
+
+---
+
+## 5. Every lever extracted from the folder, with its verdict
+
+Everything testable here is computable from data we already hold — **2,080,305 daily bars** in
+`ohlcv_1d` across 3,392 stocks; nothing needed a vendor. Verdicts are from §6; the table is the
+index into it.
+
+| # | Lever | Mechanism | Verdict (§6) |
+|---|---|---|---|
+| **L1** | **Next-day confirmation trigger** (Elder/Weinstein/Brooks/Livermore) | enter only on a stop through the prior bar's extreme, with a ceiling, alive N days | **⛔ REFUTED on BOTH samples (§6.1 market-wide, §6.5 on our own 1,979 signals).** Selection is real; the trigger price consumes it. Fill cost t ≈ −8; every benefit t ≤ 1.2 |
+| **L2** | Directional entry zone | replace the symmetric ±0.5% band with a one-sided trigger | ✅ **Still worth doing — as a CORRECTNESS fix, not a P&L lever.** A BUY drifting *down* firing "Entered zone" is wrong whatever §6.1 says |
+| **L3** | Elder **Market Thermometer** | quiet-bar entry, hot-bar exit | **⛔ REFUTED (§6.2).** No forward edge; the apparent 1.8pp effect was same-day mechanics |
+| **L4** | Weinstein **Stage 2 / 30-week MA** filter | never buy below a flat-or-falling 150-day MA | **⛔ REFUTED (§6.2).** t ≤ 2.54, horizon-dependent, vs a 3.6 bar |
+| **L5** | **Overhead supply** ("minimum resistance overhead") | trapped volume between price and the target | **⛔ REFUTED AS A PROXY (§6.4).** Monotone whole-sample gradient (t 9) that inverts under low volatility and collapses in mid-momentum |
+| **L6** | Carter **squeeze** (BB(20,2) inside KC(20,1.5)) | compression precedes expansion | **⛔ NO EDGE (§6.3).** 3,610 fires, \|t\| < 1 at every horizon, market-neutral |
+| **L7** | Damir **value area / control price** | buy lower value, never in excess above value | ⏸ **Untested.** Its two components — a volume-by-price histogram and a distance-from-value measure — are exactly the two that failed the proxy check as L5, so the prior is now poor |
+| **L8** | Carter **day-type classifier** | first six 5-min bars' volume ⇒ choppy vs trending day by ~09:45 IST | 🚫 **Untestable today** — needs intraday history destroyed on 2026-09-07 (§7.3) |
+| **L9** | Gap taxonomy (Murphy's types, Johnson's full/partial) | classify the open vs (prior close, prior high) | ⏸ censused inside §6.5's report; descriptive only |
+| **L10** | Carter/Elder higher-timeframe alignment | never trade against the weekly | ⚠ **Weak support (§6.3).** Firing *against* the weekly is mildly harmful (t −1.7 to −2.1); aligning removes a negative rather than adding a positive |
+| **L11** | **12-month price momentum** — *not from the books* | rank candidates by trailing 12m return | 🔬 **The most promising thread here**, and it arrived as a *control variable* in §6.4: momentum was strong enough to absorb an apparent effect with t = 9. D1 refuted *volume* (RVOL); price momentum has never been tested |
+
+Explicitly **not** on this list: Carter's $TICK/$TRIN/$VOLSPD internals and the AUDJPY carry
+proxy (no Indian equivalents wired, and the ones that exist are index-level, which MCE already
+covers), his 3:52 play and tick fades (intraday, and we have no intraday history), Elder's
+SafeZone (an exit tool — and exits are not the leak), and anything requiring options-flow.
+
+---
+
+## 6. The measured answer — four pre-registered tests, on our own data
+
+Hard constraint #8 is "NEVER flip a gate/knob on an argument — check the accruing data first",
+and the corollary the R:R reversal taught us: **an identity about arithmetic still rests on an
+empirical premise; test the premise.** So none of §2's consensus was taken on the authors'
+authority. Four tests, each pre-registered to a named claim, all read-only, all on the CA-clean
+window (2023-07-03 →) of the 250 most liquid active stocks.
+
+⚠ **The paper book is not the corpus.** The 2026-09-07 dev-DB destruction took all 138 paper
+positions, all signal outcomes and all intraday bars. What survived is `ohlcv_1d` (2,080,305
+bars) and `fo_bhavcopy`. Every test below therefore runs on daily bars — a **larger** sample than
+the lost 99-trade book, but see §7.3 for what that costs.
+
+### 6.1 Does breaking yesterday's high pay? — `confirmation-base-rate-2026-09-09.md`
+
+108,506 stock-days; 45.2% trade through the prior session's high. Forward return in %, t computed
+on the **daily cross-sectional mean series** (n ≈ 628 trading days), never per trade — overlapping
+forward windows across days *and* stocks would inflate a per-trade t by about an order of
+magnitude.
+
+| cohort | +1d | +3d | +5d | +10d |
+|---|---|---|---|---|
+| all: enter at open *(implementable)* | −0.088% | +0.032% | +0.145% | +0.410% |
+| **confirmed: enter at trigger** *(implementable)* | **−0.208%** | **−0.087%** | **−0.022%** | **+0.211%** |
+| confirmed: enter at open — *decomposition only, not a strategy* | +0.985% | +1.109% | +1.177% | +1.415% |
+| not confirmed: enter at open — *decomposition only* | −0.924% | −0.789% | −0.665% | −0.378% |
+
+**H-A is refuted, and instructively.** The *selection* signal is real and enormous: days a stock
+trades through its prior high average **+0.99%** the next session against **−0.92%** for days it
+does not — a 1.9pp spread at t = 13.4. But that information is **completely priced into the
+trigger**. Entering at the trigger instead of the open costs ~1.19pp, which is more than the
+0.99pp it buys, and the confirmed-at-trigger row is worse than simply entering at the open **at
+every horizon out to +10 sessions.**
+
+The two middle rows are *not* strategies — they use the fact that the day *would* confirm, which
+does not exist at the open. They are there to split the rule into its two parts, and the split is
+the finding: **confirmation's edge is entirely same-day and already realised by the time you can
+act on it.** Entering at the confirming day's *close* instead does not rescue it either (+0.04%
+to +0.36% forward, i.e. market drift).
+
+This is Brooks' trader's equation (§4.1) measured on 108k Indian stock-days. You cannot buy the
+information for free; the trigger price *is* where the market charges you for it.
+
+### 6.2 Weinstein's 30-week MA and Elder's Thermometer — both refuted
+
+Measured strictly forward of the entry day (see the caveat below):
+
+| split | +1d | +5d | +10d |
+|---|---|---|---|
+| confirmed + above a **rising 150-DMA** | −0.029% (t −0.46) | +0.145% (t +1.00) | +0.487% (t +2.54) |
+| confirmed + not above a rising 150-DMA | +0.043% (t +0.79) | +0.170% (t +1.26) | +0.239% (t +1.30) |
+| confirmed + **QUIET** bar (Thermometer < its EMA) | −0.002% (t −0.05) | +0.238% (t +1.86) | +0.477% (t +2.71) |
+| confirmed + **HOT** bar | +0.039% (t +0.73) | +0.147% (t +1.15) | +0.361% (t +2.04) |
+
+**H-B (Weinstein):** no forward edge. There is a faint hint at +10d (t 2.54 vs 1.30) but it is
+horizon-dependent and nowhere near the t ≈ 3.6 bar. **H-C (Elder):** no forward edge either way.
+
+⚠ **And H-C nearly became a false lever.** Measured from the *trigger* price — the intuitive
+thing to do — the split reads **QUIET −1.056% vs HOT +0.736%**, a 1.8pp spread at t = −17.8 /
++9.5, which would have looked like a spectacular discovery *pointing the opposite way to Elder*.
+It is an artifact: a return measured from the trigger spans the remainder of the entry day, so a
+bar that has already run far past the trigger books that run as "forward" return. Measured from
+the entry day's close the effect vanishes entirely. **Both bases are printed in the report so
+this cannot be quietly re-discovered.**
+
+### 6.3 Carter's squeeze as a generation lever — no edge — `squeeze-study-2026-09-09.md`
+
+Generation is the open problem (D5 and D1 both spent), and the squeeze is the only fully
+mechanical *generation* idea in the folder. BB(20,2) inside KC(20,1.5), fire when compression
+ends, direction from 12-period momentum, entry at the next session's open. **3,610 fires.**
+Returns are excess over that day's cross-sectional universe mean, signed so a short earns the
+negative of drift — the window is a strong Indian bull market and a long-biased rule would
+otherwise look free.
+
+| cohort | +1d | +5d | +20d |
+|---|---|---|---|
+| squeeze fire (all) | −0.025% (t −0.53) | −0.074% (t −0.57) | −0.060% (t −0.23) |
+| + weekly aligned (Carter's own filter) | +0.007% (t +0.12) | +0.038% (t +0.26) | −0.131% (t −0.44) |
+| + weekly opposed | −0.135% (t −1.80) | −0.377% (t −1.69) | +0.325% (t +0.80) |
+
+**No edge.** |t| < 1 at every horizon for the headline. The one interpretable sub-result supports
+Carter's *alignment* rule — firing against the weekly is mildly harmful — but the aligned cohort
+still has no edge, so the filter removes a negative rather than revealing a positive.
+
+### 6.4 Overhead supply — a real gradient that **fails the proxy check** — `overhead-supply-study-2026-09-09.md`
+
+The one test that produced a positive result, and the one where the mandatory check earned its
+keep. `overhead` = the share of the trailing 250 sessions' volume that traded between today's
+close and +6% above it (where the frozen swing target sits). 82,431 stock-days, quintiled.
+
+| overhead quintile | P(+6% touched ≤5d) | P(≤10d) | fwd excess +10d | fwd excess +20d |
+|---|---|---|---|---|
+| Q0 (least overhead) | **34.3%** | 49.3% | +0.461% (t +6.9) | +0.857% (t +9.2) |
+| Q1 | 30.8% | 45.8% | +0.166% | +0.260% |
+| Q2 | 29.1% | 43.8% | −0.017% | −0.104% |
+| Q3 | 25.3% | 39.7% | −0.292% | −0.321% |
+| Q4 (most overhead) | **21.5%** | 35.4% | −0.351% (t −4.5) | −0.679% (t −6.2) |
+
+Monotone on both outcomes, at all horizons, market-demeaned, with a +0.71pp Q0−Q4 return spread
+at +10d. On its own that looks like the lever.
+
+**Then the proxy check (hard constraint #8: "check the partition isn't a proxy for something
+else" — market-regime turned out to be a proxy for *side*).** A 6%-wide band captures a large
+share of a *low-volatility* stock's volume and little of a volatile one's; and low overhead means
+the trailing volume traded *below* today's price, i.e. the stock has **risen**. So the two nulls
+to beat are volatility and 12-month price momentum:
+
+| control held roughly fixed | Q0−Q4 spread at +10d |
+|---|---|
+| (none) — whole sample | **+0.711%** |
+| volatility — low tercile | **−0.229%** ← sign flip |
+| volatility — mid | +0.490% |
+| volatility — high | +1.253% |
+| 12m momentum — low tercile | +0.855% |
+| 12m momentum — mid | **+0.086%** ← collapses |
+| 12m momentum — high | +0.706% |
+
+**It does not survive.** The gradient inverts inside the low-volatility third and collapses inside
+the middle momentum third. A whole-sample t of 9 that behaves like that is the signature of a
+volatility-and-momentum compound, not an independent supply effect. **Not promotable.**
+
+Two things worth keeping from it anyway:
+
+- **The reachability result is real even if its cause is mundane.** A flat +6% target is touched
+  within 5 sessions 34% of the time in the low-overhead quintile and 21% in the high — i.e. the
+  frozen target's reachability varies ~1.6× across the universe and is predictable in advance.
+  That is a genuine critique of an *absolute-%* target. It is **not** an invitation to re-open
+  `compute_levels`: D5 tested constant-R:R targets and every paired ΔR was negative. A
+  *volatility-scaled* target is a third geometry neither D5 nor this touched — with a strong prior
+  against it from §4.1, since scaling the target trades probability for reward at fair odds.
+- **We have never tested price momentum as a selection filter.** D1 refuted *volume* (RVOL); 12m
+  price momentum is a different and far better-documented factor, and it shows up here as strong
+  enough to absorb an apparent effect. That is the most promising thread this reading produced,
+  and it is not from the books — it is from the control variable.
+
+### 6.5 The rule applied to our own signals — refuted again — `entry-confirmation-study-2026-09-09.md`
+
+The one channel §6.1 cannot see: the base-rate test has no stops, so confirmation might pay by
+avoiding immediate stop-outs rather than by adding drift. The frozen `run_single_stock` minted
+**1,979 resolved trades** over the 250-stock corpus with real SL/TP geometry; the exit walk is a
+replica of the frozen `_simulate_trade`, **asserted trade-for-trade against the original on 400
+trades** (exit date, exit price and both flags identical) before any number was read.
+
+| entry rule | n | kept | mean R | total R | win | t |
+|---|---|---|---|---|---|---|
+| baseline: fill at next open (frozen) | 1979 | 100% | −0.020 | −40.3 | 36% | −0.51 |
+| stop @ prior-bar extreme, 1d | 1189 | 60% | −0.015 | −17.3 | 44% | −0.37 |
+| … + 0.33R ceiling (Weinstein's stop-limit), 1d | 1154 | 58% | −0.016 | −18.6 | 45% | −0.41 |
+| … + 0.33R ceiling, 3d | 1434 | 72% | −0.050 | −71.4 | 45% | −1.48 |
+| … + 0.33R ceiling, 5d | 1540 | 78% | −0.061 | −93.3 | 45% | −1.89 |
+| … + **dead if the stop was hit first**, 1d | 1086 | 55% | **+0.046** | **+49.4** | 48% | +1.11 |
+| … + dead if stop hit first, 5d | 1366 | 69% | +0.015 | +20.4 | 48% | +0.43 |
+
+**The same structure as §6.1, on a completely different sample.** Section 2 of the report
+separates the two effects, and the separation is unambiguous:
+
+| | value | t |
+|---|---|---|
+| SELECTION — baseline R on just the trades that confirm | **+0.16 to +0.32** (vs −0.020 for the whole book) | — |
+| FILL COST — paired ΔR on that same intersection | **−0.22 to −0.30** | **−7.3 to −9.5** |
+
+Confirmation genuinely picks the better trades. Paying the trigger price costs about a quarter of
+an R, and the two roughly cancel. **Note which of the two is statistically solid: the cost is
+t ≈ −8; every benefit figure is t ≤ 1.2.** The cost is certain, the benefit is not.
+
+⚠ **The one positive variant is biased in its own favour, and the bias is unmeasurable here.**
+"Dead if the stop was hit first" declines any trade whose triggering bar *also* traded through
+the stop. Daily bars cannot resolve intrabar order, so that rule silently excludes two different
+cases: the setup that fell to the stop before triggering (correctly declined — a live watcher
+could cancel the resting order) **and** the setup that triggered first and was then stopped out
+(a real −1R that a live implementation would have taken, and that this variant simply deletes
+from the sample). Every unambiguous variant — plain stop, and stop+ceiling — is **negative at
+every window**. So the honest reading is: the confirmation trigger does not help our signals
+either, and the only column that looks like it does is the column that needs intraday data we no
+longer hold in order to be believed.
+
+Three things in the report are worth keeping regardless:
+
+- **The alert-timing answer, directly.** Of the signals that ever confirm: **60% do so on day 1,
+  70% by day 2, 80% by day 5 — and 20% never confirm within five sessions.** Any "wait for
+  confirmation" alert design has to decide what to do with that last fifth, and a 1-day window is
+  a materially different product from a 5-day one.
+- **It is not a cohort-mix artifact.** The effect holds inside tight (+0.068) and mid (+0.080)
+  stop-width cohorts and is flat-to-negative in the wide cohort (−0.015) — so unlike the R:R≥1
+  gate it is not just re-sorting the stop-width mix. It is simply too small and too uncertain.
+- **BUY signals are net-negative (−0.103 mean R, n=1115) and SELL net-positive (+0.087, n=864)**
+  over a corpus window that was a strong bull market. That is odd enough to deserve its own look,
+  and it is not something any of the fourteen books would have told us.
+
+## 7. What is worth building, and what is not
+
+### 7.1 One correctness fix, and it is not a P&L claim
+
+**Make the entry zone directional.** `live_levels._signal_levels` emits one symmetric `zone`
+level per signal, so a BUY drifting *down* into the band raises the same "Entered zone" alert as
+a BUY breaking *up* through it. That is wrong on its own terms — the alert claims something about
+the signal's direction that it has not checked — and it is worth fixing whether or not §6.1 holds.
+
+What §6.1 changes is the **framing**: this is a correctness fix to an alert, not an entry
+improvement. Do not ship it as "we now confirm before alerting, which should improve results",
+because the measured answer is that a trigger entry is *worse* than entering at the open at every
+horizon out to +10 sessions. Ship it as: the alert now says what it means.
+
+The machinery already exists — `live_levels.py` already computes direction-aware PDH/PDL
+`cross_up`/`cross_down` levels per stock (ids 1 and 2) with a re-arm band; they are simply not
+wired to signals. Alerting is measure-only by construction, so no recorded number moves.
+
+**Do not promote the bracket to the order path.** §6.5 came back negative on our own 1,979
+signals in every unambiguous variant, reproducing §6.1's structure on an independent sample. The
+only positive column depends on an intrabar ordering that daily bars cannot resolve and that is
+biased in its own favour. If intraday capture is ever restored (§7.3), that one column is worth
+re-measuring properly — it is the single open question this reading leaves — but it is a
+shadow-first, t ≈ 3.6 proposition, not a build.
+
+### 7.2 Nothing else in the folder is buildable on this evidence
+
+L3, L4, L5 and L6 are refuted or fail the proxy check. L7's two ingredients are the two that
+failed as L5. L1 is refuted unconditionally. That leaves:
+
+1. **L11 — 12-month price momentum as a candidate-selection filter.** Not a book idea; it showed
+   up as the control that absorbed L5. Cheap to test with the same harness (`overhead_supply_study.py`
+   already computes it). Test it market-neutral and inside volatility terciles, exactly as L5 was
+   tested, before believing anything.
+2. **L10 as a veto only** — "do not take a signal firing against the weekly" — noting the evidence
+   is t ≈ −2, i.e. suggestive of harm avoided, not of edge added.
+3. **The BUY/SELL asymmetry surfaced by §6.5** — BUY −0.103 mean R over 1,115 trades, SELL +0.087
+   over 864, in a bull-market window. Not a book idea and not yet explained; worth its own look
+   before it is worth a build.
+
+Everything else here is a negative result, and negatives are the point: four builds that would
+have been undertaken on the authority of four respected authors do not survive our own data. That
+is the same lesson as the regime gate (promoted on 44 observations, refuted by 88) and the R:R
+floor (promoted on an identity, refuted in a week) — arrived at *before* the build rather than
+after.
+
+### 7.3 The honest blocker: we have no intraday history any more
+
+The 2026-09-07 dev-DB destruction took `ohlcv_5m` / `ohlcv_15m` / `ohlcv_1h` (only two forensic
+day-snapshots from 2026-07-10 and 07-13 survive), along with all 138 paper positions and every
+signal outcome. `ohlcv_1d` (2.08M bars) and `fo_bhavcopy` (494k) survived.
+
+So **L8 and everything keyed to the opening range cannot be tested at all right now.** Carter's
+day-type classifier, Elder's "high of the first 15–30 minutes", Johnson's "post-10am off the first
+hour's extreme" — all need bars we do not have. Two consequences:
+
+- §6's tests deliberately use the **prior daily bar's extreme** as the trigger, not the opening
+  range. That is Elder's own no-real-time-data variant, which he presents as primary, so the test
+  is faithful — but it is the coarser of the two, and a finer intraday trigger is not ruled out by
+  it. It is merely unmeasurable.
+- Re-accumulating intraday bars is a **prerequisite** for the finer version of this work, and it
+  accrues only in real time. Worth starting the capture before cycle 2 rather than after.
+
+### 7.4 What NOT to do
+
+- **Do not build any of L1/L3/L4/L5/L6 on the strength of §2.** That is the whole point of §6.
+- **Do not add a new factor to the confluence engine.** `docs/SIGNAL_ENGINE.md` is protected, the
+  engine is frozen, and every idea above is an eligibility/timing judgement, not a score term.
+  Weinstein and Elder both insist these are vetoes; adding them additively is the one design error
+  the MCE exists to avoid.
+- **Do not re-open `compute_levels` on §6.4's reachability result.** It is real, but D5 already
+  tested the obvious remedy and §4.1 explains why the non-obvious one is unlikely to pay either.
+- **Do not widen stops on Carter's authority.** Already rejected (2026-08-25); "reject, don't
+  clamp" means don't take the trade instead.
+- **Do not re-promote the R:R floor.** §4.1 makes the case against it stronger, not weaker.
+- **Do not chase Carter's internals** ($TICK/$TRIN/$VOLSPD, the AUDJPY carry proxy). No Indian
+  equivalents wired; the index-level information is the MCE's job.
+- **Do not trust Johnson's "gaps always fill."** Murphy debunks it in the same folder, and for
+  single stocks he is right.
+- **Do not re-run H-C from the trigger price and get excited.** §6.2 is the record of why that
+  reads as a spectacular discovery and is an artifact.
+
+## 8. Verdict
+
+The folder identifies a real architectural gap — **we never ask the market to confirm a setup
+before acting on it** — and one real defect that follows from it (the symmetric entry zone).
+Fix the defect, as a correctness fix.
+
+Its headline remedy does **not** survive contact with our data, tested twice on independent
+samples: market-wide over 108,506 stock-days, and on 1,979 of our own minted signals with real
+stops. Both times the same structure — the selection signal is real and large, and the price of
+the trigger consumes it. Three of the four other levers extracted from the folder are refuted
+too, and the fourth fails the proxy check.
+
+The reading's real yield is not its recommendations. It is:
+
+1. **Brooks' trader's equation**, which explains our own R:R reversal structurally rather than as
+   bad luck, and warns that *any* re-cutting of risk against reward is priced at roughly fair
+   odds — which is also why D5 found what it found.
+2. **Five negative results** that pre-empt five faith-based builds, arrived at before the build
+   rather than after. That is the same lesson as the regime gate and the R:R floor, learned
+   cheaply for once.
+3. **One measured operational number** for the question that was actually asked: 60% of signals
+   confirm on day 1, 80% within five sessions, and 20% never do.
+4. **A momentum thread** that came from a control variable rather than from any of the fourteen
+   books — the only untested idea here with a decent prior.

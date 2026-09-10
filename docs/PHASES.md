@@ -10,7 +10,33 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-09-09) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-09-10) — read this block first
+
+**▶▶ 2026-09-10 (latest) — READING STUDY: the `security_analysis` folder, four pre-registered tests, FIVE NEGATIVE RESULTS. No build.**
+User asked whether the 14 PDFs in `docs/reading/security_analysis/` solve entry/stock selection, next-day
+validation of an EOD signal, or alert timing. All read. Synthesis + citations:
+**`docs/reading/security-analysis-folder-takeaways-2026-09-09.md`**. **The books agree on a real gap** —
+we have SETUP → MANAGE with **no TRIGGER stage** (`signal_service.py:236` entry = last completed close;
+`live_levels.py:217` alerts on a **symmetric ±0.5% band**, so a BUY drifting *down* fires "Entered zone").
+**Their remedy was MEASURED, not adopted (constraint #8), and it loses.** Four new read-only scripts,
+frozen engine untouched, nothing written to the DB, **no recorded number changed → no clock reset**:
+**base-rate** (108,506 stock-days) — selection is real (+0.99% vs −0.92% next-day, t 13.4) but **fully
+priced into the trigger** (−0.208% vs −0.088% at the open; worse to +10d); Weinstein's 150-DMA and Elder's
+Thermometer both refuted. **entry-confirmation** (1,979 of OUR minted signals, walker asserted trade-for-trade
+vs the frozen `_simulate_trade` on 400) — same structure on an independent sample: SELECTION +0.16…+0.32R,
+**FILL COST −0.22…−0.30R at t −7.3…−9.5**; ⚠ **the cost is t≈−8, every benefit t≤1.2**. **squeeze** (3,610
+fires, market-neutral) — **no edge, |t|<1**. **overhead-supply** — the only positive (monotone, t +9.2/−6.2)
+and it **FAILS THE PROXY CHECK**: inverts in the low-vol tercile, collapses in mid-momentum ⇒ a
+volatility/momentum compound. ⭐ **Yield: (a) Brooks' trader's equation EXPLAINS the R:R reversal
+structurally** (one of risk/reward/probability good ⇒ the others worse — the floor blocked the
+high-probability cohort *by construction*; also explains D5), **(b) five faith-based builds pre-empted**,
+**(c) the alert-timing number: 60% of signals confirm on day 1, 80% by day 5, 20% never**, **(d) one new
+untested thread — 12-month PRICE momentum** (D1 refuted *volume*/RVOL; price momentum absorbed an apparent
+t=9 effect here and has never been tested). ⚠ **Blocked by the 09-07 loss:** `ohlcv_5m/15m/1h` are gone, so
+every opening-range idea (Carter's day-type classifier, Elder's first-15–30-min high, Johnson's post-10am
+trigger) is **untestable**; restoring intraday capture is a prerequisite and accrues only in real time.
+**Only actionable item: make the entry zone DIRECTIONAL — a correctness fix to an alert, explicitly NOT a
+P&L claim.** Nothing flipped, nothing promoted.
 
 **▶▶ 2026-09-09 (latest) — BUCKET C OPERATIONAL-SAFETY + TESTS/INVARIANTS + U1 BATCH: 12 items shipped, none touching a recorded number.**
 Built during accrual, exactly as the findings-doc plan prescribes (Bucket C runs *underneath* cycle 2's
@@ -808,7 +834,31 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-09-09.**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-10.**
+
+**▶▶ 2026-09-10 READING STUDY (`docs/reading/security_analysis/`) — DONE, five negative results, NO build
+queued.** Full detail in the STATE block above + `docs/reading/security-analysis-folder-takeaways-2026-09-09.md`
++ CHANGELOG (Unreleased). What a next session needs from it:
+- **Do NOT build the next-day confirmation trigger.** Refuted twice on independent samples (108,506
+  stock-days; 1,979 of our own signals). Selection is real, the trigger price consumes it. The
+  argument for it is seductive and unanimous across five authors — the counter-evidence is in
+  `docs/analysis/entry-confirmation-study-2026-09-09.md` §2 (fill cost t −7.3…−9.5).
+- **The one cheap, honest fix worth doing:** make `live_levels._signal_levels` emit a DIRECTIONAL
+  entry level instead of the symmetric ±0.5% `zone` (a BUY drifting *down* currently fires "Entered
+  zone"). Direction-aware `cross_up`/`cross_down` machinery already exists in the same file (PDH/PDL,
+  ids 1/2) and is simply not wired to signals. **Alerting-only ⇒ no recorded number.** Ship it as a
+  correctness fix; the study says it will NOT improve P&L.
+- **The one new research thread: 12-month PRICE momentum** as a candidate-selection filter. Not a book
+  idea — it surfaced as the control that absorbed the overhead-supply effect. D1 refuted *volume* (RVOL);
+  price momentum is a different, far better-documented factor and has never been tested here.
+  `scripts/overhead_supply_study.py` already computes it; test it market-neutral and inside volatility
+  terciles exactly as the overhead study was tested.
+- **Also unexplained and worth a look:** BUY signals are net-negative (−0.103 mean R, n=1115) and SELL
+  net-positive (+0.087, n=864) over a bull-market corpus window.
+- ⚠ **Intraday history is a prerequisite for the rest.** `ohlcv_5m/15m/1h` were destroyed 09-07, so every
+  opening-range idea is untestable until capture is restored — and it accrues only in real time, so
+  starting it before cycle 2 is worth more than starting it after.
+
 
 **▶▶ 2026-09-09 OVERNIGHT AUTONOMOUS RUN — 14 commits on `feature/pre-cycle2-hardening`, UNPUSHED
 (push is the user's, W4).** A Bucket-C batch that touches **no recorded number** (no clock reset):

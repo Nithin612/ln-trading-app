@@ -7,6 +7,73 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Reading study (2026-09-09) — `docs/reading/security_analysis/`: four pre-registered tests, five negative results
+
+Read all 14 PDFs in `docs/reading/security_analysis/` against a user question: can the books
+solve entry/stock selection, validate an EOD signal against the next day's live market before
+alerting, and alert at the right moment? Synthesis with citations:
+**`docs/reading/security-analysis-folder-takeaways-2026-09-09.md`**.
+
+**The books agree on one architectural gap and it is real in our code (verified, not quoted):**
+we have SETUP → MANAGE with no TRIGGER stage. `services/signal_service.py:236` sets
+`entry = last completed close`, `analysis/risk.py compute_levels` derives SL and TP from it, and
+`broker/live_levels.py:217` alerts on a **symmetric ±0.5% band** — so a BUY drifting *down* into
+the band raises the same "Entered zone" as a BUY breaking *up*. Elder (Screen 3), Weinstein
+(buy-stop + limit), Brooks (enter on stops), Livermore and Johnson all insert a directional
+trigger there.
+
+**Their remedy was measured, not adopted** (hard constraint #8 — an argument is not evidence).
+Four NEW read-only study scripts, none touching the FROZEN engine, none writing to the DB:
+
+- **`backend/scripts/confirmation_base_rate.py`** → `docs/analysis/confirmation-base-rate-2026-09-09.md`.
+  108,506 stock-days. **H-A REFUTED:** the selection signal is real and large (days that trade
+  through the prior high average +0.99% next session vs −0.92% for days that don't, t=13.4) but
+  is **fully priced into the trigger** — entering at the trigger returns −0.208% vs −0.088% for
+  entering at the open, and is worse at every horizon to +10d. **H-B (Weinstein 150-DMA stage
+  filter) and H-C (Elder Market Thermometer) both refuted**, t ≤ 2.54 against a 3.6 bar.
+  ⚠ **H-C nearly became a false lever:** measured from the trigger price the quiet/hot split reads
+  −1.056% vs +0.736% (t −17.8/+9.5) — an artifact of spanning the rest of the entry day. Measured
+  strictly forward it vanishes. Both bases are printed so it cannot be re-discovered.
+- **`backend/scripts/entry_confirmation_study.py`** → `docs/analysis/entry-confirmation-study-2026-09-09.md`.
+  The same rule against **1,979 of our own minted signals** with real SL/TP. Exit walk is a
+  replica of the frozen `_simulate_trade`, **asserted trade-for-trade against the original on 400
+  trades** before any number is read (the assert caught one real defect — a missing right-edge
+  mark-to-last-close — during development). **Same structure, independent sample:** SELECTION is
+  real (baseline R on the confirmed subset +0.16…+0.32 vs −0.020 for the book) and FILL COST
+  cancels it (paired ΔR −0.22…−0.30, **t −7.3 to −9.5**). Every unambiguous variant is negative;
+  the one positive column depends on an intrabar ordering daily bars cannot resolve and is biased
+  in its own favour. ⚠ **The cost is t≈−8; every benefit is t≤1.2.**
+  Also measured, and useful regardless: **60% of signals confirm on day 1, 70% by day 2, 80% by
+  day 5, 20% never within five sessions** — the alert-timing answer.
+- **`backend/scripts/squeeze_study.py`** → `docs/analysis/squeeze-study-2026-09-09.md`.
+  Carter's squeeze (BB(20,2) inside KC(20,1.5)) as a *generation* lever — the open problem since
+  D5/D1. 3,610 fires, market-demeaned and sign-corrected for shorts. **No edge, |t| < 1 at every
+  horizon.** Firing *against* the weekly is mildly harmful (t −1.7…−2.1), which supports Carter's
+  own alignment filter but only removes a negative.
+- **`backend/scripts/overhead_supply_study.py`** → `docs/analysis/overhead-supply-study-2026-09-09.md`.
+  Weinstein's "minimum resistance overhead". 82,431 stock-days. Produced the only positive result
+  — a monotone gradient on both P(+6% target touched: 34.3% → 21.5% at 5d) and market-demeaned
+  forward return (+0.86% → −0.68% at +20d, t +9.2/−6.2) — and then **FAILED THE MANDATORY PROXY
+  CHECK**: the Q0−Q4 spread **inverts** inside the low-volatility tercile (−0.229%) and
+  **collapses** in the mid-momentum tercile (+0.086%). A volatility-and-momentum compound, not a
+  supply effect. **Not promotable.**
+
+**Nothing was wired, flipped or promoted. No recorded number changed; no clock reset.** The
+reading's yield is (1) Brooks' trader's equation, which explains the 2026-09-03 R:R reversal
+*structurally* (whenever one of risk/reward/probability is unusually good the others are worse —
+so the R:R floor blocked the high-probability cohort by construction, and it also explains D5),
+(2) five negative results that pre-empt five faith-based builds, (3) the day-1/day-5 confirmation
+timing numbers, and (4) one untested thread that came from a control variable rather than the
+books: **12-month price momentum** (D1 refuted *volume*/RVOL; price momentum has never been
+tested and was strong enough here to absorb an apparent t=9 effect).
+
+⚠ **Blocked by the 2026-09-07 data loss:** `ohlcv_5m/15m/1h` are gone, so Carter's day-type
+classifier, Elder's "high of the first 15–30 minutes" and Johnson's "post-10am off the first
+hour's extreme" are **untestable** — the studies use the prior daily bar's extreme (Elder's own
+no-real-time-data variant) instead. Restoring intraday capture is a prerequisite for the finer
+version and accrues only in real time.
+
+
 ### U19 (2026-09-09) — the holding-day horizon: does a gate separate winners from losers? [Bucket C]
 
 - **`backend/app/services/gate_horizon.py`** (NEW, read-only) + **`GET /api/v1/analytics/cohort/{gate_key}/horizon`**:

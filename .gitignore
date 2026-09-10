@@ -122,3 +122,8 @@ backend/shadow/
 
 # git worktrees created by the Claude worktree tool
 .claude/worktrees/
+
+# Reading material: the source books are large and copyrighted — only the
+# takeaways markdown belongs in git (docs/reading/*.md stays tracked).
+docs/reading/**/*.pdf
+docs/reading/**/*.epub
