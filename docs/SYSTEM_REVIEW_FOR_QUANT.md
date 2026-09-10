@@ -8,6 +8,11 @@ path, or measured from the project's own data by a rerunnable script. Where a
 number comes from a historical report whose data no longer exists in the dev
 database (destroyed 2026-09-07, partially restored), that is stated inline.
 
+**Companion:** `docs/POSITIONAL_REVIEW_FOR_QUANT.md` covers the **positional** class
+on its own terms — it is produced by a single bonus factor, is long-only, and its
+stop rule is implemented three different ways, none of which this document's
+figures isolate.
+
 **Generated:** 2026-09-10 · branch `feature/pre-cycle2-hardening`
 **Reproduction:** `cd backend && uv run python scripts/engine_selectivity_probe.py`
 (SELECT-only; the frozen engine is imported and called, never modified).
@@ -574,7 +579,9 @@ anything tradeable.**
 - **Neither is currently testable at all**: `index_ohlcv_1d` holds 48 rows and
   `india_vix_daily` 16, and only three broad indices were ever ingested — so
   "sector" relative strength has no sector benchmark to compute against.
-- `stocks.sector` is populated for **500 of 1,322 active names**.
+- `stocks.sector` is populated on **500 rows overall, but on only 165 of the 1,322
+  active names** (12.5% of the tradeable universe) — corrected 2026-09-10; an earlier
+  revision of this line read "500 of 1,322 active", which conflated the two counts.
 
 Fundamentals: none. `market_cap_cr` has no writer (a free source was identified in a
 2026-09-08 spike but the build was deferred for want of a consumer). News: an
@@ -810,10 +817,11 @@ promotions both refuted, best survivor at t = 0.41. The conclusion drawn was not
 "try a ninth gate" but "no partition of these trades will clear the bar, because the
 trades carry no edge to partition".
 
-### 11.4 ⚠ Three defects found in the measurement apparatus itself
+### 11.4 ⚠ Four defects found in the measurement apparatus itself
 
-Found 2026-09-10. They matter to a reviewer because **all three made a negative
-result look better than it was**, and every historical study is exposed to them.
+Found 2026-09-10 (the fourth during the positional review the same day). They matter
+to a reviewer because **all four made a negative result look better than it was**, and
+every historical study is exposed to them.
 
 1. **A daily cross-sectional t is not enough for overlapping forward windows.**
    Averaging the cross-section kills same-day dependence but not the overlap between
@@ -829,6 +837,21 @@ result look better than it was**, and every historical study is exposed to them.
    **+128.4R against a −89.7R total**. Convention: winsorize at
    `app.core.ratios.WINSOR_R = 10.0` wherever R is averaged, and report the median
    and a paired ΔR beside it.
+
+4. **⚠ Added 2026-09-10 (found during the positional review): `_simulate_trade`
+   scores a gap-through-stop fill as a WINNER.** The gap check is skipped on the fill
+   bar (correctly — the entry is that bar's open), but the intrabar `low <= stop_loss`
+   test still fires and exits **at `stop_loss`**, which for an already-gapped fill is
+   *above* the entry. A three-bar reproduction: signal close 100, stop 99, next open
+   **95** ⇒ recorded exit 99, `hit_sl = True`, **P&L +4.211% = +1.000R**. The live
+   path is immune (`paper_broker:544-554` rejects an order already through its stop),
+   so this is a *measurement* defect only — but it flatters the **tight-stop** cohort,
+   which is where this document's cost analysis (§12.5) concentrates. **The
+   1,975-trade headline in §11.1 and the entry-confirmation study in §10.2 both
+   inherit it and the magnitude there is unmeasured.** On the positional corpus,
+   excluding the affected trades moved the tightest stop bucket from −0.257R to
+   −0.306R. Details and the reproduction: `docs/POSITIONAL_REVIEW_FOR_QUANT.md`
+   Appendix C #4.
 
 The generalisable rule adopted: *an instrument never run against a known null, a
 known-contaminated input and a known tail artifact has not been validated.*

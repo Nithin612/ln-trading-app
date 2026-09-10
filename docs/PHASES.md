@@ -12,7 +12,121 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ## ▶ STATE AT A GLANCE (updated 2026-09-10) — read this block first
 
-**▶▶ 2026-09-10 (latest) — QUANT REVIEW DOC + AN ENGINE-SELECTIVITY PROBE, AND IT FOUND A DEAD FACTOR.**
+**▶▶ 2026-09-10 (latest) — EXTERNAL QUANT PANEL ADJUDICATED; THREE FINDINGS CHANGE THE PLAN.**
+Ten external reviews (5 each on the swing and positional review docs) checked claim-by-claim
+against the code and the DB → **`docs/analysis/quant-panel-adjudication-2026-09-10.md`**.
+16 mechanism claims CONFIRMED, 6 REFUTED. ⭐ **The panel's most unanimous claim is wrong**:
+factor-level IC WAS computed (`scripts/factor_sweep.py`, 2026-09-07, 212,129 obs / 156
+non-overlapping dates, day-block bootstrap **+ trial-count deflation**) and nothing survived —
+including the SMA/52w family a cross-sectional ranker is built from, which is a measured prior
+AGAINST the panel's other unanimous recommendation. Real gap: the sweep never pointed at **our
+own 15 factors or the composite score** — that is the test worth running.
+⭐ **CYCLE 2 CANNOT TEST EXPECTANCY.** σ_R = 1.489 (from n=1,975, mean −0.065, t=−1.94) ⇒ at
+n ≈ 25 trades the DSR bar demands **+1.12R/trade**, a plain t=2 demands **+0.60R**, against
+**+0.094R** from a Sharpe-1.0 system. **~12× miscalibrated and unpassable even by an excellent
+strategy** — DSR corrects for hypothesis SEARCH, and cycle 2 is a single pre-registered
+confirmation with no multiplicity to deflate. ⇒ **RE-SCOPE cycle 2 as an operational-correctness
+rehearsal** (caps fire · heat bounded · fills reconcile · FSM survives 45 days), NOT an edge gate.
+Expectancy has to be decided on the panel/corpus where n is 100× larger.
+⭐ **THE NULL WAS NEVER WRITTEN DOWN.** E[R] = 0 for ANY barrier configuration under a driftless
+martingale (denominator fixed at entry) ⇒ a coin flip scores 0.000R and our −0.065R / −0.090R are
+**worse than a coin flip, gross**. And zero is not the right null: a 100%-long, beta-+0.92 book in
+a rising market has a strongly POSITIVE null. ⇒ **we have negative alpha, not zero alpha**
+(corroborated: alpha +0.0010, −13.42pp vs NIFTY). Missing measurement = one script.
+⭐ **57% OF GENERATOR OUTPUT IS UNTRADEABLE** — 108 SELL / 81 BUY, and NSE cash delivery cannot
+hold an overnight short (our own A29 bullet says so). The backtest simulates BOTH sides, so the
+1,975-trade headline blends a tradeable long book with an untradeable short one in a market with
+positive drift. **Split every corpus statistic by direction before citing it again.**
+Also new: the **8% swing stop cap is anti-correlated with P&L** on three independent lines (cost
+hyperbola · R:R<1 = wide stop = the only profitable cohort · tight-stop −1.70R overshoot), kills
+51.9% of gate-passing signals, is worth ~0.13R of the 0.215R gap and is on NO tier of our plan;
+and **breadth** (`IR ≈ IC × √breadth`) is the dimension the architecture never considered — at
+~60 trades/yr a PERFECT version of this system is not investable.
+⭐ **THE STRATEGIC TENSION NOBODY NAMED:** at ₹1 lakh, cost economics pushes toward CONCENTRATION
+(flat ₹15.34 DP ⇒ bps falls with size) while validation pushes toward BREADTH. **You cannot have
+both ⇒ single-name delivery swing trading at ₹1L is not a VALIDATABLE strategy class, regardless
+of edge.** Escapes, ranked by how much infrastructure transfers: breadth from TIME not names
+(index/ETF/basket, ~750 daily obs) · the closing auction (the ONLY directional result we own whose
+interval excluded zero, cross-sectional so breadth is free, and microstructure rather than
+40-years-mined daily TA) · shorter holds + wider universe.
+✅ **The panel's sharpest attack on OUR numbers was TESTED AND REFUTED**: the positional
+stop-width gradient is NOT a winsorizer artifact — only **3 of 119** tight-stop trades clipped,
+raw mean **−0.222** vs winsorized −0.251; sign, ordering and conclusion all stand (the prediction
+over-shot ~10× because `R = 15/w` only applies to trades that REACH target, and that bucket wins
+13.4% of the time). Two surprises from the same re-run: the **accidental flat-5% stop BEATS the
+live EMA20 stop** on 387 paired panels (+0.091R vs −0.016R; ΔR −0.116, t −1.41 — not significant,
+but the shipped rule is the worse one), and the 8% cap would reject **54.4%** of positional panels.
+⛔ **WHAT ALL TEN MISSED: the evidence base no longer exists.** `positions` = **0 rows**,
+`cas_daily` = **1 session** (not 1,664/8), `index_ohlcv_1d` = **51**, VIX = **17**, sector 165/1322,
+`ohlcv_5m` = 0. Every live-tape number in both review docs is currently unreproducible, and the
+forward-evidence loops listed below as open are **dead**. ⇒ **Top engineering item, on nobody's
+tier list: an append-only trade ledger with off-box nightly export.** Two zero-cost governance
+edits proposed: split `FROZEN-BEHAVIOUR` from `FROZEN-CONTRACT` (we are paying promotion-bar
+prices for bug fixes), and make the burden of proof asymmetric (**the bar applies to ADDING
+behaviour; REMOVING unjustified behaviour needs only the absence of evidence for keeping it**).
+**NOTHING BUILT — this is an adjudication + a proposed sequence awaiting the user's direction.**
+
+**▶▶ 2026-09-10 (latest) — POSITIONAL REVIEW DOC + A POSITIONAL PROBE: THE CLASS IS ONE FACTOR'S
+FOOTPRINT, AND ITS STOP HAS THREE IMPLEMENTATIONS.** User asked for the same standalone
+quant-facing treatment as the swing doc below, but for **positional**. Deliverable:
+**`docs/POSITIONAL_REVIEW_FOR_QUANT.md`**; measurements from a NEW read-only script,
+**`backend/scripts/positional_probe.py`** (SELECT-only; the frozen scorer AND the frozen
+`BacktestEngine._simulate_trade` are imported and CALLED, never reimplemented — W2), over
+**every** positional panel in 238 liquid names 2019-10 → 2026-09. Deterministic; CA-filtered;
+winsorized; block-bootstrapped.
+⭐ **`positional` is NOT a horizon decision — a 1d signal is positional IFF `MULTIBAGGER_EMA`
+scores** (the `1w` route is never run). That factor is appended ONLY when it fires, always
+scores exactly **+0.9**, and has no bearish branch ⇒ **alone it yields confidence exactly 90%**
+(9/10, the top bucket; live example `BUY AFFLE — Multibagger Ema, 90% confidence`, filled and
+held). **430 of 430 gate-passing panels are BUY — structurally long-only.** 18.6% rest on that
+one factor (what the ACTIVE diversity gate now blocks).
+⭐ **THE STOP HAS NO CAP AND THREE IMPLEMENTATIONS.** `compute_levels` assigns
+`max_sl_pct = 15.00` for positional then **skips the cap check for exactly that class** (dead
+variable set to a threshold — 15% — that would barely bind, since EMA20 stops run p90 8.29% with a
+max of 15.93%; meanwhile **11.9%** of positional stops exceed 8% of price, a width no other
+multi-day class accepts). And `signal_service.py:245/:434` pass `ema20_daily` while **`profiles/pipeline.py:367`
+and `backtest/engine.py:322` do NOT** ⇒ flat 5%, R:R exactly 3.00. Live record: **26 of 40
+positional trades on the flat 5%, 14 on the real EMA20.** ⇒ **the backtest validates a stop rule
+the primary minter never produces**, and `_simulate_trade` walks to the END OF THE DATA so the
+30-trading-day validity is untested too. ⚠ Paired on identical panels the two rules are **NOT
+separable** (ΔR −0.120, t −1.47) — a CORRECTNESS defect, not a proven P&L one. Do not overclaim.
+⭐ **The class selects AGAINST trend structure:** `PRICE_VS_EMA` fires on **9.1%** of positional
+panels vs **63.4%** of daily panels generally (the defining `|EMA20−EMA200| ≤ 2%` IS a converged
+MA stack), and `DOW_TREND` scored **0 of 430** — a second, independent confirmation of the
+dead-factor finding below.
+⭐ **The notional cap is a minimum-stop-width rule in disguise:** `notional = capital × risk_pct
+÷ stop_width%`, so the cap binds at **w < risk_pct/leverage = 2%** — **the capital CANCELS**. It
+rejects **28.4%** of positional signals, was shipped as a blast-radius rail, and has never been
+measured or reported as selection. 2% is exactly where the outcome flips sign ⇒ **measure any
+future stop-width rule AGAINST it, not in addition** (W2).
+**Outcome, gross of costs:** live rule + stated 30-day horizon **n=362, meanR −0.102, medR
+−1.000, win 29.4%**; flat-5% variant +0.033R; **no bootstrap interval excludes zero**. **Enforcing
+the 30-day horizon makes BOTH rules worse** (−0.032→−0.102; +0.089→+0.033) — the horizon label is
+not carrying the returns. **Stop width is the strongest gradient in the class**, monotone and
+measured BEFORE costs: <2% **−0.306R at 9.6% win** → >10% **+0.543R at 62.5%**, and the live rule
+produces a **median 3.23% stop with 30.1% under 2%** ⇒ it manufactures the losing cohort
+(**cost in R = round-trip bps ÷ (100 × stop-width%)**).
+**"Should the class exist?"** Same 430 panels under SWING rules: swing −0.213R/37.4% win vs
+positional −0.292R/16.1%; paired **ΔR −0.079, t −0.53 — not significant.** No evidence the
+relabel adds anything; it had never been tested.
+⭐ **A FOURTH MEASUREMENT DEFECT, found by this review and it travels beyond positional:
+`_simulate_trade` scores a GAP-THROUGH-STOP fill as a WINNER.** The gap check is skipped on the
+fill bar (correctly — the entry IS that bar's open) but the intrabar `low <= stop_loss` test still
+fires and exits **AT `stop_loss`**, which for an already-gapped fill is ABOVE the entry. Three-bar
+repro: signal close 100, stop 99, next open **95** ⇒ recorded exit 99, `hit_sl=True`, **P&L
++4.211% = +1.000R**. Live is IMMUNE (`paper_broker:544-554` rejects an order already through its
+stop) — this is measurement only, and it flatters the **tight-stop** cohort (a near stop is the one
+an overnight gap clears). Excluding the 6 affected trades moved the tightest bucket from −0.257R to
+**−0.306R** (win 13.3% → 9.6%) ⇒ the §9.4 gradient was UNDERSTATED. ⚠ **Any study built on
+`_simulate_trade` inherits it — the 1,975-trade backtest headline and the entry-confirmation study
+included, magnitude there UNMEASURED.** Recorded in both review docs.
+⚠ **No realised per-trade positional record exists** — 39 of the 40 reconstructable trades are
+last seen `open` and closed trades drop out of the report tape entirely (DB destroyed 09-07), so
+live evidence is excursion-only (**63% never reached +0.5R**). ⚠ **No eligibility or risk rule is
+classification-aware** — a 30-day positional trade is gated exactly like a 5-day swing.
+**Nothing on the money path, in the frozen engine, or in the protected spec was changed.**
+
+**▶▶ 2026-09-10 — QUANT REVIEW DOC + AN ENGINE-SELECTIVITY PROBE, AND IT FOUND A DEAD FACTOR.**
 User asked for a standalone document to present the system to an external quant. Deliverable:
 **`docs/SYSTEM_REVIEW_FOR_QUANT.md`** (mechanism → measured results → diagnosis → options; every
 figure cited to a code path or reproducible). Its measurements come from a NEW read-only script,
