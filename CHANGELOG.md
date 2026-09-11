@@ -37,6 +37,27 @@ tight-vs-wide contrast from -0.386 (t -1.55) to -0.262 (t -0.78) to **+0.069 (t 
 buckets carry OPPOSITE signs (which `E[ret]*E[1/w]` cannot produce at any mean) and its
 reachable cohort is the BETTER one where swing's is worse.
 
+**⭐⭐ RESULT — E1 is ANSWERED and positional closes the same way swing did.**
+n = 390 positional trades (359 gap-clean), reproducing sec 12.1's 385 closely. The
+tight-vs-wide contrast decays monotonically as each mechanical term is removed and is gone by
+the third unit: **R -0.4879 (t -1.89) -> raw % -0.7870 (t -1.18) -> excess vs the matched
+basket -0.1909 (t -0.29)**. Swing went -0.386 -> -0.262 -> +0.069. Different numbers, identical
+shape, same verdict.
+- ⛔ And sec 12.27's "opposite signs, so not the swing mechanism" argument is WITHDRAWN against
+  itself. `E[1/w]` jumps **110x** at the first bucket boundary (43.4 against 0.352) -- a mean
+  stop width of ~0.026% -- and net Rs in that bucket is **-25,808 per trade**. It is a LEVERAGE
+  POINT, carried by a cohort the live order path refuses: the per-position notional cap is a 2%
+  minimum-stop-width rule in disguise and B2's new cash rail refuses the rest.
+- ⭐ The `drift x T` premise is confirmed a second time, on a different class: mean holding
+  period rises **6.4 -> 16.3 -> 21.9 -> 29.0 -> 32.9 sessions** across the buckets.
+- ⇒ sec 4.4, sec 12.1, sec 12.2, the cap sweep (plan item 18) and the sigma_R objective all
+  close with it, which is exactly what sec 13.8 said would happen "on one afternoon".
+- ⚠ The RELABEL question is untouched -- that rests on seven code branch points against a
+  paired dR of -0.120, t -1.47, not on stop width. New fact bearing on it: mean T runs 6-33
+  sessions against swing's 3.59, so the classes DO differ in realised holding period even
+  though their rule sets are not separable by outcome.
+
+Report: `docs/analysis/b5-positional-four-units-2026-09-11.md`, new sec 12.34.
 `ruff` + `mypy` clean.
 
 

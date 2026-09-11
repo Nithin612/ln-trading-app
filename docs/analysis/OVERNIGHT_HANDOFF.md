@@ -11,8 +11,8 @@ Queue and acceptance criteria: `docs/BUILD_QUEUE.md`. Update this file after EVE
 | **B3** | dated tick SCHEDULE table | ✅ **DONE** | (see log) |
 | **B1** | delete `_near_expiry` / `_choppy` | ✅ **DONE** | (see log) |
 | **B4** | span-based gap guard | ✅ **DONE** (1 part blocked) | (see log) |
-| **B5** | E1 positional in four units | ⏳ IN PROGRESS | — |
-| **B6+B7** | E2 three estimands + MFE/MAE | ⏸ queued | — |
+| **B5** | E1 positional in four units | ✅ **DONE** | `90000c1` `1dd38d4` |
+| **B6+B7** | E2 three estimands + MFE/MAE | ⏳ NEXT | — |
 | **B8** | append-only ledger (ONE table, ONE day) | ⏸ queued | — |
 
 ## Standing rules for this run
@@ -30,11 +30,12 @@ Queue and acceptance criteria: `docs/BUILD_QUEUE.md`. Update this file after EVE
 
 ## Where to resume
 
-⭐ **NEXT: B5** — `positional_probe.py` gains `T`, `bench`, `excess` from the SAME
-`basket_series` owner in `swing_dependence_probe.py` (do **not** write a second one, W2), plus
-the span-based gap guard from B4 (`market_calendar.window_has_holes`) which that file has never
-had. Then report the buckets in **four** units with **contrasts and their SEs**, not levels.
-Acceptance criteria in `docs/BUILD_QUEUE.md`.
+⭐ **NEXT: B6 + B7** — E2 as THREE estimands (3a unconditional IC · 3b matched-tail contrast ·
+3c the gate-conditional collider, reported never decided on) with `sd(IC_t)` and
+`E[z|selected]` as **OUTPUTS**, coverage-weighted power, **h = 5d pre-registered**, plus B7's
+MFE/MAE surface and hazard curve in the same pass. ⛔ **Write the three estimands, the horizon
+and the four-branch decision tree DOWN before a line of code** — under-specifying the decisive
+test is how KILL LINE 3 went wrong twice. Acceptance criteria in `docs/BUILD_QUEUE.md`.
 
 ⚠ **Before quoting any `probe-147` number, re-run it** — B4 changed the gap-clean cohort to
 `probe-145`, and `clean × BUY` is now **n = 60**, not 61 (§16.1d).
@@ -92,3 +93,18 @@ Acceptance criteria in `docs/BUILD_QUEUE.md`.
   ⚠ **BLOCKED, not skipped:** B4's third target, `run_single_stock`'s bar-50 walk, is inside
   the **FROZEN** `app/backtest/engine.py`. Needs sign-off + §8 regression + regenerated Rust
   fixtures. `positional_probe.py` has no guard to replace — it gets one with B5.
+
+- **B5 DONE — and it ANSWERED E1.** `positional_probe.py` gained `T`/`bench`/`excess`/`ret_atr`/
+  `cash`/`atr_pct` + the gap flag (all helpers **imported** from the swing probe, W2), B4's span
+  guard (which it never had), a four-unit bucket report with **contrasts + SEs + MDEs**, and
+  `--dump-trades`. **1,585 trade records; 390 on the live rule.**
+  ⭐⭐ **THE VERDICT: positional closes the same way swing did.** The contrast decays
+  **R −0.4879 (t −1.89) → raw % −0.7870 (t −1.18) → excess vs basket −0.1909 (t −0.29)**.
+  ⛔ **§12.27's "opposite signs ⇒ different mechanism" is WITHDRAWN against itself:** `E[1/w]`
+  jumps **110×** at the first bucket (43.4 vs 0.352, i.e. ~0.026% stops) and net ₹ there is
+  **−25,808/trade**. A leverage point, on a cohort the order path refuses.
+  ⭐ `drift × T` confirmed a second time on a different class: mean `T` 6.4 → 32.9 sessions.
+  ⇒ **§4.4, §12.1, §12.2, the cap sweep and the σ_R objective all close with it.**
+  ⚠ The RELABEL question is untouched. New fact: positional mean `T` is 6–33 sessions vs swing's
+  **3.59**, so the classes DO differ in realised hold even though their rule sets are not
+  separable by outcome.
