@@ -165,3 +165,24 @@ exists for every eligible name, not only for gate-passers. That is a supported p
 frozen function, called not modified. Gate passage is then recomputed from the returned
 confidence and the ADX schedule, so 3b and 3c partition the same population 3a scores.
 
+### Amendment 2 — 2026-09-12, after the SMOKE run (20 names), before any decision result
+
+Two defects in the implementation, both found by running it small and neither visible on
+paper. Recorded because §7 requires an amendment rather than a silent repair.
+
+**(a) The cross-section has to be built on a GLOBAL session grid.** The obvious loop — walk
+each name from its own bar 300 by `stride` — samples a **different set of dates per name**, so
+the "cross-section" on any date is one or two names and a cross-sectional IC is noise by
+construction. The smoke run reported a **median cross-section of 1**. ⇒ decision dates now come
+from the market's observed calendar (every `stride`-th session) and each name is looked up ON
+those dates. ⚠ This does not change any estimand; it makes them computable at all.
+
+**(b) `E[z | selected]` must be measured on the ABSOLUTE score.** §3 said "the mean
+standardised composite score of selected panels" without noticing that **the gate is a MAGNITUDE
+threshold**: it admits `|normalized| ≥ 0.70`, so it selects BOTH tails, and a strong SELL
+standardises to a large *negative* z on the signed score. The smoke returned
+**E[z|sel] = −1.61**, which is not a tail-strength statistic at all — it is the short side
+outvoting the long. D3's transfer `E[excess|sel] ≈ IC · σ_cs · E[z|sel]` assumes selection on
+magnitude with the sign taken by the direction, so `|z|` is the quantity it means.
+
+⚠ **Neither changes §5's decision tree or §6's predictions**, which stand as committed.
