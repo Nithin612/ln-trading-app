@@ -10,7 +10,7 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-09-11, round 10) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-09-11) — round 10 — read this block first
 
 **▶▶ 2026-09-11 (round 10) — ⭐⭐⭐ A PREDICTION HIT TO FOUR DECIMALS, AND DIED THE SAME SESSION.**
 ⭐⭐ **THE OPERATIONAL DOCUMENT IS NOW `docs/BUILD_QUEUE.md`.** The adjudication is 5,900+ lines and is

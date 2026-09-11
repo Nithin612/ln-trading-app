@@ -7,6 +7,57 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### B3 — the tick grid becomes a dated schedule, not one constant (2026-09-11)
+
+`paper_tick_size` was a single global 0.05 and the market has had two grids since mid-2024.
+`_round_tick` snapped every simulated fill and mark to it, always adversely -- the correct
+contract on the wrong grid. On a Rs39 share that is ~10 bps of round-trip rounding the
+market does not levy: ~0.051R at a 2% stop, about 40% of the real 25.5 bps charge stack,
+and concentrated on exactly the cheap tight-stop cohort the corpus is full of.
+
+**Added**
+- `app/broker/tick_schedule.py` -- the grid as a table of `(valid_from, price_lo, price_hi,
+  tick, source)` rows, newest-first, each carrying the evidence for its own row. A schedule
+  is externally owned and has already changed inside our data window, so hardcoding the
+  current state as `0.01 if price < 250 else 0.05` is the shape W5 forbids.
+- `paper_broker._tick_for()` -- owns only the override and the "what day is it" question;
+  defaults `as_of` to today IST, which is right for every current call site.
+- 15 tests including the stated acceptance criterion (Rs39 on 0.01, Rs2500 on 0.05, adverse
+  contract preserved on both) and a canary that no >=Rs225 fill moves.
+
+**Measured (the source for every schedule row, from `ohlcv_1d` itself)**
+- Share of daily closes sitting exactly on a Rs0.05 multiple, sub-Rs250: 96-98% through
+  2020, 84-88% mid-2023 to 2024-05, **38.98% in 2024-06**, then 20.8-23.3% from 2024-07
+  onward. The >=Rs250 band never moved (94-97% throughout). A population fully on Rs0.01
+  lands on Rs0.05 about 20% of the time by chance, so the post-change sub-Rs250 figure IS
+  the chance rate. The change took effect during June 2024.
+- ⚠ The boundary is a ZONE, not a cliff: post-transition the Rs225-250 band is 39.3% on
+  Rs0.05, Rs250-275 is 66.5%, Rs275-300 is 84.0%, and only Rs300+ is fully Rs0.05. That is
+  what you get when the tick is a property of the INSTRUMENT, assigned at a periodic review
+  and sticky afterwards, rather than a function of the current price. **So the boundary is
+  set at Rs225, the low end of the mixed zone** -- assuming the coarser grid there can
+  over-charge a name that is really on Rs0.01 but can never under-charge one that is really
+  on Rs0.05, which is the module's contract. A sharp Rs250 cut would hand out
+  better-than-reality fills across roughly a third of that zone.
+
+**Changed**
+- `paper_tick_size` default 0.05 -> **0.0, which now means "use the schedule"**. A positive
+  value forces a flat grid (tests, historical pinning); negative disables rounding, which
+  nothing ships with. `.env.example` documented in the same commit.
+
+⚠ Blast radius, stated because it was overstated once: `_round_tick` is called from
+`paper_broker` and nowhere else -- not the research probes, not the backtest engine -- and
+`positions` is empty, so this contaminated no published research number. It is a
+before-cycle-2 correctness fix to the simulator, not a restatement of history.
+
+⚠ The `valid_from` dates are DERIVED FROM OUR OWN DATA, correct to the month, not read off
+a circular. If the published NSE/SEBI effective date is confirmed, replace the date and the
+`source` string together.
+
+`ruff` + `mypy` clean; `tests/test_tick_schedule.py` 15 passed; the money-path regression
+(`-k "paper or fill or broker or order or trading or risk or fee or cost"`) **520 passed**.
+
+
 ### B2 — the aggregate cash rail, which did not exist (2026-09-11)
 
 First item of the B-queue (`docs/BUILD_QUEUE.md`), and the only one where real money was at

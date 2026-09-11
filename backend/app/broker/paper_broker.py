@@ -14,13 +14,15 @@ fill worse — and a missing book fails open to exactly the old behaviour.
 """
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from decimal import ROUND_CEILING, ROUND_DOWN, ROUND_FLOOR, Decimal
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.analysis.risk import compute_quantity
+from app.broker import tick_schedule
 from app.broker.depth import Depth, get_live_depth
 from app.core.config import settings
 from app.models.signal import Signal
@@ -31,6 +33,8 @@ from app.signals import eligibility
 from app.trading import risk_engine
 from app.trading.fees import product_for_classification, roundtrip_charges
 from app.trading.trail_sl import compute_pnl
+
+_IST = ZoneInfo("Asia/Kolkata")
 
 
 class PaperOrderError(Exception):
@@ -68,8 +72,27 @@ def _apply_slippage(price: Decimal, order_side: str) -> Decimal:
     return _price_after_bps(price, order_side, _flat_slippage_bps())
 
 
+def _tick_for(price: Decimal, *, as_of: date | None = None) -> Decimal:
+    """The tick grid for this price, from the DATED SCHEDULE unless overridden.
+
+    ⭐ `paper_tick_size` was one global ₹0.05 until B3, and that has not been the grid for
+    cheap names since June 2024 — a ₹39 share was charged ~10 bps of round-trip rounding
+    the market does not levy. The schedule owns the bands and their effective dates; this
+    function owns only the override and the "what day is it" question.
+
+    `as_of` defaults to **today in IST**, which is right for every current call site: the
+    paper broker fills and marks at the live clock. A historical replay should pass the
+    bar's own date, or it will price a 2019 fill on the 2026 grid.
+    """
+    override = Decimal(str(settings.paper_tick_size))
+    if override != 0:
+        return override
+    day = as_of or datetime.now(tz=_IST).date()
+    return tick_schedule.tick_for(price, as_of=day)
+
+
 def _round_tick(price: Decimal, order_side: str) -> Decimal:
-    """Snap a fill to the exchange tick grid (config `paper_tick_size`), ALWAYS adversely.
+    """Snap a fill to the exchange tick grid (see `_tick_for`), ALWAYS adversely.
 
     A BUY rounds UP, a SELL rounds DOWN. This is not cosmetic: the module contract is that
     the model "can only make a fill worse", and `ROUND_HALF_UP` to the NEAREST tick broke
@@ -84,7 +107,7 @@ def _round_tick(price: Decimal, order_side: str) -> Decimal:
     Rounding away from the grid is also the more truthful model on its own terms: an
     off-grid price is not transactable, so the achievable price is the next tick in the
     direction that costs you."""
-    tick = Decimal(str(settings.paper_tick_size))
+    tick = _tick_for(price)
     if tick <= 0:
         return price.quantize(Decimal("0.0001"))
     rounding = ROUND_CEILING if order_side.upper() == "BUY" else ROUND_FLOOR

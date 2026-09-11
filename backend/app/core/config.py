@@ -185,8 +185,18 @@ class Settings(BaseSettings):
     # `_neutral_paper_slippage`) so fill assertions aren't coupled to the knob;
     # the 2-bps path is exercised explicitly in the dedicated slippage tests.
     paper_slippage_bps: float = 2.0
-    # NSE equity tick size (₹) for rounding simulated fills; 0 disables.
-    paper_tick_size: float = 0.05
+    # Flat tick-size OVERRIDE (₹) for rounding simulated fills.
+    # ⭐ **0 (the default) means "use `app.broker.tick_schedule`"** — the DATED PRICE-BAND
+    # schedule, which is the real grid: NSE moved sub-₹250 names to ₹0.01 during June 2024
+    # while ≥₹250 stayed at ₹0.05. A single constant charged a ₹39 name ~10 bps of
+    # round-trip rounding the market does not (≈0.051R at a 2% stop, ~40% of the real
+    # 25.5 bps charge stack).
+    # A POSITIVE value forces that flat grid everywhere, ignoring the schedule — kept for
+    # tests and for pinning a historical model, not for production use.
+    # ⚠ Negative disables rounding entirely. That is not a mode anything ships with: an
+    # off-grid price is not transactable, so skipping the snap hands out fills better than
+    # reality, which is the exact failure `_round_tick` exists to prevent.
+    paper_tick_size: float = 0.0
 
     # ── Spread-aware fill model (Phase 6.8.2, app/broker/paper_broker.py) ───
     # The flat bps above is fine for a Nifty large-cap and a LIE for a small-cap
