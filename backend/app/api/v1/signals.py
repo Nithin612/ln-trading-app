@@ -226,19 +226,19 @@ async def list_active_signals(
     direction: str | None = Query(default=None, description="BUY | SELL"),
     classification: str | None = Query(default=None),
     min_confidence: int = Query(default=70, ge=0, le=100),
-    include_expiring: bool = Query(
-        default=False, description="Include signals with ≥80% of validity elapsed"
-    ),
-    include_choppy: bool = Query(
-        default=False, description="Include signals whose daily regime is choppy (ER < 0.30)"
-    ),
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> SignalListResponse:
     """Active signals — presentation overlay applied (engine unchanged): the
     base engine and named profiles can each emit a signal for the same stock;
-    they are DEDUPED to one row per (stock, direction); near-expiry and
-    choppy-regime (low daily efficiency ratio) signals are hidden by default.
+    they are DEDUPED to one row per (stock, direction) and ranked by confidence.
+
+    ⭐ **Nothing is hidden.** Until B1 (2026-09-11) this endpoint dropped near-expiry and
+    choppy-regime signals by default — two undeclared eligibility rules the ORDER path did
+    not apply, so a hidden signal would have been accepted by `place_order`. The choppy
+    half was measured at **t = −0.00, p = 0.999** on 185 trades while hiding **67%** of the
+    list, so both were removed rather than declared. Both states still ride on every row
+    (`near_expiry`, `choppy`, `regime_er`) for the UI to flag and sort on.
 
     Each row also carries an ORDER-ELIGIBILITY PREVIEW (`blocked`/`blocked_by`/
     `block_reason`): what the ACTIVE eligibility gates would do to it at order time.
@@ -279,11 +279,30 @@ async def list_active_signals(
         er = er_map.get(s.stock_id)
         return er is not None and er < CHOPPY_ER
 
-    if not include_expiring:
-        reps = [(s, n) for (s, n) in reps if not _near_expiry(s, now)]
-    if not include_choppy:
-        reps = [(s, n) for (s, n) in reps if not _choppy(s)]
-
+    # ⛔ B1 (2026-09-11): the near-expiry and choppy filters USED to run here, both
+    # defaulting ON, and they were removed rather than declared.
+    #
+    # They were two undeclared eligibility rules: absent from `restrictions.py` — the
+    # registry whose docstring calls itself the single source of truth for tradability —
+    # absent from the order path, and absent from the research corpus. A signal they hid
+    # would have been ACCEPTED by `place_order`. That is display/order drift in the
+    # OPPOSITE direction from the one fixed on 2026-09-02 (display too permissive, 41 of
+    # 204 rows showing a Buy button that could only 409); this one was display too
+    # RESTRICTIVE, and it silently narrowed the offered set along two axes nobody had
+    # accounted for in any estimand.
+    #
+    # ⭐ And the choppy half was MEASURED before it was removed, which is why this is a
+    # deletion and not a declaration: on 185 resolved trades, splitting at the deployed
+    # ER < 0.30 threshold gives a contrast of −0.0001R, **t = −0.00, p = 0.999** — as close
+    # to a perfect null as this programme has produced — while hiding **67%** of the
+    # offered set. On the clean tradeable cell its sign is wrong (the HIDDEN cohort reads
+    # +0.18R better, not significant). It was selecting nothing and costing two-thirds of
+    # the list.
+    #
+    # ⚠ NOTHING IS LOST BY REMOVING THEM. `near_expiry` and `choppy` are still computed
+    # and still ride on every row (`_enrich_page`), so the UI can flag, sort and style on
+    # both. That is this project's standing law — **flag, never hide** — the same one that
+    # keeps eligibility-blocked rows listed with a disabled Buy instead of dropping them.
     reps.sort(key=lambda t: (t[0].confidence_pct, t[0].created_at), reverse=True)
     total = len(reps)
     page = reps[offset : offset + limit]

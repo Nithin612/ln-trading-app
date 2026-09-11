@@ -7,6 +7,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### B1 — the two undeclared display filters are removed, not declared (2026-09-11)
+
+`GET /signals/active` dropped near-expiry and choppy-regime signals by default. Neither rule
+was in `restrictions.py` -- the registry whose docstring calls itself the single source of
+truth for tradability -- neither was applied by the order path, and neither was applied by
+the research corpus. A signal the listing hid would still have been ACCEPTED by
+`place_order`. That is display/order drift in the OPPOSITE direction from the one fixed on
+2026-09-02 (display too permissive, 41 of 204 rows showing a Buy button that could only
+409); this one was display too RESTRICTIVE, and it narrowed the offered set along two axes
+no estimand accounted for.
+
+**Removed**
+- The `include_expiring` and `include_choppy` query params and the two filter applications.
+  Deleted rather than declared because the choppy half was MEASURED first: splitting 185
+  resolved trades at the deployed ER < 0.30 threshold gives a contrast of -0.0001R,
+  **t = -0.00, p = 0.999**, while the filter was hiding **67%** of the offered set. On the
+  clean tradeable cell its sign is wrong (the hidden cohort reads +0.18R better, ns). It
+  was selecting nothing and costing two-thirds of the list.
+
+**Unchanged, and this is why nothing is lost**
+- `near_expiry`, `choppy` and `regime_er` still ride on every row, so the UI flags, sorts
+  and styles on both exactly as before. Standing law: **flag, never hide** -- the same one
+  that keeps eligibility-blocked rows listed with a disabled Buy instead of dropping them.
+
+**Frontend**
+- The Dashboard's two checkboxes became CLIENT-SIDE focus filters with the opposite sense
+  ("Hide near-expiry", "Hide choppy", both default off). They were about to become dead
+  controls, which is worse than removing them. Filtering on data already in the payload is
+  also strictly better: toggling no longer refetches, so it dropped out of the query key.
+- `signalsApi.getActive` lost the two dead params; `OpportunitiesTable` lost its now-
+  redundant `includeExpiring: true`.
+
+Backend: `ruff` + `mypy` clean; `test_signals.py` 18, `test_eligibility_preview.py` +
+`test_confidence_explain.py` + `test_signal_task_sizing.py` 49 passed. Frontend: `tsc`
+clean, `eslint` clean, **428 tests passed**.
+
+
 ### B3 — the tick grid becomes a dated schedule, not one constant (2026-09-11)
 
 `paper_tick_size` was a single global 0.05 and the market has had two grids since mid-2024.

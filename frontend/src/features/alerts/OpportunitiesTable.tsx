@@ -222,9 +222,9 @@ export function OpportunitiesTable() {
 
   const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ['opportunities-active'],
-    // include_expiring so stale signals still show (flagged), never silently hidden.
+    // The API hides nothing (B1, 2026-09-11): stale and choppy rows arrive flagged.
     queryFn: () =>
-      signalsApi.getActive({ minConfidence: 70, includeExpiring: true, limit: 100 }, accessToken!),
+      signalsApi.getActive({ minConfidence: 70, limit: 100 }, accessToken!),
     enabled: accessToken !== null,
     refetchInterval: 60_000, // keep the persistent list fresh; resolved/expired signals drop off
     staleTime: 30_000,

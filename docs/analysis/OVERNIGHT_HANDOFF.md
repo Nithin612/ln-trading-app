@@ -9,8 +9,8 @@ Queue and acceptance criteria: `docs/BUILD_QUEUE.md`. Update this file after EVE
 |---|---|---|---|
 | **B2** | `Σ notional ≤ available cash` rail | ✅ **DONE** | `e170d2b` |
 | **B3** | dated tick SCHEDULE table | ✅ **DONE** | (see log) |
-| **B1** | delete `_near_expiry` / `_choppy` | ⏳ IN PROGRESS | — |
-| **B4** | span-based gap guard | ⏸ queued | — |
+| **B1** | delete `_near_expiry` / `_choppy` | ✅ **DONE** | (see log) |
+| **B4** | span-based gap guard | ⏳ NEXT | — |
 | **B5** | E1 positional in four units | ⏸ queued | — |
 | **B6+B7** | E2 three estimands + MFE/MAE | ⏸ queued | — |
 | **B8** | append-only ledger (ONE table, ONE day) | ⏸ queued | — |
@@ -54,3 +54,13 @@ Queue and acceptance criteria: `docs/BUILD_QUEUE.md`. Update this file after EVE
   wrong for ~a third of that zone.
   ⚠ **Also fixed en route:** my own round-10 PHASES edit broke the `(updated YYYY-MM-DD)` stamp
   and `tests/test_doc_sync.py` caught it. The ritual works.
+
+- **B1 DONE.** Both undeclared display filters **removed** (not declared) — the choppy one was
+  measured at **t = −0.00, p = 0.999** on 185 trades while hiding **67%** of the offered set.
+  Acceptance test added: a signal that trips BOTH rules is still offered, and the registry is
+  asserted to declare neither.
+  ⚠ **Scope grew by one honest step:** the Dashboard had real user-facing toggles wired to the
+  deleted params, so they were about to become DEAD CONTROLS. Converted to **client-side focus
+  filters with the opposite sense** ("Hide near-expiry" / "Hide choppy", default off) — the data
+  (`near_expiry`, `choppy`, `regime_er`) is already on every row, and toggling now costs no
+  refetch. Backend 67 tests green; **frontend 428 green**, tsc + eslint clean.

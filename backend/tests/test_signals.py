@@ -219,11 +219,16 @@ class TestSignalsActive:
         assert data["signals"][0]["confidence_pct"] == 80
         assert data["signals"][0]["sources_count"] == 2
 
-    async def test_near_expiry_hidden_by_default_shown_on_toggle(
+    async def test_near_expiry_is_shown_and_flagged_not_hidden(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        """A signal with ≥80% of its validity elapsed is stale (little runway) —
-        hidden by default, shown + flagged with include_expiring."""
+        """⭐ B1 (2026-09-11): this asserted the OPPOSITE until the filter was removed.
+
+        A near-expiry signal used to be dropped from the default listing. That was an
+        undeclared eligibility rule — absent from `restrictions.py`, absent from the order
+        path — so a hidden signal would still have been ACCEPTED by `place_order`. The row
+        is now returned and FLAGGED, which is this project's standing law: flag, never hide.
+        """
         await create_admin(db)
         token = await get_token(client, "admin@example.com", "adminpass123")
         hdr = {"Authorization": f"Bearer {token}"}
@@ -241,12 +246,9 @@ class TestSignalsActive:
         )
         await db.commit()
 
-        assert (await client.get("/api/v1/signals/active", headers=hdr)).json()["total"] == 0
-        shown = (
-            await client.get("/api/v1/signals/active?include_expiring=true", headers=hdr)
-        ).json()
-        assert shown["total"] == 1
-        assert shown["signals"][0]["near_expiry"] is True
+        data = (await client.get("/api/v1/signals/active", headers=hdr)).json()
+        assert data["total"] == 1
+        assert data["signals"][0]["near_expiry"] is True
 
     async def _seed_daily(self, db: AsyncSession, stock_id: int, closes: list[float]) -> None:
         from app.models.market_data import OhlcvDaily
@@ -258,11 +260,19 @@ class TestSignalsActive:
                 open=d, high=d, low=d, close=d, volume=1, is_complete=True,
             ))
 
-    async def test_choppy_regime_hidden_by_default(
+    async def test_choppy_regime_is_shown_and_flagged_not_hidden(
         self, client: AsyncClient, db: AsyncSession
     ) -> None:
-        """A signal on a choppy daily tape (low efficiency ratio) is hidden by
-        default and flagged when included — the 07-30/31 review's loss driver."""
+        """⭐ B1: this asserted the OPPOSITE until the filter was removed — and unlike the
+        near-expiry one, the removal is backed by a measurement, not just by the drift.
+
+        Splitting 185 resolved trades at the deployed ER < 0.30 threshold gives a contrast
+        of −0.0001R, **t = −0.00, p = 0.999** — as close to a perfect null as this
+        programme has produced — while the filter was hiding **67%** of the offered set.
+        On the clean tradeable cell its sign is wrong (the hidden cohort reads +0.18R
+        better, not significant). So it was selecting nothing and costing two-thirds of the
+        list. The flag stays; the hiding goes.
+        """
         await create_admin(db)
         token = await get_token(client, "admin@example.com", "adminpass123")
         hdr = {"Authorization": f"Bearer {token}"}
@@ -272,11 +282,51 @@ class TestSignalsActive:
         await _make_signal(db, stock.id)  # fresh (not near-expiry)
         await db.commit()
 
-        assert (await client.get("/api/v1/signals/active", headers=hdr)).json()["total"] == 0
-        shown = (await client.get("/api/v1/signals/active?include_choppy=true", headers=hdr)).json()
-        assert shown["total"] == 1
-        assert shown["signals"][0]["choppy"] is True
-        assert shown["signals"][0]["regime_er"] < 0.30
+        data = (await client.get("/api/v1/signals/active", headers=hdr)).json()
+        assert data["total"] == 1
+        assert data["signals"][0]["choppy"] is True
+        assert data["signals"][0]["regime_er"] < 0.30
+
+    async def test_the_default_listing_hides_nothing_the_order_path_would_accept(
+        self, client: AsyncClient, db: AsyncSession
+    ) -> None:
+        """⭐⭐ THE B1 ACCEPTANCE CRITERION: default listing ≡ the set the order path admits.
+
+        Two undeclared rules used to run here and nowhere else, so the listing was a strict
+        SUBSET of what `place_order` would take. This seeds one signal that trips BOTH of
+        them at once — stale AND choppy — and asserts it is still offered, because
+        `restrictions.py` (the registry whose docstring claims to be the single source of
+        truth for tradability) declares neither.
+        """
+        from app.signals import restrictions
+
+        await create_admin(db)
+        token = await get_token(client, "admin@example.com", "adminpass123")
+        hdr = {"Authorization": f"Bearer {token}"}
+        stock = await _make_stock(db)
+        await self._seed_daily(db, stock.id, [100 + (i % 2) for i in range(15)])  # choppy
+        now = datetime.now(tz=UTC)
+        db.add(
+            Signal(
+                stock_id=stock.id, direction="BUY", classification="swing", timeframe="1d",
+                entry_price="100.0000", stop_loss="98.0000", take_profit="106.0000",
+                suggested_qty=100, confidence_pct=80, factor_scores={},
+                headline="stale AND choppy", status="active",
+                validity_until=now + timedelta(hours=2),
+                created_at=now - timedelta(days=5),
+            )
+        )
+        await db.commit()
+
+        data = (await client.get("/api/v1/signals/active", headers=hdr)).json()
+        assert data["total"] == 1, "a signal the order path would accept must be offered"
+        row = data["signals"][0]
+        assert row["near_expiry"] is True and row["choppy"] is True
+
+        # ...and the registry still declares neither, which is WHY they had to go rather
+        # than be kept: a rule the order path does not run is not an eligibility rule.
+        declared = {r.gate for r in restrictions.REGISTRY}
+        assert not {"near_expiry", "choppy"} & declared
 
     async def test_trending_regime_shown_by_default(
         self, client: AsyncClient, db: AsyncSession

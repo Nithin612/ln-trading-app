@@ -78,8 +78,6 @@ export const signalsApi = {
       direction?: string
       classification?: string
       minConfidence?: number
-      includeExpiring?: boolean
-      includeChoppy?: boolean
       limit?: number
       offset?: number
     },
@@ -89,8 +87,6 @@ export const signalsApi = {
     if (params.direction) q.set('direction', params.direction)
     if (params.classification) q.set('classification', params.classification)
     if (params.minConfidence != null) q.set('min_confidence', String(params.minConfidence))
-    if (params.includeExpiring) q.set('include_expiring', 'true')
-    if (params.includeChoppy) q.set('include_choppy', 'true')
     if (params.limit != null) q.set('limit', String(params.limit))
     if (params.offset != null) q.set('offset', String(params.offset))
     const qs = q.toString() ? `?${q.toString()}` : ''

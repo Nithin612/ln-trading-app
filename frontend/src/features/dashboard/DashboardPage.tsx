@@ -235,8 +235,14 @@ export function DashboardPage() {
   const [direction, setDirection] = useState('All')
   const [classification, setClassification] = useState('All')
   const [minConfidence, setMinConfidence] = useState(70)
-  const [showNearExpiry, setShowNearExpiry] = useState(false)
-  const [showChoppy, setShowChoppy] = useState(false)
+  // B1 (2026-09-11): these became CLIENT-SIDE filters, and their sense inverted.
+  // The server used to hide near-expiry and choppy signals by default — two rules
+  // the ORDER path never applied, so a hidden signal would still have been accepted
+  // by place_order. The choppy one measured t = -0.00, p = 0.999 on 185 trades while
+  // hiding 67% of the list. Both flags still ride on every row, so focusing on a
+  // subset is presentation and belongs here, not in the API.
+  const [hideNearExpiry, setHideNearExpiry] = useState(false)
+  const [hideChoppy, setHideChoppy] = useState(false)
   const [segment, setSegment] = useState('ALL')
   const [tradingSignalId, setTradingSignalId] = useState<string | null>(null)
   const halted = useTradingHaltStore((s) => s.halted)
@@ -267,15 +273,13 @@ export function DashboardPage() {
   }, [halted, toast, placePaperOrder])
 
   const { data: signalData, isLoading: signalsLoading } = useQuery({
-    queryKey: ['signals-active', direction, classification, minConfidence, showNearExpiry, showChoppy],
+    queryKey: ['signals-active', direction, classification, minConfidence],
     queryFn: () =>
       signalsApi.getActive(
         {
           direction: direction !== 'All' ? direction : undefined,
           classification: classification !== 'All' ? classification : undefined,
           minConfidence,
-          includeExpiring: showNearExpiry,
-          includeChoppy: showChoppy,
           limit: 100,
         },
         accessToken!,
@@ -321,7 +325,12 @@ export function DashboardPage() {
       .map(([date, vals]) => ({ date: date.slice(5), ...vals }))
   }, [cashRows])
 
-  const signals = useMemo(() => signalData?.signals ?? [], [signalData])
+  const signals = useMemo(() => {
+    let rows = signalData?.signals ?? []
+    if (hideNearExpiry) rows = rows.filter((s) => !s.near_expiry)
+    if (hideChoppy) rows = rows.filter((s) => !s.choppy)
+    return rows
+  }, [signalData, hideNearExpiry, hideChoppy])
   const buyCount = signals.filter((s) => s.direction === 'BUY').length
   const sellCount = signals.filter((s) => s.direction === 'SELL').length
   const avgConf = signals.length
@@ -461,29 +470,29 @@ export function DashboardPage() {
               onChange={(v) => setMinConfidence(Number(v))}
             />
 
-            {/* Near-expiry (day-4/5) signals are hidden by default — little runway */}
+            {/* Opt-in focus filters, applied client-side. Default OFF: nothing is hidden. */}
             <div className="flex items-center gap-1.5">
               <Checkbox
-                id="show-near-expiry"
-                checked={showNearExpiry}
-                onCheckedChange={setShowNearExpiry}
+                id="hide-near-expiry"
+                checked={hideNearExpiry}
+                onCheckedChange={setHideNearExpiry}
               />
               <label
-                htmlFor="show-near-expiry"
+                htmlFor="hide-near-expiry"
                 className="text-[11px] text-(--color-text-muted) whitespace-nowrap cursor-pointer"
               >
-                Near-expiry
+                Hide near-expiry
               </label>
             </div>
 
-            {/* Choppy-regime (low daily efficiency ratio) signals are hidden by default */}
+
             <div className="flex items-center gap-1.5">
-              <Checkbox id="show-choppy" checked={showChoppy} onCheckedChange={setShowChoppy} />
+              <Checkbox id="hide-choppy" checked={hideChoppy} onCheckedChange={setHideChoppy} />
               <label
-                htmlFor="show-choppy"
+                htmlFor="hide-choppy"
                 className="text-[11px] text-(--color-text-muted) whitespace-nowrap cursor-pointer"
               >
-                Choppy
+                Hide choppy
               </label>
             </div>
           </div>

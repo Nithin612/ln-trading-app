@@ -398,7 +398,7 @@ class TestActiveListReportsBlocks:
         await db.commit()
 
         r = await client.get(
-            "/api/v1/signals/active?include_expiring=true&include_choppy=true",
+            "/api/v1/signals/active",
             headers=headers,
         )
         assert r.status_code == 200
@@ -420,7 +420,7 @@ class TestActiveListReportsBlocks:
         await db.commit()
 
         r = await client.get(
-            "/api/v1/signals/active?include_expiring=true&include_choppy=true",
+            "/api/v1/signals/active",
             headers=headers,
         )
         rows = r.json()["signals"]
@@ -446,7 +446,7 @@ class TestActiveListReportsBlocks:
 
         listed = (
             await client.get(
-                "/api/v1/signals/active?include_expiring=true&include_choppy=true",
+                "/api/v1/signals/active",
                 headers=headers,
             )
         ).json()["signals"][0]

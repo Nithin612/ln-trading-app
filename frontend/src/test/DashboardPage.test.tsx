@@ -114,47 +114,40 @@ describe('DashboardPage', () => {
     expect(screen.getByText('×2')).toBeInTheDocument()
   })
 
-  it('flags a near-expiry signal and toggling shows them', async () => {
-    const spy = vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({
-      total: 1,
-      signals: [makeSignal({ symbol: 'RELIANCE', near_expiry: true })],
+  it('flags a near-expiry signal and can hide it client-side', async () => {
+    vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({
+      total: 2,
+      signals: [
+        makeSignal({ symbol: 'RELIANCE', near_expiry: true }),
+        makeSignal({ symbol: 'TCS', near_expiry: false }),
+      ],
     })
     wrap(<DashboardPage />)
+    // B1: the API hides nothing, so the stale row is present and FLAGGED by default.
     await waitFor(() => expect(screen.getByText('RELIANCE')).toBeInTheDocument())
     expect(screen.getByText('⚠ expiring')).toBeInTheDocument()
-    // default call excludes near-expiry; toggling requests them
-    expect(spy).toHaveBeenCalledWith(
-      expect.objectContaining({ includeExpiring: false }),
-      expect.anything(),
-    )
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Near-expiry' }))
-    await waitFor(() =>
-      expect(spy).toHaveBeenCalledWith(
-        expect.objectContaining({ includeExpiring: true }),
-        expect.anything(),
-      ),
-    )
+
+    // The toggle is now a client-side focus filter with the opposite sense.
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Hide near-expiry' }))
+    await waitFor(() => expect(screen.queryByText('RELIANCE')).not.toBeInTheDocument())
+    expect(screen.getByText('TCS')).toBeInTheDocument()
   })
 
-  it('flags a choppy-regime signal and toggling shows them', async () => {
-    const spy = vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({
-      total: 1,
-      signals: [makeSignal({ symbol: 'RELIANCE', choppy: true, regime_er: 0.1 })],
+  it('flags a choppy-regime signal and can hide it client-side', async () => {
+    vi.spyOn(signalsApiModule.signalsApi, 'getActive').mockResolvedValue({
+      total: 2,
+      signals: [
+        makeSignal({ symbol: 'RELIANCE', choppy: true, regime_er: 0.1 }),
+        makeSignal({ symbol: 'TCS', choppy: false, regime_er: 0.8 }),
+      ],
     })
     wrap(<DashboardPage />)
     await waitFor(() => expect(screen.getByText('RELIANCE')).toBeInTheDocument())
     expect(screen.getByText('· chop')).toBeInTheDocument()
-    expect(spy).toHaveBeenCalledWith(
-      expect.objectContaining({ includeChoppy: false }),
-      expect.anything(),
-    )
-    fireEvent.click(screen.getByRole('checkbox', { name: 'Choppy' }))
-    await waitFor(() =>
-      expect(spy).toHaveBeenCalledWith(
-        expect.objectContaining({ includeChoppy: true }),
-        expect.anything(),
-      ),
-    )
+
+    fireEvent.click(screen.getByRole('checkbox', { name: 'Hide choppy' }))
+    await waitFor(() => expect(screen.queryByText('RELIANCE')).not.toBeInTheDocument())
+    expect(screen.getByText('TCS')).toBeInTheDocument()
   })
 
   it('opens signal detail modal when row is clicked', async () => {
