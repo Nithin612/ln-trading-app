@@ -11,7 +11,7 @@ Queue and acceptance criteria: `docs/BUILD_QUEUE.md`. Update this file after EVE
 | **B3** | dated tick SCHEDULE table | ✅ **DONE** | (see log) |
 | **B1** | delete `_near_expiry` / `_choppy` | ✅ **DONE** | (see log) |
 | **B4** | span-based gap guard | ✅ **DONE** (1 part blocked) | (see log) |
-| **B5** | E1 positional in four units | ⏳ NEXT | — |
+| **B5** | E1 positional in four units | ⏳ IN PROGRESS | — |
 | **B6+B7** | E2 three estimands + MFE/MAE | ⏸ queued | — |
 | **B8** | append-only ledger (ONE table, ONE day) | ⏸ queued | — |
 

@@ -7,6 +7,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### B5 — E1 re-specified: the positional family in FOUR units, with contrasts (2026-09-11)
+
+E1 as originally written asked for R, raw % and net Rs. Re-reporting in raw % removes the
+`1/w` amplification and does NOT remove the second mechanical term: `R = (alpha + drift*T)/w`,
+and `T` rises with `w` at t = +6.69 while the universe drifted +0.0816%/day. Only a benchmark
+PAIRED to each trade's own window removes it. On the swing book that sequence took the
+tight-vs-wide contrast from -0.386 (t -1.55) to -0.262 (t -0.78) to **+0.069 (t +0.17)**.
+
+**Added to `positional_probe.py`**
+- `T`, `bench` and `excess` per trade, plus `ret_atr`, `cash`, `atr_pct` and the gap flag.
+  ⭐ `basket_series`, `basket_window`, `atr20` and `_as_date` are IMPORTED from
+  `swing_dependence_probe`, not re-derived (W2). Re-deriving an "equal-weight universe
+  return" in a second file is exactly how two numbers that must agree stop agreeing -- and
+  sec 16.1c's time-dimension rule exists because a benchmark measured on one sample was
+  subtracted from another.
+- B4's span-based gap guard, which this file never had at all.
+- `_e1_report()`: per stop-width bucket, n / mean T / E[1/w] / R / raw % / excess vs the
+  matched basket / ret-per-ATR20 / net Rs, for ALL windows and gap-clean separately, each
+  followed by the tight-vs-wide **CONTRAST with its SE and its 80%-power MDE**.
+  ⚠ Contrasts, never two levels: sec 12.27 found sec 12.1's published "the sign flips at
+  w = 2%" was two point estimates each within 1.3 SE of zero, and the contrast is t = -1.47,
+  p = 0.14 with an MDE of 0.74R. That is the family error this document has committed eight
+  times.
+- `--dump-trades`, the round-9 convention: one expensive pass writes the per-trade artifact,
+  every contrast downstream is a cheap read.
+
+⚠ The prior for positional is NOT the swing one and the report is built to show it: its
+buckets carry OPPOSITE signs (which `E[ret]*E[1/w]` cannot produce at any mean) and its
+reachable cohort is the BETTER one where swing's is worse.
+
+`ruff` + `mypy` clean.
+
+
 ### B4 — the gap guard tests the SPAN, not two hardcoded endpoints (2026-09-11)
 
 `GAP_LO, GAP_HI = date(2020, 12, 23), date(2023, 7, 3)` were constants describing ONE known
