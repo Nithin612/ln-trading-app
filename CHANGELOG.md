@@ -7,6 +7,46 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### B2 — the aggregate cash rail, which did not exist (2026-09-11)
+
+First item of the B-queue (`docs/BUILD_QUEUE.md`), and the only one where real money was at
+stake. The per-position notional cap bounds ONE trade against capital; nothing bounded the
+SUM. Three slots at the median 5% swing stop need ~120% of capital and all three returned
+201. It enforces an identity -- a delivery account cannot deploy money it does not have --
+so it carries no forward-evidence bar.
+
+**Added**
+- `risk_engine.cash_cap_reason()` and `RULE_CASH_CAP`, declared in `SIZING_RULES` between
+  the per-position notional cap and the concentration/risk rails: both answer "can the
+  account hold this" at two scales, and both must settle before rules that assume the
+  money exists.
+- `OpenHeat.notional` -- the cash actually deployed, computed from the same open-positions
+  read rather than a second query. Notional accrues for every open position including
+  those whose RISK is unmeasurable: a stopless position still consumes cash, so unlike the
+  heat cap this rail has no fail-closed branch.
+- `cash_cap_mode` (off/shadow/active, default **off**) and `cash_cap_leverage` (1.0 =
+  strictly cash-and-carry), plus `.env.example` documentation in the same commit.
+- Nine tests, including the stated acceptance criterion: three slots at the median 5% stop
+  are refused at exactly the 120%-of-capital figure the finding reported.
+
+**Changed**
+- `check_sizing` now evaluates its three moded portfolio rails through one table rather
+  than three copy-pasted deny-or-stamp blocks. Same order, same stamps, same behaviour;
+  ruff's complexity limit is what forced the extraction and the result is shorter.
+
+**Fixed (caught by its own test before shipping)**
+- The first draft netted the position being topped up out of the held notional. `qty` at
+  every call site is the INCREMENT, not the resulting size, so the netting double-
+  discounted and would have let a repeat entry deploy cash the account did not have. The
+  regression test is built so the per-position cap passes and only the aggregate rail can
+  refuse, otherwise it would pass for the wrong reason.
+
+Default is `off`: cycle 1 runs ~25 concurrent positions by design and an enforced rail
+would truncate the evidence the programme is accruing. It flips `active` at the cycle-2
+reset alongside the heat and position-count caps. `ruff`, `mypy` and
+`tests/test_risk_engine.py` (50) green.
+
+
 ### Round 10 — a prediction hit to four decimals, and died the same session (2026-09-11)
 
 The park-and-build ruling went to four sources; all four endorsed it. One made a falsifiable numeric

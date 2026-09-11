@@ -620,25 +620,25 @@ class TestPositionCountReason:
 
     def test_new_over_cap_is_blocked(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(get_settings(), "max_concurrent_positions", 3, raising=False)
-        held = rx.OpenHeat(total=Decimal(0), positions=3, unmeasurable=0)
+        held = rx.OpenHeat(total=Decimal(0), positions=3, unmeasurable=0, notional=Decimal(0))
         reason = rx.position_count_reason(held=held, is_new_position=True)
         assert reason is not None
         assert "max of 3" in reason
 
     def test_new_within_cap_is_allowed(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(get_settings(), "max_concurrent_positions", 3, raising=False)
-        held = rx.OpenHeat(total=Decimal(0), positions=2, unmeasurable=0)
+        held = rx.OpenHeat(total=Decimal(0), positions=2, unmeasurable=0, notional=Decimal(0))
         assert rx.position_count_reason(held=held, is_new_position=True) is None
 
     def test_adding_to_existing_is_exempt(self, monkeypatch: pytest.MonkeyPatch) -> None:
         """Adding to an OPEN position opens no new slot — the notional cap bounds its size."""
         monkeypatch.setattr(get_settings(), "max_concurrent_positions", 3, raising=False)
-        held = rx.OpenHeat(total=Decimal(0), positions=5, unmeasurable=0)
+        held = rx.OpenHeat(total=Decimal(0), positions=5, unmeasurable=0, notional=Decimal(0))
         assert rx.position_count_reason(held=held, is_new_position=False) is None
 
     def test_zero_cap_disables(self, monkeypatch: pytest.MonkeyPatch) -> None:
         monkeypatch.setattr(get_settings(), "max_concurrent_positions", 0, raising=False)
-        held = rx.OpenHeat(total=Decimal(0), positions=99, unmeasurable=0)
+        held = rx.OpenHeat(total=Decimal(0), positions=99, unmeasurable=0, notional=Decimal(0))
         assert rx.position_count_reason(held=held, is_new_position=True) is None
 
 
@@ -836,3 +836,225 @@ class TestRuleVocabulary:
         ann = Settings.model_fields["heat_cap_mode"].annotation
         assert get_origin(ann) is Literal
         assert set(get_args(ann)) == set(restrictions.GATE_MODES)
+
+
+class TestCashCap:
+    """B2 — `Σ notional ≤ available cash`, the rail that did not exist.
+
+    The per-position notional cap bounds ONE trade against capital; nothing bounded the
+    SUM. Three slots at the median 5% swing stop need ~120% of capital and all three
+    returned 201. These tests pin the identity, not a claim about the tape.
+    """
+
+    async def test_three_slots_at_the_median_stop_are_refused(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """⭐ THE ACCEPTANCE CRITERION, in the units the finding was stated in.
+
+        Risk-first sizing at 2% of ₹1L with a 5% stop buys ₹40,000 of stock per slot
+        (₹2,000 risk ÷ ₹25/share × ₹500 = 80 shares = ₹40k). Three of those is ₹120,000
+        — **120% of capital** — which is exactly the number §12.14 reported and nothing
+        in the code refused.
+        """
+        monkeypatch.setattr(get_settings(), "cash_cap_mode", "active", raising=False)
+        monkeypatch.setattr(get_settings(), "cash_cap_leverage", 1.0, raising=False)
+        monkeypatch.setattr(get_settings(), "heat_cap_mode", "off", raising=False)
+        monkeypatch.setattr(
+            get_settings(), "position_count_cap_mode", "off", raising=False
+        )
+        user = await _make_user(db)  # ₹1,00,000
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id)
+        # two slots already deployed: 80 shares × ₹500 = ₹40,000 each
+        await _open_position(db, user, stock, signal, qty=80, entry=Decimal("500"))
+        await _open_position(db, user, stock, signal, qty=80, entry=Decimal("500"))
+        await db.commit()
+
+        held = await rx.open_heat(db, user)
+        assert held.notional == Decimal("80000")
+
+        verdict = await rx.check_sizing(
+            db, user, side="LONG", qty=80, fill_price=Decimal("500"),
+            stop_loss=Decimal("475"),
+        )
+        assert verdict.allowed is False
+        assert verdict.rule == rx.RULE_CASH_CAP
+        assert "120,000" in (verdict.reason or "")
+
+    async def test_two_slots_fit(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The canary: the rail must not refuse a book that DOES fit, or it is a ban."""
+        monkeypatch.setattr(get_settings(), "cash_cap_mode", "active", raising=False)
+        monkeypatch.setattr(get_settings(), "cash_cap_leverage", 1.0, raising=False)
+        monkeypatch.setattr(get_settings(), "heat_cap_mode", "off", raising=False)
+        monkeypatch.setattr(
+            get_settings(), "position_count_cap_mode", "off", raising=False
+        )
+        user = await _make_user(db)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id)
+        await _open_position(db, user, stock, signal, qty=80, entry=Decimal("500"))
+        await db.commit()
+
+        verdict = await rx.check_sizing(
+            db, user, side="LONG", qty=80, fill_price=Decimal("500"),
+            stop_loss=Decimal("475"),
+        )
+        assert verdict.allowed is True
+
+    async def test_off_by_default_is_byte_for_byte_the_old_behaviour(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """⭐ The regression canary: this would FAIL on a build that shipped it `active`.
+
+        Cycle 1 runs ~25 concurrent positions BY DESIGN. A rail switched on at build time
+        would throttle the sampler to a stop and silently truncate the evidence the whole
+        programme is accruing — the same mistake the regime gate made by being promoted.
+        """
+        assert Settings().cash_cap_mode == "off"
+        monkeypatch.setattr(get_settings(), "heat_cap_mode", "off", raising=False)
+        monkeypatch.setattr(
+            get_settings(), "position_count_cap_mode", "off", raising=False
+        )
+        monkeypatch.setattr(get_settings(), "cash_cap_mode", "off", raising=False)
+        user = await _make_user(db)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id)
+        for _ in range(5):
+            await _open_position(db, user, stock, signal, qty=200, entry=Decimal("500"))
+        await db.commit()
+
+        verdict = await rx.check_sizing(
+            db, user, side="LONG", qty=200, fill_price=Decimal("500"),
+            stop_loss=Decimal("475"),
+        )
+        assert verdict.allowed is True
+        assert verdict.stamps == {}
+
+    async def test_shadow_stamps_without_denying(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(get_settings(), "cash_cap_mode", "shadow", raising=False)
+        monkeypatch.setattr(get_settings(), "cash_cap_leverage", 1.0, raising=False)
+        monkeypatch.setattr(get_settings(), "heat_cap_mode", "off", raising=False)
+        monkeypatch.setattr(
+            get_settings(), "position_count_cap_mode", "off", raising=False
+        )
+        user = await _make_user(db)
+        stock = await make_stock(db)
+        signal = await _make_signal(db, stock.id)
+        await _open_position(db, user, stock, signal, qty=180, entry=Decimal("500"))
+        await db.commit()
+
+        verdict = await rx.check_sizing(
+            db, user, side="LONG", qty=80, fill_price=Decimal("500"),
+            stop_loss=Decimal("475"),
+        )
+        assert verdict.allowed is True
+        stamp = verdict.stamps["cash_cap"]
+        assert isinstance(stamp, dict)
+        assert stamp["mode"] == "shadow"
+        assert stamp["would_block"] is True
+        assert stamp["held_inr"] == "90000.0000"
+
+    async def test_a_top_up_adds_it_does_not_replace(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """⭐ A regression test for a bug this suite caught in its own first draft.
+
+        `qty` at every call site is the INCREMENT, not the resulting position size — the
+        broker passes `existing_qty` separately for exactly that reason. The first draft
+        of `cash_cap_reason` netted the position-being-topped-up out of the held total,
+        which double-discounted and would have let a repeat entry deploy cash the account
+        did not have.
+
+        The scenario is built so the PER-POSITION cap passes and only the aggregate rail
+        can refuse — otherwise the test would pass for the wrong reason:
+            stock A, untouched          ₹50,000
+            stock B, being topped up    ₹40,000  (existing_qty=80 @ ₹500)
+            incoming                   +₹30,000  (qty=60 @ ₹500)
+        per-position: 40,000 + 30,000 = ₹70,000 ≤ ₹1,00,000 ✓ passes
+        aggregate:    90,000 + 30,000 = ₹1,20,000 > ₹1,00,000 ✗ refused
+        the netting draft:  (90,000 − 40,000) + 30,000 = ₹80,000 ✓ wrongly allowed
+        """
+        monkeypatch.setattr(get_settings(), "cash_cap_mode", "active", raising=False)
+        monkeypatch.setattr(get_settings(), "cash_cap_leverage", 1.0, raising=False)
+        monkeypatch.setattr(get_settings(), "heat_cap_mode", "off", raising=False)
+        monkeypatch.setattr(
+            get_settings(), "position_count_cap_mode", "off", raising=False
+        )
+        user = await _make_user(db)
+        stock_a = await make_stock(db, symbol="CASHA")
+        stock_b = await make_stock(db, symbol="CASHB")
+        signal = await _make_signal(db, stock_a.id)
+        await _open_position(db, user, stock_a, signal, qty=100, entry=Decimal("500"))
+        await _open_position(db, user, stock_b, signal, qty=80, entry=Decimal("500"))
+        await db.commit()
+
+        held = await rx.open_heat(db, user)
+        assert held.notional == Decimal("90000.0000")
+
+        verdict = await rx.check_sizing(
+            db, user, side="LONG", qty=60, fill_price=Decimal("500"),
+            stop_loss=Decimal("475"), existing_qty=80,
+            existing_entry=Decimal("500"),
+        )
+        assert verdict.allowed is False
+        assert verdict.rule == rx.RULE_CASH_CAP
+        assert "120,000" in (verdict.reason or "")
+
+    async def test_notional_counts_positions_whose_risk_is_unmeasurable(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """⭐ A position with no recoverable stop still consumes cash.
+
+        The heat cap fails CLOSED on these; the cash rail must simply COUNT them. A
+        `continue` that skipped the notional as well as the risk would let a book with
+        stopless positions deploy unlimited capital.
+        """
+        monkeypatch.setattr(get_settings(), "cash_cap_mode", "active", raising=False)
+        monkeypatch.setattr(get_settings(), "cash_cap_leverage", 1.0, raising=False)
+        monkeypatch.setattr(get_settings(), "heat_cap_mode", "off", raising=False)
+        monkeypatch.setattr(
+            get_settings(), "position_count_cap_mode", "off", raising=False
+        )
+        user = await _make_user(db)
+        stock = await make_stock(db)
+        await _open_position(db, user, stock, None, qty=180, entry=Decimal("500"),
+                             current_sl=None)
+        await db.commit()
+
+        held = await rx.open_heat(db, user)
+        assert held.unmeasurable == 1
+        assert held.total == Decimal("0")
+        assert held.notional == Decimal("90000")  # counted anyway
+
+        verdict = await rx.check_sizing(
+            db, user, side="LONG", qty=80, fill_price=Decimal("500"),
+            stop_loss=Decimal("475"),
+        )
+        assert verdict.allowed is False
+        assert verdict.rule == rx.RULE_CASH_CAP
+
+    def test_leverage_zero_disables_it(self) -> None:
+        user = User(email="x@example.com", password_hash="x",
+                    capital_inr=Decimal("100000"))
+        held = rx.OpenHeat(total=Decimal(0), positions=9, unmeasurable=0,
+                           notional=Decimal("9999999"))
+        from unittest.mock import patch
+
+        with patch.object(get_settings(), "cash_cap_leverage", 0.0):
+            assert rx.cash_cap_reason(
+                user, held=held, incoming_notional=Decimal("500000")
+            ) is None
+
+    def test_cash_cap_is_declared_between_notional_and_the_concentration_rails(
+        self,
+    ) -> None:
+        """Order is behaviour: 'you cannot pay for this' must precede a heat refusal."""
+        order = list(rx.SIZING_RULES)
+        assert order.index(rx.RULE_NOTIONAL_CAP) < order.index(rx.RULE_CASH_CAP)
+        assert order.index(rx.RULE_CASH_CAP) < order.index(rx.RULE_POSITION_COUNT)
+        assert order.index(rx.RULE_CASH_CAP) < order.index(rx.RULE_HEAT_CAP)
+        assert rx.RULE_CASH_CAP in rx.ALL_RULES

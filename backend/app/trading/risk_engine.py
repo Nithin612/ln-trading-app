@@ -32,6 +32,7 @@ trade will not get. The split is the shape of the problem, not a compromise.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from decimal import Decimal
 from typing import TYPE_CHECKING
@@ -58,6 +59,7 @@ RULE_ELIGIBILITY = "eligibility"
 RULE_NOTIONAL_CAP = "notional_cap"
 RULE_POSITION_COUNT = "position_count"
 RULE_HEAT_CAP = "heat_cap"
+RULE_CASH_CAP = "cash_cap"
 
 PRE_TRADE_RULES: tuple[str, ...] = (
     # FIRST, ahead of even the breaker: the kill switch is the human's stop, and a human
@@ -69,7 +71,15 @@ PRE_TRADE_RULES: tuple[str, ...] = (
     RULE_SIGNAL_STATUS,
     RULE_ELIGIBILITY,
 )
-SIZING_RULES: tuple[str, ...] = (RULE_NOTIONAL_CAP, RULE_POSITION_COUNT, RULE_HEAT_CAP)
+SIZING_RULES: tuple[str, ...] = (
+    RULE_NOTIONAL_CAP,
+    # Straight after the per-position cap, because they answer the same question at two
+    # scales: can the ACCOUNT hold this trade, and can it hold the BOOK. Both must be
+    # settled before the concentration and risk rails, which assume the money exists.
+    RULE_CASH_CAP,
+    RULE_POSITION_COUNT,
+    RULE_HEAT_CAP,
+)
 ALL_RULES: tuple[str, ...] = PRE_TRADE_RULES + SIZING_RULES
 
 
@@ -184,10 +194,20 @@ def admission_risk(side: str, entry: Decimal, stop: Decimal, qty: int) -> Decima
 
 @dataclass(frozen=True)
 class OpenHeat:
-    """Portfolio heat currently held, and what could not be measured."""
+    """Portfolio state currently held: risk, notional, and what could not be measured.
+
+    ⚠ The name says "heat" and it now carries `notional` too. That is deliberate rather
+    than sloppy: both come off the SAME open-positions read, and splitting them into two
+    dataclasses would mean two queries for one snapshot, or a second read that could
+    disagree with the first. One snapshot, one object.
+    """
 
     total: Decimal
     positions: int
+    # Σ(qty × avg_entry_price) across open positions — the cash actually deployed.
+    # ⚠ Always measurable (a position has a price and a quantity or it does not exist),
+    # which is why the cash rail has no fail-closed branch while the heat cap does.
+    notional: Decimal
     # Open positions with NO recoverable commit stop. These are why the cap fails
     # CLOSED: unmeasured risk is still risk, and a cap that ignores it is not a cap.
     unmeasurable: int
@@ -218,8 +238,13 @@ async def open_heat(db: AsyncSession, user: User, *, mode: str = "paper") -> Ope
     ).all()
 
     total = Decimal(0)
+    notional = Decimal(0)
     unmeasurable = 0
     for pos, commit_sl in rows:
+        # Notional accrues for EVERY open position, including the ones whose risk cannot
+        # be measured: a position with no recoverable stop still consumes cash. Keeping
+        # the two loops fused would be wrong here — `continue` must not skip the notional.
+        notional += Decimal(pos.quantity) * Decimal(str(pos.avg_entry_price))
         stop = commit_sl if commit_sl is not None else pos.current_sl
         if stop is None:
             unmeasurable += 1
@@ -227,7 +252,9 @@ async def open_heat(db: AsyncSession, user: User, *, mode: str = "paper") -> Ope
         total += admission_risk(
             pos.side, Decimal(str(pos.avg_entry_price)), Decimal(str(stop)), pos.quantity
         )
-    return OpenHeat(total=total, positions=len(rows), unmeasurable=unmeasurable)
+    return OpenHeat(
+        total=total, positions=len(rows), unmeasurable=unmeasurable, notional=notional
+    )
 
 
 def heat_cap_reason(
@@ -270,6 +297,67 @@ def heat_cap_reason(
         f"₹{held.total + incoming_risk:,.0f} exceeds your ₹{cap:,.0f} cap "
         f"({pct}% of ₹{user.capital_inr:,.0f}) across {held.positions} open position(s). "
         "Close something, or wait for one to resolve."
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Rule: aggregate cash constraint (B2)
+# ──────────────────────────────────────────────────────────────────────────────
+
+
+def cash_cap_reason(
+    user: User,
+    *,
+    held: OpenHeat,
+    incoming_notional: Decimal,
+) -> str | None:
+    """Why deploying `incoming_notional` would spend money the account does not have.
+
+    ⛔ **Before B2 this constraint did not exist anywhere** — not in `paper_broker`, not
+    here, not in the backtest. `notional_cap_reason` bounds ONE position against capital;
+    nothing bounded the SUM. Three slots at the median 5% swing stop need ~120% of
+    capital, and all three returned 201.
+
+    ⭐ **It enforces an IDENTITY, not a claim about the tape** — a delivery account cannot
+    deploy money it does not have — so under §5.4's asymmetric burden it carries no
+    forward-evidence bar. That is the same standing it has as a rail, and the opposite of
+    the standing the R:R floor claimed and lost.
+
+    ⚠ **`incoming_notional` is an INCREMENT and it ADDS** — there is nothing to net out.
+    `qty` at every call site is the new shares being bought, not the resulting position
+    size (`paper_broker._check_notional_cap` passes `existing_qty` separately for exactly
+    that reason), and the existing position's notional is already inside `held.notional`
+    from the open-book read. An earlier draft netted the existing position out and was
+    caught by its own test: it double-discounted a top-up and would have let a repeat
+    entry deploy cash the account did not have.
+
+    ⚠ **Always measurable**, so unlike `heat_cap_reason` there is no fail-closed branch: a
+    position without a recoverable stop still has a price and a quantity, and `open_heat`
+    counts its notional even when it cannot count its risk.
+
+    ⚠ The denominator is `capital_inr`, the LIVE figure — never
+    `paper_sampling_capital_inr`, which is reporting-only and 5× larger.
+
+    ⚠ A delivery SHORT consumes cash here as a long does. That is an artefact of the paper
+    model, which admits shorts a cash-delivery account cannot actually hold — the same
+    artefact the DP charge carries — and counting them is the conservative reading.
+    """
+    settings = get_settings()
+    leverage = Decimal(str(settings.cash_cap_leverage))
+    if leverage <= 0:
+        return None
+    cap = (user.capital_inr * leverage).quantize(Decimal("0.01"))
+
+    after = held.notional + incoming_notional
+    if after <= cap:
+        return None
+    return (
+        f"Deploying ₹{incoming_notional:,.0f} would take the book to ₹{after:,.0f} "
+        f"against ₹{cap:,.0f} of available cash "
+        f"(capital ₹{user.capital_inr:,.0f} × {settings.cash_cap_leverage}), with "
+        f"₹{held.notional:,.0f} already deployed across {held.positions} open "
+        "position(s). A delivery account cannot buy what it cannot pay for — close "
+        "something, or wait."
     )
 
 
@@ -382,11 +470,11 @@ async def check_sizing(
     existing_qty: int = 0,
     existing_entry: Decimal | None = None,
 ) -> RiskVerdict:
-    """Rules that need a size: notional cap → position-count cap → heat cap.
+    """Rules that need a size: notional cap → cash cap → position-count cap → heat cap.
 
     `side` is the POSITION side (LONG/SHORT), matching `admission_risk`.
 
-    The two portfolio-state rails (position-count, heat) are moded and default **off**, so
+    The three portfolio-state rails (cash, position-count, heat) are moded and default **off**, so
     this is byte-for-byte the previous behaviour until someone turns one on. That default
     is not timidity: both would throttle the cycle-1 sampler (a 6% heat cap cuts entries
     ~74%; a 3-position count cuts a ~25-position book far harder), and cycle 1 exists to
@@ -403,44 +491,64 @@ async def check_sizing(
         return _deny(RULE_NOTIONAL_CAP, reason)
 
     settings = get_settings()
-    count_mode = settings.position_count_cap_mode
-    heat_mode = settings.heat_cap_mode
+    modes = {
+        RULE_CASH_CAP: settings.cash_cap_mode,
+        RULE_POSITION_COUNT: settings.position_count_cap_mode,
+        RULE_HEAT_CAP: settings.heat_cap_mode,
+    }
     # `"off"` is a TRUTHY string — never `mode or other`. That exact bug silently stopped
-    # the entry_quality stamp being written (2026-09-05). Both off ⇒ no open-book read.
-    if count_mode == "off" and heat_mode == "off":
+    # the entry_quality stamp being written (2026-09-05). All off ⇒ no open-book read.
+    if all(m == "off" for m in modes.values()):
         return ALLOWED
 
-    held = await open_heat(db, user)  # one read serves both portfolio-state rails
+    held = await open_heat(db, user)  # one read serves all three portfolio-state rails
+    incoming_notional = Decimal(qty) * fill_price
+    incoming_risk = admission_risk(side, fill_price, stop_loss, qty)
+
+    # Each rail is (reason-fn, the numbers its stamp carries). Evaluated in SIZING_RULES
+    # order, which is the order the rules are declared in — one sequence, not two (W2).
+    # Aggregate cash runs first of the three because the concentration and risk rails
+    # below both presuppose the money exists, and "you cannot pay for this" is a clearer
+    # refusal than a heat breach on a trade that was never affordable.
+    rails: tuple[tuple[str, Callable[[], str | None], dict[str, object]], ...] = (
+        (
+            RULE_CASH_CAP,
+            lambda: cash_cap_reason(
+                user, held=held, incoming_notional=incoming_notional
+            ),
+            {
+                "held_inr": str(held.notional),
+                "incoming_inr": str(incoming_notional),
+            },
+        ),
+        (
+            RULE_POSITION_COUNT,
+            lambda: position_count_reason(held=held, is_new_position=(existing_qty == 0)),
+            {"max": settings.max_concurrent_positions},
+        ),
+        (
+            RULE_HEAT_CAP,
+            lambda: heat_cap_reason(user, held=held, incoming_risk=incoming_risk),
+            {"held_inr": str(held.total), "incoming_inr": str(incoming_risk)},
+        ),
+    )
+
     stamps: dict[str, object] = {}
-
-    # Position-count cap first — the concentration rail that actually binds at cycle-2 scale.
-    if count_mode != "off":
-        reason = position_count_reason(held=held, is_new_position=(existing_qty == 0))
-        if reason is not None:
-            if count_mode == "active":
-                return _deny(RULE_POSITION_COUNT, reason)
-            stamps["position_count"] = {
-                "mode": "shadow",
-                "would_block": True,
-                "reason": reason,
-                "open_positions": held.positions,
-                "max": settings.max_concurrent_positions,
-            }
-
-    # Portfolio heat cap.
-    if heat_mode != "off":
-        incoming = admission_risk(side, fill_price, stop_loss, qty)
-        reason = heat_cap_reason(user, held=held, incoming_risk=incoming)
-        if reason is not None:
-            if heat_mode == "active":
-                return _deny(RULE_HEAT_CAP, reason)
-            stamps["heat_cap"] = {
-                "mode": "shadow",
-                "would_block": True,
-                "reason": reason,
-                "held_inr": str(held.total),
-                "incoming_inr": str(incoming),
-                "open_positions": held.positions,
-            }
+    for rule, judge, extra in rails:
+        mode = modes[rule]
+        if mode == "off":
+            continue
+        reason = judge()
+        if reason is None:
+            continue
+        if mode == "active":
+            return _deny(rule, reason)
+        stamps[rule] = {
+            "mode": "shadow",
+            "would_block": True,
+            "reason": reason,
+            "open_positions": held.positions,
+            **extra,
+        }
 
     return RiskVerdict(allowed=True, stamps=stamps) if stamps else ALLOWED

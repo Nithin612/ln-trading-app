@@ -465,6 +465,27 @@ class Settings(BaseSettings):
     position_count_cap_mode: Literal["off", "shadow", "active"] = "off"
     max_concurrent_positions: int = 3
 
+    # ── Aggregate cash constraint (B2, round 10 — 2026-09-11) ──────────────────
+    # ⛔ Before this the constraint DID NOT EXIST ANYWHERE: not in `paper_broker`, not in
+    # the RiskEngine, not in the backtest. The per-position notional cap bounds ONE trade
+    # against capital; nothing bounded the SUM. Three slots at the median 5% swing stop
+    # need ~120% of capital, and every one of them returned 201.
+    #
+    # It enforces an IDENTITY — a delivery account cannot deploy money it does not have —
+    # so under §5.4's asymmetric burden it carries NO forward-evidence bar, unlike the six
+    # selection overlays. It is a rail, not a gate.
+    #
+    # ⚠ The denominator is `capital_inr`, the LIVE figure, for the same reason the heat cap
+    # uses it: `paper_sampling_capital_inr` is declared reporting-only and is 5× larger, so
+    # misapplying it would silently quintuple the rail.
+    #
+    # `off` during the cycle-1 sampler (which runs ~25 concurrent positions BY DESIGN and
+    # would be throttled to a stop); flips `active` at the CYCLE-2 RESET alongside the heat
+    # cap and the position-count cap. `cash_cap_leverage` is the multiple of capital the
+    # book may deploy — 1.0 = strictly cash-and-carry, no leverage.
+    cash_cap_mode: Literal["off", "shadow", "active"] = "off"
+    cash_cap_leverage: float = 1.0
+
     # ── KILL SWITCH (Phase 7.4) ────────────────────────────────────────────
     # The human's stop. `true` halts all NEW ENTRIES immediately, at the first rule the
     # RiskEngine runs — ahead of even the daily-loss breaker, because someone who has hit
