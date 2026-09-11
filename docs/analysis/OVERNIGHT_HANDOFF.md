@@ -1,6 +1,6 @@
 # Overnight build handoff — B-queue
 
-**Started 2026-09-11 evening. Branch `feature/pre-cycle2-hardening`, MAIN checkout (never a worktree).**
+**Started 2026-09-11 evening; 4 of 7 items done by ~01:00. Branch `feature/pre-cycle2-hardening`, MAIN checkout (never a worktree).** ⭐ A scheduled continuation is set for **03:31** when the token quota refreshes — but cron jobs here are SESSION-ONLY, so if the terminal closed it did not fire and this file is the resume point.
 Queue and acceptance criteria: `docs/BUILD_QUEUE.md`. Update this file after EVERY item.
 
 ## Order (round-10: money-at-risk first)
@@ -27,6 +27,17 @@ Queue and acceptance criteria: `docs/BUILD_QUEUE.md`. Update this file after EVE
   hook-protected.
 - One long task at a time; wait for it.
 - If blocked: write why here, skip, move on.
+
+## Where to resume
+
+⭐ **NEXT: B5** — `positional_probe.py` gains `T`, `bench`, `excess` from the SAME
+`basket_series` owner in `swing_dependence_probe.py` (do **not** write a second one, W2), plus
+the span-based gap guard from B4 (`market_calendar.window_has_holes`) which that file has never
+had. Then report the buckets in **four** units with **contrasts and their SEs**, not levels.
+Acceptance criteria in `docs/BUILD_QUEUE.md`.
+
+⚠ **Before quoting any `probe-147` number, re-run it** — B4 changed the gap-clean cohort to
+`probe-145`, and `clean × BUY` is now **n = 60**, not 61 (§16.1d).
 
 ## Log
 
