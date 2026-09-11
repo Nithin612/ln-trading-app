@@ -3742,6 +3742,23 @@ selects from by 19–56 pp/yr net of explicit charges (30–63 pp/yr on the reac
 uncertainty** — both ends are computed on the same trades — and **the sign is invariant to every
 choice made anywhere in this section.**
 
+⭐ **And the 2× gap between the two aggregations has a single, measurable cause.** `[measured]`
+The **27 same-session exits (14.6%)** are not a rounding detail — they are the worst cohort in the
+book by a wide margin:
+
+| cohort | n | mean R | win rate |
+|---|---:|---:|---:|
+| **`T` = 0 (exit on the entry bar)** | **27** | ⛔ **−0.7034** | **14.8%** |
+| `T` ≥ 1 | 158 | −0.0541 | 43.7% |
+
+⇒ **Mean-of-ratios charges each of those a full day of exposure for a −0.70R outcome**, which is
+where the entire gap between −56 and −19 pp/yr comes from. ⚠ **Both treatments are defensible and
+neither is a bug** — a stop hit on the entry bar really did consume a day of capital, and it really
+did not consume five. ⭐ **The finding underneath the aggregation argument is the more useful one:
+`_simulate_trade` books 1 trade in 7 as dying on the bar it opened, at −0.70R, and that cohort has
+never been separated out anywhere in the record.** It is also where harness defect #4 lives
+(2 of 185 booked `hit_sl` with a positive return, 1.08%). **Worth one column in B7's MFE/MAE pass.**
+
 ⇒ ⭐⭐ **THAT is the sentence the 2026-10-31 decision should be written in, and Part F was right
 about that even though its number was not.** It needs no t-statistic, no prior, no MDE and no
 convention — which is exactly why it survived a round in which almost every t-statistic moved.
