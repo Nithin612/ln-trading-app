@@ -13,7 +13,7 @@ Queue and acceptance criteria: `docs/BUILD_QUEUE.md`. Update this file after EVE
 | **B4** | span-based gap guard | ✅ **DONE** (1 part blocked) | (see log) |
 | **B5** | E1 positional in four units | ✅ **DONE** | `90000c1` `1dd38d4` |
 | **B6+B7** | E2 three estimands + MFE/MAE | ✅ **DONE** | (see log) |
-| **B8** | append-only ledger (ONE table, ONE day) | ⏳ NEXT — the last item | — |
+| **B8** | append-only ledger (ONE table, ONE day) | ✅ **DONE** (migration NOT applied to dev) | (see log) |
 
 ## Standing rules for this run
 
@@ -132,3 +132,28 @@ the two corpora have never measured the same population.
   rounds — but it is the tight-stop cohort again and the order path already refuses it.
   ⚠ **Prediction scorecard 4 of 7.** The two misses are the useful ones: 3b underpowered rather
   than null, and the hazard FLAT rather than front-loaded (a stronger result than predicted).
+
+- **B8 DONE — the B-queue is COMPLETE, 7 of 7.** ONE append-only table (`ledger_entries`) with
+  the five node types as a discriminated column, mandatory provenance as REQUIRED arguments
+  (`code_commit`/`spec_version`/`experiment_id`/`data_version`/`as_of`), `correct()` that
+  supersedes rather than edits, and `export_day()` for an off-box destination. 12 tests.
+  ⭐ **A defect the tests caught at once: the chain was ordered by `created_at`, and Postgres
+  `now()` is the TRANSACTION timestamp** — so a decision, its order, its fill and its outcome
+  all share it and the first run put `position_lifecycle` before `order_intent`. **A ledger that
+  cannot be ordered is not a chain.** Fixed with a `seq` identity column.
+  ⚠⚠ **THE MIGRATION `e1f2a3b4c5d6` IS NOT APPLIED TO DEV** — verified on the test DB with the
+  downgrade actually exercised; dev is still at `d0e1f2a3b4c5`. **`make migrate` is the user's
+  call** (RUNBOOK §8b).
+
+---
+
+## ✅ THE B-QUEUE IS COMPLETE — 7 of 7
+
+**Remaining for the user:** (1) `git push` — nothing has been pushed. (2) `make migrate` to apply
+the ledger table to dev. (3) Decide what follows E2's null, which is a decision, not a build.
+
+**⚠ Queued, found during the run, NOT fixed:** `swing_dependence_probe.py` has no through-stop
+exclusion while `positional_probe.py` and the live path both do — the two corpora have never
+been measuring the same population. Bounded (harness defect #4 is 2 of 185) but real.
+**⚠ Blocked:** B4's third target (`run_single_stock`'s bar-50 walk) is inside the FROZEN
+`app/backtest/engine.py` — needs sign-off + a §8 regression + regenerated Rust fixtures.

@@ -3,6 +3,7 @@ from app.models.category import Category, StockCategory
 from app.models.corporate_action import CorporateAction, PositionCorporateAction
 from app.models.fo_data import FoBhavcopy, IndiaVixDaily, OptionChainSnapshot
 from app.models.journal import JournalEntry
+from app.models.ledger import LedgerEntry
 from app.models.market_calendar import NseHoliday
 from app.models.market_data import (
     BulkBlockDeal,
@@ -23,6 +24,7 @@ from app.models.user import User, UserSession
 from app.models.watchlist import Watchlist, WatchlistItem
 
 __all__ = [
+    "LedgerEntry",
     "User",
     "UserSession",
     "Watchlist",

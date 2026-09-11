@@ -295,6 +295,39 @@ you do want a clean cycle:
 
 ---
 
+## 8b. The append-only ledger, and getting it OFF this machine (B8, 2026-09-12)
+
+⛔ **`ledger_entries` exists because `positions` and `orders` do not.** The 2026-09-07 loss took
+the entire live tape with no backup, and that single fact made ten rounds of live-tape argument
+unfalsifiable — the offered sets, the human's picks and every realised outcome are **gone and
+unrecoverable**. The table is the precondition for any successor programme.
+
+⚠ **THE MIGRATION IS WRITTEN BUT NOT APPLIED TO DEV.** `e1f2a3b4c5d6` was verified against the
+test database (upgrade **and** downgrade both run clean) and deliberately left unapplied here.
+Apply it when you are ready:
+
+```bash
+cd backend && uv run alembic current     # expect d0e1f2a3b4c5
+make migrate                             # -> e1f2a3b4c5d6
+```
+
+⭐ **The export is the point, not a nicety.** A ledger on the same disk as the database it
+describes protects against nothing:
+
+```python
+from app.services.ledger import export_day
+await export_day(db, day, "/path/OFF/this/machine")   # newline-delimited JSON
+```
+
+⚠ `export_day` cannot know what is off-box, so it does not enforce it. **Point it at the same
+external destination as §9's dumps, or it is decoration.**
+
+⛔ **Append-only means append-only.** Nothing in the application may `UPDATE` or `DELETE` a row.
+A correction is a NEW row naming the one it supersedes (`ledger.correct()`), and the superseded
+row stays. ⭐ Rows are ordered by **`seq`**, a database identity column — **not `created_at`**,
+because Postgres `now()` is the *transaction* timestamp, so a decision, its order, its fill and
+its outcome all share it to the microsecond and cannot be ordered by it.
+
 ## 9. Database backups
 
 **Installed 2026-09-07, after the dev database was destroyed** — a pytest run was pointed at

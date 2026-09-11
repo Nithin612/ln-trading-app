@@ -7,6 +7,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### B8 — the append-only ledger. The last item of the B-queue (2026-09-12)
+
+⛔ It exists because `positions` and `orders` are EMPTY. The 2026-09-07 loss took the live tape
+with no backup, and that made ten rounds of live-tape argument unfalsifiable: the offered sets,
+the human's picks and every realised outcome are gone and unrecoverable. Whether the human adds
+value over an uninformative sort key is, for all of history, unanswerable. ⭐ **Not for this
+strategy -- E2 just closed the scorer as a ranker -- but for any successor.**
+
+**Added**
+- `app/models/ledger.py` + `app/services/ledger.py` + migration `e1f2a3b4c5d6`: **ONE**
+  append-only table with the five node types as a discriminated column, not the eight-table
+  schema the rounds proposed. ⭐ **Timeboxed deliberately**: the base rate is one item shipped
+  as code in the fifty days before this queue, and the eight-table version is the one that does
+  not ship. It can be normalised later, which is a far easier problem than resurrecting data
+  nobody wrote.
+- Mandatory provenance on every row -- `code_commit`, `spec_version`, `experiment_id`,
+  `data_version`, `as_of` -- as REQUIRED arguments with no defaults. ⭐ **The sample-tag rule in
+  software**: sec 16.1 has been violated eight times by five authors, twice by whoever was
+  invoking it. Prose cannot carry that rule; a NOT NULL column can.
+- `correct()` supersedes a row with a NEW one and leaves the original standing; `export_day()`
+  writes newline-delimited JSON for an off-box destination.
+- 12 tests covering both invariants, the export, and the empty-day case.
+
+**⭐ A defect the tests caught immediately**
+- The chain was ordered by `created_at`, and **Postgres `now()` is the TRANSACTION timestamp** --
+  so every row written inside one transaction shares it to the microsecond, and a decision, its
+  order, its fill and its outcome are exactly the rows written in one transaction. The first run
+  put `position_lifecycle` before `order_intent` because the tiebreak fell through to a random
+  UUID. **A ledger that cannot be ordered is not a chain.** Fixed with a database identity
+  column (`seq`), which depends on no clock and cannot tie.
+
+**⚠ The migration is NOT applied to the dev database**
+- Verified against the test DB, upgrade **and** downgrade both clean (the downgrade was actually
+  exercised, not merely written). Dev remains at `d0e1f2a3b4c5`. `make migrate` when ready --
+  see RUNBOOK sec 8b.
+
+`ruff` + `mypy` clean (303 files); `tests/test_ledger.py` 12 passed.
+
+
 ### B6 + B7 — E2 run against its pre-registration: 3a is a NULL (2026-09-12)
 
 Pre-registered in `docs/analysis/E2-PREREGISTRATION-2026-09-12.md` and committed (`fe5d508`)
