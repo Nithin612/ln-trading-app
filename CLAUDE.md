@@ -627,6 +627,24 @@ else.
   — TimescaleDB hypertables need `timescaledb_pre_restore()`/`post_restore()`) — details in
   `RUNBOOK.md` §9. **Ask before anything that writes to, truncates or migrates live data.**
 
+- **⭐⭐ THE B-QUEUE IS 5 OF 7 BUILT (2026-09-11/12), AND E1 IS ANSWERED.**
+  ⭐ **`docs/BUILD_QUEUE.md` is the operational doc.** Shipped: **B2** `Σ notional ≤ cash` rail ·
+  **B3** tick grid → a DATED schedule (sub-₹250 moved to ₹0.01 in **June 2024**, measured;
+  boundary **₹225**, not 250, because ₹225–300 is a MIXED zone — the tick is a property of the
+  INSTRUMENT) · **B1** both undeclared display filters DELETED (choppy: **p = 0.999** while hiding
+  **67%**) · **B4** gap guard tests SPAN · **B5** E1 run.
+  ⭐⭐ **E1 ANSWERED (§12.34): POSITIONAL CLOSES LIKE SWING.** Contrast decays **R −0.4879
+  (t −1.89) → raw % −0.7870 (t −1.18) → excess vs matched basket −0.1909 (t −0.29)**.
+  ⇒ **§4.4, §12.1, §12.2, the cap sweep and the σ_R objective ALL CLOSE.**
+  ⛔ **§12.27's "opposite signs" is WITHDRAWN against itself** — `E[1/w]` jumps **110×** at the
+  first bucket (~0.026% stops), net ₹ **−25,808/trade**: a LEVERAGE POINT on a cohort the order
+  path refuses. ⭐ `drift × T` confirmed again: mean `T` **6.4 → 32.9** sessions.
+  ⚠ **B4 shipped a blind spot its own verification caught** — the observed-session calendar is
+  blind to MARKET-WIDE holes (nobody has bars in the gap, so a straddling window reads
+  contiguous). Now tests sessions AND calendar days. **`probe-147` → `probe-145`; `clean × BUY`
+  is n = 60** (§16.1d). ⛔ **NEXT: B6+B7** — write the estimands, h=5d and the decision tree down
+  BEFORE any code.
+
 - **⭐⭐⭐ ROUND 10 (2026-09-11) — A PREDICTION HIT TO FOUR DECIMALS, AND DIED THE SAME SESSION.**
   ⭐⭐ **THE OPERATIONAL DOCUMENT IS NOW `docs/BUILD_QUEUE.md`** — B1–B8 with `WHY · SCOPE · FILES ·
   ACCEPTANCE · ARTIFACT · DO NOT` per item, the parked register, and five probe conventions. **The

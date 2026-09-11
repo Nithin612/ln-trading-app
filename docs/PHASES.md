@@ -12,6 +12,31 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ## ▶ STATE AT A GLANCE (updated 2026-09-11) — round 10 — read this block first
 
+**▶▶ 2026-09-11/12 — ⭐⭐ THE B-QUEUE IS 5 OF 7 BUILT, AND E1 IS ANSWERED.**
+⭐ **Read `docs/BUILD_QUEUE.md`, not the adjudication.** Shipped overnight: **B2** the `Σ notional
+≤ cash` rail (did not exist; 3 slots at the median stop need 120% of capital) · **B3** the tick
+grid as a DATED price-band schedule (₹0.05 was the wrong grid for sub-₹250 names since **June
+2024**, measured; boundary at **₹225** because ₹225–300 is a MIXED zone) · **B1** the two
+undeclared display filters DELETED (choppy measured at **p = 0.999** while hiding **67%** of the
+list) · **B4** the gap guard tests SPAN not endpoints · **B5** E1 re-specified and run.
+⭐⭐ **E1 IS ANSWERED (§12.34): POSITIONAL CLOSES THE SAME WAY SWING DID.** The tight-vs-wide
+contrast decays as each mechanical term is removed — **R −0.4879 (t −1.89) → raw % −0.7870
+(t −1.18) → excess vs the matched basket −0.1909 (t −0.29)** (n=359 gap-clean). Swing went
+−0.386 → −0.262 → +0.069. **Identical shape, same verdict.** ⇒ **§4.4, §12.1, §12.2, the cap
+sweep and the σ_R objective ALL CLOSE with it.**
+⛔ **§12.27's "opposite signs ⇒ a different mechanism" is WITHDRAWN against itself:** `E[1/w]`
+jumps **110×** at the first bucket (43.4 vs 0.352 — ~0.026% stops) and net ₹ there is
+**−25,808/trade**. A **leverage point**, on a cohort the order path already refuses.
+⭐ **`drift × T` confirmed a second time on a different class:** mean `T` **6.4 → 32.9 sessions**
+across the buckets. ⚠ And positional's mean `T` (6–33) vs swing's **3.59** is a NEW fact for the
+relabel question, which stays open.
+⚠ **B4 shipped a blind spot its own verification caught:** the observed-session calendar is
+structurally blind to MARKET-WIDE holes (during the 922-day gap nobody has bars, so a straddling
+window reads as contiguous). Now tests sessions AND calendar days. **`probe-147` → `probe-145`;
+`clean × BUY` is n = 60, not 61** (§16.1d).
+⛔ **NEXT: B6 + B7** — E2's three estimands + the MFE/MAE surface, in one pass. **Write the
+estimands, the h=5d horizon and the decision tree down BEFORE any code.**
+
 **▶▶ 2026-09-11 (round 10) — ⭐⭐⭐ A PREDICTION HIT TO FOUR DECIMALS, AND DIED THE SAME SESSION.**
 ⭐⭐ **THE OPERATIONAL DOCUMENT IS NOW `docs/BUILD_QUEUE.md`.** The adjudication is 5,900+ lines and is
 a forensic archive, not a specification — read the queue to decide what to do, cite the adjudication
