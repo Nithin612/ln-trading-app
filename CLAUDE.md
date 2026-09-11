@@ -119,8 +119,10 @@ else.
   (2026-09-07 — none of its 3 preconditions holds). **D3 RESOLVED 2026-09-08: the `market_cap` writer
   needs NO vendor and NO XBRL scraper** — a free NSE-`/api/` `issuedSize × price` path exists (the
   surface the app already uses for FII/DII); build it only when a consumer appears
-  (`docs/analysis/market-cap-source-spike-2026-09-08.md`). The index backfill is already done
-  (see the MCE memory). Shadow→active flips need the R-track (§8-on-≥2y + sign-off). Plan in the phase-MCE doc.
+  (`docs/analysis/market-cap-source-spike-2026-09-08.md`). ⛔ **The index backfill was DESTROYED with
+  the dev DB on 2026-09-07 and has NOT been redone — `index_ohlcv_1d` holds 51 rows and
+  `india_vix_daily` 17 (measured 2026-09-10). Every market-regime / sector-RS overlay is
+  therefore unevaluable until it is re-run.** Shadow→active flips need the R-track (§8-on-≥2y + sign-off). Plan in the phase-MCE doc.
 - **The provisional breadth-flood fix is MERGED on the Phase-6 branch (`c1b4752`,
   cherry-picked 2026-08-20 — the source branch had diverged so `--ff-only` was impossible).**
   `live-worker`'s hot set no longer floods with breadth alerts (near-trigger = signal-bound
@@ -400,10 +402,12 @@ else.
   Child-start AFTER flip-time ⇒ the live process holds the current value. Worked example
   2026-09-04: R:R revert committed 09-03 09:34, uvicorn reload child started 09-03 12:28, celery
   worker 09-04 08:37 ⇒ both live on `shadow`.
-- **✅ WATCH MODE COMPLETE (ran to Fri 2026-09-04).** CAS Stage-1 accrual finished **HEALTHY:
-  `cas_daily` = 1,664 rows across 8 sessions, last 2026-09-04, no missed window** (verified by query
-  2026-09-04). Stage 2 (the overnight-reversal study) is now unblocked. The daily "check the row
-  count each morning" obligation is **discharged — do not carry it forward.** The capture remains a
+- **⛔ WATCH MODE / CAS ACCRUAL WAS DESTROYED — restart it (corrected 2026-09-10).** Stage-1 accrual
+  did finish healthy on 2026-09-04 (1,664 rows / 8 sessions), but the 2026-09-07 dev-DB loss took it:
+  **`cas_daily` holds 43 rows across 1 session** (measured 2026-09-10). The Stage-2 overnight-reversal
+  result (ρ −0.272) is therefore **not currently reproducible**, and its "re-run at ≥30 sessions"
+  trigger restarts from zero. **CAS accrual is real-time-only and cannot be back-filled**, so every
+  day `make worker` is not up across 15:15–15:33 IST is a session lost permanently. The capture remains a
   Celery-beat task, so if accrual resumes, `make worker` must be up across 15:15–15:33 IST and a
   missed window still cannot be back-filled.
 - **⭐ THE PROMOTION BAR, IN ONE NUMBER: t ≈ 3.6 on the trade series (H8, validated 2026-09-04).**
@@ -475,6 +479,36 @@ else.
   and **cost in R is a hyperbola in stop width** — 0.05–0.11R at the median 5% stop, **0.40–0.83R at
   the p10 0.65% stop**) in **`docs/SYSTEM_REVIEW_FOR_QUANT.md`**, the standalone document for presenting the
   system to an external quant.
+- **⚠ THE `positional` CLASS IS ONE FACTOR'S FOOTPRINT, AND ITS STOP HAS THREE IMPLEMENTATIONS
+  (2026-09-10).** `docs/POSITIONAL_REVIEW_FOR_QUANT.md` + `backend/scripts/positional_probe.py`
+  (read-only; the frozen scorer AND the frozen `_simulate_trade` are imported and CALLED, never
+  reimplemented). A 1d signal is positional **IFF `MULTIBAGGER_EMA` scores** — the `1w` route is
+  never run. That factor is appended ONLY when it fires, always scores exactly **+0.9**, and has no
+  bearish branch ⇒ **alone it yields confidence exactly 90%** (9/10, the top bucket; live example
+  `BUY AFFLE — Multibagger Ema, 90% confidence`). **430/430 gate-passing panels are BUY —
+  structurally long-only**; 18.6% rest on that one factor. ⭐ **`compute_levels` assigns
+  `max_sl_pct=15.00` for positional then SKIPS the cap check for exactly that class** (dead
+  variable), and **`signal_service` passes `ema20_daily` while `profiles/pipeline.py:367` and
+  `backtest/engine.py:322` do NOT** ⇒ flat 5%, R:R exactly 3.00 (live: **26 of 40 trades on the
+  flat 5%**). ⇒ **the backtest validates a stop rule the primary minter never produces**, and
+  `_simulate_trade` walks to the END OF DATA so the 30-day validity is untested. Paired on
+  identical panels the rules are **NOT separable** (ΔR −0.120, t −1.47) — a CORRECTNESS defect,
+  not a proven P&L one. ⭐ **The class selects AGAINST trend:** `PRICE_VS_EMA` fires on **9.1%** of
+  positional panels vs 63.4% generally (`|EMA20−EMA200| ≤ 2%` IS a converged MA stack) and
+  `DOW_TREND` scored 0/430 — second confirmation of the dead-factor finding. ⭐ **The notional cap
+  is a `risk_pct/leverage` (=2%) MINIMUM-STOP-WIDTH rule in disguise — the capital CANCELS**;
+  it rejects 28.4% of positional signals and was never measured as selection, so **measure any
+  future stop-width rule AGAINST it, not in addition** (W2). Outcome gross: 30-day horizon
+  **n=362, meanR −0.102, win 28.5%**, no bootstrap interval excluding zero, and **enforcing the
+  30-day horizon makes both stop rules WORSE**. Stop width is the strongest gradient (before
+  costs): <2% **−0.306R at 9.6% win** → >10% +0.543R at 62.5%. Same panels under SWING rules:
+  −0.213R/37.4% vs −0.292R/16.1%, paired ΔR −0.079 t −0.53 (**not significant — the relabel is
+  supported by no evidence either way**). ⚠ **No realised per-trade positional record exists**
+  (39 of 40 last seen `open`; closed trades drop out of the report tape). ⛔ **A FOURTH harness
+  defect, NOT positional-specific: `_simulate_trade` books a GAP-THROUGH-STOP fill as ~+1R**
+  (3-bar repro: close 100 / stop 99 / next open 95 ⇒ exit 99, `hit_sl=True`, +4.211% = +1.000R).
+  Live is immune (`paper_broker:544-554`); it flatters TIGHT stops, and **every study built on
+  `_simulate_trade` inherits it** (the 1,975-trade headline included, magnitude unmeasured).
 - **⛔ THE `security_analysis` READING STUDY IS CLOSED — FIVE NEGATIVES, NOTHING BUILT (2026-09-10).**
   All 14 PDFs in `docs/reading/security_analysis/` read against the user's entry/alert-timing question;
   synthesis + citations in `docs/reading/security-analysis-folder-takeaways-2026-09-09.md` (§1 rates each
@@ -592,6 +626,128 @@ else.
   pruning only after a verified dump). `make backup` · `make backup-verify` (a REAL restore
   — TimescaleDB hypertables need `timescaledb_pre_restore()`/`post_restore()`) — details in
   `RUNBOOK.md` §9. **Ask before anything that writes to, truncates or migrates live data.**
+
+- **⭐⭐ ROUND 7 OF THE QUANT PANEL (2026-09-11) — THE HEADLINE INVERTS, AND `ohlcv_1d` HAS A
+  922-DAY HOLE.** Four reviews adjudicated point by point in
+  `docs/analysis/quant-panel-adjudication-2026-09-10.md` (§12.12–§12.17 · §13.7 · §13f · §14b ·
+  §15.7 · rebuilt §16.1 · **§17 = four questions back to the panel**); probe extended read-only in
+  `backend/scripts/swing_dependence_probe.py`. **37 points: 21 taken · 8 refined · 8 rejected on
+  evidence.** Nothing built on the money path.
+  ⭐⭐ **Round 6's "significantly negative gross edge, t = −2.31" is carried by the UNTRADEABLE half:
+  BUY-only n=82, −0.0992R, t = −0.94** (SELL n=103, −0.1885R, t = −2.36; a cash-delivery account
+  cannot hold an overnight short). ⇒ **the tradeable book is NOT distinguishable from zero, negative
+  in expectation.** All four reviewers led with this and it had been an unrun plan item since round 1.
+  ⛔⛔ **`ohlcv_1d` HAS A 922-DAY HOLE, 2020-12-23 → 2023-07-03 — 1,097 sessions, not the ~1,730 a
+  2019-10 → 2026-09 span implies, and 33.2% of round 6's 16,428 panels were scored on a 300-bar
+  window straddling it** (EMA200/ATR/ADX/pivots across a 2.5-year discontinuity). It explains
+  `_CLEAN_SINCE = 2023-07-03` — **not a CA-clean choice, just the first date of the contiguous modern
+  block** — and it **KILLS the un-truncation plan item**: real yield n ≈ 2,662 (bar-50 walk) or
+  **exactly 0** (300-bar walk), not 4,300. The blocker was never the CA source but **615 missing
+  sessions** (bhavcopy back-fill). On gap-clean windows the headline falls to t = −1.79. ⭐ **Standing
+  rule: a span is not a span until the session count is QUERIED** — three docs and six rounds asserted
+  "~7 years" from `min(time)`/`max(time)`, two numbers that say nothing about what lies between them.
+  ⭐ **Three round-6 conclusions corrected:** (1) **ρ̄ ≈ 0 was a DIRECTIONAL-CANCELLATION artifact** —
+  long-only inflation is **1.19–1.23×** (ρ̄ ≈ **+0.19**), so ₹3L buys ×1.63 effective observations, not
+  ×3.26 and not +20%; **Kimi's stress case was the real case.** (2) **§12.10a's "detects an edge below
+  friction, with room to spare" is WITHDRAWN** — long-only MDE **+0.0714R > 0.051R** explicit charges;
+  a Sharpe-1.0 edge is still detectable at ×2.87 but the margin is **1.3×, not 4×**. (3) **Δ_select as
+  a continuous rank statistic: ρ = −0.018, perm p 0.807, powered to detect 0.147** — same answer, now
+  properly powered (the decile contrast had MDE +0.31R).
+  ⭐⭐ **Two structural repairs.** **KILL LINE 3 → 3a (strategy closure) / 3b (feature-family closure)**:
+  ChatGPT, Claude and Kimi converged from three directions that **a line keyed to total strategy R
+  cannot kill the SCORER** when the classifier, the level stage (−60.8%), geometry, horizon and fill
+  model sit between. And ⛔ **`Σ notional ≤ available cash` DOES NOT EXIST IN THE CODE** — three slots
+  at the median 5% stop need **120% of capital**, unchecked (the per-position cap binds only below a
+  2% stop). **First new RAIL in 25 reviews, identity-enforcing so no DSR bar, and a PRECONDITION for
+  cycle 2.**
+  ⭐ **The best new finding, and the only breadth lever left: the level stage discards 289 of 475
+  gate-passing swing panels and has NEVER been evaluated as a selector.** Re-simulated with fallback
+  stops on identical panels, **the discarded cohort beats the kept cohort by +0.16R** (paired by entry
+  date, t **+1.43** flat-5% / **+1.54** 2×ATR20, rejects carrying wider stops). ⚠ **Not significant —
+  MDE +0.22R**, but **+288 trades available today with no data blocker** and it is 3b's first test.
+  ⭐ **Gemini's one control variable outperformed every other point:** its ATR-proxy hypothesis was
+  **refuted** (ATR% t −0.43), **one of OUR findings was partially refuted** (the stop-width gradient is
+  t +2.30 in R, **+1.07 in raw %**, +1.06 long-only ⇒ **the 2026-08-25 stop-width result is
+  substantially a DENOMINATOR EFFECT**), and it surfaced **`RVOL-20` at t = +3.67, the only coefficient
+  in seven rounds to clear the t ≈ 3.6 bar.** ⛔ **Then round 6's own rule disqualified it — in raw
+  return % it is t = −0.28, and D1 refuted RVOL as a generator at t = −2.91. RECORDED, NOT PROMOTED.**
+  ⭐ §12.10b ("keep R for sizing, test in bps and ATR") has now disqualified **two of our three best
+  results**, which makes it the most productive finding of the whole exercise.
+  ⭐⭐ **AND THE HONEST CELL (R7-K), WHICH CORRECTED THREE OF THE ABOVE.** Gap guard × direction split
+  = **clean windows × long only: `n = 61, −0.0843R, t = −0.66, σ_R 1.0050, MDE +0.29R` —
+  UNINFORMATIVE.** ⇒ the evidence base for the book we can actually trade is **EMPTY, not negative**,
+  and KILL LINE 3 cannot fire on this sample either way. ⭐ **σ_R rises MONOTONICALLY as the
+  population is restricted: 0.878 → 0.911 → 0.957 → 1.005** (halfway back to the corpus's 1.489);
+  inflation with it, 1.00× → **1.24–1.43×** (ρ̄ ≈ +0.26).
+  ⛔ **(1) CLAUDE'S FINDING D DOES NOT SURVIVE** — paired contrast **+0.16R (t 1.43) → +0.095R
+  (t 0.69)**, and it **REVERSES on the clean tradeable book** (rejects BUY −0.118R vs accepts
+  −0.084R): gap contamination + a shorts effect. ⭐ **Structural credit stands — the largest filter in
+  the pipeline is measured and "not anti-selective" CLOSES a suspect** — but it is not a lever
+  (downgraded to a +223-trade sample-enlarger). ⛔ **(2) The Kelly INTERVAL claim is WITHDRAWN** —
+  clean BUY CI **[−0.844, +0.016] includes zero**; ✅ `f* = 0.0000` exactly survives everywhere and
+  **Claude's prediction was right.** ⛔ **(3) The stop-width gradient COLLAPSES AND FLIPS** — t +2.30
+  → **+1.06** clean → **NEGATIVE on clean × BUY** ⇒ **the 2026-08-25 stop-width finding survives
+  NEITHER the unit change NOR the gap filter**, and `sl_atr`'s "reproduction at exactly 1.0×"
+  inherits the defect (already DECIDED: NO at t 0.41, so nothing downstream moves).
+  ⭐ **STRONGER: `RVOL-20` is robust to the gap filter** (t +3.65 clean, +3.13 clean × BUY) **and
+  still t −0.36 in raw %** ⇒ **only the UNIT kills it.**
+  ⛔⛔ **PROCESS LESSON: I published four measurements before running the `--clean-only` variant of
+  the guard I had just built in the same round, and it corrected three of them.** ⭐ **STANDING RULE:
+  a guard is not adopted until every number in the same document has been re-run through it.**
+  ⚠ **GOVERNANCE: §16.1 carries a `sample` and a `verified` column per row, with one mechanical rule —
+  NO FORMULA MAY COMBINE TWO QUANTITIES WHOSE SAMPLE TAGS DIFFER.** Five instances so far; Claude found
+  the fifth (σ from `probe-185` × n from `corpus-1975`) and **Kimi committed it in the same round while
+  diagnosing a different one** (its "t ≈ −3.3" is the published −1.94 with a foreign σ). ⛔ **And I
+  drafted one regression table from expectation before its run finished — deleted before it entered the
+  doc, recorded permanently in §13f.**
+  ⛔ **Shipped since 2026-09-10: four commits, all docs. ONE of nine cut items has shipped as code.
+  50 days to the 2026-10-31 sunset.** ⇒ **ship, do not review** — §13f measures the marginal value of
+  review breadth as negative (4 of 37 points changed a decision; 5 were refuted by a query the reviewer
+  could have asked for).
+- **⭐ EXTERNAL QUANT PANEL ADJUDICATED 2026-09-10 —
+  `docs/analysis/quant-panel-adjudication-2026-09-10.md`.** Ten external reviews (5 each on
+  `SYSTEM_REVIEW_FOR_QUANT.md` and `POSITIONAL_REVIEW_FOR_QUANT.md`) checked claim-by-claim
+  against the code and the DB. Sixteen mechanism claims **CONFIRMED** (denominator, volume
+  sign-forcing, three-way level divergence, no positional stop cap, zero-cost/no-horizon
+  backtest, notional cap = 2% min-stop-width, symmetric entry zone, `_has_active_signal`
+  latch). Six **REFUTED** — most importantly the panel's most unanimous claim, *"you have
+  never computed factor-level IC"*: `scripts/factor_sweep.py` ran it 2026-09-07 on 212,129
+  observations / 156 non-overlapping dates with day-block bootstrap **and trial-count
+  deflation**, and nothing survived — including the exact SMA/52w feature family a
+  cross-sectional ranker would use, which is a strong measured prior **against** the panel's
+  other unanimous recommendation. The real gap is narrower: the sweep never pointed at our
+  own 15 factors or the composite score. **FIVE genuinely new findings, three of which change
+  the plan:** (1) ⭐ **cycle 2 cannot test expectancy** — σ_R = 1.489, so at n ≈ 25 trades the
+  DSR bar demands **+1.12R/trade** and even a plain t=2 demands +0.60R, against **+0.094R**
+  from a Sharpe-1.0 system ⇒ **re-scope cycle 2 as an operational-correctness rehearsal, not
+  an edge gate**; (2) ⭐ **the null was never written down** — E[R]=0 for ANY barrier config
+  under a martingale, so −0.065R is *worse than a coin flip*, and the correct null for a
+  100%-long beta-0.92 book in a rising market is strongly POSITIVE ⇒ we have **negative
+  alpha**, not zero alpha; (3) ⭐ **57% of generator output is untradeable** (108 SELL / 81 BUY
+  on a cash-delivery book that cannot hold an overnight short — the backtest simulates both
+  sides, so the 1,975-trade headline blends a tradeable long book with an untradeable short
+  one); (4) the **8% swing stop cap is anti-correlated with P&L** on three independent lines
+  and kills 51.9% of gate-passing signals — worth ~0.13R of the 0.215R gap, on no tier of our
+  plan; (5) **breadth** (`IR ≈ IC × √breadth`) is the dimension the architecture never
+  considered — at ~60 trades/yr a *perfect* version of this system is not investable.
+  ⭐ **The tension nobody named, and the real strategic problem: at ₹1 lakh, cost economics
+  pushes toward CONCENTRATION (flat ₹15.34 DP ⇒ bps falls with size) while statistical
+  validation pushes toward BREADTH — you cannot have both, so single-name delivery swing
+  trading at this capital is not a validatable strategy class regardless of whether it has
+  edge.** ✅ **The panel's sharpest attack on our own numbers was TESTED AND REFUTED** — the
+  positional stop-width gradient is NOT a winsorizer artifact (only **3 of 119** trades
+  clipped; raw mean −0.222 vs winsorized −0.251; sign, ordering and conclusion all stand).
+  Two unexpected results from that same re-run: the **accidental flat-5% stop BEATS the live
+  EMA20 stop** on 387 paired panels (+0.091R vs −0.016R, ΔR −0.116, t −1.41), and applying the
+  8% cap to positional panels would reject **54.4%**. Two zero-cost governance edits proposed:
+  split `FROZEN-BEHAVIOUR` from `FROZEN-CONTRACT` (we are paying promotion-bar prices for bug
+  fixes), and make the burden of proof asymmetric (**the t≈3.6 bar applies to ADDING
+  behaviour; REMOVING unjustified behaviour needs only the absence of evidence for keeping
+  it**). ⛔ **What all ten reviewers missed: the evidence base they reason from no longer
+  exists** — `positions` = 0 rows, so every live-tape number in both review documents is
+  currently unreproducible and the forward-evidence loops still listed as open in PHASES are
+  dead. Highest-priority engineering item is on nobody's tier list: an **append-only trade
+  ledger with off-box nightly export**.
 
 ## Tech stack (locked in — ask before substituting)
 

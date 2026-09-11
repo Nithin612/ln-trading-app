@@ -10,7 +10,475 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-09-10) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-09-11) — read this block first
+
+**▶▶ 2026-09-11 — ⭐⭐ ROUND 7 OF THE QUANT PANEL: THE HEADLINE INVERTS, AND `ohlcv_1d` HAS A
+922-DAY HOLE.** Four external reviews (Claude · ChatGPT · Gemini · Kimi) of
+`docs/analysis/quant-panel-adjudication-2026-09-10.md`, adjudicated point by point against code,
+queries and arithmetic. **37 points: 21 taken · 8 refined · 8 rejected on evidence; four changed a
+decision and five were refuted by a query the reviewer could have asked for.** Doc now 3,320 lines
+with new §12.12–§12.17, §13.7 (the revised plan), §13f (the round-7 ledger), §14b, §15.7, a rebuilt
+§16.1 and **§17 = four questions back to the panel.**
+
+⭐⭐ **THE HEADLINE, DIVIDED BY DIRECTION — all four reviewers led with this and it had been an unrun
+plan item since round 1.** Round 6's *"significantly negative gross edge, t = −2.31"* is carried by
+the **untradeable** half: **BUY-only n=82, mean −0.0992R, t = −0.94** vs SELL n=103, −0.1885R,
+t = −2.36. An NSE cash-delivery account cannot hold an overnight short. ⇒ **the tradeable book is
+NOT distinguishable from zero, negative in expectation** — a materially different verdict from
+"the sign is negative".
+
+⛔⛔ **`ohlcv_1d` HAS A 922-DAY HOLE: 2020-12-23 → 2023-07-03. 1,097 sessions, not the ~1,730 a
+2019-10 → 2026-09 span implies.** No reviewer could have found it; it took a query, not a code read.
+**33.2% of round 6's 16,428 panels were scored on a 300-bar window straddling it** (EMA200/ATR/ADX/
+pivots computed across a 2.5-year discontinuity). ⭐ It also explains `_CLEAN_SINCE = 2023-07-03`,
+which three documents describe as a *CA-clean* choice — **it is simply the first date of the
+contiguous modern block.** ⇒ **it KILLS plan item #2 (un-truncate the corpus): the real yield is
+n ≈ 2,662 on the corpus's bar-50 walk and EXACTLY ZERO at a 300-bar window, not the 4,300 the plan's
+MDE rested on.** The blocker was never the CA source — it is **615 missing sessions** (bhavcopy
+back-fill, days of ingestion). **Standing rule earned: a span is not a span until the session count
+is queried.** On gap-clean windows alone the headline falls to **t = −1.79** — a second, independent
+reason it is not robust.
+
+⭐ **THREE ROUND-6 CONCLUSIONS CORRECTED BY MEASUREMENT.** (1) **ρ̄ ≈ 0 was a DIRECTIONAL-CANCELLATION
+ARTIFACT** — long-only, variance inflation is **1.19–1.23×** (ρ̄ ≈ **+0.19**), so ₹3L buys **×1.63**
+effective observations, and **Kimi's stress case turned out to be the real case.** (2) **§12.10a's
+"the corpus detects an edge below friction, with room to spare" is WITHDRAWN** — on the long-only
+book the MDE is **+0.0714R, ABOVE the 0.051R of explicit charges**; a Sharpe-1.0 edge is still
+detectable at ×2.87, but the margin is **1.3×, not 4×**. (3) **Δ_select re-run as a continuous rank
+statistic** (ρ = −0.018, perm p 0.807, detectable at 0.147) — same answer, now properly powered,
+after Claude showed the decile contrast had **MDE +0.31R** and could not have found anything.
+
+⭐⭐ **AND TWO STRUCTURAL REPAIRS.** **(a) KILL LINE 3 splits into 3a / 3b.** ChatGPT §7, Claude's
+Finding D and Kimi Q8 converged from three unrelated directions: **a line keyed to total strategy R
+cannot declare the death of the SCORER**, because between the score and that number sit the
+classifier, the level stage (**−60.8%**), the geometry, the horizon and the fill model. 3a = strategy
+closure (unchanged endpoint); **3b = feature-family closure**, measured on gate-passers vs matched
+eligible non-passers, **before** the level stage. **(b) `Σ notional ≤ available cash` DOES NOT EXIST
+IN THE CODE** (ChatGPT §11, confirmed by grep): three slots at the median 5% stop need **120% of
+capital**, and nothing notices. It is the **first new RAIL any of 25 reviews has produced**, enforces
+an identity so it is exempt from the t≈3.6 bar, and is a **precondition for cycle 2**, not an
+enhancement.
+
+⭐ **THE BEST NEW FINDING IS CLAUDE'S, AND IT IS THE ONLY BREADTH LEVER LEFT.** The level stage
+discards **289 of 475** gate-passing swing panels and has **never been evaluated as a selector**.
+Simulated with fallback stops on identical panels: **the discarded cohort outperforms the kept cohort
+by +0.16R** (paired by entry date: t = **+1.43** flat-5%, **+1.54** at 2×ATR20; rejects carry wider
+stops, 5.00%/6.57% vs 4.65%). ⚠ **Not significant — MDE +0.22R, which is my own §4.1 error, stated
+rather than buried.** But it is **+288 trades available today with no data blocker**, larger in
+magnitude than the entire deficit being investigated, and it is 3b's first test.
+
+⭐⭐ **AND THE HONEST CELL, WHICH CORRECTS THREE OF MY OWN ROUND-7 CLAIMS.** Crossing the gap guard
+with the direction split — **clean windows × long only** — gives the one number every conclusion
+depends on: **n = 61, mean −0.0843R, t = −0.66, σ_R 1.0050, MDE +0.29R. UNINFORMATIVE.**
+⭐ **σ_R rises MONOTONICALLY as the population is restricted to the honest one: 0.878 → 0.911 →
+0.957 → 1.005**, halfway back to the corpus's back-derived 1.489 — independent support that the two
+samples differ structurally, not by noise. Inflation rises with it: 1.00× → **1.24–1.43×** (ρ̄ ≈ +0.26).
+⛔ **Three corrections. (1) CLAUDE'S FINDING D DOES NOT SURVIVE** — the paired level-stage contrast
+falls **+0.16R (t 1.43) → +0.0953R (t 0.69)** and **REVERSES on the clean tradeable book** (rejects
+BUY −0.118R vs accepts −0.084R); the effect was gap contamination plus a shorts effect. ⭐ **The
+structural credit stands — the largest filter in the pipeline is now measured and the answer is "not
+anti-selective", which closes a suspect** — but it is not a lever, and plan item 2′ is downgraded to
+"a cheap sample-enlarger (+223 clean trades)". **(2) The Kelly interval claim is withdrawn** — on the
+clean BUY book μ/σ²'s CI is **[−0.844, +0.016], which INCLUDES zero**; ✅ `f* = 0.0000` exactly still
+holds in every cell, and **Claude's prediction that the upper end sits near zero was RIGHT.**
+**(3) The stop-width gradient COLLAPSES and FLIPS** — t +2.30 → **+1.06** clean → **NEGATIVE on clean
+× BUY** (−0.032, t −0.56). ⇒ **the 2026-08-25 stop-width finding survives NEITHER the unit change NOR
+the gap filter**; `sl_atr`'s independent "reproduction" of it at 1.0× inherits the same defect (it was
+already DECIDED: NO at t 0.41, so nothing downstream moves — but the reason is now known).
+⭐ **What got STRONGER: `RVOL-20` is robust to the gap filter** (t +3.65 clean, **+3.13 clean × BUY**)
+and **still t −0.36 in raw %** ⇒ **the only thing that kills it is the unit.** Most robust coefficient
+in the document and the most firmly disqualified.
+⛔⛔ **AND THE PROCESS LESSON, recorded permanently: I published R7-A/C/E/J before running the
+`--clean-only` variant of the guard I had just built in the same round, and it then corrected three
+of them.** ⭐ **Standing rule: a guard is not adopted until every number in the same document has been
+re-run through it.**
+
+⭐ **GEMINI'S ONE CONTROL VARIABLE DID MORE THAN ANY OTHER POINT.** Asked whether the stop-width
+gradient is an ATR proxy: **its own hypothesis was REFUTED** (ATR% t = −0.43, gradient intact at
++0.063), **one of OUR findings was partially refuted** (the gradient is t +2.30 in R and **+1.07 in
+raw %**, +1.06 long-only ⇒ **the 2026-08-25 stop-width result is substantially a DENOMINATOR
+EFFECT**), and it surfaced **`RVOL-20` at t = +3.67 — the only coefficient in seven rounds to clear
+our own t ≈ 3.6 bar.** ⛔ **Then round 6's own rule disqualified it: in raw return % it is t = −0.28**,
+and D1 already refuted RVOL as a generator at t = −2.91. **Recorded, NOT promoted.** ⭐ §12.10b — "keep
+R for sizing, test in bps and ATR" — has now disqualified two of our three best results, which makes
+it the most productive finding of the whole exercise.
+
+⚠ **GOVERNANCE: §16.1 now carries a `sample` and a `verified` column per row, with one mechanical
+rule — NO FORMULA MAY COMBINE TWO QUANTITIES WHOSE SAMPLE TAGS DIFFER.** This document has committed
+that error **five** times; Claude found the fifth (σ from `probe-185` with n from `corpus-1975`) and
+**Kimi committed it in the same round while diagnosing a different one** (its "t ≈ −3.3" is the
+published −1.94 recomputed with a foreign σ). ⛔ **And I drafted one regression table from expectation
+before the run finished — caught and deleted before it entered the document, and recorded permanently
+in §13f.**
+
+⛔ **SHIPPED SINCE 2026-09-10: four commits, all documentation. Of the nine cut items, ONE has shipped
+as code** (measure ρ̄, via `swing_dependence_probe.py`). **50 days to the 2026-10-31 programme
+sunset.** `positions` 0 · `orders` 0 · `corporate_actions` 0 · `cas_daily` **43 rows / 1 session** ·
+`index_ohlcv_1d` 51 · `india_vix_daily` 17. **Next: ship, do not review** — §17 is four questions and
+explicitly not a review request.
+
+**▶▶ 2026-09-11 — DOC REBUILT CLEAN (2,091 lines) + PER-QUESTION ANSWER MATRIX.** A careful audit
+against the reviewers' actual question lists found **three genuine gaps that had been reported in
+chat but never written into the doc**: Claude's full 10d/30d/60d bootstrap table (now published
+**including the 60d anomaly at 0.62× on 19 blocks — under-blocked, noise, do not quote**), the
+same-sector/cross-sector split (⛔ **blocked**: sector is 165/1,322, so splitting would select on
+which names happened to get a label), and "is the 1,975-trade corpus all signals or gate-passers?"
+(⇒ **neither — three stages downstream**; measured attrition is 89 panels and 2.8 gate-passers per
+trade, and **the corpus's own upstream counts were never recorded**, so any future run must emit the
+whole chain). The brief now carries a **per-question matrix for all 32**: **24 answered · 4 partial ·
+3 impossible/gated with reasons · 2 not attempted** (Kite's adjustment policy; the end-to-end
+look-ahead trace) — nothing silently dropped.
+(2,041 lines) + ANSWER COVERAGE PUBLISHED.** Five PARTS
+(I system adjudicated · II measurements · III plan · IV round ledgers · V governance/reference), a
+navigation map, all round/date attribution stripped out of headings into the bodies, the round-2
+ledger moved beside the round-3/4/5 ledgers, **§8 marked SUPERSEDED** (the live plan is §13), and two
+real defects fixed: **§15.5/§15.6 were duplicated** and **§12.11a/b were out of order**.
+⚠ **Section NUMBERS are deliberately stable** — several `§N` references point at
+`SYSTEM_REVIEW_FOR_QUANT.md` / `POSITIONAL_REVIEW_FOR_QUANT.md`, so renumbering would silently break
+them; the parts group the sections without renumbering. The adjudication doc (2,063 lines)
+now opens with a **map** (Part I round 1 · Part II rounds 2–6 · plan · open questions · rebuttals ·
+reference card) and an **honest answer-coverage matrix**: of round 6's **32 questions**, **24 answered
+with code/query/measurement · 4 partial · 2 impossible (slippage regression — `orders`/`positions`
+empty; un-truncated dependence — gated on 0a.6) · 2 not yet attempted (Kite's adjustment policy; the
+end-to-end look-ahead trace).** Stale round-N headings fixed; sections predating §12.10 that lean on
+σ_R = 1.489 or ρ̄ = 0.5 are marked superseded, not deleted.
+**Newly answered this pass:** the **Sharpe→per-trade-R derivation** (`μ_net = S·σ·√I/√N` — meaningless
+without N and I, which is why it moved every round) · **cycle-2 calibration power** (functions to
+sd(ε) ≈ 0.35R; dead at 0.5R) · **slippage sensitivity** (the assumed 0.06R = **15 bps/leg**; report
+every friction-dependent conclusion at 10/15/20 until cycle 2 pins it) · **post-tax rows** (₹18k/₹54k/
+₹1.8L at ₹1L/₹3L/₹10L) · **the capital ladder under BOTH policies**, resolving §12.9's contradiction
+(A: fixed 2% risk ⇒ 3 slots at every capital · B: fixed ₹40k position ⇒ 3/4/6/9 slots by cutting risk
+to 0.67% — **and B is available at ₹1L too, so capital is not what unlocks it**) · **fill accounting**
+(`engine.py:212` fills at the next open; both probes take the R denominator from the **FILL** price,
+which is correct) · ⛔ **no ex-date handling anywhere in the backtest — stops hit at the RAW price**,
+so Kimi is right that a modelling decision hides inside what is presented as a data repair.
+⭐ **GATE PROVENANCE PARTLY REFUTES THE IN-SAMPLE WORRY:** `confluence.py` (70 threshold, weights, ADX
+schedule) landed **2026-07-03**; the first corpus analysis **2026-08-12**, six weeks later ⇒ **the
+scorer was authored from the spec, NOT fitted to this data.** What IS in-sample is everything after
+08-12 — the eight shadow gates and the retune experiments. **Kimi's claim is right about the overlay
+programme and wrong about the scorer**, which matters because #16 therefore tests a genuinely
+pre-registered object.
+
+**▶▶ 2026-09-11 (round 6) — ⭐⭐ THE THREE ASSUMPTIONS ARE MEASURED, ALL THREE WERE WRONG,
+AND THE PROGRAMME'S CENTRAL QUESTION WAS THE WRONG ONE.** Round 6's reviewers asked for evidence
+rather than opinion; `backend/scripts/swing_dependence_probe.py` (read-only, frozen engine CALLED)
+walked **16,428 swing panels / 238 names / stride 10** and measured them. §12.10, §12.11.
+⛔ **σ_R: assumed 1.489 (back-derived from a t) → MEASURED 0.878** ⇒ required n falls **65%**.
+⛔ **ρ̄: assumed 0.50 → MEASURED −0.013** (263 overlapping pairs). **Variance inflation: assumed
+6.5× corpus / 1.75× live → MEASURED 1.00×** (calendar-block bootstrap, 10d and 30d agree; §12.4's
+trade-block 1.046× agrees too — **three independent measurements, dependence is nil**). ⭐ Claude's
+structural argument predicted it: **R is a barrier-truncated path-dependent transform and truncation
+compresses correlation** — ρ̄ on R was never going to look like ρ̄ on returns. ⚠ **`1+(m−1)ρ̄` appears
+NOWHERE in the code** — it was a document-level assumption for three rounds.
+⭐⭐ **THE HEADLINE INVERTS A SECOND TIME, AND DETECTABILITY STOPS BEING THE CONSTRAINT.** With
+measured inputs the corpus detects a Sharpe-1.0 system at **×3.28 truncated / ×4.84 un-truncated**.
+**MDE (+0.027R to +0.040R) is now BELOW the +0.051R friction floor ⇒ anything that nets positive is
+detectable with room to spare.** "We're standing on the line" (§12.8) and "2.8–3.8× short" (§12.5)
+were BOTH artifacts of unmeasured assumptions. ⚠ **And that makes the next number worse, not better:
+this sample's gross mean is −0.1489R, SE 0.0645, t = −2.31 — a SIGNIFICANTLY NEGATIVE gross edge.**
+The programme spent three rounds asking "can we detect an edge?" when the powered answer available
+was **"the sign is negative."**
+⭐ **CLAUDE'S RATIO-ESTIMATOR FINDING CONFIRMED SPECTACULARLY.** Same 185 trades, three units:
+**R → excess kurtosis +8.19 · raw % → −0.25 · return/ATR20 → +0.02.** **The fat tails are
+manufactured by our own denominator** (stop-width CV 0.51). ⇒ every MDE, every DSR run and the
+"kurtosis 11.46" bootstrap inherit a tail their unit created. **Keep R for SIZING; report in bps and
+ATR units.**
+⭐ **Δ_select = +0.045R, SE 0.153, t = +0.29** and **confidence is NOT monotone** (70–74 −0.158 ·
+75–79 −0.002 · **80–84 −0.292, the worst** · 85–89 −0.150 · 90+ +0.230 on n=3). ⇒ **the score's top
+decile is statistically indistinguishable from the average gate-passer.** After six rounds that is
+the measured answer to *"sometimes I cannot select the right stock"*: **there is no selection premium
+to capture.**
+**Denominator chain:** 16,428 panels → **514 gate-passing (3.13%)** → BUY 242 / **SELL 272 (52.9%)**
+→ 475 swing → **289 (60.8%) die at the level stage** → 1 CA-dropped → **185 resolved trades.**
+**Defect #4 counted: 2/185 = 1.08%** ⚠ which **disciplines my own round-3 claim** that it makes the
+stop-width gradient steeper — at 1% it cannot move a mean. Overstated; corrected.
+**Code answers:** §12.4's bootstrap block was **8 TRADES, not days** (so it could never have seen
+overlap — undermining both sides of Claude's Finding 1) · **`orders.price` + `orders.filled_price`
+EXIST but both tables are EMPTY ⇒ slippage is unmeasurable retrospectively, only cycle 2 can produce
+it** · the three level call sites share `compute_levels` but with a **divergent call contract**,
+which is worse than three implementations because it looks unified · `backtest/engine.py` calls
+**neither** `fees.py` nor `risk_engine` · **no tax handling anywhere** (⭐ Kimi: first-order at the
+₹10L scale where §12.9 says the programme turns EV-positive) · ⛔ **§12.9 contradicts itself on slots**
+(3 at every capital vs a 3/4/6/9 ladder — two policies presented as one; ChatGPT was right).
+⭐ **Kimi's Kelly point, confirmed: at p ≈ 0.25 and b ≈ 1, f\* = p − q/b ≈ −0.5 ⇒ the corpus's own
+numbers imply the growth-optimal live risk is ZERO.** Cycle 2 staying on paper is not prudence, it is
+what the arithmetic mandates.
+
+**▶▶ 2026-09-11 (latest) — ⛔ TWO OF THE THREE INPUTS TO THE HEADLINE ARE UNMEASURED ASSUMPTIONS.
+NEW §16 REFERENCE CARD + PER-REVIEWER NOTES.**
+⛔ **§15.6 (mine, and it applies to every reviewer's arithmetic including my own):** rounds 3–5 all
+turn on three quantities and **only ONE is measured.** σ_R ✅ measured (1.489 swing / 1.844–2.088
+positional). **ρ̄ = 0.5 ⛔ ASSUMED — introduced in round 3 as illustrative and used unchallenged ever
+since**; it sets `1+(m−1)ρ̄`, which drives every effective-n figure, §12.5, §12.8 and the whole capital
+analysis. At ρ̄=0.3 every MDE improves ~23%; at 0.7 they worsen ~16%. **It is one query.** Friction ⚠
+half measured — explicit charges **0.051R**, the document uses **0.11R**, the ~0.06R gap is an
+**unmeasured slippage assumption**. ⇒ **Both added to the cut as items 10 and 11** — they feed the two
+levers §12.5 says can move the answer and are cheaper than anything else on the list.
+⭐ **NEW §16 — REFERENCE CARD + REVIEWER NOTES (user instruction).** **All five sources STAY** (user
+ruling); the point is to raise the floor, not to rank. §16.1 fixes the canonical constants with
+`[measured]` vs `[ASSUMED]` marked on each — **most of the dozen arithmetic disagreements across five
+rounds came from sources using different values for the same quantity.** §16.2 gives each reviewer an
+evidence-backed note on its characteristic failure: **ChatGPT** best framings, arithmetic under a
+correct framing is its weak point (gross/net; CAS-vs-swing DP) · **Claude** best auditor, but its own
+arithmetic is not exempt (+33% vs measured +20%) and its framings over-reach where its numbers are
+right · **Kimi** best governance questions, arithmetic wrong twice (MDE-vs-SE; +6% vs +20%) though in
+one case the **conclusion was still right** · **Gemini** one adopted contribution in five rounds, and
+a narrow prescription that would change its value entirely: **evaluate one number from §16.1 before
+asserting any formula.** §16.3 names what to attack next — **not** this document's consistency.
+⭐ **§15.5 adds the round-5 rejections WITH DERIVATIONS** so they can be checked, not re-argued:
+ChatGPT's capital table (CAS figures on the swing book — 11.51%/3.83% vs the correct **2.30%/0.77%**)
+· Kimi's +6% and Claude's +33% breadth (measured **+20%**: 75→90 eff obs/yr) · and my own
+**self-rejected** gross-vs-net headline.
+
+**▶▶ 2026-09-11 (latest, round 5) — ⛔ THE HEADLINE RATIO WAS MALFORMED AND THE CONCLUSION INVERTS.
+PLUS: the capital question, answered against our own fee model.**
+⛔ **§12.5 compared a GROSS requirement (`friction + MDE`) against a NET benchmark** (a Sharpe ratio
+is conventionally net) — friction counted on one side only. ⚠ **And I used N=250 trades/yr for the
+benchmark and N=125 for the live book's accrual.** Consistent gross-vs-gross at ρ̄=0.5: a Sharpe-1.0
+book **grosses +0.189–0.286R** against an MDE of **+0.116–0.203R** ⇒ **DETECTABLE at ×1.11–×1.63.**
+⭐ **"2.8–3.8× short" is WRONG — we are STANDING ON THE LINE, not far from it.** That **changes what
+the plan is for**: un-truncation, σ_R and friction become **decisive** rather than merely surviving,
+because they are the three things that move you across a line you are standing on. ⚠ Convention now
+stated explicitly (**NET**) because a gross reading flips it back to failing by ~8×. ⚠ **σ_R is a
+weaker lever than §12.2 claimed** — the benchmark scales with σ_R too, so only friction is fixed;
+the gap narrows 0.028R→0.021R, ~¼ of the claimed gain. ⚠ **My own counter-caveat (nobody raised it):
+the corpus takes EVERY signal while the book takes the best 2–3, so the corpus population mean is
+LOWER than the deployed mean if the gate adds anything** — the strongest remaining pessimistic argument.
+⛔ **HALF THE FRICTION TERM IS AN UNMEASURED ASSUMPTION.** Against the real fee model, a 5% stop at
+₹1L costs **25.5 bps = 0.051R**; §12.5 uses **0.11R**. The missing ~0.06R is a slippage assumption
+that drives every conclusion — ⇒ **Week 0 #5 (fee/slippage reconciliation) RESTORED to the cut**
+(it was dropped while friction was named one of only three levers that can move the answer).
+⭐ **THE CA BLOCKER IS AN AFTERNOON, NOT PROCUREMENT (Claude).** Derive the adjustment factors from
+**Kite-adjusted ÷ our unadjusted** series — the step in the ratio IS the factor, on the exact ex-date,
+as actually applied. ~1,300 names × 1 request at 3 req/s ≈ **7 minutes**. Strictly better than an
+event feed (no reconciliation). FII/DII is likewise a scraping afternoon ⇒ **#16 may run on the
+SHIPPED composite, not a price-only variant.** **The critical path is unblocked.**
+⭐ **SEQUENCING FIXED (Kimi): 0a.1 freeze-the-holdout is now item #1** — it costs nothing, depends on
+nothing, and freezing a *date* is a commitment device, not a test run. Gating it behind un-truncation
+was a leftover. ⭐ **PROGRAMME SUNSET ADDED (Kimi — the hole in our own rule): if zero Week-0 items
+ship by 2026-10-31 the programme CLOSES**, ledger archived as the deliverable. ⭐ **KILL LINE 1
+re-scoped from absolute to COMPARATIVE** (Claude: "a gate you already know fires on everything is not
+a decision rule") — lowest required gross wins the next quarter; classes above 2× the leader struck.
+⭐ **HOLDOUT REGIME GUARD pre-committed** (Kimi): if KILL LINE 2 fires, a holdout verdict must be
+regime-matched or recorded **CONFOUNDED**, not negative.
+
+**⭐⭐ CAPITAL: WHAT ₹1.5L / ₹2L / ₹3L ACTUALLY DO (§12.9, computed on `roundtrip_charges`).**
+**Slot count is SCALE-FREE** — `slots = heat ÷ risk = 6%÷2% = 3` at every capital level; capital
+cancels exactly as in the notional-cap identity. **Capital does not buy positions, the risk rules do**
+(9 slots at ₹3L means 0.67% risk — which you could run at ₹1L). **Swing friction barely moves:**
+5% stop costs 25.5 bps at ₹1L vs **23.0 bps at ₹3L — 0.005R/trade, ~10%** (STT ~20 bps is
+proportional; only the flat ₹15.34 DP scales away). **The daily-turnover book is the exception:** DP
+drag 2.30%→0.77% of capital for swing, but **11.51%→3.83% for CAS** ⇒ **capital helps the
+microstructure book enormously and the swing book almost not at all.** **Power barely moves:**
+75→90 effective obs/yr = **+20%** (Kimi said +6%, Claude +33%; measured +20%) — **the MDE wall does
+not move when you add cash.** ⇒ **Adding ₹2L is a friction-and-CAS decision, NOT a validation or edge
+decision** — and if the paired-calibration test shows the corpus-to-live bias is real, **more capital
+loses more at the same rate.** Strict ordering: ship the nine → run cycle 2 as the paired calibration
+→ THEN decide capital with the BTST answer and the bias number. ⭐ **The one qualitative purchase is
+the F&O door** (futures make the 57% SELL output tradeable; options open the covered-call overlay) —
+⚠ but at SEBI's raised contract values one lot may need ₹2.5–4L, so **that door may open at ₹10L, not
+₹3L; run the lot-size check across the whole ladder.** ⚠ **In ₹/day terms: +0.09R/trade ≈ ₹22k/yr at
+₹1L, ₹67k/yr at ₹3L — neither pays for the engineering already done; positive EV including your own
+time probably starts near ₹10L.**
+**Rejected this round:** ChatGPT's capital table (applied **CAS** DP figures to the **swing** book) ·
+Kimi's +6% breadth · Claude's +33% breadth. **Still open:** there is **not one chart in 1,634 lines**
+(Claude) — cumulative R vs the matched-random null, cost drag shaded, one line per year.
+
+**▶▶ 2026-09-11 (latest, round 4) — THE PLAN IS CUT TO EIGHT ITEMS, TWO OF WHICH ARE BLOCKED BY
+EMPTY TABLES. CYCLE 2 IS REFRAMED AS A PAIRED CALIBRATION.** Four sources reviewed **one at a time**
+(user instruction, after ChatGPT was under-credited twice). All folded into
+`docs/analysis/quant-panel-adjudication-2026-09-10.md` — §12.5 corrected, **§12.7** new, **§13d**
+round-4 ledger, **§15 REBUTTALS-WITH-EVIDENCE** (new).
+⛔ **§12.5's corpus rows used NOMINAL n — the same failure as R2-11, committed twice.** The corpus is
+**more** overlapped than the live book (~620 trades/yr at 5-day holds ⇒ **m≈12** vs 2–3). Corrected at
+ρ̄=0.5: corpus truncated **+0.28R** · corpus un-truncated **+0.23R** · live **+0.31R**. **The corpus
+advantage falls 3.4× → 1.7×.** ⚠ And the **benchmark must move with the hurdle** (ChatGPT): Sharpe-1.0
+is +0.094R only under independence, **+0.125R** at m=2.5 ⇒ ratio 2.80× → **2.52×**.
+⛔ **TWO PLAN-BLOCKING DATA GAPS, found by query (§12.7):** `corporate_actions` = **0 rows** — the CA
+layer has **no event source for any period**, so **0a.6 un-truncation is gated behind sourcing it**;
+and `fii_dii_daily` = **4 rows over 3 days** with sector at 165/1,322 ⇒ **test #16 is INFEASIBLE on
+any window** — a **price-only composite variant frozen by commit hash** is now mandatory and is a
+*different estimand* from the shipped score.
+⭐ **CYCLE 2 IS A PAIRED CALIBRATION MEASUREMENT, not merely a rehearsal** (Claude — best idea of the
+round). Corpus and live book estimate **different quantities**, so more n converges on the bias.
+Three roles: **corpus can REJECT not PROMOTE · live book neither · only the PAIR measures the bias.**
+Paired backtest-vs-realised R shares signal/name/window/geometry ⇒ sd(ε)≈0.2–0.3R ⇒ **SE≈0.05R at
+n=25, detecting a 0.10R bias at t=2.** ⭐ Its **acceptance criteria are now recorded** (Kimi raised
+them in R3 and they **dropped silently from the ledger** — my process failure): fills within model+2bps
+on ≥95% · 100% of cap/breaker firings logged · displacement distribution · **`signal_id` + commit hash
+on every row.**
+⭐ **THE CUT — the plan is 3–4× over capacity; a readiness gate on an over-capacity plan yields
+slippage, not protection.** 29 items → **EIGHT**: 0a.6 · 0a.1 holdout · 0a.2 defect-#4 repair ·
+0a.3 universe query · Week-0 #1 CA layer (**with cost-stack bitemporality folded in**) · #2 ledger ·
+#6 cost table · **#16 in the repaired economic form**. Plus two afternoons: the **BTST/DP ticket**
+(called the most decision-relevant item and **no week owned it** → Week 0 #8) and the **F&O lot-size
+check**. Driven by the four words I wrote and ignored — *"regardless of their outcome"*: **only
+friction, σ_R and breadth can move the answer.**
+⭐ **KILL LINE 3 RE-KEYED** — it pointed at IC four lines after #16 demoted IC (all three reviewers
+caught it). Primary endpoint is now **cost-adjusted mean R of gate-passing trades, SESOI = friction at
+the class's median stop width**, one-sided. ⛔ **|IC| = 0.02 was below break-even** (transfer
+`IC × σ_cs × E[z]`, E[z]=1.755 ⇒ **0.018–0.071**). ⛔ Gemini's replacement formula **rejected — doesn't
+type-check** (units of 1/count) and is 4–100× too permissive.
+✅ **A23 partially covers Claude's cost-stack point:** `fees.py:101` has `effective_from` and
+`schedule_for(on)` — but **`SCHEDULE_HISTORY` has ONE entry** floored at 2000-01-01. Machinery built,
+unpopulated; the **tradeability** half (ASM/GSM, T2T, circuit at signal time) has no mechanism.
+⭐ **NEW §15 — REBUTTALS WITH EVIDENCE** (user instruction): every claim rejected across four rounds,
+with the code line / query / arithmetic that refutes it **and what would change my mind**, so a
+rejection can be checked rather than re-argued. ⭐ Standing rule: **a claim about the data plane is a
+question, not a finding, until someone runs the SQL** — four rounds, four times.
+⭐ **Also taken:** two locks (holdout + prospective) · IC-within-gate-passers is a **collider**
+(marginal / conditional / **incremental**) · **three-layer nulls** — my "never use an analytic null"
+was too absolute, the missing layer is the **engine-calibrated** null · **feature lineage table** ·
+**simple benchmarks** not just placebos · **CVaR / gap-loss tails** · **capacity ₹1L→₹1cr** · keep the
+horizon **descriptor**, delete only the **rule set** · σ(early)/σ(late) < √2 pre-check before
+un-truncating · regime-stratified **from the outset**, not pooled-then-split.
+⭐ **CHATGPT WAS UNDER-CREDITED TWICE — the σ_R lever originated with it in ROUND 1** (*"R = entry −
+stop; if the stop is arbitrary, R is arbitrary"*), as did the **capital-scaling question** now
+central to the Week-4 branch. Six further round-1 items were never picked up and are now recorded.
+⚠ **Kimi's headline was arithmetically wrong** (bootstrap SE is **1.046×** iid, not 2× — it compared
+an MDE to an SE) **but its CONCLUSION was right**, reached correctly by Claude via concurrency. ⭐
+*A conclusion can survive its own broken derivation — attack the two separately.*
+
+**▶▶ 2026-09-11 (latest) — ⭐ THE CORPUS IS TRUNCATED FOR TWO DEAD REASONS; UN-TRUNCATING TRIPLES IT
+AND MAKES A HOLDOUT AFFORDABLE.** Found while writing the round-4 brief, and it corrects §12.5's own
+table. **There are TWO required-edge numbers, not one:** §12.5 solved for the LIVE book's accrual
+rate (~125 trades/yr ⇒ +0.264R), but the research corpus runs at **619 trades/yr** (1,975 trades /
+3.19 yr) ⇒ **+0.177R as truncated, +0.155R un-truncated.** ⭐ **This RESOLVES the ₹1L tension rather
+than restating it: the corpus can detect an edge the live book never can, so ALL validation belongs
+on the corpus and the live book confirms plumbing only** — §4.1's cycle-2 conclusion generalised.
+⭐ **The swing corpus starts 2023-07-03 for two reasons that are BOTH DEAD:** (a) `ohlcv_1d` once
+began there — a hard blocker **RESOLVED 2026-09-08**, three days before the corpus was reported, when
+the bhavcopy acquisition reached **2019-10-01**; (b) it was called "the CA-clean window", a claim our
+own memory records as **⛔ FALSE**. ⇒ **un-truncating takes n from 1,975 to ~4,300 using data already
+in the table** (new Week-0a #6). ⚠ **It also defuses a collision no reviewer could see:** Claude's
+2024-01 holdout against the *truncated* corpus leaves a **six-month** development set (fatal);
+against the un-truncated corpus it is comfortable — dev n≈2,631 (MDE +0.058R), holdout n≈1,665 (MDE
++0.073R). **0a.6 must therefore precede 0a.1**, and must land with the CA layer + the regime split
+since it spans COVID and the 2020–21 melt-up.
+**A ▶ BRIEF FOR ROUND 4 now heads the adjudication doc** — what is settled (do not re-open), the four
+live questions worth attacking, and the standing note that reviewers cannot check the data plane from
+prose. User has elected to run round 4 despite the §13c recommendation to stop; brief is written to
+make it short and targeted.
+
+**▶▶ 2026-09-11 (round 3) — MY OWN KILL LINES WERE BROKEN IN THREE WAYS. STOP REVIEWING,
+START SHIPPING.** Round 3 (Claude · Kimi · ChatGPT; Gemini returned nothing) audited **this
+document's statistics** rather than the system's, and found the round-2 headline improvement — the
+kill lines — unusable as written. All three defects **verified by arithmetic**; repairs are in
+`docs/analysis/quant-panel-adjudication-2026-09-10.md` (§12.5, §12.6, §13a/0a, §13b, **§13c**).
+⛔ **KILL LINE 4 was UNPASSABLE — §4.1's error one level down.** At n=271, σ_R=1.844 the **MDE at
+t=2 is +0.224R**, so "gross > +0.15R **and** interval excluding zero" silently demanded ≥0.224R; a
+TRUE +0.15R gives **t = 1.34**. On the swing cells that carry the decision (n≈200–400) MDE is
+0.149–0.211R — at or above the threshold being tested. ⇒ **publish the MDE per cell in the
+pre-registration; cells whose MDE exceeds the threshold are decorative.**
+⛔ **KILL LINE 3 had TWO independent defects.** (a) It **could not fire**: 15 factors + composite ×
+5 horizons = **80 intervals**, `P(≥1 exclusion | all null) = 0.9998`. (b) If it fired it was
+**unsound** — power is ~0 at t 2.6–3.5, so a flat result is absence of evidence. ⇒ **ONE primary
+endpoint (composite, one horizon, commit-hash frozen) + a TOST equivalence test against a
+pre-specified SESOI**, and **statistical closure vs ECONOMIC closure are now separate verdicts.**
+⛔ **DECISION LINE 6 optimised the wrong quantity.** A constant-R:R target lowers σ_R *mechanically*
+by truncating the winning tail — and lowers μ with it. Required n = (σ/μ)², so **the criterion must
+be σ/|μ| or n itself, never σ alone.**
+⭐ **THE SYNTHESIS (best number of all three rounds): required gross edge = friction(w) + MDE over
+the wait.** swing reachable **+0.264R** · positional reachable **+0.355R** — against **+0.094R** from
+a Sharpe-1.0 system. **Both classes need 2.8×/3.8× a world-class edge merely for it to be VISIBLE in
+3 years.** It supersedes KILL LINE 1 (+0.30R fired on nothing) and reconciles four unreconciled
+thresholds. ⚠ **And it is optimistic** — R2-11 was accepted and never propagated: at 2.5 concurrent
+positions with ρ̄ 0.5 the variance inflates **1.75×** (7.1 yr → **12.4 yr**); at cycle-1's 23
+positions, **12× ⇒ 85 years.** That is why the wide sampler can never validate anything.
+⭐ **SURVIVORSHIP — 3 reviewers named the disease, all 3 named the wrong organ.** `[db]` The DB is
+FINE: `stocks` = **3,392** rows, **2,070 inactive RETAINED**, **542** price series that die
+mid-history, `listed_on` present. **The bias is in MY OWN universe selector** —
+`positional_probe.py:92` and `engine_selectivity_probe.py:106` both do
+`WHERE time > now() - interval '180 days'` (⛔ excludes all 542 dead names) then rank by **TODAY's**
+liquidity and apply that top-250 to 2019–2026 (⛔ look-ahead). `squeeze_study.py:65` is explicitly
+survivor-only (`s.is_active`). ✅ `factor_sweep.py` is CLEAN on this axis (rolling `adv20`). ⇒ **one
+query to fix, not a data project — the delisted names are already in the table.** Bias direction is
+**upward**, so every historical figure is flattered, §12.1's sign flip included.
+⭐ **NEW, ADDED TO THE PLAN AS WEEK 0a (do FIRST):** **freeze a 2024-01+ HOLDOUT** — deflation cannot
+deflate a trial count nobody recorded, and 3 rounds of reviewers on one window is exactly that ·
+**repair harness defect #4 as a `FROZEN-CONTRACT` fix and RE-BASELINE** (9 "decisive tests" would
+otherwise run through an exit ledger wrong in the direction that biases the variable under study) ·
+fix the universe query · **backfill index/VIX** (51/17 rows — the nulls, the beta regression and the
+"breadth from time" escape all need it; I recorded the row counts and then left the backfill out of
+the plan) · commit hash on every ledger row · **READINESS gating, not calendar gating.**
+**Also taken:** the `>25%` CA filter is **demoted to an ingestion ALARM** (it drops exactly the moves
+a multibagger factor exists to catch) · both nulls refined (same eligible universe; **matched
+temporal** permutation) · **IC DEMOTED from "the decisive test"** — it answers the wrong question for
+a *gated* system (we trade the ~2–4% tail) and for a *sparse event* signal; report 3 estimands and
+put **conditional economic effect** above IC in the hierarchy · **CAPITAL-TIME ECONOMICS** (the
+account earns ₹/day, not R) · the Q1 confounding regression moved to Week 1.
+**Answered, not deferred:** Q1 = domain restriction, not survivorship (control = one regression) ·
+Q3 = ⭐ **stop formulating the null analytically; run both arms through the identical harness so its
+biases cancel** · Q4 = **"breadth from time" is NOT breadth** (observations ≠ bets) ⇒ escape 2 or
+nothing ⇒ **the DP/BTST ticket is the most decision-relevant item in the plan** · Q6 = **delete the
+positional relabel** (Claude beats Kimi: pooling different-σ populations LOWERS power; delete, don't
+merge). ⚠ **"₹1L is not validatable" SOFTENED** — the constraint is execution-economic, not
+statistical; validate at scale-free units, THEN test ₹1L friction.
+⭐⭐ **§13c — THE RECOMMENDATION: STOP THE REVIEW CYCLE.** Three rounds, thirteen reviews, a
+1,088-line document, **zero Week-0 items shipped.** Round 3 paid for itself only because it audited
+the plan's own statistics; a round 4 has nothing comparable left to find, because what is still
+unexamined is **the data plane, which no reviewer can inspect from prose.** Next artifact = a shipped
+Week-0a item, not another review. **On §12.5's arithmetic the likely outcome is that KILL LINE 3
+fires cleanly — and that is a perfectly good result for a programme to reach.**
+
+**▶▶ 2026-09-11 (latest) — ROUND-2 ADJUDICATION: THE CORPUS IS NOT THE LIVE STRATEGY, AND THE
+SIGN FLIPS. PLAN NOW HAS KILL LINES.** The 09-10 adjudication went back to 4 reviewers with the 10
+round-1 reviews; **round 2 landed 3 direct hits on our own document**, all verified against code/DB
+→ `docs/analysis/quant-panel-adjudication-2026-09-10.md` (§10 scoreboard, 35 rows; §12 new
+measurements; **§13 revised plan with 6 dated kill lines**; §14 open questions for round 3).
+⛔ **HIT 1 — §4.4's "three independent lines" was ONE variable measured twice.** `risk.py:101,111`
+targets are flat 6%/15% ⇒ **R:R = 6/w and 15/w IDENTICALLY**; "R:R<1" and "wide stop" are the same
+variable (swing R:R<1 ⟺ w>6%), so the R:R-revert cohort's 7.29% avg stop **was** the wide-stop
+finding, not corroboration of it.
+⛔ **HIT 2 (Kimi, the sharpest) — our own counter-evidence is CA-contaminated.** `factor_sweep.py`
+has **NO CA filter**: features (`close/sma200`, `close/hi252`) AND labels (`LEAD(close,h)`) on
+unadjusted prices ⇒ ~**5.8% of 212,129 obs** grossly wrong vs a target IC of 0.02–0.04. It does
+**NOT** license "no cross-sectional IC exists" — only "none detectable on contaminated data".
+**⇒ THE RANKER QUESTION IS REOPENED.** `instrument_self_validation` failed on our own instrument.
+⛔ **HIT 3 — "negative alpha" over-claimed.** +0.0010 on 40–105 obs won't exclude zero, and −13.42pp
+vs NIFTY needs a time-in-market adjustment (2–3 positions ≠ 100% invested). Under DISCRETE daily
+monitoring the martingale null is negative anyway — via `engine.py:257-261` checking `hit_sl`
+BEFORE `hit_tp`, not via Claude's stated mechanism (our engine gaps BOTH sides at the open).
+⭐ **NEW MEASUREMENT — THE CORPUS CONTAINS TRADES LIVE WOULD REFUSE, AND THEY ARE THE WORST
+COHORT.** The notional cap is **unconditional** in the paper broker and algebraically
+`w ≥ risk_pct/leverage` = **2%**; `backtest/engine.py` applies **NO cap**. Restricting to the
+live-reachable set (a PRE-SPECIFIED identity, not a searched partition) **FLIPS THE SIGN**:
+ALL n=385 **−0.032R** · **REACHABLE (w≥2%) n=271 +0.084R** · REJECTED (w<2%) n=114 **−0.306R**.
+⚠ **BUT the bootstrap does NOT exclude zero** — reachable Sharpe **+0.045** [−0.061, +0.148],
+≤0 in **25%** of histories vs ALL at −0.011 [−0.120, +0.076], ≤0 in **57%**. ⇒ **this is a CORRECTED
+MEASUREMENT, not a discovered edge**: the defect (every corpus statistic includes ~30% of trades
+live refuses) must be fixed regardless, and the corrected baseline is **~0, not negative** — "the
+engine destroys money" and "the engine is a coin flip after its own rails" are different diagnoses
+and the second is the supported one. Gross of costs (~0.05–0.11R friction ⇒ **net ≈ 0**, below the
++0.15R kill line), and harness defect #4 FLATTERS the rejected bucket so its true figure is worse
+than −0.306R. **The DISPERSION half is unaffected and is the durable result.**
+⭐ **THE DISPERSION LEVER (best idea of either round, Claude).** Required n scales σ_R² and nobody
+treated σ_R as an objective. The rejected cohort has the **highest** dispersion (2.566 vs 1.844), so
+ONE intervention raises mean R by 0.116R **and** cuts required n **22%** (1,744→1,360 for +0.10R at
+t=2). **Positional σ_R 1.84–2.09 vs swing 1.489 ⇒ positional needs ~2× the trades to validate** —
+an argument against the relabel owing nothing to expectancy. The excess dispersion **IS** the R:R
+identity ⇒ **D5 already proved a constant-R:R target costs ~nothing in expectancy (paired ΔR all
+negative, |t| ≤ 0.65) — it was CLOSED ON THE WRONG OBJECTIVE. Reopened as a POWER decision.**
+⭐ **CAS GO/NO-GO:** `fees.py:228-231` charges the flat ₹15.34 DP on **every** delivery sell with **no
+BTST exemption** ⇒ a daily-turnover strategy pays **₹3,835/₹7,670/₹11,505 per year at 1/2/3
+positions = 3.8/7.7/11.5% of ₹1L.** Whether Zerodha exempts BTST is ONE SUPPORT TICKET and it is the
+entire verdict on the closing-auction escape. ⚠ Do NOT pause the accrual while establishing it
+(zero marginal cost; a missed session is permanently unrecoverable).
+**REJECTED from round 2:** Kimi's §7-median inconsistency (**misread** — our table shows +1.084 for
+that bucket, not −1.000); Claude's "hold off restarting CAS" (asymmetry); Gemini's "deprecate TA
+confluence for a 4-factor model" (unmeasured, and presumes the conclusion HIT 2 reopened);
+ChatGPT's regime **cube** (deferred — no trial control; the calendar-year `GROUP BY` first).
+**TAKEN and NEW in the plan:** offered-set nightly snapshot (the human picker is uninstrumented —
+the direct answer to "I can't select the right stock") · hazard curves `P(+1R before −1R | day d)`
+(*"a 2–5 day strategy masquerading as a 30-day one"*) · effective breadth from the CORRELATION
+matrix not the position count · setup-type decomposition · BOTH permutation nulls (shuffle-date =
+TIMING, random-name = SELECTION — the two halves of the original question) · CA adjustment moved
+**ABOVE** the ledger · the removal-rule **guard rail** (removal may delete behaviour or restore the
+spec default, **never select between two live variants** — else "remove the EMA20 stop" back-doors
+flat-5% on t=−1.41).
+⭐ **6 DATED KILL LINES (2026-09-18 → 2026-10-16)** now close the programme / the class / the null /
+the unit question instead of deferring them — the biggest gap in the previous plan.
+**NOTHING BUILT, no behaviour changed.** Round 3 questions are in §14.
 
 **▶▶ 2026-09-10 (latest) — EXTERNAL QUANT PANEL ADJUDICATED; THREE FINDINGS CHANGE THE PLAN.**
 Ten external reviews (5 each on the swing and positional review docs) checked claim-by-claim
@@ -989,7 +1457,58 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-09-10.**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-11.**
+
+**▶▶ 2026-09-11 — ROUND 7 IS ADJUDICATED AND WRITTEN. START HERE, AND SHIP RATHER THAN REVIEW.**
+Deliverable: `docs/analysis/quant-panel-adjudication-2026-09-10.md` (now 3,320 lines — new
+§12.12–§12.17 · §13.7 · §13f · §14b · §15.7 · rebuilt §16.1 · **§17 = four questions back to the
+panel**) and `backend/scripts/swing_dependence_probe.py` extended read-only (direction split ·
+continuous Δ_select · level-stage reject simulation · portfolio-space dependence · empirical Kelly ·
+winsorization audit · the gap guard · Gemini's multivariate regression). **Nothing was built on the
+money path, no gate, no knob, no recorded number, no clock.**
+
+⚠ **Read the STATE block above first — six things moved and three of them are corrections to round
+6's own conclusions.** The short version: **the headline (t = −2.31) is carried by the untradeable
+short half — BUY-only is t = −0.94**; **`ohlcv_1d` has a 922-day hole that killed plan item #2**;
+**ρ̄ ≈ 0 was a directional-cancellation artifact (long-only ≈ +0.19)**; **KILL LINE 3 is now 3a/3b**;
+and **`Σ notional ≤ available cash` does not exist in the code.**
+
+**THE QUEUE, in the order round 7 leaves it — §13.7 is the authority:**
+
+1. ⭐ **Run the level-stage reject test properly** (§12.16 R7-C · §17 Q7-3). It is now **plan item
+   2′ and the only breadth lever left standing**: `--clean-only`, stride 1, long-only, paired.
+   Measured at **+0.16R, t 1.5, MDE 0.22R** — under-powered exactly as written, which is why the
+   estimator question in Q7-3(b) has to be settled first.
+2. ⭐ **`Σ notional ≤ available cash`** as one more `*_reason` in Phase 7.1's RiskEngine (§12.14).
+   Identity-enforcing ⇒ no DSR bar, like the diversity and position-count rails. **Precondition for
+   cycle 2.**
+3. ⭐ **0a.3 — the point-in-time universe, applied**, now across THREE probes. Quantified for the
+   first time: **46% of the 2021 top-250 is invisible to a today-ranked query**; 1,294 inactive-today
+   names held >100 bars in H2-2020, so the DB is not the constraint, the query is.
+4. **Week-0 #2 — the append-only ledger**, with ChatGPT §12's
+   `DecisionSnapshot → OrderIntent → Execution → PositionLifecycle → PerformanceRecord` schema.
+5. **σ_R on the 1,975-trade corpus, split by classification and direction** (§16.3 item 1). It has
+   **never been measured** — 1.489 is back-derived from a t — and the class mix alone (positional
+   σ_R 1.844–2.088) plausibly closes the whole gap. **One flag on `entry_confirmation_study.py`, and
+   everything in §12.10a and §16.1 that combines a σ with n=1,975 is waiting on it.**
+6. **0a.1 — freeze the holdout.** Still first in the cut, still un-started, costs nothing. ⭐ But
+   **downgraded from blocker to insurance**: the base scorer is genuinely pre-registered
+   (`confluence.py` 2026-07-03 vs first corpus analysis 2026-08-12), so 3b can be read without it.
+
+**What a next session should NOT do:**
+- ⛔ **Do NOT run another review round.** §13f's scoreboard: **4 of 37 round-7 points changed a
+  decision and 5 were refuted by a query the reviewer could have asked for.** The marginal value of
+  review breadth is now negative. §17 asks four questions and says so explicitly.
+- ⛔ **Do NOT promote `RVOL-20` on its t = +3.67.** It is **t = −0.28 in raw return %**, which our own
+  §12.10b rule says is the unit to test in, and **D1 already refuted RVOL as a generator at t = −2.91**.
+  Logged in §12.16 R7-J precisely so it cannot be rediscovered as new.
+- ⛔ **Do NOT cite the 2026-08-25 stop-width finding without the unit caveat.** t +2.30 in R,
+  **+1.07 in raw %**, +1.06 long-only — substantially a denominator effect (R7-J).
+- ⛔ **Do NOT plan around "un-truncate to 2019-10 for n ≈ 4,300".** The bars do not exist; the real
+  yield is 2,662 (bar-50) or 0 (300-bar). **615 sessions of bhavcopy back-fill come first**, and
+  §17 Q7-4 asks whether they are even worth it.
+- ⛔ **Do NOT pass `DATABASE_URL` to pytest** (unchanged, and the guard is in `conftest.py:36`).
+
 
 **▶▶ 2026-09-10 (later) — THE QUANT REVIEW DOC IS WRITTEN AND IT SURFACED A DEAD FACTOR. START HERE.**
 Deliverable `docs/SYSTEM_REVIEW_FOR_QUANT.md` + `backend/scripts/engine_selectivity_probe.py`
@@ -1443,6 +1962,14 @@ survive trimming the tail** and the partition must not be a proxy for something 
 
 | item | mode | stands at | trigger to re-check | current verdict |
 |---|---|---|---|---|
+| **⭐ KILL LINE 1 — cost feasibility** | — | not built | **2026-09-18** | Fill the min-gross-edge table (position size × holding period × stop width) at the real cost stack for swing / positional / index-ETF / CAS. **Any class needing > +0.30R/trade is struck without further research.** |
+| **⭐ KILL LINE 2 — regime mixture** | — | never run | **2026-09-25** | One `GROUP BY` calendar year. If the sign flips by regime, **every aggregate in both review docs is a mixture** and must be re-reported per regime before being cited. |
+| **⭐ KILL LINE 3 — THE PROGRAMME LINE** | — | not run on adjusted data | **2026-10-09** | Composite-score + all-15-factor IC on the **CA-adjusted** panel (h = 1/3/5/10/20, day-block bootstrap + trial-count deflation) **and** a re-run of `factor_sweep`. If nothing has a 90% interval excluding zero at any horizon ⇒ **the daily-bar TA selection programme is CLOSED PERMANENTLY.** Record the **t**, not the pass/fail. |
+| **⭐ KILL LINE 4 — the class line** | — | not run | **2026-10-09** | Pre-registered reachable-band cap sweep (floor 2%, cap ∈ {8,12,16,none}), cost-bearing, adjusted data. If no cell shows gross **> +0.15R** *and* net **> 0** with an interval excluding zero ⇒ **the swing class is deleted.** |
+| **⭐ KILL LINE 5 — the null line** | — | not run | **2026-10-09** | **Both** permutation nulls: shuffle entry dates within name (**timing**) and random eligible name within date (**selection**). Fail both ⇒ there is neither a selection nor a timing edge, and the answer to the original question is "neither — geometry and costs are the whole story." |
+| **⭐ DECISION LINE 6 — the unit** | — | σ_R 1.489 (swing) / 1.84–2.09 (positional) | **2026-10-09** | Adopt a constant-R:R target iff **σ_R falls ≥15%** *and* the paired ΔR interval includes zero. A **POWER** decision, not an expectancy one — D5 already settled expectancy (paired ΔR all negative, \|t\| ≤ 0.65) and was therefore closed on the wrong objective. |
+| **⭐ CAS re-accrual + BTST/DP question** | — | `cas_daily` = 1 session (destroyed 09-07) | **≥30 sessions**, threshold pre-registered NOW | Day-clustered interval excluding zero, same trial-count deflation, **and net of the DP charge**. ⚠ `fees.py:228-231` charges ₹15.34 on every delivery sell with no BTST exemption ⇒ **3.8/7.7/11.5% of ₹1L per year at 1/2/3 positions.** Whether Zerodha exempts BTST is **one support ticket and the entire go/no-go**. Assign CAS **zero** weight until it re-earns one. |
+| **⭐ THE DECISION — Week 4** | — | — | **2026-10-16** | Decide against lines 1–6. **Not one round later.** Cycle 2 is scoped in this doc as an operational-correctness rehearsal before day one — it cannot be an expectancy gate at n ≈ 25. |
 | **CAS Stage 1 accrual** | — | 6 sessions × 208 rows | **Fri 2026-09-04** (watch-mode end) | on track; `make worker` must be up 15:15–15:33 IST daily, a missed window is unrecoverable |
 | **`sl_atr`** | shadow — **DECIDED 2026-09-04: NO** | 17/20 resolved flagged; **t = 0.41 vs a hurdle of 3.6** | ⛔ **none — stop accruing.** The count was never the constraint | ⛔ **CLOSED by H8.** It passes all three readiness guards and is still the clearest case the bar has ever rejected: its eligible set is Sharpe **+0.046 over n=78 ⇒ t ≈ 0.41**, short of the bar's ≈3.6 hurdle by ~9×. H8 proved the bar is SOUND (rejects noise at 1.1%, accepts real edges at ≥80% power), so this verdict is the instrument working, not failing. Report: `docs/analysis/dsr-negative-control-2026-09-04.md` |
 | **anti-chase** | shadow | 4/20 resolved chased | when ≥20 resolved | far off; retrospective reconstruction says the chase cohort is the loss, forward-stamped n is thin |
