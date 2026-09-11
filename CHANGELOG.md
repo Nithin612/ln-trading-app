@@ -7,6 +7,49 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Round 10 — a prediction hit to four decimals, and died the same session (2026-09-11)
+
+The park-and-build ruling went to four sources; all four endorsed it. One made a falsifiable numeric
+prediction from our own published rows, and testing what it implied killed the actionable version of
+it within the hour. Zero new scoring walks: every number came off round 9's `--dump-trades` artifact
+plus one basket rebuild. Adjudication sec 12.33, process sec 13.12, ledger sec 18.6.
+
+**Added**
+- `docs/BUILD_QUEUE.md` — the only operational document, created on ChatGPT's round-10 diagnosis that
+  a 5,900-line adjudication is an excellent forensic archive and a dangerous specification. Per item:
+  WHY / SCOPE / FILES / ACCEPTANCE / ARTIFACT / DO NOT, plus the parked register and five probe
+  conventions. Its `CURRENT_SYSTEM_CONTRACT.md` was declined on W2 grounds -- CLAUDE.md plus
+  .claude/rules/ already are that document.
+- `docs/analysis/round10-cells-2026-09-11.md` — the measurement record.
+
+**Measured**
+- The BUY-SELL matched-basket contrast, predicted at -0.74% / SE 0.31 / t -2.4 and measured at
+  **-0.7413% / SE 0.2914 / t -2.54 / p 0.011**, clustered -2.06, surviving the gap filter
+  (clean -0.8556, t -2.59). First contrast in ten rounds with |t| > 2 on both samples.
+- Decomposition: **88% of the BUY book's gross loss is tape, not alpha** (raw -0.1877% = tape
+  -0.1659% + alpha -0.0218%); the SELL book rides a +0.58% tape and gives back -1.01% in alpha.
+- The Wald check: on the full book `mean(bench) = drift x mean(T)` to ratio 1.00, and the deviation
+  is entirely directional -- so the paired benchmark carries no exit-selection bias and sec 12.31c's
+  alpha is confirmed as a genuine measurement.
+- The counter-timing has **no observable antecedent**: BUY vs SELL trailing basket at entry gives
+  t = +0.50 / -0.88 / +0.29 at 5/10/20 sessions, and the one bridging mechanism (basket mean
+  reversion, t -2.14) explains 3% of the gap. Recorded, not acted on.
+- The market-regime overlay was never gated on `index_ohlcv_1d`: the equal-weight basket is the
+  better proxy, and conditioning BUY alpha on pre-entry tape does not separate (best cell t = +1.66).
+  A parked item retired for free.
+
+**Process**
+- Queue entry rule: converged across sources OR settled by our own measurement, never consensus
+  alone. Unanimous panel agreement has been wrong repeatedly; the best items each came from one
+  source.
+- B2 moves first (the only item where real money is at stake); B7 retires a parked row; B8 is
+  timeboxed to one append-only table in one day.
+- Rejected as forbidden, not parked: "deactivate the dead factors". `app/analysis/` is frozen and
+  `docs/SIGNAL_ENGINE.md` is hook-protected; sec 12.32 is a finding to record, not a licence to edit.
+
+Docs only. No code, no gate, no knob, no recorded number, no clock.
+
+
 ### Round 9 — E3 was run, the paired null refuted our own alpha, and the panel is closed (2026-09-11)
 
 Five responses to §17b's standing invitation (*run one of E1/E2/E3, or refute a §16.1 row*),

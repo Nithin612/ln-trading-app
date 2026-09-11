@@ -10,7 +10,35 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-09-11, round 9) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-09-11, round 10) — read this block first
+
+**▶▶ 2026-09-11 (round 10) — ⭐⭐⭐ A PREDICTION HIT TO FOUR DECIMALS, AND DIED THE SAME SESSION.**
+⭐⭐ **THE OPERATIONAL DOCUMENT IS NOW `docs/BUILD_QUEUE.md`.** The adjudication is 5,900+ lines and is
+a forensic archive, not a specification — read the queue to decide what to do, cite the adjudication
+for why. New §12.33 (measurements) · §13.12 (process) · §18.6 (ledger).
+⭐⭐ **PREDICTED −0.74%, SE 0.31, t −2.4 (from our published rows alone). MEASURED −0.7413%, SE 0.2914,
+t −2.54, p 0.011**, clustered −2.06, **and it SURVIVES the gap filter** (clean −0.8556, t −2.59). The
+BUY book's matched basket returns **−0.166%** over its holding windows; the SELL book's **+0.575%**.
+⇒ ⭐ **88% OF THE BUY BOOK'S GROSS LOSS IS TAPE, NOT ALPHA** (raw −0.1877% = tape −0.1659% + alpha
+−0.0218%); **the SELL book rides a +0.58% tape and gives back −1.01% in alpha.**
+⭐⭐ **THE INSTRUMENT WAS TESTED AGAINST ITS OWN PREFERRED CONCLUSION AND PASSED.** Exit time is
+path-chosen, so the paired benchmark could have been an exit artifact. `[measured]` **On the full book
+`mean(bench) = drift × mean(T)` to ratio 1.00** (Wald — `T` is a stopping time) **and the deviation is
+ENTIRELY directional, which an exit artifact cannot produce** ⇒ ✅ **§12.31c's α is confirmed.**
+⛔⛔ **THEN IT DIED: THE COUNTER-TIMING HAS NO OBSERVABLE ANTECEDENT.** BUY vs SELL **trailing** basket
+at entry: **t = +0.50 / −0.88 / +0.29** at 5/10/20 sessions. The −0.74% exists **only in the FORWARD
+window**, and the one bridging mechanism (basket mean reversion, t −2.14) explains **3%** of it.
+⇒ ⭐ **RECORDED, NOT ACTED ON** at t −2.06 clustered vs our own t ≈ 3.6 bar — the RVOL verdict, same reason.
+⭐ **A PARKED ITEM RETIRED FOR FREE: the market-regime overlay was NEVER gated on `index_ohlcv_1d`** —
+the equal-weight basket is the better proxy, and conditioning BUY alpha on pre-entry tape does not
+separate (**best cell t = +1.66, none clears 2**). ⚠ "No evidence for", not "evidence against" (n=82).
+⭐ **PROCESS — 3 adopted, 1 FORBIDDEN.** ✅ `BUILD_QUEUE.md` created · ✅ **queue entry rule: converged
+across sources OR settled by our own measurement — NEVER consensus alone** (unanimity has been wrong
+repeatedly; the best items each came from ONE source) · ✅ **B2 goes FIRST** (only item where money is
+at stake), **B7 retires a parked row**, **B8 timeboxed to ONE table in ONE day** (base rate: 1 item
+shipped as code in 50 days). ⛔ **REJECTED: "deactivate the dead factors" is a SPEC CHANGE to a FROZEN,
+hook-protected engine** — §12.32 is a finding to record, not a licence to edit.
+⭐ **Zero new scoring walks — every number came off round 9's `--dump-trades` artifact.**
 
 **▶▶ 2026-09-11 (round 9) — ⭐⭐⭐ E3 WAS RUN, AND THE PAIRED NULL REFUTED MY OWN α. THE PANEL IS CLOSED.**
 Five responses to §17b's invitation (*run E1/E2/E3, or refute a §16.1 row*). ⭐ **The first round that
@@ -1594,6 +1622,21 @@ which is what Phase-6 expectancy calibration is for.
 > single-gate consolidation** (test-first, equivalence-pinned) — it closes the
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
+
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-11 (round 10).**
+
+**▶▶ ⭐⭐ READ `docs/BUILD_QUEUE.md`, NOT THE ADJUDICATION.** It carries B1–B8 with `WHY · SCOPE ·
+FILES · ACCEPTANCE · ARTIFACT · DO NOT` per item, the round-10 ordering, the parked register and the
+five probe conventions. **The adjudication (5,900+ lines) is the forensic record you CITE, not the
+document you READ to decide.**
+
+**⇒ BUILD ORDER (round-10 reordering — B2 first, it is the only item where money is at stake):**
+**B2** `Σ notional ≤ cash` rail (½d, **precondition for cycle 2**) → **B3** the dated tick SCHEDULE
+table (½d, before cycle 2) → **B1** delete `_near_expiry`/`_choppy` (2h) → **B4** span-based gap guard
+(½d) → **B5** E1 positional in four units (½d) → **B6+B7** E2's three estimands + MFE/MAE (1½d) →
+**B8** the ledger (**ONE table, ONE day**).
+⛔ **B6 gets its three estimands, its 5-day horizon and its decision tree written down BEFORE a line
+of code** — under-specifying the decisive test is how KILL LINE 3 went wrong twice.
 
 **▶ CONTINUE HERE (next session, any account) — updated 2026-09-11 (round 9).**
 

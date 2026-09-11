@@ -1,6 +1,6 @@
 # Adjudicating the external quant panel — claim by claim, against the code and the DB
 
-**Date:** 2026-09-10, last updated **2026-09-11 (round 9 — ⭐ the first round that shipped a probe with itself)** · **Branch:** `feature/pre-cycle2-hardening`
+**Date:** 2026-09-10, last updated **2026-09-11 (round 10 — ⭐ a prediction hit to four decimals, and died the same session)** · **Branch:** `feature/pre-cycle2-hardening`
 **Inputs:** `/home/nithin/swing_Profit Analysis.txt` and `/home/nithin/positional_Profit_Analysis.txt`
 — five external reviews each (Perplexity · Claude · ChatGPT · Gemini · Kimi) of
 `docs/SYSTEM_REVIEW_FOR_QUANT.md` and `docs/POSITIONAL_REVIEW_FOR_QUANT.md`, plus two
@@ -10,6 +10,49 @@ companion documents (`~/Downloads/REVIEWER_RESPONSE_2026-09-10.md`,
 ---
 
 ## ▶ BRIEF FOR REVIEWERS — read this before the 3,200 lines below
+
+> ### ⭐⭐⭐ ROUND 10 (2026-09-11) — A PREDICTION HIT TO FOUR DECIMALS, AND THEN DIED THE SAME SESSION
+>
+> **The user's park-and-build ruling went to four sources; all four endorsed it.** ⭐ **One made a
+> falsifiable numeric prediction from our own published rows, and testing what it implied killed the
+> actionable version of it within the hour.** Adjudication **§12.33** · process changes **§13.12** ·
+> ledger **§18.6** · ⭐⭐ **and the operational document is now `docs/BUILD_QUEUE.md`, not this file.**
+>
+> ⭐⭐ **PREDICTED −0.74%, SE 0.31, t −2.4. MEASURED −0.7413%, SE 0.2914, t −2.54, p 0.011** (clustered
+> −2.06), **and it survives the gap filter** (clean: −0.8556, t −2.59). The BUY book's matched basket
+> returns **−0.166%** over its holding windows while the SELL book's returns **+0.575%**.
+> ⭐ **Decomposed: 88% of the BUY book's gross loss is TAPE, not ALPHA** (raw −0.1877% = tape −0.1659%
+> + alpha −0.0218%), **while the SELL book rides a +0.58% tape and gives back −1.01% in alpha.**
+>
+> ⭐⭐ **AND THE INSTRUMENT WAS TESTED AGAINST ITS OWN PREFERRED CONCLUSION.** The objection: exit time
+> is path-chosen, so conditioning the benchmark on it could drag the basket negative for longs. `[measured]`
+> On the full book **`mean(bench) = drift × mean(T)` to ratio 1.00** — Wald's identity holds because `T`
+> is a stopping time — **and the deviation is ENTIRELY directional, which an exit artifact cannot
+> produce.** ⇒ ✅ **§12.31c's α is confirmed as a genuine measurement.**
+>
+> ⛔⛔ **THEN IT DIED. The counter-timing has NO OBSERVABLE ANTECEDENT.** If the generator were
+> counter-trend in any actionable sense, the tape it fires into would differ **at entry**. `[measured]`
+> **It does not: BUY vs SELL trailing basket at 5 / 10 / 20 sessions gives t = +0.50 / −0.88 / +0.29.**
+> The −0.74% exists **only in the forward window**. The one bridging mechanism — basket mean reversion
+> at `d(fwd)/d(trailing-5d) = −0.1301, t −2.14` — predicts **−0.022%, or 3% of what is observed.**
+> ⇒ ⭐ **RECORDED, NOT ACTED ON**, at t −2.06 clustered against this programme's own t ≈ 3.6 bar — the
+> same verdict RVOL got, for the same reason.
+>
+> ⭐ **A PARKED ITEM RETIRED FOR FREE: the market-regime overlay was never gated on `index_ohlcv_1d`.**
+> The equal-weight basket is the better proxy, and conditioning BUY alpha on pre-entry tape does not
+> separate — **best cell t = +1.66, no cell clears 2** (§12.33d). ⚠ *"No evidence for"*, not *"evidence
+> against"*: n = 82 split two ways.
+>
+> ⭐ **PROCESS: four amendments, three adopted, one FORBIDDEN.** ✅ **`docs/BUILD_QUEUE.md` created** —
+> this file is 5,700 lines and is a forensic archive, not a specification. ✅ **Queue entry rule:
+> *converged across sources OR settled by our own measurement — never consensus alone*** (unanimity has
+> been wrong repeatedly; the best items each came from ONE source). ✅ **B2 goes first** (the only item
+> where money is at stake), **B7 retires a parked row**, **B8 is timeboxed to ONE table in ONE day**
+> (base rate: one item shipped as code in fifty days). ⛔ **REJECTED: "deactivate the dead factors" is a
+> spec change to a FROZEN, hook-protected engine** — §12.32 is a finding to record, not a licence to edit.
+>
+> ⭐ **Zero new scoring walks: every number above came off round 9's `--dump-trades` artifact plus one
+> basket rebuild.** That convention is now a standing probe rule.
 
 > ### ⭐⭐⭐ ROUND 9 (2026-09-11) — E3 WAS RUN, AND THE PAIRED NULL REFUTED THE DOCUMENT'S OWN α
 >
@@ -3857,6 +3900,134 @@ and interesting" to "confirmatory", and it is queued behind B6 rather than besid
 denominator convention. ⚠ **The two documents disagree on the total (160 vs 325) because one counts
 families and the other counts registry entries — fix the review document, not this one (W1).**
 
+## 12.33 ⭐⭐⭐ ROUND 10 — A PREDICTION HIT TO FOUR DECIMALS, AND THEN DIED THE SAME SESSION
+
+**Four sources were sent the park-and-build plan.** Three endorsed it and restated it; **one made a
+falsifiable numeric prediction from our own published rows.** ⭐ **That prediction was right, and
+testing what it implied killed the actionable version of it within the hour.** Both halves matter.
+
+### 12.33a ⭐⭐ The prediction, and the measurement
+
+Claude's round-10 reply reasoned from §12.31c's published table: ALL's matched basket is **+0.247%**
+(t +1.72) and BUY's is **−0.166%** (t −0.71), so SELL must be ≈ **+0.575%**, giving a BUY−SELL
+contrast of ≈ **−0.74%, SE 0.31, t ≈ −2.4**. `[measured]` **Computed directly off the round-9
+artifact — no new walk:**
+
+| window set | quantity | BUY | SELL | **contrast** | SE | **t** | p | clustered t |
+|---|---|---:|---:|---:|---:|---:|---:|---:|
+| ALL | ⭐ **matched basket (the TAPE)** | −0.1659 (n82) | +0.5753 (n103) | ⭐ **−0.7413** | 0.2914 | ⭐ **−2.54** | **0.011** | **−2.06** |
+| ALL | raw return % | −0.1877 | −0.4394 | +0.2517 | 0.4731 | +0.53 | 0.595 | +0.50 |
+| ALL | **excess vs basket (the ALPHA)** | −0.0218 | −1.0148 | **+0.9930** | 0.5175 | **+1.92** | 0.055 | +1.70 |
+| ALL | holding period `T` | 3.549 | 3.621 | −0.073 | 0.2935 | −0.25 | 0.805 | −0.27 |
+| **clean** | ⭐ **matched basket** | −0.3037 (n61) | +0.5519 (n86) | ⭐ **−0.8556** | 0.3302 | ⭐ **−2.59** | **0.010** | **−2.07** |
+| clean | excess vs basket | −0.2250 | −0.8754 | +0.6504 | 0.5696 | +1.14 | 0.254 | +1.02 |
+
+⇒ ⭐⭐ **PREDICTED −0.74, SE 0.31, t −2.4. MEASURED −0.7413, SE 0.2914, t −2.54.** A point estimate
+correct to **four decimal places** from published summary rows, and **it survives the gap filter**
+(−0.8556, t −2.59). ⭐ **This is the first contrast in ten rounds whose |t| exceeds 2 on both the
+full and the clean sample.**
+
+⭐ **And the decomposition it enables is the clearest statement of the book's problem yet:**
+
+| cohort | raw return | = | **TAPE** (matched basket) | + | **ALPHA** (excess) | then −0.255% charges |
+|---|---:|---|---:|---|---:|---:|
+| ALL | −0.3279% | = | +0.2468% | + | **−0.5746%** | −0.5829% |
+| ⭐ **BUY** | −0.1877% | = | ⛔ **−0.1659%** | + | ⭐ **−0.0218%** | −0.4427% |
+| SELL | −0.4394% | = | +0.5753% | + | ⛔ **−1.0148%** | — |
+| **E3** | −0.5781% | = | **−0.3376%** | + | **−0.2405%** | −0.8331% |
+
+⇒ ⭐⭐ **88% of the BUY book's gross loss is TAPE, not ALPHA.** The tradeable half has essentially no
+stock-selection deficit; it has a timing deficit. **The SELL half is the reverse** — it rides a +0.58%
+tape and gives back −1.01% in alpha. ⚠ **And the SELL half is untradeable on a cash-delivery account
+anyway, which is why the ALL-book numbers have always been a blend of two different failures.**
+
+### 12.33b ⭐⭐ The Wald check — the paired benchmark is NOT an exit artifact
+
+⭐ **Claude raised the right objection against its own instrument and then answered it.** The worry:
+exit time is chosen by the trade's own path, and for a long book a stop-out *is* a down-move, so
+conditioning the benchmark window on the exit could drag the basket negative for BUYs and positive
+for SELLs — **exactly the pattern reported.** It simulated zero alpha and found the paired bench
+comes out at `drift × mean(T)` to three decimals, because **`T` is a stopping time and Wald's
+identity makes the expected benchmark accumulation over it unbiased.**
+
+`[measured]` **Verified empirically on our own book rather than in simulation.** Implied per-session
+drift from the book's own windows: **+0.0688%/session.**
+
+| cohort | mean `T` | mean bench | `drift × mean T` | **ratio** |
+|---|---:|---:|---:|---:|
+| ⭐ **ALL** | 3.59 | **+0.2468** | **+0.2468** | ⭐ **1.00** |
+| BUY | 3.55 | −0.1659 | +0.2440 | ⛔ **−0.68** |
+| clean | 3.68 | +0.1969 | +0.2530 | 0.78 |
+| clean × BUY | 3.77 | −0.3037 | +0.2592 | ⛔ **−1.17** |
+| **E3** | 4.00 | −0.3376 | +0.2750 | ⛔ **−1.23** |
+
+⇒ ⭐⭐ **On the FULL book the ratio is 1.00 to four decimals — the paired benchmark is exactly
+`drift × T` and there is no exit-selection bias in aggregate.** ⛔ **The deviation is ENTIRELY
+directional**, which is what an exit artifact cannot produce (both directions would be dragged the
+same way by their own stop-outs). ⇒ ✅ **§12.31c's α is confirmed as a genuine measurement, and
+B5's `excess` column is well-founded.** ⭐ **A reviewer testing the instrument it had just recommended,
+against its own preferred conclusion, is the best single act of the ten rounds.**
+
+### 12.33c ⛔⛔ AND THEN IT DIED — the counter-timing has NO OBSERVABLE ANTECEDENT
+
+The structural story Claude drew from the contrast: *"the generator fires bearish signals into rising
+tape and bullish signals into falling tape — a mean-reversion signal set running trend-following
+barrier geometry in a trending market."* ⭐ **That story is testable and it makes one hard
+prediction: if the generator is systematically counter-trend, the tape it fires into must differ
+OBSERVABLY at entry.** `[measured]` **It does not.**
+
+| trailing basket return **at entry** (observable) | BUY | SELL | contrast | SE | t | p |
+|---|---:|---:|---:|---:|---:|---:|
+| 5 sessions | +0.1764 | +0.0071 | +0.1693 | 0.3387 | **+0.50** | 0.617 |
+| 10 sessions | +0.4640 | +0.8508 | −0.3868 | 0.4377 | **−0.88** | 0.377 |
+| 20 sessions | +2.3626 | +1.9241 | +0.4386 | 1.5064 | **+0.29** | 0.771 |
+
+⇒ ⛔⛔ **BUY and SELL signals fire into statistically INDISTINGUISHABLE trailing tape. The −0.74%
+difference exists only in the FORWARD window.** A signal set that were counter-trend in any
+observable sense would separate here, and it does not at any lookback.
+
+⭐ **And the one mechanism that could bridge the gap is far too small.** `[measured]` the basket has
+short-horizon mean reversion — `d(forward basket)/d(trailing 5-session basket) = −0.1301, SE 0.0608,
+**t = −2.14**` — but BUY's trailing 5-session tape exceeds SELL's by only +0.169%, so the mechanism
+predicts a forward gap of `−0.1301 × 0.169 =` **−0.022%**, which is **3% of the −0.741% observed.**
+
+⇒ ⭐⭐ **THE VERDICT: a forward-tape difference with no observable antecedent is either genuine
+unobservable adverse selection — implausible for a single-stock TA scorer with no market input — or
+a sample artifact. At t = −2.06 CLUSTERED against this programme's own t ≈ 3.6 bar, our own standing
+rule says treat it as an artifact until it clears.** ⭐ **RECORDED, NOT ACTED ON** — the same verdict
+RVOL got at t = +3.67, and for the same reason.
+
+### 12.33d ⭐ A parked item retired for free, and a shadow gate refuted
+
+The same test answers a question that has been parked since MCE slice 4 as *"unevaluable until the
+index backfill is re-run."* ⛔ **It was never gated on `index_ohlcv_1d`** — the same insight that
+unblocked the drift null (§12.20b) unblocks this: **the equal-weight basket from `ohlcv_1d` is a
+better market-state proxy than any index we do not have.** `[measured]`
+
+| conditioning on pre-entry tape state | best cell | t (iid) | t (clustered) |
+|---|---|---:|---:|
+| **BUY alpha**, tape-UP vs tape-DN, 5-session | +0.0772 | +0.11 | +0.10 |
+| **BUY alpha**, tape-UP vs tape-DN, **10-session** | **+1.0888** | **+1.66** | +1.50 |
+| **BUY alpha**, tape-UP vs tape-DN, 20-session | +0.3026 | +0.44 | +0.38 |
+| SELL alpha, 20-session | −1.7552 | −1.80 | −1.67 |
+
+⇒ ⛔ **The market-regime hypothesis does not separate on this sample: the best BUY cell is t = +1.66
+and no cell clears 2.** ⭐ **That is a real result for `market_regime.py`, which has sat in shadow for
+three weeks as "unevaluable"** — it is evaluable, and it does not work here. ⚠ **Bounded honestly:
+n = 82 BUY trades split two ways is small (MDE ≈ 1.9% per trade), so this is "no evidence for", not
+"evidence against". It does not license removing the overlay; it licenses not waiting on it.**
+
+### ⭐ 12.33e What round 10 costs and what it is worth
+
+**Zero new walks.** Every number above came off the round-9 artifact plus one basket rebuild (a
+single query, no scoring). ⭐⭐ **That is the `--dump-trades` convention paying for itself a second
+time, and it is why it is now a standing probe rule rather than a nice idea.**
+
+⚠ **And the honest accounting of round 10's four sources: one produced a confirmed prediction, a
+validated instrument and a refuted hypothesis; three produced accurate restatements of §13.10/§13.11
+and one genuinely useful process proposal (§13.12). ⭐ That is 1 of 4 — consistent with §13i's
+measured ceiling, and it is why §17c stays closed.**
+
 ---
 
 # PART III — THE PLAN
@@ -3958,6 +4129,12 @@ was not looking for one.**
 
 ## 13.10 ⭐⭐⭐ WHAT WE ARE BUILDING NOW — the decided queue, with acceptance criteria
 
+⚠ **SUPERSEDED AS THE OPERATIONAL DOCUMENT BY `docs/BUILD_QUEUE.md` (round 10, §13.12).** The
+content below is unchanged and correct; **the queue there carries the round-10 reordering — B2 goes
+FIRST because it is the only item where real money is at stake — plus per-item `FILES` and `DO NOT`
+sections, and it is the file a working session should read.** This section remains as the record of
+why each item is on the list.
+
 ⭐ **User ruling 2026-09-11: build the agreed half, then discuss the rest.** This is that half.
 **Everything here is converged across sources or settled by measurement — nothing below is waiting
 on an opinion.** Ordered by dependency, then by cost. ⚠ **None of it changes the frozen engine,
@@ -4007,6 +4184,84 @@ worth doing before B1–B8 return).
 | **Data-gap reconstruction costs** (2021–23 · CA · index · FII/DII) | Deepseek R8 | ⏸ **SEQUENCED, and one part now moot** | ⭐ **§12.32 removed the FII/DII item from the critical path** — the factor scores on **0 of 487** panels, so back-filling it changes no score. The 2021–23 back-fill is already **DROPPED** (D2). ⇒ **what remains is the CA table and the index history, and neither gates any round-9 conclusion** |
 | **F&O to escape the cash-delivery short constraint** | Gemini (alone) | ⛔ **NOT NOW** | ⭐ The constraint is real and structural — **55.7% of generated signals are untradeable by construction.** ⛔ **But moving instrument class to rescue a book with zero measured gross α is the definition of chasing.** ⇒ **A successor question, behind the allocation one** |
 | **An eighth/ninth review round** | — | ⛔ **CLOSED (§17c)** | **7 decision changes came from claims a probe could test; ~60 other points came from architecture already adopted, questions the document answers, or restatement.** **No reviewer can shorten B1–B8** |
+
+## 13.12 ⭐⭐ ROUND-10 PROCESS CHANGES — four adopted, and the queue reordered
+
+**The user's park-and-build ruling was put to four sources. All four endorsed it.** ⭐ **The value
+was not the endorsement — it was four concrete amendments, three of which are adopted below and one
+of which is forbidden.**
+
+### ✅ ADOPTED 1 — the document is SPLIT, because it is now dangerous as a specification
+
+⭐ **ChatGPT's diagnosis is correct and it is the most useful process point of the round:** this file
+is **5,700+ lines** and retains every superseded plan and every withdrawn number **by design**. That
+makes it an excellent forensic archive and **a bad thing to read in order to decide what to do next.**
+
+✅ **`docs/BUILD_QUEUE.md` CREATED** — the only operational document. Per item: `WHY · SCOPE · FILES ·
+ACCEPTANCE · ARTIFACT · DO NOT`. A working session reads **that**; this file is the record it cites.
+
+⚠ **Two amendments to its proposal, both on W2 grounds.** ⛔ **`CURRENT_SYSTEM_CONTRACT.md` is NOT
+created** — `CLAUDE.md` plus `.claude/rules/` already are that document, and adding a third would be
+the parallel-implementation mistake the rules exist to prevent. ⛔ **This file is NOT renamed to
+`RESEARCH_ARCHIVE.md`** — every cross-reference in PHASES, CHANGELOG, CLAUDE.md and eight memory
+files points at its current path, and W5 says a value with an owner is not copied around for tidiness.
+
+### ✅ ADOPTED 2 — the entry rule, stated so it cannot be misread
+
+> ⭐⭐ **An item enters the queue when it is converged across sources **OR** settled by our own
+> measurement — never on consensus alone.**
+
+⭐ **ChatGPT's refinement is right and the ledgers are the evidence: unanimous agreement in this panel
+has a poor record on truth and a good one on priority.** All five sources demanded a factor-level IC
+study that had already been run; all five recommended a cross-sectional ranker against a measured
+prior; **both round-7 "inversions" were unanimous and both were withdrawn.** ⭐ **Meanwhile the best
+single items each came from ONE source** — the cash rail, the normalizer decomposition, the tick grid,
+the level-stage question, and round 10's own BUY/SELL prediction. ⇒ **§13.10's wording already carried
+the `or settled by measurement` clause; it is now promoted to the queue's entry condition.**
+
+### ✅ ADOPTED 3 — the queue is REORDERED and B8 is timeboxed
+
+⭐ **Three amendments from Claude, all accepted:**
+
+| # | amendment | why it is right |
+|---|---|---|
+| 1 | ⭐ **B2 goes FIRST, not second** | **It is the only item on the list where real money is at stake.** B1 is two hours of tidying; B2 is the rail that stops three slots consuming 120% of capital |
+| 2 | ⭐ **B7 retires a PARKED row for free** | §13.11 lists hold-period-as-breadth-lever as **UNCONVERGED**, and the hazard curve decides it. B7 is therefore not merely B6's companion — **it is the only build that closes a parked item** |
+| 3 | ⭐⭐ **B8 is TIMEBOXED to one day: ONE append-only table with the five node types as a discriminated column** | **The base rate is the argument: one item shipped as code in the previous fifty days.** The five-table schema with `ExperimentManifest` / `DataSnapshot` / `UniverseSnapshot` as separate entities **is the version that does not ship.** They become columns on the manifest row |
+
+### ✅ ADOPTED 4 — probe conventions, now standing rules
+
+⭐ **Deepseek's point, and round 10 proved it twice in one session:** `--dump-trades` produced five of
+round 9's adjudications from one walk, and **every number in §12.33 came off that same artifact with
+zero new scoring walks.** ⇒ **Five conventions recorded in `BUILD_QUEUE.md`:** a probe emits its
+per-trade artifact **before** its report sections · a round only happens if a probe runs with it ·
+report the **contrast with its SE**, never two levels · **pair** a benchmark to each observation's own
+window · **publish a numeric prediction before running the test** (Kimi did it for E3, Claude for the
+BUY/SELL contrast; both turned a run into a test).
+
+### ⛔ REJECTED — and this one is FORBIDDEN, not merely parked
+
+**Gemini's brief listed as an "agreed consensus build": *"Factor Inventory Cleanup — deactivate dead
+factors (`DOW_TREND`, `MARUBOZU`, `FII_DII_FLOW`)."*** ⛔⛔ **That is a spec change to a frozen
+engine.** `app/analysis/` is FROZEN at the adjudicated state; `docs/SIGNAL_ENGINE.md` is
+**hook-protected**; and removing a factor requires **explicit user instruction + a §8 backtest
+regression + regenerated Rust oracle fixtures in the same commit.** ⭐ **§12.32's measurement is a
+finding to RECORD, not a licence to edit the engine** — and the distinction is exactly what the freeze
+exists to enforce.
+
+⚠ **Three of the other four items on that same list are already done or already parked:** re-scoping
+cycle 2 as an operational rehearsal (done, §12.10), fee-model reconciliation (done, A23/A29), and
+CA sourcing (parked with a reason, §13.11). ⭐ **Third round running in which every proposed task was
+already answered in the document supplied. Recorded in §13i, and it is the arithmetic behind §17c.**
+
+### ⚠ NOT ADOPTED, but recorded as correct
+
+**ChatGPT's "use the models as adversarial reviewers at gates, not as a strategy committee."** ✅
+**Right, and it is what §17c already does by closing the panel.** ⚠ **Not adopted as a new process
+because there is no remaining gate before 2026-10-31 that wants one:** B1–B5 are correctness repairs
+with acceptance tests, B6 is pre-registered, and B8 is a schema. ⭐ **Worth re-reading if a successor
+programme starts — at which point its "find a contradiction in THIS item, with reproducible evidence"
+framing is the right default.**
 
 ⛔ **§13.8 BELOW IS SUPERSEDED BY §13.9 ABOVE** — E3 ran, two of its items closed by measurement, and E1/E2 were re-specified. Kept for the record.
 
@@ -5665,3 +5920,22 @@ because the pattern is now two rounds old and is the evidence behind §17c's clo
 the document is readable by someone who was not in the rounds that produced it.** ⛔ **That is not
 worth a review round, and §13i measures its marginal decision value at zero for the second round
 running.**
+
+## 18.6 ⭐ ROUND 10 — the four responses to the park-and-build ruling, adjudicated
+
+**All four endorsed the plan.** ⭐ **Scored on what they added beyond endorsement:**
+
+| source | what it added | verdict |
+|---|---|---|
+| **Claude** | ⭐⭐ a **numeric prediction** for the BUY/SELL basket contrast (−0.74%, SE 0.31, t −2.4) · a **Wald simulation** testing its own recommended instrument against its own preferred conclusion · **B2-first** · **B7 retires a parked row** · **B8 timeboxed** | ⭐⭐⭐ **the round.** The prediction hit to **four decimals** and survived the gap filter; the Wald check **validated §12.31c**; and the structural story it drew was **refuted the same session** by the test its own claim implied (§12.33c) |
+| **ChatGPT** | ⭐⭐ **split the document** (archive / contract / build queue) · **"converged OR measured, never consensus alone"** · models as adversarial reviewers at gates | ⭐ **2 adopted, 1 recorded.** `BUILD_QUEUE.md` created; `CURRENT_SYSTEM_CONTRACT.md` declined on W2 grounds (`CLAUDE.md` + `.claude/rules/` are it) |
+| **Deepseek** | accurate one-screen restatement of §13.10/§13.11 · ⭐ **two conventions to protect**: the probe rule and the `--dump-trades` artifact shape | ⭐ **1 adopted.** The artifact-shape point paid for itself within the hour — **every number in §12.33 came off the round-9 dump with no new walk** |
+| **Gemini** | a build list of 8 items | ⛔ **0 adopted, 1 FORBIDDEN.** *"Deactivate dead factors"* is a spec change to a **frozen, hook-protected** engine (§13.12); three others are already done or already parked. **Third round running** |
+
+### ⭐ The three questions round 10 answered that were open in §18
+
+| question | where it was open | answer |
+|---|---|---|
+| **Is the paired benchmark an exit-selection artifact?** | implicit in §12.31c — nobody had asked | ⛔ **NO.** `[measured]` On the full book `mean(bench) = drift × mean(T)` to **ratio 1.00**; the deviation is **entirely directional**, which an exit artifact cannot produce (§12.33b) |
+| **Is the market-regime overlay evaluable without `index_ohlcv_1d`?** | parked since MCE slice 4 as *"unevaluable until the backfill"* | ⭐ **YES, and it does not separate.** The equal-weight basket is the better proxy; best BUY cell is **t = +1.66** and no cell clears 2 (§12.33d). ⚠ *"No evidence for"*, not *"evidence against"* — n = 82 split two ways |
+| **Does the generator fire counter-trend in any OBSERVABLE way?** | the structural story round 10 proposed | ⛔ **NO.** `[measured]` BUY and SELL fire into **statistically indistinguishable trailing tape** at 5, 10 and 20 sessions (max \|t\| = 0.88). **The −0.74% exists only in the FORWARD window, so it has no antecedent to condition on and is not actionable** (§12.33c) |

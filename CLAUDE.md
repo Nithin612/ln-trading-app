@@ -627,6 +627,33 @@ else.
   — TimescaleDB hypertables need `timescaledb_pre_restore()`/`post_restore()`) — details in
   `RUNBOOK.md` §9. **Ask before anything that writes to, truncates or migrates live data.**
 
+- **⭐⭐⭐ ROUND 10 (2026-09-11) — A PREDICTION HIT TO FOUR DECIMALS, AND DIED THE SAME SESSION.**
+  ⭐⭐ **THE OPERATIONAL DOCUMENT IS NOW `docs/BUILD_QUEUE.md`** — B1–B8 with `WHY · SCOPE · FILES ·
+  ACCEPTANCE · ARTIFACT · DO NOT` per item, the parked register, and five probe conventions. **The
+  adjudication (5,900+ lines) is the forensic record you CITE, not the file you READ to decide.**
+  New §12.33 (measurements) · §13.12 (process) · §18.6 (ledger) · `docs/analysis/round10-cells-2026-09-11.md`.
+  ⭐⭐ **PREDICTED −0.74%, SE 0.31, t −2.4 from our published rows alone. MEASURED −0.7413%, SE 0.2914,
+  t −2.54, p 0.011** (clustered −2.06), **surviving the gap filter** (clean −0.8556, t −2.59). The BUY
+  book's matched basket returns **−0.166%** over its own holding windows; the SELL book's **+0.575%**.
+  ⇒ ⭐ **88% OF THE BUY BOOK'S GROSS LOSS IS TAPE, NOT ALPHA** (raw −0.1877% = tape −0.1659% + alpha
+  −0.0218%); **SELL rides a +0.58% tape and gives back −1.01% in alpha.**
+  ⭐⭐ **THE INSTRUMENT WAS TESTED AGAINST ITS OWN PREFERRED CONCLUSION AND PASSED:** on the full book
+  **`mean(bench) = drift × mean(T)` to ratio 1.00** (Wald — `T` is a stopping time) **and the deviation
+  is ENTIRELY directional, which an exit artifact cannot produce** ⇒ ✅ §12.31c's α confirmed.
+  ⛔⛔ **THEN IT DIED — NO OBSERVABLE ANTECEDENT.** BUY vs SELL **trailing** basket at entry:
+  **t = +0.50 / −0.88 / +0.29** at 5/10/20 sessions. The −0.74% exists **only FORWARD**; the one
+  bridging mechanism (basket mean reversion, t −2.14) explains **3%** of it. ⇒ ⭐ **RECORDED, NOT ACTED
+  ON** at t −2.06 clustered vs our t ≈ 3.6 bar — the RVOL verdict, same reason.
+  ⭐ **PARKED ITEM RETIRED FREE: the market-regime overlay was NEVER gated on `index_ohlcv_1d`** — the
+  equal-weight basket is the better proxy and conditioning BUY alpha on pre-entry tape **does not
+  separate** (best cell t = +1.66). ⚠ "No evidence for", not "evidence against" (n=82 split two ways).
+  ⭐ **PROCESS — 3 adopted, 1 FORBIDDEN.** ✅ `BUILD_QUEUE.md` · ✅ **entry rule: converged across sources
+  OR settled by our own measurement — NEVER consensus alone** (unanimity has been wrong repeatedly; the
+  best items each came from ONE source) · ✅ **B2 FIRST** (only item where money is at stake), **B7
+  retires a parked row**, **B8 timeboxed to ONE table in ONE day**. ⛔ **REJECTED: "deactivate the dead
+  factors" is a SPEC CHANGE to a FROZEN, hook-protected engine.**
+  ⭐ **Zero new scoring walks — everything came off round 9's `--dump-trades` artifact.**
+
 - **⭐⭐⭐ ROUND 9 (2026-09-11) — E3 WAS RUN, THE PAIRED NULL REFUTED OUR OWN α, AND THE PANEL IS CLOSED.**
   Five responses to §17b's invitation (*run E1/E2/E3 or refute a §16.1 row*). ⭐ **The first round that
   shipped code with itself:** `swing_dependence_probe.py` gained the holding period `T`, a **paired**
