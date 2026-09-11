@@ -2150,6 +2150,29 @@ not survive *either* correction, and it survives their conjunction least of all.
    DECIDED: NO at t = 0.41 against the 3.6 bar, so nothing downstream changes, but the reason it was
    wrong is now known.
 
+#### ⚠ What round 7's OWN instruments have NOT had done to them
+
+`instrument_self_validation` is a standing rule here: **every metric gets the H8 treatment — reject a
+known null, accept a planted edge, and prove the design choice — run on the real book, and expect it
+to carry the defect it hunts.** Four estimators were written this round and **none has had that
+treatment**: `spearman` + `perm_p` (R7-B), `ols_slope` / `ols_multi` (R7-J), `kelly_empirical`
+(R7-E), and `simulate_rejects` (R7-C).
+
+**What they DO have, stated so the gap is not overstated either:** the probe **reproduces every
+round-6 number exactly** (16,428 panels · 514 gate-passers · 185 trades · σ_R 0.8776 · ρ̄ −0.0126 ·
+Δ_select +0.0447/t +0.29), which validates the shared walk but **nothing new**; the permutation
+p-values behave (0.807 at ρ = −0.018, and 0.752 at ρ = −0.074 on an independent 20-trade run);
+Spearman's sign **flips between the all-windows and clean samples**, which is what noise does and
+what a broken estimator would not reliably do; and `kelly_empirical` returns the boundary solution
+`f* = 0` on four independent negative-mean samples, which is the analytically correct answer.
+
+⚠ **The one that most needs the treatment is `ols_multi`**, because it produced the round's only
+t ≥ 3.6. A planted-edge arm (inject a known coefficient into a shuffled column and confirm recovery)
+and a null arm (16 coefficients on permuted outcomes, confirming ~0.8 of them clear t = 2 by chance)
+are both cheap. ⭐ **Until that runs, R7-J's RVOL result carries one more reason to stay
+"recorded, not promoted" than the four already listed** — and it is a *fifth* reason, not a
+restatement of the unit argument.
+
 #### ⭐ And one thing that got STRONGER
 
 **`RVOL-20` is robust to the gap filter: t = +3.65 (ALL, clean) and +3.13 (BUY-only, clean)**, against
