@@ -25,6 +25,13 @@ is undivided by DIRECTION, and the selection test threw away 84% of the sample. 
   R7-G  CA-detector strength, and the class mix that explains the sigma gap (Claude A / Kimi Q2)
   R7-I  the 922-day ohlcv_1d hole: which trades are scored across it (mine, round 7)
   R7-J  multivariate stop-width regression - is the gradient geometry or an ATR proxy? (Gemini)
+
+ROUND 8 (2026-09-11) - the external audit recomputed round 7 and found four defects in it.
+Added to settle them with measurement rather than argument:
+  R8-C1 MDE at 80% power (2.80*SE) beside the t=2 critical effect - 2*SE is 50% power
+  R8-C2 the two round-7 splits as INTERACTION tests, not subgroup levels
+  R8-C4 the cost-in-R DISTRIBUTION - friction is 1/w, so E[cost] != cost(median w) by Jensen
+  R8-C6 HC3 and DATE-CLUSTERED standard errors on the regression that produced t=+3.67
 """
 from __future__ import annotations
 import argparse, asyncio, collections, math, random, statistics, sys
@@ -256,7 +263,10 @@ def kelly_empirical(rs: list[float]) -> tuple[float, float]:
     return best_f, best_g
 
 
-def ols_multi(y: list[float], X: list[list[float]], names: list[str]) -> None:
+def ols_multi(
+    y: list[float], X: list[list[float]], names: list[str],
+    clusters: list[Any] | None = None,
+) -> None:
     """Multivariate OLS with iid SEs, printed as a table. Gemini's R7-J ask: does the
     stop-width gradient survive controls for ATR%, relative volume and price level, or is it
     a proxy for volatility? Normal equations with a pseudo-inverse, so a collinear column
@@ -272,12 +282,44 @@ def ols_multi(y: list[float], X: list[list[float]], names: list[str]) -> None:
     beta, *_ = np.linalg.lstsq(A, yv, rcond=None)
     resid = yv - A @ beta
     s2 = float(resid @ resid) / (n - k)
-    cov = s2 * np.linalg.pinv(A.T @ A)
-    se = np.sqrt(np.diag(cov))
-    print(f"    n={n}  R2={1 - float(resid @ resid) / float(((yv - yv.mean()) ** 2).sum()):.4f}")
-    for nm, b, e in zip(["intercept"] + names, beta, se):
-        print(f"      {nm:<16} {b:+10.5f}  SE {e:8.5f}  t {b/e if e else float('nan'):+6.2f}  "
-              f"90% CI [{b-1.645*e:+.5f},{b+1.645*e:+.5f}]")
+    xtx_inv = np.linalg.pinv(A.T @ A)
+    se_iid = np.sqrt(np.diag(s2 * xtx_inv))
+
+    # R8-C6: an iid OLS SE is the WRONG quantity here, not an approximation. The dependent
+    # variable has excess kurtosis +8.19, the observations OVERLAP (mean concurrency 2.08), and
+    # RVOL is strongly date-clustered because market-wide volume spikes hit every name on the
+    # same day. HC3 prices the tail; clustering by entry date prices the common daily component.
+    h = np.einsum("ij,jk,ik->i", A, xtx_inv, A)          # leverages
+    u3 = resid / np.clip(1.0 - h, 1e-9, None)            # HC3 weighting
+    meat3 = (A * u3[:, None]).T @ (A * u3[:, None])
+    se_hc3 = np.sqrt(np.diag(xtx_inv @ meat3 @ xtx_inv))
+
+    se_cl = None
+    if clusters is not None:
+        cl = [c for c, keep in zip(clusters, ok) if keep]
+        meat = np.zeros((k, k))
+        by: dict[Any, list[int]] = collections.defaultdict(list)
+        for i2, c in enumerate(cl):
+            by[c].append(i2)
+        for rows in by.values():
+            sg = (A[rows] * resid[rows][:, None]).sum(axis=0)
+            meat += np.outer(sg, sg)
+        g = len(by)
+        if g > k + 1:
+            adj = (g / (g - 1.0)) * ((n - 1.0) / (n - k))
+            se_cl = np.sqrt(np.diag(xtx_inv @ (adj * meat) @ xtx_inv))
+
+    r2 = 1 - float(resid @ resid) / float(((yv - yv.mean()) ** 2).sum())
+    ncl = len(set(c for c, keep in zip(clusters, ok) if keep)) if clusters is not None else 0
+    print(f"    n={n}  R2={r2:.4f}" + (f"  clusters={ncl}" if clusters is not None else ""))
+    print(f"      {'regressor':<16} {'beta':>10}  {'SE(iid)':>9} {'t':>6} | "
+          f"{'SE(HC3)':>9} {'t':>6} | {'SE(clust)':>9} {'t':>6}")
+    for j, nm in enumerate(["intercept"] + names):
+        b = beta[j]
+        row = f"      {nm:<16} {b:+10.5f}  {se_iid[j]:9.5f} {b/se_iid[j]:+6.2f} | " \
+              f"{se_hc3[j]:9.5f} {b/se_hc3[j]:+6.2f} | "
+        row += f"{se_cl[j]:9.5f} {b/se_cl[j]:+6.2f}" if se_cl is not None else f"{'-':>9} {'-':>6}"
+        print(row)
 
 
 def simulate_rejects(
@@ -709,23 +751,109 @@ async def main(n_stocks: int, stride: int, clean_only: bool = False) -> None:
     for lbl, sub in (("ALL", trades), ("BUY only", [t for t in trades if t["dir"] == "BUY"])):
         if len(sub) < 30:
             continue
+        cl = [t["entry"] for t in sub]
         print(f"  --- {lbl}: Rw ~ stop_width% (univariate)")
-        ols_multi([t["Rw"] for t in sub], [[t["w"] for t in sub]], ["stop_width_pct"])
+        ols_multi([t["Rw"] for t in sub], [[t["w"] for t in sub]], ["stop_width_pct"], cl)
         print(f"  --- {lbl}: Rw ~ stop_width% + ATR% + RVOL + log(close)  [Gemini's spec]")
         ols_multi([t["Rw"] for t in sub],
                   [[t["w"] for t in sub], [t["atr_pct"] for t in sub],
                    [t["rvol"] for t in sub], [t["log_close"] for t in sub]],
-                  ["stop_width_pct", "atr_20_pct", "rvol_20", "log_close"])
+                  ["stop_width_pct", "atr_20_pct", "rvol_20", "log_close"], cl)
         print(f"  --- {lbl}: raw return % ~ same  (the economically relevant unit, no R denominator)")
         ols_multi([t["ret_pct"] for t in sub],
                   [[t["w"] for t in sub], [t["atr_pct"] for t in sub],
                    [t["rvol"] for t in sub], [t["log_close"] for t in sub]],
-                  ["stop_width_pct", "atr_20_pct", "rvol_20", "log_close"])
+                  ["stop_width_pct", "atr_20_pct", "rvol_20", "log_close"], cl)
+        print(f"  --- {lbl}: return/ATR20 ~ same  (the third unit)")
+        ols_multi([t["ret_atr"] for t in sub],
+                  [[t["w"] for t in sub], [t["atr_pct"] for t in sub],
+                   [t["rvol"] for t in sub], [t["log_close"] for t in sub]],
+                  ["stop_width_pct", "atr_20_pct", "rvol_20", "log_close"], cl)
     print("  (note: stop_width and ATR% are both volatility-loaded, so read the SEs, not just the betas)")
     wv = [t["w"] for t in trades]; av = [t["atr_pct"] for t in trades if t["atr_pct"] == t["atr_pct"]]
     if len(av) > 10:
         pw = [t["w"] for t in trades if t["atr_pct"] == t["atr_pct"]]
         print(f"  corr(stop_width%, ATR%) = {spearman(pw, av):+.4f}  (spearman, n={len(av)})")
+
+    # =============================== ROUND 8 ===============================
+    print("\n" + "=" * 78)
+    print("ROUND 8 - settling the external audit's four recomputations")
+    print("=" * 78)
+
+    print("\n== R8-C1: MDE at 80% POWER beside the t=2 critical effect (2*SE is 50% power) ==")
+    z80 = 2.8015951
+    for lbl, sub, infl in (("mixed, all windows", trades, 1.00),
+                           ("BUY, all windows", [t for t in trades if t["dir"] == "BUY"], 1.21)):
+        if len(sub) < 10:
+            continue
+        v = [t["Rw"] for t in sub]
+        sd = statistics.stdev(v)
+        se = sd / math.sqrt(len(v)) * math.sqrt(infl)
+        print(f"  {lbl:<22} n={len(v):>4} sigma {sd:.4f} infl {infl:.2f} SE {se:.4f}  "
+              f"crit@t2 {2*se:+.4f}R   MDE@80% {z80*se:+.4f}R")
+
+    print("\n== R8-C2: the two round-7 splits as INTERACTION tests, not subgroup levels ==")
+    def interaction(label: str, a: list[float], b: list[float], na: str, nb: str) -> None:
+        if len(a) < 3 or len(b) < 3:
+            print(f"  {label:<26} (too few)"); return
+        ma, mb = statistics.mean(a), statistics.mean(b)
+        sea = statistics.stdev(a) / math.sqrt(len(a))
+        seb = statistics.stdev(b) / math.sqrt(len(b))
+        se = math.sqrt(sea**2 + seb**2)
+        d = ma - mb
+        print(f"  {label:<26} {na} {ma:+.4f} (n={len(a)}) vs {nb} {mb:+.4f} (n={len(b)})  "
+              f"diff {d:+.4f}  SE {se:.4f}  t {d/se if se else float('nan'):+.2f}")
+    interaction("direction (R7-A)", [t["Rw"] for t in trades if t["dir"] == "BUY"],
+                [t["Rw"] for t in trades if t["dir"] == "SELL"], "BUY", "SELL")
+    interaction("gap filter (R7-I)", [t["Rw"] for t in trades if not t.get("straddle")],
+                [t["Rw"] for t in trades if t.get("straddle")], "clean", "straddling")
+    print("  2x2 cells (mean R / n):")
+    for d in ("BUY", "SELL"):
+        for g, gl in ((False, "clean"), (True, "straddle")):
+            v = [t["Rw"] for t in trades if t["dir"] == d and bool(t.get("straddle")) == g]
+            if v:
+                print(f"    {d:<5} {gl:<9} {statistics.mean(v):+.4f}  n={len(v)}")
+
+    print("\n== R8-C4: the cost-in-R DISTRIBUTION - friction is 1/w, so E[cost] != cost(median w) ==")
+    for bps in (25.5, 55.5):
+        cin = [bps / 100.0 / t["w"] for t in trades if t["w"] > 0]
+        wv = [t["w"] for t in trades if t["w"] > 0]
+        med_w = statistics.median(wv)
+        print(f"  round trip {bps:.1f} bps ({'explicit only' if bps < 30 else 'explicit + 15bps/leg slippage'}):")
+        print(f"    cost at the MEDIAN stop ({med_w:.2f}%)          {bps/100.0/med_w:.4f}R   <- the scalar the document uses")
+        print(f"    E[cost in R] across the book                {statistics.mean(cin):.4f}R   "
+              f"=> understatement {statistics.mean(cin)/(bps/100.0/med_w):.2f}x")
+        print(f"    median {statistics.median(cin):.4f}R  p90 {pctl(cin,.90):.4f}R  p99 {pctl(cin,.99):.4f}R  max {max(cin):.4f}R")
+        reach = [bps / 100.0 / t["w"] for t in trades if t["w"] >= 2.0]
+        if reach:
+            print(f"    E[cost in R] on the live-reachable book (w>=2%)  {statistics.mean(reach):.4f}R  (n={len(reach)})")
+        for lbl2, sub in (("ALL", trades), ("BUY", [t for t in trades if t["dir"] == "BUY"])):
+            net = [t["Rw"] - bps / 100.0 / t["w"] for t in sub if t["w"] > 0]
+            n2, m2, sd2, se2, _, _ = moments(net)
+            print(f"    NET mean R, {lbl2:<4} (per-trade cost, not a scalar): {m2:+.4f}  SE {se2:.4f}  t {m2/se2 if se2 else float('nan'):+.2f}")
+
+    print("\n== R8-C5: the MECHANICAL 1/w term - how much of a w-bucketed R gradient is arithmetic? ==")
+    rng2 = random.Random(19)
+    wv = [t["w"] for t in trades if t["w"] > 0]
+    sd_ret = statistics.stdev([t["ret_pct"] for t in trades])
+    print(f"  w drawn from the MEASURED swing distribution (n={len(wv)}), return INDEPENDENT of w, sd {sd_ret:.3f}%")
+    print(f"  {'E[raw ret]':>11} {'R(w<2%)':>10} {'R(w>=2%)':>10} {'ALL':>10}")
+    for mu_ret in (-0.10, -0.05, 0.0, float(statistics.mean([t["ret_pct"] for t in trades]))):
+        lo: list[float] = []
+        hi: list[float] = []
+        allr: list[float] = []
+        for _ in range(40000):
+            sim_w = rng2.choice(wv)
+            sim_r = clamp_ratio_f(rng2.gauss(mu_ret, sd_ret) / sim_w, WINSOR_R)
+            allr.append(sim_r)
+            (lo if sim_w < 2.0 else hi).append(sim_r)
+        print(f"  {mu_ret:>+11.3f} {statistics.mean(lo):>+10.4f} {statistics.mean(hi):>+10.4f} {statistics.mean(allr):>+10.4f}")
+    obs_lo = [t["Rw"] for t in trades if t["w"] < 2.0]
+    obs_hi = [t["Rw"] for t in trades if t["w"] >= 2.0]
+    if obs_lo and obs_hi:
+        print(f"  {'MEASURED':>11} {statistics.mean(obs_lo):>+10.4f} {statistics.mean(obs_hi):>+10.4f} "
+              f"{statistics.mean([t['Rw'] for t in trades]):>+10.4f}   (n {len(obs_lo)} / {len(obs_hi)})")
+        interaction("  w<2% vs w>=2% (interaction)", obs_lo, obs_hi, "tight", "wide")
 
 
 if __name__ == "__main__":

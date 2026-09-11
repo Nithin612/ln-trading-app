@@ -627,6 +627,68 @@ else.
   — TimescaleDB hypertables need `timescaledb_pre_restore()`/`post_restore()`) — details in
   `RUNBOOK.md` §9. **Ask before anything that writes to, truncates or migrates live data.**
 
+- **⭐⭐ ROUND 8 (2026-09-11) — AN EXTERNAL AUDIT RECOMPUTED ROUND 7 AND WITHDREW FIVE OF MY CLAIMS.**
+  Three responses; one (`~/Downloads/round8-external-audit-2026-09-11.md`) is the **first review in
+  eight rounds to arrive as a reproducible RECOMPUTATION** — **11 of 13 claims reproduce exactly.**
+  New §12.18–§12.23 · §13.8 (the plan) · §13h (ledger) · §16.1b (card corrections) · §17b.
+  ⛔⛔ **BOTH ROUND-7 "INVERSIONS" WERE DECOMPOSITIONS, NOT FINDINGS** — I read the *level* in each half
+  and never computed the **contrast**: BUY-vs-SELL `+0.0893, SE 0.1325, t = +0.67, p = 0.50`;
+  clean-vs-straddling `+0.0718, SE 0.1420, t = +0.51`. **Neither separates**, and **0.33 of the 0.52
+  t-drop is POWER, only 0.20 the mean.** ⭐ What survives is **structural, not statistical**: cash
+  delivery cannot hold an overnight short ⇒ 55.7% untradeable by construction — **the reason for
+  preferring the BUY cell was never statistical.** ⭐ **Family name for the error: a quantity computed
+  on a subgroup is not evidence about the subgroup until it is compared with its complement.**
+  ⛔ Also withdrawn: **the σ_R ladder is NOISE** (0.62 SE; t 0.82 two-sample) · **"the evidence base is
+  EMPTY, not negative"** ⇒ **P(positive net edge) = 0.4–5.7%** across priors 0.03R→0.20R = **economic
+  closure without statistical closure** · **every "MDE" was 1.40× too small** (`2·SE` = 50% power; the
+  honest cell is **+0.417R**) · ⛔⛔ **RVOL's t = +3.67 was an IID-SE ARTIFACT — HC3 +0.61,
+  date-clustered +0.98** (SE inflates 6×; 185 trades on 92 dates, RVOL is market-wide daily).
+  **"Most robust coefficient in the document" withdrawn: the unit was never the only problem, the SE was.**
+  ⭐⭐ **THE ONE PLACE IT GOT SHARPER: costed PER TRADE, the tradeable book is SIGNIFICANTLY NEGATIVE.**
+  `cost_in_R = bps/(100·w)` ⇒ Jensen. Measured **E[cost] 0.1522R vs the 0.0549R scalar = 2.77×
+  understatement** on the corpus (scalar is **right** for the reachable w≥2% book, 0.0573R).
+  **BUY-only net −0.2435R at t = −2.19** (explicit only), **−0.4134R at t = −3.31** with slippage.
+  ⇒ **the GROSS question is underpowered; the NET question is ANSWERED.**
+  ⛔⛔ **THE STOP-WIDTH/DENOMINATOR FAMILY IS CLOSED ON SWING:** the pure `1/w` term with return
+  **independent** of `w` reproduces **116%** of the measured spread (−0.4470 vs −0.3864); independence
+  is measured (`ret ~ w` t +1.07); the contrast was never significant (t −1.55). ⇒ **§4.4, §12.1 and
+  §12.2 are ONE artifact of dividing by a small number.** Positional untested = plan item **E1**.
+  ⭐ **THREE FINDINGS IN NO REVIEW, all from verifying it.** (a) ⭐⭐ **the equity-beta NULL is
+  computable from `ohlcv_1d` alone** and I had just declared it blocked on `index_ohlcv_1d`:
+  equal-weight eligible basket = **789 sessions, +0.0816%/day, t +2.06, +22.8%/yr** ⇒ 5-session null
+  **+0.088R** ⇒ **α = −0.137…−0.172R, roughly DOUBLE the raw deficit.** (b) ⭐⭐ **MONEY-PATH BUG:
+  `paper_tick_size` is ONE constant (₹0.05) and the market has TWO grids** — NSE moved sub-₹250 to
+  ₹0.01; on-₹0.05 for those names **0.98 (2019) → 0.49 (2024) → 0.22 (2025)**, nothing above ₹250
+  changed. `_round_tick` rounds adversely to ₹0.05 regardless ⇒ **a ₹39 name overcharged ~10 bps round
+  trip = 0.064R at a 2% stop**, on exactly the cohort the remaining results rest on. **Changes a
+  recorded number ⇒ BEFORE cycle 2; published exchange schedule ⇒ no DSR bar; read it from a TABLE
+  (the phase-in is staged), not a constant.** (c) **my gap guard tests two hardcoded endpoints, not the
+  SPAN** — a **second, per-NAME hole** exists (790 post-gap sessions; median 620 bars/name, **p10 67**;
+  2,048/3,129 names <95% coverage) and the guard **misses 1.2% of panels**, worst **516 sessions in a
+  300-row window**. Fix = span vs the market's session calendar (**W5: the calendar owns it**).
+  ⭐⭐ **AND THE ANSWER TO THE ORIGINAL QUESTION, from the code.** `signals.py:267-289`: dedup on
+  confidence → **two UNDECLARED filters** (`_near_expiry`; `_choppy` at ER<0.30) **both defaulting ON,
+  neither in `restrictions.py`, neither on the order path** → **sort DESCENDING by `confidence_pct`** →
+  human picks the top. ⇒ **the deployed picker's ranking key is `confidence_pct`, measured at Spearman
+  ρ = −0.018 (perm p 0.807) on a test powered to 0.147.** *"Sometimes I cannot select the right
+  stock"* — **the quantity the UI sorts by carries no measured information.** ⚠ Second display/order
+  divergence, opposite direction to the 2026-09-02 one (that was too permissive; this is too
+  restrictive) ⇒ **`restrictions.py` is NOT currently the single source of truth its docstring claims.**
+  ⭐ **Two structural reads:** **ρ̄ is FLAT in m** (one-factor identity — refutes my Q7-2) and **HOLD
+  PERIOD is the bigger breadth lever** — 9 slots × 3-day holds = **298** effective obs/yr vs **109**
+  ⇒ **the 2021–23 back-fill is DROPPED, the lever is TURNOVER**; and **§4.5 used `IR ≈ IC√BR` (a
+  portfolio law) for a gated TAIL selector** — correctly transferred, **IC 0.02 ≈ break-even/trade,
+  IC 0.04 comfortably positive** ⇒ §4.5's "not investable" is a **turnover** diagnosis. ⚠ At the honest
+  σ, **decade-scale validation is BACK** (1,198 trades ≈ **9.6 yr**).
+  **⇒ THE PLAN IS THREE MEASUREMENTS + ONE BUILD (§13.8): E2** the panel-level score IC at **h=5d**
+  (⭐ the only fully-powered test of the only question that changes direction; **pre-register 5d** — 20d
+  can only say INCONCLUSIVE; **report `sd(IC_t)` as an OUTPUT**, it is `[ASSUMED]` at 0.10 and every
+  power figure is linear in it) · **E1** positional family in raw %/ATR/net ₹ with the gap flag ·
+  **E3** the one cell the programme turns on in ONE pass (`clean × BUY × w≥2% × net-per-trade` + the
+  mean hold) · **BUILD: the append-only ledger** (not for this strategy — for any successor).
+  ⛔ **DROPPED: the back-fill · the level-stage lever · the cap sweep · the index-backfill gate ·
+  ROUND 9** (4 of 37 round-7 and 3 of 29 round-8 points changed a decision; **a round only happens if
+  a probe runs with it**).
 - **⭐⭐ ROUND 7 OF THE QUANT PANEL (2026-09-11) — THE HEADLINE INVERTS, AND `ohlcv_1d` HAS A
   922-DAY HOLE.** Four reviews adjudicated point by point in
   `docs/analysis/quant-panel-adjudication-2026-09-10.md` (§12.12–§12.17 · §13.7 · §13f · §14b ·

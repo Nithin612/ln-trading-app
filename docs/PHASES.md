@@ -12,6 +12,85 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ## ▶ STATE AT A GLANCE (updated 2026-09-11) — read this block first
 
+**▶▶ 2026-09-11 (round 8) — ⭐⭐ AN EXTERNAL AUDIT RECOMPUTED ROUND 7 AND WITHDREW FIVE OF MY CLAIMS.**
+Three round-8 responses; one (`~/Downloads/round8-external-audit-2026-09-11.md`, 727 lines) is the
+**first review in eight rounds to arrive as a reproducible RECOMPUTATION rather than a reading.**
+Every number in it was re-derived before adjudication: **11 of 13 claims reproduce exactly.** Doc now
+4,500 lines — new §12.18–§12.23, §13.8 (the plan), §13h (the ledger), §16.1b (card corrections),
+§17b. **Nothing built on the money path; `make typecheck` green.**
+
+⛔⛔ **FIVE ROUND-7 CLAIMS WITHDRAWN, ALL FIVE MINE.** (1) **Both round-7 "inversions" were
+DECOMPOSITIONS, not findings** — I read the *level* in each half of a small sample and never computed
+the **contrast**: BUY-vs-SELL is `+0.0893, SE 0.1325, **t = +0.67**, p = 0.50`; clean-vs-straddling is
+`+0.0718, SE 0.1420, **t = +0.51**`. **Neither partition separates**, and **0.33 of the 0.52 t-drop is
+power loss, only 0.20 the mean.** ⭐ What survives is *structural*: a cash-delivery account cannot hold
+an overnight short, so 55.7% of trades are untradeable by construction — **the reason for preferring
+the BUY cell was never statistical.** (2) The **σ_R ladder 0.878 → 1.005 is NOISE** — 0.62 SE by this
+document's own estimator, **t = 0.82** two-sample. (3) **"The evidence base is EMPTY, not negative" is
+withdrawn**: the posterior gives **P(positive net edge) = 0.4%–5.7%** across prior sds 0.03R→0.20R ⇒
+**economic closure without statistical closure.** (4) **Every "MDE" was 1.40× too small** — `2·SE` is
+50% power; the honest cell's real MDE is **+0.417R**. (5) ⛔⛔ **RVOL's t = +3.67 was an IID-STANDARD-
+ERROR ARTIFACT** — under **HC3 it is +0.61** and date-clustered **+0.98** (HC3 inflates the SE
+**six-fold**; 185 trades sit on only 92 entry dates while RVOL is a market-wide daily quantity).
+**"The most robust coefficient in the document" is withdrawn — the unit was never the only problem,
+the SE was.**
+
+⭐⭐ **AND THE ONE PLACE ROUND 8 MADE IT SHARPER, NOT SOFTER: costed PER TRADE instead of by a median
+scalar, the tradeable book is SIGNIFICANTLY NEGATIVE.** `cost_in_R = bps/(100·w)`, so by Jensen
+`E[cost] ≠ cost(median w)` — measured, **E[cost] = 0.1522R vs the 0.0549R scalar = a 2.77×
+understatement** on the unrestricted corpus (and the scalar is *correct* for the reachable w≥2% book
+at 0.0573R). **BUY-only net: −0.2435R at t = −2.19 on explicit charges alone, −0.4134R at t = −3.31
+with slippage.** ⇒ **the GROSS question is underpowered; the NET question is answered.**
+
+⛔⛔ **THE WHOLE STOP-WIDTH / DENOMINATOR FAMILY IS CLOSED.** Simulating the pure `1/w` term with raw
+return **independent of** stop width reproduces **116% of the measured tight-vs-wide spread**
+(−0.4470 predicted vs −0.3864 observed) — **there is no residual to explain** — and the independence
+is itself measured (`ret ~ w`, t = +1.07). The contrast was never significant (t = −1.55). ⇒ **§4.4's
+wide-stop gradient, §12.1's reachable-cohort sign flip and §12.2's dispersion lever are ONE artifact
+of dividing by a small number.** The positional members are still unmeasured and that is now plan
+item **E1** — if they die the same way, **five plan items close on one afternoon.**
+
+⭐ **THREE FINDINGS ROUND 8 PRODUCED THAT WERE IN NO REVIEW.** (a) ⭐⭐ **THE EQUITY-BETA NULL IS
+COMPUTABLE AND I HAD JUST DECLARED IT BLOCKED** — an equal-weight basket of the eligible universe from
+`ohlcv_1d` alone: **789 sessions, +0.0816%/day, t +2.06, +22.8%/yr, +81.2% cumulative.** A 5-session
+null is **+0.088R** ⇒ **the honest cell reads α = −0.137R…−0.172R, roughly DOUBLE the raw deficit**, and
+§16.3's index-backfill gate is withdrawn one section after being written. (b) ⭐⭐ **A MONEY-PATH BUG:
+`paper_tick_size` is ONE constant (₹0.05) and the market has TWO grids** — NSE moved sub-₹250
+securities to ₹0.01, measured on-₹0.05 for those names **0.98 (2019) → 0.49 (2024) → 0.22 (2025)**
+while nothing above ₹250 changed. `_round_tick` rounds adversely to ₹0.05 regardless ⇒ **a ₹39 name is
+overcharged ~10 bps round trip = 0.064R at a 2% stop**, on exactly the cheap-tight-stop cohort the
+remaining results are built on. **Changes a recorded number ⇒ BEFORE cycle 2.** (c) **My gap guard
+tests two hardcoded endpoints, not the SPAN** — there is a **second, per-NAME hole** (post-gap: 790
+sessions, median 620 bars/name, **p10 67**, 2,048 of 3,129 names below 95% coverage), and the guard
+**misses 1.2% of panels** whose 300-row window spans up to **516 sessions**. Fix = test span against
+the market's session calendar (W5: the calendar owns the quantity).
+
+⭐ **AND THE ANSWER TO THE ORIGINAL QUESTION, from the code.** `[code]` `signals.py:267-289` — the
+deployed offered set is deduped on confidence, filtered by two **undeclared** rules
+(`_near_expiry`, `_choppy` at ER<0.30, **both defaulting ON, neither in `restrictions.py`, neither
+applied by the order path**), then **sorted DESCENDING BY `confidence_pct`** — and the human picks
+from the top. ⇒ ⭐⭐ **the deployed picker's ranking key is `confidence_pct`, which R7-B measures at
+Spearman ρ = −0.018 (perm p 0.807) on a test powered to detect 0.147.** *"Sometimes I cannot select
+the right stock"* — **the quantity the UI sorts by carries no measured information about outcome.**
+
+⭐ **Two structural reads worth more than the corrections.** **ρ̄ is FLAT in m** under a one-factor
+model (refuting my own Q7-2), and **hold period is a bigger breadth lever than slot count**: 9 slots ×
+3-day holds = **298** effective obs/yr vs **109** today ⇒ **the 2021–23 back-fill is DROPPED and the
+lever is TURNOVER.** And **§4.5 used `IR ≈ IC√BR`, a portfolio law, for a gated TAIL selector** — at
+the correct transfer **IC 0.02 is break-even per trade and IC 0.04 comfortably positive**, so §4.5's
+"not investable" is a **turnover** diagnosis, not a signal-quality one. ⚠ At the honest σ,
+**decade-scale validation is BACK**: 1,198 trades ≈ **9.6 years** for a Sharpe-1.0 net edge.
+
+**⇒ THE PLAN IS NOW THREE MEASUREMENTS AND ONE BUILD (§13.8).** **E1** positional family in raw %/ATR/
+net ₹ with the gap flag · **E2** ⭐ **panel-level score IC at h=5d, date-clustered — the only fully
+powered test of the only question that changes direction** (~790 clean sessions, SE(IC) ≈ 0.008 vs a
+0.018–0.071 break-even; **pre-register 5d — at 20d it can only return INCONCLUSIVE**; **report
+`sd(IC_t)` as an OUTPUT** — it is `[ASSUMED]` at 0.10 and every power figure is linear in it) ·
+**E3** the one cell the programme turns on, in one pass: `clean × BUY × w≥2% × net-per-trade`.
+**Build: the append-only ledger** — not because it helps this strategy but because it is the
+precondition for any successor. ⛔ **Dropped: the back-fill · the level-stage lever · the cap sweep ·
+the index-backfill gate · ROUND 9.**
+
 **▶▶ 2026-09-11 — ⭐⭐ ROUND 7 OF THE QUANT PANEL: THE HEADLINE INVERTS, AND `ohlcv_1d` HAS A
 922-DAY HOLE.** Four external reviews (Claude · ChatGPT · Gemini · Kimi) of
 `docs/analysis/quant-panel-adjudication-2026-09-10.md`, adjudicated point by point against code,
@@ -1457,7 +1536,61 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-09-11.**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-11 (round 8).**
+
+**▶▶ 2026-09-11 (round 8) — THE PLAN IS NOW THREE MEASUREMENTS AND ONE BUILD. START HERE.**
+§13.8 of `docs/analysis/quant-panel-adjudication-2026-09-10.md` is the authority; §13h is the ledger;
+§16.1 + §16.1b are the constants. **Read the STATE block above first — five of my round-7 claims were
+withdrawn by an external recomputation, and three new findings came out of verifying it.**
+
+**DO THESE THREE, IN THIS ORDER. All read-only, all afternoons.**
+
+1. ⭐⭐ **E2 — the panel-level score IC at h=5d on the gap-clean block, date-clustered.** **The only
+   fully-powered test of the only question that changes direction**, and it needs no CA source, no
+   index, no ledger, no holdout, no barriers and no R denominator. ~790 clean sessions ⇒
+   SE(IC) ≈ 0.008 against a 0.018–0.071 break-even. ⚠ **Pre-register h = 5d** — at 20d it can only
+   return INCONCLUSIVE (KILL LINE 4's defect one level up). ⚠ **Report `sd(IC_t)` as an OUTPUT** —
+   it is `[ASSUMED]` at 0.10 and every power figure in two documents is linear in it.
+2. ⭐ **E1 — re-report the POSITIONAL stop-width family** (§12.1 / §12.2 / §7 cohorts and buckets) in
+   **four units** (R · raw % · return÷ATR20 · net ₹ per-trade), **split by the gap flag**, with HC3 and
+   date-clustered SEs. The swing member is now **fully explained by arithmetic** (the `1/w` term
+   reproduces 116% of the spread), so the prior is hard. **If positional dies the same way, §4.4,
+   §12.1, §12.2, plan item 18 and the σ_R objective all close on one afternoon.**
+3. ⭐ **E3 — the one cell the programme turns on, in ONE pass:** `clean × BUY × w ≥ 2% × net,
+   per-trade`, plus the **mean holding period** (the drift null needs it — §12.20 currently bounds it
+   at the 5-session cap). Round 8 reached `BUY × net-per-trade` = **−0.2435R, t = −2.19** and no
+   further.
+
+**THEN the one build worth doing regardless of outcome:** Week-0 #2, the **append-only ledger** with
+`DecisionSnapshot → OrderIntent → Execution → PositionLifecycle → PerformanceRecord`. It does not
+help this strategy (`positions` = 0, cycle 2 cannot test expectancy) — **it is the precondition for
+any successor, and it is the part of the apparatus that is the asset.**
+
+**TWO BEFORE-CYCLE-2 REPAIRS (both change a recorded number):**
+- ⭐ **`paper_tick_size` must be price- AND date-dependent** (§12.19). ₹0.05 is the wrong grid for
+  sub-₹250 names since 2024; a ₹39 name is overcharged ~10 bps round trip = **0.064R at a 2% stop**.
+  Published exchange schedule ⇒ **no forward-evidence bar** (§5.4). **Read it from a table, not a
+  constant** — the measured phase-in (0.87→0.49→0.22 across 2023–25) is staged.
+- ⭐ **The gap guard must test SPAN, not endpoints** (§12.23). `GAP_LO`/`GAP_HI` are hardcoded
+  constants describing one incident; **the market's session calendar owns the quantity (W5)**. The
+  current guard misses 1.2% of panels, worst case 516 sessions inside a 300-row window.
+
+**What a next session should NOT do:**
+- ⛔ **DO NOT run round 9.** §13h: **4 of 37 round-7 points and 3 of 29 round-8 points changed a
+  decision**, and four of round 8's twenty-nine were spent re-asking things the document already
+  answered. Round 8 was worth it for one reason — **a source recomputed instead of reading.**
+  Standing rule: **a round only happens if a probe runs with it.**
+- ⛔ **DO NOT quote the stop-width gradient, the reachable-cohort sign flip or the σ_R dispersion
+  lever** without the arithmetic caveat. On swing they are **one artifact of dividing by a small
+  number** (116% of the spread reproduced with zero dependence).
+- ⛔ **DO NOT quote RVOL's t = +3.67.** HC3 gives **+0.61**, clustered **+0.98**.
+- ⛔ **DO NOT say "the negative edge is carried by the untradeable half"** or **"the hole biases the
+  mean down"**. Neither contrast separates (t = +0.67, +0.51).
+- ⛔ **DO NOT plan around the 2021–23 back-fill** (dropped — hold period is the better lever) or the
+  **index backfill as a gate on §4.2** (the null was computable from `ohlcv_1d` all along).
+- ⛔ **DO NOT pass `DATABASE_URL` to pytest**, and ⛔ **do not replace the real Postgres test DB with
+  SQLite** — `.claude/rules/testing.md` forbids it and the `_test` guard already exists.
+
 
 **▶▶ 2026-09-11 — ROUND 7 IS ADJUDICATED AND WRITTEN. START HERE, AND SHIP RATHER THAN REVIEW.**
 Deliverable: `docs/analysis/quant-panel-adjudication-2026-09-10.md` (now 3,320 lines — new

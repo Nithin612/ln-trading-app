@@ -7,6 +7,81 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Round 8 — an external audit recomputed round 7 and withdrew five of its claims (2026-09-11)
+
+Three round-8 responses to `docs/analysis/quant-panel-adjudication-2026-09-10.md`, adjudicated one at
+a time against code, queries and arithmetic. One of them (`~/Downloads/round8-external-audit-2026-09-11.md`,
+727 lines) is the first review in eight rounds to arrive as a reproducible recomputation rather than a
+reading; every number in it was re-derived here before adjudication and 11 of 13 reproduce exactly.
+Read-only throughout — no gate, no knob, no recorded number, no clock. `make typecheck` green.
+
+**Five round-7 claims withdrawn, all five ours.** Both round-7 "inversions" were decompositions rather
+than findings: the level in each half of a small sample was reported and the contrast was never
+computed. BUY-vs-SELL is +0.0893, SE 0.1325, t = +0.67, p = 0.50; clean-vs-straddling is +0.0718,
+SE 0.1420, t = +0.51. Neither partition separates, and 0.33 of the 0.52 t-drop from the gap filter is
+power loss against only 0.20 from the mean. What survives is structural rather than statistical: a
+cash-delivery account cannot hold an overnight short, so 55.7% of the trades are untradeable by
+construction, and the reason for preferring the BUY cell was never statistical. The σ_R ladder
+0.878 → 1.005 is noise at 0.62 SE by this document's own estimator, and t = 0.82 on a proper
+two-sample test. "The evidence base is empty, not negative" is withdrawn: the posterior against the
+0.111R net break-even gives P(positive net edge) = 0.4%–5.7% across prior sds from 0.03R to 0.20R,
+which is economic closure without statistical closure. Every "MDE" in the document was 1.40× too
+small — 2·SE is 50% power, so the honest cell's real MDE is +0.417R. And RVOL's t = +3.67, the only
+coefficient in seven rounds to clear the t ≈ 3.6 bar, was an iid-standard-error artifact: under HC3 it
+is +0.61 and date-clustered +0.98, because HC3 inflates its SE six-fold and 185 trades sit on only 92
+entry dates while RVOL is a market-wide daily quantity.
+
+**The one place round 8 made the picture sharper.** Friction is 1/w, so by Jensen the expected
+cost-in-R is strictly greater than the cost at the median stop. Measured on the swing sample:
+E[cost] = 0.1522R against the 0.0549R scalar, a 2.77× understatement on the unrestricted corpus — and
+the scalar is correct for the live-reachable w ≥ 2% book at 0.0573R. Costed per trade instead of by a
+scalar, the tradeable book reads −0.2435R at t = −2.19 on explicit charges alone and −0.4134R at
+t = −3.31 with the slippage assumption. The gross question is underpowered; the net question is
+answered.
+
+**The stop-width family is closed on the swing sample.** Simulating the pure 1/w term with raw return
+independent of stop width reproduces 116% of the measured tight-vs-wide spread (−0.4470 predicted
+against −0.3864 observed), the independence is itself measured at t = +1.07, and the contrast was
+never significant (t = −1.55). §4.4's wide-stop gradient, §12.1's reachable-cohort sign flip and
+§12.2's dispersion lever are one artifact of dividing by a small number. The positional members remain
+unmeasured and are now plan item E1.
+
+**Three findings that were in no review, all from verifying the audit.** The equity-beta null is
+computable from `ohlcv_1d` alone and had just been declared blocked on `index_ohlcv_1d`: an
+equal-weight basket of the eligible universe gives 789 sessions at +0.0816%/day, t +2.06, +22.8%
+annualised, so a 5-session hold's null is +0.088R and the honest cell reads α = −0.137R to −0.172R,
+roughly double the raw deficit. `paper_tick_size` is a single global constant of ₹0.05 while NSE moved
+sub-₹250 securities to a ₹0.01 tick — the on-₹0.05 fraction for those names fell from 0.98 in 2019 to
+0.49 in 2024 and 0.22 in 2025 while nothing above ₹250 changed — so `_round_tick`, which always rounds
+adversely, charges a ₹39 name about 10 bps of round-trip rounding the market does not, or 0.064R at a
+2% stop, on exactly the cheap-tight-stop cohort the remaining results are built on. And the gap guard
+shipped in round 7 tests two hardcoded endpoints rather than the span: there is a second, per-name
+hole (790 post-gap sessions against a median 620 bars per name and a p10 of 67, with 2,048 of 3,129
+names below 95% coverage), and the guard misses 1.2% of panels whose 300-row window spans up to 516
+sessions.
+
+**And the answer to the question that started the exercise, from the code.** `signals.py:267-289`
+builds the offered set by deduping on confidence, filtering by two undeclared rules that default on
+and appear neither in `restrictions.py` nor on the order path (`_near_expiry`, and `_choppy` at
+Kaufman ER < 0.30), then sorting descending by `confidence_pct`. The deployed picker's ranking key is
+therefore `confidence_pct`, which R7-B measures at Spearman ρ = −0.018 on a test powered to detect
+0.147. The quantity the UI sorts by carries no measured information about outcome.
+
+**Two structural reads adopted.** ρ̄ is flat in slot count under a one-factor model, which refutes the
+round-7 question that asked whether it rises, and hold period is a bigger breadth lever than slot
+count — nine slots at three-day holds gives 298 effective observations a year against 109 today — so
+the 2021–2023 back-fill is dropped and the lever is turnover. And §4.5 applied `IR ≈ IC√BR`, a
+portfolio law, to a gated tail selector; at the correct transfer an IC of 0.02 is roughly break-even
+per trade and 0.04 comfortably positive, making §4.5's "not investable" a turnover diagnosis rather
+than a signal-quality one. At the honest σ, validating on the live book is decade-scale again: 1,198
+trades, about 9.6 years, for a Sharpe-1.0 net edge.
+
+**Changed:** `backend/scripts/swing_dependence_probe.py` — HC3 and date-clustered sandwich estimators
+in `ols_multi` (printed beside iid for every regression from now on), the two splits as interaction
+tests, the per-trade cost-in-R distribution, the mechanical 1/w simulation, MDE at 80% power, and a
+third outcome unit. `docs/analysis/quant-panel-adjudication-2026-09-10.md` → 4,500 lines with new
+§12.18–§12.23, §13.8, §13h, §16.1b and §17b. `docs/PHASES.md` top block and CONTINUE HERE re-written.
+
 ### Round 7 of the quant panel — the headline inverts, and `ohlcv_1d` has a 922-day hole (2026-09-11)
 
 Four external reviews (Claude · ChatGPT · Gemini · Kimi) of
