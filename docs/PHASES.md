@@ -56,6 +56,14 @@ p > 0.46** ⇒ the negative covers the **factor set**, not one summary of it. (b
 matched-tail · the collider, reported never decided on), with `sd(IC_t)` and `E[z|selected]` as
 **OUTPUTS**, coverage-weighted (the cross-section runs 46→250, and 1/√46 = 0.147 exceeds the whole
 break-even band).
+⭐⭐ **THE FACTOR INVENTORY, READ FROM THE FROZEN SCORER (§12.32): 26 registry entries, not 15** (the
+pattern detectors are separate and only one can be selected). **325 declared weight, of which the mean
+that SCORES per panel is 30.6 — 9.4%.** ⛔ **THREE factors never score on 487 panels: `DOW_TREND`
+(weight 20, the HEAVIEST), `MARUBOZU`, and `FII_DII_FLOW`** (dead because `fii_dii_daily` = 4 rows).
+⭐ **That last one REMOVES A BLOCKER two reviewers built packages around — the only non-price term is
+already inert on live panels, so E2 can test the SHIPPED scorer, not a "price-only variant."** ⭐ Four
+factors carry nearly every scoring event (**PRICE_VS_EMA 70% · ADX 46% · MACD_HISTOGRAM 43% ·
+RSI_LEVEL 36%**) and two of the top three are EMA-derived ⇒ **effective dimensionality ~2–3, not 15.**
 ⭐ **NEW MECHANICAL RULE — the sample-tag rule in the TIME dimension:** ⛔ **a benchmark measured over
 one set of sessions may not be subtracted from a return measured over a different set. Pair it, or do
 not subtract it.** Eighth instance of the family; first in time rather than population.
@@ -1591,8 +1599,10 @@ which is what Phase-6 expectancy calibration is for.
 
 **▶▶ 2026-09-11 (round 9) — ⭐ USER RULING: BUILD THE AGREED HALF FIRST, THEN DISCUSS THE REST.**
 *"Complete what is agreed so far between the AI chats; after building and testing the accepted
-criteria, then plan, discuss and work on the remaining unagreed points."* **§13.9 is the authority**
-(§13.8 is superseded); §13i is the ledger; **§16.1c** supersedes §16.1b and §16.1.
+criteria, then plan, discuss and work on the remaining unagreed points."* ⭐ **§13.10 is the build queue with acceptance criteria** · ⭐ **§13.11 is what is
+parked and the specific reason for each** · ⭐⭐ **PART VI (§18.1–§18.5) answers every question every
+source asked, per source** · §13.9 is the agreed/not-agreed split · §13i is the ledger ·
+**§16.1c** supersedes §16.1b and §16.1.
 
 **✅ ALREADY CLOSED BY ROUND 9's MEASUREMENT — do not re-run:** E3 (§12.31b) · the ₹/day headline
 (§12.31f) · the confidence-normalizer hypothesis (**refuted**, §12.31e) · the `choppy` filter as a

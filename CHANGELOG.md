@@ -59,7 +59,28 @@ closure §17c of `docs/analysis/quant-panel-adjudication-2026-09-10.md`.
   the 0.051R excess over the true grid, not the 0.064R total.
 - Duplicate `12.18f` section headings disambiguated to `12.18f-C7` and `12.18f-C5`.
 
-No gate, no knob, no recorded number and no clock were touched. `mypy` green on both scripts.
+**Also measured — the factor inventory, read from the frozen scorer (487 real panels)**
+- 26 registry entries, not the 15 every review document says: the candlestick detectors are separate
+  `FactorResult`s and `_best_pattern_factor` selects at most one per panel. Declared weight 325; the
+  mean weight that actually SCORES per panel is 30.6, or 9.4%.
+- Three factors never score at all: `DOW_TREND` (weight 20, the heaviest — reconfirming the standing
+  finding that it cannot score on a 20-bar lookback with swing_n=5), `MARUBOZU`, and `FII_DII_FLOW`
+  (dead because `fii_dii_daily` holds 4 rows).
+- That last one removes a blocker two reviewers built verification packages around: the only
+  non-price term is already inert on live panels, so E2 can test the shipped scorer rather than a
+  labelled "price-only variant".
+- Four factors carry nearly every scoring event (PRICE_VS_EMA 70%, ADX 46%, MACD_HISTOGRAM 43%,
+  RSI_LEVEL 36%) and two of the top three are EMA-derived, so effective dimensionality is plausibly
+  2-3 rather than 15 — which downgrades the requested factor-correlation matrix to confirmatory.
+
+**Documented**
+- New sec 13.10: the decided build queue B1-B8 with acceptance criteria per item.
+- New sec 13.11: what is parked, each row labelled BLOCKED / UNCONVERGED / SEQUENCED with the
+  specific reason, so a parked item is distinguishable from a dropped one.
+- New PART VI (sec 18.1-18.5): every question every panel source asked, answered per source, each
+  answer pointing at a measured number or a numbered build.
+
+No gate, no knob, no recorded number and no clock were touched. `mypy app/ scripts/` green.
 
 
 ### Round 8 — an external audit recomputed round 7 and withdrew five of its claims (2026-09-11)

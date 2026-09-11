@@ -672,7 +672,18 @@ else.
   ⭐ **NEW MECHANICAL RULE — the sample-tag rule in TIME: ⛔ a benchmark measured over one set of
   sessions may not be subtracted from a return measured over a different set. Pair it, or do not
   subtract it.** Eighth instance of the family, first in time rather than population.
-  ⛔ **PANEL CLOSED AT ROUND 9 (§17c).** What remains is **B1–B8** (§13.9): delete the two undeclared
+  ⭐⭐ **THE FACTOR INVENTORY, READ FROM THE FROZEN SCORER (§12.32): 26 registry entries, not 15** (the
+  pattern detectors are separate; only one is selected per panel). **325 declared weight; the mean that
+  SCORES per panel is 30.6 = 9.4%.** ⛔ **THREE factors never score on 487 panels — `DOW_TREND`
+  (weight 20, the HEAVIEST), `MARUBOZU`, `FII_DII_FLOW`** (dead: `fii_dii_daily` = 4 rows). ⭐ **That
+  last one REMOVES A BLOCKER two reviewers built packages around — the only non-price term is already
+  inert, so E2 can test the SHIPPED scorer, not a "price-only variant."** Four factors carry nearly
+  every scoring event (**PRICE_VS_EMA 70% · ADX 46% · MACD_HISTOGRAM 43% · RSI_LEVEL 36%**), two of the
+  top three EMA-derived ⇒ **effective dimensionality ~2–3.**
+  ⭐ **THE DOC NOW CARRIES: §13.10 the build queue WITH ACCEPTANCE CRITERIA · §13.11 what is parked
+  and WHY (each row BLOCKED / UNCONVERGED / SEQUENCED) · PART VI §18.1–§18.5 every panel question
+  answered per source.**
+  ⛔ **PANEL CLOSED AT ROUND 9 (§17c).** What remains is **B1–B8** (§13.10): delete the two undeclared
   filters · `Σ notional ≤ cash` rail · the tick SCHEDULE table · span-based gap guard · E1 positional in
   four units · E2's three estimands + MFE/MAE · the ledger. **User ruling: build the AGREED half first,
   discuss the rest after.**
