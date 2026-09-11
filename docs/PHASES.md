@@ -12,6 +12,36 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ## ▶ STATE AT A GLANCE (updated 2026-09-11) — round 10 — read this block first
 
+**▶▶ 2026-09-12 — ✅ THE B-QUEUE IS COMPLETE (7/7), AND E2 RETURNED A NULL.**
+⭐ **Read `docs/BUILD_QUEUE.md`, not the adjudication.** All seven shipped: **B2** cash rail ·
+**B3** dated tick schedule · **B1** the two undeclared display filters deleted · **B4** span gap
+guard · **B5** E1 (positional closes like swing) · **B6+B7** E2 + the excursion surface ·
+**B8** the append-only ledger.
+⭐⭐⭐ **E2 IS ANSWERED (§12.35), against a pre-registration committed BEFORE the code** (`fe5d508`,
+2 timestamped amendments). **17,748 panels · 96 sessions · median cross-section 190.**
+**3a unconditional IC at h=5d = −0.0070, 90% [−0.0259, +0.0119] ⇒ NULL** — the interval contains
+zero AND its upper bound is below the **measured** break-even IC of **0.0310**. **The scorer
+carries no measurable cross-sectional information, and `confidence_pct` — what the UI sorts by —
+is flatter still (+0.0024).**
+⚠ **3b is INCONCLUSIVE, reported as such, NOT rounded to null:** point estimate −0.3150% (passers
+UNDERPERFORM matched non-passers) but the upper bound +0.388% clears the +0.255% break-even.
+⇒ ⭐ **THE RANKER IS DEAD; THE GATE IS UNPROVEN IN BOTH DIRECTIONS.** The clean-closure branch
+does not fire cleanly, and filling that gap with a prior is what the pre-registration forbids.
+⭐ **Two assumed constants RETIRED: `sd(IC_t)` 0.10 → 0.1126; `E[z|selected]` 2.268 → 1.8506**
+(a normal-tail approximation applied to a hard gate on a bounded score) ⇒ every break-even-IC
+figure rises ~23%.
+⭐⭐ **B7: MFE/|MAE| = 0.83 / 1.12 — symmetric, so NO geometry repair**, and **the hazard curve is
+FLAT** (0.559 → 0.489 over days 0–5, unchanged to day 20) ⇒ **§13.11's hold-period-as-breadth-lever
+is RESOLVED AGAINST THE LEVER.** The **T=0 cohort** contrast is **t = −4.16** (first past 3.6 in
+eleven rounds) but it is the tight-stop cohort again and the order path already refuses it.
+⚠⚠ **THE LEDGER MIGRATION `e1f2a3b4c5d6` IS NOT APPLIED TO DEV** — verified on the test DB with
+the downgrade exercised; dev is at `d0e1f2a3b4c5`. **`make migrate` is the user's call** (RUNBOOK §8b).
+⚠ **QUEUED, NOT FIXED:** `swing_dependence_probe.py` has **no through-stop exclusion** while
+`positional_probe.py` and the live path both do — **the two corpora have never measured the same
+population.** ⚠ **BLOCKED:** B4's third target is inside the FROZEN backtest engine.
+⛔ **NOTHING IS PUSHED.** What remains is the user's: `git push`, `make migrate`, and deciding
+what follows a null — which is a decision, not a build.
+
 **▶▶ 2026-09-11/12 — ⭐⭐ THE B-QUEUE IS 5 OF 7 BUILT, AND E1 IS ANSWERED.**
 ⭐ **Read `docs/BUILD_QUEUE.md`, not the adjudication.** Shipped overnight: **B2** the `Σ notional
 ≤ cash` rail (did not exist; 3 slots at the median stop need 120% of capital) · **B3** the tick

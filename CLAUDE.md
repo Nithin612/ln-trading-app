@@ -627,6 +627,23 @@ else.
   — TimescaleDB hypertables need `timescaledb_pre_restore()`/`post_restore()`) — details in
   `RUNBOOK.md` §9. **Ask before anything that writes to, truncates or migrates live data.**
 
+- **✅ THE B-QUEUE IS COMPLETE 7/7 (2026-09-12), AND E2 RETURNED A NULL.**
+  ⭐ **`docs/BUILD_QUEUE.md` is the operational doc.** B2 cash rail · B3 dated tick schedule ·
+  B1 filters deleted · B4 span gap guard · B5 E1 · B6+B7 E2 + excursion surface · B8 ledger.
+  ⭐⭐⭐ **E2 ANSWERED (§12.35) against a pre-registration committed BEFORE the code** (`fe5d508`).
+  **3a unconditional IC h=5d = −0.0070, 90% [−0.0259, +0.0119] ⇒ NULL** (upper bound below the
+  MEASURED break-even 0.0310). **The scorer carries no cross-sectional information; `confidence_pct`
+  is flatter still.** ⚠ **3b INCONCLUSIVE, not rounded to null** (−0.3150%, upper bound +0.388% >
+  +0.255%) ⇒ ⭐ **THE RANKER IS DEAD, THE GATE IS UNPROVEN BOTH WAYS.**
+  ⭐ **Retired: `sd(IC_t)` 0.10 → 0.1126 · `E[z|selected]` 2.268 → 1.8506** ⇒ break-even IC figures
+  rise ~23%. ⭐⭐ **B7: MFE/|MAE| 0.83/1.12 (no geometry repair) and the hazard curve is FLAT** ⇒
+  **the hold-period breadth lever is RESOLVED AGAINST IT.** T=0 contrast t = −4.16 but it is the
+  tight-stop cohort the order path refuses.
+  ⚠⚠ **LEDGER MIGRATION `e1f2a3b4c5d6` NOT APPLIED TO DEV** (dev at `d0e1f2a3b4c5`; RUNBOOK §8b).
+  ⚠ **QUEUED:** `swing_dependence_probe.py` has **no through-stop exclusion** while the positional
+  probe and the live path do — the two corpora never measured the same population.
+  ⛔ **NOTHING PUSHED.**
+
 - **⭐⭐ THE B-QUEUE IS 5 OF 7 BUILT (2026-09-11/12), AND E1 IS ANSWERED.**
   ⭐ **`docs/BUILD_QUEUE.md` is the operational doc.** Shipped: **B2** `Σ notional ≤ cash` rail ·
   **B3** tick grid → a DATED schedule (sub-₹250 moved to ₹0.01 in **June 2024**, measured;
