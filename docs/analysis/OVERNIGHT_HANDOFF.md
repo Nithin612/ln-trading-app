@@ -12,8 +12,8 @@ Queue and acceptance criteria: `docs/BUILD_QUEUE.md`. Update this file after EVE
 | **B1** | delete `_near_expiry` / `_choppy` | ✅ **DONE** | (see log) |
 | **B4** | span-based gap guard | ✅ **DONE** (1 part blocked) | (see log) |
 | **B5** | E1 positional in four units | ✅ **DONE** | `90000c1` `1dd38d4` |
-| **B6+B7** | E2 three estimands + MFE/MAE | ⏳ NEXT | — |
-| **B8** | append-only ledger (ONE table, ONE day) | ⏸ queued | — |
+| **B6+B7** | E2 three estimands + MFE/MAE | ✅ **DONE** | (see log) |
+| **B8** | append-only ledger (ONE table, ONE day) | ⏳ NEXT — the last item | — |
 
 ## Standing rules for this run
 
@@ -30,12 +30,18 @@ Queue and acceptance criteria: `docs/BUILD_QUEUE.md`. Update this file after EVE
 
 ## Where to resume
 
-⭐ **NEXT: B6 + B7** — E2 as THREE estimands (3a unconditional IC · 3b matched-tail contrast ·
-3c the gate-conditional collider, reported never decided on) with `sd(IC_t)` and
-`E[z|selected]` as **OUTPUTS**, coverage-weighted power, **h = 5d pre-registered**, plus B7's
-MFE/MAE surface and hazard curve in the same pass. ⛔ **Write the three estimands, the horizon
-and the four-branch decision tree DOWN before a line of code** — under-specifying the decisive
-test is how KILL LINE 3 went wrong twice. Acceptance criteria in `docs/BUILD_QUEUE.md`.
+⭐ **NEXT: B8 — the LAST item.** ⚠ **TIMEBOXED TO ONE DAY: ONE append-only table with the five
+node types as a discriminated column** (`DecisionSnapshot · OrderIntent · Execution ·
+PositionLifecycle · PerformanceRecord`), every row carrying `code_commit · spec_version ·
+experiment_id · data_version · created_at`, plus a nightly off-box export. ⛔ **NOT the five-table
+schema** — the base rate is one item shipped as code in fifty days and that version is the one
+that does not ship. ⛔ **Write the migration but do NOT apply it to the DEV database** — verify
+against the test DB and leave the dev apply for the user.
+
+⚠ **QUEUED, found during B6/B7, not fixed:** `swing_dependence_probe.py` has **no through-stop
+exclusion** while `positional_probe.py` and the live path both do. The swing corpus admits fills
+the order path would refuse; the positional corpus does not. Bounded (defect #4 is 2 of 185) but
+the two corpora have never measured the same population.
 
 ⚠ **Before quoting any `probe-147` number, re-run it** — B4 changed the gap-clean cohort to
 `probe-145`, and `clean × BUY` is now **n = 60**, not 61 (§16.1d).
@@ -108,3 +114,21 @@ test is how KILL LINE 3 went wrong twice. Acceptance criteria in `docs/BUILD_QUE
   ⚠ The RELABEL question is untouched. New fact: positional mean `T` is 6–33 sessions vs swing's
   **3.59**, so the classes DO differ in realised hold even though their rule sets are not
   separable by outcome.
+
+- **B6 + B7 DONE — and E2 is ANSWERED.** Pre-registration committed at `fe5d508` **before** the
+  code, with 2 timestamped amendments (signed score; global session grid + `E[z]` on the absolute
+  score — both found by smoke-running, both pre-result).
+  ⭐⭐ **3a unconditional IC at h=5d = −0.0070, 90% [−0.0259, +0.0119] ⇒ NULL** on the
+  pre-registered band (upper bound below the measured break-even 0.0310). **The scorer carries no
+  measurable cross-sectional information; `confidence_pct` is flatter still (+0.0024).**
+  ⚠ **3b is INCONCLUSIVE, reported as such** — point estimate −0.3150% (passers UNDERPERFORM) but
+  the upper bound +0.388% clears the +0.255% break-even. ⇒ **the RANKER is dead, the GATE is
+  unproven in both directions. The clean-closure branch does NOT fire cleanly.**
+  ⭐ **Two assumed constants retired:** `sd(IC_t)` 0.10 → **0.1126**; **`E[z|selected]` 2.268 →
+  1.8506** ⇒ every break-even-IC figure rises ~23%; break-even IC is **0.0310**.
+  ⭐⭐ **B7: MFE/|MAE| = 0.83 / 1.12 — symmetric, so no geometry repair.** And **the hazard curve is
+  FLAT** (0.559 → 0.489 over days 0–5, unchanged to day 20) ⇒ **§13.11's hold-period lever is
+  RESOLVED AGAINST IT.** The **T=0 cohort** contrast is **t = −4.16** — first past 3.6 in eleven
+  rounds — but it is the tight-stop cohort again and the order path already refuses it.
+  ⚠ **Prediction scorecard 4 of 7.** The two misses are the useful ones: 3b underpowered rather
+  than null, and the hazard FLAT rather than front-loaded (a stronger result than predicted).

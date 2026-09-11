@@ -7,6 +7,61 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### B6 + B7 — E2 run against its pre-registration: 3a is a NULL (2026-09-12)
+
+Pre-registered in `docs/analysis/E2-PREREGISTRATION-2026-09-12.md` and committed (`fe5d508`)
+BEFORE the code existed, with two amendments both timestamped before any decision result.
+Full output: `docs/analysis/e2-b7-results-2026-09-12.md`. New sec 12.35.
+
+**Added**
+- `scripts/e2_score_ic.py` — the three pre-registered estimands: 3a unconditional IC (the
+  decision), 3b matched-tail contrast, 3c the gate-conditional collider (reported, never
+  decided on). The frozen scorer is called with `min_confidence=0` so a score exists for
+  every eligible name; `_spearman` comes from `factor_sweep` and the gap guard from
+  `market_calendar` rather than being re-derived.
+- `scripts/b7_hazard.py` — MFE/MAE per trade in R, raw % and ATR units; the hazard curve
+  `P(+1R before -1R | day d)` for d = 0..20; time-to-excursion by stop-width bucket and
+  direction; and the T=0 cohort separated out.
+
+**⭐ THE RESULT — 17,748 panels, 96 sessions, median cross-section 190 names**
+- **3a unconditional IC at h=5d: -0.0070, SE 0.0115, t -0.61, 90% [-0.0259, +0.0119] = NULL**
+  on the pre-registered band (interval contains zero AND its upper bound sits below the
+  measured break-even IC of 0.0310). The `confidence_pct` the deployed UI sorts by is flatter
+  still (+0.0024).
+- ⚠ **3b is INCONCLUSIVE and is reported as such.** Point estimate -0.3150% (passers
+  UNDERPERFORM matched non-passers, so it is not evidence the gate adds value) but the upper
+  bound +0.388% exceeds the +0.255% break-even. **The clean-closure branch does not fire
+  cleanly: the RANKER is dead, the GATE is unproven in both directions.** Filling that gap
+  with a prior is what the pre-registration forbids.
+
+**⭐ Two assumed constants retired (these move sec 16.1)**
+- `sd(IC_t)`: assumed 0.10, **measured 0.1126**.
+- `E[z|selected]`: assumed **2.268**, **measured 1.8506** (SE 0.0238) -- a normal-tail
+  approximation applied to a hard gate on a bounded score. 18% lower, so every break-even-IC
+  figure rises ~23%. Break-even IC is now **0.0310**, near the middle of the published band.
+
+**⭐⭐ B7**
+- MFE/|MAE| is **0.83 (ALL) / 1.12 (clean x BUY)** -- roughly symmetric, so the "3a positive
+  with MFE >> |MAE| means a geometry repair" branch does not fire on either leg.
+- **The hazard curve is FLAT**: P(+1R before -1R | resolved by day d) = 0.559, 0.510, 0.500,
+  0.520, 0.494, 0.489 over days 0-5 and unchanged through day 20. ⇒ **sec 13.11's
+  hold-period-as-breadth-lever is RESOLVED AGAINST THE LEVER** -- shortening the hold does not
+  raise mu, it only truncates unresolved trades.
+- The **T=0 cohort** (27 of 185, exits on its entry bar) reads mean R **-0.7034** against
+  -0.0541, contrast **t = -4.16** -- the first contrast in eleven rounds past t = 3.6. ⚠ It is
+  the TIGHT-STOP cohort again: 53% of sub-2% trades are T=0 against 7% of the reachable book,
+  and on w >= 2% removing it does not change the verdict. Recorded, not acted on.
+
+**⛔ A new defect found en route, queued not fixed**
+- `positional_probe.py` rejects a fill whose open has gapped past the stop and the live path
+  refuses it unconditionally; **`swing_dependence_probe.py` has no such check**. Harness defect
+  #4 runs at 2 of 185 so it drives nothing above, but the swing corpus admits fills the live
+  order path would refuse and the positional corpus does not -- the two have never been
+  measuring the same population.
+
+`ruff` + `mypy` clean on both scripts.
+
+
 ### B5 — E1 re-specified: the positional family in FOUR units, with contrasts (2026-09-11)
 
 E1 as originally written asked for R, raw % and net Rs. Re-reporting in raw % removes the

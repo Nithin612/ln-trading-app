@@ -4097,6 +4097,93 @@ mean `T` runs 6–33 sessions against swing's 3.59, so the classes DO differ in 
 period even though their rule sets are not separable by outcome.**
 
 
+## 12.35 ⭐⭐⭐ E2 HAS RUN — 3a IS A NULL, AND THE DECISION TREE DOES NOT FIRE CLEANLY
+
+`[measured]` **B6 + B7, 2026-09-12, against a pre-registration committed BEFORE the code
+existed** (`docs/analysis/E2-PREREGISTRATION-2026-09-12.md`, `fe5d508`). Full output:
+`docs/analysis/e2-b7-results-2026-09-12.md`. **17,748 panels · 96 sessions · median
+cross-section 190 names · gate pass rate 4.22%.**
+
+| estimand | value | SE | t | 90% interval | verdict |
+|---|---:|---:|---:|---|---|
+| ⭐ **3a — unconditional IC, h=5d** | **−0.0070** | 0.0115 | −0.61 | **[−0.0259, +0.0119]** | ⭐ **NULL** |
+| 3a on `confidence_pct` *(the deployed key)* | +0.0024 | 0.0100 | +0.24 | [−0.0141, +0.0189] | — |
+| **3b — matched-tail contrast** | **−0.3150%** | 0.4274 | −0.74 | [−1.0180, +0.3881] | ⚠ **INCONCLUSIVE** |
+| 3c — gate-conditional | +0.0743 | 0.0480 | +1.55 | — | ⛔ **a COLLIDER; not decided on** |
+
+⇒ ⭐⭐ **3a clears the pre-registered NULL band** — the interval contains zero *and* its upper
+bound (+0.0119) is below the **measured** break-even IC (0.0310). **The scorer carries no
+measurable cross-sectional information at h = 5d, on a properly powered test, and the
+`confidence_pct` the deployed UI sorts by is even flatter.**
+
+⚠ ⛔ **BUT THE TREE DOES NOT FIRE CLEANLY, AND THAT IS REPORTED RATHER THAN ROUNDED AWAY.**
+§5's clean-closure branch needs **3a NULL and 3b NULL**. 3b is **INCONCLUSIVE**: its point
+estimate is negative (passers *underperform* matched non-passers by 0.32%, so it is certainly
+not evidence the gate adds value) but its upper bound, +0.388%, exceeds the +0.255% break-even
+and cannot exclude a tradeable effect. ⭐ **Filling that gap with a prior is exactly what §7 of
+the pre-registration forbids, so the honest statement is: the RANKER is dead; the GATE is
+unproven in both directions.**
+
+### ⭐ Two assumed constants retired — and both move §16.1
+
+| quantity | ⛔ assumed | ✅ **measured** | consequence |
+|---|---:|---:|---|
+| `sd(IC_t)` | 0.10 | **0.1126** | 13% optimistic |
+| ⭐ **`E[z \| selected]`** | **2.268** | ⭐ **1.8506** (SE 0.0238) | **18% lower** ⇒ every break-even-IC figure rises ~23% |
+| σ_cs, 5d forward | — | 4.450% median | — |
+| **break-even IC** | band 0.018–0.071 | ⭐ **0.0310** | near the middle of the published band |
+
+⚠ **`E[z|selected]` = 2.268 was a normal-tail approximation applied to a hard gate on a bounded
+score.** Measured it is **1.85**, and the direction makes the bar *harder*, not easier. ⭐ **And
+the definition itself needed a correction found by running:** the gate is a MAGNITUDE threshold
+(`|normalized| ≥ 0.70`), so on the signed score a strong SELL standardises to a large NEGATIVE
+z — the first smoke run returned **−1.61**, which is the short side outvoting the long rather
+than any tail statistic (amendment 2).
+
+### ⭐⭐ B7 — nothing for the geometry to give back, and a PARKED item resolved
+
+| cohort | n | MFE | MAE | **MFE/\|MAE\|** | realised R |
+|---|---:|---:|---:|---:|---:|
+| ALL | 185 | +0.940R | −1.138R | 0.83 | −0.1489 |
+| **clean × BUY** | 60 | +0.922R | −0.820R | **1.12** | −0.0691 |
+
+⇒ **Roughly symmetric.** §12.28's branch — *3a positive with `MFE ≫ |MAE|` ⇒ a GEOMETRY repair,
+not closure* — **does not fire on either leg.** There is no trapped information the barrier
+placement is handing back.
+
+⭐⭐ **And the hazard curve is FLAT.** `P(+1R before −1R | resolved by day d)` runs
+**0.559 · 0.510 · 0.500 · 0.520 · 0.494 · 0.489** over days 0–5 and is unchanged through day 20.
+⇒ ⛔ **§13.11's hold-period-as-breadth-lever is RESOLVED AGAINST THE LEVER.** Round 8's D2
+argued 9 slots × 3-day holds buys 298 effective obs/yr against 109; Kimi and ChatGPT both
+objected that more observations ≠ more information. **A flat hazard settles it: shortening the
+hold does not raise μ, it only truncates unresolved trades** — a pure n-increase bought with
+turnover cost and the flat ₹15.34 DP charge.
+
+### ⭐ The T = 0 cohort — the first t ≥ 3.6 contrast in eleven rounds, and it is `1/w` again
+
+| cohort | n | mean R | win | MAE | median stop |
+|---|---:|---:|---:|---:|---:|
+| **T = 0** (exits on its entry bar) | **27 (14.6%)** | ⛔ **−0.7034** | 14.8% | ⛔ **−3.550R** | **1.76%** |
+| T ≥ 1 | 158 | −0.0541 | 43.7% | −0.726R | 5.06% |
+| **contrast** | — | **−0.6493** (SE 0.1559) | — | — | ⭐ **t = −4.16** |
+
+⚠ **It is the TIGHT-STOP cohort wearing a third hat: 53% of sub-2% trades are T=0 against 7% of
+the reachable book.** On `w ≥ 2%`, removing T=0 moves the mean from −0.0862 (t −1.43) to −0.0443
+(t −0.72) — **the verdict does not change, because the live order path already refuses most of
+it** (the notional cap is a 2% minimum-stop-width rule, §1). ⭐ **Recorded, not acted on:** a
+t = −4.16 on a cohort that is already unreachable is a description of the denominator, not a
+finding about the tape.
+
+### ⛔ A NEW DEFECT FOUND EN ROUTE
+
+`[code]` `positional_probe.py` rejects a fill whose open has already gapped past the stop, and
+the live path refuses it unconditionally. ⛔ **`swing_dependence_probe.py` has NO such check.**
+⚠ Bounded: harness defect #4 runs at **2 of 185 (1.08%)** and the T=0 cohort is 85% losses, so
+this is not the driver of anything above. **But the swing corpus — `probe-185`, the E3 cell, the
+σ_R ladder — admits fills the live order path would refuse, and the positional corpus does not.
+The two have never been measuring the same population.** Queued, not fixed tonight.
+
+
 ---
 
 # PART III — THE PLAN
