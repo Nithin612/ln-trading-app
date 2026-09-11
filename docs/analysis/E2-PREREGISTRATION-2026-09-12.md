@@ -145,4 +145,23 @@ which branch fires, and it must be propagated into §16.1.
 
 ## 8. Amendments
 
-*(none yet)*
+### Amendment 1 — 2026-09-12, BEFORE any result was computed
+
+§1 defines `S(i,t)` as "the composite confluence score" without saying **signed or absolute**.
+The scorer produces both: `normalized_score` ∈ [−1, +1] (signed, BUY positive / SELL negative) and
+`confidence_pct = int(|normalized| × 100)` (absolute, 0–100).
+
+⭐ **Fixed now: `S` is the SIGNED `normalized_score`.** A cross-sectional IC asks whether the score
+ORDERS forward returns, and only the signed quantity can — `confidence_pct` is a magnitude and
+treats a strong SELL and a strong BUY identically, so its correlation with a forward return is
+near-zero *by construction* and would be an artifact of the unit, not a finding.
+
+⚠ **`confidence_pct` is reported alongside as a secondary column**, because it is the key the
+deployed UI actually sorts by (§12.21a) — but the DECISION in §5 reads the signed score.
+§12.31e already tested `confidence_pct` within resolved trades (ρ = −0.018, p = 0.807).
+
+⚠ **Consequence for the gate:** `score_from_factors` is called with `min_confidence=0` so a score
+exists for every eligible name, not only for gate-passers. That is a supported parameter of the
+frozen function, called not modified. Gate passage is then recomputed from the returned
+confidence and the ADX schedule, so 3b and 3c partition the same population 3a scores.
+
