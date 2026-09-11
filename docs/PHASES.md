@@ -10,7 +10,58 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-09-11) — read this block first
+## ▶ STATE AT A GLANCE (updated 2026-09-11, round 9) — read this block first
+
+**▶▶ 2026-09-11 (round 9) — ⭐⭐⭐ E3 WAS RUN, AND THE PAIRED NULL REFUTED MY OWN α. THE PANEL IS CLOSED.**
+Five responses to §17b's invitation (*run E1/E2/E3, or refute a §16.1 row*). ⭐ **The first round that
+shipped code with itself:** `swing_dependence_probe.py` gained the holding period `T`, a **paired**
+matched-window basket return, the entry-day Kaufman ER and a confidence-normalizer decomposition, plus
+a `--dump-trades` artifact; `scripts/round9_cells.py` reads it. **`probe-185` reproduced to 4 dp.**
+Adjudication §12.24–§12.30 · **measurements §12.31** · plan **§13.9** · ledger §13i · card **§16.1c** ·
+closure §17c of `docs/analysis/quant-panel-adjudication-2026-09-10.md`.
+⛔⛔ **THE BIGGEST CORRECTION IS MINE: §12.20a's "the correct null roughly DOUBLES the deficit"
+(α = −0.137…−0.172R) IS WITHDRAWN.** It multiplied a drift measured on 789 *post-gap* sessions by an
+**assumed** 5-session horizon and subtracted it from trades in *different* sessions whose **measured
+mean hold is 3.59** (median 5; **14.6% exit same-session**). `[measured]` **Paired over each trade's
+own window the basket is NEGATIVE on the tradeable book: −0.166% (BUY), −0.338% (E3).**
+⇒ ⭐⭐ **GROSS ALPHA ON THE TRADEABLE BOOK IS ZERO — paired excess −0.0218%, t = −0.07 (n=82).** The ALL
+book's matched basket is **+0.247%** and BUY's is **−0.166%** ⇒ **SELL signals fire into rising tape,
+BUY signals into falling tape.** The gross loss is **WHEN it trades plus cost, not what it picks.**
+⚠ t = −0.07 is the absence of evidence for any α, not evidence of zero (MDE ≈ ±0.93%/trade).
+⭐⭐ **E3 RUN — `clean × BUY × w ≥ 2%`, n = 49:** gross **−0.1212R (t −1.26)** · **NET −0.1772R
+(t −1.84)** explicit · **−0.2432R (t −2.52)** at 15 bps/leg · **−0.3092R (t −3.19)** at 30 bps.
+⭐ **Date-clustering moves every t by ≤0.06** (answers the standing "why is iid OK here and not for
+RVOL" — RVOL is a per-DATE regressor). ⛔ **§16.1b's `t = −2.19` is WITHDRAWN as the wrong cohort's
+number** (it includes sub-2% stops the order path refuses) — **the verdict re-derives at −1.84.**
+⚠ Both published predictions were too optimistic because both held σ at 1.0050; **the reachable cell's
+σ is 0.6712**, and `E[cost in R]` there is **+0.0561R** (confirming the 0.0573R estimate to 2%).
+⭐⭐ **THE STOP-WIDTH FAMILY, CLOSED A THIRD TIME, BY A MECHANISM §12.18f MISSED.** `R = (α + drift·T)/w`
+and **`d(T)/dw = +0.384, t = +6.69`**. The contrast decays and **flips sign** as each mechanical term
+is removed: **R −0.386 (t −1.55) → raw % −0.262 (t −0.78) → excess vs matched basket +0.069 (t +0.17)**.
+⛔ **"Independence is MEASURED" is WITHDRAWN — t = +1.07 is a NON-REJECTION**, and ~25% of that slope is
+drift×T (predicted +0.0264, measured removal +0.0298). **Raw % was never enough; only pairing is.**
+⭐⭐ **THE HEADLINE, and it needs no t-statistic: per rupee-day deployed the tradeable book underperforms
+simply HOLDING the universe it selects from by 19–56 pp/yr (30–63 pp/yr on the reachable cell) net of
+explicit charges** — 39–90 pp/yr at 15 bps/leg. ⚠ **The range is the aggregation choice
+(mean-of-ratios vs ratio-of-means), not uncertainty; the sign is invariant to every choice.**
+⛔ **TWO HYPOTHESES TESTED AND REFUTED, and both make the closure CLEANER.** (a) **the confidence
+normalizer** — `confluence.py:160` divides by the weight of *scoring* factors so sparse conviction
+outranks broad agreement (confirmed in code), **but all four rival ranking keys are ρ ≈ 0, every
+p > 0.46** ⇒ the negative covers the **factor set**, not one summary of it. (b) **the undeclared
+`choppy` display filter** hides **67%** of the offered set and separates **nothing** — contrast
+−0.0001, **p = 0.999** ⇒ **delete it** (and `_near_expiry` with it).
+⭐ **THE ROUND'S CONVERGENCE: three sources, three routes, one defect in E2** — the specified test
+(full cross-sectional IC) is not the deployed question and the gate-conditional version is a
+**collider** on the score's own output ⇒ **E2 becomes THREE estimands** (3a unconditional · 3b
+matched-tail · the collider, reported never decided on), with `sd(IC_t)` and `E[z|selected]` as
+**OUTPUTS**, coverage-weighted (the cross-section runs 46→250, and 1/√46 = 0.147 exceeds the whole
+break-even band).
+⭐ **NEW MECHANICAL RULE — the sample-tag rule in the TIME dimension:** ⛔ **a benchmark measured over
+one set of sessions may not be subtracted from a return measured over a different set. Pair it, or do
+not subtract it.** Eighth instance of the family; first in time rather than population.
+⛔ **THE PANEL IS CLOSED AT ROUND 9** (§17c) — what remains is B1–B8, builds and measurements, not
+arguments. **A future source may send exactly one thing: a refutation of a §16.1c row with the
+recomputation attached.**
 
 **▶▶ 2026-09-11 (round 8) — ⭐⭐ AN EXTERNAL AUDIT RECOMPUTED ROUND 7 AND WITHDREW FIVE OF MY CLAIMS.**
 Three round-8 responses; one (`~/Downloads/round8-external-audit-2026-09-11.md`, 727 lines) is the
@@ -1535,6 +1586,43 @@ which is what Phase-6 expectancy calibration is for.
 > single-gate consolidation** (test-first, equivalence-pinned) — it closes the
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
+
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-11 (round 9).**
+
+**▶▶ 2026-09-11 (round 9) — ⭐ USER RULING: BUILD THE AGREED HALF FIRST, THEN DISCUSS THE REST.**
+*"Complete what is agreed so far between the AI chats; after building and testing the accepted
+criteria, then plan, discuss and work on the remaining unagreed points."* **§13.9 is the authority**
+(§13.8 is superseded); §13i is the ledger; **§16.1c** supersedes §16.1b and §16.1.
+
+**✅ ALREADY CLOSED BY ROUND 9's MEASUREMENT — do not re-run:** E3 (§12.31b) · the ₹/day headline
+(§12.31f) · the confidence-normalizer hypothesis (**refuted**, §12.31e) · the `choppy` filter as a
+selector (**refuted, p = 0.999**) · the paired drift null (**refuted my own α**, §12.31c).
+
+**⇒ BUILD THESE, IN THIS ORDER (§13.9 "AGREED AND STILL TO BUILD"):**
+
+1. **B1 — delete `_near_expiry` and `_choppy`** from `app/api/v1/signals.py:267-289`, or declare them
+   in `restrictions.py` with `enforced_by = DISPLAY`. **Measured: they hide 67% of the offered set and
+   select nothing (p 0.999).** 2 h.
+2. ⭐ **B2 — `Σ notional ≤ available cash`** as a RiskEngine rail. ⛔ **Does not exist in code**; three
+   slots at the median 5% stop need **120% of capital**. Identity-enforcing ⇒ no DSR bar.
+   ⭐ **PRECONDITION for cycle 2.** ½ day.
+3. ⭐ **B3 — `paper_tick_size` → a price- AND date-dependent schedule TABLE** (not a constant; the
+   phase-in is staged). Published exchange schedule ⇒ no forward-evidence bar; changes a recorded
+   number ⇒ **before cycle 2.** ⚠ Blast radius is the **paper broker only** and the artifact is
+   **0.051R**, not 0.064R (§12.30a/b). ½ day.
+4. ⭐ **B4 — the gap guard tests SPAN, not endpoints**, against the session calendar.
+   `GAP_LO`/`GAP_HI` violate **W5**. ½ day.
+5. ⭐ **B5 — E1 re-specified: positional in FOUR units** (add `raw % − matched-window basket`), plus
+   mean/median `T` and `E[1/w]` per bucket, with **contrasts and their SEs**, split by the gap flag.
+   ⚠ **The swing version is now CLOSED (§12.31d) and positional is NOT the same mechanism** — its
+   buckets carry opposite signs and its *reachable* cohort is the better one, where swing's is worse.
+   ⚠ **The contrast is t = −1.47, p = 0.14 (§12.27) — underpowered, MDE 0.74R.** ½ day.
+6. ⭐⭐ **B6 — E2 as THREE estimands** (§12.28) + **B7 — MFE/MAE and `P(+1R before −1R | day d)`** in
+   the same pass. **The last unrun question that can change direction.** 1–1½ days.
+7. ⭐⭐ **B8 — the append-only ledger.** Not for this strategy — **for any successor.** The one real build.
+
+⛔ **DO NOT run round 10 (§17c).** ⛔ **Do not start "point the apparatus at allocation"** — it is the
+sharpest strategic read in the round and it is a new strategy class 50 days from the decision date.
 
 **▶ CONTINUE HERE (next session, any account) — updated 2026-09-11 (round 8).**
 

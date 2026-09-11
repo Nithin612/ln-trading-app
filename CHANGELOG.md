@@ -7,6 +7,61 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Round 9 — E3 was run, the paired null refuted our own alpha, and the panel is closed (2026-09-11)
+
+Five responses to §17b's standing invitation (*run one of E1/E2/E3, or refute a §16.1 row*),
+adjudicated against code, queries and — for the first time — **a probe that shipped with the round**.
+Seven of roughly seventy points changed a decision, and all seven came from a claim a probe could
+test. Adjudication §12.24–§12.30, measurements §12.31, plan §13.9, ledger §13i, card §16.1c,
+closure §17c of `docs/analysis/quant-panel-adjudication-2026-09-10.md`.
+
+**Added**
+- `backend/scripts/swing_dependence_probe.py` — four new per-trade column families, all read-only and
+  all computed from the frozen scorer's own output: the **holding period `T`**; the **paired
+  matched-window basket return** (`bench`/`excess`) over each trade's actual entry-to-exit window;
+  the entry-day **Kaufman ER**; and the **confidence-normalizer decomposition** (`wsum`, `nsc`,
+  `wsc`, `top`). Plus `--dump-trades <csv>`, which writes the per-trade table before the report
+  sections so one expensive pass serves every downstream cell.
+- `backend/scripts/round9_cells.py` — reads that artifact and emits E3 in five units with four SE
+  flavours, the stop-width family with `drift x T` isolated, the paired drift null, the rupee-day
+  table under both aggregations, the `choppy` filter as a selector, the four rival ranking keys, and
+  the posterior against three hurdles.
+
+**Measured (all new, all read-only)**
+- **Mean holding period is 3.59 sessions**, median 5, with 14.6% of trades exiting in the same
+  session. It had never been emitted, and every per-day and fixed-horizon statement in the record
+  was conditional on it.
+- **E3** — `clean x BUY x w >= 2%`, n=49: gross -0.1212R (t -1.26), net -0.1772R (t -1.84) on
+  explicit charges, -0.2432R (t -2.52) at 15 bps/leg. Date-clustered SEs move every t by <= 0.06.
+- **The paired basket over the tradeable book's own windows is NEGATIVE** (-0.166% BUY, -0.338% E3),
+  so gross paired excess is -0.0218%, **t = -0.07** — the book's gross loss is when it trades plus
+  cost, not what it picks.
+- **Per rupee-day deployed the tradeable book underperforms holding the universe it selects from by
+  19-56 pp/yr** (30-63 on the reachable cell) net of explicit charges; 39-90 with 15 bps/leg.
+- The stop-width contrast decays and flips sign as each mechanical term is removed: R -0.386
+  (t -1.55) -> raw % -0.262 (t -0.78) -> excess vs the matched basket +0.069 (t +0.17), with
+  `d(T)/dw = +0.384, t = +6.69`.
+- Two hypotheses refuted: the confidence normalizer (all four rival ranking keys rho ~ 0, every
+  p > 0.46) and the undeclared `choppy` display filter as a selector (contrast -0.0001, p = 0.999,
+  while hiding 67% of the offered set).
+
+**Withdrawn / corrected in place**
+- **Sec 12.20a's "the correct null roughly doubles the deficit" (alpha = -0.137R...-0.172R)** — it
+  subtracted a drift measured on 789 post-gap sessions, at an assumed 5-session horizon, from trades
+  occupying different sessions. New mechanical rule recorded: *a benchmark measured over one set of
+  sessions may not be subtracted from a return measured over a different set.*
+- **Sec 16.1b's net-cost row (`t = -2.19`)** — the right number for the wrong cohort; it includes
+  sub-2% stops the live order path refuses. The verdict re-derives at -1.84 on the correct cell.
+- **Sec 12.18f's "independence is measured"** — `t = +1.07` is a non-rejection, and about a quarter
+  of that slope is the `drift x T` term.
+- **Sec 12.19b's tick-bug blast radius** — `_round_tick` exists only in `paper_broker.py` (three call
+  sites) and `positions` = 0, so the bug contaminates no number in the document; and the artifact is
+  the 0.051R excess over the true grid, not the 0.064R total.
+- Duplicate `12.18f` section headings disambiguated to `12.18f-C7` and `12.18f-C5`.
+
+No gate, no knob, no recorded number and no clock were touched. `mypy` green on both scripts.
+
+
 ### Round 8 — an external audit recomputed round 7 and withdrew five of its claims (2026-09-11)
 
 Three round-8 responses to `docs/analysis/quant-panel-adjudication-2026-09-10.md`, adjudicated one at

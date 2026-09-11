@@ -55,6 +55,7 @@ from app.db.session import AsyncSessionFactory
 from app.signals.classifier import classify_signal
 from app.services.block_bootstrap import newey_west_t
 from app.signals.risk_guards import safe_levels
+from app.trading.regime import kaufman_er
 
 WINDOW, SWING_DAYS = 300, 5
 # ohlcv_1d carries a 922-day HOLE: 2020-12-23 -> 2023-07-03 (measured 2026-09-11, round 7).
@@ -380,9 +381,66 @@ def simulate_rejects(
     return out
 
 
-async def main(n_stocks: int, stride: int, clean_only: bool = False) -> None:
+def _key_decomp(factors: list[Any]) -> dict[str, float]:
+    """ROUND 9 / Kimi C3 — three rival ranking keys from the SAME frozen factor list.
+
+    `wsum`   raw weighted sum, UNNORMALIZED (what confidence divides)
+    `nsc`    breadth: how many factors actually scored
+    `wsc`    the denominator itself (weight of scoring factors)
+    `top`    concentration: the largest single |w*s| as a share of the total
+    Read-only on the frozen scorer's output — nothing is recomputed or reimplemented.
+    """
+    contrib = [(f.weight * f.score) for f in factors if f.score != 0.0]
+    tot = sum(abs(c) for c in contrib)
+    return {
+        "wsum": sum(f.weight * f.score for f in factors),
+        "nsc": float(len(contrib)),
+        "wsc": sum(f.weight for f in factors if f.score != 0.0),
+        "top": (max((abs(c) for c in contrib), default=0.0) / tot) if tot else float("nan"),
+    }
+
+
+def basket_series(frames: dict[str, pd.DataFrame]) -> dict[date, float]:
+    """ROUND 9 / G5 — the equal-weight eligible-universe daily return, as ONE owner.
+
+    §12.20 computed this with an ad-hoc query and then used it as a fixed-horizon
+    scalar (+0.0816%/day). Every reviewer that read round 8 asked for the same thing:
+    the null a trade must beat is the basket over THAT TRADE'S OWN window, paired, not
+    a horizon average. Built from the frames already in memory — same universe
+    definition as `load_frames`, so it inherits the same (documented) 0a.3 survivorship
+    bias and no new query.
+    """
+    acc: dict[date, list[float]] = collections.defaultdict(list)
+    for df in frames.values():
+        r = df["close"].pct_change()
+        for ts, v in r.items():
+            if v == v:
+                acc[ts.date()].append(float(v))
+    return {d: statistics.mean(v) for d, v in acc.items() if v}
+
+
+def basket_window(bser: dict[date, float], d0: date, d1: date) -> tuple[float, int]:
+    """Compounded basket return over (d0, d1] in %, and the session count = holding period.
+
+    The session count IS `T`: the probe caps at SWING_DAYS but trades exit early at a
+    barrier, so mean T is strictly less than the cap and has never been emitted.
+    """
+    if d1 <= d0:
+        return 0.0, 0
+    c, n = 1.0, 0
+    for d in sorted(bser):
+        if d0 < d <= d1:
+            c *= 1.0 + bser[d]
+            n += 1
+    return (c - 1.0) * 100.0, n
+
+
+async def main(n_stocks: int, stride: int, clean_only: bool = False,
+               dump: str | None = None) -> None:
     frames = await load_frames(n_stocks)
     print(f"names with usable history: {len(frames)}   (stride {stride}, clean_only={clean_only})")
+    bser = basket_series(frames)
+    print(f"basket sessions: {len(bser)}  mean daily {100*statistics.mean(bser.values()):+.4f}%")
     engine = BacktestEngine(BacktestConfig(capital=CAPITAL, risk_pct=RISK_PCT))
 
     panels = gate_pass = swing_cls = lvl_reject = 0
@@ -454,8 +512,28 @@ async def main(n_stocks: int, stride: int, clean_only: bool = False) -> None:
             seg_soft = closes.iloc[max(0, i - WINDOW + 1):stop_bar + 1]
             if (seg_soft.pct_change().abs().dropna() > 0.08).any():
                 ca_soft += 1
+            _entry_d, _exit_d = df.index[i + 1].date(), _as_date(rec.exit_date)
+            _bench, _T = basket_window(bser, _entry_d, _exit_d)
+            _er = kaufman_er([float(x) for x in closes.iloc[max(0, i - 20):i + 1]])
             trades.append({
-                "sym": sym, "entry": df.index[i + 1].date(), "exit": _as_date(rec.exit_date),
+                "sym": sym, "entry": _entry_d, "exit": _exit_d,
+                # ROUND 9 — the three columns every round-8 reviewer converged on.
+                # T: the probe caps at SWING_DAYS but exits early; mean T was never emitted,
+                #    and every per-day / drift-null statement is conditional on it.
+                # bench/excess: the PAIRED drift null (G5) — this trade's own window, not a
+                #    fixed-horizon scalar. Also removes the drift*T term from the stop-width
+                #    family, which re-reporting in raw % does NOT remove (C2/C3).
+                # er: the deployed display path drops ER < 0.30 and the corpus never did,
+                #    so the offered set is narrower than the corpus along an untested axis.
+                "T": _T, "bench": _bench, "excess": float(rec.pnl_pct) - _bench,
+                "er": _er if _er is not None else float("nan"),
+                # ROUND 9 / Kimi C3 — the confidence NORMALIZER, decomposed.
+                # confluence.py:160 divides by the weight of factors that SCORED, so one
+                # 0.8 factor reads 80% while four moderate agreeing factors read ~50%: the
+                # key the UI sorts by mechanically rewards SPARSE conviction. rho(conf, R)
+                # = -0.018 may therefore be the normalizer's fault rather than the factors'.
+                # These four columns let the same panels be re-ranked by three rival keys.
+                **_key_decomp(res.factors),
                 "R": R, "Rw": clamp_ratio_f(R, WINSOR_R), "w": w_pct,
                 "ret_pct": float(rec.pnl_pct), "conf": res.confidence_pct,
                 "dir": res.direction, "qty": qty, "entry_px": rec.entry_price,
@@ -476,6 +554,21 @@ async def main(n_stocks: int, stride: int, clean_only: bool = False) -> None:
     print(f"  ... rejected at the level stage (cap/wrong-side/degenerate)   : {lvl_reject:,}")
     print(f"  ... dropped as unadjusted corporate actions (|move|>25%)      : {ca_drop:,}")
     print(f"  ... RESOLVED TRADES                                           : {len(trades):,}")
+
+    # ROUND 9: write the artifact FIRST. One expensive pass produces the per-trade table;
+    # every cell, contrast and unit-change downstream is then a cheap read off the file
+    # (Kimi R4). Emitted before the report sections so a small-n run still yields the dump.
+    if dump:
+        import csv
+        cols = ["sym", "entry", "exit", "T", "dir", "w", "R", "Rw", "ret_pct", "ret_atr",
+                "bench", "excess", "cash", "conf", "er", "straddle", "atr_pct", "rvol",
+                "log_close", "entry_px", "qty", "wsum", "nsc", "wsc", "top"]
+        with open(dump, "w", newline="") as fh:
+            wtr = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
+            wtr.writeheader()
+            wtr.writerows(trades)
+        print(f"== round 9: dumped {len(trades)} trades x {len(cols)} cols -> {dump} ==")
+
     if not trades:
         return
 
@@ -862,5 +955,8 @@ if __name__ == "__main__":
     ap.add_argument("--stride", type=int, default=10)
     ap.add_argument("--clean-only", action="store_true",
                     help="skip panels whose 300-bar window straddles the 922-day ohlcv_1d hole")
+    ap.add_argument("--dump-trades", default=None,
+                    help="write the per-trade table to this CSV path (round 9 / Kimi R4): one "
+                         "expensive pass, then every cell/contrast is a cheap read off the file")
     args = ap.parse_args()
-    asyncio.run(main(args.stocks, args.stride, args.clean_only))
+    asyncio.run(main(args.stocks, args.stride, args.clean_only, args.dump_trades))

@@ -627,6 +627,56 @@ else.
   — TimescaleDB hypertables need `timescaledb_pre_restore()`/`post_restore()`) — details in
   `RUNBOOK.md` §9. **Ask before anything that writes to, truncates or migrates live data.**
 
+- **⭐⭐⭐ ROUND 9 (2026-09-11) — E3 WAS RUN, THE PAIRED NULL REFUTED OUR OWN α, AND THE PANEL IS CLOSED.**
+  Five responses to §17b's invitation (*run E1/E2/E3 or refute a §16.1 row*). ⭐ **The first round that
+  shipped code with itself:** `swing_dependence_probe.py` gained the holding period `T`, a **paired**
+  matched-window basket return, entry-day Kaufman ER and a confidence-normalizer decomposition, plus
+  `--dump-trades`; `scripts/round9_cells.py` reads the artifact. **`probe-185` reproduced to 4 dp.**
+  New §12.24–§12.31 · §13.9 (plan) · §13i (ledger) · **§16.1c (card, supersedes §16.1b)** · §17c.
+  ⛔⛔ **THE BIGGEST CORRECTION IS OURS: §12.20a's "the correct null roughly DOUBLES the deficit"
+  (α = −0.137…−0.172R) IS WITHDRAWN.** It multiplied a drift from **789 post-gap sessions** by an
+  **assumed** 5-session horizon and subtracted it from trades in *different* sessions whose measured
+  **mean hold is 3.59** (median 5; **14.6% same-session exits**). **Paired over each trade's own window
+  the basket is NEGATIVE on the tradeable book** (−0.166% BUY, −0.338% E3). ⇒ ⭐⭐ **GROSS ALPHA ON THE
+  TRADEABLE BOOK IS ZERO: paired excess −0.0218%, t = −0.07 (n=82)** — the ALL book's basket is +0.247%
+  and BUY's is −0.166%, so **SELL signals fire into rising tape and BUY signals into falling tape; the
+  gross loss is WHEN it trades plus cost, not what it picks.** ⚠ t = −0.07 is absence of evidence for
+  any α, not evidence of zero (MDE ≈ ±0.93%/trade).
+  ⭐⭐ **E3 RUN — `clean × BUY × w≥2%`, n=49:** gross **−0.1212R (t −1.26)** · **NET −0.1772R (t −1.84)**
+  explicit · **−0.2432R (t −2.52)** @15bps/leg · −0.3092R (t −3.19) @30bps. **Date-clustering moves every
+  t by ≤0.06** (RVOL collapsed under clustering because it is a per-DATE regressor; a per-trade mean is
+  not). ⛔ **§16.1b's `t = −2.19` is WITHDRAWN as the WRONG COHORT's number** (it includes sub-2% stops
+  the order path refuses) — the verdict re-derives at −1.84. ⚠ **Both published predictions were too
+  optimistic because both held σ at 1.0050; the reachable cell's σ is 0.6712**, and `E[cost in R]` there
+  is **+0.0561R** (confirming 0.0573R to 2%).
+  ⭐⭐ **THE STOP-WIDTH FAMILY, CLOSED A THIRD TIME BY A MECHANISM §12.18f MISSED:** `R = (α + drift·T)/w`
+  with **`d(T)/dw = +0.384, t = +6.69`**. The contrast decays and **flips sign** — **R −0.386 (t −1.55)
+  → raw % −0.262 (t −0.78) → excess vs matched basket +0.069 (t +0.17)**. ⛔ **"Independence is MEASURED"
+  is WITHDRAWN — t = +1.07 is a NON-REJECTION**, ~25% of it drift×T. **Raw % was never enough; only
+  pairing is.**
+  ⭐⭐ **THE HEADLINE, needing no t-statistic: per rupee-day deployed the tradeable book underperforms
+  simply HOLDING the universe it selects from by 19–56 pp/yr (30–63 on the reachable cell) net of
+  explicit charges**, 39–90 at 15 bps/leg. ⚠ **Range = the aggregation choice (mean-of-ratios vs
+  ratio-of-means), NOT uncertainty; the sign is invariant.**
+  ⛔ **TWO HYPOTHESES REFUTED, both making closure CLEANER:** (a) **the confidence normalizer** —
+  `confluence.py:160` divides by the weight of *scoring* factors so sparse conviction outranks broad
+  agreement (**confirmed in code**), **but all four rival ranking keys are ρ ≈ 0, every p > 0.46** ⇒ the
+  negative covers the **factor set**, not one summary; (b) **the undeclared `choppy` filter** hides
+  **67%** of the offered set and separates **nothing** (−0.0001, **p = 0.999**) ⇒ **delete it and
+  `_near_expiry` with it.**
+  ⭐ **CONVERGENCE: three sources, three routes, one defect in E2** — the specified full-cross-sectional
+  IC is not the deployed question and the gate-conditional version is a **collider** on the score's own
+  output ⇒ **E2 = THREE estimands** (3a unconditional · 3b matched-tail · the collider, reported never
+  decided on), `sd(IC_t)` and `E[z|selected]` as **OUTPUTS**, coverage-weighted (cross-section runs
+  46→250 and 1/√46 = 0.147 exceeds the whole break-even band).
+  ⭐ **NEW MECHANICAL RULE — the sample-tag rule in TIME: ⛔ a benchmark measured over one set of
+  sessions may not be subtracted from a return measured over a different set. Pair it, or do not
+  subtract it.** Eighth instance of the family, first in time rather than population.
+  ⛔ **PANEL CLOSED AT ROUND 9 (§17c).** What remains is **B1–B8** (§13.9): delete the two undeclared
+  filters · `Σ notional ≤ cash` rail · the tick SCHEDULE table · span-based gap guard · E1 positional in
+  four units · E2's three estimands + MFE/MAE · the ledger. **User ruling: build the AGREED half first,
+  discuss the rest after.**
+
 - **⭐⭐ ROUND 8 (2026-09-11) — AN EXTERNAL AUDIT RECOMPUTED ROUND 7 AND WITHDREW FIVE OF MY CLAIMS.**
   Three responses; one (`~/Downloads/round8-external-audit-2026-09-11.md`) is the **first review in
   eight rounds to arrive as a reproducible RECOMPUTATION** — **11 of 13 claims reproduce exactly.**

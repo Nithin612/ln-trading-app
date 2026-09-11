@@ -1,6 +1,6 @@
 # Adjudicating the external quant panel — claim by claim, against the code and the DB
 
-**Date:** 2026-09-10, last updated **2026-09-11 (round 8)** · **Branch:** `feature/pre-cycle2-hardening`
+**Date:** 2026-09-10, last updated **2026-09-11 (round 9 — ⭐ the first round that shipped a probe with itself)** · **Branch:** `feature/pre-cycle2-hardening`
 **Inputs:** `/home/nithin/swing_Profit Analysis.txt` and `/home/nithin/positional_Profit_Analysis.txt`
 — five external reviews each (Perplexity · Claude · ChatGPT · Gemini · Kimi) of
 `docs/SYSTEM_REVIEW_FOR_QUANT.md` and `docs/POSITIONAL_REVIEW_FOR_QUANT.md`, plus two
@@ -10,6 +10,69 @@ companion documents (`~/Downloads/REVIEWER_RESPONSE_2026-09-10.md`,
 ---
 
 ## ▶ BRIEF FOR REVIEWERS — read this before the 3,200 lines below
+
+> ### ⭐⭐⭐ ROUND 9 (2026-09-11) — E3 WAS RUN, AND THE PAIRED NULL REFUTED THE DOCUMENT'S OWN α
+>
+> **Five responses; §17b had asked for exactly two things — run E1/E2/E3, or refute a §16.1 row.**
+> One did the second correctly, three converged independently on a defect in E2's estimand, and
+> ⭐ **the round shipped code**: `swing_dependence_probe.py` gained the holding period `T`, a
+> **paired** matched-window basket return, the entry-day Kaufman ER and a confidence-normalizer
+> decomposition, plus a `--dump-trades` artifact; `scripts/round9_cells.py` reads it.
+> **`probe-185` reproduced to 4 decimals**, so the artifact is validated against the record it
+> replaces. Adjudication §12.24–§12.30 · **measurements §12.31** · plan §13.9 · card **§16.1c**.
+>
+> ⛔⛔ **THE BIGGEST CORRECTION IS MINE. §12.20a's "the correct null roughly DOUBLES the deficit"
+> IS WITHDRAWN.** I multiplied a drift measured on 789 *post-gap* sessions by an **assumed**
+> 5-session horizon and subtracted it from trades occupying **different** sessions whose mean hold
+> is **3.59**. `[measured]` **Paired, over each trade's own entry-to-exit window, the basket is
+> NEGATIVE on the tradeable book: −0.166% (BUY), −0.338% (E3).**
+>
+> ⇒ ⭐⭐ **GROSS ALPHA ON THE TRADEABLE BOOK IS ZERO: paired excess −0.0218%, t = −0.07 (n=82).**
+> The ALL book's matched basket is **+0.247%** and the BUY book's is **−0.166%** ⇒ **the SELL
+> signals fire into rising tape and the BUY signals into falling tape.** The book's gross loss is
+> **not stock selection — it is WHEN it trades, plus cost.** No round had looked, because no round
+> had the paired column. ⚠ `t = −0.07` is the absence of evidence for any α, not evidence of zero.
+>
+> ⭐⭐ **E3 — the cell the whole programme turns on — RUN.** `clean × BUY × w ≥ 2%`, n = **49**:
+> gross **−0.1212R (t −1.26)** · **NET −0.1772R (t −1.84)** explicit · **−0.2432R (t −2.52)** at
+> 15 bps/leg. ⭐ **Date-clustering moves every t by ≤ 0.06.** ⛔ §16.1b's **`t = −2.19` is
+> withdrawn as the wrong cohort's number** (it includes sub-2% stops the order path refuses) —
+> **and the verdict re-derives on the right cohort at −1.84.** ⚠ **Both published predictions
+> (Kimi's −1.1…−1.4, mine −0.95…−1.10) were too optimistic because both held σ at 1.0050; the
+> reachable cell's σ is 0.6712.**
+>
+> ⭐⭐ **THE STOP-WIDTH FAMILY, CLOSED A THIRD TIME AND BY A MECHANISM §12.18f MISSED.** There is a
+> THIRD mechanical term — `R = (α + drift·T)/w`, and `d(T)/dw = +0.384, t = +6.69`. The contrast
+> decays and **flips sign** as the terms are removed: **R −0.386 (t −1.55) → raw % −0.262 (t −0.78)
+> → excess vs the matched basket +0.069 (t +0.17).** ⛔ **"Independence is MEASURED" is withdrawn —
+> t = +1.07 is a NON-REJECTION**, and ~25% of that slope is drift×T (predicted +0.0264, measured
+> removal +0.0298). ⚠ **Re-reporting in raw % was never enough; only pairing is.**
+>
+> ⭐⭐ **THE HEADLINE THE DECISION SHOULD BE WRITTEN IN, and it needs no t-statistic:**
+> **per rupee-day deployed, the tradeable book underperforms simply holding the universe it selects
+> from by 19–56 pp/yr (30–63 pp/yr on the reachable cell) net of explicit charges** — 39–90 pp/yr
+> with a 15 bps/leg slippage assumption. ⚠ **The range is the aggregation choice, not uncertainty;
+> the sign is invariant to every choice in the section.**
+>
+> ⛔ **TWO HYPOTHESES TESTED AND REFUTED, and both refutations make the closure CLEANER.**
+> (a) ⭐ **The confidence normalizer** (`confluence.py:160` divides by the weight of *scoring*
+> factors, so sparse conviction outranks broad agreement — confirmed in the code): **all four rival
+> ranking keys are ρ ≈ 0, every p > 0.46** ⇒ **the negative covers the FACTOR SET, not one summary
+> of it.** (b) ⭐ **The undeclared `choppy` display filter** hides **67%** of the offered set and
+> separates **nothing**: contrast −0.0001, **p = 0.999** ⇒ **delete it.**
+>
+> ⭐ **AND THE ROUND'S REAL CONVERGENCE: three sources, three routes, one defect in E2** — the
+> specified test (full cross-sectional IC) is not the deployed question, and the gate-conditional
+> version is a **collider** on the score's own output. **E2 becomes three estimands** (3a
+> unconditional · 3b matched-tail · the collider, reported never decided on) with `sd(IC_t)` and
+> `E[z|selected]` as **OUTPUTS**. §12.28.
+>
+> ⭐ **NEW MECHANICAL RULE — the sample-tag rule in the TIME dimension:** ⛔ **a benchmark measured
+> over one set of sessions may not be subtracted from a return measured over a different set. Pair
+> it, or do not subtract it.** Eighth instance of the family; first in time rather than population.
+>
+> ⛔ **THE PANEL IS CLOSED AT ROUND 9 (§17c).** What remains is B1–B8: builds and measurements, not
+> arguments. **No reviewer can shorten that list.**
 
 > ### ⛔⭐ ROUND 8 (2026-09-11) — AN EXTERNAL AUDIT RECOMPUTED ROUND 7 AND MOST OF IT HOLDS
 >
@@ -2414,7 +2477,7 @@ fictitious power gain. ⭐ Its own counter-evidence is equally sharp: the measur
 must rise steeply with stop width and partially cancel it — **the two effects are tangled and only the
 raw-% and ATR versions can separate them.**
 
-### 12.18f C7 — the core is right, and consequence #3 is wrong by √5
+### 12.18f-C7 C7 — the core is right, and consequence #3 is wrong by √5
 
 ✅ **The core claim is correct and is the most useful thing in the audit after C2 and C8:** every
 trade-level statistic in this document sits **three filters and a barrier simulator** downstream of
@@ -2503,7 +2566,7 @@ author. **A robust SE is not a refinement on a leptokurtic, overlapping, date-cl
 iid SE there is simply the wrong quantity.** ⇒ **every regression in this programme reports iid, HC3
 and clustered t side by side from now on**, which is now how `ols_multi` prints.
 
-### 12.18f ⭐⭐ C5 — MEASURED, and the mechanical term explains the ENTIRE gradient
+### 12.18f-C5 ⭐⭐ C5 — MEASURED, and the mechanical term explains the ENTIRE gradient
 
 `[measured]` The pure arithmetic: draw `w` from the **measured swing distribution**, draw a raw return
 that is **independent of `w`** with the measured sd (3.169%), form `R = ret/w`, and bucket on `w`:
@@ -2720,9 +2783,16 @@ adverse penalty is `tick/2`, so:
 ⇒ **On a ₹39 name the paper broker charges ~10 bps of round-trip rounding the market does not — about
 40% of the entire real 25.5 bps charge stack, and 0.064R of pure model artifact at a 2% stop.**
 
-⚠ **This lands on exactly the cohort that carries the document's remaining positive results.** §12.1's
-reachable-cohort flip, §7's stop-width buckets and §12.10b's denominator pathology are all *about*
-cheap stocks with tight stops — and that is where this artifact is largest.
+⛔⛔ **CORRECTED IN ROUND 9 (§12.30a) — THIS SENTENCE WAS WRONG.** It read: *"this lands on
+exactly the cohort that carries the document's remaining positive results — §12.1's
+reachable-cohort flip, §7's stop-width buckets and §12.10b's denominator pathology."* `[code]`
+**`_round_tick` exists ONLY in `app/broker/paper_broker.py` (defined `:71`, called `:245`, `:263`,
+`:291`, and nowhere else in the repo).** Neither probe nor the backtest engine references it, and
+`positions` = `orders` = 0. ⇒ **The bug contaminates NO number in this document.** It is a genuine
+before-cycle-2 fix with a much smaller blast radius than stated, and §12.21c's parity matrix was
+right while this prose was wrong — two sections of the same round disagreeing. ⚠ **And the
+magnitude is the EXCESS over the true grid, 10.26 bps ⇒ 0.0513R at a 2% stop — not 0.064R, which
+is the total wrong-grid cost** (Kimi C6). The artifact is still largest on cheap tight-stop names.
 
 ⭐ **It also completes the diagnosis of a finding already in the record.** CLAUDE.md and
 `_round_tick`'s own docstring cite quant-verifier's measurement that **"27.2% of our 1m closes are off
@@ -3028,6 +3098,678 @@ actual point: `run_single_stock` walks from **bar 50** with no guard at all, and
 computes stateful EMA/ATR/ADX incrementally with no session-contiguity check anywhere. **The probe is
 the best-guarded of the three consumers and it is the only one that was measured.**
 
+## 12.24 ⭐⭐ ROUND 9 — THE STANDING INVITATION WAS TAKEN UP, AND ONE CARD ROW FALLS
+
+§17b asked for exactly two things: **run one of E1/E2/E3, or name a number in §16.1 you can
+refute.** Five responses arrived. ⭐ **One did the second and did it correctly**, and — more
+usefully — showed that **E1 as specified cannot answer its own question.** Three others converged
+independently on a **defect in E2's estimand** that none of them could have coordinated on. The
+fifth restated the document accurately and asked for the builds.
+
+⚠ **This round is different from rounds 2–8 in one respect that matters: it produced a probe.**
+`swing_dependence_probe.py` gained four column families (holding period `T`, the **paired**
+matched-window basket return, the entry-day Kaufman ER, and the confidence-normalizer
+decomposition) plus a `--dump-trades` artifact; `scripts/round9_cells.py` reads that artifact and
+emits every cell below. **One expensive pass, then every contrast is a cheap read** — which is the
+shape Kimi's R4 asked for and the reason five adjudications could be settled without five walks.
+
+### The scoreboard
+
+| source | shape | decision-changing | verdict |
+|---|---|---:|---|
+| **Claude** (`round8-followup-audit`) | ⭐ recomputation + a redesigned test | **3** | ⭐⭐ **the round.** Refuted a §16.1b row, found a third mechanical term in the stop-width family, and computed plan item 22. Two errors of its own, both found below |
+| **Kimi** | ⭐ independent recomputation + 12 scoped asks | **2** | ⭐ **C3 is the best untested idea in the round** and C5 predicted E3 correctly before it ran. Also duplicated Claude's tick catch independently |
+| **Deepseek** | structural map + 8 purpose-stated requests | **1** | ⭐ **the collider framing of E2 is the sharpest statement of the round's biggest convergence** |
+| **ChatGPT** | estimand/architecture reading + 6 verification packages | **1** | ⭐ the MDE-convention schema and the E2 estimand point; the rest is architecture already adopted in §12.21e |
+| **Gemini** | accurate restatement + a 4-task brief | **0** | ⛔ all four tasks are already answered in the document it was reading (§12.14, §12.12, §12.19, E2). See §13i |
+
+⇒ **7 decision-changing points from 5 sources.** That is a higher rate than round 7 (4 of 37) or
+round 8 (3 of 29) **and the reason is visible**: the two sources that recomputed produced five of
+the seven, and the source that only read produced none. ⭐ **§17b's rule is confirmed by its own
+first application.**
+
+## 12.25 ⭐⭐ THE REFUTATION SUSTAINED — §16.1b's net-cost row does not survive its own unit rule
+
+**The claim under attack** (§12.18g, adopted into §12.21d point 1 and into §13.8's decision
+paragraph): *"the tradeable book, costed correctly, is SIGNIFICANTLY NEGATIVE at t = −2.19 on
+explicit charges alone… the gross test is uninformative; the NET test is not."*
+
+`[measured]` **Reconstructed from the document's own published rows**, exactly:
+
+| book | gross | SE_gross | net | SE_net | mean ratio | SE ratio | **t ratio** | **t_net** | doc |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| ALL (n=185) | −0.1489 | 0.0645 | −0.3011 | 0.0764 | 2.022 | 1.185 | 1.706 | **−3.941** | −3.94 |
+| **BUY (n=82)** | −0.0992 | 0.1055 | −0.2435 | 0.1112 | 2.455 | 1.054 | **2.330** | ⭐ **−2.190** | **−2.19** |
+
+⇒ **The net t is the gross t multiplied by a constant that is entirely determined by the cost and
+the `1/w` distribution.** `net_R = (ret − c)/w`: subtracting a roughly-constant cost in bps moves
+the numerator and leaves the `1/w` amplification intact, so the mean grows 2.46× while the SE grows
+only 1.05×. **No new data enters the estimator between the gross test and the net test.**
+
+⚠ **Where I refine the refutation rather than accept it wholesale.** Claude's framing — *"no new
+information enters"* — is **too strong as a general statement**: a test against a non-zero null is
+a legitimately different question from a test against zero, and it is precisely the question D4's
+posterior asks. **The `1/w` amplification of the COST is also not an artifact** — for a risk-first
+sized book a fixed bps charge genuinely consumes half the risk budget on a 0.5% stop, and that is
+economics, not arithmetic. ⭐ **The refutation bites for a different and narrower reason, which is
+the one that survives: the trades doing the amplifying are trades the live order path REFUSES.**
+
+`[measured]` **The same net question, in the unit §12.10b commits the document to:**
+
+| book | quantity | mean | SE | **t** | **t, ×1.21 BUY inflation** |
+|---|---|---:|---:|---:|---:|
+| ALL | net, explicit | −0.5829% | 0.2330% | **−2.50** | −2.50 |
+| ALL | net, + 15 bps/leg | −0.8829% | 0.2330% | −3.79 | −3.79 |
+| **BUY** | **net, explicit** | **−0.4450%** | 0.3500% | ⭐ **−1.27** | ⭐ **−1.05** |
+| BUY | net, + 15 bps/leg | −0.7450% | 0.3500% | −2.13 | −1.76 |
+
+⇒ ⛔⛔ **"THE NET QUESTION IS ANSWERED NEGATIVELY" IS TRUE OF THE MIXED BOOK AND FALSE OF THE
+TRADEABLE ONE.** In raw % the BUY book reads **t = −1.27** (−1.05 with the inflation the document
+measured and used for the MDE two rows away in the same section). **§12.21d's pushback against the
+architecture source rests on a number that does not survive either of this document's own rules.**
+
+⭐ **And the E3 cell was predictable before it ran — Kimi C5 published the prediction, which is the
+correct way to run a test.** From the document's own inputs (clean × BUY gross −0.0843R, σ 1.0050,
+n 61; E[cost in R] on the reachable book **0.0573R**, §12.18g):
+
+| cohort | net R | SE | **t** |
+|---|---:|---:|---:|
+| clean × BUY × w≥2%, explicit, iid | **−0.1416** | 0.1287 | **−1.10** |
+| clean × BUY × w≥2%, explicit, ×1.157 inflation | −0.1416 | 0.1489 | **−0.95** |
+| clean × BUY × w≥2%, + 15 bps/leg, iid | −0.2091 | 0.1287 | −1.63 |
+
+⚠ **And restricting to `w ≥ 2%` also DROPS trades, so n < 61 and the SE rises further.** Kimi's
+published prediction was *"net ≈ −0.15R, t ≈ −1.1 to −1.4, not significant"*; the arithmetic says
+**−0.142R, t −0.95 to −1.10.** ⇒ **E3 was decided by the document's own numbers before the probe ran.**
+
+### ⚠ THE PREDICTIONS ABOVE WERE PUBLISHED BEFORE THE PROBE RAN — and §12.31 says two of them were wrong
+
+⭐ **Kimi's C5 is the right methodology and it is worth naming: it published a numeric prediction
+for E3 before E3 existed, so E3 became a TEST rather than a search.** I published a second one
+(−0.142R, t −0.95…−1.10) from the same inputs. ⛔ **Both were too optimistic, and for the same
+reason: they held σ fixed at the clean×BUY value of 1.0050.** Dropping the sub-2% cohort removes
+the high-variance tail, `σ` falls to **0.671**, the SE falls with it, and the measured cell is
+**−0.1772R at t = −1.84** — closer to the number under attack than to the prediction.
+
+⇒ ⭐⭐ **The adjudication therefore SPLITS, and neither source had it right:**
+
+| claim | verdict |
+|---|---|
+| *"`t = −2.19` is the wrong cohort's number"* — Claude Part B | ✅ **UPHELD.** It is `BUY`, all windows, all stop widths, including trades the order path refuses |
+| *"the net question is NOT answered on the tradeable book"* — Claude Part B's conclusion | ⛔ **REFUTED BY MEASUREMENT.** On the correct cohort it is **t = −1.84** explicit and **t = −2.52** at 15 bps/leg (§12.31) |
+| *"net ≈ −0.15R, t −1.1…−1.4, not significant"* — Kimi C5 | ⚠ **half right** — the mean is −0.177R, the t is −1.84 |
+| §12.18g's **conclusion** (*the net question is answered negatively*) | ⭐ **SURVIVES its own number's withdrawal.** The number was from the wrong cohort; the right cohort says the same thing less loudly |
+
+⇒ **The cleanest statement of what round 9 did to §16.1b's row: the NUMBER is withdrawn, the
+VERDICT is re-derived on the correct population, and it is weaker than published and still
+negative.** ⚠ **That is not the same as "Claude's refutation failed"** — without it, the document
+would still be quoting a `t` from a population its own order path refuses.
+
+### ⭐ What survives, and it is stronger than the t ever was
+
+⚠ **None of this rescues the strategy, and two things get sharper:**
+
+1. ⭐⭐ **Plan item 22, open since round 1, computed.** Per rupee-day deployed, against the basket
+   the book selects from — **and the sign is invariant to the one input nobody had measured:**
+
+   | book | net of | per trade | T=2 | T=3 | T=4 | T=5 |
+   |---|---|---:|---:|---:|---:|---:|
+   | ALL | explicit | −0.583% | −94.0 pp/yr | −69.5 | −57.3 | −49.9 |
+   | **BUY** | **explicit** | **−0.445%** | **−76.6 pp/yr** | **−57.9** | **−48.6** | ⭐ **−43.0** |
+   | BUY | +15 bps/leg | −0.745% | −114.4 | −83.1 | −67.5 | −58.1 |
+
+   ⚠ **The table above is the PREDICTION, computed from an assumed `T` because nobody had measured
+   it.** `[measured]` **mean `T` is 3.59 sessions, not 5** (median 5, and **14.6% of trades exit in
+   the SAME session**) — so the per-trade loss is spread over fewer days and the per-day figure is
+   worse than every column above. ⛔ **But the basket half of the comparison also moved, and it
+   moved further: see §12.31. The measured gap is −19 to −56 pp/yr on BUY, not −43.**
+   **What survives unconditionally is the SIGN, and that it needs no significance test.**
+
+2. ⭐ **The posterior against the drift-inclusive hurdle.** ⚠ **Two SEs for one cell, same round:**
+   D4 used **0.1287** (iid) and §16.1b's MDE row used **0.1490** (inflation-adjusted). `[verified]`
+   Recomputed consistently at the inflation-adjusted SE, against three hurdles:
+
+   | prior sd | P(μ > 0) | P(μ > 0.111 break-even) | ⭐ **P(μ > 0.199 = break-even + drift)** |
+   |---:|---:|---:|---:|
+   | 0.03R | 45.6% | 0.005% | **0.000%** |
+   | 0.05R | 42.9% | 0.58% | **0.001%** |
+   | 0.10R | 37.6% | 4.9% | **0.33%** |
+   | 0.20R *(absurdly generous)* | 32.5% | 8.3% | **1.70%** |
+
+   ⚠ **This is the arithmetic of the published inputs and BOTH of its inputs were wrong.** The
+   `0.199R` hurdle is `break-even + 0.088R`, and the `+0.088R` is an **unpaired** drift taken from
+   a different block of sessions than the trades occupy. ⛔ **Paired, the basket over these
+   trades' own windows is NEGATIVE** (§12.31), so the drift-inclusive hurdle is **+0.008R**, not
+   +0.199R — a 25× change that runs AGAINST the document. ⭐ **The SE inconsistency Claude found
+   is real and is fixed; the conclusion it was used to draw is withdrawn.**
+
+⇒ ⭐ **THE SUPPORTABLE STATEMENT, THIRD REVISION:** *the GROSS question is underpowered and will
+stay so for a decade; the NET question is answered negatively on the MIXED book and is **NOT**
+answered on the tradeable one; and the decision does not depend on either, because the ₹/day gap
+against the basket is 43–77 pp/yr and the posterior against that hurdle is under 2%.*
+**The decision is economic and it was never going to be a t-statistic.**
+
+⚠ ⭐ **AND THE FAMILY ERROR, SIXTH INSTANCE.** §12.18g read a level (`t = −2.19` on one cohort)
+and never asked whether it survived the restriction that the cohort's own order path imposes.
+That is C2's error — *a quantity computed on a subgroup is not evidence about the subgroup until
+it is compared with its complement* — wearing a different hat: **a quantity computed on a
+population is not evidence about a SUB-population until it is recomputed there.** It was committed
+inside §12.18, the section that named it.
+
+## 12.26 ⭐⭐ A THIRD MECHANICAL TERM IN THE STOP-WIDTH FAMILY — and it is why E1 as specified could not have worked
+
+**This is the most valuable thing in round 9 and it is not the refutation.** §13.8's E1 says:
+re-report the positional stop-width family in raw %, ATR units and net ₹. ⭐ **Re-reporting in
+raw % removes ONE mechanical term and leaves a second one of comparable size.**
+
+`R = (α + drift·T) / w`, where `T` is the realised holding period:
+
+| term | direction of its effect on the tight-vs-wide R spread | removed by raw %? |
+|---|---|---|
+| `1/w` amplification | makes **tight** look **worse** (negative contribution to the spread) | ✅ yes |
+| ⭐ **`drift × T` accrual** | ⭐ makes **tight** look **BETTER** (positive contribution) | ⛔ **NO** |
+| genuine stop-geometry α | unknown — this is the only thing E1 wants | — |
+
+⚠ **Correction to the source that found it.** Claude's own summary row reads *"`drift × T` accrual
+makes **wide** look better"*, and its own next table contradicts it: the drift contribution is
+`drift·T/w`, which is **larger for tight stops** (`+0.192R` at `T`=1.5/`w`=0.638%) than for wide
+(`+0.075R` at `T`=4.5/`w`=4.91%). A tight stop is held for fewer days but divides by a much smaller
+number, and the division wins. **The prose ("the two terms push in opposite directions") is right;
+the table's label is inverted.** The numbers, and the conclusion, are unaffected.
+
+`[verified]` **Sizing it against the document's own `E[1/w]`:**
+
+| `T_tight` / `T_wide` | drift-in-R, tight | drift-in-R, wide | **contribution to the spread** |
+|---|---:|---:|---:|
+| 1.0 / 4.5 | +0.128 | +0.075 | **+0.053R** |
+| 1.5 / 4.5 | +0.192 | +0.075 | **+0.117R** |
+| 2.0 / 4.5 | +0.256 | +0.075 | **+0.181R** |
+
+⇒ ⭐⭐ **The drift term is the same order of magnitude as the effect being interpreted, and its
+sign and size depend entirely on `E[T | w]` — a quantity the probe did not emit until this round.**
+
+### ⭐⭐ And it is already visible in §12.18f's own residual — which is my addition, not the source's
+
+§12.18f simulated a spread of **−0.4470** against a measured **−0.3864**: a **14% over-prediction**,
+which the document read as *"the mechanical term explains all of it, and slightly more than all of
+it."* `[verified]` **Solve the residual for the one unknown:**
+
+```
+observed − simulated = +0.0606R
++0.0606 = 0.0816 × (T_tight/0.638 − T_wide/4.91)      [with T_wide = 4.5]
+⇒ T_tight = 1.06 sessions
+```
+
+⇒ ⭐ **A 0.64% stop being hit in ~1 session is not a fitted parameter, it is the physically obvious
+answer** — and it reproduces the residual exactly. **"The mechanical term explains 116% of the
+spread" and "two mechanical terms partially cancel and neither has been isolated" fit the same data,
+and the second one also explains the 16 percentage points of over-shoot that the first has to
+discard.**
+
+### ⭐⭐ The stronger version: §12.18f's independence is NOT measured, it is un-rejected
+
+§12.18f's load-bearing sentence is: *"The independence assumption is not an assumption — it is
+measured. R7-J's `ret_pct ~ stop_width` gives t = +1.07."*
+
+⛔ **t = +1.07 is a failure to reject independence. It is not a measurement of independence** —
+and the distinction is exactly the one this document has spent nine rounds enforcing everywhere
+else. ⭐ **Worse: the drift×T hypothesis makes a POINT prediction for that slope, and the point
+estimate matches it.**
+
+| quantity | value |
+|---|---:|
+| `[measured]` R7-J slope, `ret_pct ~ stop_width%` | **+0.11235** (SE 0.10480, t +1.07, 90% CI [−0.060, +0.285]) |
+| `[derived]` drift×T prediction at `T` 1.0 → 4.5 over `w` 0.638 → 4.91 | **+0.0669** |
+| `[derived]` drift×T prediction at `T` 1.5 → 4.5 | **+0.0573** |
+
+⇒ ⭐⭐ **The measured slope is POSITIVE, of the sign drift×T requires, 1.7–2.0× its predicted
+magnitude, and comfortably inside its own CI.** The data cannot separate "independent" from
+"exactly the drift×T dependence a rising market forces" — **and §12.18f chose the first without
+noticing the second was on the table.** The conclusion (`1/w` explains most of the swing gradient)
+survives; the claim that independence is *established* does not.
+
+### ⇒ E1 is re-specified, and it merges with §12.20
+
+⭐ **E1 must carry a fourth unit: `raw return % − matched-window basket return %`, per trade, over
+each trade's ACTUAL entry-to-exit window** — plus mean and median `T` per bucket, so the mechanism
+is visible rather than inferred. **§12.20 and E1 are the same measurement and were written as two
+plan items.** `swing_dependence_probe.py` now emits `T`, `bench` and `excess` per trade for exactly
+this reason; `positional_probe.py` needs the same three columns.
+
+⚠ **And one thing the paired column fixes that nobody raised:** `[measured]` the basket's drift is
+**not a constant**. Over the full span of the probe's own universe it is **+0.2042%/day**; over the
+post-gap block §12.20 measured **+0.0816%/day** — a **2.5× difference**. ⇒ **Using one scalar
+drift for all trades is itself a sample-tag violation.** The paired estimator does not need a
+scalar at all, which is a second and independent reason to prefer it.
+
+## 12.27 ⭐ THE POSITIONAL CONTRAST, COMPUTED FOR THE FIRST TIME — and the sign argument is the SEVENTH instance
+
+§13.8 states E1's expected outcome as *"if positional dies the same way [as swing], §4.4, §12.1,
+§12.2, plan item 18 and the σ_R objective all close on one afternoon."* ⛔ **That prior was never
+supported, and §12.1's own rows have never been turned into a contrast.**
+
+`[verified]` From §12.1's published table, computed here for the first time:
+
+| cohort | n | mean R | sd | SE | t vs 0 |
+|---|---:|---:|---:|---:|---:|
+| ALL | 385 | −0.0320 | 2.088 | 0.1064 | −0.30 |
+| WIDE (w ≥ 2%) | 271 | **+0.0840** | 1.844 | 0.1120 | +0.75 |
+| TIGHT (w < 2%) | 114 | **−0.3060** | 2.566 | 0.2403 | −1.27 |
+| ⭐ **CONTRAST tight − wide** | — | ⭐ **−0.3900** | — | **0.2652** | ⭐ **t = −1.47, p = 0.141** |
+| MDE @ 80% power | — | **+0.7428R** | — | — | the observed contrast is **0.53×** of it |
+
+⇒ ⭐ **§12.2's headline — "removing the sub-2% cohort raises mean R by 0.116R" — is a contrast
+quoted without an SE, and §12.1's "the sign flips" is a level read in two halves.** Neither
+positional bucket is distinguishable from zero and neither is distinguishable from the other.
+**The positional stop-width family is not "about to close like swing"; it is UNDERPOWERED, and
+that is a different plan item.**
+
+### ⚠ But the structural argument against it is itself a level-read — the seventh instance
+
+Claude's C1 argues: under `ret ⊥ w`, `E[R|bucket] = E[ret]·E[1/w|bucket]` and `E[1/w] > 0` always,
+so **every bucket must carry the sign of the raw mean**. Swing's buckets are −0.4726 and −0.0862
+(same sign ✅ consistent); positional's are −0.306 and **+0.084** (opposite ⇒ *"`1/w` cannot produce
+this at any μ_ret"*).
+
+⭐ **The algebra is right and the inference from it is not.** `[verified]`
+
+| question | answer |
+|---|---:|
+| P(true WIDE mean < 0 \| +0.084 ± 0.1120) | ⭐ **22.7%** |
+| P(true TIGHT mean > 0 \| −0.306 ± 0.2403) | 10.1% |
+
+⇒ **Roughly one chance in four that the wide bucket is truly negative and the pure-`1/w` story
+holds after all.** The sign pattern is a property of two point estimates that are each within 1.3
+SE of zero. ⛔ **"`1/w` cannot produce this" should read "the point estimates are inconsistent with
+it; the data does not exclude it."** ⭐ **That is the family error — reading a level instead of
+testing it — committed by the source that named the family, in the same document that named it.
+Seventh instance, and the third committed by whoever was enforcing the rule.**
+
+⇒ ✅ **E1's verdict: the CATCH is accepted (the prior was unsupported, the contrast was never
+computed, and it is t = −1.47), the MECHANISM claim is downgraded to "suggestive, 23% chance of
+being noise", and E1's SPECIFICATION changes per §12.26 — four units plus `T`, not three.**
+
+## 12.28 ⭐⭐ THE ROUND'S REAL CONVERGENCE — E2's ESTIMAND IS AMBIGUOUS, AND THE SPECIFIED ONE IS NOT THE DEPLOYED QUESTION
+
+⭐ **Three sources, working from three different framings, arrived at the same defect in the one
+test the 2026-10-31 decision is supposed to rest on.** That is the strongest convergence in nine
+rounds, and unlike round 7's four-way direction-split convergence it is about an **unrun** test,
+so it is still cheap to act on.
+
+| source | its route to the defect |
+|---|---|
+| **Deepseek** (Request 1) | ⭐⭐ **the collider.** The 70 gate is a threshold on the same weighted sum the score IS, so IC *within gate-passers* is conditioned on the estimator's own output. Only the **unconditional** IC is not a collider |
+| **Kimi** (C1) | ⭐ **estimand drift.** §12.15 pre-registered **3b** as *the conditional forward return of gate-passers vs date-and-characteristic-matched eligible non-passers*. §13.8's E2 silently became *full-cross-sectional panel IC*. Those are different objects and only the first maps to the picker's job |
+| **ChatGPT** (§16) | ⭐ **the tail-vs-cross-section mismatch.** The system does not buy the cross-section; it scores → gates → presents ~200 → a human takes 2–3. A full-universe IC can be ≈0 while tail selection is useful, and vice versa |
+
+⇒ ✅ **ALL THREE ACCEPTED. They are one defect seen from three sides, and §12.10c already carried
+the principle** (*"near-zero IC can coexist with a valuable event strategy"* — ChatGPT's R4 point,
+accepted in round 4 and then not applied when E2 was specified in round 8).
+
+### ⭐ The repair: E2 is THREE estimands, and they cost one pass
+
+| # | estimand | what a null means | what a positive means |
+|---|---|---|---|
+| **E2a** | ⭐ **UNCONDITIONAL IC** — composite score vs h=5d forward return, across the eligible universe, per date | **the scorer carries nothing and no pipeline repair recovers it** — this is 3a, and it is clean closure | the information exists; ask where it is lost |
+| **E2b** | ⭐⭐ **MATCHED-TAIL CONTRAST** — gate-passers vs date-and-characteristic-matched non-passers (the pre-registered 3b) | the gate selects nothing | ⭐ the gate is the value and the ranking is not |
+| **E2c** | gate-conditional IC within passers | ⚠ **a COLLIDER — report it, never decide on it** | — |
+
+⇒ ⭐ **The decision tree is what makes this worth the repair, and none of the three branches is
+reachable from E2 as written:**
+
+```
+E2a ≈ 0  and  E2b ≈ 0   ->  clean closure: the scorer carries nothing
+E2a > 0  and  E2b ≈ 0   ->  information exists, the GATE destroys it  ->  the 70 threshold is the bug
+E2a ≈ 0  and  E2b > 0   ->  a tail/event selector, not a ranker  ->  a different (valid) strategy class
+E2a > 0  and  E2b > 0   ->  information survives to the offered set  ->  the loss is DOWNSTREAM
+                            (level stage / geometry / execution) -> pipeline repair, not closure
+```
+
+⚠ **And two inputs must become OUTPUTS of the same pass, not assumptions carried into it:**
+
+1. ⭐ **`sd(IC_t)`.** §16.1b already flags 0.10 as `[ASSUMED]` and every power number as linear in
+   it — but §13.8 still calls E2 "fully powered", which is **"fully powered conditional on an
+   assumption"** (ChatGPT §17). ⚠ **Kimi C8 adds the harder half: the cross-section is not 250
+   names.** §12.23 measured **46 → 250** names per session and **65% of names below 95% coverage**;
+   at 46 names the pure-noise IC floor is `1/√46` = **0.147**, which exceeds the entire 0.018–0.071
+   break-even band. **Early sessions contribute ~nothing and the power table has to be
+   coverage-weighted.** ✅ Both accepted. ⭐ **And Kimi's cheapest suggestion first: if
+   `factor_sweep.py` stored per-date ICs, `sd(IC_t)` is measurable TODAY and retires before E2 runs.**
+2. ⭐ **`E[z | selected]` = 2.268** (Claude D4). It is a **normal-tail** approximation applied to a
+   hard gate at 70 on a bounded score whose passers have mean 77.8, sd 5.8 (§12.10c) — not a normal
+   tail. Every break-even-IC figure (0.018–0.071) and therefore **KILL LINE 3's SESOI** is linear in
+   it. ✅ **Accepted: measure it in the same pass.**
+
+⚠ ⭐ **The honest consequence for the decision date: E2 is no longer "one query".** It is one pass
+producing three estimands and two previously-assumed constants. It is still an afternoon of compute
+and it is still the only fully-powered question left — but §13.8's "the decisive test is ONE query"
+was an under-specification, and under-specifying the decisive test is how KILL LINE 3 went wrong
+twice.
+
+## 12.29 ⭐⭐ THE CONFIDENCE NORMALIZER — Kimi C3, CONFIRMED BY CODE, and it reframes ρ = −0.018
+
+⭐ **The best untested idea in the round, and it costs four columns on a probe that already runs.**
+
+`[code]` `app/analysis/confluence.py:159-166`:
+
+```python
+total_weighted = sum(f.weight * f.score for f in factors)
+total_weight   = sum(f.weight for f in factors if f.score != 0.0)   # <- SCORING factors only
+normalized     = total_weighted / total_weight
+confidence_pct = int(abs(normalized) * 100)
+```
+
+⇒ ⭐⭐ **The denominator counts only the factors that FIRED. One factor scoring 0.8 reads 80%.
+Four factors agreeing at 0.6/0.5/0.5/0.4 read ~50% and fail the gate.** The key mechanically
+**rewards sparse conviction and punishes broad agreement** — which is the precise inverse of what
+the word "confluence" means and of what `trading-domain.md`'s first rule demands.
+
+⚠ **This is not new as a mechanism** — it is §1 #2 of CLAUDE.md, it is why the `entry_diversity`
+gate exists, and it is how SRTL entered on `RSI_DIVERGENCE` alone. ⭐ **What is new is the
+inference Kimi draws, and it is right: the deployed picker sorts DESCENDING on this key
+(§12.21a), so the top of the offered list is systematically enriched in SPARSE-EVIDENCE signals.
+`ρ(confidence, R) = −0.018` may therefore be a property of the NORMALIZER rather than of the
+FACTORS, and the document has been reading it as the latter.**
+
+⇒ ✅ **ACCEPTED AND BUILT.** `swing_dependence_probe.py` now emits four columns per trade from the
+frozen scorer's own output — `wsum` (the un-normalized weighted sum), `nsc` (breadth: how many
+factors scored), `wsc` (the denominator itself) and `top` (the largest single contribution's
+share) — and `round9_cells.py` re-ranks the same panels by each. **Nothing is recomputed or
+reimplemented; the frozen scorer is read.** Three outcomes, all decision-relevant:
+
+- **a rival key ranks materially better** ⇒ ⭐ the information was **destroyed by one division**,
+  the repair is a one-line change to a *reporting* quantity (not to the frozen scorer's decision),
+  and §13.8's closure paragraph is wrong about which object carries the failure
+- **no key ranks** ⇒ ⭐ **the closure is much cleaner than it was** — the negative now covers the
+  factor set, not just one summary of it
+- **breadth ranks but confidence does not** ⇒ the `entry_diversity` gate, which is ACTIVE on a
+  hard-rule argument and has never been credited with a measured edge, is doing real work
+
+⚠ **One honest bound.** `confidence_pct` is also the **gate**, not only the sort key, so every
+trade in the artifact already passed a ≥70 filter on it. Re-ranking *within* the passers is
+therefore **range-restricted** — a rival key gets a fairer test than confidence does. ⇒ **A null
+on the rival keys is strong evidence; a positive on them is suggestive and belongs in E2a's
+unconditional pass, not here.** That is the same collider §12.28 just repaired, and it applies to
+this test too.
+
+## 12.30 ⭐ FOUR CORRECTIONS TO THE RECORD — three from the round, all cheap, all confirmed here
+
+### 12.30a ⛔⛔ The tick bug contaminates NO number in this document — §12.19b overstated its blast radius
+
+⭐ **Claude D3 and Kimi C6 caught this independently, and the code settles it.**
+
+§12.19b: *"This lands on exactly the cohort that carries the document's remaining positive results
+— §12.1's reachable-cohort flip, §7's stop-width buckets and §12.10b's denominator pathology."*
+
+`[code]` **Verified by grep, three ways:**
+
+| consumer | applies `_round_tick`? |
+|---|---|
+| `scripts/swing_dependence_probe.py` (the source of §12.10b, §12.18f, R7-J, R7-K) | ⛔ **no — zero references** |
+| `scripts/positional_probe.py` (the source of §12.1, §7) | ⛔ **no — zero references** |
+| `app/backtest/engine.py` (the source of the 1,975-trade headline) | ⛔ **no — zero references** |
+| `app/broker/paper_broker.py` | ✅ yes — `_round_tick` at `:71`, called at `:245`, `:263`, `:291`, **and nowhere else in the repo** |
+
+⇒ ⛔ **`positions` = `orders` = 0 rows, and the only consumer of the wrong grid is the paper
+broker. The bug contaminates nothing in the adjudication.** It is a **genuine before-cycle-2 fix
+with a much smaller blast radius than stated**, and §12.21c's parity matrix was right while
+§12.19b's prose was wrong — **two sections of the same round disagreeing, in the round that
+adopted the larger claim into §16.1b.** ✅ **§12.19b is corrected in place below.**
+
+### 12.30b ⚠ The 0.064R figure is the WRONG one of two — Kimi C6
+
+`[verified]` On the ₹39 archetype, half-tick adverse per leg:
+
+| quantity | value | in R at a 2% stop |
+|---|---:|---:|
+| rounding at the ₹0.05 grid, round trip | 12.82 bps | **0.0641R** |
+| rounding at the true ₹0.01 grid, round trip | 2.56 bps | 0.0128R |
+| ⭐ **EXCESS — the actual artifact** | ⭐ **10.26 bps** | ⭐ **0.0513R** |
+
+⇒ §12.19b's sentence uses the **excess** for its "~10 bps" and "40% of the 25.5 bps stack" and the
+**total** for its "0.064R". ✅ **The artifact is 0.051R, not 0.064R.** Direction and the
+before-cycle-2 classification are unchanged.
+
+### 12.30c ⚠ Two sections are numbered `12.18f` — Claude D5
+
+`[verified]` Line 2417 (`C7 — the core is right…`) and line 2506 (`C5 — MEASURED…`), with
+`12.18e` at 2469 **between** them. §16.1b cross-references "§12.18f" for both. ⭐ **In a document
+whose §16.1 is explicitly the contract, an ambiguous cross-reference is the same class of defect
+as an unstamped sample tag.** ✅ **Renumbered in place: the C7 section becomes `12.18f-C7` and the
+C5 section `12.18f-C5`, and §16.1b's pointers are disambiguated.**
+
+### 12.30d ⚠ "MDE" needs a convention, not just a number — ChatGPT §4
+
+§16.1b adopted **`2.8016·SE` at 80% power**, correcting `2·SE`. ⭐ **Right correction, and it is
+still under-specified:** 2.8016 = `z(0.975) + z(0.80)` is **two-sided α=0.05 at 80% power**. A
+one-sided α=0.05 test at the same power needs **2.487·SE**; the document also reasons in 90%
+intervals, t≈2, and a DSR bar at t≈3.6 — **which are four conventions in one reference card.**
+
+✅ **ACCEPTED as a schema rule rather than a number.** ⚠ Bounded honestly: `[verified]` it changes
+nothing operationally (the honest cell's MDE is +0.417R two-sided and +0.371R one-sided; no
+plausible edge is between them). ⭐ **The reason to adopt it anyway is that this exact class of
+ambiguity — a statistic quoted without the convention that defines it — is what produced the
+`2·SE` error the same card corrected one round ago.** From here, no MDE is quoted without
+`alpha · sidedness · power · SE-flavour`.
+
+## 12.31 ⭐⭐⭐ ROUND-9 MEASUREMENTS — E3 RUN, AND THE PAIRED NULL INVERTS §12.20
+
+`[measured]` `swing_dependence_probe.py --stocks 250 --stride 10 --dump-trades` (2026-09-11,
+**185 trades — `probe-185` reproduced exactly**, every published moment matches to 4 decimals)
+→ `scripts/round9_cells.py`. ⭐ **The artifact is the deliverable: one pass, 185 × 25 columns,
+and every cell below is a cheap read off it.**
+
+### 12.31a ⭐⭐ The holding period, emitted for the first time — and the 5-session null was never right
+
+| cohort | n | **mean T** | median T | **T = 0 (same-session exit)** | mean w | E[1/w] |
+|---|---:|---:|---:|---:|---:|---:|
+| ALL | 185 | **3.59** | 5.0 | **14.6%** | 4.43% | 0.597 |
+| BUY | 82 | 3.55 | 5.0 | 17.1% | 4.34% | 0.566 |
+| clean | 147 | 3.68 | 5.0 | 13.6% | 4.41% | 0.586 |
+| clean × BUY | 61 | 3.77 | 5.0 | 14.8% | 4.37% | 0.438 |
+| ⭐ **clean × BUY × w≥2% (E3)** | **49** | **4.00** | 5.0 | 10.2% | 5.20% | **0.220** |
+
+⇒ ⭐ **Every "per day" statement and every fixed-horizon null in the record was conditional on a
+number nobody had measured**, and §12.20's 5-session assumption over-states the exposure window by
+**~39%** on the mixed book. ⭐ **`T` also rises sharply with stop width — `d(T)/dw = +0.384,
+SE 0.057, t = +6.69`** — which is the premise of §12.26's third mechanism, now measured, and the
+largest |t| in nine rounds. ⚠ **It is a structural fact, not an edge claim, so the DSR bar does
+not apply to it** — but it settles that the mechanism exists.
+
+### 12.31b ⭐⭐ E3 — the one cell the programme turns on, computed in one pass
+
+`[measured]` **clean × BUY × w ≥ 2%, n = 49.** Charges = the measured 25.5 bps explicit stack;
+slippage reported as a ladder because it can never be measured retrospectively (`orders` = 0).
+
+| quantity | mean | iid SE | **t** | clustered SE | **t (date-clustered)** |
+|---|---:|---:|---:|---:|---:|
+| gross R | −0.1212 | 0.0959 | −1.26 | 0.0991 | −1.22 |
+| ⭐ **NET R, explicit** | ⭐ **−0.1772** | 0.0961 | ⭐ **−1.84** | 0.0986 | **−1.80** |
+| NET R, +10 bps/leg | −0.2212 | 0.0963 | −2.30 | 0.0983 | −2.25 |
+| ⭐ **NET R, +15 bps/leg** | **−0.2432** | 0.0965 | ⭐ **−2.52** | 0.0982 | **−2.48** |
+| NET R, +30 bps/leg | −0.3092 | 0.0970 | −3.19 | 0.0978 | −3.16 |
+| gross raw return % | −0.5781 | 0.4941 | −1.17 | 0.5142 | −1.12 |
+| NET raw return %, explicit | −0.8331 | 0.4941 | −1.69 | 0.5142 | −1.62 |
+| NET return / ATR20 | −0.3510 | 0.2017 | −1.74 | — | — |
+| NET cash ₹ | −307.50 | 184.57 | −1.67 | 191.13 | −1.61 |
+| ⭐ **E[cost in R] on this cohort** | ⭐ **+0.0561** | 0.0034 | +16.4 | — | — |
+
+⇒ ⭐⭐ **THREE THINGS THIS SETTLES AT ONCE.**
+**(1)** **§12.18g's `E[cost in R] = 0.0573R` estimate for the reachable book is confirmed at
+0.0561R (2% error)** — the Jensen correction was right and its own caveat was the precise answer.
+**(2)** ⭐ **Date-clustered SEs move nothing** — every t shifts by ≤0.06. ChatGPT's §6 demand (*"we
+cannot have RVOL invalid under iid and the net mean apparently valid under iid"*) is **answered:
+the net mean survives clustering, and RVOL did not.** The two are different because RVOL is a
+market-wide per-DATE regressor and the net mean is per-trade. ✅ **Legitimate, and now verified
+rather than asserted.**
+**(3)** ⛔ **Restricting to the live-reachable book makes the swing gross WORSE, not better**
+(−0.0843 → −0.1212) while cutting σ from **1.0050 → 0.6712.** ⚠ **This is the OPPOSITE of §12.1's
+positional result**, where the reachable cohort was the better one — so the two classes do not
+share the mechanism, which is a second independent reason E1's prior (§12.27) was unsupported.
+
+### 12.31c ⭐⭐⭐ THE PAIRED DRIFT NULL — and it REFUTES §12.20a's central claim
+
+§12.20a: *"the correct null roughly DOUBLES the point-estimate deficit: −0.084R against zero
+becomes −0.137R to −0.172R against the drift."* `[measured]` **Paired per trade, over each
+trade's OWN entry-to-exit window:**
+
+| cohort | **basket over the trade's own window** | t | **PAIRED excess (trade − basket), gross** | t | **NET excess** | t |
+|---|---:|---:|---:|---:|---:|---:|
+| ALL | **+0.2468%** | +1.72 | −0.5746% | −2.15 | −0.8296% | −3.11 |
+| ⭐ **BUY** | ⛔ **−0.1659%** | −0.71 | ⭐ **−0.0218%** | ⭐ **−0.07** | −0.2768% | −0.83 |
+| clean | +0.1969% | +1.24 | −0.6055% | −2.05 | −0.8605% | −2.91 |
+| clean × BUY | ⛔ **−0.3037%** | −1.09 | −0.2250% | −0.60 | −0.4800% | −1.29 |
+| ⭐ **E3** | ⛔ **−0.3376%** | −1.05 | −0.2405% | −0.54 | −0.4955% | −1.11 |
+
+⇒ ⛔⛔ **THE BASKET OVER THE TRADEABLE BOOK'S OWN WINDOWS IS NEGATIVE.** §12.20 measured
++0.0816%/day on the post-gap block and multiplied by an assumed 5 sessions to get **+0.408%**;
+the trades' actual windows returned **−0.166% (BUY) and −0.338% (E3)**. ⭐ **The "correct null"
+is not +0.088R, it is −0.048R on the E3 cell — a swing of 0.136R, in the direction that makes the
+book look BETTER.**
+
+⇒ ⭐⭐ **AND THE FINDING THAT FALLS OUT IS THE MOST INTERESTING THING IN THE ROUND: on the
+tradeable book, GROSS ALPHA IS ZERO.** `excess = −0.0218%, t = −0.07` on 82 BUY trades. **The
+book's gross loss is not stock selection. It is WHEN it trades.** The ALL book's basket is
++0.247% while the BUY book's is −0.166%, so **the SELL signals fire into rising tape and the BUY
+signals into falling tape** — a measurable, adverse timing property that no round has looked for
+because no round had the paired column.
+
+⚠ **Three bounds, stated because they constrain the reading rather than rescue it.**
+**(1)** `t = −0.07` on `n = 82` is **not** evidence of zero alpha; it is the absence of evidence
+of any alpha, with an MDE of roughly ±0.93% per trade. **(2)** The basket inherits the **0a.3
+survivorship defect** (today's liquidity), so its drift is if anything **overstated** — which makes
+the measured α **conservative**. **(3)** The paired excess is **not beta-adjusted**; at β = +0.92
+the correct adjustment is small and moves α slightly positive.
+
+⇒ ⛔ **CONSEQUENCE — three published conclusions are withdrawn, two of them mine and one of them
+round 9's own:** **§12.20a's "the correct null roughly doubles the deficit"** · **§16.1b's
+"α = −0.137R…−0.172R"** · **round-9 Claude's "P(beats the basket) is under 2% at any prior."**
+⭐ **All three used an UNPAIRED drift from a different block of sessions than the trades occupy.**
+⚠ ⭐ **THE RULE THIS EARNS, and it is the generalisation of §16.1's sample-tag rule to TIME: a
+benchmark measured over one set of sessions may not be subtracted from a return measured over a
+different set. Pair it, or do not subtract it.**
+
+### 12.31d ⭐⭐ THE STOP-WIDTH FAMILY — closed a third time, and by the mechanism §12.18f missed
+
+`[measured]` The same contrast, three units, `ALL` (n = 185):
+
+| unit | tight (w<2%, n=30) | wide (w≥2%, n=155) | **contrast** | SE | **t** | p |
+|---|---:|---:|---:|---:|---:|---:|
+| **R** | −0.4726 | −0.0862 | **−0.3864** | 0.2492 | **−1.55** | 0.121 |
+| **raw %** *(removes `1/w`)* | −0.5475 | −0.2854 | **−0.2622** | 0.3381 | **−0.78** | 0.438 |
+| ⭐ **excess vs matched basket** *(removes `1/w` AND `drift×T`)* | −0.5169 | −0.5858 | ⭐ **+0.0690** | 0.4143 | ⭐ **+0.17** | 0.868 |
+
+⇒ ⭐⭐ **The gradient decays −0.386 → −0.262 → +0.069 as the two mechanical terms are removed in
+turn, and the sign FLIPS.** §12.18f closed the family on the `1/w` term alone and its simulation
+over-shot by 14%; **that 14% is the `drift×T` term, and pairing removes it.** ✅ **Claude's C2/C3
+is CONFIRMED BY MEASUREMENT, not merely accepted as an argument.**
+
+`[measured]` **And the slope decomposition confirms the mechanism quantitatively:**
+
+| regression (ALL) | slope | SE | t |
+|---|---:|---:|---:|
+| `d(ret %)/dw` | +0.1053 | 0.1030 | +1.02 |
+| ⭐ `d(T)/dw` | ⭐ **+0.3844** | 0.0574 | ⭐ **+6.69** |
+| `d(excess %)/dw` *(basket removed)* | **+0.0755** | 0.1183 | +0.64 |
+
+⇒ Removing the basket removes **0.0298** of the `ret ~ w` slope; the drift×T prediction is
+`basket_per_day × dT/dw` = 0.0688 × 0.384 = **0.0264**. ⭐ **Agreement to 12%.** ⇒ §12.18f's
+*"independence is not an assumption — it is measured"* is **withdrawn**: the slope is a
+**non-rejection** whose point estimate is ~25% drift×T and ~75% unexplained noise, and the
+document read the first as the second.
+
+⚠ **On the clean × BUY cell all three contrasts are ≈ 0 with MDEs of 1.5–2.0R** — the tradeable
+book cannot see this family at all. ⇒ **The swing stop-width question is CLOSED and should not be
+re-opened in any unit; E1 remains worth running on POSITIONAL only, per §12.27.**
+
+### 12.31e ⛔ TWO HYPOTHESES TESTED AND REFUTED — and both refutations make the closure cleaner
+
+**(i) Kimi C3 — the confidence normalizer. REFUTED.** `[measured]` Four rival ranking keys,
+computed from the frozen scorer's own factor list, on the same 185 panels:
+
+| ranking key | ρ vs R | perm p | ρ vs raw % | perm p |
+|---|---:|---:|---:|---:|
+| ⭐ `confidence_pct` **(the deployed sort key)** | −0.0179 | 0.807 | −0.0262 | 0.728 |
+| raw weighted sum *(un-normalized)* | +0.0544 | 0.465 | +0.0375 | 0.608 |
+| breadth — # of factors that scored | +0.0295 | 0.691 | +0.0149 | 0.834 |
+| weight that scored *(the denominator itself)* | +0.0416 | 0.569 | +0.0187 | 0.795 |
+| concentration — top factor's share | −0.0435 | 0.555 | −0.0179 | 0.801 |
+
+Breadth buckets (ALL): 1 factor **−0.187** · 2 **−0.175** · 3 **−0.073** · 4 **−0.275** · 5 +0.374
+(n=3). **No monotone pattern.**
+
+⇒ ⛔ **The mechanism Kimi identified is real and confirmed in the code (§12.29), and the
+information it was hypothesised to be destroying does not exist.** ⭐⭐ **This is the second
+outcome pre-registered in §12.29 and it is the valuable one: the negative now covers the FACTOR
+SET, not just one summary of it.** Removing the normalizer recovers nothing. ⚠ Bounded as
+pre-registered: all 185 trades already cleared a ≥70 gate **on confidence**, so this is
+range-restricted and a null here is stronger than a positive would have been. **The unconditional
+version is E2a.**
+
+**(ii) Claude G4 — the `choppy` display filter as a selector. REFUTED.** `[measured]`
+
+| cohort | ER < 0.30 (**HIDDEN** by the UI) | ER ≥ 0.30 (shown) | contrast | SE | t | p |
+|---|---:|---:|---:|---:|---:|---:|
+| ALL, R | −0.1489 (n=124) | −0.1488 (n=61) | **−0.0001** | 0.1344 | **−0.00** | **0.999** |
+| ALL, excess vs basket | −0.5714 | −0.5811 | +0.0097 | 0.5535 | +0.02 | 0.986 |
+| clean × BUY, R | −0.0056 (n=35) | −0.1903 (n=26) | +0.1846 | 0.2384 | +0.77 | 0.439 |
+
+⇒ ⛔ **`p = 0.999` is as close to a perfect null as this document has produced.** The filter that
+hides **67% of the offered set** separates nothing. ⚠ **And on the tradeable cell its sign is
+wrong** — the HIDDEN cohort is the better one (+0.18R, not significant). ⇒ ✅ **A9 is decided by
+measurement: DELETE both undeclared filters rather than declare them.** Deleting them also removes
+two axes from §12.8's corpus-vs-deployed estimand gap **at zero cost**, which is the cheapest
+estimand repair in nine rounds.
+
+### 12.31f ⭐ ₹/DAY — plan item 22, measured, and the aggregation choice moves it 2×
+
+⚠ **Two defensible aggregations, and Claude's Part F used neither explicitly.** *Mean-of-ratios*
+counts a same-session exit as a full day of exposure; *ratio-of-means* (total return ÷ total days
+deployed) is **what the account experiences**, and is the one a capital decision should use.
+
+| cohort | slip | mean-of-ratios vs basket | **ratio-of-means vs basket** |
+|---|---:|---:|---:|
+| ALL | 0 | −0.365 vs +0.075 %/d = **−110.9 pp/yr** | −0.156 vs +0.066 = **−56.0 pp/yr** |
+| **BUY** | **0** | −0.247 vs −0.026 = **−55.8 pp/yr** | −0.119 vs −0.045 = ⭐ **−18.8 pp/yr** |
+| BUY | 15 | −0.374 vs −0.026 = −87.6 pp/yr | −0.200 vs −0.045 = **−39.1 pp/yr** |
+| **E3** | **0** | −0.338 vs −0.088 = **−63.0 pp/yr** | −0.203 vs −0.082 = ⭐ **−30.4 pp/yr** |
+| E3 | 15 | −0.443 vs −0.088 = −89.5 pp/yr | −0.276 vs −0.082 = **−48.9 pp/yr** |
+
+⇒ ⭐ **Claude's "−43 pp/yr" is inside the measured range and is not the number.** The honest
+statement: ⭐⭐ **per rupee-day deployed, the tradeable book underperforms holding the universe it
+selects from by 19–56 pp/yr net of explicit charges (30–63 pp/yr on the reachable cell), and by
+39–90 pp/yr with a 15 bps/leg slippage assumption.** ⚠ **The range is aggregation, not
+uncertainty** — both ends are computed on the same trades — and **the sign is invariant to every
+choice made anywhere in this section.**
+
+⇒ ⭐⭐ **THAT is the sentence the 2026-10-31 decision should be written in, and Part F was right
+about that even though its number was not.** It needs no t-statistic, no prior, no MDE and no
+convention — which is exactly why it survived a round in which almost every t-statistic moved.
+
+### 12.31g The posterior, with the prior on the right quantity and the hurdle paired
+
+⚠ **One methodological fix of my own before the table: the prior belongs on the GROSS mean.** A
+prior of the form *"an unfitted TA scorer has no edge"* is a claim about gross edge; **costs are
+known, not estimated, and must not be shrunk toward zero.** §12.18h D4 had this right. `[measured]`
+**E3 cell, gross −0.1212R, iid SE 0.0959, clustered 0.0991; hurdles from the SAME 49 trades:**
+`E[cost]` **+0.0561R** · paired basket **−0.0478R** ⇒ **break-even + basket = +0.0083R.**
+
+| prior sd | P(μ > 0) | P(μ > break-even) | ⭐ **P(μ > break-even + PAIRED basket)** | P(same, @15 bps/leg) |
+|---:|---:|---:|---:|---:|
+| 0.03R | 35.3% | 0.97% | **25.2%** | 0.15% |
+| 0.05R | 28.0% | 3.2% | **22.0%** | 1.2% |
+| 0.10R | 18.1% | 4.3% | **15.1%** | 2.4% |
+| 0.20R | 12.7% | 3.7% | **10.8%** | 2.3% |
+
+⇒ ⛔ **Round-9 Claude's "P(beats the basket) < 2% at every prior" is REFUTED: it is 11%–25%**,
+because the hurdle it used (+0.199R) was built from an unpaired drift and the paired one is
++0.008R. ⚠ **And round-8's own "0.4%–5.7%" is confirmed in shape against the CASH hurdle
+(1.0%–4.3% here) but it is not the decision-relevant hurdle.** ⭐ **The honest summary: against
+cash the book is ~96% likely to lose; against the market it selects from, it is ~15–25% likely to
+win, and it takes single-name risk to do it.** ⚠ **That is a WORSE argument for trading it than
+the published one, not a better one** — it says the book is a high-variance way to slightly
+under-perform a basket you can buy with one order.
+
 ---
 
 # PART III — THE PLAN
@@ -3071,6 +3813,63 @@ that can move the answer are ones that change friction, σ_R or breadth.**
 **Plus two afternoons that are not research and gate strategy choices:** the **BTST/DP support
 ticket** (Kimi R4: §13b calls it "the single most decision-relevant item in the plan" and **no week
 owned it** — it is now **Week 0 #8**) and the **F&O lot-size feasibility check** at ₹1L.
+
+## 13.9 ⭐⭐ THE PLAN AFTER ROUND 9 — five items closed by measurement, and the AGREED/NOT-AGREED split
+
+⭐ **User ruling, 2026-09-11:** *"complete what is agreed so far between the AI chats; after
+building and testing the accepted criteria, then plan, discuss and work on the remaining unagreed
+points. Too much discussion exhausts the models and redirects us from the goal."*
+
+✅ **Adopted, and the document's own ledger argues FOR it.** §13g measured the marginal value of
+review breadth as negative; §13c said the document had become the work. ⭐ **Round 9 is the first
+round where that was not true, and the reason is mechanical: it shipped a probe.** Of five
+sources, the two that recomputed produced five of the seven decision-changing points; the one that
+only restated produced none. ⇒ **The split below is the operating plan, and nothing in the
+NOT-AGREED column blocks anything in the AGREED column.**
+
+### ✅ AGREED AND ALREADY DONE — closed by this round's measurement, not by argument
+
+| # | item | outcome |
+|---|---|---|
+| **A1** | the probe artifact: `T`, paired `bench`/`excess`, entry-day `er`, four normalizer columns, `--dump-trades`; plus `scripts/round9_cells.py` | ✅ **SHIPPED.** 185 × 25 columns. `probe-185` reproduced to 4 dp, so the artifact is validated against the record it replaces |
+| **A2** | ⭐⭐ **E3** — `clean × BUY × w≥2% × net-per-trade`, five units, four SE flavours | ✅ **RUN (§12.31b).** **n=49, net −0.1772R, t −1.84** explicit · **−2.52** at 15 bps/leg. Date-clustering moves every t by ≤0.06 |
+| **A5** | the confidence-normalizer decomposition (Kimi C3) | ✅ **RUN and REFUTED (§12.31e).** Every rival key ρ ≈ 0, all p > 0.46 ⇒ ⭐ **the closure now covers the factor set, not one summary of it** |
+| **A9′** | measure `_choppy` as a selector before deciding its governance | ✅ **RUN and REFUTED (§12.31e).** `p = 0.999` on 185 trades ⇒ ⭐ **DELETE both undeclared filters**; the governance question answered itself |
+| **A11** | ⭐ the ₹/day statement as the headline (plan item 22, open since round 1) | ✅ **COMPUTED (§12.31f).** **−19 to −56 pp/yr vs the basket** net of explicit charges; −39 to −90 with slippage. **Sign invariant to every choice** |
+| — | ⭐⭐ **the PAIRED drift null** — which nobody had asked for as a measurement, only as an estimator | ✅ **RUN, and it REFUTED three published conclusions** (§12.31c), two of them mine and one round 9's own |
+
+### ✅ AGREED AND STILL TO BUILD — in this order
+
+| # | item | who converged | why | cost |
+|---|---|---|---|---|
+| **B1** | ⭐ **delete `_near_expiry` and `_choppy`** from `signals.py`, or declare them in `restrictions.py` with `enforced_by = DISPLAY` | Claude, ChatGPT §12, Kimi R5 — **and now measurement** | `restrictions.py` is not the single source of truth its docstring claims; the filters hide 67% of the offered set and select **nothing** (p 0.999) | 2 h |
+| **B2** | ⭐ **`Σ notional ≤ available cash`** as a RiskEngine rail | ChatGPT (r7), Gemini, Deepseek | ⛔ **does not exist in code**; 3 slots at the median 5% stop need **120% of capital**. Identity-enforcing ⇒ no DSR bar. ⭐ **PRECONDITION for cycle 2** | ½ day |
+| **B3** | ⭐ **`paper_tick_size` → a price- AND date-dependent schedule TABLE** | **four of five sources** | published exchange schedule ⇒ no forward-evidence bar; changes a recorded number ⇒ before cycle 2. ⚠ blast radius is the **paper broker only** (§12.30a) and the artifact is **0.051R**, not 0.064R | ½ day |
+| **B4** | ⭐ **gap guard tests SPAN, not endpoints**, against the session calendar | Claude, ChatGPT §9, Deepseek | catches the 922-day hole, the per-name holes (1.2% of panels) and every future hole without hardcoding any; `GAP_LO`/`GAP_HI` violate **W5** | ½ day |
+| **B5** | ⭐ **E1 re-specified** — positional in **four** units (add the paired basket column), + mean/median `T` + `E[1/w]` per bucket, + contrasts with SEs, split by the gap flag | Claude C2/C3 | ⭐ **the swing version of this is now CLOSED by measurement** (§12.31d) **and positional is NOT the same mechanism** — opposite bucket signs, and reachable is the *better* cohort there and the *worse* one on swing | ½ day |
+| **B6** | ⭐⭐ **E2 as THREE estimands** — unconditional IC (3a) · matched-tail contrast (3b) · gate-conditional IC (reported as a collider, never decided on). `sd(IC_t)` and `E[z\|selected]` as **OUTPUTS**; coverage-weighted power | ⭐ **Deepseek + Kimi + ChatGPT, independently** | the version in §13.8 cannot reach three of the four decision branches (§12.28). ⭐ **The last unrun question that can change direction** | 1 day |
+| **B7** | ⭐ **MFE/MAE + `P(+1R before −1R \| day d)`** — two more columns on A1's artifact | Claude E1, Deepseek R4, open since round 2 | **the companion to B6**: it separates *"no signal"* from *"signal destroyed by the barrier geometry"*, and the optimal hold falls out of the same curve | ½ day, folded into B6 |
+| **B8** | ⭐⭐ **the append-only ledger** — `DecisionSnapshot → OrderIntent → Execution → PositionLifecycle → PerformanceRecord`, + ChatGPT's `ExperimentManifest` / `DataSnapshot` / `UniverseSnapshot` | **all five, every round since 7** | ⭐ **not for this strategy — for any successor.** The only real build in the plan | the build |
+
+### ⛔ NOT AGREED — parked until the above is built and read
+
+| item | status after round 9 |
+|---|---|
+| *"the net question is answered negatively"* | ⭐ **RESOLVED (§12.25 / §12.31b): the NUMBER (t −2.19) is withdrawn as the wrong cohort's; the VERDICT re-derives at t −1.84 explicit, −2.52 at 15 bps.** Claude's refutation was half right and the half it got wrong was the conclusion |
+| *is `confidence_pct` uninformative, or is the PICKER uninformative?* | ⭐ **the distinction is ACCEPTED and the measurement is BLOCKED** — ρ = −0.018 licenses *"the deployed RANKING is uninformative"*, not *"the human is bad"*; the human's choices died with the book (`positions` = 0). **Needs B8** |
+| **hold period as the breadth lever** | ⚠ still a hypothesis. ⭐ **Now partly costed: mean `T` is 3.59, not 5, so the book already turns over 39% faster than the plan assumed** and the 109 obs/yr figure is understated. **Needs B7's hazard curve before it is a decision** |
+| ⭐⭐ *"point the apparatus at ALLOCATION rather than selection"* (Claude Part F) | ⭐ **STRENGTHENED and still parked.** §12.31c measured **gross α ≈ 0 on the tradeable book (t = −0.07)** — the loss is timing and cost, not selection — which is the sharpest argument yet that the SELECTION layer is the part with no demonstrated value. ⛔ **A new strategy class 50 days from the decision date. Record as the answer to §14 Q5; do not start building** |
+| a unified `ExecutionKernel` across research/backtest/paper/live | ✅ correct, ⛔ weeks. B2/B3 close the two divergences that change a recorded number |
+| tax as its own layer (ChatGPT §24) | ✅ correct in principle, immaterial at ₹1L, changes no recorded number |
+| PIT `UniverseSnapshot` (0a.3) | ✅ required, ⭐ **and now also gating the paired basket** (§12.31c bound 2). Folded into B8's schema |
+| factor correlation matrix (Deepseek R5) | ⚠ **downgraded by measurement.** §12.31e already shows no ranking key on the factor set carries information; the spectrum would explain *why*, not *whether*. **Queued behind B6** |
+| data-gap reconstruction costs · F&O to escape the short constraint | ⛔ both presuppose the programme continues past the sunset |
+
+⚠ **What did NOT change: no queued item attacks profitability.** Round 9 sharpened five
+instruments, withdrew four published numbers and closed two hypotheses. **It found no edge, and it
+was not looking for one.**
+
+⛔ **§13.8 BELOW IS SUPERSEDED BY §13.9 ABOVE** — E3 ran, two of its items closed by measurement, and E1/E2 were re-specified. Kept for the record.
 
 ## 13.8 ⭐⭐ THE PLAN AFTER ROUND 8 — three measurements, one build, and a decision date
 
@@ -3901,6 +4700,79 @@ than most sources' whole rounds.
 
 ---
 
+## 13i. LEDGER — round 9: five sources, one probe, seven decision changes
+
+⭐ **The first round that shipped code with itself**, per §17b's rule. `swing_dependence_probe.py`
+gained four column families and a `--dump-trades` artifact; `scripts/round9_cells.py` is new.
+
+### Round-9 scoreboard
+
+| source | points | changed a decision | refuted by measurement | net |
+|---|---:|---:|---:|---|
+| **Claude** | 7 (B, C1, C2/C3, D1–D5, E1–E3, F, G1–G7) | ⭐ **3** — the wrong-cohort `t`, the third mechanism, the ₹/day framing | **2** — Part B's conclusion, D1's `<2%` posterior | ⭐⭐ **the round** |
+| **Kimi** | 12 asks + 9 criticisms | ⭐ **2** — C3's normalizer mechanism, C5's pre-registered prediction | **1** — C3's hypothesis (the refutation is the useful outcome) | ⭐ **second, and C5's methodology is the best habit in the round** |
+| **Deepseek** | 8 requests | ⭐ **1** — the collider framing of E2 | — | ⭐ sharpest single sentence |
+| **ChatGPT** | 6 packages, 36 sections | ⭐ **1** — the E2 estimand + the MDE convention schema | — | architecture mostly already adopted in §12.21e |
+| **Gemini** | 4 tasks | **0** | — | ⛔ see below |
+
+### ⚠ Where each source slipped — with the derivation, per §15.4.3
+
+- **Claude, Part B.** Its closed form `t_net/t_gross = (μ_ret − c)/μ_ret` predicts **−2.202** and
+  the exact reconstruction gives **−2.190** (it neglects the 5.4% SE inflation). ⭐ Right to 0.01
+  and the structural point stands. ⛔ **Its CONCLUSION — "the net question is not answered on the
+  tradeable book" — is refuted by the cell it asked for: t = −1.84 explicit, −2.52 at 15 bps.**
+  The prediction failed because it held σ at the clean×BUY value; the reachable restriction cuts
+  σ from 1.0050 to 0.6712.
+- **Claude, C2's table label.** *"`drift × T` accrual makes **wide** look better"* — its own next
+  table shows the drift contribution is `drift·T/w`, **larger for tight** (+0.192R) than wide
+  (+0.075R). The prose ("opposite directions") is right; the row label is inverted. Numbers and
+  conclusion unaffected.
+- **Claude, C1's mechanism claim.** *"`1/w` cannot produce this at any μ_ret"* reads two point
+  estimates each within 1.3 SE of zero. `[verified]` **P(the wide bucket is truly negative) =
+  22.7%** ⇒ pure `1/w` is **not excluded**. ⭐ **That is the family error — reading a level
+  instead of testing it — committed by the source that named the family. Seventh instance.**
+- **Claude, D1 and Part F.** Both hang on §12.20's **unpaired** +0.0816%/day drift. Paired, the
+  basket over these trades' own windows is **negative**, so `P(beats the basket) < 2%` becomes
+  **11%–25%** and the −43 pp/yr becomes a −19…−63 pp/yr range. ⭐ **The estimator it recommended
+  (pairing) is what refuted the conclusions it drew without it** — which is the strongest possible
+  endorsement of the recommendation and the weakest possible one of the conclusions.
+- **Kimi, C5's prediction.** −0.15R / t −1.1…−1.4 vs measured −0.177R / **t −1.84**. ⭐ **Publishing
+  it anyway was the right call** — a wrong pre-registered prediction is worth more than a right
+  post-hoc one, and it is why §12.31b reads as a test.
+- **Kimi, C6's tick arithmetic.** ✅ **Correct and adopted**: the artifact is the **excess**
+  (10.26 bps ⇒ **0.0513R** at a 2% stop), not the total (12.82 bps ⇒ 0.0641R). §12.19b used both
+  for the same quantity.
+- **Kimi, C9.** Reported the document truncated at §16.1b. ⚠ **Not reproducible here** — the file
+  is 4,500 lines with §16.2, §16.3, §17 and §17b all present. **A transfer artifact, and it means
+  its adjudication of §17's four questions was made without reading them.**
+- **ChatGPT, §29's P0 list.** Four of its eight P0 items were already answered in the document it
+  was reading (the cash rail §12.14, the parity matrix §12.21c, the collider §12.10c, the
+  raw-%/ATR re-report R7-J). ⚠ **§17b's standing request, ignored for the fifth round running.**
+- ⛔ **Gemini.** All four of its "execute these sequentially" tasks are answered in the document it
+  was given: the tick bug is §12.19 (**and its proposed hardcoded `0.01 if price < 250 else 0.05`
+  is exactly what §12.19b warns against** — the phase-in is staged, so it needs a dated table);
+  the cash constraint is §12.14; the 922-day hole is §12.12 and §12.23; the IC-in-raw-% test is
+  E2. ⭐ **Its restatement of the document is accurate, which is worth something — but round 9
+  measured the marginal value of a source that reads without recomputing at exactly zero, for the
+  second round running.**
+
+### ⭐ My own errors this round, stated before anyone else finds them
+
+1. ⛔⛔ **§12.20a's "the correct null roughly DOUBLES the deficit" is mine, and it is wrong.** I
+   multiplied a drift measured on **789 post-gap sessions** by an **assumed** 5-session horizon and
+   subtracted it from trades occupying **different** sessions with a mean hold of **3.59**. Paired,
+   the basket on the tradeable book is **negative**. ⭐ **This is §16.1's sample-tag rule in the
+   TIME dimension, and I wrote the rule.** Sixth… ⚠ eighth instance.
+2. ⛔ **I published the E3 prediction (−0.142R, t −0.95…−1.10) with σ held fixed at 1.0050** — the
+   same "combine a σ from one sample with an n from another" defect, in the section adjudicating
+   that defect. Measured σ on the reachable cell is **0.6712**.
+3. ⚠ **My first posterior shrank a NET mean toward zero.** The prior is a claim about GROSS edge;
+   costs are known and must not be shrunk. Caught and fixed before it entered the document
+   (§12.31g), recorded here permanently.
+4. ⚠ **My first ₹/day table used mean-of-ratios without saying so**, which counts a same-session
+   exit as a full day and roughly doubles the gap. **Both aggregations are now printed** and the
+   account-relevant one is the smaller.
+
 # PART V — GOVERNANCE AND REFERENCE
 
 ## 14. Open questions — NOT review prompts
@@ -4169,6 +5041,42 @@ being accepted (§12.18).
 | **`σ_IC` per date** | — | ⚠ **0.10 `[ASSUMED]`** — enters at §12.15, inherited by every IC power number in both documents, **linear in it**. Pure-noise floor 0.063 at 250 names/date, 0.027 at 1,360. **MUST be an output of 3b, never an input** | C7 |
 | **3b's horizon** | unstated | ⭐ **PRE-REGISTER 5d.** At 20d, SE(IC) 0.0159 ⇒ t 1.26 at IC 0.02 ⇒ **can only return INCONCLUSIVE** — KILL LINE 4's defect one level up | C7 |
 | `factor_sweep`'s power | *"nothing survived"* read as a clean negative | ⚠ **it resolved only IC ≈ 0.05–0.07** — the TOP of its own 0.018–0.071 break-even band, derived from its **own** published day-block interval (SE(spread) 0.436%). ⛔ The audit's √5 route is wrong (`factor_sweep.py:271` already samples every 5th date); the **conclusion** stands | C7 |
+
+### 16.1c ⭐⭐ Round-9 corrections to the card — these SUPERSEDE both §16.1 and §16.1b
+
+⚠ **Precedence: §16.1c > §16.1b > §16.1.** Every row below was MEASURED this round on
+`probe-185` / `probe-49`, not argued. ⭐ **Four published numbers are withdrawn and two of them
+were the document's own headlines.**
+
+| quantity | ⛔ previous value | ✅ **round-9 value** | sample | why |
+|---|---|---|---|---|
+| ⭐⭐ **mean holding period `T`** | ⚠ **never measured; assumed 5** | ⭐ **3.59 sessions** (median 5; **14.6% exit same-session**); **4.00** on the E3 cell | `probe-185` | §12.31a. Every per-day and fixed-horizon statement in the record was conditional on this |
+| ⭐⭐ **the equity-beta null, on the trades' OWN windows** | +0.0816%/day × 5 = **+0.408% = +0.088R** | ⛔⛔ **PAIRED: −0.166% (BUY), −0.338% (E3) ⇒ −0.048R** | `probe-82` / `-49` | §12.31c. **The basket over the tradeable book's actual windows is NEGATIVE** |
+| ⭐⭐ **α vs the drift null** | **−0.137R…−0.172R** ("the null roughly DOUBLES the deficit") | ⛔⛔ **WITHDRAWN. Gross paired excess = −0.0218%, t = −0.07 (BUY)** | `probe-82` | §12.31c. **Gross alpha on the tradeable book is indistinguishable from ZERO** — the loss is timing and cost, not selection |
+| ⭐⭐ **the E3 cell** | never computed | ⭐ **n=49 · gross −0.1212R (t −1.26) · NET −0.1772R (t −1.84) · −0.2432R at 15 bps (t −2.52)** | `probe-49` | §12.31b |
+| **σ_R on the reachable book** | ⚠ assumed to stay at 1.0050 | ⭐ **0.6712** | `probe-49` | §12.31b. Dropping w<2% removes the high-variance tail — **this is why both E3 predictions were too optimistic** |
+| **`E[cost in R]`, reachable book** | +0.0573R `[derived]` | ✅ **+0.0561R** `[measured]` — 2% error, **confirmed** | `probe-49` | §12.31b |
+| **net R, BUY (all windows, all w)** | **−0.2435, t −2.19** quoted as *"the net question is answered"* | ⚠ **the number stands for that cohort and the cohort is wrong** — it includes trades the order path refuses. **Quote the E3 row instead** | `probe-82` | §12.25 / §12.31b |
+| **date-clustered SE on the net mean** | ⚠ unverified (ChatGPT §6 demanded it) | ✅ **verified: every t moves by ≤0.06.** RVOL collapsed under clustering because it is a per-DATE regressor; a per-trade mean does not | `probe-49` | §12.31b |
+| ⭐⭐ **stop-width contrast, third unit** | *"`1/w` explains 116% of it"* | ⭐ **R −0.386 (t −1.55) → raw % −0.262 (t −0.78) → excess vs basket +0.069 (t +0.17).** Decays and **flips sign** | `probe-185` | §12.31d. `1/w` **and** `drift×T`, not `1/w` alone |
+| **`d(T)/dw`** | ⚠ never measured | ⭐ **+0.3844, SE 0.0574, t = +6.69** | `probe-185` | §12.31a. The premise of the third mechanism, measured. **Structural fact ⇒ no DSR bar** |
+| **"independence of `ret` and `w` is MEASURED"** | asserted from t = +1.07 | ⛔ **WITHDRAWN — it is a NON-REJECTION.** ~25% of the slope is drift×T (predicted +0.0264, measured removal +0.0298) | `probe-185` | §12.31d |
+| ⭐ **the four rival ranking keys** | ⚠ untested | ⛔ **ALL ≈ 0.** conf −0.018 (p 0.807) · raw sum +0.054 (p 0.465) · breadth +0.030 (p 0.691) · concentration −0.044 (p 0.555) | `probe-185` | §12.31e. **The normalizer is not the culprit; the closure covers the factor set** |
+| ⭐ **the `choppy` display filter** | ⚠ a governance item | ⛔ **SELECTS NOTHING: contrast −0.0001, t −0.00, p 0.999** — and it hides **67%** of the offered set | `probe-185` | §12.31e ⇒ **delete it** |
+| ⭐⭐ **₹/day vs the basket** | ⚠ never computed | ⭐ **−19 to −56 pp/yr (BUY) · −30 to −63 pp/yr (E3)** net of explicit charges; −39…−90 with 15 bps/leg. ⚠ **range = aggregation, not uncertainty** | `probe-82` / `-49` | §12.31f. ⭐ **THE headline** |
+| **posterior, drift-inclusive** | *"under 2% at any prior"* (round 9) · 0.4–5.7% vs break-even (round 8) | ⭐ **vs cash 12.7–35.3% · vs break-even 1.0–4.3% · vs break-even + PAIRED basket 10.8–25.2%** | `probe-49` | §12.31g. ⚠ **The prior belongs on the GROSS mean; costs are known and must not be shrunk** |
+| **`paper_tick_size` artifact** | 0.064R at a 2% stop | ✅ **0.0513R** — 0.064R is the TOTAL wrong-grid cost; the artifact is the **EXCESS** over the true grid | `[derived]` | §12.30b (Kimi C6) |
+| **tick-bug blast radius** | *"lands on exactly the cohort carrying §12.1, §7, §12.10b"* | ⛔ **WITHDRAWN — `_round_tick` exists ONLY in `paper_broker.py` (3 call sites) and `positions` = 0. It contaminates NO number in this document** | `[code]` | §12.30a |
+| **"MDE"** | `2.8016·SE at 80% power` | ✅ unchanged as a value; ⭐ **now requires `alpha · sidedness · power · SE-flavour` alongside it.** One-sided at 80% is 2.487·SE | — | §12.30d |
+
+⭐ **AND THE NEW MECHANICAL RULE, earned twice this round — the sample-tag rule in the TIME dimension:**
+
+> ⛔ **A BENCHMARK MEASURED OVER ONE SET OF SESSIONS MAY NOT BE SUBTRACTED FROM A RETURN MEASURED
+> OVER A DIFFERENT SET. PAIR IT, OR DO NOT SUBTRACT IT.**
+> §12.20a violated it (789 post-gap sessions × an assumed 5-day horizon, subtracted from trades
+> with a 3.59-session mean hold), and round 9's own D1 inherited the violation while diagnosing a
+> different one. **This is the eighth instance of the sample-tag family and the first in time
+> rather than in population.**
 
 ### 16.2 Per-reviewer notes
 
@@ -4498,3 +5406,27 @@ described in the document), the portfolio cash check (§12.14, written in round 
 re-report (R7-J, run in round 7), and re-asserted a level-stage claim R7-K had already withdrawn.
 **That is four of twenty-nine points spent on answered questions**, and the reviewing is where the
 programme's remaining time is going.
+
+## 17c. ⭐ AFTER ROUND 9 — the invitation is CLOSED, and the reason is arithmetic
+
+⛔ **No round 10. Not "probably not" — closed.**
+
+⭐ **§17b's rule ("a round only happens if a probe runs with it") worked and should now be
+retired along with the rounds themselves.** Round 9 produced 7 decision changes from 5 sources —
+a better rate than rounds 7 or 8 — **and every one of the seven came from a claim that a probe
+could test.** The other ~60 points were architecture already adopted, questions the document
+answers, or restatement.
+
+⚠ **The decisive arithmetic is that the remaining questions are no longer REVIEWABLE.** B1–B8 are
+builds and measurements, not arguments: deleting two filters, adding a cash rail, a tick table, a
+span guard, one positional re-run, one three-estimand IC pass, and the ledger. ⭐ **No reviewer,
+however good, can shorten that list — and round 9 demonstrated the converse, that a reviewer who
+recomputes can only help by pointing at a probe.**
+
+⇒ ⭐ **What the panel is thanked for, precisely: nine rounds produced ONE surviving strategy
+finding (there is no measurable edge) and roughly TWENTY surviving instrument findings.** The
+instruments are the deliverable. **The panel is closed at round 9.**
+
+### The one thing a future source may still send
+
+**A refutation of a §16.1c row, with the recomputation attached.** Nothing else.
