@@ -64,3 +64,20 @@ Queue and acceptance criteria: `docs/BUILD_QUEUE.md`. Update this file after EVE
   filters with the opposite sense** ("Hide near-expiry" / "Hide choppy", default off) — the data
   (`near_expiry`, `choppy`, `regime_er`) is already on every row, and toggling now costs no
   refetch. Backend 67 tests green; **frontend 428 green**, tsc + eslint clean.
+
+- **B4 DONE — and it shipped a defect that the verification run caught.** `market_calendar`
+  gained `observed_session_index` / `session_span` / `window_has_holes`; the two hardcoded
+  `GAP_LO`/`GAP_HI` constants are **deleted**.
+  ⛔⛔ **The first version tested observed SESSIONS only and flagged 3 trades where the old
+  guard flagged 38.** During the 922-day hole NOBODY has bars, so those dates are absent from
+  the observed calendar and a straddling window reads as ~300 sessions for 300 rows —
+  contiguous. **Only the wall clock sees it** (~1,340 days vs ~440). ⭐ **A hole is invisible
+  to exactly the instrument that defines "normal" using the same data the hole is missing
+  from.** Now runs BOTH tests OR-ed, with a regression test.
+  ✅ **Re-verified full corpus: 40 straddling / 145 clean** vs the old 38 / 147 — catches
+  everything the endpoint test did **plus 2 per-name holes**. Contrast t +0.88, so no
+  conclusion moves. ⚠ **`probe-147` → `probe-145`; `clean × BUY` is now n = 60, not 61**
+  (recorded as §16.1d).
+  ⚠ **BLOCKED, not skipped:** B4's third target, `run_single_stock`'s bar-50 walk, is inside
+  the **FROZEN** `app/backtest/engine.py`. Needs sign-off + §8 regression + regenerated Rust
+  fixtures. `positional_probe.py` has no guard to replace — it gets one with B5.

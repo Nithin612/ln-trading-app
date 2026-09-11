@@ -194,18 +194,47 @@ def session_span(index: dict[date, int], first: date, last: date) -> int | None:
     return b - a + 1
 
 
+# A trading year is ~250 sessions in ~365 calendar days, so `rows` sessions should occupy
+# roughly `rows × 1.46` calendar days. 1.75 leaves comfortable room for a long holiday
+# stretch while still being ~2.5× below a window straddling even a one-year outage.
+CALENDAR_DAYS_PER_SESSION_MAX = 1.75
+
+
 def window_has_holes(
-    index: dict[date, int], first: date, last: date, rows: int, *, tol: float = 0.02
+    index: dict[date, int],
+    first: date,
+    last: date,
+    rows: int,
+    *,
+    tol: float = 0.02,
 ) -> bool:
-    """Does a `rows`-bar window span materially more than `rows` sessions?
+    """Does a `rows`-bar window cover materially more history than `rows` sessions should?
 
-    ⭐ **This is the whole guard.** `tol` absorbs the handful of names that legitimately
-    miss a session or two (a trading halt, a late listing) without flagging them; anything
-    beyond it means the window is computing EMA200/ATR/ADX/pivots across a discontinuity.
+    ⭐ **TWO tests, because there are two KINDS of hole and each is invisible to the other
+    instrument.** This was not obvious and the first version of this guard shipped with
+    only the first test; the full-corpus run then flagged **3** trades where the previous
+    endpoint-based guard flagged **38**, which is how the blind spot was found.
 
-    ⚠ **Fails OPEN on an unassessable span** (an endpoint outside the calendar), matching
-    every other overlay in this codebase: a guard that cannot see is not evidence of a hole.
+    **1. Per-NAME holes — measured in observed SESSIONS.** One name has 300 bars while the
+    market traded 516 sessions: it was suspended, illiquid, or newly listed. The observed
+    calendar sees this because *other* names traded on the missing dates.
+
+    ⛔ **2. Market-WIDE holes — measured in CALENDAR DAYS, and the session calendar is
+    STRUCTURALLY BLIND to them.** During `ohlcv_1d`'s 922-day hole (2020-12-23 →
+    2023-07-03) **nobody** has bars, so those dates are absent from the observed calendar
+    entirely and a window spanning the gap looks perfectly contiguous in session terms —
+    ~300 sessions for 300 rows. Only the wall clock reveals it: those 300 rows cover
+    ~1,340 calendar days instead of ~440.
+
+    ⇒ **A hole is invisible to exactly the instrument that defines "normal" by the same
+    data the hole is missing from.** Hence both tests, OR-ed.
+
+    ⚠ **Fails OPEN on an unassessable session span** (an endpoint outside the calendar),
+    matching every other overlay here: a guard that cannot see is not evidence of a hole.
+    ⭐ The calendar-day test still runs in that case — it needs no index at all.
     """
+    if (last - first).days > rows * CALENDAR_DAYS_PER_SESSION_MAX:
+        return True
     span = session_span(index, first, last)
     if span is None:
         return False

@@ -35,6 +35,22 @@ a window: measured, it missed 204 of 16,428 panels (1.2%), worst case 516 sessio
   `--clean-only` now means "no holes", a superset of its old meaning. Smoke run reads 1,098
   observed sessions.
 
+**⛔ Fixed after the full-corpus run caught it — the guard shipped with a blind spot**
+- The first version tested observed SESSIONS only and flagged **3** trades where the old
+  endpoint guard flagged **38**. The reason is structural: during the 922-day hole NOBODY
+  has bars, so those dates are absent from the observed calendar entirely and a window
+  spanning the gap reads as ~300 sessions for 300 rows -- perfectly contiguous. Only the
+  wall clock reveals it (~1,340 calendar days instead of ~440).
+  ⭐ **A hole is invisible to exactly the instrument that defines "normal" using the same
+  data the hole is missing from.** `window_has_holes` now runs BOTH a session-span and a
+  calendar-day test, OR-ed, with a regression test for the blind spot.
+- Re-verified on the full corpus: **40 straddling / 145 clean**, against the old guard's
+  38 / 147 -- it catches everything the endpoint test caught PLUS two per-name holes it was
+  blind to. The gap contrast is +0.1235, SE 0.1400, **t +0.88**: still not significant, so
+  no conclusion moves. ⚠ `probe-147` is superseded by `probe-145` (sec 16.1d).
+- ⚠ Two test fixtures had to be fixed too: they used consecutive CALENDAR days as a session
+  calendar, which is not what one looks like.
+
 **⚠ Blocked, and recorded rather than worked around**
 - BUILD_QUEUE B4 also names `run_single_stock`'s bar-50 walk, which has no guard at all.
   That function lives in `app/backtest/engine.py`, which is **FROZEN**: wiring it needs

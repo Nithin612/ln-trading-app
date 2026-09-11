@@ -5472,6 +5472,35 @@ were the document's own headlines.**
 > different one. **This is the eighth instance of the sample-tag family and the first in time
 > rather than in population.**
 
+### 16.1d ⚠ B4 supersedes the gap-clean cohort — `probe-147` becomes `probe-145`
+
+**B4 (2026-09-11) replaced the endpoint-based gap guard with a span test**, so "gap-clean"
+now means *a window whose 300 rows do not cover materially more than 300 sessions* rather
+than *a window whose two endpoints do not straddle one named date range*. The cohort moves:
+
+| quantity | ⛔ `probe-147` (endpoint guard) | ✅ **`probe-145` (span guard)** |
+|---|---|---|
+| clean / straddling split | 147 / 38 | ⭐ **145 / 40** |
+| mean R, clean | −0.1341 (t −1.79) | **−0.1222 (t −1.61)** |
+| σ_R, clean | 0.911 | 0.9114 |
+| gap contrast | +0.0718, t +0.51 | **+0.1235, SE 0.1400, t +0.88** |
+
+⇒ ⭐ **The new guard catches everything the old one did (38) PLUS two more** — per-name
+holes the endpoint test was structurally blind to. **No conclusion moves**: the contrast is
+still not significant, and the clean cell is still not distinguishable from zero.
+⚠ **Re-run any cell tagged `probe-147` before quoting it**; the `clean × BUY` cell in
+particular is now **n = 60**, not 61.
+
+⛔⛔ **AND A DEFECT WORTH RECORDING, because it is the instrument-self-validation rule
+catching its own builder.** The first version of the span guard tested observed SESSIONS
+only, and the full-corpus run flagged **3** trades where the old guard flagged 38. The
+reason is structural: during the 922-day hole **nobody** has bars, so those dates are
+absent from the observed calendar entirely and a window spanning the gap reads as ~300
+sessions for 300 rows — **perfectly contiguous**. Only the wall clock reveals it (~1,340
+calendar days instead of ~440). ⭐ **The general form: a hole is invisible to exactly the
+instrument that defines "normal" using the same data the hole is missing from.** The guard
+now runs BOTH tests, OR-ed, and carries a regression test for the blind spot.
+
 ### 16.2 Per-reviewer notes
 
 **These are written from five rounds of evidence, not impressions. Each includes the specific
