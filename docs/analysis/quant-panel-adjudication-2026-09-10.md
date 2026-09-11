@@ -4028,6 +4028,75 @@ validated instrument and a refuted hypothesis; three produced accurate restateme
 and one genuinely useful process proposal (§13.12). ⭐ That is 1 of 4 — consistent with §13i's
 measured ceiling, and it is why §17c stays closed.**
 
+## 12.34 ⭐⭐⭐ E1 IS ANSWERED — POSITIONAL CLOSES THE SAME WAY SWING DID
+
+`[measured]` **B5 ran E1 as re-specified (§12.26): four units, the paired matched-window
+basket, mean `T` and `E[1/w]` per bucket, and CONTRASTS with their SEs.**
+Report: `docs/analysis/b5-positional-four-units-2026-09-11.md`. **n = 390 positional trades
+(359 gap-clean), reproducing §12.1's 385 closely.**
+
+### The decay, which is the whole result
+
+| unit | tight (<2%) | wide (≥2%) | contrast | SE | **t** |
+|---|---:|---:|---:|---:|---:|
+| **R** | −0.4570 | +0.0309 | −0.4879 | 0.2586 | **−1.89** |
+| **raw %** *(removes `1/w`)* | −0.3945 | +0.3924 | −0.7870 | 0.6685 | **−1.18** |
+| ⭐ **excess vs the matched basket** *(removes `drift×T` too)* | −0.4339 | −0.2430 | **−0.1909** | 0.6514 | ⭐ **−0.29** |
+| ret ÷ ATR20 | −0.1629 | +0.0906 | −0.2535 | 0.2757 | −0.92 |
+
+*(gap-clean, n = 359. ALL windows reads the same shape: **−1.47 → −1.20 → −0.29**.)*
+
+⇒ ⭐⭐ **The gradient decays monotonically as each mechanical term is removed and is GONE by
+the third unit.** Swing went −0.386 (t −1.55) → −0.262 (t −0.78) → **+0.069 (t +0.17)**;
+positional goes −0.488 (t −1.89) → −0.787 (t −1.18) → **−0.191 (t −0.29)**. **Different
+numbers, identical shape, same verdict.**
+
+### ⛔ And §12.27's "opposite signs" argument is RESOLVED — against itself
+
+§12.27 argued the positional prior should not be swing's, because its buckets carried
+**opposite signs**, which `E[ret]·E[1/w|bucket]` cannot produce at any `μ_ret`. ⚠ That
+argument was already downgraded there (P(the wide bucket is truly negative) = 22.7%).
+`[measured]` **The mechanism is now visible and it is not a different effect — it is a
+LEVERAGE POINT:**
+
+| bucket | n | **`E[1/w]`** | mean `T` | net ₹ |
+|---|---:|---:|---:|---:|
+| ⭐ **0–2%** | 102 | ⛔ **43.39** | 6.4 | ⛔ **−25,808** |
+| 2–4% | 108 | 0.352 | 16.3 | −48 |
+| 4–6% | 64 | 0.206 | 21.9 | +147 |
+| 6–10% | 71 | 0.133 | 29.0 | −89 |
+| 10%+ | 14 | 0.082 | 32.9 | +469 |
+
+⇒ ⭐⭐ **`E[1/w]` jumps 110× at the first bucket boundary — a mean stop width of ~0.026%.**
+Those are degenerate, near-zero risk distances, and risk-first sizing turns a four-paise stop
+into a position that loses **₹25,808 on average**. ⇒ **What read as a stop-width effect in R
+is an arithmetic artifact of dividing by a number close to zero, carried by a cohort the live
+order path REFUSES** — the per-position notional cap is a 2% minimum-stop-width rule in
+disguise (§1), and B2's new aggregate cash rail refuses the rest.
+
+### ⭐ The `drift × T` premise, confirmed a second time and on a different class
+
+`[measured]` mean holding period by bucket: **6.4 → 16.3 → 21.9 → 29.0 → 32.9 sessions.**
+`T` rises with `w` monotonically and by **5×** across the range. This was measured at
+`d(T)/dw = +0.384, t = +6.69` on swing (§12.31d); positional reproduces it independently.
+⇒ **The mechanism §12.26 proposed is not a swing quirk.**
+
+### ⇒ What this closes
+
+| item | status |
+|---|---|
+| **E1** | ✅ **ANSWERED. The positional stop-width family is closed.** |
+| §4.4 · §12.1 · §12.2 · plan item 18 (the cap sweep) | ⭐ **All close with it** — §13.8 said "if positional dies the same way, these close on one afternoon", and it did |
+| the σ_R objective | ⭐ closes: the dispersion lever was a denominator effect in both classes |
+| §12.27's "not the swing mechanism" | ⛔ **WITHDRAWN.** It IS the swing mechanism plus a leverage point; the sign pattern was the leverage point, not a different effect |
+
+⚠ **What it does NOT close.** The **relabel** question (`positional` as a strategy vs a
+holding-period descriptor) is untouched — that rests on the seven code branch points against a
+paired ΔR of −0.120, t −1.47 (§18.3 R7), not on stop width. ⭐ **And one new fact bears on it:
+mean `T` runs 6–33 sessions against swing's 3.59, so the classes DO differ in realised holding
+period even though their rule sets are not separable by outcome.**
+
+
 ---
 
 # PART III — THE PLAN
