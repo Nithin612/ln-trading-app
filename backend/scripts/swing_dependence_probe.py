@@ -54,16 +54,26 @@ from app.core.ratios import WINSOR_R, clamp_ratio_f
 from app.db.session import AsyncSessionFactory
 from app.signals.classifier import classify_signal
 from app.services.block_bootstrap import newey_west_t
+from app.services.market_calendar import observed_session_index, window_has_holes
 from app.signals.risk_guards import safe_levels
 from app.trading.regime import kaufman_er
 
 WINDOW, SWING_DAYS = 300, 5
-# ohlcv_1d carries a 922-day HOLE: 2020-12-23 -> 2023-07-03 (measured 2026-09-11, round 7).
-# A 300-bar window that opens before the hole and closes after it computes EMA200/ATR/ADX/pivots
-# across a 2.5-year discontinuity as if the two sides were consecutive sessions. 33.2% of the
-# round-6 panels are in that state. `--clean-only` restricts the walk to windows wholly on one
-# side; the default keeps round 6 reproducible.
-GAP_LO, GAP_HI = date(2020, 12, 23), date(2023, 7, 3)
+# B4 (round 10): the gap guard tests the SPAN, not two hardcoded endpoints.
+#
+# `ohlcv_1d` carries a 922-day hole (2020-12-23 -> 2023-07-03), and a 300-bar window opening
+# before it and closing after it computes EMA200/ATR/ADX/pivots across a 2.5-year
+# discontinuity as if the two sides were consecutive sessions — 33.2% of the round-6 panels.
+# ⛔ But the old guard tested only whether the two ENDPOINTS straddled that ONE named range,
+# which said nothing about holes INSIDE a window: measured, it missed 204 of 16,428 panels
+# (1.2%), worst case 516 sessions inside a 300-row window, with 2,048 of 3,129 names below
+# 95% coverage on the post-gap block.
+# ⭐ `market_calendar.window_has_holes` asks the market's OWN observed calendar whether a
+# 300-row window spans materially more than 300 sessions. That catches the 922-day hole,
+# every per-name hole and every future hole WITHOUT NAMING ANY OF THEM — and it deletes a
+# pair of hardcoded constants describing one incident, which is what W5 is about.
+# `--clean-only` restricts the walk to windows with no holes; the default keeps round 6
+# reproducible (and `straddle` now means "has holes", a superset of the old meaning).
 CAPITAL, RISK_PCT = Decimal("100000"), Decimal("2.0")
 CA_JUMP = 0.25
 
@@ -439,6 +449,9 @@ async def main(n_stocks: int, stride: int, clean_only: bool = False,
                dump: str | None = None) -> None:
     frames = await load_frames(n_stocks)
     print(f"names with usable history: {len(frames)}   (stride {stride}, clean_only={clean_only})")
+    async with AsyncSessionFactory() as db:
+        sessions = await observed_session_index(db)
+    print(f"observed market sessions in ohlcv_1d: {len(sessions):,}")
     bser = basket_series(frames)
     print(f"basket sessions: {len(bser)}  mean daily {100*statistics.mean(bser.values()):+.4f}%")
     engine = BacktestEngine(BacktestConfig(capital=CAPITAL, risk_pct=RISK_PCT))
@@ -455,7 +468,9 @@ async def main(n_stocks: int, stride: int, clean_only: bool = False,
         closes = df["close"]
         for i in range(WINDOW, len(df) - SWING_DAYS - 2, stride):
             window = df.iloc[i - WINDOW + 1:i + 1]
-            straddles = (window.index[0].date() <= GAP_LO and window.index[-1].date() >= GAP_HI)
+            straddles = window_has_holes(
+                sessions, window.index[0].date(), window.index[-1].date(), WINDOW
+            )
             if clean_only and straddles:
                 straddle_skip += 1
                 continue
@@ -954,7 +969,8 @@ if __name__ == "__main__":
     ap.add_argument("--stocks", type=int, default=250)
     ap.add_argument("--stride", type=int, default=10)
     ap.add_argument("--clean-only", action="store_true",
-                    help="skip panels whose 300-bar window straddles the 922-day ohlcv_1d hole")
+                    help="skip panels whose 300-bar window spans more sessions than it has rows "
+                         "(the 922-day hole, any per-name hole, any future hole)")
     ap.add_argument("--dump-trades", default=None,
                     help="write the per-trade table to this CSV path (round 9 / Kimi R4): one "
                          "expensive pass, then every cell/contrast is a cheap read off the file")

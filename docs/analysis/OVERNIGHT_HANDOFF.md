@@ -10,8 +10,8 @@ Queue and acceptance criteria: `docs/BUILD_QUEUE.md`. Update this file after EVE
 | **B2** | `Σ notional ≤ available cash` rail | ✅ **DONE** | `e170d2b` |
 | **B3** | dated tick SCHEDULE table | ✅ **DONE** | (see log) |
 | **B1** | delete `_near_expiry` / `_choppy` | ✅ **DONE** | (see log) |
-| **B4** | span-based gap guard | ⏳ NEXT | — |
-| **B5** | E1 positional in four units | ⏸ queued | — |
+| **B4** | span-based gap guard | ✅ **DONE** (1 part blocked) | (see log) |
+| **B5** | E1 positional in four units | ⏳ NEXT | — |
 | **B6+B7** | E2 three estimands + MFE/MAE | ⏸ queued | — |
 | **B8** | append-only ledger (ONE table, ONE day) | ⏸ queued | — |
 

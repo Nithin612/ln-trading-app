@@ -7,6 +7,43 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### B4 — the gap guard tests the SPAN, not two hardcoded endpoints (2026-09-11)
+
+`GAP_LO, GAP_HI = date(2020, 12, 23), date(2023, 7, 3)` were constants describing ONE known
+incident -- the 922-day hole in `ohlcv_1d` -- which is the shape W5 forbids. Worse, testing
+only whether a window's two ENDPOINTS straddled that range said nothing about holes INSIDE
+a window: measured, it missed 204 of 16,428 panels (1.2%), worst case 516 sessions inside a
+300-row window, with 2,048 of 3,129 names below 95% coverage on the post-gap block.
+
+**Added**
+- `market_calendar.observed_session_index()` -- the dates the market actually produced bars
+  on, from `ohlcv_1d` itself. ⚠ Deliberately NOT `trading_days_between`, which derives the
+  calendar from `nse_holidays` -- measured incomplete for 2019-2020 (7 rows against >=17
+  holidays that occurred). A missing holiday reads as a trading day and inflates every span.
+  It also needs no holiday table at all, which makes it correct for any exchange later
+  ingested.
+- `session_span()` -- sessions between two dates inclusive, or **`None`** when either is not
+  a session. Not 0, not an exception: 0 would read as "no gap" and silently pass a window
+  the guard could not judge, which is the zero-sentinel mistake this codebase keeps finding.
+- `window_has_holes()` -- does a `rows`-bar window span materially more than `rows`
+  sessions. Fails OPEN on an unassessable span, matching every other overlay here.
+- 8 tests, including the case the old guard structurally could not see: both endpoints well
+  inside the modern contiguous block, 300 bars across 516 sessions.
+
+**Changed**
+- `swing_dependence_probe.py` now calls the guard and the two constants are **deleted**.
+  `--clean-only` now means "no holes", a superset of its old meaning. Smoke run reads 1,098
+  observed sessions.
+
+**⚠ Blocked, and recorded rather than worked around**
+- BUILD_QUEUE B4 also names `run_single_stock`'s bar-50 walk, which has no guard at all.
+  That function lives in `app/backtest/engine.py`, which is **FROZEN**: wiring it needs
+  explicit sign-off, a §8 regression and regenerated Rust oracle fixtures in the same
+  commit. Left untouched.
+- `positional_probe.py` has no gap guard to replace; it gets one as part of B5, which is
+  already adding the paired-basket columns to the same file.
+
+
 ### B1 — the two undeclared display filters are removed, not declared (2026-09-11)
 
 `GET /signals/active` dropped near-expiry and choppy-regime signals by default. Neither rule
