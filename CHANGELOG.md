@@ -41,10 +41,21 @@ index and the size ladder. `indices` currently holds 3 rows.
 **Added**
 - `docs/UNIVERSE_REBUILD_PLAN.md` — measurement (PART I), an 11-item restoration queue in
   `BUILD_QUEUE.md` conventions (PART II), the universe-curation decision left explicitly open
-  (PART III), and six questions for external review (PART IV). Splits every criterion into
+  (PART III), and a **two-way review protocol** (PART IV). Splits every criterion into
   **structural** (no evidence bar) vs **empirical** (needs the `t ≈ 3.6` bar or a user ruling),
   and records that a liquidity floor at the universe layer would re-implement MCE slice 5a, which
   was measured and rejected.
+- PART IV makes the review a loop rather than a verdict: **§12 THE WINDOW** (the book is empty, so
+  structural change is free today and expensive after cycle 2's clock starts — while explicitly
+  *not* lowering the evidence bar for selection changes); **§13** the six questions that block the
+  plan; **⭐ §14 ten architecture questions** on building a standard security master (identity,
+  point-in-time universe, corporate actions, ingestion invariants, universe-as-rule, multi-source
+  reconciliation, sector taxonomy, calibration to a solo operator at ₹1 lakh, and the two
+  time-sensitive captures — CAS and intraday); **§15** what reviewers may ask us, what we cannot
+  answer at all (the destroyed book, CAS, intraday, 2021–22), and how to ask cheaply; **§16** the
+  ADOPT / **PARK** / REJECT disposition rule — *parked never means wrong, and every parked row must
+  carry its unblocking condition*; **§17–§18** the round ledger and parked register;
+  **Appendix B** a five-point orientation for a reviewer new to the system.
 
 **Fixed (docs, W1)**
 - `CLAUDE.md`, `docs/PHASES.md` and the memory index claimed the ledger migration `e1f2a3b4c5d6`

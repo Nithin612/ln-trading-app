@@ -22,7 +22,14 @@ claim**:
   *missing*", not "is this right".
 - **PART III (§8–§10) is the curation decision.** This is where judgement lives and
   where reviewers should spend their effort. It is deliberately NOT decided here.
-- **PART IV (§11–§12)** is the trap list and the questions we actually want answered.
+- **PART IV (§11–§18) is the review protocol**, and it is two-way. §12 explains the
+  window we are in (empty book ⇒ structural change is free right now, and why that does
+  **not** lower the evidence bar for selection changes). §13 holds the six questions that
+  block this plan; **§14 holds the ten architecture questions we actually want help
+  with**; §15 tells you what you may ask *us* and what we cannot answer; §16 is how your
+  points get dispositioned — ADOPT / **PARK** / REJECT, where *parked never means wrong*.
+  **Appendix B is a five-point orientation for a reviewer new to this system** — read it
+  first if you have not seen this project before.
 
 ⭐ **The one thing to internalise before reviewing:** this project has an explicit,
 hard-won rule that a selection rule is never flipped on an argument (CLAUDE.md hard
@@ -387,7 +394,7 @@ Ordering is dependency-driven; U1 gates U2, U2 gates U3.
 - ⚠ **Reviewers: this is the one item I am least sure about.** It is the correct
   architecture, but it adds a column and a concept to a system that is mid-flight
   toward cycle 2. The alternative — keep one flag, rely on U4's alarm — is cheaper and
-  weaker. §12 Q4.
+  weaker. §13 Q4.
 
 ---
 
@@ -398,7 +405,7 @@ Ordering is dependency-driven; U1 gates U2, U2 gates U3.
 - **SCOPE** Declare the source of record and its refresh cadence. `ind_nifty500list.csv`
   is live and carries `Industry` for 501 names. Widening beyond that needs either the
   per-sector index constituent CSVs (free, ~15 files) or a different source — an open
-  question (§12 Q2). Record the source and as-of date on the row; do not invent a
+  question (§13 Q2, §14 A7). Record the source and as-of date on the row; do not invent a
   sector for a name we cannot classify (`NULL` beats a plausible guess — UI rule A24).
 - **DO NOT** Use a sector map as a gate. It is a *modifier/context* input per the MCE
   principle, never an additive confluence factor.
@@ -552,7 +559,11 @@ been tried here and has a recorded outcome:
 
 ---
 
-# PART IV — WHAT WE WANT FROM REVIEW
+# PART IV — THE REVIEW PROTOCOL
+
+This is a **two-way, multi-round exercise**, not a request for a verdict. Reviewers are
+expected to ask us questions; we will answer them with measurements. Sections §13–§18
+exist to make that loop cheap.
 
 ## §11 · What this plan deliberately does NOT do
 
@@ -563,37 +574,313 @@ been tried here and has a recorded outcome:
 - It does not attempt to recover the destroyed book, CAS history, or signal outcomes.
   Those are gone; the plan is forward-only.
 
-## §12 · Open questions — please answer these specifically
+## §12 · ⭐⭐ THE WINDOW — what "no positions, no holdings" licenses right now
 
-1. **Q1 — Structural vs empirical.** Is the §6/2 split the right frame? Specifically:
-   is "≥ 300 daily bars" structural (the engine's window canon cannot produce a score
-   without it) or is it a disguised survivorship/liquidity filter?
-2. **Q2 — Sector coverage.** The free `ind_nifty500list.csv` caps sector coverage at
-   ~500 of ~2,290 names. Is a ~22 %-covered sector map worth shipping, or does a
-   partial map do more harm than none (a sector-RS overlay that silently fails open for
-   78 % of the universe)? What free source would do better?
+This is the most important context a reviewer can have, and it is easy to miss.
+
+```
+positions = 0   orders = 0   watchlist_items = 0   signal_outcomes = 0
+cycle-1 paper clock = INFORMATIONAL   cycle-2 clock = NOT STARTED
+```
+
+The project's governing constraint is: **anything that changes a recorded number must
+land BEFORE cycle 2's clock starts** — a rule earned by having to reset one clock already
+(the 2026-08-17 spread-aware-fill change made paper P&L non-comparable across that date).
+
+⭐ **Right now there are no recorded numbers to protect.** The book is empty. That makes
+this the cheapest moment in the project's life to make structural changes, and the window
+closes the day cycle 2 begins. Concretely, all of the following are **free today and
+expensive later**:
+
+- redefining the tradeable universe (nothing to restate);
+- the `is_active` / `is_listed` split (U6) and any other schema change to `stocks`;
+- changing the fill, cost, slippage or mark model;
+- rebuilding the index registry and re-basing every benchmark;
+- restarting intraday and CAS capture on a new schema.
+
+⚠ **But the window licenses STRUCTURE, not SELECTION — and the distinction is the whole
+discipline of this project.** "We have no positions, so we can try it" is a correct
+argument about *cost*. It is not an argument about *evidence*, and the two have been
+conflated here before, expensively:
+
+| Free today | Still needs evidence |
+|---|---|
+| Changing **what the system is** — schema, universe definition, data model, cost model, which names we ingest | Changing **what the system believes** — flipping a shadow gate active, adding a selection filter, promoting a ranker |
+| Justified by: correctness, reproducibility, maintainability | Justified by: the `t ≈ 3.6` deflated-Sharpe bar, or an explicit user ruling recorded with its reasoning |
+
+Both gates this project promoted were promoted on arguments and refuted by data within
+weeks — the regime gate (promoted on 44 observations, refuted by 88, cost ~8R) and the
+R:R ≥ 1 floor (promoted on an identity argument, refuted in a week; it had been blocking
+the book's only profitable cohort). **An empty book removes the cost of being wrong about
+structure. It does not remove the cost of being wrong about edge** — it just defers the
+bill to cycle 2, which is the one measurement that is supposed to be trustworthy.
+
+⇒ **Reviewers: propose structural changes freely and aggressively. Propose selection
+changes only with the evidence that would settle them, or explicitly as PARKED items
+(§16) with their unblocking condition stated.**
+
+## §13 · Decision questions — the six that block this plan
+
+Answer these specifically; each one gates an item in §7.
+
+1. **Q1 — Structural vs empirical.** Is the §6/2 split the right frame? Specifically: is
+   "≥ 300 daily bars" structural (the engine's window canon cannot produce a score
+   without it) or a disguised survivorship/liquidity filter?
+2. **Q2 — Sector coverage.** The free `ind_nifty500list.csv` caps sector coverage at ~500
+   of ~2,290 names. Is a ~22 %-covered sector map worth shipping, or does a partial map do
+   more harm than none (a sector-RS overlay that silently fails open for 78 % of the
+   universe)? What free source would do better?
 3. **Q3 — Universe size.** Given §8's table and §9's history, what do you recommend, and
-   **what evidence would change your mind**? Answers of the form "top N by liquidity"
-   must engage with §9/1.
+   **what evidence would change your mind**? Answers of the form "top N by liquidity" must
+   engage with §9/1.
 4. **Q4 — `is_active` split (U6).** Correct architecture, or unnecessary complexity
-   mid-flight? Is there a cheaper way to guarantee that a selection error can never
-   again stop data ingestion?
-5. **Q5 — Ordering.** I have CAS restart at P3 (U10) but it is the only item losing
-   data permanently every day it waits. Should it jump to P0 alongside U1?
-6. **Q6 — What is missing?** The failure mode of this document is an unlisted consumer
-   of the stock master that stays broken after U1–U3. §4 lists seven; what is the
-   eighth?
+   mid-flight? Is there a cheaper way to guarantee that a selection error can never again
+   stop data ingestion?
+5. **Q5 — Ordering.** CAS restart sits at P3 (U10) but is the only item losing data
+   permanently every day it waits. Should it jump to P0 alongside U1?
+6. **Q6 — What is missing?** The failure mode of this document is an unlisted consumer of
+   the stock master that stays broken after U1–U3. §4 lists seven; what is the eighth?
+
+## §14 · ⭐ Architecture questions — building this as a STANDARD system
+
+§13 gets the current fire out. **These are the questions we actually want help with**,
+because they decide whether we rebuild the same fragile thing or something durable. We
+have no institutional background here; assume we do not know the standard answer.
+
+### A1 — Security identity
+We key on `(symbol, exchange)` with a surrogate `stocks.id` that turned out **not to be
+stable**: every id was reassigned on 2026-09-07, silently invalidating any artifact that
+recorded a raw `stock_id`. Symbols rename, series move (`EQ` → `BE` → `T2T` → `EQ`),
+companies merge. `isin` exists, is nullable, has a unique constraint, and already has a
+known collision path (`seed_stocks.py` writes `NULL` rather than die on `uq_stocks_isin`).
+> **What is the standard identity model for an equity security master?** Permanent
+> surrogate ID + an effective-dated symbol/listing history table? Is ISIN the right
+> natural key given that it also changes on some schemes of arrangement? **And what is the
+> minimum viable version at our scale** (§A8)?
+
+### A2 — Point-in-time / bitemporal universe
+The project already made `as_of` mandatory on every trading restriction (A38) so a
+backtest can ask *"was this restricted on that date"*. **The universe has the identical
+problem and no answer.** `index_constituents.added_on` is uniformly the reseed date and
+`weight_pct` is NULL, so *"was X in the Nifty 50 on date D"* is unanswerable. We also just
+shipped an append-only ledger (`ledger_entries`, migration `e1f2a3b4c5d6`).
+> **Effective-dated rows (`valid_from`/`valid_to`), a daily snapshot table, or an event
+> log the universe is folded from?** Which is standard, which is right for a single-box
+> Postgres 16 + TimescaleDB holding ~2,300 names × ~1,100 sessions, and **should the
+> universe ride the ledger we already have** rather than getting its own mechanism (W2:
+> do not add a parallel implementation)?
+
+### A3 — Corporate actions
+`corporate_actions` = **0 rows**. `ohlcv_1d` is CA-unadjusted end to end. Measured cost:
+**49 unadjusted corporate actions sit in the top-250-liquid universe, 35 of them ≥ 40 %
+halvings** (SHRIRAMFIN −81.1 %, ANGELONE −90.1 %, DIACABS +3118.6 %), and dropping just
+**4 contaminated trades removed ~+49R of fake profit** from one study — more than that
+study's entire original loss. We do have a working ratio-adjuster for *open positions*
+(6.8.5, admin-verified ratio), so a detector exists; the **history** does not.
+> **Standard architecture: store raw prices + a cumulative adjustment-factor series and
+> adjust at read time, or store adjusted with raw kept for audit?** And **is there a free,
+> reliable Indian CA source** (NSE corporate-announcements API, BSE, or bhavcopy-derived
+> detection of unexplained overnight gaps)? We have no vendor budget.
+
+### A4 — Ingestion invariants
+Our staleness alarm asserted **recency** and missed a **56 % breadth collapse** for five
+days (§4a).
+> **What is the standard invariant set for an EOD reference + price ingestion?** We are
+> looking for the minimum set that would have caught *this* failure and the next one —
+> candidates: expected row count vs a trailing baseline, per-name presence vs a
+> subscription list, price/volume sanity bounds, cross-source reconciliation, monotonic
+> session count. Which of these earn their keep at our scale, and which are institutional
+> habit?
+
+### A5 — Universe as data or as rule
+Today the universe is a mutable boolean on `stocks`, which is why one wrong flag was
+invisible.
+> **Should the tradeable universe be (a) a flag, (b) a declarative rule evaluated nightly
+> whose OUTPUT is snapshotted and immutable, or (c) a hand-curated list?** Reproducibility
+> argues for (b). What is actually standard?
+
+### A6 — Multi-source reconciliation
+Three sources disagree today: NSE `EQUITY_L.csv` (2,568 rows), the Kite instruments dump,
+and the daily bhavcopy. U2 proposes activating on three-way agreement.
+> **What is the standard disagreement policy** — intersection (safe, silently loses
+> names), union (unsafe), or source-precedence with an exception queue a human clears?
+> **Should a disagreement block the pipeline or merely alarm?** Note we are a solo
+> operator: an exception queue nobody clears is worse than no exception queue.
+
+### A7 — Sector taxonomy
+Our sector map comes from index-membership CSVs, which is **circular**: a name gets a
+sector only if it is already in the Nifty 500. That caps coverage at ~22 % and biases it
+toward large caps — the opposite of where a sector overlay would be most useful.
+> **What free taxonomy covers the full NSE universe?** And a specific idea we would like
+> judged rather than assumed: **should sector be derived from return-correlation
+> clustering on our own 1,098 sessions of price history** instead of from a published
+> taxonomy? That needs no vendor, covers 100 % of names with enough bars, and is arguably
+> closer to what a relative-strength overlay actually wants — but it is also a fitted
+> object that could overfit, and we would want to hear why it is or is not standard.
+
+### A8 — ⭐ Calibrate to our scale, and tell us what to cut
+We are **one person**, personal use first, **₹1 lakh of live capital**, 1–2 concurrent
+positions, one dev box (Postgres on :5433, Redis, RAYON ≤ 6 threads), evenings only. The
+project's expensive failures have never been infrastructure — they were **unvalidated
+claims**. There is a real risk that "standard system" advice imports institutional
+machinery we will never need and cannot maintain.
+> **What is the minimum professional-grade security master at this scale — and which of
+> your own recommendations above would you cut** if told the whole thing must be
+> maintainable by one person in evenings, forever?
+
+### A9 — What would you do with the window?
+Given §12 — empty book, no recorded numbers to protect, window closes at cycle 2:
+> **What is the single highest-value STRUCTURAL change you would make before the window
+> closes, that this document has not proposed?**
+
+### A10 — Intraday capture (time-sensitive, like CAS)
+`ohlcv_1m`, `ohlcv_5m`, `ohlcv_15m`, `ohlcv_1h` are **all 0 rows** since 2026-09-07.
+Intraday data accrues **only in real time and cannot be back-filled** from any free
+source, so every opening-range, intraday-timing and execution-microstructure question is
+untestable until capture restarts — and each day of delay is permanent.
+> **Should intraday capture restart now, before cycle 2?** At what granularity and
+> retention for ~2,300 names on one box — and is storing 1-minute bars for the full
+> universe sane, or should it be a subscribed subset?
+
+## §15 · What YOU may ask US — and how
+
+⭐ **Please ask.** Several of this project's worst review rounds happened because a
+reviewer reasoned from an assumption that one query would have settled. Five separate
+review points across previous rounds were refuted by a query the reviewer could have asked
+for.
+
+**We can answer, same round:**
+
+| You can ask for | Because |
+|---|---|
+| Any read-only `SELECT` against the dev DB | 42 application tables, 2.08 M daily bars, 1,098 sessions |
+| Any counted distribution, quantile, or cross-tab of the above | |
+| The source of any function, model, migration or script | Whole repo available |
+| A re-run of any existing probe with different parameters | `backend/scripts/` holds 60 scripts, most of them read-only probes |
+| Excerpts of any doc, including the protected `SIGNAL_ENGINE.md` | Protected against *edits*, not reads |
+| Exact settings values as a running process sees them | There is a recipe for this (`.env` is unreadable by the agent; a fresh `get_settings()` load is the check) |
+
+**We cannot answer — do not build a recommendation on these:**
+
+| Unavailable | Why |
+|---|---|
+| Any live-tape P&L, fill, or trade outcome | `positions` = `orders` = `signal_outcomes` = 0. **The entire cycle-1 book was destroyed 2026-09-07 with no backup.** Every live-tape number in our older review docs is currently unreproducible |
+| Closing-auction (CAS) behaviour beyond 1 session | `cas_daily` = 86 rows; real-time-only, cannot be back-filled |
+| Anything intraday | All intraday tables are empty (§A10) |
+| Index or VIX history | `index_ohlcv_1d` = 54 rows, `india_vix_daily` = 18 (U8 fixes this) |
+| Anything in `ohlcv_1d` for 2021 or 2022 | The 922-day hole (§5) — **0 sessions** in both years |
+| Point-in-time index membership | §A2 — `added_on` is uniformly the reseed date |
+
+**How to ask, so the round stays cheap:**
+
+1. **Name the object.** "What is the distribution of X in table Y" beats "how liquid is
+   the universe".
+2. **Say whether the answer is BLOCKING.** If your recommendation is the same either way,
+   mark it context — we will answer it, but it will not hold up the round.
+3. **State your prediction before we run it.** This is an adopted convention here (probe
+   convention 5): a published numeric prediction turns our run into a *test* instead of a
+   *search*, and it has twice caught an error that a bare result would have hidden.
+4. **One question, one estimand.** Compound questions have produced compound answers that
+   were half-wrong here before.
+
+## §16 · How we will dispose of your recommendations
+
+Every point gets exactly one of three dispositions, recorded with a reason, following this
+project's existing state machine:
+
+```
+PARKED ──(evidence it is worth capacity)──> BUILD ──(acceptance test)──> MEASURED ──> ACCEPTED
+```
+
+| Disposition | Means | Requires |
+|---|---|---|
+| **ADOPT** | Enters the §7 queue with an acceptance test | Converged across sources **OR** settled by our own measurement |
+| **PARK** | Right, or plausibly right, but not justified to consume capacity **now** | A stated **unblocking condition** — the specific thing that would move it to ADOPT |
+| **REJECT** | Contradicted by a measurement we hold | The measurement, cited |
+
+⚠⚠ **"PARKED" NEVER MEANS "WRONG".** This is the user's explicit instruction for this
+exercise and it is also existing project policy. A recommendation can be **correct and
+still parked** because our system does not yet have the configuration, data, or capital to
+support it. ⭐ **A parked item without an unblocking condition is a rejected item wearing a
+polite label — so every parked row must state what would unblock it**, and we will raise it
+unprompted when that condition is met (the project's review-calendar rule: Claude owns the
+calendar and raises due items without being asked).
+
+⭐ **The entry rule, which is the single most expensive lesson of the previous ten rounds:**
+
+> **An item enters the build queue when it is converged across sources OR settled by our
+> own measurement — never on consensus alone.**
+
+Unanimous panel agreement has been wrong here repeatedly: all five reviewers once demanded
+a factor-level IC study that had already been run and returned nothing; all five
+recommended a cross-sectional ranker against a measured prior that it would not work — and
+it did not (E2, 2026-09-12: IC = −0.0070, 90 % CI [−0.0259, +0.0119], a null). Meanwhile
+**the best items each came from a single source.** ⇒ *Consensus is a good filter for
+PRIORITY and a bad one for TRUTH.*
+
+⛔ **Three things are FORBIDDEN rather than parked** — proposing them wastes a round:
+
+1. **Editing the frozen engine.** `backend/app/analysis/`, `app/backtest/engine.py` and
+   the swing/window canon are frozen; `docs/SIGNAL_ENGINE.md` is hook-protected. Changing
+   a factor, a weight, or the ≥ 70 % gate is a **spec change** requiring explicit user
+   instruction, a §8 backtest regression, **and** regenerated Rust oracle fixtures in the
+   same commit. Measurements about the engine are findings to record, not licence to edit
+   it.
+2. **Flipping a shadow gate active without its evidence.** §9/4.
+3. **Anything that writes to, truncates, or migrates live data without asking first.**
+   The 2026-09-07 loss is why.
+
+## §17 · Review round ledger
+
+Each round appends a row. Keep it honest — including rounds that changed nothing, since
+the marginal value of review breadth is itself something this project measures.
+
+| Round | Date | Sources | Points | ADOPT | PARK | REJECT | Notes |
+|---|---|---|---|--:|--:|--:|---|
+| 0 | 2026-09-12 | Claude (in-repo) | — | — | — | — | This document. Measurement + plan only; nothing executed |
+| 1 | | | | | | | |
+
+## §18 · The parked register
+
+Empty at round 0. Every parked item lands here with its unblocking condition.
+
+| item | source / round | why parked | what would unblock it |
+|---|---|---|---|
+| _(none yet)_ | | | |
 
 ---
 
 ## Appendix A — Reproducing every number here
 
 All measurements are read-only `SELECT`s against `trading_platform` on 2026-09-12, plus
-three live HTTP fetches of public NSE CSVs (`EQUITY_L.csv`, `ind_nifty500list.csv`, the
-daily indices CSV via `app.services.vix_service.download_indices_csv`). No script in
+three live HTTP fetches of public NSE CSVs (`EQUITY_L.csv`, `ind_nifty500list.csv`, and
+the daily indices CSV via `app.services.vix_service.download_indices_csv`). No script in
 this document has been run against the database in write mode.
 
-⚠ Per the project's own convention, note what is **[ASSUMED]** rather than measured:
-the liquidity tiers in §8 use a trailing-120-day window that ends 09-04 for the
-wrongly-inactive names, so they understate those names' recent turnover. Everything else
-in PART I is a direct count.
+⚠ Per this project's convention, what is **[ASSUMED]** rather than measured: the liquidity
+tiers in §8 use a trailing-120-day window that ends 2026-09-04 for the wrongly-inactive
+names, so they understate those names' recent turnover. Everything else in PART I is a
+direct count.
+
+## Appendix B — Orientation for a reviewer new to this system
+
+The five facts that make this project unusual, and without which several recommendations
+will misfire:
+
+1. **The signal engine is FROZEN and hook-protected.** It is the user's edge, adjudicated
+   at a specific commit. It cannot be edited as part of this work.
+2. **There is a quantified promotion bar: `t ≈ 3.6` on the trade series**, validated
+   against a noise control (it rejects 1.1 % of best-of-20 zero-edge selections and has
+   80 % power at a true per-trade Sharpe of 0.52). ⚠ **The hurdle is flat in n** — more
+   data never lowers it — so "keep accruing until it passes" is only ever right when the
+   point estimate is already ahead.
+3. **The measured state of the strategy is honest and poor.** The scorer carries no
+   cross-sectional information (E2: IC ≈ 0); gating as a programme is closed (eight
+   shadow gates, two promotions, both refuted); exit geometry and the queued generation
+   lever were both tested and refuted. **Finding a new source of edge is the open
+   problem** — and it is not what this document is about. This document is about the data
+   layer being correct enough that the question can be asked at all.
+4. **Live trading does not exist.** `place_order` is paper-only. Everything here is
+   upstream of an execution path that has not been built (Phase 7).
+5. **The operator is one person.** Every recommendation is implicitly a maintenance
+   commitment for a solo developer in evenings (§A8).
