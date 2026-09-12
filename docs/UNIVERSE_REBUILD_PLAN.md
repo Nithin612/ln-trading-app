@@ -30,6 +30,10 @@ claim**:
   points get dispositioned — ADOPT / **PARK** / REJECT, where *parked never means wrong*.
   **Appendix B is a five-point orientation for a reviewer new to this system** — read it
   first if you have not seen this project before.
+- ⭐ **PART V (§19–§22) is the round-1 adjudication** of five external reviews. Read it
+  before re-reading PART I: **§3a corrects §3's root cause**, which round 1 proved wrong,
+  and §21 supersedes §7's ordering. §20 carries two findings no reviewer had, both found
+  by checking a review against the database rather than against our own documents.
 
 ⭐ **The one thing to internalise before reviewing:** this project has an explicit,
 hard-won rule that a selection rule is never flipped on an argument (CLAUDE.md hard
@@ -189,6 +193,57 @@ This is confirmed, not inferred:
 **Recovery-order dependency, stated plainly:** `seed_stocks.py` must run **before** any
 bhavcopy ingestion on an empty database. Nothing in the code, the scripts or
 `RUNBOOK.md` enforces or documents that today.
+
+### 3a. ⛔⛔ CORRECTION (round 1, 2026-09-12) — the ordering above is WRONG, and the fix changes
+
+⭐ **Credit: Claude's round-1 review (F1) found this by arithmetic, and it is confirmed.**
+The review observed that 1,322 active − 17 with no bars = **1,305 active stocks that have
+bars**, which under a strictly sequential "bhavcopy first on an empty table, then seed"
+is impossible: every stock the backfill touched would have been created inactive.
+
+**Measured, and it is decisive.** 1,303 active stocks hold bars dated *before* 2026-09-05
+— `DMART`, `AFFLE`, `NEOGEN` each carry 1,045 bars back to 2019-10-01. Sequential
+ordering cannot produce that.
+
+⭐ **The row ids are a forensic fingerprint, because `_ensure_historical_stocks` inserts a
+`sorted()` symbol list while `seed_stocks.py` iterates a `set` in hash order.** Grouping
+`stocks` by id block:
+
+| id block | rows | active | what created it |
+|---|--:|--:|---|
+| 1 – ~1,700 | 1,552 | **0** | `_ensure_historical_stocks`, alphabetical — 1,415 of them carry a 2019-10-01 bar, and that session has 1,484 names |
+| ~1,700 – 9,276 | 0 | — | ~7,500 sequence values burned by `ON CONFLICT DO NOTHING` |
+| 9,277 – 11,823 | 1,322 | **1,322 (100 %)** | `seed_stocks.py`'s INSERT branch |
+| 11,750 – 2,157,287 | ~518 | **0** | `_ensure_historical_stocks` again, *after* the seed |
+
+Spot-check: `ABB` id 15, `RELIANCE` id 1,140, `TCS` id 1,383 — all inactive, all in the
+first block. `DMART` id 9,424, `NEOGEN` id 9,736, `AFFLE` id 10,063 — all active, all in
+the seed block. And the **five active Nifty 50 names are `ETERNAL`, `JIOFIN`,
+`MAXHEALTH`, `SHRIRAMFIN`, `TMPV`** — every one a recent listing or rename, i.e. precisely
+the names the 2019-era bhavcopy could not have contained.
+
+⇒ **The restore was INTERLEAVED: backfill → seed → backfill.** `is_active` does not encode
+any property of the stock. It encodes **which process created the row first**.
+
+⚠ **This changes the remedy, which is why it matters.** Under the original story, "seed
+first" was a sufficient fix. Under the true story it is not: any `historical=True`
+ingestion run that meets a symbol not yet in `stocks` creates it inactive, and
+`seed_stocks.py`'s conflict branch can never repair it — so the hazard recurs on every
+future backfill, independent of the 2026-09-07 disaster. ⭐ **The fix is therefore not an
+ordering rule but an invariant: the price archive must never consult a trading flag** (see
+U6′ in §21).
+
+⚠ **One part of the round-1 finding does NOT survive.** The review stated that *"new
+listings are permanently invisible right now."* Checked in code: `_ensure_historical_stocks`
+is called **only** under `historical=True` (`bhavcopy_service.py:253`). Daily ingestion never
+creates a stock — an unknown symbol is counted in `skipped` — so a genuine new listing is
+picked up as ACTIVE by the next `seed_stocks.py` run. The hazard is real but narrower: it
+is triggered by *historical backfills*, not by the daily path.
+
+⚠ **Residual unknown, stated rather than guessed:** the exact run sequence that produced
+the third block (a backfill re-run after the seed, filling bars for seed-created names) is
+not fully reconstructible from the surviving evidence. The *mechanism* above is proven; the
+precise operator command history is not.
 
 ## §4 · The cascade — what is broken downstream, and why none of it alarmed
 
@@ -838,15 +893,242 @@ the marginal value of review breadth is itself something this project measures.
 | Round | Date | Sources | Points | ADOPT | PARK | REJECT | Notes |
 |---|---|---|---|--:|--:|--:|---|
 | 0 | 2026-09-12 | Claude (in-repo) | — | — | — | — | This document. Measurement + plan only; nothing executed |
-| 1 | | | | | | | |
+| 1 | 2026-09-12 | ChatGPT · Gemini · Perplexity · DeepSeek · Claude (5) | ~40 | 10 | 6 | 2 | **PART V.** ⭐ One finding (Claude F1) overturned §3's root cause and changed the remedy. **3 claims refuted by measurement**, incl. "no scheduled backup" (cron has run since 09-07) and E2 contamination. ⭐⭐ **Verifying the reviews produced 2 findings no reviewer had** (§20/1 the `load_frames` deadline, §20/2 the dangerous reversal SQL). Gemini added nothing not stated more precisely elsewhere |
+| 2 | | | | | | | |
 
 ## §18 · The parked register
 
-Empty at round 0. Every parked item lands here with its unblocking condition.
+Live register: **§19d** (round 1 populated it — 6 items, each with its unblocking
+condition). Round 0 was empty.
 
-| item | source / round | why parked | what would unblock it |
+⭐ **The most instructive parked row is one of my own:** the correlation-derived sector
+taxonomy I proposed in §A7 was independently objected to by two reviewers on a ground I
+could not have tested from inside the system — co-movement clusters are regime artifacts,
+not sectors. It is parked with a real instrument attached (a 60/40 session stability
+split), which is what PARK is supposed to look like.
+
+---
+
+# PART V — ROUND 1 ADJUDICATION (2026-09-12)
+
+Four reviews received: **ChatGPT**, **Gemini**, **Perplexity**, **DeepSeek**, and a
+**Claude** review delivered as a separate 857-line document
+(`~/Downloads/UNIVERSE_REBUILD_REVIEW_R1_CLAUDE.md`).
+
+⭐ **Every claim below was adjudicated against the code and the database, not against our
+own documents** — which is how two of the reviewers' strongest points were confirmed and
+three were refuted.
+
+## §19 · Dispositions
+
+### 19a. ⭐⭐ CONFIRMED BY MEASUREMENT — the single most valuable finding of the round
+
+**Claude F1 — "§3's stated ordering is contradicted by your own counts."** ✅ **CONFIRMED,
+and the correction is now §3a.** The reviewer reached it by arithmetic on our published
+rows (1,322 − 17 = 1,305 active-with-bars, impossible under sequential ordering). Verified
+three ways: 1,303 active stocks hold pre-09-05 bars; the id-block structure separates
+cleanly into `_ensure_historical_stocks` and `seed_stocks` regions; and the five active
+Nifty 50 names are all post-2019 listings.
+
+⇒ **`is_active` encodes which process created the row, not any property of the stock.**
+⇒ **U5's "document the recovery order" is necessary but NOT sufficient** — see U6′.
+
+⚠ **This is the round's lesson about the review process, not just the bug:** the finding
+came from *one* reviewer, was derived from numbers we had already published, and needed no
+information we had not given. It is the fifth time in this project's review history that a
+single source beat the consensus. It also reinforces the probe convention that a reviewer
+who *recomputes* outperforms one who only reads.
+
+### 19b. ✅ CONVERGED ACROSS ALL FIVE — adopting
+
+| Point | Sources | Disposition |
+|---|---|---|
+| **Universe = versioned rule + immutable snapshot**, not a mutable boolean | ChatGPT §6, Perplexity A5, DeepSeek A5, Claude, Gemini | **ADOPT** — and it is *also* settled by our own precedent: A38 already did exactly this for restrictions (declare once, walk the registry, mandatory `as_of`). Converged **and** self-settled, so it clears the entry rule on both counts. |
+| **Permanent security identity + effective-dated symbol/listing history** | ChatGPT §4, DeepSeek A1, Perplexity A1, Claude A1 | **ADOPT** — §20/2 below is the concrete proof it is already costing us. |
+| **Corporate actions are not P2** | ChatGPT §12, Claude F4, DeepSeek A3, Perplexity A3 | **ADOPT** — raw immutable + adjustment-factor series + a *detector and review queue*, never auto-adjustment. |
+| **Coverage-aware ingestion alarm, elevated** | all five | **ADOPT at P0** (was U4/P1). |
+| **CAS + intraday restart in capture-only mode** | ChatGPT §10, Perplexity P0-B, DeepSeek Q5, Claude A10 | **ADOPT at P0.** "Capture-only" (store and validate, do not signal or trade) is ChatGPT's framing and is better than my P3 placement. |
+| **U2 must not use bhavcopy recency as an activation criterion** | ChatGPT §5, Claude F5, Perplexity A6, DeepSeek A6 | **ADOPT** — OHLCV presence is an *observation*, not an identity authority, and during this very repair it is circular (1,481 names have no bar since 09-04). Replace the three-way intersection with **source precedence** (EQUITY_L → Kite → bhavcopy) + a bounded, noisy disagreement report. |
+| **No liquidity / market-cap / top-N floor at the universe layer** | all five | **ADOPT (unchanged)** — unanimous, and consistent with the measured 2026-08-21 finding. |
+| **Do not touch the frozen engine; do not flip shadow gates** | all five | **ADOPT (unchanged)**. |
+| **Intraday: tiered capture, not 1-minute for the whole universe** | ChatGPT §11, DeepSeek A10, Perplexity A10 | **ADOPT** — 1m for a declared subscribed subset, 5m/15m/1h derived, daily for everything. |
+
+### 19c. ⛔ REFUTED BY MEASUREMENT — do not carry these into round 2
+
+**DeepSeek R4 — "no scheduled backup exists, and `make backup` is not one."**
+⛔ **REFUTED.** A cron job has been installed since 2026-09-07 and is running:
+
+```
+0 11 * * 1-5  /home/nithin/code/back_ups/trading_platform/bin/backup_db.sh
+```
+```
+trading_platform-20260909-110001.dump   49,745,318 bytes
+trading_platform-20260910-110001.dump   58,238,427 bytes
+trading_platform-20260911-110001.dump   59,390,111 bytes
+```
+
+⚠ **But the review was half-right for reasons it did not state, and those reasons are
+real.** (1) **Every existing backup post-dates the breakage**, so all three contain the
+inverted universe — restoring one recovers nothing this plan is about. (2) **The dumps sit
+on the same box as the database**, so they survive a bad `TRUNCATE` and not a disk
+failure. (3) There is a `make backup-verify` target that performs a real restore; whether
+it has been *run* since installation is a separate question and is now a queue item.
+⇒ The valid residue is adopted as **U0.5′** (off-box copy + a dated restore drill), not as
+"there is no backup".
+
+**Claude F2 — "E2 may be contaminated by the regression."**
+⛔ **LARGELY REFUTED, and checking it produced something more important.** `e2_score_ic.py`
+draws its universe from `swing_dependence_probe.load_frames`, which reads `ohlcv_1d`
+**directly and applies no `is_active` filter** — it ranks by median `close × volume` over
+the last 180 days with `HAVING count(*) > 100`. Measured today, the frozen blue chips hold
+**117 bars** in that window against a threshold of 100. They were in E2's universe. **E2
+stands.** → But see §20/1, which is the reason the check was worth running.
+
+**Claude — "new listings are permanently invisible right now."**
+⛔ **REFUTED as stated.** `_ensure_historical_stocks` is invoked **only** under
+`historical=True` (`bhavcopy_service.py:253`); daily ingestion never creates a stock row.
+An unknown symbol on the daily path is counted in `skipped`, and the next `seed_stocks.py`
+run INSERTs it **active**. The real hazard is narrower and is stated correctly in §3a:
+it is triggered by historical backfills.
+
+**DeepSeek Q2 — "were the 15 `forensic_stocks_deactivated` rows correct?"**
+✅ **VERIFIED CORRECT.** `QUINTEGRA`, `VISASTEEL`, `JBCHEPHARM`, `GUJGASLTD` and
+`NIFTYNXT50` are all **ABSENT from today's `EQUITY_L.csv`**. `deactivate_dead_stocks.py`'s
+July judgements were sound; U2's "951 correctly inactive" figure is not undermined.
+
+**DeepSeek Q1 — "are the 35 signals garbage?"** ✅ **PREDICTION CONFIRMED.** All 35 point
+at currently-active stocks, zero orphans, and the sample is the microcap set —
+`ALIVUS`, `PNGJL`, `VRAJ`, `BHAGCHEM`, `FABTECH`, `FRONTSP`, `INTLCONV`, `LLOYDSENT`,
+`NIRLON`, `AYE`. **Quarantine them before cycle 2** (new queue item U11).
+
+### 19d. ⏸ PARKED, each with its unblocking condition
+
+| item | source | why parked | unblocking condition |
 |---|---|---|---|
-| _(none yet)_ | | | |
+| Full layered 5-state security model (`security` / `security_listing` / `security_status` / `universe_snapshot` / `data_coverage`) | ChatGPT §4 | Right target, but it is a five-table rewrite competing with a P0 outage. DeepSeek's 4-table and Perplexity's 2-table variants are cheaper and cover the measured failures. | U6′ + U12 ship and a *measured* need appears that the smaller model cannot express |
+| Correlation-derived sector taxonomy (my own A7 idea) | mine; ChatGPT §13 and Perplexity both argued against | ⭐ **Both reviewers independently made the same objection I could not have tested: co-movement clusters are regime artifacts, not sectors** (steel + PSU banks + IT can cluster in one regime). DeepSeek's 60/40 stability test is the right instrument. | clustering shows temporal stability on a 60/40 session split **AND** the sector-RS overlay demonstrates it needs coverage beyond the published map |
+| Per-sector index constituent CSVs to widen sector coverage 22 % → ~40–50 % | DeepSeek A7 | Good, cheap, but strictly after the P0 outage | U1–U3 complete |
+| Full bitemporal model everywhere | ChatGPT, Perplexity (who also cautioned against it) | Over-scope at one operator | a backtest requirement the effective-dated rows cannot serve |
+| Separate DEV / TEST / PAPER / PROD databases with startup assertions | ChatGPT P0-A, Perplexity | The specific hole is already closed (`conftest.py` refuses any DB not named `*_test`) | a second near-miss, or live trading (Phase 7) |
+| `ingestion_runs` lineage table | Perplexity A9, ChatGPT §15 | ⭐ Genuinely good and I under-weighted it; but it is a cross-cutting change touching every ingester | U1–U4 land; then it is the natural next structural item |
+
+### 19e. ⛔ REJECTED
+
+- **"Declare the ~1,800-name universe only after re-measuring" as a blocker** (ChatGPT §7).
+  Half-adopted: re-measuring after U3 is correct and already in §8's caveat. But ChatGPT
+  treats the universe size as undecided pending data — it is not. The *structural*
+  definition does not depend on the liquidity distribution at all; only an *empirical*
+  floor would, and we are not adopting one. Re-measure for the record, do not gate on it.
+- **Gemini's review** contributed no point not made more precisely elsewhere, and its
+  closing question ("which schema change do you prefer for U6") is answered by U6′ below.
+  Recorded for the ledger; no disposition.
+
+## §20 · ⭐ New findings — produced by verifying the reviews, not contained in them
+
+**1. ⭐⭐ THE RESEARCH APPARATUS HAS A DEADLINE, AND IT IS ABOUT THREE WEEKS OUT.**
+`load_frames` (the universe loader shared by `swing_dependence_probe.py`, `e2_score_ic.py`
+and everything importing them) admits a name only if it has `> 100` bars in the trailing
+180 days. The frozen blue chips are at **117 bars — a margin of 17 sessions** — and they
+gain none while the window slides forward one session per trading day.
+
+⇒ **On or about 2026-10-06, `RELIANCE`, `TCS`, `HDFCBANK`, `INFY` and `ITC` drop silently
+out of every probe built on `load_frames`**, and any study run after that date measures a
+microcap universe while appearing to measure the market. Nothing would alarm.
+
+⚠ This converts U2/U3 from "important" into **time-boxed**, and it is a second irreversible
+clock alongside CAS and intraday. It was not found by any reviewer; it was found by
+checking whether one reviewer's contamination worry was true.
+
+**2. ⭐⭐ A DOCUMENTED REVERSAL PROCEDURE IN THE REPO IS NOW ACTIVELY DANGEROUS.**
+`deactivate_dead_stocks.py`'s docstring ships reversal SQL that joins
+`forensic_stocks_deactivated` on `stock_id`. **Every one of its 15 stock_ids now resolves
+to a different company:**
+
+| `stock_id` | symbol in July 2026 | symbol today |
+|--:|---|---|
+| 228 | `QUINTEGRA` | `BSE` |
+| 544 | `UNIVAFOODS` | `HERCULES` |
+| 719 | `NIFTYNXT50` | `JSLHISAR` |
+| 853 | `AVAILFC` | `MANAPPURAM` |
+| 1,213 | `JBCHEPHARM` | `SCHNEIDER` |
+| 1,274 | `MIRCELECTR` | `SKIPPER` |
+
+Running the documented reversal today would reactivate **the wrong companies**. ⭐ This is
+the concrete, in-repo cost of unstable `stocks.id` that §5 flagged abstractly — and it is
+the strongest argument for the identity work in §19b, stronger than any argument a
+reviewer made for it. **Fix the docstring in the same change (W1).**
+
+**3. ⭐ THE ACTIVE SET IS WRONG BY INCLUSION, NOT ONLY BY OMISSION.** `QUINTEGRA` is
+`is_active = true` today despite being absent from `EQUITY_L.csv` and having been
+*correctly* deactivated in July 2026. The plan so far has framed the damage as "1,119
+names wrongly inactive". It is bidirectional, and U2's acceptance test must assert both
+directions.
+
+**4. The 35 live signals are artifacts of the broken universe** (§19c) — quarantine, new
+item U11.
+
+**5. `_ensure_historical_stocks` runs only under `historical=True`** — narrows the hazard
+and kills one reviewer claim (§3a, §19c).
+
+**6. Backups run, but all three post-date the breakage and live on the same box** (§19c).
+
+## §21 · The revised queue
+
+Changes from §7 in bold. Two irreversible clocks (CAS/intraday, and now `load_frames`
+at ~2026-10-06) drive the ordering.
+
+| # | item | pri | change |
+|---|---|--:|---|
+| U0 | doc corrections — ledger migration, **plus §3a and the `deactivate_dead_stocks.py` reversal docstring (§20/2)** | P0 | **widened** |
+| **U0.5′** | **off-box backup copy + a dated restore drill** | **P0** | **NEW** (DeepSeek's valid residue) |
+| U1 | `kite_instruments` + scheduled owner + startup guard | P0 | unchanged |
+| **U10a′** | **restart worker → CAS + tiered intraday, CAPTURE-ONLY** | **P0** | **promoted from P3** |
+| U2′ | universe repair by **source precedence, not three-way intersection**; acceptance asserts **both** directions (§20/3) | P0 | **modified** |
+| U3 | backfill 09-05 → today | P0 | unchanged |
+| U4′ | coverage-aware feed alarm | **P0** | **elevated** |
+| **U6′** | **remove the trading flag from the ingestion path** — the price archive must never consult a trading decision. Cheaper than the `is_listed` column and closes the whole class | **P1** | **replaces U6** |
+| U5′ | recovery-order runbook + invariant test + `_ensure_historical_stocks` refuses an empty `stocks` | P1 | **necessary, no longer sufficient** |
+| **U11** | **quarantine the 35 microcap signals** | P1 | **NEW** |
+| **U12** | **permanent `stocks.id` + `symbol_history`; migrate the forensic reversal path** | P1 | **NEW** |
+| **U13** | **universe as versioned rule + immutable snapshot** | P1 | **NEW** |
+| **U14** | **corporate-action detector + quarantine queue; raw immutable + factor series** | P1 | **NEW** (was implicit in A3) |
+| U7/U8/U9 | sector map · index registry · constituents | P2 | unchanged |
+| U10b | remaining operational surfaces | P3 | unchanged |
+
+⚠ **Still not decided, and still the user's call:** whether U12/U13/U14 are done *inside*
+the window (they change no recorded number, so they are cheap now and dear later) or
+deferred so the P0 outage closes first. My recommendation: **U0–U4 first without
+exception**, then U12–U14 before cycle 2, because all three get strictly more expensive
+once a clock is running.
+
+## §22 · Questions for round 2
+
+The apparatus questions are largely answered. These are what remain open.
+
+1. **[BLOCKING] U6′ vs U6.** Removing `active_only` from the daily path means the archive
+   ingests every bhavcopy name, including `BE`/`BZ`/`SM` series that the T2T ruling
+   excludes from live coverage. The storage cost is small (the round-1 review estimated
+   ~65 MB/year; ~1,100 extra names × ~250 sessions puts it in the same order, and it has
+   not been measured here), but it **contradicts the stated rationale of the T2T ruling** ("deactivated names get no EOD bars"). Is the ruling
+   about *trading* or about *storage*? If trading only, U6′ is strictly correct and
+   cheaper than a new column. If storage too, U6′ needs the user to overturn a prior
+   ruling. **This is the one place a reviewer's recommendation collides with an existing
+   decision, and I will not resolve it silently.**
+2. **[BLOCKING] The `load_frames` clock (§20/1).** Is ~2026-10-06 a hard deadline that
+   should reorder everything, or should `load_frames`'s `> 100` threshold simply be made
+   coverage-aware so the clock stops mattering? The second is a one-line change to a
+   research probe — but it is a change to a *measurement instrument*, and this project has
+   a rule about those.
+3. **[context] Universe snapshot granularity (U13).** Daily snapshot of ~1,800 rows ≈
+   450 k rows/year. Acceptable, or should the snapshot be written only on change?
+4. **[context] Given §20/2, should `stocks.id` stability be enforced by *never deleting
+   rows* plus `symbol_history`, or by adding a separate immutable `security_id`?** DeepSeek
+   and ChatGPT differ here; both work; the cheap one wins unless someone names a case it
+   cannot express.
+5. **What did this round miss?** Round 0 asked for the eighth broken consumer. Round 1
+   produced §20/1 and §20/2, neither of which was on anyone's list — **including mine.**
+   The pattern is that the findings come from *running a check*, not from reading. So:
+   **name the check, not the concern.**
 
 ---
 

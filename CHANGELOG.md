@@ -7,6 +7,54 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Universe rebuild plan — round 1 adjudicated; §3's root cause was wrong (2026-09-12)
+
+Five external reviews (ChatGPT, Gemini, Perplexity, DeepSeek, and a Claude review delivered as
+a separate document). Every claim adjudicated against the code and the database rather than
+against our own docs, which confirmed two strong points and refuted three.
+
+**⛔ §3's root cause is corrected (new §3a).** The round-1 review found by arithmetic on our
+own published rows that 1,305 active stocks have bars, which sequential "bhavcopy first, then
+seed" cannot produce. Verified three ways: 1,303 active stocks hold pre-09-05 bars (DMART,
+AFFLE, NEOGEN carry 1,045 each back to 2019-10-01); the row-id blocks separate cleanly
+(ids 1–1,700 = 0% active, created alphabetically by `_ensure_historical_stocks`, 1,415 of them
+carrying a 2019-10-01 bar; ids 9,277–11,823 = 100% active, `seed_stocks.py`'s INSERT branch;
+ids 11,750+ = 0% active again); and the five active Nifty 50 names (ETERNAL, JIOFIN, MAXHEALTH,
+SHRIRAMFIN, TMPV) are all post-2019 listings. The restore was **interleaved**, so `is_active`
+encodes which process created the row, not any property of the stock — and "seed first" is
+therefore not a sufficient fix. The remedy becomes an invariant: the price archive must never
+consult a trading flag (U6′).
+
+**⭐ Two findings no reviewer had, both from verifying a review against the DB**
+- **The research apparatus has a ~3-week deadline.** `load_frames` — the universe loader shared
+  by `swing_dependence_probe.py` and `e2_score_ic.py` — admits a name only with >100 bars in the
+  trailing 180 days. The frozen blue chips sit at **117**, a margin of 17 sessions that shrinks
+  by one per trading day. On or about **2026-10-06** RELIANCE, TCS, HDFCBANK, INFY and ITC drop
+  silently out of every probe built on it.
+- **A documented reversal procedure is now actively dangerous.** `deactivate_dead_stocks.py`'s
+  docstring ships reversal SQL joining `forensic_stocks_deactivated` on `stock_id`, and all 15
+  ids now resolve to different companies (228 QUINTEGRA→BSE, 1213 JBCHEPHARM→SCHNEIDER). Running
+  it would reactivate the wrong stocks.
+
+**Refuted by measurement**
+- "No scheduled backup exists" — a cron job has run `0 11 * * 1-5` since 2026-09-07; dumps for
+  09-09/10/11 are present. Valid residue kept as U0.5′: all backups post-date the breakage and
+  live on the same box.
+- "E2 may be contaminated" — `load_frames` applies no `is_active` filter and the frozen names
+  cleared its threshold at 117 bars on 09-12. E2 stands.
+- "New listings are permanently invisible" — `_ensure_historical_stocks` runs only under
+  `historical=True`; the daily path never creates a stock row.
+- "Were the 15 July deactivations correct?" — verified correct; all are absent from today's
+  `EQUITY_L.csv`.
+
+**Also measured:** the active set is wrong by *inclusion* too (QUINTEGRA is active despite being
+delisted), and all 35 live signals point at the microcap set — queued for quarantine (U11).
+
+**Added** — PART V (§19 dispositions · §20 new findings · §21 revised queue with U0.5′, U6′,
+U11–U14 and CAS/intraday promoted to P0 · §22 two blocking questions for round 2, including
+whether the T2T ruling governs trading or storage, which U6′ collides with).
+
+
 ### Universe rebuild plan — the stock master has been silently wrong since 2026-09-07 (2026-09-12)
 
 ⛔ Diagnosis only; **nothing was executed** — no table written, no flag flipped, no migration run.
