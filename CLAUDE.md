@@ -639,7 +639,7 @@ else.
   rise ~23%. ⭐⭐ **B7: MFE/|MAE| 0.83/1.12 (no geometry repair) and the hazard curve is FLAT** ⇒
   **the hold-period breadth lever is RESOLVED AGAINST IT.** T=0 contrast t = −4.16 but it is the
   tight-stop cohort the order path refuses.
-  ⚠⚠ **LEDGER MIGRATION `e1f2a3b4c5d6` NOT APPLIED TO DEV** (dev at `d0e1f2a3b4c5`; RUNBOOK §8b).
+  ✅ **LEDGER MIGRATION `e1f2a3b4c5d6` IS APPLIED TO DEV** — measured 2026-09-12 (`alembic_version` = `e1f2a3b4c5d6`, `ledger_entries` present); the earlier "not applied" warning was stale (RUNBOOK §8b).
   ⚠ **QUEUED:** `swing_dependence_probe.py` has **no through-stop exclusion** while the positional
   probe and the live path do — the two corpora never measured the same population.
   ⛔ **NOTHING PUSHED.**

@@ -7,6 +7,51 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Universe rebuild plan — the stock master has been silently wrong since 2026-09-07 (2026-09-12)
+
+⛔ Diagnosis only; **nothing was executed** — no table written, no flag flipped, no migration run.
+The symptom was `live-worker up: 0 instruments` and an empty AlertBell.
+
+**Measured (dev DB, 2026-09-12)**
+- `kite_instruments` = **0 rows** — the live path joins through it (`tick_consumer.py:463`), so
+  there were no subscriptions. Its only caller is the admin endpoint `app/api/v1/broker.py:118`:
+  **nothing scheduled has ever owned that table.**
+- `stocks` = 3,392 / 1,322 active, but the active set is the wrong one: `RELIANCE`, `TCS`,
+  `HDFCBANK` are `is_active = false`; **45 of 50 Nifty 50 and 14 of 14 Bank Nifty names inactive**.
+  Only **751** active stocks carry the ≥300 bars the engine window needs; 1,683 inactive ones do.
+- Daily EOD writes bars only for active names (`bhavcopy_service.py:255`), so **1,481 names have
+  received no daily bar since 2026-09-04** and the hole grows one session per day.
+
+**Root cause** — two individually-correct pieces composing. `_ensure_historical_stocks`
+(`bhavcopy_service.py:191`) creates unseen bhavcopy symbols `is_active = false` for survivorship
+safety; its stated invariant ("can only add, never deactivate") holds **only if `stocks` is
+populated first**. On an empty table every symbol is unseen. `seed_stocks.py:354`'s
+`ON CONFLICT DO UPDATE` then repaired every column **except `is_active`**. ⇒ the recovery order
+`seed_stocks.py` → instruments sync → bhavcopy backfill → universe repair is **mandatory** and was
+documented nowhere.
+
+**⭐ Why nothing alarmed** — the 6.8.6 silent-feed-outage alarm asserts **recency**
+(`max(time)`), never **coverage**, and printed "✅ Feeds current … Equity EOD 2026-09-11"
+throughout. The A40 worker-liveness alarm fired correctly (celery and live_worker both down).
+
+**⭐ Free capability found** — the NSE daily indices CSV `vix_service` already downloads carries
+**165 indices** with OHLC + Volume + Turnover + P/E + P/B + Div Yield, including every sector
+index and the size ladder. `indices` currently holds 3 rows.
+
+**Added**
+- `docs/UNIVERSE_REBUILD_PLAN.md` — measurement (PART I), an 11-item restoration queue in
+  `BUILD_QUEUE.md` conventions (PART II), the universe-curation decision left explicitly open
+  (PART III), and six questions for external review (PART IV). Splits every criterion into
+  **structural** (no evidence bar) vs **empirical** (needs the `t ≈ 3.6` bar or a user ruling),
+  and records that a liquidity floor at the universe layer would re-implement MCE slice 5a, which
+  was measured and rejected.
+
+**Fixed (docs, W1)**
+- `CLAUDE.md`, `docs/PHASES.md` and the memory index claimed the ledger migration `e1f2a3b4c5d6`
+  was **not** applied to dev. Measured: `alembic_version` = `e1f2a3b4c5d6` and `ledger_entries`
+  exists. The warning was stale and is corrected in all three.
+
+
 ### B8 — the append-only ledger. The last item of the B-queue (2026-09-12)
 
 ⛔ It exists because `positions` and `orders` are EMPTY. The 2026-09-07 loss took the live tape

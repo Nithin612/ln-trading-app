@@ -34,8 +34,9 @@ figure rises ~23%.
 FLAT** (0.559 → 0.489 over days 0–5, unchanged to day 20) ⇒ **§13.11's hold-period-as-breadth-lever
 is RESOLVED AGAINST THE LEVER.** The **T=0 cohort** contrast is **t = −4.16** (first past 3.6 in
 eleven rounds) but it is the tight-stop cohort again and the order path already refuses it.
-⚠⚠ **THE LEDGER MIGRATION `e1f2a3b4c5d6` IS NOT APPLIED TO DEV** — verified on the test DB with
-the downgrade exercised; dev is at `d0e1f2a3b4c5`. **`make migrate` is the user's call** (RUNBOOK §8b).
+✅ **THE LEDGER MIGRATION `e1f2a3b4c5d6` IS APPLIED TO DEV** — measured 2026-09-12:
+`alembic_version` = `e1f2a3b4c5d6` and `ledger_entries` exists (0 rows). The previous
+"not applied / dev at `d0e1f2a3b4c5`" warning here was stale (W1) (RUNBOOK §8b).
 ⚠ **QUEUED, NOT FIXED:** `swing_dependence_probe.py` has **no through-stop exclusion** while
 `positional_probe.py` and the live path both do — **the two corpora have never measured the same
 population.** ⚠ **BLOCKED:** B4's third target is inside the FROZEN backtest engine.
