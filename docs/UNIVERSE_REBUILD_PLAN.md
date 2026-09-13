@@ -2098,3 +2098,74 @@ working.
 §29a actually needed. And the guard's whole path is exercised: first run, no baseline, accept,
 record. ⚠ **The recorded baseline is 1,178, and the universe repair will take it to 2,655** —
 growth, so accepted and ratcheted up (`test_growth_never_refused` pins exactly that).
+
+
+---
+
+# PART XII — WHAT THE UNIVERSE MAY AND MAY NOT GATE (2026-09-14)
+
+## §37 · ⛔⛔ The universe is an ENTRY gate — and the tick feed does not know that
+
+**User question:** *what do the downstream processing units — signals, alerts, orders,
+positions, holdings — do with `is_active`?* Checked in code rather than reasoned from the
+diagram, and it produced a hazard that **D2′ would make substantially worse**.
+
+| stage | reads `is_active`? | where | verdict |
+|---|---|---|---|
+| bar ingestion | **yes** | `bhavcopy_service.py:255` | ⛔ wrong — this is **D3** |
+| signal minting | yes | `universe_service.resolve_universe` | ✅ correct: an ENTRY gate |
+| provisional alerts / hot set | **yes** | `provisional.py:428, 442` | ⚠ wrong for HELD names |
+| **tick subscription** | **yes** | `tick_consumer.py:469` | ⛔ **the dangerous one** |
+| order path · `restrictions.py` · `paper_broker` | no | — | ✅ correct |
+| `position_monitor.scan_positions` | no | — | ✅ correct — **but starved** |
+
+### 37a · The chain, and why it fails silently
+
+1. `scan_positions` evaluates **every** open position — correctly NOT universe-filtered.
+2. It prices via `get_live_ltp(pos.stock_id)` → Redis `ltp:{stock_id}`.
+3. Those keys exist **only for subscribed instruments**.
+4. The subscription is `… JOIN stocks s … WHERE s.is_active = true`.
+
+⇒ **A held name that leaves the active set stops receiving ticks, its `ltp:` key expires,
+and the monitor skips it — permanently.** Its own docstring states the rule that makes this
+silent: *"A position is skipped when no live LTP is available — the monitor never acts on a
+stale price."* ⭐ **Correct in isolation, catastrophic in composition:** the position keeps
+its SL and TP on paper and **nothing will ever evaluate them again**. No error, no alarm —
+the un-exitable-position hazard the circuit guard exists for, arriving through another door.
+
+### 37b · ⭐ Why D2′ escalates it from rare to routine
+
+Today `is_active` changes only when a human runs a script — three writers, all manual.
+**After D2′ it is re-evaluated NIGHTLY by a rule.** A delisting, a series move to
+`BE`/`BZ`, a tightened definition: any of them can drop a held name overnight, unattended.
+**D2′ converts a rare manual hazard into a recurring automatic one**, which is the opposite
+of what the rebuild is for.
+
+### 37c · The rule, and the fix
+
+⭐⭐ **THE PRINCIPLE: the universe is an ENTRY gate. Nothing an open position depends on may
+be universe-gated.** Entry, minting and display may be gated. **Pricing, monitoring, exits
+and P&L must key off the POSITION, not the universe.** The order path and the monitor
+already respect this — **the data feeding them does not.**
+
+⇒ **NEW ITEM U17, a PRECONDITION for D2′** (one clause, two call sites):
+
+> **subscription universe = trading universe ∪ { names with an open position or holding }**
+
+and the same union for the alert hot set (`provisional.py`). ⚠ It composes with **U16** by
+construction: because the ceiling arm **refuses rather than truncating**, a held name can
+never be one of the ones silently dropped.
+
+⚠ **Latent, not live: `positions` is 0 rows today**, which makes this the cheapest moment
+to fix it — the §12 window argument applied to the one place it has not yet been applied.
+
+### 37d · D3's real justification, which is not storage
+
+Three rounds have argued D3 on storage (~6 MB/year) versus the T2T ruling's wording.
+**Positions settle it better:** if we hold a name and it is deactivated, **its daily bars
+stop**, so its own P&L history, exit analysis and R-multiples are computed against a series
+that **ends mid-position**. ⭐ *"The archive must never consult a trading decision"* stops
+being an architectural preference and becomes a correctness requirement about trades we
+actually hold.
+
+**⇒ REVISED ORDER: D3 → U17 → D0 → D1′ → D2′ → (D4b / A3 later).**
