@@ -7,6 +7,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### D3 — the price archive no longer consults a trading decision (2026-09-14)
+
+`upsert_bhavcopy_rows` appended `AND is_active = true` on the daily path. `is_active` is a
+selection flag with three writers and no owner, so a selection mistake silently destroyed
+price history — that is how 1,481 names lost five sessions between 2026-09-07 and 09-12.
+
+- ⛔ **It also made U3's repair non-durable, which is what actually decided this.**
+  `eod_catchup.py:102` calls the default path, so measured on 2026-09-11: of the **2,637**
+  names that traded, the old path would write **1,166** and drop **1,471 — every single
+  day.** That is the same per-session number U3 had to repair, so the next EOD run would
+  have reopened the hole. Three rounds argued this on storage (~6 MB/year); the data flow
+  settled it in one query.
+- Both modes now attach bars to every KNOWN NSE symbol. They differ only on UNKNOWN ones:
+  creating a stock row stays a `historical=True` behaviour, because recording a bar is
+  bookkeeping while minting an instrument is a universe decision.
+- ⚠ **The T2T ruling is not overturned.** It excludes BE/BZ/SM from live *scanning* and the
+  scanner still enforces it (`resolve_universe` filters `is_active` itself). It was never
+  implementable as a storage rule anyway — `parse_bhavcopy_csv` keeps `EQ` series only, so a
+  name that *moves* to BE stops appearing in what we ingest regardless of any flag.
+- **Downstream trace in §38b** — every `ohlcv_1d` consumer checked. Nothing defines a
+  universe by "has bars" (the one hazard that would have silently widened a recorded
+  number). Unaffected: signal minting, alerts, pair universe, the 6.8.6 feed alarm
+  (measures recency, which is why it read ✅ through the outage), `deactivate_dead_stocks`
+  (keys on `kite_instruments`, not bars), every benchmark service, liquidity, backtests.
+  Affected and intended: U15's median threshold (self-adjusting by construction),
+  `ca_detector` (§38c), and `load_frames` — where it is a restoration that closes the
+  ~2026-10-06 clock permanently rather than pausing it.
+- ⚠ **§38c, for whoever runs D2′:** D3 + D4a compose, so archive-only names will accrue
+  `ca_flagged_at` over time and some returning names will already be quarantined on D2′ day.
+  Correct behaviour, but measure the flag count before and after the first rule evaluation.
+- `test_inactive_stock_gets_no_bars` is reversed to `test_an_inactive_stock_now_receives_bars`
+  with the history kept in the class docstring. 13 tests.
+
+
 ### U16 — assert Kite's per-connection subscription cap (2026-09-13)
 
 `live_worker` subscribes in one unchunked call and Kite carries at most 3,000 instruments

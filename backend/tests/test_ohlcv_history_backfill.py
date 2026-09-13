@@ -92,28 +92,76 @@ class TestSurvivorshipSafety:
         assert await _bars_for(db, dead.id) == 1
 
 
-class TestDailyPathUnchanged:
-    """The default path is what daily ingestion runs. It must not have moved."""
+class TestDailyPathIsTradeabilityBlind:
+    """D3 (2026-09-14) — the price archive never consults a trading decision.
 
-    async def test_unknown_symbol_is_skipped_not_created(self, db: AsyncSession) -> None:
+    ⛔ REVERSED DELIBERATELY. This class previously asserted
+    `test_inactive_stock_gets_no_bars` with the docstring *"The T2T ruling: a
+    deactivated name gets no EOD bars on the live path."* That coupling is what
+    let a SELECTION mistake destroy PRICE HISTORY: between 2026-09-07 and 09-12
+    the real universe was wrongly `is_active = false` and 1,481 names lost five
+    sessions of bars, silently.
+
+    It also made the repair non-durable. U3 refilled the hole in `historical`
+    mode on 09-13, but `eod_catchup.py:102` calls the DEFAULT path — so the next
+    EOD run would have written ~1,170 names instead of ~2,640 and reopened the
+    hole the following day.
+
+    ⚠ The T2T ruling is not overturned: it is a TRADING policy and the scanner
+    still enforces it (`resolve_universe` filters `is_active` itself). It was
+    never implementable here anyway — `parse_bhavcopy_csv` keeps `EQ` series
+    only, so a name that MOVES to `BE` stops appearing in what we ingest
+    regardless of any flag. See PART XIII of the universe plan.
+    """
+
+    async def test_unknown_symbol_is_still_skipped_not_created(
+        self, db: AsyncSession
+    ) -> None:
+        """Unchanged, and the line D3 does NOT cross: recording a bar is
+        bookkeeping, but MINTING an instrument is a universe decision. Creating
+        rows stays a `historical=True` behaviour."""
         inserted, skipped = await bs.upsert_bhavcopy_rows(db, [_row("NEVERHEARDOF")])
         assert (inserted, skipped) == (0, 1)
         assert (
             await db.execute(select(Stock).where(Stock.symbol == "NEVERHEARDOF"))
         ).scalar_one_or_none() is None
 
-    async def test_inactive_stock_gets_no_bars(self, db: AsyncSession) -> None:
-        """The T2T ruling: a deactivated name gets no EOD bars on the live path."""
+    async def test_an_inactive_stock_now_receives_bars(self, db: AsyncSession) -> None:
+        """The regression canary: on the old code this was (0, 1) and 0 bars."""
         dead = await make_stock(db, symbol="T2TCO", is_active=False)
         inserted, skipped = await bs.upsert_bhavcopy_rows(db, [_row("T2TCO")])
-        assert (inserted, skipped) == (0, 1)
-        assert await _bars_for(db, dead.id) == 0
+        assert (inserted, skipped) == (1, 0)
+        assert await _bars_for(db, dead.id) == 1
 
     async def test_active_stock_still_ingests(self, db: AsyncSession) -> None:
         live = await make_stock(db, symbol="ACTIVECO", is_active=True)
         inserted, _ = await bs.upsert_bhavcopy_rows(db, [_row("ACTIVECO")])
         assert inserted == 1
         assert await _bars_for(db, live.id) == 1
+
+    async def test_a_mixed_bhavcopy_ingests_both(self, db: AsyncSession) -> None:
+        """The shape of a real session: the archive records what TRADED, and the
+        active flag no longer partitions it."""
+        live = await make_stock(db, symbol="MIXLIVE", is_active=True)
+        dead = await make_stock(db, symbol="MIXDEAD", is_active=False)
+        inserted, skipped = await bs.upsert_bhavcopy_rows(
+            db, [_row("MIXLIVE"), _row("MIXDEAD")]
+        )
+        assert (inserted, skipped) == (2, 0)  # old code: (1, 1)
+        assert await _bars_for(db, live.id) == 1
+        assert await _bars_for(db, dead.id) == 1
+
+    async def test_the_daily_and_historical_paths_now_agree_on_a_known_symbol(
+        self, db: AsyncSession
+    ) -> None:
+        """Both modes attach bars to a known name; they differ only on UNKNOWN
+        ones. Pinning that keeps the two from drifting apart again."""
+        a = await make_stock(db, symbol="AGREEA", is_active=False)
+        b = await make_stock(db, symbol="AGREEB", is_active=False)
+        daily, _ = await bs.upsert_bhavcopy_rows(db, [_row("AGREEA")])
+        hist, _ = await bs.upsert_bhavcopy_rows(db, [_row("AGREEB")], historical=True)
+        assert daily == hist == 1
+        assert await _bars_for(db, a.id) == await _bars_for(db, b.id) == 1
 
 
 class TestIdempotence:

@@ -2169,3 +2169,82 @@ being an architectural preference and becomes a correctness requirement about tr
 actually hold.
 
 **⇒ REVISED ORDER: D3 → U17 → D0 → D1′ → D2′ → (D4b / A3 later).**
+
+
+---
+
+# PART XIII — D3 SHIPPED (2026-09-14)
+
+## §38 · The downstream trace, which is what decided it
+
+Three rounds argued D3 on storage (~6 MB/year) versus the T2T ruling's wording. **Tracing
+the data instead settled it in one query**, and on a completely different ground.
+
+### 38a · ⛔⛔ U3's repair was NOT durable — the hole reopens every day
+
+`eod_catchup.py:102` calls `ingest_bhavcopy_date(db, d)` **without `historical=True`**, so
+the daily path took the `AND is_active = true` branch. Measured on the last completed
+session:
+
+| 2026-09-11 | names |
+|---|--:|
+| names that actually traded (in `ohlcv_1d`) | **2,637** |
+| what the OLD daily path would write | **1,166** |
+| what the NEW daily path writes | **2,637** |
+| ⇒ **dropped every single day** | **1,471** |
+
+⭐ **1,471 is the same number U3 repaired per session** (1,469–1,471). So U3 refilled the
+hole in `historical` mode on 09-13, and **the very next EOD run would have re-opened it** —
+leaving a one-session hole that regrows daily until D2′ lands, weeks away. ⇒ **D3 is not a
+philosophical question about a ruling. It is what makes U3 stick.**
+
+### 38b · Every consumer of `ohlcv_1d`, checked
+
+| consumer | affected? | why |
+|---|---|---|
+| `signal_service` (minting) | **no** | filters `is_active` itself — the ENTRY gate is intact |
+| `universe_service.resolve_universe` | **no** | same |
+| `provisional` (alerts) · `pair_universe` · `shadow_compare` | **no** | all filter `is_active` |
+| `feed_health` (the 6.8.6 alarm) | **no** | measures `max(time)` — recency, not breadth. ⭐ Which is exactly why it read ✅ through the whole outage |
+| `deactivate_dead_stocks.py` | **no** | keys on absence from `kite_instruments`, **not** bar recency — so D3 cannot feed back into the flag |
+| `corpus_attribution` | **no** | universe is `is_nifty50`, a different flag |
+| `benchmark` · `benchmark_curve` · `beta_ir` · `buy_and_hold` | **no** | per-`stock_id` or an explicit universe, never "has bars" |
+| `liquidity` | **no** | medians are per-`stock_id`; new rows for other names cannot move them |
+| backtest · `walkforward` · `profiles/pipeline` | **no** | universe comes from `resolve_universe` |
+| **U15's completeness threshold** | **yes** | the median session rises ~1,170 → ~2,640. **Self-adjusting by construction** — that is why U15 is a median and not a constant |
+| **`ca_detector`** | **yes** | post-D4a it scans all stocks, and inactive names now get bars, so new gaps become visible. ⚠ See 38c |
+| **`load_frames`** (research) | **yes, and it is a RESTORATION** | the 1,228 wrongly-inactive names already hold bars through 09-11, so D3 keeps them qualifying instead of decaying out. **This is the §20/1 clock, closed permanently** rather than paused |
+
+⭐ **Nothing defines a universe by "has bars"** — that was the one hazard worth checking,
+because it would have silently widened a recorded number. It does not exist here.
+
+### 38c · The one interaction worth stating for a future session
+
+**D3 + D4a compose.** D4a ungated CA detection from `is_active`; D3 now gives inactive names
+bars to detect on. So archive-only names will start accruing `ca_flagged_at` over time.
+⚠ **That is correct** (an unadjusted split poisons a window whoever holds it) **but it has a
+delayed consequence: when D2′ repairs the universe, some returning names will already be
+quarantined.** That is not a bug — it is the quarantine doing its job on names we were about
+to start scoring — but it will look like a surprise on D2′ day if nobody wrote it down.
+**Measure the flag count before and after D2′'s first evaluation.**
+
+### 38d · What D3 does NOT do, and the line it does not cross
+
+Ingestion still **skips unknown symbols** in the daily path; creating a stock row remains a
+`historical=True` behaviour. ⭐ **Recording a bar is bookkeeping; minting an instrument is a
+universe decision** — and this function does not make universe decisions in either
+direction now.
+
+### 38e · The T2T ruling is not overturned
+
+It excludes `BE`/`BZ`/`SM` from **live scanning**, and the scanner still enforces exactly
+that — `resolve_universe` filters `is_active` on its own. ⭐ **And it was never implementable
+as a storage rule anyway: `parse_bhavcopy_csv` keeps `EQ` series only**, so a name that
+*moves* to `BE` stops appearing in what we ingest regardless of any flag. The storage reading
+of §22/1 was therefore describing a behaviour the code could not produce; U6′/D3 is the first
+implementation of the ruling's actual intent, not a reversal of it.
+
+**Test reversed deliberately:** `test_inactive_stock_gets_no_bars` (docstring: *"The T2T
+ruling: a deactivated name gets no EOD bars on the live path"*) is now
+`test_an_inactive_stock_now_receives_bars`, with the history kept in the class docstring so
+the decision stays visible rather than vanishing. **13 tests pass.**

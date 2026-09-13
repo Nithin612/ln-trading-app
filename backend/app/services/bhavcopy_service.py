@@ -236,14 +236,28 @@ async def upsert_bhavcopy_rows(
     Returns (inserted, skipped).
     Uses ON CONFLICT DO NOTHING so re-running is always idempotent.
 
-    `historical=False` (the default, and what daily ingestion uses) attaches bars only to
-    stocks that are **active today**, skipping everything else. That is deliberate: the
-    T2T ruling says deactivated names get no EOD bars, and a live path must not
-    resurrect them.
+    ⭐ **D3 (2026-09-14): the price archive never consults a trading decision.**
+    Both modes now attach bars to every KNOWN NSE symbol the bhavcopy names,
+    active or not. The two modes differ only in whether an UNKNOWN symbol is
+    CREATED (`historical=True`) or skipped — which is the honest split:
+    ingestion records what traded; it does not decide which instruments exist,
+    and it must not decide which are worth trading.
 
-    `historical=True` switches to backfill semantics — unknown symbols are CREATED as
-    inactive historical stocks and inactive stocks DO receive bars. Without this a
-    multi-year backfill would silently reconstruct a survivor-only universe.
+    ⛔ **Why this changed.** The daily path used to append ` AND is_active = true`.
+    `is_active` is a *selection* flag with three writers and no owner, so a
+    selection mistake silently destroyed price history: between 2026-09-07 and
+    09-12 the real universe was wrongly inactive and **1,481 names lost five
+    sessions of bars**. Worse, it made the repair non-durable — U3 refilled the
+    hole in `historical` mode on 09-13, but `eod_catchup.py:102` calls this
+    function with the default, so the very next EOD run would have written
+    ~1,170 names instead of ~2,640 and **reopened the hole the next day**.
+
+    ⚠ **On the T2T ruling (2026-07-17).** That ruling excludes `BE`/`BZ`/`SM`
+    from live scanning. It is a TRADING policy, and the scanner still enforces
+    it — `universe_service.resolve_universe` filters `is_active` itself. It was
+    never implementable as a storage policy anyway: `parse_bhavcopy_csv` keeps
+    `EQ` series only, so a name that moves to `BE` stops appearing in what we
+    ingest regardless of this flag. See PART XIII of the universe plan.
     """
     if not rows:
         return 0, 0
@@ -252,12 +266,12 @@ async def upsert_bhavcopy_rows(
     if historical:
         await _ensure_historical_stocks(db, symbols)
 
-    active_only = "" if historical else " AND is_active = true"
+    # D3: no tradeability predicate here, in either mode. An unknown symbol still
+    # resolves to no id below and is counted as skipped — creating rows remains a
+    # `historical=True` behaviour, because minting an instrument IS a universe
+    # decision and this function does not make those either.
     result = await db.execute(
-        text(
-            "SELECT symbol, id FROM stocks "
-            f"WHERE symbol = ANY(:syms) AND exchange = 'NSE'{active_only}"
-        ),
+        text("SELECT symbol, id FROM stocks WHERE symbol = ANY(:syms) AND exchange = 'NSE'"),
         {"syms": symbols},
     )
     sym_to_id: dict[str, int] = {row.symbol: row.id for row in result}
