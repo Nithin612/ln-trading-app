@@ -220,6 +220,7 @@ def seed(dry_run: bool = False) -> None:  # noqa: C901
 
     import asyncio
 
+    from app.services import symbol_history as sh
     from sqlalchemy import text
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -325,6 +326,39 @@ def seed(dry_run: bool = False) -> None:  # noqa: C901
                 )
             if renamed:
                 await session.flush()
+
+            # ── D1′: identity churn is recorded, not just applied ────────────
+            # A rename keeps the row's id (and with it every bar, signal and
+            # position) but used to leave NO trace, so "what was this id called in
+            # July?" was unanswerable — half the reason §20/2's reversal SQL names
+            # the wrong companies.
+            today = date.today()
+            seeded = await sh.seed_from_stocks(session, on=today)
+            if seeded:
+                print(f"symbol_history: opened {seeded} interval(s) for existing rows")
+            for _isin, _old, new_symbol, stock_id in renamed:
+                await sh.record_rename(
+                    session,
+                    stock_id=stock_id,
+                    new_symbol=new_symbol,
+                    exchange="NSE",
+                    isin=_isin,
+                    on=today,
+                )
+
+            # ⛔ A symbol whose stored ISIN differs from the feed's is a company
+            # MERGE waiting to happen. Reported, never auto-resolved.
+            conflicts = await sh.detect_isin_conflicts(
+                session, {sym: equity.get(sym, {}).get("isin") for sym in all_syms}
+            )
+            if conflicts:
+                print(
+                    f"\n⛔ {len(conflicts)} ISIN CONFLICT(S) — a stored identity anchor "
+                    "disagrees with NSE. The existing value was KEPT and nothing was "
+                    "overwritten; resolve by hand before trusting these rows:"
+                )
+                for sym, stored, incoming in conflicts[:20]:
+                    print(f"    {sym}: stored {stored} vs NSE {incoming}")
             _collided_symbols = {new for _isin, _old, new in collided}
 
             for sym in all_syms:
@@ -352,7 +386,16 @@ def seed(dry_run: bool = False) -> None:  # noqa: C901
                             true, :listed_on
                         )
                         ON CONFLICT (symbol, exchange) DO UPDATE SET
-                            isin = COALESCE(EXCLUDED.isin, stocks.isin),
+                            -- D1′: the identity anchor is FILLED ONCE and never
+                            -- silently rewritten (argument order reversed on
+                            -- purpose). A differing ISIN on a known symbol is
+                            -- either NSE reusing a delisted ticker for a new
+                            -- company, or a data correction — and nothing in the
+                            -- feed distinguishes them. Overwriting picked one
+                            -- answer silently, which is how a new company
+                            -- inherits a dead one's id and price history. The
+                            -- conflict is reported instead; a human decides.
+                            isin = COALESCE(stocks.isin, EXCLUDED.isin),
                             -- Was absent, so a reseed could never repair a name
                             -- once written. COALESCE keeps the existing value
                             -- only when NSE has nothing better to offer.

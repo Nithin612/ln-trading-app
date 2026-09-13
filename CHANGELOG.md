@@ -7,6 +7,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### D1′ — identity churn is recorded, and an ISIN is never silently rewritten (2026-09-14)
+
+Two kinds of identity churn exist. **Rename** (ISIN keeps, symbol changes) was already handled
+in place by `plan_renames` so the row keeps its id and its bars — but it left **no trace**, so
+"what was this id called in July?" was unanswerable, which is half of why §20/2's reversal SQL
+names the wrong companies. **Reuse** (symbol keeps, ISIN changes — NSE re-issuing a delisted
+ticker) was not handled at all: `isin = COALESCE(EXCLUDED.isin, stocks.isin)` overwrote the
+anchor and merged the new company into the dead one's row, inheriting its id and price history.
+
+- ⭐ **The one-word fix: `COALESCE(stocks.isin, EXCLUDED.isin)`.** The anchor is filled once
+  and never silently rewritten. A differing ISIN on a known symbol is either a reuse or a data
+  correction and nothing in the feed distinguishes them — the old behaviour picked one
+  silently, and it picked the one that merges two companies. It now keeps what it has and
+  reports the conflict.
+- New `symbol_history` table (migration `f2a3b4c5d6e7`, downgrade round-tripped on dev), model,
+  and `app/services/symbol_history.py`. `seed_stocks` now seeds intervals, records renames, and
+  reports ISIN conflicts. Verified on dev: 3,395 intervals, all open, 0 stocks with two open
+  intervals; `valid_from` spans 09-07…09-13, the later dates being exactly the three rows U3's
+  backfill created, so `first_seen` is honest rather than backdated.
+- ⛔ **`uq_stocks_symbol_exchange` deliberately NOT dropped**, against §26's wording. 14 call
+  sites assume one row per symbol and would silently resolve to an arbitrary row (the upserts
+  lose their conflict target outright). And the hazard's rate is **unmeasurable
+  retrospectively**: I measured 0 of 2,547 ISIN mismatches, and that number is worthless —
+  our master was rebuilt from the very CSV it is compared against, and a merge overwrites its
+  own evidence. Fourth instance of the estimand trap (§25f), caught before it was banked.
+  Parked with an unblocking condition: **when `symbol_history` records a real `reuse` event**,
+  the rate is measured and the migration has a reason.
+- 14 tests.
+
+
 ### D0 — the stock-identity pin (2026-09-14)
 
 Every `stocks.id` was reassigned during the 2026-09-07 emergency rebuild, which is why

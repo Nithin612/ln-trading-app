@@ -75,6 +75,58 @@ class Stock(Base):
         return f"<Stock id={self.id} symbol={self.symbol!r} exchange={self.exchange!r}>"
 
 
+class SymbolHistory(Base):
+    """D1′ — the record of identity churn, which used to leave no trace.
+
+    Two kinds exist and only one was handled. A RENAME (ISIN keeps, symbol changes)
+    is applied in place by `seed_stocks.plan_renames` so the row keeps its id and
+    with it every bar, signal and position — correct, but afterwards nothing
+    recorded that the old ticker ever existed, so "what was this id called in July?"
+    was unanswerable. That is half of why §20/2's reversal SQL is dangerous.
+
+    REUSE (symbol keeps, ISIN changes — NSE re-issuing a delisted ticker) is the
+    inverse, and it silently merged two companies into one row. ⚠ Its frequency
+    cannot be measured retrospectively because the merge overwrites its own
+    evidence, which is why this table RECORDS churn rather than restructuring
+    around it: `uq_stocks_symbol_exchange` deliberately still stands.
+
+    ⚠ `isin` is the anchor AS IT WAS, not as it is now. If a row's ISIN is later
+    overwritten, this is the only surviving record of what it used to be.
+
+    ⚠ Invariant: exactly one open interval (`valid_to IS NULL`) per `stock_id`,
+    enforced by the writer — a partial unique index cannot express "one NULL per
+    group" while the closed intervals share the same columns.
+    """
+
+    __tablename__ = "symbol_history"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    stock_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    symbol: Mapped[str] = mapped_column(String(32), nullable=False)
+    exchange: Mapped[str] = mapped_column(String(8), nullable=False)
+    isin: Mapped[str | None] = mapped_column(String(16), nullable=True)
+    valid_from: Mapped[date] = mapped_column(Date, nullable=False)
+    valid_to: Mapped[date | None] = mapped_column(Date, nullable=True)
+    # 'seed' (first sight) | 'rename' (ISIN kept, ticker moved) | 'reuse' (ticker
+    # kept, ISIN moved — a different company)
+    reason: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_at: Mapped[datetime] = mapped_column(
+        TZ, nullable=False, server_default=func.now()
+    )
+
+    __table_args__ = (
+        UniqueConstraint(
+            "symbol", "exchange", "valid_from", name="uq_symbol_history_symbol_from"
+        ),
+    )
+
+    def __repr__(self) -> str:
+        span = f"{self.valid_from}..{self.valid_to or 'now'}"
+        return f"<SymbolHistory stock_id={self.stock_id} {self.symbol!r} {span}>"
+
+
 class Index(Base):
     __tablename__ = "indices"
 

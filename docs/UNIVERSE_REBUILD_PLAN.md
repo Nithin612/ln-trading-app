@@ -2394,3 +2394,77 @@ Written down because insurance nobody can operate is not insurance:
 ⚠ **Skip step 3 and the next insert collides.** ⚠ And per §28a / the recovery order: run
 `seed_stocks.py` before any historical backfill, or `_ensure_historical_stocks` recreates the
 master from the wrong end again.
+
+
+---
+
+# PART XVI — D1′ SHIPPED, DELIBERATELY SMALLER THAN SPECIFIED (2026-09-14)
+
+## §41 · Why the constraint did NOT move, and what shipped instead
+
+§26/D1′ said: *permanent internal `stocks.id`; ISIN a dated attribute; **`symbol_history`
+OWNS the symbol uniqueness***. The last clause is the one that changed, and the downstream
+trace is why.
+
+### 41a · ⛔ What dropping `uq_stocks_symbol_exchange` would actually cost
+
+**14 call sites assume one row per symbol** — `seed_stocks`' `ON CONFLICT (symbol, exchange)`,
+`_ensure_historical_stocks`' `ON CONFLICT … DO NOTHING`, `upsert_bhavcopy_rows`'
+`SELECT symbol, id FROM stocks WHERE symbol = ANY(...)`, `_build_token_stock_map`'s
+`s.symbol = ki.tradingsymbol`, `ws.py`'s per-symbol lookup, and more. Drop the constraint and
+none of them error — **they silently start resolving to an arbitrary row.** The upserts lose
+their conflict target outright.
+
+### 41b · ⛔⛔ And the hazard's frequency CANNOT be measured retrospectively
+
+The hazard is **symbol REUSE**: NSE re-issues a delisted ticker, and
+`isin = COALESCE(EXCLUDED.isin, stocks.isin)` overwrites the anchor, merging the new company
+into the dead one's row — inheriting its id and its entire price history.
+
+I measured it: **0 of 2,547 symbols carry an ISIN differing from EQUITY_L today.**
+⚠ **That number is worthless and I am recording it as such.** Our master was rebuilt *from
+that very CSV* on 09-07, so agreement is guaranteed; and worse, **the merge overwrites its own
+evidence** — after a reuse, the stored ISIN *is* the new company's. ⭐ **This is the fourth
+instance of the estimand trap (§25f), caught this time before it was banked** rather than
+after.
+
+⇒ **A schema change that breaks an invariant 14 queries rely on, justified by a hazard whose
+rate is unmeasurable, is not a trade this project makes.** `uq_stocks_symbol_exchange` stands.
+
+### 41c · What shipped — record and refuse, not restructure
+
+| piece | what |
+|---|---|
+| migration `f2a3b4c5d6e7` | `symbol_history(stock_id, symbol, exchange, isin, valid_from, valid_to, reason)`; **downgrade round-tripped on dev** |
+| `SymbolHistory` model | + exported |
+| `app/services/symbol_history.py` | `classify_isin_change` (pure) · `open_interval` · `seed_from_stocks` · `record_rename` · `detect_isin_conflicts` |
+| `seed_stocks.py` | records renames · seeds intervals · **reports ISIN conflicts** · ⭐ **`COALESCE(stocks.isin, EXCLUDED.isin)`** — argument order reversed |
+| tests | **14** |
+
+⭐⭐ **The one-word fix that matters: `COALESCE(EXCLUDED.isin, stocks.isin)` →
+`COALESCE(stocks.isin, EXCLUDED.isin)`.** The anchor is now **filled once and never silently
+rewritten.** A differing ISIN on a known symbol is EITHER a reuse OR a data correction, and
+**nothing in the feed distinguishes them** — so the old behaviour picked one answer silently,
+and the answer it picked was the one that merges two companies. It now keeps what it has and
+prints the conflict.
+
+⭐ **Renames stop being invisible.** `plan_renames` already did the right thing (rename in
+place, keep the id, keep the bars — AMIRCHAND → AEROPLANE) but left **no trace**, so *"what was
+this id called in July?"* was unanswerable. **That is half of why §20/2's reversal SQL is
+dangerous**, and it is now answerable.
+
+### 41d · Verified on dev
+
+`3,395` intervals · `3,395` open · **`0` stocks with two open intervals** (the one-open-interval
+invariant, which lives in the writer because a partial unique index cannot express "one NULL
+per group") · `valid_from` spans 2026-09-07 … 09-13 — ⭐ the later dates being exactly the three
+rows U3's backfill created (`DEEPA`, `CRESTO`, `DOLLEX`), so the `first_seen` values are honest
+rather than backdated.
+
+### 41e · What is left of D1′, and its unblocking condition
+
+**Moving the uniqueness is PARKED, not dropped.** ⇒ **Unblocks when `symbol_history` has
+actually recorded a `reuse` event** — at which point the rate is measured instead of assumed,
+and the 14-query migration has a reason. The detector shipped today is what will produce that
+evidence; until then, `stocks.id` permanence is maintained by **never deleting rows**, which
+costs nothing and is already true.

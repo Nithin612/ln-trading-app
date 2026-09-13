@@ -17,7 +17,14 @@ from app.models.market_data import (
 from app.models.pair import PairSignal
 from app.models.profile import StrategyProfile
 from app.models.signal import Signal, SignalOutcome, SrLevel
-from app.models.stock import Index, IndexConstituent, IndexOhlcvDaily, SavedScreen, Stock
+from app.models.stock import (
+    Index,
+    IndexConstituent,
+    IndexOhlcvDaily,
+    SavedScreen,
+    Stock,
+    SymbolHistory,
+)
 from app.models.strategy import StrategyRun
 from app.models.trading import Order, OrderEventRow, Position
 from app.models.user import User, UserSession
@@ -30,6 +37,7 @@ __all__ = [
     "Watchlist",
     "WatchlistItem",
     "Stock",
+    "SymbolHistory",
     "Index",
     "IndexConstituent",
     "IndexOhlcvDaily",
