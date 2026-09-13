@@ -7,6 +7,58 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### U1 — `kite_instruments` repopulated, and given a scheduled owner (2026-09-13)
+
+The table had exactly one writer: an admin HTTP endpoint. Nothing scheduled had ever owned
+it, which is why it stayed empty for five days after the 2026-09-07 DB loss while
+`live_worker` logged `up: 0 instruments` every morning and ran dark.
+
+- ⭐ **The dump is PUBLIC** — `https://api.kite.trade/instruments` returns HTTP 200 with
+  110,290 rows and no `Authorization` header. That is what makes a scheduled owner
+  possible at all: a Kite token dies ~06:00 IST daily and is renewable only through an
+  interactive login, so a beat task needing one would go dark on exactly the mornings
+  nobody logged in. `sync_instruments` now takes `access_token: str | None` and uses the
+  public transport when given none; the SDK path is kept for the admin endpoint. A test
+  asserts both paths map a row identically.
+- **New beat task** `app.tasks.market_data_tasks.sync_kite_instruments`, 02:30 UTC
+  (08:00 IST) weekdays — before the 09:15 session.
+- **New startup guard** (`app/broker/universe_guard.py`): `live_worker` now exits
+  `EXIT_NO_UNIVERSE = 5` rather than running dark, on an EMPTY subscription universe or
+  one that has COLLAPSED below `LIVE_UNIVERSE_MIN_FRACTION` (0.5) of the previous
+  session's. Growth is never refused; a refusal does not overwrite the baseline (or the
+  guard would disarm itself after one bad morning); it fails open on Redis errors.
+- ⛔ **Fixed a bug this change would otherwise have shipped:** `sync_instruments` never
+  committed — it relied on its caller, and its only caller was the admin endpoint, whose
+  `get_db` auto-commits. `run_db_task` does not, so the new beat task would have upserted
+  57,595 rows and rolled them back **every morning while logging success**. The sync now
+  owns its commit, matching `bhavcopy_service.upsert_bhavcopy_rows`. Both regression tests
+  are stash-proven against the old code and assert from a **separate session**, since
+  `flush()` makes rows visible to the current one.
+- **Measured:** `kite_instruments` 0 → **57,595** rows (NFO CE 16,901 · NFO PE 16,844 ·
+  BSE EQ 12,957 · NSE EQ 10,246 · NFO FUT 647); subscription universe **1,178**.
+- ⭐ **Four subsystems un-darkened, not one:** the tick path, the frontend live-quote
+  WebSocket (`api/v1/ws.py`), and the F&O option-chain recorder — whose "skipped" status
+  in §7 of the daily report was correctly attributing its zero to this table all along.
+- ⛔ **New finding, queued as U16:** `live_worker` subscribes in one unchunked call and
+  Kite caps a connection at 3,000 instruments. Today that is 1,178 (39%); the post-repair
+  ceiling is **2,655 (88%)**. The universe repair moves this to within 345 of a hard
+  broker limit with no chunking and no guard — fix before D2′ lands.
+- ⭐ **bug-hunter found five defects in the above, all fixed in the same commit** (§30):
+  the supervisor was never taught `EXIT_NO_UNIVERSE`, so a refusal restart-looped every 5s
+  instead of pausing; the check ran *after* `startup_gap_fill`, so a refusal first spent a
+  ~35-minute throttled Kite pass; the baseline was re-recorded on every accepted start, so
+  a staged collapse (2655 → 1460 → 803 → 441 → 242 → 133) passed a 50% ratio test at every
+  step — and the real 09-07 event, 1,182 of 2,646 = 44.7%, cleared that bar by only 5.3
+  points; an HTTP-200 login interstitial parsed to zero records and reported SUCCESS
+  forever; and the refusal's remedy told the operator to use `redis-cli`, which is not
+  installed here. The baseline now **ratchets up only**, a new absolute floor
+  `LIVE_UNIVERSE_MIN_COUNT=500` covers what a ratio cannot, and both emptiness checks raise.
+- New `backend/scripts/sync_instruments.py` — the token-free manual remedy the supervisor
+  now prints.
+- Also fixed two pre-existing `ruff` failures in `tests/test_ledger.py` (unmodified by
+  this work) that had left the branch's lint gate red since the B8 commit.
+
+
 ### U3 executed — the 09-07 → 09-11 breadth hole is closed (2026-09-13)
 
 The first write the universe-rebuild plan has made, on the user's explicit instruction.

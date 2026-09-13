@@ -24,6 +24,17 @@ class Settings(BaseSettings):
 
     # ── Redis ───────────────────────────────────────────────────────────────
     redis_url: str = "redis://localhost:6379/0"
+
+    # U1 — live_worker refuses to start when its subscription universe falls
+    # below this fraction of the previous session's. Mirrors kite_client's
+    # _SWEEP_MIN_FRACTION: a real market never halves its tradable universe
+    # overnight, so a collapse is a data defect. 0 disables the collapse arm;
+    # the EMPTY arm is not disableable.
+    live_universe_min_fraction: float = 0.5
+    # Absolute floor, in instruments. The ratio arm cannot see a collapse that
+    # arrives in sub-threshold steps, and has nothing to compare against on a
+    # first run; this arm can. 0 disables it.
+    live_universe_min_count: int = 500
     # Session notifier (A11). Unset ⇒ log-only, which is the DEFAULT and not a degraded
     # mode: the policy still runs and still logs at the level it chose. Set it and the same
     # messages also POST as JSON. Vendor-neutral on purpose — Slack/Discord accept the

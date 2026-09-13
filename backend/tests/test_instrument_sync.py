@@ -182,3 +182,222 @@ class TestStaleSweep:
         ).one()
         assert row[0] > first  # refreshed, not deleted
         assert float(row[1]) == 111.5
+
+
+class TestTokenFreeSync:
+    """U1 (2026-09-13) — the dump is PUBLIC, and that is what lets it have a
+    scheduled owner.
+
+    REGRESSION. `kite_instruments` had exactly one writer, an admin HTTP
+    endpoint that requires a Kite access token. Tokens die ~06:00 IST daily
+    and are renewable only through an interactive OAuth login, so nothing
+    scheduled could ever own this table — which is why it stayed EMPTY for
+    five days after the 2026-09-07 dev-DB loss while live_worker logged
+    `up: 0 instruments`. Passing no token must take a transport that has no
+    token lifetime. These tests fail on the old signature, which required one.
+    """
+
+    @staticmethod
+    def _csv(rows: list[dict[str, Any]]) -> str:
+        cols = list(rows[0].keys())
+        body = "\n".join(",".join(str(r[c]) for c in cols) for r in rows)
+        return ",".join(cols) + "\n" + body + "\n"
+
+    def _stub_public(
+        self, monkeypatch: pytest.MonkeyPatch, rows: list[dict[str, Any]]
+    ) -> dict[str, Any]:
+        """Stub httpx.get at the module seam; record what was requested."""
+        seen: dict[str, Any] = {}
+
+        class _Resp:
+            text = self._csv(rows)
+
+            @staticmethod
+            def raise_for_status() -> None:
+                return None
+
+        def _get(url: str, **kw: Any) -> Any:
+            seen["url"] = url
+            seen["headers"] = kw.get("headers")
+            return _Resp()
+
+        monkeypatch.setattr(kite_client.httpx, "get", _get)
+
+        def _explode(token: str) -> Any:  # pragma: no cover - must not run
+            raise AssertionError("build_kite must NOT be called without a token")
+
+        monkeypatch.setattr(kite_client, "build_kite", _explode)
+        return seen
+
+    async def test_sync_without_a_token_uses_the_public_dump(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        seen = self._stub_public(monkeypatch, [_row(301, "PUBCO"), _row(302, "PUBTWO")])
+
+        n = await sync_instruments(db)
+
+        assert n == 2
+        assert await _tokens(db) == {301, 302}
+        assert seen["url"] == kite_client._INSTRUMENTS_URL
+        # No Authorization header: the point is that this path has no token.
+        assert not (seen["headers"] or {})
+
+    async def test_public_csv_rows_map_identically_to_the_sdk_shape(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The CSV gives every field as a string; the SDK gives typed values.
+        Both must land as the same row, or the two paths would disagree."""
+        rows = [_row(401, "SHAPECO")]
+        self._stub_public(monkeypatch, rows)
+        await sync_instruments(db)
+        via_csv = (
+            await db.execute(
+                text(
+                    "SELECT tradingsymbol, exchange, instrument_type, lot_size, tick_size"
+                    " FROM kite_instruments WHERE instrument_token = 401"
+                )
+            )
+        ).first()
+
+        await db.execute(text("DELETE FROM kite_instruments"))
+        await db.commit()
+        _stub_dump(monkeypatch, rows)
+        await sync_instruments(db, "tok")
+        via_sdk = (
+            await db.execute(
+                text(
+                    "SELECT tradingsymbol, exchange, instrument_type, lot_size, tick_size"
+                    " FROM kite_instruments WHERE instrument_token = 401"
+                )
+            )
+        ).first()
+
+        assert via_csv is not None and via_sdk is not None
+        assert tuple(via_csv) == tuple(via_sdk)
+
+    async def test_an_http_error_raises_rather_than_emptying_the_table(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """A failed download must not be read as 'the universe is now empty' —
+        that is the sweep's whole hazard, reached by a different door."""
+        _stub_dump(monkeypatch, [_row(501, "KEEPCO")])
+        await sync_instruments(db, "tok")
+
+        class _Boom:
+            text = ""
+
+            @staticmethod
+            def raise_for_status() -> None:
+                raise RuntimeError("503 from the dump host")
+
+        monkeypatch.setattr(kite_client.httpx, "get", lambda url, **kw: _Boom())
+
+        with pytest.raises(RuntimeError):
+            await sync_instruments(db)
+
+        assert await _tokens(db) == {501}
+
+
+class TestSyncCommits:
+    """U1 (2026-09-13) — REGRESSION: the sync did not own its commit.
+
+    `sync_instruments` relied on the caller. Its only caller was the admin
+    endpoint, whose `get_db` dependency auto-commits, so the omission was
+    invisible for as long as there was exactly one caller. The U1 beat task
+    goes through `run_db_task`, which does NOT commit — the first scheduled
+    run upserted 57,595 rows, rolled them all back, and logged
+    "Kite instruments synced: 57595 rows upserted" on the way out.
+
+    ⚠ This must be asserted from a SEPARATE session. `flush()` makes rows
+    visible to THIS session; only `commit()` makes them real
+    (.claude/rules/python.md), so a same-session assertion passes vacuously
+    on the old code.
+    """
+
+    async def test_rows_are_visible_to_another_session(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _stub_dump(monkeypatch, [_row(601, "COMMITCO"), _row(602, "COMMITTWO")])
+        await sync_instruments(db, "tok")
+
+        # ⚠ The TEST engine's factory, never `app.db.session.AsyncSessionFactory`.
+        # The app engine is a module global shared with `run_db_task`, which
+        # disposes it inside its own loop; a connection opened on it here stays
+        # bound to this test's loop and makes a LATER test die with "Event loop
+        # is closed". Caught by running the suite in a different order.
+        from tests.conftest import _SessionFactory
+
+        async with _SessionFactory() as other:
+            seen = {
+                r[0]
+                for r in await other.execute(text("SELECT instrument_token FROM kite_instruments"))
+            }
+        assert seen == {601, 602}  # old code: set() — rolled back
+
+    async def test_the_sync_leaves_no_open_transaction(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The canary, stated in-process: after the sync there is nothing left
+        for a caller to commit OR to roll back. On the old code the session was
+        still inside a transaction here, which is exactly how `run_db_task`
+        discarded the work."""
+        _stub_dump(monkeypatch, [_row(701, "DURABLE")])
+        await sync_instruments(db, "tok")
+
+        assert not db.in_transaction()
+
+
+class TestUnusableDumpRaises:
+    """U1 follow-up (bug-hunter, 2026-09-13) — a scheduled sync may not succeed
+    silently.
+
+    REGRESSION. `if not rows / if not records: return 0` reported SUCCESS. A dump
+    host answering HTTP 200 with a login interstitial or an error page passes
+    `raise_for_status()`, parses into junk-keyed rows, and maps to zero kept
+    records — so the beat task would log `kite_instruments refreshed: 0 rows` at
+    INFO and finish SUCCESS every weekday forever while the table went stale.
+    Stale is worse than empty here: it is not a step change, so the live worker's
+    COLLAPSE arm never sees it either.
+    """
+
+    async def test_an_html_page_raises_instead_of_reporting_zero(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        class _Html:
+            # Multi-line on purpose: DictReader takes line 1 as a header and
+            # yields the rest as junk-keyed rows, so this reaches the
+            # "parsed N rows but kept 0" arm rather than the empty-body one.
+            text = (
+                "<html>\n<head><title>Login</title></head>\n"
+                "<body>Please log in</body>\n</html>\n"
+            )
+
+            @staticmethod
+            def raise_for_status() -> None:
+                return None
+
+        monkeypatch.setattr(kite_client.httpx, "get", lambda url, **kw: _Html())
+
+        with pytest.raises(RuntimeError, match="not a Kite instruments CSV"):
+            await sync_instruments(db)
+
+    async def test_an_empty_dump_raises(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        _stub_dump(monkeypatch, [])
+        with pytest.raises(RuntimeError, match="empty"):
+            await sync_instruments(db, "tok")
+
+    async def test_an_unusable_dump_leaves_existing_rows_untouched(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """Both checks sit before every write, so a bad dump can neither
+        half-apply nor trigger the stale sweep."""
+        _stub_dump(monkeypatch, [_row(801, "SAFECO"), _row(802, "SAFETWO")])
+        await sync_instruments(db, "tok")
+
+        _stub_dump(monkeypatch, [])
+        with pytest.raises(RuntimeError):
+            await sync_instruments(db, "tok")
+
+        assert await _tokens(db) == {801, 802}

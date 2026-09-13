@@ -13,11 +13,10 @@ from datetime import date
 from pathlib import Path
 
 import pytest
-from sqlalchemy import func, select
-from sqlalchemy.ext.asyncio import AsyncSession
-
 from app.models.ledger import ALL_NODE_TYPES, NODE_TYPES, LedgerEntry
 from app.services import ledger as led
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
 
 EXP = "test-experiment"
 DV = "ohlcv_1d@2026-09-12"
@@ -70,7 +69,7 @@ class TestProvenanceIsMandatory:
 
 
 class TestAppendOnly:
-    async def test_a_correction_is_a_NEW_row_and_the_original_survives(
+    async def test_a_correction_is_a_new_row_and_the_original_survives(
         self, db: AsyncSession
     ) -> None:
         """⭐⭐ THE CONTRACT. Editing in place would destroy exactly the information that

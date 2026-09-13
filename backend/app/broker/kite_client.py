@@ -25,6 +25,7 @@ from datetime import UTC, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any, cast
 
+import httpx
 from kiteconnect import KiteConnect
 from sqlalchemy import CursorResult, delete, func, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
@@ -171,6 +172,18 @@ _SWEEP_MIN_FRACTION = 0.5
 # could shrink its own denominator).
 _HARD_SWEEP_DAYS = 7
 
+# ⭐ U1 — the instruments dump is PUBLIC, and that is what lets it have a
+# SCHEDULED owner. Kite access tokens die ~06:00 IST daily and can only be
+# renewed through an interactive OAuth login, so a beat task that required
+# one would fail exactly as often as the login is forgotten — which is the
+# failure that left `kite_instruments` EMPTY for five days (2026-09-07 →
+# 09-12) and the live worker running dark with `up: 0 instruments`.
+# Measured 2026-09-13: this URL returns HTTP 200 with 110,290 rows and no
+# Authorization header. The authenticated SDK path is kept for the admin
+# endpoint, which already holds a token.
+_INSTRUMENTS_URL = "https://api.kite.trade/instruments"
+_INSTRUMENTS_TIMEOUT_S = 120.0
+
 
 async def _delete_older_than(db: AsyncSession, cutoff: datetime) -> int:
     result = cast(
@@ -180,9 +193,14 @@ async def _delete_older_than(db: AsyncSession, cutoff: datetime) -> int:
     return result.rowcount
 
 
-async def sync_instruments(db: AsyncSession, access_token: str) -> int:
+async def sync_instruments(db: AsyncSession, access_token: str | None = None) -> int:
     """Download instruments CSV from Kite, upsert into kite_instruments,
     then SWEEP rows absent from the dump.
+
+    `access_token=None` uses the PUBLIC dump (`_INSTRUMENTS_URL`) instead of
+    the authenticated SDK call. That is what makes a scheduled owner possible
+    — see `_INSTRUMENTS_URL`. Both paths parse the same CSV and produce the
+    same rows; only the transport differs.
 
     The dump is Kite's complete tradable universe for the kept segments
     (NSE/BSE/NFO): a row missing from it is DEAD — delisted equity, moved
@@ -199,9 +217,15 @@ async def sync_instruments(db: AsyncSession, access_token: str) -> int:
 
     Returns the number of rows upserted (sweep counts are logged).
     """
-    kc = build_kite(access_token)
-
     def _download_and_parse() -> list[Any]:
+        if not access_token:
+            # Public path — no Authorization header, no token lifetime.
+            resp = httpx.get(
+                _INSTRUMENTS_URL, timeout=_INSTRUMENTS_TIMEOUT_S, follow_redirects=True
+            )
+            resp.raise_for_status()
+            return list(csv.DictReader(io.StringIO(resp.text)))
+        kc = build_kite(access_token)
         # kiteconnect returns raw CSV bytes from instruments(); newer SDK
         # versions return a parsed list.
         raw: bytes | str = kc.instruments()
@@ -215,13 +239,29 @@ async def sync_instruments(db: AsyncSession, access_token: str) -> int:
     # MEDIUM, 2026-07-17: an admin-triggered mid-session sync used to
     # stall tick processing for seconds).
     rows = await asyncio.to_thread(_download_and_parse)
+
+    # ⛔ Both emptiness checks RAISE rather than return 0 (bug-hunter, 2026-09-13).
+    # A dump host that answers HTTP 200 with a login interstitial or an error page
+    # passes `raise_for_status()`, parses into junk-keyed rows, and maps to zero
+    # records — so the old `return 0` reported SUCCESS to a Celery task that then
+    # logged "kite_instruments refreshed: 0 rows" every weekday forever while the
+    # table went stale. That is the same "success log over work that did not
+    # happen" class as the missing commit above, reached through the next door.
+    # Raising is safe: a genuine dump can never contain zero NSE/BSE/NFO rows, and
+    # both checks sit BEFORE every write, so nothing is half-applied or swept.
     if not rows:
-        log.warning("Kite instruments response was empty")
-        return 0
+        raise RuntimeError(
+            f"instruments dump was empty ({'public URL' if not access_token else 'SDK'}) "
+            "— refusing to report success; kite_instruments left untouched"
+        )
 
     records = await asyncio.to_thread(map_instrument_rows, rows)
     if not records:
-        return 0
+        raise RuntimeError(
+            f"instruments dump parsed {len(rows)} rows but kept 0 — this is not a Kite "
+            "instruments CSV (login/interstitial page, or a column rename). Refusing to "
+            "report success; kite_instruments left untouched"
+        )
 
     # Watermark derived from the data itself: "no fresh row below the
     # watermark" holds by construction even across a backward clock step
@@ -260,6 +300,16 @@ async def sync_instruments(db: AsyncSession, access_token: str) -> int:
         deleted = 0
     else:
         deleted = await _delete_older_than(db, watermark)
+
+    # ⛔ U1 (2026-09-13): this function used to rely on its caller to commit.
+    # The only caller was the admin endpoint, whose `get_db` dependency
+    # auto-commits — so it worked, invisibly, for one caller only. The moment a
+    # Celery task called it, `run_db_task` (which does NOT commit) rolled the
+    # whole sync back while the log below still reported success: 57,595 rows
+    # "synced" into an empty table. Upsert + sweep is one unit of work and owns
+    # its own commit, matching `bhavcopy_service.upsert_bhavcopy_rows`.
+    await db.commit()
+
     log.info(
         "Kite instruments synced: %d rows upserted, %d stale swept (%d hard)",
         len(records), deleted + hard, hard,

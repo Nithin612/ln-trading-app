@@ -109,6 +109,14 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.health_tasks.worker_heartbeat",
         "schedule": crontab(minute="*/2"),
     },
+    # ⭐ U1 — `kite_instruments` had no scheduled owner and stayed EMPTY for five
+    # days after the 2026-09-07 DB loss, while live_worker logged `up: 0 instruments`
+    # and ran dark. 02:30 UTC = 08:00 IST, before the 09:15 session so the worker's
+    # subscription universe is fresh. Token-free by design — see the task's docstring.
+    "sync-kite-instruments": {
+        "task": "app.tasks.market_data_tasks.sync_kite_instruments",
+        "schedule": crontab(hour=2, minute=30, day_of_week="1-5"),
+    },
     # A36 — calendar-coverage expiry alarm. Once per trading morning (4:00 UTC = 9:30 IST);
     # the horizon moves slowly, so a daily read with lead time is enough, and the notifier's
     # 15-min throttle collapses any repeat within a day.

@@ -62,3 +62,32 @@ async def _run_equities_eod() -> dict[str, object]:
     today_ist = datetime.now(UTC).astimezone(_IST).date()
     async with AsyncSessionFactory() as db:
         return await catchup_equities_eod(db, today_ist)
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="app.tasks.market_data_tasks.sync_kite_instruments", bind=True, max_retries=2
+)
+def sync_kite_instruments(self: object) -> dict[str, object]:  # noqa: ARG001
+    """Refresh `kite_instruments` from the PUBLIC dump. Beat: 08:00 IST weekdays.
+
+    ⭐ U1 — this table had NO scheduled owner. Its only writer was an admin
+    HTTP endpoint (`app/api/v1/broker.py`), so after the 2026-09-07 dev-DB
+    loss it stayed EMPTY for five days and `live_worker` came up with
+    `up: 0 instruments` every morning without failing.
+
+    ⚠ Deliberately token-free (`sync_instruments(db)` with no access token).
+    A Kite access token expires ~06:00 IST daily and is renewable only through
+    an interactive OAuth login; a scheduled owner that needed one would go dark
+    on exactly the mornings nobody logged in — the failure it exists to prevent.
+    """
+    return run_db_task(_run_sync_instruments)
+
+
+async def _run_sync_instruments() -> dict[str, object]:
+    from app.broker.kite_client import sync_instruments
+    from app.db.session import AsyncSessionFactory
+
+    async with AsyncSessionFactory() as db:
+        synced = await sync_instruments(db)
+    log.info("kite_instruments refreshed: %d rows", synced)
+    return {"synced": synced}

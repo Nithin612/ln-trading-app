@@ -41,6 +41,7 @@ import queue
 import sys
 import threading
 import time as time_mod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
@@ -71,6 +72,7 @@ from app.broker.tick_mode import (
     record_tick_mode_health,
     tally_tick_modes,
 )
+from app.broker.universe_guard import check_and_record_universe
 from app.core.config import settings
 from app.services.worker_health import beat_sync
 
@@ -114,9 +116,18 @@ _WATCHED_REFRESH_S = 1.0
 _LTP_RESET_S = 10.0
 
 # Exit codes for the supervisor: 0 clean stop · 3 WS died mid-session ·
-# 4 no usable token (wait for the login ritual).
+# 4 no usable token (wait for the login ritual) · 5 no usable universe.
+#
+# ⚠ CONTRACT: 3 is transient and restarts fast; 4 and 5 need a HUMAN and the
+# supervisor must back off long (`make live-worker`). A code added here without
+# a matching branch in that Makefile target falls into the generic `else` and
+# restart-loops every 5 s — which is what 5 did when it was first added
+# (bug-hunter, 2026-09-13). Add the branch in the same commit.
 EXIT_WS_DIED = 3
 EXIT_NO_TOKEN = 4
+# U1 — refusing to run dark is a distinct outcome from having no token: the
+# token case is "you must log in", this one is "the data layer is broken".
+EXIT_NO_UNIVERSE = 5
 
 
 def session_bounds_ist(day: date) -> tuple[int, int]:
@@ -975,9 +986,20 @@ async def startup_gap_fill(db: Any, access_token: str, token_map: dict[int, int]
 
 async def _bootstrap(
     gap_fill: bool,
-) -> tuple[str, dict[int, int], LevelDirectory, list[Any]] | None:
+    universe_check: Callable[[int], str | None] | None = None,
+) -> tuple[str, dict[int, int], LevelDirectory, list[Any]] | str | None:
     """Fetch the active token + instrument map, build the trigger-level
-    directory (3.5), and optionally gap-fill."""
+    directory (3.5), and optionally gap-fill.
+
+    Returns the boot tuple, `None` for "no token", or a **refusal string** from
+    `universe_check`.
+
+    ⚠ `universe_check` runs the moment the map exists and BEFORE the gap-fill
+    (bug-hunter, 2026-09-13). `startup_gap_fill` is a throttled Kite REST pass
+    its own docstring budgets at ~35 minutes; refusing afterwards would spend
+    that whole pass and then discard it — and under a restart loop, repeatedly,
+    against a rate-limited broker API.
+    """
     from app.broker.kite_client import get_active_token
     from app.db.session import AsyncSessionFactory
 
@@ -986,6 +1008,10 @@ async def _bootstrap(
         if token is None:
             return None
         token_map = await _build_token_stock_map(db, token.access_token)
+        if universe_check is not None:
+            refusal = universe_check(len(token_map))
+            if refusal is not None:
+                return refusal
         if gap_fill and token_map:
             await startup_gap_fill(db, token.access_token, token_map)
         directory = await build_directory(db, datetime.now(tz=UTC), sorted(token_map.values()))
@@ -1052,6 +1078,37 @@ def _make_ticker(
     return ticker
 
 
+def _preflight(
+    gap_fill: bool, redis_sync: Any
+) -> tuple[str, dict[int, int], LevelDirectory, list[Any]] | int:
+    """Bootstrap, then refuse to start on either unrunnable condition.
+
+    Returns the boot tuple, or an EXIT_* code. U1 added the second check: a
+    worker with an empty subscription universe used to start anyway and log
+    `up: 0 instruments` for a whole session (2026-09-07 → 09-12, five sessions
+    lost and unrecoverable). Both checks belong here because both mean the same
+    thing operationally — do not open the socket.
+    """
+    client = redis_sync.from_url(settings.redis_url, decode_responses=True)
+
+    def _check(count: int) -> str | None:
+        return check_and_record_universe(
+            client,
+            count,
+            settings.live_universe_min_fraction,
+            settings.live_universe_min_count,
+        )
+
+    boot = asyncio.run(_bootstrap(gap_fill, universe_check=_check))
+    if boot is None:
+        log.critical("no active Kite token — run scripts/kite_login.py, then restart")
+        return EXIT_NO_TOKEN
+    if isinstance(boot, str):
+        log.critical("live-worker REFUSING TO START: %s", boot)
+        return EXIT_NO_UNIVERSE
+    return boot
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="tick-to-tick live worker")
     parser.add_argument("--gap-fill", action="store_true")
@@ -1064,14 +1121,13 @@ def main(argv: list[str] | None = None) -> int:
     # finding 7). Worker-process-global, deliberate.
     sys.setswitchinterval(0.002)
 
-    boot = asyncio.run(_bootstrap(args.gap_fill))
-    if boot is None:
-        log.critical("no active Kite token — run scripts/kite_login.py, then restart")
-        return EXIT_NO_TOKEN
-    access_token, token_map, directory, initial_levels = boot
-
     import redis as redis_sync
     import tradecore
+
+    boot = _preflight(args.gap_fill, redis_sync)
+    if isinstance(boot, int):
+        return boot
+    access_token, token_map, directory, initial_levels = boot
 
     today = datetime.now(tz=UTC).astimezone(_IST).date()
     open_ts, close_ts = session_bounds_ist(today)

@@ -362,7 +362,7 @@ Ordering is dependency-driven; U1 gates U2, U2 gates U3.
 
 ---
 
-### U1 — Repopulate `kite_instruments` and give it an owner *(P0)*
+### U1 — Repopulate `kite_instruments` and give it an owner *(P0)* ✅ **DONE 2026-09-13 — see §29**
 - **WHY** It is empty; the live path joins through it; four subsystems are dark. It is
   also the *input* to `deactivate_dead_stocks.py`, so nothing else may run first.
 - **SCOPE**
@@ -1786,3 +1786,152 @@ third instance in this document (feed alarm · `load_frames` · this).
   open).
 - It changed no recorded number in the trading sense: `positions` is empty, and bars are
   inputs, not results.
+
+
+---
+
+# PART IX — U1 EXECUTED (2026-09-13)
+
+## §29 · `kite_instruments` has rows, and now it has an owner
+
+### 29a · ⭐ The finding that shaped the design: the dump is PUBLIC
+
+U1's SCOPE assumed the sync needs a Kite token, and noted one was present. **It was not
+— token id 3 expired at 06:00 IST on 09-12**, so the spec was already stale when read.
+That turned out not to matter, because **`https://api.kite.trade/instruments` returns
+HTTP 200 with 110,290 rows and no `Authorization` header** (measured 2026-09-13).
+
+⭐⭐ **This is not a convenience, it is the whole design.** A Kite access token dies
+~06:00 IST daily and is renewable only through an interactive OAuth login. **A beat task
+that required one would go dark on exactly the mornings nobody logged in — which is the
+failure U1 exists to prevent.** `sync_instruments(db)` now takes `access_token: str | None`
+and uses the public transport when none is given; the authenticated SDK path is kept for
+the admin endpoint, which already holds a token. A test asserts both paths map a row
+identically, so the two cannot drift.
+
+### 29b · ⛔⛔ THE BUG THIS TURNED UP — a success log over a rolled-back transaction
+
+The first real run printed:
+
+```
+INFO Kite instruments synced: 57595 rows upserted, 0 stale swept (0 hard)
+RESULT synced=57595
+```
+
+**and left the table empty.** `sync_instruments` never committed — it relied on its caller,
+and its *only* caller was the admin endpoint, whose `get_db` dependency auto-commits. **The
+omission was invisible for exactly as long as there was one caller.** `run_db_task` (the
+mandatory Celery bridge) does **not** commit, so the beat task added in this same change
+would have upserted 57,595 rows and discarded them **every weekday morning, while logging
+success.**
+
+⭐ **The class of defect matters more than the instance: a log line that reports work the
+transaction did not keep.** It would have been indistinguishable from working, and the
+symptom — an empty `kite_instruments` — is the exact symptom U1 was written to fix. The
+sync now owns its commit, matching `bhavcopy_service.upsert_bhavcopy_rows` in the same
+layer. ⚠ **Found by running it, not by reading it** — the same lesson as §20.
+
+**Both regression tests were stash-proven against the old code**: `assert set() == {601,
+602}` and `assert not True`. ⚠ The commit assertion is made from a **separate session** on
+purpose — `flush()` makes rows visible to *this* session, so a same-session assertion
+passes vacuously (`.claude/rules/python.md`).
+
+### 29c · What shipped
+
+| part | what |
+|---|---|
+| **U1.1** | `sync_instruments(db, access_token: str \| None = None)` — public dump when token-free; **owns its commit** |
+| **U1.2** | beat task `app.tasks.market_data_tasks.sync_kite_instruments`, **02:30 UTC (08:00 IST) weekdays**, before the 09:15 session |
+| **U1.3** | `app/broker/universe_guard.py` + `live_worker._preflight` → **`EXIT_NO_UNIVERSE = 5`** |
+| knob | `LIVE_UNIVERSE_MIN_FRACTION=0.5` in `.env.example` (**W3**) |
+| tests | **28** — 17 guard, 11 sync (incl. the commit regressions) |
+
+**The guard has two arms.** **EMPTY** — a universe of 0 can never be correct, needs no
+baseline, and survives a Redis outage. **COLLAPSE** — below `min_fraction` of the previous
+session's size, mirroring `_SWEEP_MIN_FRACTION`. ⚠ **Growth is never refused** (the pending
+universe repair roughly doubles this number), the first run cannot fire the collapse arm,
+and **a refusal does not overwrite the baseline** — otherwise the guard would disarm itself
+after one bad morning. It fails **open** on Redis errors: a guard must never be the reason a
+healthy worker cannot start.
+
+### 29d · Acceptance — measured
+
+| criterion | required | measured |
+|---|---|---|
+| `kite_instruments` rows | > 50,000 | **57,595** ✅ |
+| subscription universe | > 1,000 | **1,178** ✅ |
+| guard exits non-zero on empty | a test | ✅ `_preflight` → `EXIT_NO_UNIVERSE` |
+
+Breakdown: NFO CE 16,901 · NFO PE 16,844 · BSE EQ 12,957 · **NSE EQ 10,246** · NFO FUT 647.
+
+### 29e · ⭐ U1 un-darkens FOUR subsystems, and one of them answers §13/Q6
+
+`kite_instruments` is consumed by more than the tick path:
+
+1. `broker/tick_consumer._build_token_stock_map` — live_worker's subscription universe;
+2. `api/v1/ws.py` — the **frontend live-quote WebSocket**, which returned nothing for
+   every symbol for five days;
+3. `services/chain_recorder.py` — the **F&O option-chain recorder**, whose docstring says
+   it *"degrades silently: … NFO instruments not yet synced → status 'skipped'"*.
+   ⭐ **So §7 of the daily report was correctly attributing its zero to a reason all along
+   — the reason was this table.** That is the §7/§8 design working exactly as intended.
+4. the admin sync endpoint itself.
+
+### 29f · ⛔ NEW FINDING — the repaired universe lands near Kite's subscription cap
+
+`live_worker` subscribes in **one call with no chunking**
+(`ws.subscribe(list(token_map))`, `live_worker.py:1052`), and Kite caps a single
+WebSocket connection at **3,000 instruments**.
+
+- today, on the broken active set: **1,178** — comfortable;
+- **joinable ignoring `is_active` (the post-repair ceiling): 2,655 — 88 % of the cap.**
+
+⚠ **So D2′ moves this from 39 % to 88 % of a hard broker limit in one step**, with no
+chunking, no second connection and no guard. It does not overflow today, but the headroom
+is 345 instruments and the structural universe is the thing about to be redefined.
+
+⇒ **New queue item U16 — chunk the subscription across connections (or cap and log
+loudly) BEFORE D2′ lands.** ⭐ This is a direct answer to **§13/Q6** ("the failure mode of
+this document is an unlisted consumer that stays broken after U1–U3; §4 lists seven, what
+is the eighth?"): **the eighth is not a consumer that stays broken — it is one that breaks
+*because* of the repair.**
+
+
+## §30 · ⭐ The bug-hunter round on U1 — five defects, all in the new code
+
+Run per CLAUDE.md (bug-hunter on broker/pipeline changes). **It found five, every one
+verified by execution rather than by reading, and four of them MEDIUM.** All are fixed in
+the same commit. ⚠ **This is the second review round in two days where the tests passed and
+the code was still wrong** — the tests asserted what was intended.
+
+| # | defect | why it mattered |
+|--:|---|---|
+| 1 | **`EXIT_NO_UNIVERSE = 5` was added to a comment that says "Exit codes for the supervisor" — and the supervisor was never taught it.** Code 4 gets a 60 s human-action pause; 5 fell into the generic `else` → *"restarting in 5s"*. | On the next outage: refuse → sleep 5 s → **full interpreter restart** → refuse … **~3,000 times a session**, a `log.critical` flood and DB churn, while the screen says the transient word "restarting". ⭐ **The guard would have converted a silent failure into a loud loop — an improvement, but not the one intended.** |
+| 2 | **The check ran on `_bootstrap`'s RETURN value, so it fired *after* `startup_gap_fill`.** | A COLLAPSE refusal with `--gap-fill` first spends the throttled Kite REST pass its own docstring budgets at **~35 minutes**, then refuses and discards it. Under defect 1's loop: unbounded repeats against a rate-limited broker API. The EMPTY path escaped only by the accident that `if gap_fill and token_map` short-circuits on `{}`. |
+| 3 | ⭐⭐ **The baseline was re-written on every accepted start**, so each morning was compared only against the morning before. | A collapse delivered in sub-threshold steps is accepted at **every** step and becomes the new bar: from 2,655, six 45 % drops run **2655 → 1460 → 803 → 441 → 242 → 133** — **95 % of the universe gone, guard silent.** ⚠ **Not a margin case: the real 09-07 event was 1,182 of 2,646 = 44.7 %, clearing the 50 % bar by 5.3 points.** A slightly milder regression fires nothing *and then becomes the baseline*. |
+| 4 | **`if not rows / if not records: return 0` reported SUCCESS.** | A dump host answering **HTTP 200 with a login interstitial** passes `raise_for_status()`, parses to junk-keyed rows, maps to zero records → the beat task logs `refreshed: 0 rows` and finishes SUCCESS **every weekday forever** while the table goes stale. ⭐ **Stale is worse than empty: it is not a step change, so the new COLLAPSE arm never sees it either.** Same class as §29b, one door along. |
+| 5 | The COLLAPSE message's only escape hatch was *"delete Redis key …"* — but **`redis-cli` is not installed on this box**. | An instruction the operator cannot run, on the one path where the guard deliberately wedges and the session is ticking away. |
+
+**Fixes.** (1) a `code -eq 5` branch that prints the remedy and **sleeps 300 s**, plus a
+CONTRACT comment at the exit codes saying a new code needs its Makefile branch *in the same
+commit*. (2) `universe_check` is passed **into** `_bootstrap` and evaluated the moment the
+map exists — before gap-fill, before the directory. (3) the baseline **ratchets UP only**
+(`expire` refreshes it on an accepted-but-smaller start, so the high-water mark cannot
+silently age out) plus a new **absolute floor**, `LIVE_UNIVERSE_MIN_COUNT=500`, because a
+ratio has nothing to compare against on a first run. (4) both emptiness checks **raise**;
+they sit before every write, so nothing half-applies and the sweep cannot fire. (5) the
+message now prints a `uv run python -c …` one-liner that works here.
+
+⚠ **The ratchet's cost, stated rather than discovered later:** a universe that legitimately
+shrinks for good needs **one** manual baseline reset. Organic drift cannot reach 50 % (NSE
+listings grow), and the refusal carries the command.
+
+⭐ **New file `backend/scripts/sync_instruments.py`** — the manual remedy the supervisor
+prints, and what U1's SCOPE originally called "a thin script". Token-free.
+
+**Tests after the round: 41** (27 guard · 14 sync), plus 3 beat-schedule invariants in
+`test_schedule_invariants.py`. ⚠ One of *our own* tests also had to be fixed: it opened its
+second session on `app.db.session.AsyncSessionFactory` — **the app's module-global engine,
+which `run_db_task` disposes inside its own loop** — and killed a *later* test with *"Event
+loop is closed"*. **Use conftest's `_SessionFactory`.** Caught only by running the suite in
+a different order (111 → 133 → 189 passing as the selection widened).

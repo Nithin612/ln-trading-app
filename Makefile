@@ -123,6 +123,11 @@ live-worker:  ## Run the live worker under a restart supervisor (soak ritual)
 		if [ $$code -eq 0 ]; then echo "live-worker: clean exit (session over)"; break; fi; \
 		if [ $$code -eq 4 ]; then \
 			echo "live-worker: NO TOKEN — run 'uv run python scripts/kite_login.py' (retrying in 60s)"; sleep 60; \
+		elif [ $$code -eq 5 ]; then \
+			echo "live-worker: NO UNIVERSE — kite_instruments is empty/collapsed or stocks.is_active is wrong."; \
+			echo "  fix:  cd backend && uv run python scripts/sync_instruments.py"; \
+			echo "  then verify stocks.is_active, and see the refusal reason logged above"; \
+			echo "  (needs a human — NOT retrying blindly; sleeping 300s)"; sleep 300; \
 		else \
 			echo "live-worker: exit $$code — restarting in 5s"; sleep 5; \
 		fi; \

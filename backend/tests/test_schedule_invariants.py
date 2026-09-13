@@ -15,6 +15,7 @@ This pins two invariants that no other test covers:
 
 from __future__ import annotations
 
+import importlib
 from datetime import date, datetime
 
 from app.celery_app import celery_app
@@ -72,3 +73,41 @@ def test_coverage_close_matches_the_capture_window_end() -> None:
     from app.tasks.cas_tasks import _CAS_END
 
     assert CAS_WINDOW_CLOSE == (_CAS_END.hour, _CAS_END.minute)
+
+
+# ── U1 (2026-09-13): the instruments table finally has a scheduled owner ──────
+
+
+def test_kite_instruments_has_a_scheduled_owner() -> None:
+    """REGRESSION. `kite_instruments` had exactly one writer — an admin HTTP
+    endpoint — so nothing scheduled ever refreshed it. After the 2026-09-07
+    dev-DB loss it stayed EMPTY for five days while `live_worker` logged
+    `up: 0 instruments` and ran dark; tick/CAS/intraday capture is real-time
+    only, so those sessions are gone. A beat entry must exist and must point at
+    a task that is actually registered — a typo'd task name is a beat entry
+    that silently never fires, which is the same failure wearing a hat."""
+    # Celery registers a task when its module is imported; `include` is lazy, so
+    # the test must import it the way the worker does. That is the point — a beat
+    # entry naming a module absent from `include` would never fire.
+    for mod in celery_app.conf.include:
+        importlib.import_module(mod)
+
+    entry = _entry_for("app.tasks.market_data_tasks.sync_kite_instruments")
+    assert entry["task"] in celery_app.tasks
+
+
+def test_instrument_sync_runs_before_the_session_opens() -> None:
+    """The subscription universe must be fresh when the worker starts. The NSE
+    session opens 09:15 IST (03:45 UTC); the sync is scheduled 02:30 UTC."""
+    cron = _entry_for("app.tasks.market_data_tasks.sync_kite_instruments")["schedule"]
+    hours = {int(h) for h in cron.hour}
+    assert hours == {2}
+    assert {int(m) for m in cron.minute} == {30}
+    # 02:30 UTC = 08:00 IST, comfortably before the 03:45 UTC open.
+    assert max(hours) < 3
+
+
+def test_instrument_sync_is_weekdays_only() -> None:
+    """NSE does not trade at the weekend; a dump fetched then is the Friday one."""
+    cron = _entry_for("app.tasks.market_data_tasks.sync_kite_instruments")["schedule"]
+    assert {int(d) for d in cron.day_of_week} == {1, 2, 3, 4, 5}
