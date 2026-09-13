@@ -627,6 +627,30 @@ else.
   — TimescaleDB hypertables need `timescaledb_pre_restore()`/`post_restore()`) — details in
   `RUNBOOK.md` §9. **Ask before anything that writes to, truncates or migrates live data.**
 
+- **✅ THE D3 → U17 → D0 → D1′ → D2′a QUEUE IS DONE (overnight 2026-09-14), and ONE DECISION
+  WAITS.** ⭐⭐ **D2′a evaluated the universe as a versioned rule and the first run says: WOULD
+  ACTIVATE 1,121 · WOULD DEACTIVATE 152 · resulting universe 2,291** — the 152 all
+  `not_eq_listed`, **exactly** round 2's independently-derived "active but not in the EQ list"
+  count. ⚠ **SHADOW ONLY — nothing writes `is_active`**; the flip is D2′b and the question is
+  now *"do we accept these 1,273 changes"*, not *"is the rule right"*. Check it with
+  `uv run python scripts/universe_snapshot.py --diff`.
+  ⭐ **D3's real justification was never storage:** `eod_catchup:102` calls the default ingest
+  path, so on 09-11 the old code would write **1,166 of 2,637** traded names and drop **1,471
+  EVERY DAY** — the same count U3 repaired. **U3's fix was not durable.**
+  ⭐ **U17:** subscription = universe **∪ held names** — a held name leaving the active set lost
+  its ticks and the monitor skipped it **permanently**, SL/TP unwatched. The trace also talked me
+  OUT of unioning the alert hot set (capacity-bounded; a stale row "silently eats a slot").
+  ⭐ **D1′:** `symbol_history` + **`COALESCE(stocks.isin, EXCLUDED.isin)`** — an identity anchor is
+  filled once, never silently rewritten. ⛔ **`uq_stocks_symbol_exchange` NOT dropped**: 14 queries
+  assume one row per symbol, and the reuse hazard's rate is **unmeasurable retrospectively**
+  because the merge overwrites its own evidence (4th estimand-trap instance, caught before it was
+  banked). ⭐ **D0:** identity pin + a negative-control test planting the 09-07 id swap.
+  ⚠ **U16 pressure is LOWER than reported** — 2,291 = 76% of Kite's 3,000 cap, not 2,655/88%.
+  ⛔ **Two bugs I wrote and caught by RUNNING, both silent-partials:** the `sync_instruments`
+  missing commit, and a CSV parser that returned EMPTY because `EQUITY_L`'s header carries a
+  LEADING SPACE on every column after the first (`seed_stocks._csv_rows` already strips keys and
+  says so — a documented trap, reintroduced). Both now raise instead of succeeding quietly.
+
 - **⛔⛔ THE LIVE THREAD IS `docs/UNIVERSE_REBUILD_PLAN.md` — the stock master has been WRONG
   since the 2026-09-07 DB loss, and PART VII settles what that means.** ⭐⭐ **Every one of the
   3,392 `stocks` rows has `created_at` = 2026-09-07**, so there was never anything to "restore":
