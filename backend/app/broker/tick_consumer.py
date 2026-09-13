@@ -457,7 +457,40 @@ async def stop_consumer() -> None:
 
 
 async def _build_token_stock_map(db: Any, access_token: str) -> dict[int, int]:
-    """Return {instrument_token: stock_id} for all active NSE EQ stocks."""
+    """Return {instrument_token: stock_id} for the tradeable universe UNION every
+    name we currently hold.
+
+    ⭐ **U17 (2026-09-14) — the universe is an ENTRY gate.** It may decide what we
+    are willing to BUY. It must never decide what we can SEE, because everything an
+    open position depends on is downstream of this map:
+
+        subscription -> tick -> `ltp:{stock_id}` -> `position_monitor.scan_positions`
+                                                 -> SL / TP / trail / exit
+
+    `scan_positions` is correctly NOT universe-filtered — it evaluates every open
+    position. But it prices from `get_live_ltp`, and that key exists only for
+    SUBSCRIBED instruments. So with a bare `s.is_active` predicate, a held name
+    that left the active set stopped receiving ticks, its key expired at 600 s,
+    and the monitor skipped it **permanently** — SL and TP still recorded, and
+    nothing left alive to evaluate them. The skip is silent BY DESIGN ("the
+    monitor never acts on a stale price"), which is correct in isolation and
+    catastrophic in composition.
+
+    ⚠ Today `is_active` moves only when a human runs a script. **After D2′ a rule
+    re-evaluates it NIGHTLY**, so a delisting, a `BE`/`BZ` series move or a
+    tightened definition could strand a held position unattended. This union is a
+    precondition for that change, not a nicety.
+
+    ⚠ Deliberately mode-agnostic (`closed_at IS NULL`, any mode): a Phase-7 LIVE
+    position needs its feed even more than a paper one.
+
+    ⚠ Deliberately NOT extended to the provisional alert hot set. That set is
+    ENTRY discovery, it is capacity-bounded (`live_provisional_trigger_market_max`)
+    and its own code warns that a stale row "silently eats a slot" — spending
+    discovery slots on names we already hold would be a regression. Exits do not
+    need it: `_publish_ltp` writes from the tick batch, so a subscribed name gets
+    its price whether or not it is hot.
+    """
     from sqlalchemy import text
 
     # Join kite_instruments with stocks on tradingsymbol + exchange
@@ -466,11 +499,42 @@ async def _build_token_stock_map(db: Any, access_token: str) -> dict[int, int]:
             "SELECT ki.instrument_token, s.id"
             " FROM kite_instruments ki"
             " JOIN stocks s ON s.symbol = ki.tradingsymbol AND s.exchange = ki.exchange"
-            " WHERE s.is_active = true AND ki.instrument_type = 'EQ'"
+            " WHERE ki.instrument_type = 'EQ'"
+            "   AND (s.is_active = true"
+            "        OR EXISTS (SELECT 1 FROM positions p"
+            "                   WHERE p.stock_id = s.id AND p.closed_at IS NULL))"
         )
     )
     rows = result.fetchall()
     return {row[0]: row[1] for row in rows}
+
+
+async def held_without_instrument(db: Any) -> list[tuple[int, str]]:
+    """Open positions whose name has NO tradable `EQ` row in `kite_instruments`.
+
+    The union above cannot rescue these: with no instrument token there is nothing
+    to subscribe to, so they are genuinely un-exitable through the live path and
+    need a human (square off via the broker, or correct the instruments table).
+    Returned rather than raised — one stranded position must not stop the worker
+    from serving every other one.
+    """
+    from sqlalchemy import text
+
+    rows = (
+        await db.execute(
+            text(
+                "SELECT DISTINCT s.id, s.symbol"
+                " FROM positions p JOIN stocks s ON s.id = p.stock_id"
+                " WHERE p.closed_at IS NULL"
+                "   AND NOT EXISTS ("
+                "     SELECT 1 FROM kite_instruments ki"
+                "     WHERE ki.tradingsymbol = s.symbol AND ki.exchange = s.exchange"
+                "       AND ki.instrument_type = 'EQ')"
+                " ORDER BY s.symbol"
+            )
+        )
+    ).fetchall()
+    return [(int(r[0]), str(r[1])) for r in rows]
 
 
 def get_consumer() -> TickConsumer | None:

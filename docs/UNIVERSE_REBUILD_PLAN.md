@@ -2248,3 +2248,75 @@ implementation of the ruling's actual intent, not a reversal of it.
 ruling: a deactivated name gets no EOD bars on the live path"*) is now
 `test_an_inactive_stock_now_receives_bars`, with the history kept in the class docstring so
 the decision stays visible rather than vanishing. **13 tests pass.**
+
+
+---
+
+# PART XIV — U17 SHIPPED (2026-09-14)
+
+## §39 · The subscription is now `universe ∪ held`, and the scope was decided by tracing
+
+§37 established the principle. This is the build, and **the trace narrowed it** — the
+first instinct ("union everything that filters `is_active`") turned out to be wrong in one
+place and unnecessary in another.
+
+### 39a · What the exit path actually depends on
+
+```
+subscription  →  tick  →  ltp:{stock_id}  →  scan_positions  →  SL / TP / trail / exit
+```
+
+`_publish_ltp` writes **from the tick batch**, so a subscribed name gets its price whether
+or not anything else knows about it. ⇒ **Only the SUBSCRIPTION gates the exit path.** That
+is the one query U17 had to change: `tick_consumer._build_token_stock_map`, now
+
+```sql
+WHERE ki.instrument_type = 'EQ'
+  AND (s.is_active = true
+       OR EXISTS (SELECT 1 FROM positions p
+                  WHERE p.stock_id = s.id AND p.closed_at IS NULL))
+```
+
+⚠ **Mode-agnostic on purpose** (`closed_at IS NULL`, any mode): a Phase-7 **live** position
+needs its feed more than a paper one, and writing `mode = 'paper'` here would have to be
+found and removed later, probably after it mattered.
+
+### 39b · ⭐ What the trace talked me OUT of
+
+**The provisional alert hot set (`provisional.py:428, 442`) is deliberately NOT unioned**,
+and that is a decision rather than an omission:
+
+1. **Exits do not need it.** It drives near-trigger/provisional computation — ENTRY
+   discovery — while `ltp:` comes from the tick batch.
+2. ⭐ **Unioning it would be a regression.** The set is capacity-bounded by
+   `live_provisional_trigger_market_max`, and its own comment records a past
+   quant-verifier finding that a stale row *"silently eats a slot"*. Spending discovery
+   slots on names we already hold is precisely that bug, re-introduced deliberately.
+
+⭐ **The general form, worth keeping: a fix aimed at a principle should be applied where the
+DATA flows, not everywhere the same predicate appears.** Four call sites mention
+`is_active`; exactly one of them was on the path that mattered.
+
+### 39c · The residue the union cannot fix — and why it warns instead of refusing
+
+A held name with **no `EQ` row in `kite_instruments` at all** has no token to subscribe to.
+`held_without_instrument()` reports those and `_bootstrap` logs them at ERROR with their
+symbols. ⚠ **Reported, never raised:** these positions are genuinely un-exitable through
+the live path and need a human (square off at the broker, or repair the instruments table)
+— but **one stranded name must not stop the worker serving every other position.** That is
+the opposite call from U16's ceiling, and deliberately so: the ceiling means *every*
+subscription is wrong, this means *one* is.
+
+### 39d · Verified
+
+| check | result |
+|---|--:|
+| tests | **9**, two stash-proven to fail on the old query (`assert None == 1`) |
+| real data | open positions **0** · subscription universe **1,178** · stranded **0** |
+| vs U16's cap | 1,178 ≤ 3,000 ✅ |
+
+⚠ **The union only ever adds INACTIVE held names**, so at cycle-2 scale (1–2 positions) it
+is a rounding error against the cap — it cannot be the thing that trips U16.
+
+⭐ **Latent today (`positions` = 0 rows), which is exactly why it was cheap to build now.**
+It becomes load-bearing the moment D2′ starts moving `is_active` nightly.

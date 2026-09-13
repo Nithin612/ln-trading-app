@@ -65,6 +65,7 @@ from app.broker.tick_consumer import (
     LTP_KEY_TTL_SECONDS,
     _build_token_stock_map,
     _maybe_trigger_signal,
+    held_without_instrument,
 )
 from app.broker.tick_mode import (
     MODE_FULL,
@@ -1008,6 +1009,22 @@ async def _bootstrap(
         if token is None:
             return None
         token_map = await _build_token_stock_map(db, token.access_token)
+
+        # U17 — the union in _build_token_stock_map covers held names that merely
+        # left the tradeable universe. It cannot cover one with no EQ instrument
+        # at all: there is no token to subscribe to, so the position is
+        # un-exitable through the live path and needs a human. Reported, never
+        # raised — one stranded name must not stop the worker serving the rest.
+        stranded = await held_without_instrument(db)
+        if stranded:
+            log.error(
+                "%d OPEN POSITION(S) HAVE NO TRADABLE INSTRUMENT and cannot be "
+                "priced or exited by this worker: %s — square off at the broker, "
+                "or repair kite_instruments",
+                len(stranded),
+                ", ".join(sym for _sid, sym in stranded),
+            )
+
         if universe_check is not None:
             refusal = universe_check(len(token_map))
             if refusal is not None:

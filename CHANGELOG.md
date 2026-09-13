@@ -7,6 +7,34 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### U17 — the subscription is `universe ∪ held names` (2026-09-14)
+
+`_build_token_stock_map` filtered `s.is_active = true`, and that map is the subscription
+universe. `scan_positions` is correctly NOT universe-filtered, but it prices from
+`get_live_ltp` and that key exists only for SUBSCRIBED instruments — so a held name that
+left the active set stopped receiving ticks, its key expired at 600s, and the monitor
+skipped it **permanently**, with SL and TP still on the row and nothing alive to evaluate
+them. The skip is silent by design ("the monitor never acts on a stale price"), which is
+correct in isolation and catastrophic in composition.
+
+- Latent until now only because `is_active` moves when a human runs a script. **D2′ makes a
+  rule re-evaluate it nightly**, so this is a precondition for that change, not a nicety.
+- Mode-agnostic on purpose (`closed_at IS NULL`, any mode) — a Phase-7 live position needs
+  its feed more than a paper one.
+- ⭐ **The trace narrowed the scope.** The provisional alert hot set is deliberately NOT
+  unioned: exits don't need it (`_publish_ltp` writes from the tick batch), and it is
+  capacity-bounded with a recorded quant-verifier finding that a stale row "silently eats a
+  slot" — so unioning it would re-introduce that bug on purpose. Four call sites mention
+  `is_active`; exactly one was on the path that mattered.
+- New `held_without_instrument()`: a held name with no EQ instrument has no token to
+  subscribe to, so it is genuinely un-exitable through the live path. `_bootstrap` logs
+  those at ERROR by symbol — reported, never raised, because one stranded name must not stop
+  the worker serving every other position (the opposite call from U16's ceiling, where
+  *every* subscription would be wrong).
+- 9 tests, two stash-proven against the old query. Real data: 0 open positions, subscription
+  universe 1,178, 0 stranded, within U16's 3,000 cap.
+
+
 ### D3 — the price archive no longer consults a trading decision (2026-09-14)
 
 `upsert_bhavcopy_rows` appended `AND is_active = true` on the daily path. `is_active` is a
