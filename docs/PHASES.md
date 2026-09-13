@@ -1679,6 +1679,49 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-13 (universe rebuild).**
+
+**▶▶ ⛔⛔ THE LIVE THREAD IS `docs/UNIVERSE_REBUILD_PLAN.md`, NOT THE B-QUEUE.** The B-queue is
+COMPLETE 7/7. Since the 2026-09-07 dev-DB loss the **stock master has been wrong** — and PART VII
+§25a settles what that means: **every one of the 3,392 `stocks` rows has `created_at` = 2026-09-07**,
+so there is nothing to "restore". The whole master was improvised in one night. ⇒ **REBUILD-D:
+derive, don't repair** (§26).
+
+**✅ DONE 2026-09-13 (all committed, NOTHING PUSHED):**
+- **U3** — the 09-07 → 09-11 breadth hole is closed: **+7,351 bars**, per-session breadth
+  1,166–1,182 → **2,637–2,652**, stale names **1,481 → 4**. ⭐ `is_active` was **1,322 before and
+  after**, so `U1 → U2 → U3` was never a real chain and the `load_frames` ~10-06 clock is STOPPED.
+- **U1** — `kite_instruments` **0 → 57,595**; subscription universe **1,178**. The dump is PUBLIC
+  (no token), which is the only reason a **beat task** can own it. Startup guard
+  `EXIT_NO_UNIVERSE = 5`. ⛔ The sync **had never committed** (one caller, an endpoint whose
+  `get_db` auto-commits), and **bug-hunter found five more defects in the new code** — §30.
+- **D4a** — the CA detector is no longer gated on `is_active`. **U15** — the backfill can now
+  repair a THIN session, not just a missing one.
+
+**⇒ NEXT, IN THIS ORDER (§26 + PARTS VIII–XI):**
+1. ⭐ **U16 — chunk the websocket subscription.** `live_worker` subscribes in **one unchunked call**
+   and Kite caps a connection at **3,000**. Today 1,178 (39 %); **the post-repair ceiling is 2,655
+   (88 %)**. ⛔ **Must land BEFORE D2′.**
+2. **D0** pin identity (a `(stock_id, symbol, isin, first_seen)` seed file) → **D1′** permanent
+   `stocks.id` + `symbol_history` **owning the symbol uniqueness** (833 delisted symbols currently
+   occupy `uq_stocks_symbol_exchange`, so a reused NSE symbol silently merges into a dead company's
+   row) → ⭐ **D2′ the real work: keep the `is_active` column, REMOVE its three writers**
+   (`bhavcopy_service:216` · `seed_stocks:345` · `deactivate_dead_stocks:100`), nightly materialiser
+   from a versioned rule, **extends to all five flags**, first evaluation inside the migration.
+   **4–6 evenings.**
+3. ⛔ **BLOCKED ON THE USER: D3** (the daily ingest stops consulting `is_active`). The 2026-07-17
+   T2T ruling is stated two ways in our own doc; all reviewers read it as a TRADING policy, which
+   makes D3 the first implementation rather than an overturning. One line, ~6 MB/year. **§22/1.**
+4. ⛔ **D4b is NOT half a day.** A backward CA pass at the shipped 20 % threshold flags **1,768 of
+   3,395 stocks — 386 of the 1,322 ACTIVE** — and the flag has no expiry. Rescoped in **§32** as a
+   review queue with a split-RATIO discriminator ⇒ it is the front half of **A3**.
+
+⚠ **The universe rule drops the `≥ 300 bars` term** (§25e/1): bar count is a fact about OUR OWN
+data completeness, and a rule that reads its own completeness shrinks when ingestion breaks — that
+is 09-07 rebuilt inside the fix. It becomes a **scoring-time** check instead.
+
+---
+
 **▶ CONTINUE HERE (next session, any account) — updated 2026-09-11 (round 10).**
 
 **▶▶ ⭐⭐ READ `docs/BUILD_QUEUE.md`, NOT THE ADJUDICATION.** It carries B1–B8 with `WHY · SCOPE ·

@@ -1935,3 +1935,166 @@ second session on `app.db.session.AsyncSessionFactory` — **the app's module-gl
 which `run_db_task` disposes inside its own loop** — and killed a *later* test with *"Event
 loop is closed"*. **Use conftest's `_SessionFactory`.** Caught only by running the suite in
 a different order (111 → 133 → 189 passing as the selection widened).
+
+
+---
+
+# PART X — D4′ RESCOPED BEFORE BUILDING (2026-09-13)
+
+## §31 · ⛔ "Run the CA detector backwards over the archive" is NOT safe as written
+
+§23.6/D4′ and §25e adopted *"drop the `is_active` gate; run it backwards over the archive
+once"* — half a day, uncontroversial. **Measured first (read-only, dev DB, 2026-09-13),
+and the second half is wrong.**
+
+`ca_detector.scan_for_discontinuities` flags a stock when
+`|open ÷ prev_close − 1| > 20 %`, sets `ca_flagged_at`, and `universe_service.resolve_universe`
+then **excludes that stock from every suggestion universe until a human unflags it**. Run
+over the whole 1,098-session archive that fires:
+
+| threshold | distinct stocks flagged | events |
+|--:|--:|--:|
+| **20 % (the shipped default)** | **1,768 of 3,395 (52 %)** | 2,923 |
+| 30 % | 1,581 | 2,232 |
+| 40 % | 1,385 | 1,765 |
+| 50 % | 1,197 | 1,390 |
+
+⛔ **At the shipped threshold the backward pass quarantines 386 of the 1,322 currently
+active names — 29 % of the tradeable universe — permanently, in one command**, since the
+flag has no expiry and only a human clears it.
+
+⭐ **The premise that fails is written in the detector's own docstring:** *"Genuine
+20 %-circuit moves are rarer than splits at this threshold; false positives cost a review,
+false negatives cost a poisoned window — the asymmetry favors flagging."* That asymmetry is
+sound **at forward cadence**, where the detector fires a few times a day and a review is
+cheap. It does not survive a 1,098-session replay, where "a review" means **2,923 of them**.
+⚠ **A threshold calibrated for a daily decision was about to be reused for a bulk one.** The
+project already has a name for this shape: an instrument validated for one estimand used to
+settle another (§25f).
+
+## §32 · D4′, revised — split the safe half from the unsafe one
+
+**D4a — ungate `is_active`. SAFE, ship it.** A corporate action is a fact about a *price
+series*, not about whether we currently trade the name, and the quarantine's only consumer
+(`resolve_universe`) filters `is_active` separately anyway — so gating *detection* on it is
+both redundant and harmful. Its cost is bounded: forward cadence, a few events a day. ⭐ This
+is what made the detector blind to the real universe for the whole outage, and it is the
+half that mattered.
+
+**D4b — the backward pass is a MEASUREMENT, not a quarantine. Rescoped.** Do not auto-flag.
+Write the discontinuities to the (currently empty) **`corporate_actions` table** as a review
+queue, and leave `ca_flagged_at` alone. Three things it needs that the forward detector does
+not:
+
+1. ⭐ **A discriminator, not just a threshold.** A true split/bonus lands near a simple
+   ratio — 1/2, 1/5, 1/10, 2/3 — while a circuit move does not. Ratio proximity is a far
+   better separator than magnitude, and it is testable against the four known cases
+   (`SHRIRAMFIN` −81.1 %, `COFORGE` −79.7 %, `ANGELONE` −90.1 %, `DIACABS` +3118.6 %).
+2. **A per-event record**, not a per-stock flag — the same stock can have several actions
+   across seven years, and the current schema records only "flagged, once, for one reason".
+3. **A decision about what quarantine even means historically**, which is A3 and still open:
+   a 2021 split does not poison a 2026 window. ⚠ **The forward flag is permanent and
+   date-less, so it cannot express that** — which is why D4b must not reuse it.
+
+⇒ **D4b is no longer "half a day". It is the front half of A3 (corporate actions), which
+§25g explicitly parked.** ⭐ **Recording this rather than running the command is the whole
+value of measuring first:** the naive version would have looked like it worked — 1,768 rows
+updated, no error — and silently removed a third of the scannable universe.
+
+⚠ **Nothing about D4b is urgent.** The 7,351 bars U3 added are unscanned, but they are
+unscanned in the same way the other 2.08 M are, and the archive has been CA-unadjusted
+since it was built. ⭐ **D4a closes the regression; D4b was never the regression.**
+
+
+---
+
+# PART XI — D4a AND U15 SHIPPED (2026-09-13)
+
+## §33 · D4a — the CA detector is no longer gated on the trading flag
+
+One line of SQL removed from `ca_detector.scan_for_discontinuities`: `AND s.is_active`.
+
+⭐ **Why it was wrong, not merely unlucky.** A corporate action is a fact about a **price
+series**; `is_active` is a statement about whether we currently *trade* the name. Worse, the
+quarantine's only consumer — `universe_service.resolve_universe` — already filters
+`is_active` **itself**, so gating *detection* on it was **redundant**. Redundant and
+harmful: through the 09-07 → 09-12 outage the real universe was wrongly inactive, so the
+detector was blind to exactly the names that mattered. **3 flags in its lifetime**, against
+49 unadjusted actions known to sit in the top-250-liquid set alone.
+
+⚠ Forward cost is bounded: the daily ingest path still writes bars only for active names, so
+an inactive stock gets no new bars and therefore no new gap to flag. **Three regression
+tests**, each failing on the old code.
+
+⛔ **D4b (the backward pass) is NOT shipped — see §32.** It would quarantine 29 % of the
+active universe.
+
+## §34 · U15 — the backfill can now repair a THIN session, not just a missing one
+
+`backfill_ohlcv_history` judged a date "already done" by a **fixed floor of 500 rows**
+(`_COMPLETE_DAY_ROWS`). The five broken sessions each held ~1,170 against a normal ~2,630 —
+**all comfortably over 500** — so running the script across that range would have printed
+*"nothing to fetch — range already complete"* and done nothing. §28a caught it before U3 ran;
+this fixes it.
+
+**Completeness is now measured against the range's own median session** (`80 %`, via a pure
+`complete_day_threshold()` so the rule is testable without a database), with the old 500 kept
+only as a backstop for degenerate ranges, plus a `--min-rows` override and a printed line
+naming every session it intends to re-fetch.
+
+⚠ **Raising the constant would have reproduced the defect at a new threshold** — no constant
+can be right for a quantity that grows with the listed universe. **8 tests**, including a
+canary asserting the old floor *would* have passed every thin session.
+
+⭐ **Third instance of one shape, now named in three places:** the 6.8.6 feed alarm asserted
+recency, `load_frames` asserted a bar count, this asserted a row floor — **every one an
+instrument asserting PRESENCE where the failure mode is COVERAGE.**
+
+
+## §35 · U16 — the per-connection ceiling, asserted before D2′ can trip it
+
+§29f found that `live_worker` subscribes in **one unchunked call**
+(`ws.subscribe(list(token_map))`) against Kite's **3,000-instrument per-connection cap**,
+with today's universe at 1,178 (39 %) and the **post-repair ceiling at 2,655 (88 %)**.
+
+⭐ **Checked the SDK rather than assuming: `kiteconnect/ticker.py:567` just serialises the
+whole list into one frame and enforces nothing client-side.** So exceeding the cap is a
+*server-side* behaviour — the excess is dropped and nothing tells us. That is the same shape
+as every other defect in this document: a silent partial that looks like success.
+
+**Shipped as a third arm of the same guard, not a new mechanism** (W2). ⭐ **It REFUSES
+rather than truncating, and that is the substantive choice:** subscribing "the first 3,000"
+means silently picking which names the system stops watching — **a selection decision, made
+by list order, with no evidence.** This project does not make those. The refusal names the
+two real fixes: shard across connections, or narrow the universe rule.
+
+⚠ Like EMPTY and FLOOR, the ceiling needs **no baseline and no Redis**, so it fires on a
+first run and survives an outage of the store. And an over-cap universe is **not recorded**
+as a high-water mark — otherwise a refused start would raise the baseline to a size the
+connection cannot carry.
+
+`LIVE_UNIVERSE_MAX_COUNT=3000` (W3). **6 tests.** ⚠ **This does not make a >3,000 universe
+work** — it makes it impossible for one to fail quietly. Sharding is the follow-up, and the
+headroom before it is needed is **345 instruments**.
+
+
+## §36 · ⭐ Live verification with a real token (2026-09-13, after the user refreshed it)
+
+U1's design deliberately does not need a Kite token — but having one closed a gap in **our
+own testing**: the **public** transport had been verified against the real dump, while the
+**authenticated SDK** transport (kept for the admin endpoint) had only ever run against a
+stub. A test asserting the two map a row identically is not the same as both actually
+working.
+
+| check | result |
+|---|---|
+| token state | id 4 live, created 16:44 UTC, expires 2026-09-14 00:30 UTC (06:00 IST); id 3 correctly invalidated |
+| `sync_instruments(db, access_token)` — **real SDK path** | **57,595 rows** |
+| `sync_instruments(db)` — **real public path** | **57,595 rows** |
+| `live_worker._preflight` against real state | **OK → 1,178 instruments**; baseline `None` → `1178` |
+| knobs read from the live process | `min_fraction=0.5 · min_count=500 · max_count=3000` |
+
+⭐ **The two transports agree on real data, not just in a stubbed test** — which is the claim
+§29a actually needed. And the guard's whole path is exercised: first run, no baseline, accept,
+record. ⚠ **The recorded baseline is 1,178, and the universe repair will take it to 2,655** —
+growth, so accepted and ratcheted up (`test_growth_never_refused` pins exactly that).

@@ -11,6 +11,14 @@ Heuristic: |open ÷ prev_close − 1| > threshold (default 20%) between two
 consecutive TRADING sessions. Genuine 20%-circuit moves are rarer than
 splits at this threshold; false positives cost a review, false negatives
 cost a poisoned window — the asymmetry favors flagging.
+
+⚠ **That asymmetry holds at FORWARD cadence only.** Measured 2026-09-13:
+replayed over the whole 1,098-session archive this threshold flags **1,768
+of 3,395 stocks (52%)**, including **386 of the 1,322 active** — 2,923
+events, i.e. 2,923 reviews. A threshold calibrated for a daily decision
+does not transfer to a bulk one. **Do not "just run it backwards"**; the
+backward pass is rescoped as a review queue against `corporate_actions`
+with a split-ratio discriminator (PART X / §32 of the universe plan).
 """
 
 from __future__ import annotations
@@ -53,7 +61,17 @@ async def scan_for_discontinuities(
                 JOIN stocks s ON s.id = l.stock_id
                 WHERE l.d = :session_date
                   AND l.prev_close IS NOT NULL AND l.prev_close > 0
-                  AND s.is_active AND s.ca_flagged_at IS NULL
+                  -- ⭐ D4a (2026-09-13): NOT gated on `is_active`. A corporate
+                  -- action is a fact about a PRICE SERIES, not about whether we
+                  -- currently trade the name — and the quarantine's only consumer
+                  -- (`universe_service.resolve_universe`) filters `is_active`
+                  -- separately anyway, so gating DETECTION on it was redundant.
+                  -- It was also harmful: between 2026-09-07 and 09-12 the real
+                  -- universe was wrongly inactive, so the detector was blind to
+                  -- exactly the names that mattered and produced 3 flags in its
+                  -- lifetime against 49 unadjusted actions known to sit in the
+                  -- top-250-liquid set alone.
+                  AND s.ca_flagged_at IS NULL
                   AND ABS(l.open / l.prev_close - 1) > :threshold
                 """
             ),

@@ -19,6 +19,15 @@ conditions:
   * **FLOOR** — below `min_count` instruments outright. A ratio test alone
     cannot catch a collapse that arrives in small steps, and it has nothing to
     compare against on a first run.
+  * **CEILING (U16)** — a universe ABOVE what one Kite WebSocket connection can
+    carry. Kite caps a connection at 3,000 instruments; `live_worker` subscribes
+    in a single unchunked call and the SDK enforces nothing client-side
+    (`kiteconnect/ticker.py:567` just sends the list), so exceeding it is a
+    server-side behaviour we would discover in production. ⭐ **Refusing is the
+    only honest response: truncating to the first N is a silent SELECTION
+    decision, and this project does not make those without evidence.** Measured
+    2026-09-13: today's subscription is 1,178 (39 % of the cap) but the
+    post-universe-repair ceiling is **2,655 — 88 %, headroom 345**.
   * **COLLAPSE** — a universe below `min_fraction` of the **high-water** size.
     This mirrors `_SWEEP_MIN_FRACTION` in `kite_client`, which protects the
     instrument sweep from a truncated dump for the same reason.
@@ -65,7 +74,11 @@ _RESET_CMD = (
 
 
 def assess_universe(
-    count: int, previous: int | None, min_fraction: float, min_count: int = 0
+    count: int,
+    previous: int | None,
+    min_fraction: float,
+    min_count: int = 0,
+    max_count: int = 0,
 ) -> str | None:
     """Return a refusal reason, or None when the universe is usable.
 
@@ -86,6 +99,15 @@ def assess_universe(
             "happens before any baseline exists — this arm can. Refusing to start; fix "
             "the universe, or lower LIVE_UNIVERSE_MIN_COUNT if the shrink is intended."
         )
+    if max_count and count > max_count:
+        return (
+            f"subscription universe {count} EXCEEDS the per-connection cap {max_count}. "
+            "live_worker subscribes in one call and Kite carries at most this many "
+            "instruments per WebSocket; the SDK enforces nothing, so the excess would be "
+            "dropped server-side without telling us. Refusing to start rather than "
+            "truncating — picking which names to drop is a selection decision. Fix: shard "
+            "across connections, or narrow the universe rule."
+        )
     if previous is not None and previous > 0 and count < min_fraction * previous:
         return (
             f"subscription universe COLLAPSED: {count} instruments vs a high-water "
@@ -97,13 +119,17 @@ def assess_universe(
 
 
 def check_and_record_universe(
-    redis_client: Any, count: int, min_fraction: float, min_count: int = 0
+    redis_client: Any,
+    count: int,
+    min_fraction: float,
+    min_count: int = 0,
+    max_count: int = 0,
 ) -> str | None:
     """Assess `count` against the high-water size, then ratchet the baseline.
 
     Fails OPEN on any Redis error: the guard must never be the reason a healthy
-    worker cannot start. The EMPTY and FLOOR arms are evaluated first and need no
-    Redis, so they survive an outage of the very thing that stores the baseline.
+    worker cannot start. The EMPTY, FLOOR and CEILING arms are evaluated first and
+    need no Redis, so they survive an outage of the thing that stores the baseline.
     """
     previous: int | None = None
     try:
@@ -113,7 +139,7 @@ def check_and_record_universe(
     except Exception:  # noqa: BLE001 — a guard must not block a healthy start
         log.warning("universe guard: previous size unreadable; collapse arm skipped")
 
-    reason = assess_universe(count, previous, min_fraction, min_count)
+    reason = assess_universe(count, previous, min_fraction, min_count, max_count)
     if reason is not None:
         return reason
 

@@ -69,9 +69,29 @@ from sqlalchemy import text  # noqa: E402
 _IST = ZoneInfo("Asia/Kolkata")
 _OUT_DIR = Path(__file__).resolve().parents[2] / "docs" / "analysis"
 
-# A trading day carries ~1,700-2,400 EQ rows. A date holding fewer than this was a partial
-# ingest (interrupted run, or a request that returned a truncated file) and is retried
-# rather than treated as done — "has some rows" is not the same as "is complete".
+# ⛔ U15 (2026-09-13). This was a FIXED floor of 500 rows, and a fixed floor can only
+# see a MISSING session — never a THIN one. On 2026-09-07 → 09-11 five sessions were
+# ingested at ~1,170 rows against a normal ~2,630 (the universe outage), and every one
+# of them cleared 500: running this script over that range printed "nothing to fetch —
+# range already complete" and did nothing. The repair had to bypass it.
+#
+# ⭐ Same blindness as the 6.8.6 feed alarm and `load_frames`: an instrument asserting
+# PRESENCE where the failure mode is COVERAGE. So completeness is now judged against the
+# MEDIAN SESSION ALREADY PRESENT IN THE REQUESTED RANGE, not a constant — a session holding
+# less than this fraction of it is treated as partial and re-fetched.
+#
+# ⚠ It is the median of the WHOLE range, not a local window. A range spanning eras of
+# different breadth (2019 carried ~1,700 EQ rows a day, 2026 carries ~2,630) therefore
+# judges the thin era against a blended median and re-fetches some legitimately-complete
+# early sessions. That is WASTE, not corruption — the ingest is idempotent
+# (`ON CONFLICT DO NOTHING`) — and it is bounded by one HTTP request per affected day.
+# Pass `--min-rows` to pin the bar explicitly when backfilling across eras.
+#
+# ⚠ Raising the constant would reproduce the defect at a new threshold; the point is that
+# no constant can be right for a quantity that grows with the listed universe.
+_COMPLETE_DAY_FRACTION = 0.80
+# Floor for the degenerate cases the median cannot serve: an empty range, or one whose own
+# median is itself depressed. Kept deliberately low — it is a backstop, not the test.
 _COMPLETE_DAY_ROWS = 500
 
 # The archive's own floor, established by probing in the Q5 sourcing spike: 2019-09-02
@@ -79,21 +99,55 @@ _COMPLETE_DAY_ROWS = 500
 ARCHIVE_START = date(2019, 10, 1)
 
 
-async def _already_done(start: date, end: date) -> set[date]:
-    """Dates that already hold a full day of bars, so no request is made for them."""
+def complete_day_threshold(
+    counts: list[int], fraction: float = _COMPLETE_DAY_FRACTION, floor: int = _COMPLETE_DAY_ROWS
+) -> int:
+    """Rows a session must hold to count as complete, from the range's own shape.
+
+    Pure, so the rule is testable without a database. Returns the larger of the
+    absolute floor and `fraction` × the median session in `counts`; an empty range
+    falls back to the floor.
+    """
+    if not counts:
+        return floor
+    ordered = sorted(counts)
+    mid = len(ordered) // 2
+    median = ordered[mid] if len(ordered) % 2 else (ordered[mid - 1] + ordered[mid]) // 2
+    return max(floor, int(median * fraction))
+
+
+async def _already_done(start: date, end: date, min_rows: int | None = None) -> set[date]:
+    """Dates that already hold a full day of bars, so no request is made for them.
+
+    "Full" is measured against the range's own trailing median unless `min_rows`
+    overrides it — see `_COMPLETE_DAY_FRACTION`.
+    """
     async with AsyncSessionFactory() as db:
-        rows = await db.execute(
-            text(
-                "SELECT time::date AS d, count(*) AS n FROM ohlcv_1d"
-                " WHERE time >= :s AND time < :e GROUP BY 1 HAVING count(*) >= :min"
-            ),
-            {
-                "s": datetime(start.year, start.month, start.day, tzinfo=UTC),
-                "e": datetime(end.year, end.month, end.day, tzinfo=UTC) + timedelta(days=1),
-                "min": _COMPLETE_DAY_ROWS,
-            },
-        )
-        return {r.d for r in rows}
+        rows = (
+            await db.execute(
+                text(
+                    "SELECT time::date AS d, count(*) AS n FROM ohlcv_1d"
+                    " WHERE time >= :s AND time < :e GROUP BY 1"
+                ),
+                {
+                    "s": datetime(start.year, start.month, start.day, tzinfo=UTC),
+                    "e": datetime(end.year, end.month, end.day, tzinfo=UTC)
+                    + timedelta(days=1),
+                },
+            )
+        ).fetchall()
+        counts = [int(r.n) for r in rows]
+        threshold = min_rows if min_rows is not None else complete_day_threshold(counts)
+        thin = [(r.d, int(r.n)) for r in rows if int(r.n) < threshold]
+        if thin:
+            print(
+                f"  {len(thin)} session(s) below the completeness threshold "
+                f"({threshold} rows) will be RE-FETCHED: "
+                + ", ".join(f"{d} ({n})" for d, n in sorted(thin)[:8])
+                + ("…" if len(thin) > 8 else ""),
+                flush=True,
+            )
+        return {r.d for r in rows if int(r.n) >= threshold}
 
 
 def _weekdays(start: date, end: date) -> list[date]:
@@ -177,7 +231,7 @@ async def _run(args: argparse.Namespace) -> int:
         print(f"nothing to do: start {start} is after end {end}")
         return 1
 
-    done = await _already_done(start, end)
+    done = await _already_done(start, end, args.min_rows)
     todo = [d for d in _weekdays(start, end) if d not in done]
     if args.limit:
         todo = todo[: args.limit]
@@ -267,6 +321,12 @@ def main() -> int:
     p.add_argument("--limit", type=int, default=0, help="stop after N dates (a smoke run)")
     p.add_argument("--sleep", type=float, default=1.0, help="seconds between requests")
     p.add_argument("--dry-run", action="store_true")
+    p.add_argument(
+        "--min-rows",
+        type=int,
+        default=None,
+        help="override the completeness threshold (default: 80%% of the range's median session)",
+    )
     return asyncio.run(_run(p.parse_args()))
 
 

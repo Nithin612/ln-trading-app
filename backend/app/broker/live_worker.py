@@ -1097,6 +1097,7 @@ def _preflight(
             count,
             settings.live_universe_min_fraction,
             settings.live_universe_min_count,
+            settings.live_universe_max_count,
         )
 
     boot = asyncio.run(_bootstrap(gap_fill, universe_check=_check))

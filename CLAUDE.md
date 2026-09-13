@@ -627,6 +627,35 @@ else.
   — TimescaleDB hypertables need `timescaledb_pre_restore()`/`post_restore()`) — details in
   `RUNBOOK.md` §9. **Ask before anything that writes to, truncates or migrates live data.**
 
+- **⛔⛔ THE LIVE THREAD IS `docs/UNIVERSE_REBUILD_PLAN.md` — the stock master has been WRONG
+  since the 2026-09-07 DB loss, and PART VII settles what that means.** ⭐⭐ **Every one of the
+  3,392 `stocks` rows has `created_at` = 2026-09-07**, so there was never anything to "restore":
+  the whole master was improvised in one night by the emergency recovery. The choice is keep that,
+  or replace it with one that was chosen ⇒ **REBUILD-D: derive, don't repair** (§26) — collapse the
+  `is_active` repair into the versioned universe rule, so the repair becomes the rule's FIRST
+  EVALUATION (no repair script, no forensic table, and no reversal SQL — §20/2 proved the documented
+  reversal now reactivates the WRONG companies, every id having been reassigned that night).
+  ✅ **DONE 2026-09-13, committed, NOTHING PUSHED: U3** (breadth hole closed, **+7,351 bars**, stale
+  names 1,481 → 4; ⭐ `is_active` **1,322 before and after**, so `U1 → U2 → U3` was never a real
+  chain and the `load_frames` clock is STOPPED) · **U1** (`kite_instruments` **0 → 57,595**; the dump
+  is **PUBLIC**, which is the only reason a beat task can own it — a Kite token dies ~06:00 IST daily;
+  plus an `EXIT_NO_UNIVERSE` startup guard) · **D4a** (CA detector ungated from `is_active`) ·
+  **U15** (the backfill can repair a THIN session, not just a missing one).
+  ⛔ **TWO "SUCCESS LOG OVER WORK THAT DID NOT HAPPEN" BUGS in one day:** `sync_instruments` had
+  **never committed** (its one caller was an endpoint whose `get_db` auto-commits, so a Celery caller
+  would have discarded 57,595 rows nightly while logging success), and a 200-OK login interstitial
+  parsed to zero records and reported success. **Both found by RUNNING, not reading.** bug-hunter
+  then found **five more defects in the new code** (§30), incl. a supervisor that restart-looped on
+  the new exit code and a baseline that let a **staged collapse walk under the ratio guard**.
+  **⇒ NEXT: U16** (chunk the WS subscription — `live_worker` subscribes in ONE call and Kite caps a
+  connection at **3,000**; today 1,178 = 39 %, **post-repair 2,655 = 88 %** ⇒ **before D2′**) → **D0 /
+  D1′ / D2′**. ⛔ **BLOCKED ON THE USER: D3** (does the T2T ruling govern TRADING or STORAGE — §22/1).
+  ⛔ **D4b is not half a day** — a backward CA pass flags **1,768 of 3,395 stocks, 386 of them
+  ACTIVE**; rescoped in §32 as a review queue (= the front half of A3).
+  ⚠ **The universe rule drops `≥ 300 bars`:** bar count is a fact about OUR OWN data completeness,
+  and a rule that reads its own completeness shrinks when ingestion breaks — 09-07 rebuilt inside
+  the fix. It becomes a SCORING-TIME check.
+
 - **✅ THE B-QUEUE IS COMPLETE 7/7 (2026-09-12), AND E2 RETURNED A NULL.**
   ⭐ **`docs/BUILD_QUEUE.md` is the operational doc.** B2 cash rail · B3 dated tick schedule ·
   B1 filters deleted · B4 span gap guard · B5 E1 · B6+B7 E2 + excursion surface · B8 ledger.

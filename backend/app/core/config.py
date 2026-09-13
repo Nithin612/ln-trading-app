@@ -35,6 +35,10 @@ class Settings(BaseSettings):
     # arrives in sub-threshold steps, and has nothing to compare against on a
     # first run; this arm can. 0 disables it.
     live_universe_min_count: int = 500
+    # U16 — Kite carries at most this many instruments on one WebSocket connection
+    # and live_worker subscribes in a single unchunked call. Exceeding it drops the
+    # excess server-side silently, so the worker refuses instead. 0 disables.
+    live_universe_max_count: int = 3000
     # Session notifier (A11). Unset ⇒ log-only, which is the DEFAULT and not a degraded
     # mode: the policy still runs and still logs at the level it chose. Set it and the same
     # messages also POST as JSON. Vendor-neutral on purpose — Slack/Discord accept the

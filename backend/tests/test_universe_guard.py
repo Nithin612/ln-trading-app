@@ -225,6 +225,50 @@ def test_the_collapse_message_names_a_command_that_exists_here() -> None:
     assert "uv run python" in reason and UNIVERSE_KEY in reason
 
 
+# ── U16: the per-connection ceiling ──────────────────────────────────────────
+
+
+def test_a_universe_above_the_connection_cap_is_refused() -> None:
+    """Kite carries at most 3,000 instruments per WebSocket and `live_worker`
+    subscribes in ONE unchunked call; the SDK enforces nothing client-side
+    (`kiteconnect/ticker.py:567` just sends the list), so the excess would be
+    dropped server-side without telling us."""
+    reason = assess_universe(3001, previous=2900, min_fraction=0.5, max_count=3000)
+    assert reason is not None
+    assert "EXCEEDS" in reason
+
+
+def test_the_cap_is_inclusive() -> None:
+    assert assess_universe(3000, previous=2900, min_fraction=0.5, max_count=3000) is None
+
+
+def test_todays_and_the_post_repair_universe_both_fit() -> None:
+    """Measured 2026-09-13: 1,178 today, 2,655 after the universe repair. The
+    guard must not block the repair it exists alongside — but the headroom is
+    only 345, which is why U16 exists at all."""
+    for n in (1178, 2655):
+        assert assess_universe(n, previous=None, min_fraction=0.5, max_count=3000) is None
+
+
+def test_the_ceiling_is_off_when_max_count_is_zero() -> None:
+    assert assess_universe(50_000, previous=None, min_fraction=0.5, max_count=0) is None
+
+
+def test_the_ceiling_needs_no_baseline() -> None:
+    """Like EMPTY and FLOOR, it must fire on a first run and survive a Redis
+    outage — it is a fact about the transport, not about history."""
+    r = _FakeRedis(boom=True)
+    assert check_and_record_universe(r, 5000, 0.5, 0, 3000) is not None
+
+
+def test_an_over_cap_universe_is_not_recorded_as_a_baseline() -> None:
+    """Otherwise a refused start would raise the high-water mark to a size the
+    connection cannot carry."""
+    r = _FakeRedis()
+    assert check_and_record_universe(r, 5000, 0.5, 0, 3000) is not None
+    assert UNIVERSE_KEY not in r.store
+
+
 # ── the worker refuses to start (the U1 acceptance criterion) ─────────────
 
 

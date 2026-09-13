@@ -7,6 +7,62 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### U16 — assert Kite's per-connection subscription cap (2026-09-13)
+
+`live_worker` subscribes in one unchunked call and Kite carries at most 3,000 instruments
+per WebSocket. Checked the SDK rather than assuming: `kiteconnect/ticker.py:567` serialises
+the whole list into one frame and enforces nothing client-side, so the excess is dropped
+server-side and nothing tells us — the same silent-partial shape as everything else here.
+
+- Added as a third arm of the existing universe guard (`LIVE_UNIVERSE_MAX_COUNT=3000`), not
+  a new mechanism. It **refuses rather than truncating**: subscribing "the first 3,000"
+  silently picks which names the system stops watching, which is a selection decision made
+  by list order with no evidence behind it.
+- Needs no baseline and no Redis, so it fires on a first run; an over-cap universe is not
+  recorded as a high-water mark, or a refused start would raise the baseline above what the
+  connection can carry.
+- Measured: today's subscription is 1,178 (39% of the cap); the post-universe-repair ceiling
+  is **2,655 (88%)**, so the headroom before sharding is needed is 345. ⚠ This does not make
+  a >3,000 universe work — it makes it impossible for one to fail quietly.
+
+
+### D4a — the corporate-action detector is no longer gated on `is_active` (2026-09-13)
+
+A corporate action is a fact about a price series, not about whether we currently trade the
+name — and the quarantine's only consumer (`universe_service.resolve_universe`) already
+filters `is_active` itself, so gating *detection* on it was redundant. It was also harmful:
+through the 2026-09-07 → 09-12 outage the real universe was wrongly inactive, so the
+detector was blind to exactly the names that mattered. Three flags in its lifetime, against
+49 unadjusted actions known to sit in the top-250-liquid set alone. Three regression tests.
+
+⛔ **The backward pass (D4b) is deliberately NOT shipped.** Measured first: replayed over the
+1,098-session archive at the detector's own 20% threshold it would flag **1,768 of 3,395
+stocks — including 386 of the 1,322 active**, i.e. 29% of the tradeable universe
+quarantined permanently in one command, since the flag has no expiry. The docstring's
+asymmetry ("false positives cost a review") holds at forward cadence, where the detector
+fires a few times a day; it does not survive 2,923 events. Rescoped in §32 of the universe
+plan as a review queue against `corporate_actions` with a split-ratio discriminator — which
+makes it the front half of A3, not a half-day job.
+
+### U15 — the backfill can repair a THIN session, not just a missing one (2026-09-13)
+
+`backfill_ohlcv_history` judged a date complete by a fixed floor of 500 rows. The five
+broken sessions held ~1,170 against a normal ~2,630 — all over 500 — so running the script
+across that range would have printed "nothing to fetch — range already complete" and done
+nothing; the U3 repair had to bypass it.
+
+- Completeness is now measured against the range's own median session (80%), via a pure
+  `complete_day_threshold()` so the rule is testable without a database; the old 500 is kept
+  only as a backstop for degenerate ranges. Adds `--min-rows` and prints every session it
+  intends to re-fetch. 8 tests, including a canary asserting the old floor would have passed
+  every thin session.
+- ⚠ Raising the constant would have reproduced the defect at a new threshold — no constant
+  can be right for a quantity that grows with the listed universe.
+- ⭐ Third instance of one shape: the 6.8.6 feed alarm asserted recency, `load_frames`
+  asserted a bar count, this asserted a row floor — each an instrument asserting PRESENCE
+  where the failure mode is COVERAGE.
+
+
 ### U1 — `kite_instruments` repopulated, and given a scheduled owner (2026-09-13)
 
 The table had exactly one writer: an admin HTTP endpoint. Nothing scheduled had ever owned

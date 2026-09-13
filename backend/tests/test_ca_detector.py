@@ -77,3 +77,61 @@ class TestCaDetector:
         await _candle(db, stock.id, SESSION, "100", "101")  # first-ever session
         await db.commit()
         assert await scan_for_discontinuities(db, SESSION) == []
+
+
+class TestDetectionIsNotGatedOnTradeability:
+    """D4a (2026-09-13) — REGRESSION: the detector was gated on `s.is_active`.
+
+    A corporate action is a fact about a PRICE SERIES, not about whether we
+    currently trade the name. Gating detection on the trading flag was redundant
+    (the quarantine's only consumer, `resolve_universe`, filters `is_active`
+    itself) and actively harmful: between 2026-09-07 and 09-12 the real universe
+    was wrongly `is_active = false`, so the detector was blind to exactly the
+    names that mattered. It has produced 3 flags in its lifetime, against 49
+    unadjusted actions known to sit in the top-250-liquid set alone.
+
+    These fail on the old code, which skipped inactive stocks entirely.
+    """
+
+    async def test_an_inactive_stock_is_still_flagged(self, db: AsyncSession) -> None:
+        dormant = await make_stock(db, symbol="CAINACT", is_active=False)
+        prev = SESSION - timedelta(days=1)
+        await _candle(db, dormant.id, prev, "990", "1000")
+        await _candle(db, dormant.id, SESSION, "500", "505")  # 1:2 split
+        await db.commit()
+
+        flagged = await scan_for_discontinuities(db, SESSION)
+
+        assert [sid for sid, _ in flagged] == [dormant.id]
+        await db.refresh(dormant)
+        assert dormant.ca_flagged_at is not None
+
+    async def test_active_and_inactive_are_both_caught_in_one_pass(
+        self, db: AsyncSession
+    ) -> None:
+        live = await make_stock(db, symbol="CALIVE", is_active=True)
+        dormant = await make_stock(db, symbol="CADEAD", is_active=False)
+        prev = SESSION - timedelta(days=1)
+        for s in (live, dormant):
+            await _candle(db, s.id, prev, "990", "1000")
+            await _candle(db, s.id, SESSION, "500", "505")
+        await db.commit()
+
+        flagged = {sid for sid, _ in await scan_for_discontinuities(db, SESSION)}
+
+        assert flagged == {live.id, dormant.id}  # old code: {live.id}
+
+    async def test_an_already_flagged_stock_is_not_reflagged(
+        self, db: AsyncSession
+    ) -> None:
+        """The idempotency guard must survive the ungating — otherwise every
+        session would rewrite the reason and lose the original one."""
+        s = await make_stock(db, symbol="CAONCE", is_active=False)
+        prev = SESSION - timedelta(days=1)
+        await _candle(db, s.id, prev, "990", "1000")
+        await _candle(db, s.id, SESSION, "500", "505")
+        await db.commit()
+
+        first = await scan_for_discontinuities(db, SESSION)
+        assert len(first) == 1
+        assert await scan_for_discontinuities(db, SESSION) == []
