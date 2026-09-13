@@ -1,10 +1,13 @@
 # Universe Rebuild Plan — stock master, sector map, index registry
 
-**Status:** DRAFT for review · round 0 · written 2026-09-12
+**Status:** DRAFT for review · round 0 written 2026-09-12 · **round-1 adjudication (PART V)
+2026-09-12** · ⭐ **PART VI added 2026-09-13 — the user's restore-vs-rebuild question, which
+changes the queue and is the live question for round 3**
 **Author:** Claude (session 2026-09-12) · **Owner:** Nithin
 **Nothing in this document has been executed.** No table was written, no flag flipped,
-no migration run. Every number below is a `SELECT` taken on 2026-09-12 against the dev
-database `trading_platform`.
+no migration run. Every number in PARTS I–V is a `SELECT` taken on **2026-09-12** against
+the dev database `trading_platform`; every number in **PART VI is a `SELECT` taken on
+2026-09-13** against the same database (re-measured, not carried forward).
 
 ---
 
@@ -34,6 +37,13 @@ claim**:
   before re-reading PART I: **§3a corrects §3's root cause**, which round 1 proved wrong,
   and §21 supersedes §7's ordering. §20 carries two findings no reviewer had, both found
   by checking a review against the database rather than against our own documents.
+- ⭐⭐ **PART VI (§23–§24) is the live question, and it is upstream of everything above.**
+  The user asked why we are repairing the old universe rather than rebuilding a better one
+  while the book is empty. §23.1 corrects the premise (**nothing was deleted** — one
+  boolean and one empty table broke), §23.3 proves by measurement that **U3 does not depend
+  on U2**, and §23.6 proposes **REBUILD-D: derive, don't repair** — collapsing U2 into U13.
+  ⚠ **The three round-2 reviews are NOT yet dispositioned**; PART VI was written before
+  that adjudication and does not pre-empt it. **§24 holds the six round-3 questions.**
 
 ⭐ **The one thing to internalise before reviewing:** this project has an explicit,
 hard-won rule that a selection rule is never flipped on an argument (CLAUDE.md hard
@@ -1166,3 +1176,251 @@ will misfire:
    upstream of an execution path that has not been built (Phase 7).
 5. **The operator is one person.** Every recommendation is implicitly a maintenance
    commitment for a solo developer in evenings (§A8).
+
+---
+
+# PART VI — THE RESTORE-vs-REBUILD QUESTION (user, 2026-09-13)
+
+⚠ **This part was written BEFORE the round-2 adjudication.** Three round-2 reviews
+(ChatGPT, Gemini, DeepSeek) and one external Claude review (`UNIVERSE_REBUILD_REVIEW_R2`)
+have arrived and are **not yet dispositioned** — that is separate work. This part exists
+because the user raised a question that none of the ten reviews across two rounds asked,
+and it is upstream of all of them.
+
+## §23 · The question
+
+> *"Why are we trying to retrieve the deleted stocks somehow? Why not rebuild this time
+> more efficiently — a more future-scoped, more useful system — while we have the
+> chance?"* — user, 2026-09-13
+
+⭐ **This is the best question asked of this document so far, and the answer changes the
+queue.** Every reviewer so far has argued about *how* to repair `is_active`. Nobody asked
+whether repairing it is the right shape of work at all.
+
+### 23.1 · ⛔ First, the premise needs correcting — nothing is being retrieved
+
+There are **no deleted stocks to recover.** Measured 2026-09-13:
+
+| | |
+|---|--:|
+| `stocks` rows surviving | **3,392** |
+| `ohlcv_1d` bars surviving | **2.08 M** |
+| `kite_instruments` rows | **0** |
+
+The company records were never lost. What broke is **one boolean column** (`is_active`,
+written by the wrong process) and **one empty reference table**. And U2 does not restore
+that column from a backup — it re-derives it from the live NSE `EQUITY_L.csv`. ⭐ **We
+are already rebuilding from source; the document merely describes it in restoration
+language** ("repair `is_active` to mean what it always meant"), which is what makes it
+read as recovery. The user's question was a fair reading of our own prose.
+
+So the real question is not *restore vs rebuild*. It is: **do we rebuild into the same
+shape, or a better one?**
+
+### 23.2 · Where the plan IS still restoration-shaped, and should not be
+
+U2 writes a repair script that flips a mutable boolean on ~1,000 rows, with a forensic
+table and reversal SQL. That restores **the exact data model that produced the failure**:
+a single mutable flag, writable by three processes, that simultaneously means
+
+```
+listed · tradeable · ingest bars for this · score this ·
+subscribe to ticks for this · scan for corporate actions on this
+```
+
+Repairing its *value* correctly today does nothing to stop it being written incorrectly
+tomorrow. §3a already established that `is_active` partly encodes **which process created
+the row first** — that is not a property of a company, and no repair script can make it
+one.
+
+⭐⭐ **THE ONE CHANGE THAT MATTERS: collapse U2 into U13.** The plan already contains the
+right thing — **U13, "universe as versioned rule + immutable snapshot"** — parked at P1
+*behind* the repair. **They are the same work done twice.** Build U13 first and U2 ceases
+to exist as an item: the repair becomes **the rule's first evaluation**. Consequences:
+
+- no repair script;
+- no forensic table;
+- **no reversal SQL** — which matters, because §20/2 proved the documented reversal now
+  reactivates the *wrong companies* (`stock_id` 228 was `QUINTEGRA` in July, `BSE` today).
+  A derivation has nothing to reverse: you re-evaluate the rule.
+
+⇒ **Derive, don't repair.** This is the round-3 proposal, and it is what the user's
+question licenses.
+
+### 23.3 · ⭐ The sequencing unlock — U3 does NOT depend on U2 (measured, not argued)
+
+`app/services/bhavcopy_service.py:255`:
+
+```python
+active_only = "" if historical else " AND is_active = true"
+```
+
+**Historical-mode ingestion ignores `is_active` entirely.** Therefore **U3 (the 09-05 →
+today backfill) has no dependency on U2 whatsoever**, and §7's stated chain
+`U1 → U2 → U3` is wrong.
+
+⭐ **This is what makes choosing the better design free.** The urgent data item (close the
+coverage hole) and the design decision (what a universe *is*) are independent. We do not
+have to ship a fast repair to stop the bleeding and promise to do it properly later —
+the promise that never survives contact with a running clock.
+
+It also independently corroborates the external R2 review's G6: historical-mode ingestion
+is a **self-healing repair**, so U3 should be **recurring**, not one-off.
+
+### 23.4 · The rebuild is far smaller than it sounds — most of it is already built
+
+Measured 2026-09-13 (read-only `SELECT`s + `grep`):
+
+| Piece | Status | Measured |
+|---|---|--:|
+| `stocks.isin` — a permanent identity anchor | exists, **UNIQUE, zero duplicates** | 2,547 / 3,392 |
+| `stocks.listed_on` | exists | 2,547 |
+| ISIN-keyed rename handling | **BUILT** (`seed_stocks.plan_renames`) | — |
+| CA detector + quarantine columns | **BUILT** (`ca_detector.py`, `ca_flagged_at`) | 3 flags total |
+| `corporate_actions` model | **BUILT** | table 0 rows |
+| `universe_service.resolve_universe` | **BUILT** — a single resolver already exists | — |
+| `kite_instruments` | empty | 0 |
+| `categories` / `stock_categories` | empty | 0 / 0 |
+| `indices` / `index_constituents` | thin | 3 / 89 |
+
+⛔ **Consequence for the queue: U14 ("corporate-action detector + quarantine — NEW")
+duplicates an existing implementation.** That is a **W1 violation inside our own plan** —
+the artifact disagreed with the checkbox and we wrote the checkbox.
+
+⭐ **The pattern across the whole inventory: the components exist. `is_active` is the only
+wiring between them, and it is a mutable boolean with no owner.** That is the thing to
+rebuild — not the components.
+
+### 23.5 · ⛔ Two defects found while answering this question
+
+Neither is in any review, and both are *worse* than the items they sit next to.
+
+**(1) The CA detector is gated on the broken flag AND is forward-only.**
+`ca_detector.py` filters `AND s.is_active AND s.ca_flagged_at IS NULL`, and
+`eod_catchup.py:123` calls it **one session date at a time**. So:
+
+- through the entire outage it has been **blind to exactly the names that matter** (the
+  wrongly-inactive real universe);
+- it has never been run backwards over the 1,098-session archive.
+
+It has produced **3 flags in its lifetime** — `DUCON` (−26.6%, 08-25), `CORDELIA`
+(−90.2%, 08-25), `TCC` (−79.7%, 09-04) — against the **49 unadjusted corporate actions
+known to sit in the top-250-liquid universe alone** (`[[study-measurement-defects]]`, and
+the +49R of fake profit that measurement cost us). ⇒ **The correct U14 is not "build a
+detector". It is "the detector exists, remove its `is_active` gate, and run it backwards
+once."** Materially cheaper and materially more valuable than what U14 proposed.
+
+**(2) `stocks.tick_size` is a third copy of a value B3 gave an owner.**
+`seed_stocks.py` inserts the literal `0.05` and **never updates it on conflict**;
+`kite_client.py:144` writes it from the instruments dump; B3's dated schedule lives in
+`app/broker/tick_schedule.py` and the paper broker reads `settings.paper_tick_size`.
+Three copies, one owner — a **W5** instance. B3 measured that the ₹0.05 grid has been
+wrong for sub-₹250 names since June 2024. The rebuild should drop the column or declare
+it a cache of the schedule; it must not be reseeded as a literal.
+
+### 23.6 · ⭐ THE PROPOSAL — "REBUILD-D" (derive, don't repair)
+
+Four items. Three are a day or less; one is the real work.
+
+| # | item | size | what it kills |
+|---|---|--:|---|
+| **D1** | **Identity = ISIN, permanent.** `stocks.id` never deleted, never reused; `symbol_history(stock_id, symbol, series, valid_from, valid_to)`. | ½ day | §20/2's dangerous reversal; symbol-rename ambiguity. 75 % already present. |
+| **D2** | ⭐ **`is_active` stops being a decision variable.** Replace with dated **facts** — `series` + listing status (EQUITY_L), `kite_tradable` (instruments dump), bar coverage (computed) — and make the universe a **named, versioned rule** evaluated over them and materialised daily. `resolve_universe` reads the snapshot; `is_active` survives as a **derived view** so the 79 call sites in 45 files need not all change at once. | **2–3 evenings** | the entire failure class. This is U13, promoted to the front. |
+| **D3** | **The archive never consults a trading decision** (= U6′). | ½ day | a selection mistake destroying price history. |
+| **D4** | **Fix the CA detector** — drop the `is_active` gate; run it backwards over the archive once. | ½ day | §23.5/1; replaces U14. |
+
+⭐ **The derived-view trick in D2 is what makes this affordable for a solo developer.**
+The honest cost of "remove `is_active`" is touching 45 files. The honest cost of "make
+`is_active` a view over the snapshot" is touching the writers only — and the 79 readers
+keep working, unchanged, reading a value that **can no longer be written by the wrong
+process**. The migration to explicit universe queries then happens per-caller, at leisure,
+with no outage.
+
+⚠ **Where this proposal agrees with round 2, and where it goes further.** ChatGPT's §10
+and §13 (universe *definition* vs *snapshot*), DeepSeek's §2.1 (U6′ closes the data-loss
+path but **not** the selection-corruption path — `seed_stocks.py`'s conflict branch still
+does not own `is_active`, **confirmed by reading it today**) and the external Claude
+review's G1 all point the same way. **None of them proposes removing the flag** — all three
+propose *repairing it more carefully*. D2 says the flag is the defect.
+
+### 23.7 · ⛔ What I would NOT rebuild — stated because "rebuild" has gravity
+
+1. **`ohlcv_1d`.** 2.08 M bars, attribution internally consistent. The 922-day hole is a
+   **fetch** problem, not a design problem. Do not redesign the price archive.
+2. **Selection.** A rebuild is precisely the moment a liquidity floor gets slipped in
+   "since we are redoing it anyway". §9/1: measured, illiquid set **net-positive**, user
+   ruling explicit. **§12's line holds without exception: structure is free today,
+   selection still needs `t ≈ 3.6`.**
+3. **The 5-table institutional security master** (`security` / `security_listing` /
+   `security_status` / `universe_snapshot` / `data_coverage`). Already parked in §19d and
+   correctly. ISIN + `symbol_history` + one snapshot table expresses every failure mode
+   this project has actually had. If a reviewer wants the fifth table, they must name the
+   failure it prevents that D1–D4 cannot express.
+4. **`stocks.id` → a separate `security_id`.** Answered in §22/4: never-delete +
+   `symbol_history` is cheaper and sufficient. A second identity column is maintenance
+   with no named payoff.
+
+### 23.8 · The honest cost, and what it delays
+
+D2 costs ~3 evenings and it **does not delay U1, U3, U4′ or U10a′** — §23.3 proves the
+backfill is independent. What it delays is the moment the *scanner* sees the real
+universe, which is currently delayed anyway and has no clock on it (the book is empty;
+nothing is being traded off the scanner today).
+
+⚠ **The one clock it touches is `load_frames` (§20/1, ~2026-10-06).** That clock is a
+consequence of the **coverage hole**, which U3 closes — and U3 is unblocked. So REBUILD-D
+does not push that deadline. ⭐ **This also re-answers §22/2 more cleanly than either
+option offered there:** the deadline is neither a reason to reorder P0 nor a reason to
+weaken a measurement instrument — it is a reason to run U3 in **historical mode now**,
+which needs no universe decision at all.
+
+⚠ **What is genuinely lost by choosing REBUILD-D over the fast repair:** if D2 slips or
+proves harder than estimated, we will have spent the window and still have a broken flag.
+**The mitigation is that D3 + U3 are independently shippable and close the data-loss
+paths on day one** — so a D2 slip costs a delayed scanner, never a lost bar.
+
+---
+
+## §24 · Questions for round 3 — put to reviewers, unanswered by us
+
+The user has asked for this to go to the panel before anything is built. **These are the
+questions; §23 is our position, not our decision.**
+
+1. **[BLOCKING] Is REBUILD-D right, or is it scope creep dressed as architecture?** A
+   solo developer in evenings is proposing to delete a column that 79 call sites read.
+   The derived-view migration (§23.6/D2) is the whole argument for feasibility — **attack
+   that specifically.** If the view is unworkable (write paths, `mypy`, SQLAlchemy model
+   mapping, the `ON CONFLICT` writers), REBUILD-D collapses back to U2 and we should know
+   it now.
+2. **[BLOCKING] Does collapsing U2 into U13 lose anything?** Our claim: the repair becomes
+   the rule's first evaluation, and the forensic/reversal apparatus becomes unnecessary
+   rather than dangerous. **Name what a derivation cannot do that a repair script can.**
+3. **[BLOCKING] What is the minimum honest content of a universe rule?** Our draft:
+   `series ∈ EQUITY_L` + `plain EQ listing in kite_instruments` + `≥ 300 daily bars`,
+   evaluated `as_of` a date, versioned, snapshotted. ⚠ Answers proposing a liquidity /
+   price / market-cap term must engage §9 — that is an **empirical** claim under §6/2 and
+   needs the `t ≈ 3.6` bar or a user ruling.
+4. **Given §23.4 — what ELSE in this system is already built and mis-wired rather than
+   missing?** The CA detector was found by grepping for what U14 proposed to build, and it
+   already existed, gated on the broken flag. ⭐ **That check generalises: for each queue
+   item, grep for its own name before building it.** Round 1 found two items this way
+   (§20); §23 found two more. **Name the next one.**
+5. **Does the ISIN key hold?** Measured: 2,547 of 3,392 rows carry an ISIN, **zero
+   duplicates**; the 842 rows with no ISIN are all inactive and **all have bars** (the
+   bhavcopy-created archive-only names). Our reading: ISIN is a sound identity key for
+   everything tradeable, and the 842 are archive-only by construction — which is the
+   archive/trade split stated as data rather than policy. **Is there a case this cannot
+   express?** (Renames, series moves `X` → `X-BE` — 13 such symbols exist today —
+   delisting-then-relisting, an ISIN reassigned by the depository.)
+6. **⚠ The measured false-positive count, which nobody predicted well.** DeepSeek's round-2
+   prediction was that after a clean repair, `is_active` names with no recent bar should be
+   `< 10`. **Measured today, before any repair: 137** of the 1,322 currently-active names
+   have no bar since 2026-09-04. `QUINTEGRA` is not an isolated case. **What does a rule
+   do with a name that is listed in `EQUITY_L` and has not traded in a week?** Suspension,
+   illiquidity and delisting-in-progress are three different facts and our schema
+   currently records none of them.
+
+⭐ **Round-3 entry rule, unchanged (§16):** a point is adopted when it is **converged
+across sources OR settled by our own measurement — never on consensus alone.** §23 is
+settled by measurement where it cites a number and is **opinion everywhere else**, and the
+opinion is what we are asking you to attack.
