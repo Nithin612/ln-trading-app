@@ -412,7 +412,7 @@ Ordering is dependency-driven; U1 gates U2, U2 gates U3.
 
 ---
 
-### U3 — Backfill the 09-05 → today coverage hole *(P0, gated on U2)*
+### U3 — Backfill the 09-05 → today coverage hole *(P0, ~~gated on U2~~)* ✅ **DONE 2026-09-13 — see §28**
 - **WHY** **1,481 names** had a bar on 2026-09-04 and none on 2026-09-11 — each is missing every session since. Left alone this is a permanent
   discontinuity inside the 300-bar window of every blue chip — the same class of defect
   as the 922-day 2020-12→2023-07 hole that invalidated 33 % of a study's panels.
@@ -421,7 +421,10 @@ Ordering is dependency-driven; U1 gates U2, U2 gates U3.
   (`ON CONFLICT DO NOTHING`).
 - **ACCEPTANCE** Every session 09-05 → today shows ≥ 2,500 names; a span-vs-calendar
   gap check (the B4 guard) reports no per-name hole for the active set.
-- **DO NOT** Re-run before U2, or the hole is simply refilled at the wrong breadth.
+- **DO NOT** ~~Re-run before U2, or the hole is simply refilled at the wrong breadth.~~
+  ⛔ **THIS DO-NOT WAS WRONG AND IS NOW DISPROVEN BY EXECUTION (§28).** §23.3 predicted it
+  from `bhavcopy_service.py:255`; the run confirmed it — breadth was fully restored with
+  `is_active` untouched (1,322 before and after). U3 never depended on U2.
 
 ---
 
@@ -1696,3 +1699,90 @@ architecture round.
 ⭐ **And the one action that should not wait for any of it: run U3.** It is independent, it
 closes the only hole that grows every day, and it needs nothing in PART VI or PART VII to
 be accepted first.
+
+
+---
+
+# PART VIII — U3 EXECUTED (2026-09-13)
+
+## §28 · The first write this document has made
+
+⭐ **U3 ran. It is the only item in this document that has been executed, and it was run on
+the user's explicit instruction.** `make backup` first (`trading_platform-20260913-215611.dump`,
+58 MB), per §6/6 and the §10 risk register.
+
+### 28a · What the run actually had to be
+
+⚠ **The scope in §7/U3 was wrong in two ways, both found before running:**
+
+1. **"09-05 → today" is not five sessions plus a weekend — it is exactly five sessions.**
+   2026-09-05/06 and 09-12/13 are weekends. **The hole was 09-07 → 09-11.** There was no
+   missing session after 09-11, so "today" was never in scope.
+2. ⛔ **`scripts/backfill_ohlcv_history.py` would have been a NO-OP, silently.** Its
+   `_already_done()` guard skips any date holding `>= _COMPLETE_DAY_ROWS` bars, and
+   **`_COMPLETE_DAY_ROWS = 500`** — while the broken sessions each held ~1,170 against a
+   normal ~2,630. Every session in the hole would have been classified "already complete"
+   and the script would have printed *"nothing to fetch — range already complete."*
+
+⭐ **That is a REAL DEFECT, not a workaround detail** (see §28d). The run therefore reused
+that script's own `_fetch_all` loop with an explicit date list — reusing the implementation
+rather than writing a second one (**W2**), since the loop is correct and only the
+completeness *predicate* is wrong.
+
+### 28b · Result — measured before and after
+
+| session | bars before | bars after |
+|---|--:|--:|
+| 2026-09-04 (last healthy) | 2,633 | 2,633 |
+| 2026-09-07 | 1,182 | **2,652** |
+| 2026-09-08 | 1,179 | **2,650** |
+| 2026-09-09 | 1,175 | **2,644** |
+| 2026-09-10 | 1,168 | **2,638** |
+| 2026-09-11 | 1,166 | **2,637** |
+
+- **+7,351 bars** (`ohlcv_1d` 2,082,639 → 2,089,990), matching the reported inserts exactly.
+- **Names with a bar on 09-04 and none after: 1,481 → 4.** The four residuals — `RNBDENIMS`,
+  `DAICHI` (both `is_active`), `MANAKSTEEL`, `HEG` — stopped appearing in the bhavcopy
+  itself. **That is a real trading/listing event, not an ingestion failure**, and it is
+  precisely the population §25g parked the `listing_status` enum for.
+- `RELIANCE`, `TCS`, `HDFCBANK`, `INFY`, `ICICIBANK` all current to **2026-09-11**.
+- **Idempotency confirmed by arithmetic:** the per-day `skipped` counts (1,182 / 1,179 /
+  1,175 / 1,168 / 1,166) equal the pre-run row counts exactly. Nothing was double-written.
+- **3 new `stocks` rows** created inactive by `_ensure_historical_stocks` — `DEEPA`,
+  `CRESTO`, `DOLLEX` (3,392 → 3,395). Designed survivorship-safe behaviour; ⚠ these are
+  likely renames, which is the standing symbol-churn caveat.
+
+### 28c · ⭐⭐ §23.3's unlock is now DEMONSTRATED, not merely measured
+
+**`is_active` was 1,322 before the run and 1,322 after.** The universe was not touched, and
+the breadth hole closed completely. ⇒ **U3 never depended on U2**, §7's `U1 → U2 → U3` chain
+was wrong, and the `load_frames` clock (§20/1, ~2026-10-06) is **stopped** — its cause was
+the coverage hole, which no longer exists.
+
+⭐ **The design decision is now entirely unhurried.** Nothing in REBUILD-D is on a clock.
+
+### 28d · ⛔ NEW DEFECT — the backfill can repair a MISSING session, never a THIN one
+
+`_COMPLETE_DAY_ROWS = 500` is a fixed floor standing in for "this day is complete". A day at
+45 % of normal breadth passes it. ⭐ **This is the same blindness as the 6.8.6 feed alarm in
+§4a — an instrument asserting PRESENCE where the failure mode is COVERAGE** — and it is the
+third instance in this document (feed alarm · `load_frames` · this).
+
+⇒ **New queue item, cheap and independent of REBUILD-D:**
+
+> **U15 — make the backfill's completeness predicate breadth-aware.** Compare a session's
+> row count against the **trailing median session** (e.g. `< 80 %` ⇒ not complete) instead
+> of a fixed 500, and expose it as a CLI override. **ACCEPTANCE:** a session seeded at
+> 45 % of trailing median is re-fetched rather than skipped. **DO NOT** raise the constant
+> to another fixed number — that reproduces the defect at a different threshold.
+
+### 28e · What U3 did NOT do
+
+- ⛔ **It did not run the corporate-action detector over the new bars.** `ca_detector.py`
+  is called from `eod_catchup`, not from `ingest_bhavcopy_date`; CA flags stand at **3**.
+  **7,351 bars have entered the archive unscanned** — which is D4′'s job and is now slightly
+  more urgent than it was this morning.
+- It did not touch `is_active`, `kite_instruments`, or any universe state (U1, U2/D2′ remain
+  open).
+- It changed no recorded number in the trading sense: `positions` is empty, and bars are
+  inputs, not results.

@@ -7,6 +7,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### U3 executed — the 09-07 → 09-11 breadth hole is closed (2026-09-13)
+
+The first write the universe-rebuild plan has made, on the user's explicit instruction.
+`make backup` first (`trading_platform-20260913-215611.dump`).
+
+- **+7,351 bars** across five sessions; `ohlcv_1d` 2,082,639 → 2,089,990. Per-session
+  breadth 1,166–1,182 → **2,637–2,652**, matching the pre-hole 2,632–2,647 range.
+- **Names with a bar on 09-04 and none after: 1,481 → 4.** The four residuals
+  (`RNBDENIMS`, `DAICHI`, `MANAKSTEEL`, `HEG`) stopped appearing in the bhavcopy itself —
+  a listing event, not an ingestion failure. Blue chips all current to 09-11.
+- ⭐⭐ **`is_active` was 1,322 before and 1,322 after**, so the plan's `U1 → U2 → U3`
+  dependency chain is disproven by execution, not just by reading
+  `bhavcopy_service.py:255`. The `load_frames` ~2026-10-06 clock is stopped; no part of
+  the universe redesign is on a deadline any more.
+- ⚠ Scope was wrong in the plan two ways, both caught before running: the hole is five
+  sessions (09-05/06 and 09-12/13 are weekends), and
+  **`scripts/backfill_ohlcv_history.py` would have silently no-opped** — its
+  `_already_done` guard skips any date with `>= _COMPLETE_DAY_ROWS = 500` rows, and the
+  broken sessions held ~1,170. The run reused that script's own `_fetch_all` loop with an
+  explicit date list rather than writing a second one.
+- ⛔ **New defect queued as U15:** the backfill can repair a MISSING session but never a
+  THIN one. Same blindness as the 6.8.6 feed alarm — an instrument asserting presence
+  where the failure mode is coverage. Fix = a breadth-aware predicate (trailing median),
+  not a higher constant.
+- ⚠ The 7,351 new bars have **not** been scanned by `ca_detector.py` (it runs from
+  `eod_catchup`, not from `ingest_bhavcopy_date`); CA flags stand at 3.
+- 3 new `stocks` rows created inactive by `_ensure_historical_stocks` (`DEEPA`, `CRESTO`,
+  `DOLLEX`); 3,392 → 3,395. Designed survivorship-safe behaviour.
+
+
 ### Universe rebuild plan — round 1 adjudicated; §3's root cause was wrong (2026-09-12)
 
 Five external reviews (ChatGPT, Gemini, Perplexity, DeepSeek, and a Claude review delivered as
