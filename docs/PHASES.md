@@ -1679,7 +1679,50 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-09-13 (universe rebuild).**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-14 (overnight run).**
+
+**▶▶ ⛔⛔ THE LIVE THREAD IS `docs/UNIVERSE_REBUILD_PLAN.md` (PARTS VI–XVII).** Every one of the
+3,392 `stocks` rows has `created_at` = 2026-09-07: the master was improvised in one night, so
+there was never anything to "restore" (§25a). ⇒ **REBUILD-D: derive, don't repair.**
+
+**✅ DONE overnight 2026-09-14 — the whole D3 → U17 → D0 → D1′ → D2′ queue, committed, NOTHING PUSHED:**
+- **D3** — the archive stops consulting a trading decision. ⭐ **What decided it was not the
+  3-round storage argument but the data flow:** `eod_catchup:102` calls the DEFAULT path, so on
+  2026-09-11 the old code would write **1,166 of 2,637** traded names and drop **1,471 EVERY
+  DAY** — the same per-session count U3 repaired. **U3's fix was not durable; the hole reopened
+  tomorrow.** §38.
+- **U17** — subscription = universe **∪ held names**. A held name leaving the active set lost its
+  ticks, its `ltp:` key expired, and the monitor skipped it **permanently** with SL/TP unwatched.
+  ⭐ The trace also talked me OUT of unioning the alert hot set (capacity-bounded; a stale row
+  "silently eats a slot"). §39.
+- **D0** — identity pin (`backend/seed/stock_identity.csv`, 3,395 rows) + `--verify`. ⭐ First
+  test is a NEGATIVE CONTROL planting the 09-07 swap. §40.
+- **D1′** — `symbol_history` + ⭐ **`COALESCE(stocks.isin, EXCLUDED.isin)`**: the anchor is filled
+  once, never silently rewritten. ⛔ **`uq_stocks_symbol_exchange` deliberately NOT dropped** —
+  14 queries assume one row per symbol and the hazard's rate is **unmeasurable retrospectively**
+  (the merge overwrites its own evidence). §41.
+- **D2′a** — the universe as a **versioned rule, SHADOW ONLY**. §42.
+
+**⇒ ⭐⭐ THE DECISION WAITING FOR YOU — D2′b.** The rule's first evaluation says:
+**WOULD ACTIVATE 1,121 · WOULD DEACTIVATE 152 · resulting universe 2,291.** The 152 are all
+`not_eq_listed` — **exactly** round 2's "currently active but not in the EQ list" count, reached
+by an independent route. **Nothing writes `is_active` yet.** The question is no longer *"is the
+rule right"* but *"do we accept these 1,273 changes"*. Run
+`uv run python scripts/universe_snapshot.py --diff` to see it yourself.
+
+**⇒ THEN D2′b (§43):** remove the three writers (`bhavcopy_service:216` · `seed_stocks:345` ·
+`deactivate_dead_stocks:100`) · enforce single-writer in the DB · materialiser becomes the writer,
+first evaluation inside the migration · extend to the four membership flags (same defect, but they
+**self-heal on reseed** so they fail as silent DRIFT) · retire `deactivate_dead_stocks.py` with its
+15 July judgements as an acceptance test.
+
+⚠ **U16's pressure is LOWER than reported:** the rule's universe is **2,291 = 76 %** of Kite's
+3,000 cap (headroom 709), not §29f's 2,655/88 %. ⚠ **D4b is still NOT half a day** (a backward CA
+pass flags 1,768 of 3,395 stocks, 386 of them ACTIVE) — §32.
+
+---
+
+**▶ CONTINUE HERE (superseded) — updated 2026-09-13 (universe rebuild).**
 
 **▶▶ ⛔⛔ THE LIVE THREAD IS `docs/UNIVERSE_REBUILD_PLAN.md`, NOT THE B-QUEUE.** The B-queue is
 COMPLETE 7/7. Since the 2026-09-07 dev-DB loss the **stock master has been wrong** — and PART VII
