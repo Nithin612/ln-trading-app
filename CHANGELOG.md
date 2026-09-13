@@ -7,6 +7,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### D2′a — the universe as a versioned rule, evaluated and recorded (2026-09-14) — SHADOW ONLY
+
+`is_active` is a mutable boolean with three writers and no owner, and every one of the 3,392
+`stocks` rows was minted during the 2026-09-07 rebuild, so there was never an original to
+restore. The universe is now DERIVED and recorded rather than written. ⚠ **Nothing here writes
+`is_active`** — the flip is D2′b, and this project has promoted exactly two rules on an
+argument and had both refuted by data within weeks.
+
+- **The rule, v1:** `EQ_LISTED ∧ KITE_TRADABLE`. ⛔ No bar-count term — bar coverage is a fact
+  about our own data completeness, and a rule that reads its own completeness shrinks when
+  ingestion breaks, which is 09-07 rebuilt inside the fix. Asserted **structurally**:
+  `UniverseInputs` carries no coverage field, so no edit can add the term without changing a
+  signature a test pins.
+- ⭐⭐ **The diff: WOULD ACTIVATE 1,121 · WOULD DEACTIVATE 152 · resulting universe 2,291.**
+  The 152 are all `not_eq_listed` — *exactly* the round-2 figure for "currently active but not
+  in the EQ list", the QUINTEGRA class. Two independent routes to the same number, neither
+  fitted to the other. Both directions are reported separately because the outage ran both
+  ways and one "1,273 changed" would hide half the defect.
+- ⭐ **Corrects U16 free:** §29f estimated the post-repair subscription at 2,655 (88% of Kite's
+  cap) from a looser join. The rule's actual answer is **2,291 — 76%, headroom 709**. U16 still
+  earns its place, but sharding is further off than reported.
+- ⛔ **A bug I wrote, of the exact shape this rebuild is about.** The first run printed
+  `EQUITY_L EQ=0` and "WOULD DEACTIVATE 1,322": the CSV header is
+  `SYMBOL,NAME OF COMPANY, SERIES, …` — every column after the first has a **leading space** —
+  so `row["SERIES"]` matched nothing and the parser returned empty **without raising**.
+  `seed_stocks._csv_rows` already strips keys and says so in a comment, so this was a
+  documented trap reintroduced by not reusing it. Had I trusted the output I would have
+  "measured" that the rule condemns the whole universe. It now raises on a schema with no
+  SERIES column, and the real header is pinned in a test.
+- Ships migration `d6e7f8a9b0c1` (`universe_snapshot`, downgrade round-tripped),
+  `universe_rule.py` (pure), `universe_materialiser.py`, `scripts/universe_snapshot.py`
+  (`--diff` / `--materialise`), and a beat entry at 03:05 UTC — **after** the 02:30 instrument
+  sync, since the rule reads `kite_instruments`; the ordering is pinned by test because nothing
+  else enforces it. 15 tests + 2 schedule invariants.
+- ⚠ `app/` must not import from `scripts/`; the first draft did, which also dragged that
+  module's relaxed typing into a strict-checked file.
+
+
 ### D1′ — identity churn is recorded, and an ISIN is never silently rewritten (2026-09-14)
 
 Two kinds of identity churn exist. **Rename** (ISIN keeps, symbol changes) was already handled

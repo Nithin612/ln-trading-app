@@ -117,6 +117,14 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.market_data_tasks.sync_kite_instruments",
         "schedule": crontab(hour=2, minute=30, day_of_week="1-5"),
     },
+    # D2′a — materialise the universe rule's verdict. 03:05 UTC = 08:35 IST, AFTER
+    # sync-kite-instruments (02:30 UTC) because the rule reads kite_instruments, and
+    # before the 09:15 session. ⚠ SHADOW ONLY — it records an outcome and measures the
+    # diff against `is_active`; it does not write the flag.
+    "materialise-universe": {
+        "task": "app.tasks.market_data_tasks.materialise_universe",
+        "schedule": crontab(hour=3, minute=5, day_of_week="1-5"),
+    },
     # A36 — calendar-coverage expiry alarm. Once per trading morning (4:00 UTC = 9:30 IST);
     # the horizon moves slowly, so a daily read with lead time is enough, and the notifier's
     # 15-min throttle collapses any repeat within a day.

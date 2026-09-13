@@ -91,3 +91,45 @@ async def _run_sync_instruments() -> dict[str, object]:
         synced = await sync_instruments(db)
     log.info("kite_instruments refreshed: %d rows", synced)
     return {"synced": synced}
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="app.tasks.market_data_tasks.materialise_universe", bind=True, max_retries=2
+)
+def materialise_universe(self: object) -> dict[str, object]:  # noqa: ARG001
+    """D2′a — record today's universe membership. Beat: 08:35 IST weekdays.
+
+    ⚠ **SHADOW ONLY — this does not write `is_active`.** It evaluates the versioned
+    rule and stores the outcome, so that "was X in the universe on date D" becomes
+    answerable and the diff against the live flag is measurable. Making the rule the
+    source of truth is D2′b.
+
+    ⚠ Runs AFTER `sync_kite_instruments` (02:30 UTC): the rule reads
+    `kite_instruments`, so evaluating first would judge the universe against
+    yesterday's instrument dump.
+    """
+    return run_db_task(_run_materialise_universe)
+
+
+async def _run_materialise_universe() -> dict[str, object]:
+    from app.db.session import AsyncSessionFactory
+    from app.services.universe_materialiser import (
+        diff_against_live,
+        load_inputs,
+        materialise,
+    )
+
+    today_ist = datetime.now(UTC).astimezone(_IST).date()
+    async with AsyncSessionFactory() as db:
+        inputs = await load_inputs(db)
+        members = await materialise(db, as_of=today_ist, inputs=inputs)
+        d = await diff_against_live(db, inputs=inputs)
+    log.info(
+        "universe %s: %d member(s); vs is_active would activate %d, deactivate %d",
+        today_ist, members, len(d.would_activate), len(d.would_deactivate),
+    )
+    return {
+        "members": members,
+        "would_activate": len(d.would_activate),
+        "would_deactivate": len(d.would_deactivate),
+    }

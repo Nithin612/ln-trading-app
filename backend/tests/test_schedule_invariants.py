@@ -111,3 +111,28 @@ def test_instrument_sync_is_weekdays_only() -> None:
     """NSE does not trade at the weekend; a dump fetched then is the Friday one."""
     cron = _entry_for("app.tasks.market_data_tasks.sync_kite_instruments")["schedule"]
     assert {int(d) for d in cron.day_of_week} == {1, 2, 3, 4, 5}
+
+
+def test_the_universe_materialiser_runs_after_the_instrument_sync() -> None:
+    """D2′a — the rule reads `kite_instruments`, so evaluating before the dump is
+    refreshed would judge today's universe against yesterday's instruments. Pinned
+    because the two beat entries are 35 minutes apart and nothing else enforces the
+    order."""
+    for mod in celery_app.conf.include:
+        importlib.import_module(mod)
+
+    sync = _entry_for("app.tasks.market_data_tasks.sync_kite_instruments")["schedule"]
+    univ = _entry_for("app.tasks.market_data_tasks.materialise_universe")["schedule"]
+
+    sync_min = min(int(h) for h in sync.hour) * 60 + min(int(m) for m in sync.minute)
+    univ_min = min(int(h) for h in univ.hour) * 60 + min(int(m) for m in univ.minute)
+    assert sync_min < univ_min
+    # …and both still land before the 09:15 IST open (03:45 UTC).
+    assert univ_min < 3 * 60 + 45
+
+
+def test_the_universe_materialiser_is_registered() -> None:
+    for mod in celery_app.conf.include:
+        importlib.import_module(mod)
+    entry = _entry_for("app.tasks.market_data_tasks.materialise_universe")
+    assert entry["task"] in celery_app.tasks

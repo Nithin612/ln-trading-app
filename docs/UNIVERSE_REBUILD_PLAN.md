@@ -2468,3 +2468,118 @@ actually recorded a `reuse` event** — at which point the rate is measured inst
 and the 14-query migration has a reason. The detector shipped today is what will produce that
 evidence; until then, `stocks.id` permanence is maintained by **never deleting rows**, which
 costs nothing and is already true.
+
+
+---
+
+# PART XVII — D2′a SHIPPED, SHADOW-FIRST (2026-09-14)
+
+## §42 · The universe is now a rule that is EVALUATED and RECORDED
+
+⭐ **The split, and why it is not cowardice.** D2′ is 4–6 evenings and its second half —
+removing `is_active`'s three writers and making the rule the source of truth — changes the
+money path. This project has promoted exactly two rules on an argument (the regime gate, the
+R:R floor) and **both were refuted by data within weeks**. So D2′ ships the way every risky
+thing here ships: **shadow first.** Tonight computes and records; **nothing writes
+`is_active`.** The flip is D2′b and now has a measured diff to be judged on.
+
+### 42a · The rule, v1
+
+```
+EQ_LISTED  ∧  KITE_TRADABLE
+```
+
+- **`EQ_LISTED`** — the symbol appears in `EQUITY_L.csv` with series `EQ`.
+- **`KITE_TRADABLE`** — a plain `EQ` instrument exists in `kite_instruments`.
+
+⛔ **No bar-count term** (§25e/1), and the test asserts it **structurally** — `UniverseInputs`
+carries no coverage field, so no future edit can add one without changing a signature a test
+pins. ⛔ No liquidity, price or market-cap term: those are EMPIRICAL under §6/2, and the
+liquidity floor was already measured and rejected.
+
+**Where it lives:** the DEFINITION in code (git is already versioned and diffable), the
+EVALUATION in `universe_snapshot` (which is what needs point-in-time answers).
+⚠ **Stated limitation:** the rule's inputs — today's `EQUITY_L.csv`, today's
+`kite_instruments` — are **not themselves snapshotted**, so *"was X in on D"* is answered
+exactly and *"why was Y out on D"* is not reconstructible however much we store. Membership
+rows only; a row per excluded name would triple the table to answer a question whose inputs
+we do not keep.
+
+### 42b · ⭐⭐ THE DIFF — what flipping would do, measured
+
+```
+rule v1: EQUITY_L EQ=2,292 · kite EQ=10,246
+agreement:        1,170 active · 952 inactive
+WOULD ACTIVATE    1,121     (ABB, ACC, 3MINDIA, AARTIIND, AAVAS, ABBOTINDIA, ABCAPITAL …)
+WOULD DEACTIVATE    152     (all `not_eq_listed`)
+resulting universe  2,291
+```
+
+⭐ **The rule's first evaluation reproduces the known damage in BOTH directions, independently
+derived**: **1,121** real names restored, and **152** removed — and that 152 is *exactly* the
+round-2 figure for "currently active but not in the EQ list", the `QUINTEGRA` class. **Two
+separate routes to the same number is the strongest evidence in this document that the rule is
+right**, and neither was fitted to the other.
+
+⚠ **This is why both directions are reported separately and `total_changed` is a property, not
+the headline.** The 09-07 outage made good names inactive *and* left bad ones active; a single
+"1,273 changed" would hide half the defect.
+
+### 42c · ⭐ A correction to U16, free
+
+§29f estimated the post-repair subscription at **2,655 (88 % of Kite's 3,000 cap, headroom
+345)**. That came from a looser join — *everything* joinable ignoring `is_active`, which
+includes names NSE does not list as `EQ`. **The rule's actual answer is 2,291: 76 % of the cap,
+headroom 709.** U16 still earns its place (the ceiling is asserted rather than discovered in
+production), but **the pressure is materially lower than reported** and sharding is further off
+than §29f implied.
+
+### 42d · ⛔ A bug I wrote, and the shape it took
+
+The first run printed **`EQUITY_L EQ=0`** and *"WOULD DEACTIVATE 1,322"* — i.e. the rule
+appeared to condemn the entire active universe. Cause: `EQUITY_L.csv` ships its header as
+`SYMBOL,NAME OF COMPANY, SERIES, …` — **every column after the first carries a LEADING SPACE**
+— so `row["SERIES"]` matched nothing and the parser returned an empty set **without raising**.
+
+⭐ **`scripts/seed_stocks._csv_rows` already strips keys and carries a comment saying NSE does
+this.** So this was not a new trap; it was a documented one, reintroduced in new code that did
+not reuse the existing normalisation.
+
+⭐⭐ **And the failure mode is the one this entire rebuild is about: a silent partial that looks
+like an answer.** Had I trusted the output, I would have "measured" that the rule deactivates
+everything. `parse_eq_listed` now **raises** on a schema without a `SERIES` column rather than
+returning empty, and the real leading-space header is pinned in a test.
+
+### 42e · Shipped
+
+| piece | what |
+|---|---|
+| migration `d6e7f8a9b0c1` | `universe_snapshot(as_of, stock_id, rule_version)`; downgrade round-tripped |
+| `app/services/universe_rule.py` | the rule + `shadow_diff` — pure, no DB, no clock |
+| `app/services/universe_materialiser.py` | input loading, `materialise`, `diff_against_live` |
+| `scripts/universe_snapshot.py` | `--diff` (read-only) · `--materialise` |
+| beat `materialise-universe` | **03:05 UTC / 08:35 IST weekdays**, after the instrument sync |
+| tests | **15** + 2 schedule invariants |
+
+⚠ The beat ordering is **pinned by test**: the rule reads `kite_instruments`, so evaluating
+before the 02:30 UTC dump refresh would judge today's universe against yesterday's instruments.
+Nothing else enforces that the two entries stay 35 minutes apart.
+
+⚠ `app/` must not import from `scripts/` — the first draft did, which also dragged that
+module's relaxed typing into a strict-checked file. The materialiser has its own NSE fetch,
+shaped like `vix_service.download_indices_csv`.
+
+## §43 · D2′b — what remains, and what it now needs
+
+1. Remove the three writers: `bhavcopy_service:216` · `seed_stocks:345` ·
+   `deactivate_dead_stocks:100`.
+2. Enforce single-writer at the database (trigger, or column-level `REVOKE`).
+3. Make the materialiser the writer, with its first evaluation inside the migration.
+4. Extend to the four membership flags (`is_nifty50` / `is_banknifty` / `is_finnifty` /
+   `is_fno`), which have the same defect but **self-heal on every reseed** — so they fail as
+   silent drift rather than a stuck value.
+5. Retire `deactivate_dead_stocks.py`, with its 15 July judgements as an acceptance test.
+
+⭐ **It is no longer a proposal — it is a diff with a number on it: +1,121 / −152.** The
+remaining question is not *"is the rule right"* but *"do we accept these 1,273 changes"*, and
+that is a decision for a waking human, not a sleeping one.
