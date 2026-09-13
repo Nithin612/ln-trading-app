@@ -1702,17 +1702,26 @@ derive, don't repair** (§26).
 1. ⭐ **U16 — chunk the websocket subscription.** `live_worker` subscribes in **one unchunked call**
    and Kite caps a connection at **3,000**. Today 1,178 (39 %); **the post-repair ceiling is 2,655
    (88 %)**. ⛔ **Must land BEFORE D2′.**
-2. **D0** pin identity (a `(stock_id, symbol, isin, first_seen)` seed file) → **D1′** permanent
+2. ⛔⛔ **U17 — the ENTRY-GATE rule, a PRECONDITION for D2′ (PART XII).** `scan_positions` is
+   correctly NOT universe-filtered, but it prices from Redis `ltp:{stock_id}`, those keys exist
+   only for SUBSCRIBED instruments, and the subscription is `WHERE s.is_active = true` ⇒ **a held
+   name that leaves the active set stops receiving ticks and the monitor skips it PERMANENTLY,
+   silently, with its SL and TP never evaluated again.** Today `is_active` moves only when a human
+   runs a script; **after D2′ a rule moves it NIGHTLY**. Fix = one clause, two call sites:
+   **subscription universe = trading universe ∪ {names with an open position or holding}**, same
+   union for the alert hot set. ⭐ **THE PRINCIPLE: the universe is an ENTRY gate — nothing an open
+   position depends on may be universe-gated.**
+3. **D0** pin identity (a `(stock_id, symbol, isin, first_seen)` seed file) → **D1′** permanent
    `stocks.id` + `symbol_history` **owning the symbol uniqueness** (833 delisted symbols currently
    occupy `uq_stocks_symbol_exchange`, so a reused NSE symbol silently merges into a dead company's
    row) → ⭐ **D2′ the real work: keep the `is_active` column, REMOVE its three writers**
    (`bhavcopy_service:216` · `seed_stocks:345` · `deactivate_dead_stocks:100`), nightly materialiser
    from a versioned rule, **extends to all five flags**, first evaluation inside the migration.
    **4–6 evenings.**
-3. ⛔ **BLOCKED ON THE USER: D3** (the daily ingest stops consulting `is_active`). The 2026-07-17
+4. ⛔ **BLOCKED ON THE USER: D3** (the daily ingest stops consulting `is_active`). The 2026-07-17
    T2T ruling is stated two ways in our own doc; all reviewers read it as a TRADING policy, which
    makes D3 the first implementation rather than an overturning. One line, ~6 MB/year. **§22/1.**
-4. ⛔ **D4b is NOT half a day.** A backward CA pass at the shipped 20 % threshold flags **1,768 of
+5. ⛔ **D4b is NOT half a day.** A backward CA pass at the shipped 20 % threshold flags **1,768 of
    3,395 stocks — 386 of the 1,322 ACTIVE** — and the flag has no expiry. Rescoped in **§32** as a
    review queue with a split-RATIO discriminator ⇒ it is the front half of **A3**.
 
