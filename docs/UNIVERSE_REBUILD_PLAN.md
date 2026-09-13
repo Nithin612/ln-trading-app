@@ -2320,3 +2320,77 @@ is a rounding error against the cap — it cannot be the thing that trips U16.
 
 ⭐ **Latent today (`positions` = 0 rows), which is exactly why it was cheap to build now.**
 It becomes load-bearing the moment D2′ starts moving `is_active` nightly.
+
+
+---
+
+# PART XV — D0 SHIPPED (2026-09-14)
+
+## §40 · The identity pin, and what it is honestly worth
+
+### 40a · ⭐ What pinning buys — and the case where it buys nothing
+
+Restoring from a `pg_dump` carries ids with it, so the pin adds **nothing** there.
+It matters in **the case that actually happened**: a rebuild **from source** — re-seed
+`stocks`, re-attach bars from the bhavcopy archive. Bars re-attach BY SYMBOL so they stay
+internally consistent, which is why nobody noticed; but **every artifact keyed on an id from
+before silently re-points at a different company.** That is §20/2's reversal SQL, and it is
+also every probe JSONL dump, forensic table and analysis output written before 09-07.
+
+⇒ **The pin's job is narrow and worth stating precisely: make a SOURCE rebuild reproduce the
+same `id → symbol` mapping.**
+
+### 40b · ⛔ A forensic detail found while building it
+
+`stocks` holds **3,395 rows with ids running 1 … 2,178,609.**
+
+⭐ **A `ON CONFLICT DO UPDATE` still consumes a sequence value on every attempted insert**, so
+that gap is a *log* of how many insert attempts the 09-07 reconstruction made — on the order
+of 950 backfill days × ~2,300 symbols ≈ 2.18 M. **Independent, third confirmation of §3a's
+`backfill → seed → backfill` ordering**, arriving from the sequence rather than the id blocks.
+It also settles that the ids are arbitrary: pinning them preserves something with no meaning
+beyond *everything else points at it*, which is exactly why it must not move.
+
+### 40c · Shipped
+
+| piece | what |
+|---|---|
+| `backend/seed/stock_identity.csv` | **3,395 rows, 116 KB** — `stock_id, symbol, isin, first_seen`, sorted by symbol |
+| `app/services/stock_identity.py` | pure `serialise` / `parse` / `diff` — no DB, no clock |
+| `scripts/stock_identity.py` | `--export` · `--verify` (exit 1 on conflict) |
+| tests | **11**, including the negative control |
+
+⚠ **`data/` is gitignored**, which is why the pin lives in `backend/seed/`. A pin file git
+never sees is not insurance.
+
+### 40d · ⭐ Only a CONFLICT fails — and that is a design decision
+
+`diff()` returns three lists, deliberately separated:
+
+- **conflicts** — same symbol, different id. **The only failure**; it is the 09-07 defect.
+- **missing** — pinned names absent from the DB. Delisting, or an incomplete rebuild.
+- **added** — live names not in the pin. New listings.
+
+⭐ **Churn is not drift.** Failing on ordinary listing turnover would make the check noisy
+within weeks, and **a noisy guard gets ignored, which is how guards die** — this project has
+already watched the 6.8.6 alarm read green through a five-day outage because it asserted the
+wrong thing.
+
+⭐ **The first test is a NEGATIVE CONTROL**, not a happy path: it plants the exact 09-07
+scenario (`QUINTEGRA` 228 → 900, `BSE` 500 → 228) and asserts both are caught. **A verifier
+that cannot detect the failure it exists for is decoration** — the `instrument_self_validation`
+discipline applied to a data file.
+
+### 40e · The restore procedure this is insurance for
+
+Written down because insurance nobody can operate is not insurance:
+
+1. load the pin;
+2. insert `stocks` with **EXPLICIT ids**;
+3. **advance the sequence past the maximum** —
+   `SELECT setval(pg_get_serial_sequence('stocks','id'), (SELECT max(id) FROM stocks))`;
+4. *then* seed / backfill as normal.
+
+⚠ **Skip step 3 and the next insert collides.** ⚠ And per §28a / the recovery order: run
+`seed_stocks.py` before any historical backfill, or `_ensure_historical_stocks` recreates the
+master from the wrong end again.

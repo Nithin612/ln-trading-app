@@ -7,6 +7,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### D0 — the stock-identity pin (2026-09-14)
+
+Every `stocks.id` was reassigned during the 2026-09-07 emergency rebuild, which is why
+`deactivate_dead_stocks.py`'s documented reversal SQL now names the wrong companies (§20/2):
+July's `stock_id = 228` was QUINTEGRA, today's is BSE.
+
+- **What it buys, stated precisely:** restoring from a `pg_dump` carries ids with it, so the
+  pin adds nothing there. It matters in the case that actually happened — a rebuild **from
+  source**, where bars re-attach by SYMBOL and stay internally consistent (which is why
+  nobody noticed) while every artifact keyed on an id silently re-points at a different
+  company.
+- `backend/seed/stock_identity.csv` (3,395 rows, 116 KB), a pure `app/services/stock_identity.py`,
+  and `scripts/stock_identity.py --export | --verify`. ⚠ `data/` is gitignored, hence
+  `backend/seed/` — a pin file git never sees is not insurance.
+- ⭐ **Only a CONFLICT fails.** New listings and delistings are reported as churn, because a
+  guard that cries on ordinary turnover gets ignored within weeks — this project has already
+  watched the 6.8.6 alarm read green through a five-day outage for asserting the wrong thing.
+- ⭐ **The first test is a negative control**, not a happy path: it plants the exact 09-07
+  scenario (QUINTEGRA 228→900, BSE 500→228) and asserts both are caught. A verifier that
+  cannot detect the failure it exists for is decoration.
+- ⛔ **Forensic detail found while building it:** 3,395 rows carry ids running to **2,178,609**.
+  An `ON CONFLICT DO UPDATE` still consumes a sequence value per attempted insert, so that gap
+  is a log of the reconstruction's insert attempts (~950 backfill days × ~2,300 symbols ≈
+  2.18M) — an independent third confirmation of §3a's `backfill → seed → backfill` ordering,
+  this time from the sequence rather than the id blocks.
+- The restore procedure is written down in §40e, including the `setval` step that must follow
+  an explicit-id insert or the next insert collides.
+- 11 tests.
+
+
 ### U17 — the subscription is `universe ∪ held names` (2026-09-14)
 
 `_build_token_stock_map` filtered `s.is_active = true`, and that map is the subscription
