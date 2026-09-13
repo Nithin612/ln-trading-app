@@ -1,8 +1,9 @@
 # Universe Rebuild Plan — stock master, sector map, index registry
 
 **Status:** DRAFT for review · round 0 written 2026-09-12 · **round-1 adjudication (PART V)
-2026-09-12** · ⭐ **PART VI added 2026-09-13 — the user's restore-vs-rebuild question, which
-changes the queue and is the live question for round 3**
+2026-09-12** · **PART VI 2026-09-13 — the user's restore-vs-rebuild question** ·
+⭐⭐ **PART VII 2026-09-13 is the round-3 adjudication and SUPERSEDES PART VI's mechanism,
+its bar-count rule term, and four of its numbers. Read PART VII before acting on PART VI.**
 **Author:** Claude (session 2026-09-12) · **Owner:** Nithin
 **Nothing in this document has been executed.** No table was written, no flag flipped,
 no migration run. Every number in PARTS I–V is a `SELECT` taken on **2026-09-12** against
@@ -42,8 +43,13 @@ claim**:
   while the book is empty. §23.1 corrects the premise (**nothing was deleted** — one
   boolean and one empty table broke), §23.3 proves by measurement that **U3 does not depend
   on U2**, and §23.6 proposes **REBUILD-D: derive, don't repair** — collapsing U2 into U13.
-  ⚠ **The three round-2 reviews are NOT yet dispositioned**; PART VI was written before
-  that adjudication and does not pre-empt it. **§24 holds the six round-3 questions.**
+  ⚠ **§24 held six questions for round 3; they are answered in PART VII.**
+- ⭐⭐ **PART VII (§25–§27) is the round-3 adjudication, and it corrects PART VI.**
+  §25a carries the decisive fact of the whole exercise (**every one of the 3,392 `stocks`
+  rows was created on 2026-09-07 — the rebuild already happened, improvised, in one night**).
+  §25b lists **four errors in PART VI, all ours**. §25c confirms that D2's derived view
+  cannot work **while refuting the reason given for it**. §26 is the revised REBUILD-D.
+  ⭐ **§27 recommends closing the panel and building.**
 
 ⭐ **The one thing to internalise before reviewing:** this project has an explicit,
 hard-won rule that a selection rule is never flipped on an argument (CLAUDE.md hard
@@ -1325,7 +1331,7 @@ Four items. Three are a day or less; one is the real work.
 | # | item | size | what it kills |
 |---|---|--:|---|
 | **D1** | **Identity = ISIN, permanent.** `stocks.id` never deleted, never reused; `symbol_history(stock_id, symbol, series, valid_from, valid_to)`. | ½ day | §20/2's dangerous reversal; symbol-rename ambiguity. 75 % already present. |
-| **D2** | ⭐ **`is_active` stops being a decision variable.** Replace with dated **facts** — `series` + listing status (EQUITY_L), `kite_tradable` (instruments dump), bar coverage (computed) — and make the universe a **named, versioned rule** evaluated over them and materialised daily. `resolve_universe` reads the snapshot; `is_active` survives as a **derived view** so the 79 call sites in 45 files need not all change at once. | **2–3 evenings** | the entire failure class. This is U13, promoted to the front. |
+| **D2** | ⭐ **`is_active` stops being a decision variable.** Replace with dated **facts** — `series` + listing status (EQUITY_L), `kite_tradable` (instruments dump), bar coverage (computed) — and make the universe a **named, versioned rule** evaluated over them and materialised daily. `resolve_universe` reads the snapshot; `is_active` survives as a **derived view** so the 79 call sites in 45 files need not all change at once. | **2–3 evenings** | the entire failure class. This is U13, promoted to the front. ⛔ **SUPERSEDED — §25b/1 (34 readers, not 79) and §25c (the view cannot work; keep the column, remove the three writers). Revised item = D2′ in §26.** |
 | **D3** | **The archive never consults a trading decision** (= U6′). | ½ day | a selection mistake destroying price history. |
 | **D4** | **Fix the CA detector** — drop the `is_active` gate; run it backwards over the archive once. | ½ day | §23.5/1; replaces U14. |
 
@@ -1387,7 +1393,7 @@ The user has asked for this to go to the panel before anything is built. **These
 questions; §23 is our position, not our decision.**
 
 1. **[BLOCKING] Is REBUILD-D right, or is it scope creep dressed as architecture?** A
-   solo developer in evenings is proposing to delete a column that 79 call sites read.
+   solo developer in evenings is proposing to delete a column that 79 call sites read. ⛔ **§25b/1: the number is 34.**
    The derived-view migration (§23.6/D2) is the whole argument for feasibility — **attack
    that specifically.** If the view is unworkable (write paths, `mypy`, SQLAlchemy model
    mapping, the `ON CONFLICT` writers), REBUILD-D collapses back to U2 and we should know
@@ -1406,7 +1412,7 @@ questions; §23 is our position, not our decision.**
    item, grep for its own name before building it.** Round 1 found two items this way
    (§20); §23 found two more. **Name the next one.**
 5. **Does the ISIN key hold?** Measured: 2,547 of 3,392 rows carry an ISIN, **zero
-   duplicates**; the 842 rows with no ISIN are all inactive and **all have bars** (the
+   duplicates**; the 842 rows with no ISIN are all inactive and **all have bars** (the ⛔ **§25b/2: it is 845, three are ACTIVE, and they are a test fixture plus two indices — the claim is false. §25d found zero collision casualties.**
    bhavcopy-created archive-only names). Our reading: ISIN is a sound identity key for
    everything tradeable, and the 842 are archive-only by construction — which is the
    archive/trade split stated as data rather than policy. **Is there a case this cannot
@@ -1424,3 +1430,269 @@ questions; §23 is our position, not our decision.**
 across sources OR settled by our own measurement — never on consensus alone.** §23 is
 settled by measurement where it cites a number and is **opinion everywhere else**, and the
 opinion is what we are asking you to attack.
+
+---
+
+# PART VII — ROUND 3 ADJUDICATION (2026-09-13)
+
+Five responses to PART VI (ChatGPT · Gemini · DeepSeek · Nemotron · an external Claude
+session with a 597-line review). **Every claim below was checked against the code or the
+database before disposition. Two checks went against this document's own PART VI, and one
+went against the reviewer who raised it.**
+
+## §25 · Dispositions
+
+### 25a · ⭐⭐ CONFIRMED, AND IT IS THE DECISIVE FACT OF THE ROUND
+
+> *"The rebuild already happened. On 2026-09-07, at speed, at night, with no design."*
+> — external Claude review, §T1
+
+**Measured:**
+
+```sql
+SELECT created_at::date, count(*) FROM stocks GROUP BY 1;
+--  2026-09-07 | 3392      ← every row. one date. no others.
+```
+
+⭐⭐ **There is no pre-existing stock master to restore, and there never was one in this
+database.** All 3,392 rows were manufactured in a single day by the emergency recovery.
+Every `stocks.id` was minted then. `kite_instruments` was never repopulated at all. The
+`is_active` values we have been debating how to "repair" were **produced by that night's
+process ordering**, which §3a already proved was `backfill → seed → backfill`.
+
+⇒ **The choice was never restore-vs-rebuild. It is: keep an architecture that was
+improvised in a few hours under pressure, or replace it with one that was chosen.** That
+reframing settles the cost argument. Three evenings is not an optional refinement bolted
+onto a working system — it is the cost of no longer being stuck with an accident that has
+already produced a five-day blackout, a documented reversal procedure that reactivates the
+wrong companies, and a corporate-action detector blind to the entire real universe.
+
+⭐ **This is the strongest single point produced in four rounds, and it came from a
+reviewer reading our own measurements more carefully than we did.**
+
+### 25b · ⛔⛔ FOUR ERRORS IN PART VI, ALL OURS, ALL CORRECTED HERE
+
+**(1) "79 call sites in 45 files" is wrong — the real number is 34.** That grep counted
+every occurrence of the string `is_active`, which includes `BrokerToken.is_active`,
+`User.is_active`, a `sharpe_decay` local parameter and a screener column reference.
+**Actual `Stock.is_active` read sites: 34.** ⚠ This was the load-bearing number in D2's
+feasibility argument. It makes D2 *cheaper*, not harder — but it was wrong, it was ours,
+and it was the number we asked reviewers to reason about.
+
+**(2) "the 842 rows with no ISIN are all inactive and all have bars — archive-only by
+construction" is wrong on every clause.** Measured: **845** rows have no ISIN, and **three
+of them are ACTIVE**:
+
+| id | symbol | company_name |
+|--:|---|---|
+| 1 | `KNOWNCO` | **Test Company Ltd** — a test fixture in the production stock master |
+| 9470 | `NIFTYNXT50` | an **index**, carried as a stock row |
+| 10151 | `NIFTYFPI` | an **index**, carried as a stock row |
+
+⇒ "no ISIN ⇒ archive-only" is **false**, and the counterexamples are junk rows that a
+universe rule would have to exclude on some other ground. §23.4's tidy "the archive/trade
+split stated as data rather than policy" does not survive its own measurement.
+
+**(3) "13 series-suffixed symbols" is wrong.** The list is `BAJAJ-AUTO`, `MCDOWELL-N`,
+`NAM-INDIA`, `HCL-INSYS`, `MRO-TEK`… — **hyphenated company names**, not series suffixes.
+Two (`DUCON-RE1`, `JAYKAY-RE1`) are rights entitlements. The claim was pattern-matching on
+a hyphen and calling it a measurement.
+
+**(4) The ISIN evidence was circular, exactly as H2 says.** We offered *"UNIQUE, zero
+duplicates"* as proof the key holds. **`seed_stocks.py` writes `NULL` rather than violate
+`uq_stocks_isin`** (§A1 says so, in our own document), so zero duplicates is guaranteed
+under every possible input. **It measures that the collision handler exists.** ⇒ **H2's
+reasoning is ADOPTED in full** — and see 25d for what happened when we went looking for the
+casualties it predicted.
+
+⭐ **All four are the same defect: a number was produced, and the question it actually
+answered was narrower than the question it was used to settle.** That is H7, and 25f makes
+it a convention.
+
+### 25c · ⭐⭐ H1 — VERDICT CONFIRMED, STATED MECHANISM REFUTED
+
+H1 claims D2's derived view is impossible because *"`ON CONFLICT` requires a unique index
+to infer against. **A view has no unique index.**"* **Tested directly** (TEMP objects, one
+rolled-back transaction, no real table touched):
+
+| test | result |
+|---|---|
+| `ON CONFLICT` against a **simple auto-updatable** view | ⛔ **SUCCEEDED** — a genuine upsert (1 row, `sym='UPDATED'`) |
+| plain `INSERT` into a view **joining** base to snapshot | ✅ **REJECTED** — `cannot insert into view "v_join"` |
+| `ON CONFLICT` against that joined view | ✅ **REJECTED** |
+
+⇒ **Postgres infers the conflict target *through* an auto-updatable view against the base
+table's index, so the stated reason is false.** But **the view D2 actually needs has a
+join**, joined views are not auto-updatable at all, and `INSTEAD OF` triggers do not restore
+`ON CONFLICT`. ⭐ **The conclusion stands and the reasoning does not** — recorded so nobody
+re-derives the false rule from the true verdict.
+
+⭐⭐ **H1's ALTERNATIVE IS ADOPTED, and it is better than what it replaces.** The 09-07
+failure was never that the column existed — it was that three processes could write it and
+none owned it. **Keep the column; remove its writers.** Verified by grep: there are
+**exactly three writers of `Stock.is_active`**, matching H1's prediction —
+
+```
+bhavcopy_service.py:216    _ensure_historical_stocks  (INSERT column list)
+seed_stocks.py:345         seed                       (INSERT column list, literal `true`)
+deactivate_dead_stocks.py:100  the ONLY UPDATE statement in the repo
+```
+
+A column with one writer, refreshed from a versioned rule, **is a materialised view
+semantically without being one syntactically** — and the guarantee is enforced by the
+database (trigger, or column-level `REVOKE UPDATE (is_active)`) instead of by convention.
+**34 readers change by zero lines. The ORM is untouched. `ON CONFLICT` keeps working.**
+
+⭐ **And H1's third check paid off: `resolve_universe` has 4 callers** (`profiles/pipeline`,
+`broker/provisional`, `api/v1/strategy`, `backtest/walkforward`) **against 34 direct
+queries.** So the remaining work is *routing existing callers through a resolver that
+already exists* — a migration, not a build.
+
+### 25d · ⛔ H2's PREDICTED CASUALTIES — REFUTED BY MEASUREMENT
+
+H2 predicted (a) `EQUITY_L.csv` contains ≥ 1 duplicated ISIN, ~65%, and (b) ≥ 1 `stocks`
+row has `isin IS NULL` despite the CSV supplying one, ~70%. **Both measured, both zero:**
+
+```
+EQUITY_L rows 2,568 · series EQ 2,292 / BE 249 / BZ 27 · duplicate ISINs: 0
+stocks rows with NULL isin for which EQUITY_L supplies an ISIN: 0
+```
+
+⇒ **No identity has in fact been discarded.** ⭐ The correct disposition is the one this
+project keeps having to make: **the reasoning is adopted and the predicted consequence is
+absent.** D1's *evidence* must be replaced (25b/4); D1's *premise* survives the search for
+its own counterexample. ⚠ And `SM` does not appear in `EQUITY_L` at all — the T2T ruling's
+third series is not in the source we would gate on.
+
+**What H2 got right that no measurement was needed for, and which IS adopted:** the unique
+constraint sits in the wrong place. `uq_stocks_symbol_exchange` + never-delete + `ON
+CONFLICT DO UPDATE` means **an NSE symbol reused after delisting silently merges into the
+delisted company's row, and the new company's bars attach to the old company's id.**
+Measured surface: **833 symbols in `stocks` are absent from `EQUITY_L`** (H2 said 951;
+the hazard is real, the number was not). ⇒ **Move uniqueness onto `symbol_history
+(symbol, exchange, valid_from)`.** D1 already builds that table and merely left the
+constraint behind.
+
+### 25e · ✅ ADOPTED FROM ROUND 3
+
+1. ⭐⭐ **`≥ 300 bars` comes OUT of the universe rule** (H6). The other two terms are
+   *exogenous* facts — what NSE lists, what Kite will route. Bar count is a fact about **our
+   own data completeness**, and *a rule that reads its own completeness shrinks when our
+   ingestion breaks.* **That is 2026-09-07 rebuilt inside the design meant to prevent it.**
+   The engine's 300-bar window becomes a **scoring-time eligibility check** — a name with
+   too little history is *unscoreable today*, never *unlisted*. Two layers, two questions.
+   ⚠ §8's "1,801 names" therefore stops being a universe definition and becomes a **coverage
+   statistic**.
+2. ⭐ **The four membership flags are in scope for D2** (DeepSeek §2.2). `is_nifty50`,
+   `is_banknifty`, `is_finnifty`, `is_fno` have the same shape: mutable, current-composition
+   only, no point-in-time answer. ⭐ **A sharper root cause falls out of checking this:
+   `is_active` is the ONLY one of the five missing from `seed_stocks.py`'s `ON CONFLICT DO
+   UPDATE SET`.** The other four have the identical ownership defect but **self-heal on every
+   reseed** — so they fail as silent *drift* instead of as a stuck value. One class, two
+   symptoms; fix all five in one materialiser.
+3. ⭐ **Run U3 now** (DeepSeek §7, and it is right that PART VI stated the unlock without
+   acting on it). It is independent of every design decision here, it closes the only growing
+   hole, and it stops the `load_frames` clock. ⚠ **It writes to the dev DB, so it needs the
+   user's go-ahead** — it is the one item in this document that is not read-only.
+4. **D2's first act is the rule's first evaluation, inside the same migration** (DeepSeek
+   §2.4) — no window in which the writers are gone and the snapshot has not yet run.
+5. **`deactivate_dead_stocks.py` is retired by D2, and its July judgements become an
+   acceptance test** (DeepSeek §2.5): the rule's first evaluation must reproduce those 15
+   deactivations with the same reasons. ⭐ It is also the only `UPDATE` writer, so retiring
+   it is what makes the single-writer guarantee true rather than aspirational.
+6. **Facts vs policies must be enumerated explicitly** (ChatGPT §8). `series`,
+   `kite_tradable`, `listing status` are facts; "we trade only EQ" is a policy. Otherwise the
+   rule becomes a new hiding place for assumptions — the thing `is_active` was.
+7. **`stocks.id` is the permanent identity; ISIN is a dated attribute** (ChatGPT §6, H2/c).
+   D1's title "Identity = ISIN, permanent" is wrong by its own question's standard — ISINs
+   change on amalgamations and demergers. **Renamed: `D1′ — permanent internal id, ISIN as
+   the strongest dated external attribute.`** No second `security_id` column (unchanged).
+8. **A rebuild-from-empty test** (ChatGPT §19): reconstruction is a first-class operation,
+   not an emergency sequence of commands. ⭐ **The original failure happened *during* a
+   reconstruction** — which is the whole argument for making it testable.
+9. **Check a `(stock_id, symbol, isin, first_seen)` seed file into the repo** (H2/2).
+   "Never delete" is not enforceable against the `TRUNCATE` that has already happened once.
+   ~3,400 rows, and it is what makes §20/2's reversal permanently safe instead of newly
+   documented.
+
+### 25f · ⭐ THE ESTIMAND CONVENTION — adopted as a standing rule
+
+H7 names a pattern across three rounds: **E2** (checked *admission* to the universe, used to
+settle *universe extent*), **ISIN** (checked *duplicates today*, used to settle *whether
+collisions occur*), **the 137 count** (measured *pre-repair*, compared against a prediction
+about *post-repair*, then recorded as a refutation it had not earned). 25b adds a fourth.
+
+> ⭐ **STANDING RULE, into `docs/BUILD_QUEUE.md`'s probe conventions: state what the check
+> would NOT establish, before running it.** The verification discipline in this project is
+> strong; the **estimand** discipline is the weak joint, and every one of these four made a
+> conclusion look better supported than it was.
+
+⚠ **The 137 figure stands as a measurement and is withdrawn as a refutation.** It was
+measured before any repair; DeepSeek's `< 10` prediction was about after one. It is
+evidence that **13 active symbols are absent from `EQUITY_L` entirely** and that the schema
+records neither suspension, illiquidity, nor delisting-in-progress — not evidence that
+anyone's prediction failed.
+
+### 25g · ⏸ PARKED · ⛔ REJECTED
+
+| item | disposition |
+|---|---|
+| Lightweight provenance / `source_observation` lineage (ChatGPT §18) | ⏸ **PARK** — unblocks when the rule has >1 version and a snapshot disagrees with expectation. Real, not yet earned. |
+| `listing_status` enum on `symbol_history` (DeepSeek §5/6) | ⏸ **PARK** — the right answer to the 13 absentees, but needs a source that publishes suspension. EQUITY_L does not. |
+| Bar-coverage hysteresis (DeepSeek §5/6.1) | ⛔ **MOOT** — 25e/1 removes bar coverage from the rule entirely. |
+| `isin IS NOT NULL` as a rule term (DeepSeek §24/3) | ⛔ **REJECT as a term, ADOPT as an assertion** — every EQUITY_L row has an ISIN, so it is redundant; a listed name *without* one is a bug to alarm on, not a name to silently drop. |
+| `isin_history` table | ⛔ **REJECT** — reassignment is rare; a manual `UPDATE` with an audit row is proportionate. |
+| 5-table institutional security master | ⏸ **PARK**, unchanged (§19d). No reviewer named a failure D1′–D4′ cannot express. |
+| "Don't rebuild the research apparatus while you're in here" (DeepSeek §4/1) | ✅ **ADOPT into §23.7** as a fifth exclusion. |
+| "Don't bundle the CA-adjusted-vs-raw decision into D4" (DeepSeek §4/2) | ✅ **ADOPT into §23.7** as a sixth. That is A3, still open. |
+
+⭐ **Also confirmed, and it is the same pattern as the CA detector:** DeepSeek's §24/4
+candidates are real. `categories`/`stock_categories` are **empty but consumed** by
+`universe_service` (`kind="category"`), `screener/compiler.py`, `cas_tasks.py` and an API;
+`strategy_profiles` is **empty but consumed** by `profiles/pipeline.py`, `daily_report.py`
+and `broker/provisional.py`. **Built and starved, exactly like `ca_detector.py`.**
+
+## §26 · REBUILD-D, revised
+
+| # | item | change from §23.6 | est. |
+|---|---|---|--:|
+| **D0** | **Pin identity: check `(stock_id, symbol, isin, first_seen)` into the repo** | **NEW** (H2/2) — makes a rebuild reproduce the same ids | 1 hr |
+| **D1′** | **Permanent internal `stocks.id`; ISIN a dated attribute; `symbol_history` OWNS the symbol uniqueness** | **renamed + constraint moved** (25d) | ½ day |
+| **D2′** | **Keep the column, remove the three writers.** Trigger or column-level `REVOKE`; nightly materialiser from a versioned rule → `universe_snapshot`; **extends to all five flags**; first evaluation inside the migration; retires `deactivate_dead_stocks.py` | **mechanism replaced** (25c), **scope widened** (25e/2) | 2–3 evenings |
+| **D3** | Archive never consults a trading decision (= U6′) | unchanged | ½ day |
+| **D4′** | Ungate `ca_detector.py`; one backward pass over the archive | unchanged | ½ day |
+
+**The rule, revised:** `series ∈ EQUITY_L` **AND** a plain `EQ` listing in
+`kite_instruments`. ⛔ **No bar-count term** (25e/1). ⛔ No liquidity, price or market-cap
+term (§9, unchanged and not reopened by any round-3 reviewer).
+
+⚠ **Estimate.** §23.6 said 2–3 evenings for D2; H1 says 1–2 with the column kept; DeepSeek
+says 4–6 with the widened scope. **We adopt DeepSeek's: 4–6 evenings**, because 25e/2
+widened the scope after H1 narrowed the mechanism, and the two roughly cancel. ⭐ **The
+honest estimate is the one that accounts for the scope we actually adopted, not the one
+that makes the proposal easiest to approve.**
+
+## §27 · What round 4 is for — and it should probably not happen
+
+Round 3 changed decisions: the view mechanism is out, the bar-count term is out, the
+membership flags are in, the identity title was wrong, and four of our own numbers were
+wrong. That is a high yield. But §13f's rule — **a round only happens if a probe runs with
+it** — now cuts the other way: **the remaining open items are build decisions, not review
+decisions.** Three questions genuinely remain, and all three are settled by writing code,
+not by asking:
+
+1. Does the single-writer guarantee hold under a trigger, or does it need the
+   `REVOKE UPDATE (is_active)` + dedicated-role form? **Settled by building it.**
+2. Does the rule's first evaluation reproduce the 15 July deactivations? **Settled by
+   running it.**
+3. Do the 13 EQUITY_L absentees and the 3 junk active rows (`KNOWNCO`, `NIFTYNXT50`,
+   `NIFTYFPI`) fall out correctly, or do they need a term the rule does not have?
+   **Settled by evaluating it.**
+
+⇒ **Recommendation: close the panel and build.** The single exception, if the user wants
+one more pass, is a **narrow** round on D2′'s single-writer mechanism alone — not another
+architecture round.
+
+⭐ **And the one action that should not wait for any of it: run U3.** It is independent, it
+closes the only hole that grows every day, and it needs nothing in PART VI or PART VII to
+be accepted first.
