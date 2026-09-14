@@ -7,6 +7,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Index + VIX backfill — the market-regime overlay is evaluable again (2026-09-14)
+
+`index_ohlcv_1d` and `india_vix_daily` were destroyed on 2026-09-07 and never redone: 54 and
+18 rows, ~18 sessions. Every market-regime and sector-RS overlay has been unevaluable since.
+
+| series | sessions | span |
+|---|--:|---|
+| NIFTY50 · BANKNIFTY · FINNIFTY | **789 each** | 2023-07-03 → 2026-09-11 |
+| INDIA VIX | **789** | 2023-07-03 → 2026-09-11 |
+
+- 789 sessions ingested, 46 skipped (weekends/holidays), from the NSE indices archive — one
+  CSV per session feeding **both** tables, so half the requests of two separate backfills.
+  No Kite dependency.
+- ⭐ **Depth lands on 2023-07-03 again**, matching `ohlcv_1d`'s clean block and the intraday
+  backfill from earlier today. All four archives — daily, 5m, 15m, index/VIX — now cover the
+  **same period**, so no study can straddle a boundary present in one and absent in another.
+- ✅ **Verified end-to-end, not just by row count:** `load_market_regime_context` now returns
+  **200 closes** (the full DMA period) and **VIX 12.29**. Before this it had ~18 sessions and
+  failed open silently.
+- ⛔ **This restores the DATA. It does not license a flip.** `market_regime_gate_mode` stays
+  `shadow` — §9/4 of the universe plan is explicit that restoring the index data is not
+  evidence, and this project has promoted two gates on arguments and had both refuted within
+  weeks. A promotion still needs the `t ≈ 3.6` bar.
+- ⚠ **Sector-RS is still NOT unblocked.** The backfill scopes to `indices.is_active`, and the
+  registry holds only **3** broad indices — the reason sector-RS has always been untested.
+  Expanding it is U8. ⭐ The free win stands: the same CSV this downloads carries **165
+  indices**, so U8 is a registry-population job, not a new data source.
+
+
 ### Intraday capture restored — 16.2M bars, back to the daily archive's clean block (2026-09-14)
 
 `ohlcv_5m`/`15m`/`1h` have been **empty since the 2026-09-07 DB loss**, which made every

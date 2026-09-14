@@ -1740,8 +1740,21 @@ accrues ONLY from the live worker, so its 09-07→now gap is **permanently unrec
 (baseline ratcheted 1,178 → 2,291), but `make live-worker` is a supervised ritual needing a
 FRESH KITE TOKEN each morning. **Start it tomorrow, 09:15 IST.**
 
-**⇒ NEXT:** push (**18 commits unpushed**) · **run `make live-worker` each session** ·
-index/VIX backfill · the panel's UI/UX round (PART XVIII §46).
+**✅ INDEX + VIX BACKFILLED 2026-09-14: NIFTY50 · BANKNIFTY · FINNIFTY · INDIA VIX all at
+789 sessions, 2023-07-03 → 2026-09-11** (789 ok / 46 skipped, one NSE CSV per session feeding
+both tables, no Kite dep). ⭐ **All FOUR archives — daily, 5m, 15m, index/VIX — now cover the
+SAME period**, so no study can straddle a boundary present in one and absent in another.
+✅ Verified end-to-end: `load_market_regime_context` returns **200 closes + VIX 12.29** (was
+~18 sessions, failing open).
+⛔ **DATA ONLY — NOT a licence to flip.** `market_regime_gate_mode` stays `shadow`; §9/4 is
+explicit, and two gates promoted on arguments were both refuted within weeks. Promotion needs
+the `t ≈ 3.6` bar.
+⚠ **Sector-RS is STILL blocked** — the backfill scopes to `indices.is_active` and the registry
+holds only **3** broad indices (exactly why sector-RS was never testable). That is **U8**, and
+the same CSV carries **165 indices**, so it is a registry-population job, not a new source.
+
+**⇒ NEXT:** push (**19 commits unpushed**) · **run `make live-worker` each session** ·
+**U8** (index registry → unblocks sector-RS) · the panel's UI/UX round (PART XVIII §46).
 
 ---
 
