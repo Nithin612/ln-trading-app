@@ -44,6 +44,11 @@ claim**:
   boolean and one empty table broke), §23.3 proves by measurement that **U3 does not depend
   on U2**, and §23.6 proposes **REBUILD-D: derive, don't repair** — collapsing U2 into U13.
   ⚠ **§24 held six questions for round 3; they are answered in PART VII.**
+- ⭐⭐ **PART XVIII (§44–§46) is the UI/UX surface, and it is the NEW question for the panel.**
+  §44 is a *verified* inventory of what a user can see (absences checked in the frontend
+  source, not assumed); §45 holds six statements to attack; §46 holds eight questions.
+  ⭐ **The headline: we made the ORDER path's refusals visible and left the UNIVERSE's
+  refusals invisible** — and the hard part is that **an absence is not askable** (§45/S2).
 - ⭐⭐ **PART VII (§25–§27) is the round-3 adjudication, and it corrects PART VI.**
   §25a carries the decisive fact of the whole exercise (**every one of the 3,392 `stocks`
   rows was created on 2026-09-07 — the rebuild already happened, improvised, in one night**).
@@ -2583,3 +2588,150 @@ shaped like `vix_service.download_indices_csv`.
 ⭐ **It is no longer a proposal — it is a diff with a number on it: +1,121 / −152.** The
 remaining question is not *"is the rule right"* but *"do we accept these 1,273 changes"*, and
 that is a decision for a waking human, not a sleeping one.
+
+
+---
+
+# PART XVIII — THE UI/UX SURFACE OF ALL THIS (2026-09-14)
+
+**For the panel.** Everything in PARTS VI–XVII is backend. This part is the **measured
+inventory of what a user can actually SEE**, the positions we hold, and the questions we
+want attacked. ⚠ Every "does not exist" below was checked in the frontend source, not
+assumed — absence is the finding here.
+
+## §44 · Current status, verified
+
+### 44a · ✅ What EXISTS and is good
+
+**Signal-level eligibility is fully plumbed** (the 2026-09-02 work). `SignalOut` and
+`SuggestionOut` carry `blocked` · `blocked_by` · `block_reason` · `unassessed`;
+`features/alerts/alertPresentation.ts:231-259` (`tradeBlock()`) is the single renderer, and
+**all four Buy surfaces consume it** — `OpportunitiesTable`, `DashboardPage`, `StylePage`,
+`LiveSignalsPage`. `unassessed` renders as *"eligibility not fully checked"* and stays
+clickable, so **unknown is visibly distinct from blocked**. `block_reason` is verbatim the
+409 detail and a contract test pins that. ⭐ **This is the standard the rest of this part is
+measured against.**
+
+**Stock metadata** — `StockDetailPage` shows Exchange · **ISIN** · Sector · Industry · Lot
+Size · **Listed On**; `StocksPage` has an opt-in ISIN column and ISIN in the CSV export.
+
+**The nearest thing to an ops surface** is `features/broker/KiteConnectPage.tsx`: token
+connected/expiry countdown, `consumer_running` start/stop, and a **Sync Instruments** button
+that toasts `Synced {n} instruments`.
+
+### 44b · ⛔ What does NOT exist
+
+| # | absent surface | evidence |
+|--:|---|---|
+| 1 | **Any UI for `is_active` / universe membership.** No badge, column, filter or sort. `StocksPage` never sends the param, so it inherits the backend default `is_active=True` — an excluded stock is **simply not in the list, with no cue**. The **screener has no `is_active` field at all**, so a user cannot even ask. | `StocksPage.tsx:126-137` · `FilterRow.tsx:8-19` |
+| 2 | **Any UI for `ca_flagged_at`.** Zero hits for `ca_flag` / `quarantin` / `corporate action` in the whole client. ⭐ And it is not just missing from the UI — **`ca_flagged_at` is not in `StockRead` either**, so no client could render it. | `app/schemas/stock.py:7-27` |
+| 3 | **Any per-stock reason in an empty state.** `StylePage`'s `EMPTY_REASON` offers three causes (no validated profile / EOD timing / IV-rank gate); `OpportunitiesTable` says *"Nothing meets the confluence gate right now."* **Neither can name a stock-level exclusion.** | `StylePage.tsx:64-76` · `OpportunitiesTable.tsx:309` |
+| 4 | **Any ops / health page.** Three admin routes exist — Kite, Users, Settings (**theme only**). No feed health, worker status, data coverage, universe size, or daily report. ⭐ `feed_health` / `worker_health` / `calendar_health` exist as **services with no API endpoint**; they feed the markdown report and nothing else. | `router.tsx` · `nav-items.tsx:62-70` |
+| 5 | ⛔⛔ **Any price-freshness signal on positions.** `PositionsPage` does **not** use `useLiveQuotes` — it polls every 30 s and renders the backend `current_price`; when null it prints a bare **`—`**. There is no last-tick timestamp on `PositionOut`. ⇒ **A stranded position (U17) is pixel-identical to a momentary gap.** ⚠ `PositionHealth.stale` renders as "expired" but that is a *signal-age* verdict, not price staleness. | `PositionsPage.tsx:27-30, 99-105, 159` |
+| 6 | **`series` anywhere in the client model**, and **any symbol-history / rename UI.** A renamed ticker simply appears as a different symbol. | `lib/api/stocks.ts` |
+| 7 | **Any surface for the D2′b change.** +1,121 / −152 would reach a user **only as rows appearing and disappearing.** | — |
+
+### 44c · ⭐ One built-and-unwired surface, which is a pattern not an accident
+
+`lib/api/filings.ts:24-30,64` defines `EventGuardStatus { suppressed, reason, suppressed_until }`
+and `filingsApi.getGuard(...)` — **and no component calls it.** Dead client code for a
+suppression mechanism, sitting beside a suppression mechanism with no client code at all.
+
+⭐ **This is the frontend twin of the backend pattern this rebuild kept hitting:** `ca_detector`
+built and gated on the wrong flag, `categories` / `strategy_profiles` built and starved,
+`kite_instruments` built with no owner. **The recurring defect in this system is not missing
+capability — it is capability that exists and is not wired to anything.**
+
+### 44d · ⚠ Two stale artifacts found while surveying
+
+- **`docs/STATUS.html` was last modified 2026-09-06** — the day *before* the DB loss. The
+  project's only presentation-facing artifact predates the entire outage and everything since.
+  (The standing warning that it hardcodes gate modes with no data source still applies.)
+- **A refuted claim in a schema comment, now fixed:** `SignalOut.choppy` was annotated *"the
+  07-30/31 review showed choppy tapes drove ~all the losses"*. Round 9 measured `choppy` as a
+  selector at **−0.0001, p = 0.999** — separating nothing — which is why **B1 deleted** the
+  display filter it justified. `choppy` and `near_expiry` survive as **measured stamps, not
+  eligibility**. ⚠ If any UI renders them as a reason a signal is *worse*, that is now a
+  refuted belief on screen.
+
+## §45 · Our statements — attack these
+
+**S1 — The asymmetry is the finding.** Three mechanisms remove a name from a user's view:
+the **order-path overlays** (visible: `⊘ Blocked`, verbatim reason, contract-tested), plus
+**`is_active`** and **`ca_flagged_at`** (both invisible, one not even in the API). The user
+experience is identical in all three cases — *a name I expected is not actionable* — and we
+built a careful answer for one third of it.
+
+**S2 — ⭐ Absence is not askable, and that is why this is hard.** The 2026-09-02 fix worked
+because the user was **looking at a row** and clicking a button that 409'd; the feedback had
+somewhere to attach. A stock excluded by `is_active` produces **no row, no signal, no click**.
+**You cannot ask "why isn't X here" about a name you do not know to look for.** We assert this
+is a genuinely hard product problem and not a missing badge — and we are not confident we know
+the right shape of answer.
+
+**S3 — The stranded position is the most urgent thing the system can know, and it renders as an
+em-dash.** U17 logs it at ERROR; `PositionsPage` prints `—`. **A position that cannot be priced
+or exited is a money-path fact, and it currently has less UI than a sector label.**
+
+**S4 — We deliberately did NOT build ops UI, and we are not sure that is right.** Health lives
+in a markdown report a solo operator reads daily. That is cheap and it works; it also read ✅
+through a five-day outage (6.8.6 asserted recency). **Our position: a dashboard that must be
+LOOKED AT is weaker than an alarm that arrives** — but we may be defending an absence.
+
+**S5 — `is_active` should probably NEVER be a user-facing filter.** It is an internal
+derivation (after D2′b, a nightly rule). Exposing it invites the user to override a rule they
+cannot see the inputs of. **The useful surface is the REASON, not the flag** — but this is
+exactly where we want to be wrong if we are.
+
+**S6 — Any number we add must carry its evidence (`.claude/rules/ui.md` A24).** "2,291 names"
+is fine; "2,291 tradeable" is a claim. A universe count rendered without its `as_of` and its
+rule version is the precise-figure-without-uncertainty failure that rule exists for.
+
+## §46 · Questions for the panel
+
+**[BLOCKING] Q1 — What is the right surface for a name that was EXCLUDED, given S2?** Options
+we see, none obviously right: (a) show excluded names in search greyed with a reason —
+honest, but puts un-tradeable rows in front of a trader; (b) a "why isn't X here?" lookup —
+solves nothing, since the user must already suspect; (c) surface it only on the **stock detail
+page** the user navigated to deliberately; (d) accept the absence and surface exclusions
+**only in aggregate**, in the daily report. ⭐ **Name the failure mode of whichever you pick.**
+
+**[BLOCKING] Q2 — Does the D2′b flip (+1,121 / −152) need a user-facing surface at all, or
+only an operator one?** The 152 disappearing are names that should never have been scannable;
+the 1,121 appearing are the real universe returning. ⚠ **No positions exist**, so nothing a
+user holds is affected — does that make this purely an ops event?
+
+**[BLOCKING] Q3 — What should `PositionsPage` show when a position cannot be priced?** We
+believe `—` is wrong and that "no live price for N minutes" must be distinguishable from
+"price is zero/unknown". ⚠ Constraints: the page **polls 30 s and does not subscribe to live
+quotes**, and `PositionOut` has **no last-tick timestamp** — so this needs a backend field,
+not only a component change. Is a per-row age the right shape, or a page-level banner?
+
+**Q4 — Is a markdown report the right ops surface for a one-person system (S4)?** If you say a
+page, say what it shows that the report cannot, and **who notices it when nobody opens it.**
+
+**Q5 — Should `ca_flagged_at` be exposed at all?** It quarantines a stock from every
+suggestion universe on a 20 %-gap heuristic, and §32 measured that a naive backward pass would
+flag **1,768 of 3,395 stocks**. Rendering "quarantined" invites a user to demand an unflag they
+cannot evaluate. **Better invisible, or better visible-with-its-heuristic?**
+
+**Q6 — Does `symbol_history` have any user-facing value, or is it analyst-only?** Today a
+renamed ticker just becomes a different symbol. A user holding it through the rename sees no
+continuity. ⚠ Also note: nothing renders `series`, so `BE`/`BZ` is invisible even though it
+determines tradeability.
+
+**Q7 — What should the four "empty state" messages say when the true cause is per-stock?**
+They currently enumerate global causes and cannot name a name (§44b/3).
+
+**Q8 — ⭐ The pattern question, and the one we most want answered: what stops the NEXT
+capability from being built and left unwired?** `filingsApi.getGuard` (dead client code),
+`ca_detector` (gated on the wrong flag), `categories` and `strategy_profiles` (empty but
+consumed), `kite_instruments` (no owner). **Is there a check that catches "built, not wired"
+the way a test catches "built, not working"?**
+
+⚠ **Constraints any proposal must respect** (`.claude/rules/ui.md`, each earned here): tokens
+only, never palette classes — the app has **5 themes**; ⛔ **never stack `opacity` on a state
+carrying safety copy** (a 0.55 row × the Button's `disabled:opacity-50` put "Blocked" at
+**1.52:1** against a 4.5 AA floor); use **`aria-disabled` + a click guard**, never native
+`disabled`, whenever the reason must stay readable; and **A24** — no bare point estimate for
+anything predictive.

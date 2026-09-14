@@ -67,7 +67,12 @@ class SignalOut(BaseModel):
     near_expiry: bool = False
     days_valid_remaining: float = 0.0  # calendar days until validity_until (server-computed)
     # Daily Kaufman efficiency ratio (0-1): >~0.4 clean trend, <~0.3 choppy.
-    # The 07-30/31 review showed choppy tapes drove ~all the losses.
+    # ⚠ The 07-30/31 review BELIEVED choppy tapes drove ~all the losses. Round 9
+    # measured it: as a selector `choppy` separates NOTHING (−0.0001, p = 0.999)
+    # while the undeclared display filter it justified was hiding 67% of the
+    # offered set — which is why B1 DELETED that filter. Both fields survive as
+    # measured STAMPS, not as eligibility: render them as description, never as a
+    # reason a signal is worse.
     regime_er: float | None = None
     choppy: bool = False
     # Order-eligibility preview (2026-09-02). The order path runs seven overlays and

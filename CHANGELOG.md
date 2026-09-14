@@ -7,6 +7,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Calendar + UI/UX status for the panel (2026-09-14)
+
+- **Added 2026-09-14 Ganesh Chaturthi to `nse_holidays`** (`source='manual'`, the model's
+  documented value for an admin entry; the seed's `ON CONFLICT DO NOTHING` means later
+  derivation cannot clobber it). ⭐ The calendar is 46/48 **derived** from bhavcopy gaps, which
+  can only infer a holiday *after* the session passes — hence the gap. Verified:
+  `_expected_latest_trading_day` now returns 2026-09-11, matching the latest bar, so **tonight's
+  report will not raise a false staleness alarm**.
+- ✅ **`sync-kite-instruments` fired unattended in production** at 02:30 UTC
+  (`kite_instruments.synced_at` confirms) — first proof the token-free scheduled owner works.
+  Worker restarted 10:19, so `materialise-universe` is now live too (fires tomorrow 03:05 UTC).
+- **New plan PART XVIII — the UI/UX surface**, a *verified* inventory plus six statements and
+  eight questions for the external panel. Headline: signal-level eligibility is fully plumbed
+  (`blocked`/`blocked_by`/`block_reason`/`unassessed` → `tradeBlock()` on all four Buy
+  surfaces), while **stock-level exclusion is invisible** — no UI for `is_active`, none for
+  `ca_flagged_at` (which is not even in `StockRead`), no per-stock reason in any empty state,
+  no ops/health page, and **a stranded position renders as a bare `—`, pixel-identical to a
+  momentary gap**. ⭐ The hard part is that an absence is not askable: the 09-02 fix worked
+  because the user was looking at a row and clicking a button that 409'd.
+- ⚠ Two stale artifacts noted: `docs/STATUS.html` predates the 09-07 DB loss, and a **refuted
+  claim in `SignalOut.choppy`'s comment** ("choppy tapes drove ~all the losses") is corrected —
+  round 9 measured it at p = 0.999, which is why B1 deleted the filter. `choppy`/`near_expiry`
+  survive as measured stamps, not eligibility.
+
+
 ### D2′a — the universe as a versioned rule, evaluated and recorded (2026-09-14) — SHADOW ONLY
 
 `is_active` is a mutable boolean with three writers and no owner, and every one of the 3,392
