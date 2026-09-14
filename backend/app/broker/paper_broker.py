@@ -28,6 +28,7 @@ from app.core.config import settings
 from app.models.signal import Signal
 from app.models.trading import Order, Position
 from app.models.user import User
+from app.schemas.trading import PriceSource
 from app.services.liquidity import load_median_traded_values_safe
 from app.signals import eligibility
 from app.trading import risk_engine
@@ -382,18 +383,28 @@ async def get_live_ltp(stock_id: int) -> Decimal | None:
         return None
 
 
-async def get_current_price(db: AsyncSession, stock_id: int) -> Decimal | None:
-    """Best-effort current price: live Redis LTP, else the FRESHEST stored close.
+#: V2 — where a mark actually came from. ⭐ The fallback chain is THREE deep, and the
+#: difference between its rungs is the difference between "seconds old" and "a day old",
+#: which is exactly what a position holder needs to know and what a bare number hides.
+# ⚠ W5 — ONE declaration, not two. `PriceSource` (app/schemas/trading.py) is the wire
+# vocabulary; these constants are annotated with it, so mypy refuses a value the API cannot
+# serialise and there is no second list to drift. `app.schemas.trading` is a leaf module
+# (no app imports), so this direction costs nothing and cannot cycle.
+PRICE_LIVE: PriceSource = "live"      # a live Redis tick
+PRICE_MINUTE: PriceSource = "minute"  # last COMPLETE 1m bar — ticks are cold
+PRICE_DAILY: PriceSource = "daily"    # daily close — no intraday data; up to a session stale
+PRICE_NONE: PriceSource = "none"      # nothing at all
 
-    When live ticks are cold (off-market, or a tick outage), the last completed
-    1-minute close is the freshest mark available — much fresher than the daily
-    close, which lags a full session until the evening EOD ingest. Preferring
-    the 1m close keeps unrealised P&L honest instead of stuck a day behind.
+
+async def stored_price_with_source(
+    db: AsyncSession, stock_id: int
+) -> tuple[Decimal | None, PriceSource]:
+    """The NON-LIVE half of `get_current_price`, with its provenance.
+
+    Split out for V2 so a caller can tell a mark seconds old from one a session old.
+    `get_current_price` delegates here, so there is exactly ONE fallback chain and the
+    two cannot drift (W2).
     """
-    live = await get_live_ltp(stock_id)
-    if live is not None:
-        return live
-
     from app.models.market_data import Ohlcv1m, OhlcvDaily
 
     minute = (
@@ -405,7 +416,7 @@ async def get_current_price(db: AsyncSession, stock_id: int) -> Decimal | None:
         )
     ).scalar_one_or_none()
     if minute is not None:
-        return Decimal(str(minute))
+        return Decimal(str(minute)), PRICE_MINUTE
 
     daily = (
         await db.execute(
@@ -415,7 +426,28 @@ async def get_current_price(db: AsyncSession, stock_id: int) -> Decimal | None:
             .limit(1)
         )
     ).scalar_one_or_none()
-    return Decimal(str(daily)) if daily is not None else None
+    if daily is not None:
+        return Decimal(str(daily)), PRICE_DAILY
+    return None, PRICE_NONE
+
+
+async def get_current_price(db: AsyncSession, stock_id: int) -> Decimal | None:
+    """Best-effort current price: live Redis LTP, else the FRESHEST stored close.
+
+    When live ticks are cold (off-market, or a tick outage), the last completed
+    1-minute close is the freshest mark available — much fresher than the daily
+    close, which lags a full session until the evening EOD ingest. Preferring
+    the 1m close keeps unrealised P&L honest instead of stuck a day behind.
+
+    ⚠ Returns the price ALONE, which is why V2 exists: every caller that renders this
+    to a human needs `stored_price_with_source` instead, or it shows a day-old close as
+    though it were a live quote.
+    """
+    live = await get_live_ltp(stock_id)
+    if live is not None:
+        return live
+    price, _source = await stored_price_with_source(db, stock_id)
+    return price
 
 
 def size_for_fill(
@@ -744,7 +776,14 @@ async def close_position(
     close_side = "SELL" if position.side == "LONG" else "BUY"
     raw_price = exit_price or await get_current_price(db, position.stock_id)
     if raw_price is None:
-        raw_price = position.avg_entry_price  # fallback: flat trade
+        # ⚠ NOT a flat trade — that claim predates 6.8.2 and A29 and is now wrong. This
+        # price still goes through `simulate_fill` below (directional tick rounding +
+        # half-spread + participation impact) and the result is then netted against
+        # `fees.py` round-trip charges, including the FLAT ₹15.34 DP charge on a delivery
+        # sell. So `realized_pnl` is a small LOSS, never zero. It is a fabricated fill at
+        # a price the market never printed — which is why the UI warns about it at the
+        # point of action rather than silently booking it.
+        raw_price = position.avg_entry_price
     # The exit is where illiquidity really bites — the whole position crosses the
     # spread at once. Unlike the entry there is no circularity here: the size is
     # already known, so the impact term is exact in a single pass.

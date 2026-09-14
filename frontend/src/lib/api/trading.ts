@@ -32,6 +32,18 @@ export interface PositionOut {
   exit_price: string | null
   exit_reason: 'sl_hit' | 'tp_hit' | 'manual' | null
   current_price: string | null
+  /**
+   * V2 — where `current_price` came from. The backend chain is
+   * live tick -> last COMPLETE 1m bar -> DAILY CLOSE, so `current_price` almost never
+   * goes null: a position whose feed died renders a plausible number from a previous
+   * session. Without this field the UI cannot tell a live quote from a day-old close.
+   */
+  price_state: 'live' | 'minute' | 'daily' | 'none'
+  /**
+   * V2 — a DIFFERENT condition from staleness: no tradable instrument exists, so this
+   * position cannot be priced or exited through the live path at all and needs a human.
+   */
+  stranded: boolean
   peak_price: string | null
   peak_pnl: string | null
   health: PositionHealth | null

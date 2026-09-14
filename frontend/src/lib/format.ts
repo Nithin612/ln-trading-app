@@ -37,6 +37,19 @@ export const formatPct = (n: number, opts?: { signed?: boolean }) => {
   return `${sign}${n.toFixed(2)}%`
 }
 
+/**
+ * "99%" — a whole-percent magnitude, TRUNCATED, never rounded and never signed.
+ *
+ * ⛔ Rounding is wrong for this class of figure and the bug is not hypothetical: a 99.5%
+ * coverage shortfall rendered as "100% below the median" ASSERTS zero coverage, while the
+ * count printed two lines above it said 12 names were priced. Truncation can only ever
+ * understate an alarm; rounding can overstate it past a claim boundary.
+ *
+ * ⛔ NOT `formatPct` — that one carries 2dp and a leading "+", both wrong for a magnitude
+ * derived from a 30-session median of daily counts, which supports neither.
+ */
+export const formatWholePct = (n: number) => `${Math.trunc(n)}%`
+
 const IST_DATETIME = new Intl.DateTimeFormat("en-IN", {
   timeZone: "Asia/Kolkata",
   day: "2-digit",
@@ -88,4 +101,22 @@ export const formatChange = (n: number) => {
   if (n > epsilon) return `▲ +${n.toFixed(2)}%`
   if (n < -epsilon) return `▼ ${n.toFixed(2)}%`
   return `— 0.00%`
+}
+
+const IST_DATE = new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata",
+  day: "2-digit",
+  month: "short",
+})
+
+/**
+ * "11 Sep" — a market DATE, IST, from a plain `YYYY-MM-DD` string.
+ *
+ * Parsed as a UTC midnight instant deliberately: a bare date has no zone, and letting the
+ * browser read it as LOCAL midnight shifts it a day backwards for anyone west of IST.
+ * Returns "—" for an unparseable value rather than "Invalid Date".
+ */
+export const formatIstDate = (isoDate: string) => {
+  const d = new Date(`${isoDate}T00:00:00Z`)
+  return Number.isNaN(d.getTime()) ? "—" : IST_DATE.format(d)
 }

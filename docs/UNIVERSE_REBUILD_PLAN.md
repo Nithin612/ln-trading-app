@@ -3139,3 +3139,335 @@ urgent.
 3. **Deferred for discussion, and Claude is to raise both:** ⛔ the index backfill **does not
    license** a `market_regime_gate_mode` flip (§9/4 — two gates promoted on arguments, both
    refuted within weeks; promotion needs `t ≈ 3.6`), and ⚠ **sector-RS stays blocked on U8**.
+
+---
+
+# PART XXII · V1 AND V2 BUILT (2026-09-14)
+
+> Built while the round-5 reviews were being gathered, per the user's "start V1 and V2 while
+> I get the reviews". Both are §62 items. **Backend and frontend shipped together on
+> purpose** — shipping the backend alone would have been the exact "built but unwired"
+> defect §60/A5 is about, and §44c already found one instance of that pattern here.
+
+## §65 · V2 — a price now says where it came from
+
+### 65a · ⛔ A correction to PART XXI: the fallback chain is THREE deep, not two
+
+PART XXI said a position's price falls back live → daily. **Read from the code, it is
+live → last 1m close → previous daily close → nothing.** The middle rung was never
+documented and never surfaced.
+
+All four rendered **identically**. A position whose feed had died showed a plausible number
+from a previous session with nothing marking it, and — this is the part that matters —
+`unrealized_pnl`, the daily P&L card and the paper record were all computed from that
+number and looked equally real.
+
+⚠ This is not hypothetical: the 2026-09-07 universe loss left held names with no
+instrument, and every one of them kept rendering a price.
+
+### 65b · What shipped
+
+- `paper_broker.py` — `PRICE_LIVE / PRICE_MINUTE / PRICE_DAILY / PRICE_NONE` and
+  `stored_price_with_source()`. ⭐ **`get_current_price` now delegates to it** rather than
+  carrying a second copy of the chain (W2). A first draft left the old chain behind as
+  `_unused_legacy_chain` — deleted immediately; that IS the defect under review.
+- `PositionOut` gained `price_state` and `stranded`.
+- `api/v1/trading.py` — the per-position `get_live_ltp` loop was **batched to
+  `get_live_ltps`**, fixing an N+1 Redis round-trip the depth fetch had already been
+  batched to avoid.
+- Frontend: a per-row provenance label (`last 1m close` / `prev session close` / `no price`;
+  a live tick is annotated with **nothing**, because that is the expected state and
+  annotating it would train the eye to ignore the annotation).
+
+### 65c · ⭐ STRANDED is a different condition, not a worse staleness
+
+A held name with no tradable instrument cannot be priced **or exited** through the app at
+all. That needs a person, not a badge — so it is a page-level `role="alert"` banner naming
+every affected symbol, with the two real remedies (square off at the broker, or repair the
+instrument list). The set comes from `held_without_instrument(db)`, the same U17 query the
+live worker logs at ERROR, so **the alert and the log cannot disagree**.
+
+## §66 · V1 — an empty list now says what it looked at
+
+### 66a · The defect, stated precisely
+
+"Nothing meets the confluence gate right now" and "the scan covered 12 stocks because the
+universe collapsed" **rendered identically**. That is not a hypothetical either: it is what
+the signal list displayed for days after 2026-09-07.
+
+⭐⭐ And the funnel doubles as a breadth detector the **6.8.6 feed alarm structurally cannot
+be**: that alarm asserts **RECENCY** (are the newest bars fresh), never **COVERAGE** (how
+many names have them). It read ✅ throughout the outage. `priced_today` against its own
+30-session median would have read ⚠ on day one.
+
+### 66b · ⭐ A measurement that changed the implementation
+
+Q-R2 predicted 4 of 5 stages would be computable. **Confirmed** — the "assessed" stage is
+genuinely **ABSENT**: the scorer does not persist how many panels it evaluated.
+
+The stage that nearly shipped wrong was `priced_today`. Raw "distinct stocks with a bar in
+the latest session" = **2,637**, against an in-universe count of **2,291** — because D3
+ingests the whole bhavcopy, deliberately, and archiving is not a universe decision. A funnel
+that **widens** at stage three is not a funnel; it is a bug that looks like data. The stage
+is now joined to `stocks.is_active`, giving **2,286**, and the nesting is asserted by test.
+
+### 66c · Measured on dev, 2026-09-14
+
+| stage | count |
+|---|---|
+| known | 3,395 |
+| in universe | 2,291 |
+| priced (latest session) | 2,286 |
+| scored | **not recorded** |
+| live signals | **0** |
+
+`session = 2026-09-11` · 30-session median coverage **2,250** · shortfall **−1.6%** (today
+is *above* median). ⇒ **the zero is real**: 2,286 names were priced and none passed. That is
+now a statement the UI can make, and could not make before.
+
+### 66d · ⚠ Scope — two of four planned surfaces, and why the other two were refused
+
+The queue said "wire it into the four empty states". **Two were wrong, and saying so is the
+point of writing the estimand down first:**
+
+- ✅ `OpportunitiesTable` and `DashboardPage` — both render `/signals/active`. The funnel is
+  literally the scope of that list.
+- ⛔ `LiveSignalsPage` — an absent **alert** means no level was touched. The funnel says
+  nothing about that. Rendering it there would be a confident-looking non-answer to a
+  different question.
+- ⛔ `StylePage` — its `EMPTY_REASON` copy is already per-style and already honest (intraday
+  is empty because **no profile passed walk-forward**, which is a refusal, not a coverage
+  problem). The funnel is **not** style-scoped, so its counts would not correspond to the
+  table under them.
+
+⭐ **The rule this is an instance of:** a diagnostic attached to a question it does not
+answer is worse than no diagnostic, because it looks like an answer.
+
+### 66e · A24 in three places
+
+1. `breadth_shortfall_pct` **never renders without the median it is a shortfall against**,
+   in the same element.
+2. The shortfall is rounded to **whole percent** — a 30-session median of daily counts
+   supports no more precision than that.
+3. The absent "scored" stage renders as **"not recorded"**, never as `0`. A `0` would
+   *assert* that nothing was scored, which we do not know. Pinned by a test.
+
+Alarm threshold **20%**; below it the line reads "typical coverage is N names" rather than
+crying wolf on ordinary variation.
+
+## §67 · State
+
+- Frontend: **439 tests green**, lint clean, production build clean (the `pnpm build` gate
+  `make check` does not cover).
+- Backend: 12 price-truthfulness tests + 8 funnel tests green; 182 trading/position tests green.
+- ⛔ **Still unpushed**, as everything on this branch is.
+
+## §68 · What V1/V2 did NOT establish
+
+- ⛔ **Neither touches a recorded number.** `price_state` is a *label on* the price the code
+  already used; it does not change which price is used, so no P&L figure moves. The funnel
+  reads only.
+- ⛔ **V1 does not explain the drop from 2,286 priced to 0 signals** — that is precisely the
+  stage that is not recorded. It bounds the question; it does not answer it.
+- ⚠ **V2 does not make a stranded position exitable.** It makes it visible and names the
+  remedy. The remedy is still manual.
+
+## §69 · ui-reviewer returned **FAIL**, and the most important finding inverted on measurement
+
+16 findings, 3 HIGH. Recorded here in full because §63/5 asked "what did THIS round miss?" and
+the answer is: **a review caught things four rounds of panel review did not, because it
+measured contrast ratios instead of reasoning about them.**
+
+### 69a · ⛔⛔ THE ONE THAT INVERTED — a remedy that would have trapped the user
+
+**The finding was right and its fix was backwards.** The reviewer observed that the banner
+asserted *"N positions cannot be priced or exited here"* while the row for that exact symbol
+rendered a **fully enabled Close button** — the documented display-vs-action divergence class
+(five Buy surfaces; 41-of-204 signals that could only 409). Proposed remedy: gate the row's
+buttons with `aria-disabled` + a click guard.
+
+⭐ **Measured before applying it, and the premise is false.** `paper_broker.close_position`
+takes **no instrument**:
+
+```python
+raw_price = exit_price or await get_current_price(db, position.stock_id)
+if raw_price is None:
+    raw_price = position.avg_entry_price  # fallback: flat trade
+```
+
+⇒ **a stranded position closes fine.** And `held_without_instrument`'s own docstring says
+"un-exitable **through the live path**" — a qualifier my banner had silently dropped.
+
+**Measured on dev 2026-09-14: 740 stocks have no EQ instrument, and exactly ONE of them
+printed a bar in the latest session.** So the fallback is a stale close or, failing that, a
+**fabricated flat trade at the entry price — entering `realized_pnl` and the paper record.**
+
+⇒ ⭐⭐ **Disabling Close would have trapped the user in the one position they most need out
+of, to enforce a claim that was itself wrong.** The divergence was real; the *lie* was the
+banner, not the button. Resolved in the opposite direction:
+
+1. The banner now says the names have **no tradable instrument** and **receive no live
+   price**, so any exit here is **booked against a stale close** — all three true.
+2. A `role="alert"` warning inside `ClosePositionDialog` fires whenever `price_state != live`
+   and names **exactly what leaving the price blank will resolve to**; on `none` it says it
+   books a flat trade at the entry price. **The warning at the point of ACTION replaces the
+   block — it does not add one**, pinned by a test asserting the confirm button stays enabled.
+
+⭐ **The generalisable rule: when a UI and an action contradict each other, measure which one
+is lying before silencing either.** Disabling a control is not the neutral, safe default it
+looks like — it is a claim that the action is impossible, and here that claim was false.
+
+### 69b · Two HIGH findings that only a measurement could produce
+
+- ⛔ **`--color-loss` on the row surface fails AA in the DEFAULT theme** — slate **3.96:1**,
+  midnight **4.18:1**, and **3.36 / 3.66 on hover**, against the 4.5 floor. This is the
+  daybreak `--color-loss` incident of 2026-09-02 **repeating in the dark themes**.
+- ⛔ **And it was the wrong token regardless of contrast.** `--color-loss` means *"this
+  position is losing money"* on the same row (the SL cell, the P&L cell, the SELL pill).
+  Painting *"prev session close"* in that red makes **stale data and a losing trade read
+  identically at a glance**. ⇒ a stale mark is a **degraded state, not a negative value**;
+  both now use the `--color-warning` on `--color-warning-bg` pill idiom.
+- `--color-text-muted` at 11px fails AA in **four of five** themes (daybreak **2.34:1**) →
+  `--color-text-secondary`, which passes in all five resting and hovered.
+- ⚠ **Recorded in `tokens.css`:** daybreak's `--color-warning` on `--color-warning-bg` is
+  **4.51:1 — clearing AA by 0.01, the tightest margin in the file**, and now load-bearing for
+  two components. Nudging either value without re-measuring that pair breaks AA silently.
+
+### 69c · Three defects in my own A24 enforcement, inside the component built to enforce A24
+
+1. ⛔ **`Math.round` overstated an alarm past a claim boundary.** A 99.5% shortfall rendered
+   **"100% below the median"** — which asserts **zero** coverage — while the rung two lines
+   above printed **12 names priced**. The component contradicted itself *in the same visual
+   element*, in the direction that exaggerates. ⇒ `formatWholePct` **truncates**: truncation
+   can only ever understate an alarm.
+2. ⛔ **`session` was fetched, typed, and never rendered** — the exact defect I had found
+   myself minutes earlier. The backend field's own docstring reads **"Without it the count
+   means nothing"**, and there is a backend test named `test_the_session_is_reported`. ⭐ **The
+   contract was enforced one layer down and the UI dropped it anyway**, which is the strongest
+   available argument that a schema docstring is not a substitute for a test at the surface
+   that renders it.
+3. ⛔ **A null median fell through BOTH branches** — count with no reference and no statement
+   that the reference was missing. The same rule the component applies *correctly* to the
+   scored stage, omitted one element below it.
+
+### 69d · And the wiring predicate was wrong in the way its own comment forbade
+
+`DashboardPage`'s `signals` is **already filtered** by the near-expiry and choppy checkboxes,
+so testing it would blame the scan's scope for what a checkbox did — **precisely the
+mis-attribution the footer exists to prevent**, written directly beneath a comment saying so.
+Now derived from the unfiltered response.
+
+### 69e · What the reviewer confirmed
+
+Tokens resolve in all five themes · the `footer` slot is outside the dimmed icon wrapper (no
+opacity stacked on safety copy) · stranded-banner text **13.10–15.47:1** · colour is never the
+sole carrier · `→` separators `aria-hidden` · **the "assessed is unrecorded, not zero"
+rendering is A24 done exactly right** · responsive at 375px · 0 raw hex, 0 palette classes,
+0 `dark:`, 0 native controls in the diff.
+
+⚠ **Dropped `role="status"`**: the component returns `null` until its query resolves, so the
+live region mounts **already populated**, which screen readers do not reliably announce. **A
+live region that silently never fires is worse than none, because we would believe it works.**
+
+## §70 · The re-review: PASS-WITH-NOTES, and it found nine defects **in the fixes**
+
+⭐ **The reviewer withdrew its own remedy on #3** after reading `close_position` and agreed the
+correction belonged in the claim, not in the control. That is the round's best outcome: the
+divergence was real, the reflexive fix was wrong, and **measurement settled it in one pass.**
+
+### 70a · ⛔ The fix to §69d was itself the same error, moved one layer up
+
+I replaced `DashboardPage`'s post-filter predicate with `signalData?.signals?.length` and
+called it "the UNFILTERED response" in a comment. **It is not.** That query's key carries
+`direction`, `classification` and `minConfidence` — all **server-side**. Set min-confidence
+to 90 and the response empties, so the page would have announced *"signals are generated
+nightly"* **and rendered the scan-scope funnel** — blaming coverage for a slider. Exactly the
+mis-attribution the footer exists to prevent, one layer up, under a comment asserting the
+opposite.
+
+⭐⭐ **THE REAL FIX WAS TO MOVE THE DECISION, NOT PATCH THE PREDICATE.** `funnel.signals_live`
+counts `status='active' AND quarantined_at IS NULL` with **no filter applied**, so if it is
+positive while a caller renders an empty list, a filter did that. `ScanScope` now decides
+from it and says so. **It needs no knowledge of any caller's filter state and cannot drift as
+filters are added** — and `DashboardPage` now carries no predicate at all.
+
+⚠ **Three attempts, three wrong predicates, one structural fix.** The tell each time was that
+the component needing the answer was not the component that had it.
+
+### 70b · Copy that overstated, in both directions
+
+- ⛔ **"a flat trade" was wrong.** The `avg_entry_price` fallback still goes through
+  `simulate_fill` (directional tick rounding + half-spread + participation) and is then netted
+  against `fees.py` — **including the flat ₹15.34 DP charge on a delivery sell**. The booked
+  result is a small **loss**, never zero. ⭐ **The backend's own `# fallback: flat trade`
+  comment is stale for the same reason** — it predates 6.8.2 and A29 — and is now corrected
+  (W1).
+- ⛔ **The banner was wrong for its own worst case.** "any exit here is booked against a stale
+  close" holds only when a close exists; **740 names have no instrument and exactly one printed
+  a recent bar**, so the realistic stranded position has none and books against the *entry*
+  price. The dialog branched on this correctly and the banner did not.
+- ⛔ **A grammar bug in safety copy:** the singular/plural branch covered "position(s)",
+  "has/have" and "This name/These names" — and left the verb hardcoded, so the common case read
+  **"This name receive no live price"**. The test asserted the headline and never reached it.
+
+### 70c · ⚠ Token semantics, applied to the annotation and not to the banner
+
+§69b moved `PriceProvenance` off `--color-loss` because **a degraded state is not a negative
+value** — then the page-level banner kept `--color-loss` + `--color-loss-bg`. Same rule, same
+file, thirty lines apart. Now `--color-warning`, consistent with the pill and the dialog.
+⭐ **A principle stated in a comment and applied to one of its two instances is not applied.**
+
+### 70d · A11y: the warning was unreachable non-visually
+
+The label said *"see the warning **above**"* — a positional reference that means nothing to a
+screen reader or a magnifier — and the input carried no `aria-describedby`, so the copy
+explaining what a blank field resolves to was **never announced when focus landed on it**. Now
+associated by id, with the positional wording gone.
+
+## §71 · ⛔⛔ A PALETTE-WIDE AA DEFECT, FOUND BY A TEST WRITTEN FOR SOMETHING ELSE
+
+`tokens.css` records contrast measurements **in prose comments**, and that convention has now
+failed three times. So the measurement became a test — and it immediately found a defect
+nobody was looking for.
+
+**Eight pairs are below the 4.5:1 AA floor today**, on copy that carries money and safety:
+
+| pair | slate | midnight | carbon | ocean | daybreak |
+|---|---|---|---|---|---|
+| `--color-loss` / `--color-loss-bg` | **4.29** | **4.29** | **4.29** | 5.81 | 5.30 |
+| `--color-bear` / `--color-loss-bg` | **4.29** | **4.29** | **4.29** | 5.81 | **3.95** |
+| `--color-loss` / `--color-surface-2` | **3.96** | **4.18** | 4.90 | 5.03 | 5.91 |
+| `--color-bear` / `--color-surface-2` | **3.96** | **4.18** | 4.90 | 5.03 | **4.41** |
+| `--color-profit` / `--color-profit-bg` | 5.97 | 5.97 | 6.54 | 5.06 | **3.32** |
+| `--color-profit` / `--color-surface-2` | 5.87 | 6.19 | 8.08 | 7.05 | **3.44** |
+
+⭐⭐ **THE STRUCTURAL FINDING: the 2026-09-02 fix was applied to a TOKEN, not to a SEMANTIC
+GROUP.** That review moved daybreak's `--color-loss` from **3.95 → 5.30** — and
+**`--color-bear` in daybreak still measures 3.95 today**, the very number that triggered it,
+because it was never touched. `--color-profit`/`--color-bull` on daybreak were never measured
+at all. ⇒ **a fix applied to one member of a semantic group is not a fix.**
+
+⛔ **NOT FIXED — deliberately, and this one is the user's call.** Choosing a different red or
+green changes the appearance of **every P&L figure in the app across five themes**. That is a
+design decision for the owner, not a side effect of the change that happened to measure it.
+Instead `frontend/src/test/tokenContrast.test.ts` asserts the failing set **exactly**: a new
+pair below AA fails the suite, **and so does fixing one without removing its line** — the list
+can only shrink, deliberately.
+
+⭐ **The recommendation, measured and ready to apply in one line each:** dark themes
+`--color-loss`/`--color-bear` red-500 `#ef4444` → red-400 `#f87171` (clears everything: 5.84 on
+`-bg`, 5.38/5.68/6.66 on surface-2); daybreak `--color-bear` → `#b91c1c`, matching the
+`--color-loss` already fixed there; daybreak `--color-profit`/`--color-bull` need a darker green.
+
+### 71a · ⚠ And the test caught itself twice before it caught anything else
+
+1. It first used `node:fs`, which **does not typecheck** under the app tsconfig
+   (`types: ["vite/client"]`) — `make check` would have stayed green while `pnpm build`
+   failed, the documented build-gate gap. Now a file-scoped `/// <reference types="node" />`
+   rather than widening the whole app project so one test can read a file.
+2. Switching to Vite's `?raw` made it **silently vacuous**: vitest disables CSS processing, so
+   the import resolved to an **empty string**, every assertion iterated an empty object, and
+   the suite would have gone **green while measuring nothing**. ⭐ **The parse canary written
+   for exactly this — "a failure below cannot be an empty-object false pass" — is what caught
+   it.** Third instance of the repo's *guard test that cannot fail* pattern, this time caught
+   by a guard deliberately planted against it.

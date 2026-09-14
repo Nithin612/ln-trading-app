@@ -5,6 +5,12 @@ interface EmptyStateProps {
   title: string
   description?: string
   action?: React.ReactNode
+  /**
+   * Supporting context rendered below the action — diagnostic detail that explains the
+   * emptiness rather than offering a next step. Kept distinct from `action` so the two
+   * cannot be confused: an action is something to click, a footer is something to read.
+   */
+  footer?: React.ReactNode
   className?: string
 }
 
@@ -20,7 +26,7 @@ function DefaultIcon() {
   )
 }
 
-export function EmptyState({ icon, title, description, action, className }: EmptyStateProps) {
+export function EmptyState({ icon, title, description, action, footer, className }: EmptyStateProps) {
   return (
     <div
       className={cn(
@@ -36,6 +42,7 @@ export function EmptyState({ icon, title, description, action, className }: Empt
         <p className="text-xs text-(--color-text-muted) max-w-xs">{description}</p>
       )}
       {action && <div className="mt-4">{action}</div>}
+      {footer}
     </div>
   )
 }

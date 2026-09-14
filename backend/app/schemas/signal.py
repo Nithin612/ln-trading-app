@@ -1,6 +1,6 @@
 """Pydantic schemas for Signal endpoints."""
 
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal
 from typing import Any
 
@@ -120,3 +120,23 @@ class SignalOutcomeOut(BaseModel):
     resolved_at: datetime | None
 
     model_config = {"from_attributes": True}
+
+
+class FunnelOut(BaseModel):
+    """V1 — the scope a scan actually covered, for empty states and breadth detection.
+
+    ⚠ Every count travels with `session` and, where it exists, `breadth_median` (A24: a
+    figure without its reference is decoration). ⛔ `assessed_available` is always False
+    today and the stage is genuinely ABSENT rather than zero — the scorer does not
+    persist how many panels it evaluated, and a silent missing rung invites the reader to
+    assume zero.
+    """
+
+    known: int
+    in_universe: int
+    priced_today: int
+    signals_live: int
+    session: date | None = None
+    breadth_median: int | None = None
+    breadth_shortfall_pct: float | None = None
+    assessed_available: bool = False

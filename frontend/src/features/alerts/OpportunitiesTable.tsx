@@ -29,6 +29,7 @@ import { tradingApi } from '@/lib/api/trading'
 import { useTradingHaltStore } from '@/store/tradingHaltStore'
 import { Button } from '@/components/ui/button'
 import { EmptyState } from '@/components/ui/empty-state'
+import { ScanScope } from '@/components/ui/ScanScope'
 import { PriceCell } from '@/components/ui/PriceCell'
 import { StatusPill } from '@/components/ui/StatusPill'
 import { SkeletonTable } from '@/components/ui/skeleton'
@@ -309,6 +310,10 @@ export function OpportunitiesTable() {
         <EmptyState
           title="No active signals"
           description="Nothing meets the confluence gate right now. Signals appear here as the engine commits them; they stay until they hit target/stop or expire."
+          // V1: "nothing passed" and "almost nothing was looked at" render identically
+          // without this. The scan's scope is the only thing an empty list can honestly
+          // report about itself.
+          footer={<ScanScope />}
         />
       ) : (
         <Table aria-label="Opportunities">

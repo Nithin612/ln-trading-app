@@ -72,6 +72,28 @@ export interface SignalListResponse {
   signals: SignalOut[]
 }
 
+/**
+ * V1 — the scope a scan actually covered.
+ *
+ * ⭐ Exists so an empty state can say what it LOOKED AT. An empty signal list has no
+ * stock in context and therefore cannot name a per-stock cause; stating the scope is
+ * the honest alternative to "nothing meets the confluence gate right now".
+ *
+ * ⛔ `assessed_available` is always false today: the scorer does not persist how many
+ * panels it evaluated, so that rung is genuinely ABSENT, never zero. Render the
+ * absence — a silent missing rung invites the reader to assume zero.
+ */
+export interface FunnelOut {
+  known: number
+  in_universe: number
+  priced_today: number
+  signals_live: number
+  session: string | null
+  breadth_median: number | null
+  breadth_shortfall_pct: number | null
+  assessed_available: boolean
+}
+
 export const signalsApi = {
   getActive(
     params: {
@@ -95,6 +117,10 @@ export const signalsApi = {
 
   getById(id: string, token: string): Promise<SignalOut> {
     return api.get<SignalOut>(`/signals/${id}`, token)
+  },
+
+  getFunnel(token: string): Promise<FunnelOut> {
+    return api.get<FunnelOut>('/signals/funnel', token)
   },
 }
 

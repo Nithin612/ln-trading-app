@@ -7,6 +7,115 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### V1 + V2 — a price says where it came from, and an empty list says what it looked at (2026-09-14)
+
+The first two items of the PART XXI §62 queue, backend **and** frontend in one change:
+shipping the backend alone would have been the exact "built but unwired" defect §60/A5 is
+about, and §44c had already found one instance of that pattern here.
+
+- ⛔ **V2 — CORRECTION to PART XXI: the price fallback chain is THREE deep, not two.** Read
+  from the code it is live tick → **last 1m close** → previous daily close → nothing; the
+  middle rung was never documented and never surfaced. All four rendered **identically**, so a
+  position whose feed had died showed a plausible number from a previous session — and
+  `unrealized_pnl`, the daily P&L card and the paper record were all computed from it and
+  looked equally real. `paper_broker` now exposes `PRICE_LIVE/MINUTE/DAILY/NONE` +
+  `stored_price_with_source()`, with `get_current_price` **delegating** to it rather than
+  carrying a second copy of the chain (W2).
+- ⭐ **STRANDED is a different condition, not a worse staleness** — a held name with no
+  tradable instrument cannot be priced *or exited* through the app at all. Page-level
+  `role="alert"` naming every affected symbol plus the two real remedies, sourced from the
+  same U17 `held_without_instrument()` query the live worker logs at ERROR, so the alert and
+  the log cannot disagree.
+- Positions API: the per-position `get_live_ltp` loop is **batched to `get_live_ltps`**,
+  fixing an N+1 Redis round-trip the depth fetch had already been batched to avoid.
+- ⭐⭐ **V1 — `GET /signals/funnel`**, and it doubles as the breadth detector the 6.8.6 feed
+  alarm structurally cannot be: that alarm asserts **RECENCY**, never **COVERAGE**, and read ✅
+  throughout the 2026-09-07 outage. Measured on dev: **3,395 known → 2,291 in universe → 2,286
+  priced → 0 live signals**, 30-session median 2,250. ⇒ the zero is real.
+- ⛔ **A stage nearly shipped wrong:** raw "stocks with a bar in the latest session" = **2,637**
+  against an in-universe 2,291, because D3 ingests the whole bhavcopy deliberately. A funnel
+  that *widens* is a bug that looks like data; the stage is now scoped to the universe and the
+  nesting is asserted by test.
+- ⛔ **The "scored" stage is genuinely ABSENT, not zero** — the scorer does not persist how many
+  panels it evaluated. It renders as "not recorded"; a `0` would assert something we do not
+  know (A24). Pinned by a test.
+- ⚠ **Wired into two empty states, not the four the queue named.** `LiveSignalsPage` answers
+  "was a level touched" and `StylePage` is per-style while the funnel is not — in both cases
+  the counts would not correspond to the list beneath them. A diagnostic attached to a question
+  it does not answer is worse than none, because it reads as an answer.
+- Neither item moves a recorded number: `price_state` labels the price the code already used,
+  and the funnel reads only.
+- ⛔⛔ **ui-reviewer returned FAIL (16 findings, 3 HIGH) and the most important one INVERTED on
+  measurement.** It observed the stranded banner claiming *"cannot be priced or exited here"*
+  beside a fully enabled Close button, and proposed disabling the button. **Measured first:
+  `close_position` takes no instrument** — `raw_price = exit_price or get_current_price(...)`,
+  then `if raw_price is None: raw_price = position.avg_entry_price  # flat trade` — so a
+  stranded position **closes fine**, and `held_without_instrument`'s own docstring says
+  un-exitable *"through the **live path**"*, a qualifier the banner had dropped. **740 stocks
+  have no EQ instrument and exactly 1 printed a bar in the latest session**, so the exit is
+  booked against a stale close or a **fabricated flat trade**. ⇒ **disabling Close would have
+  trapped the user in the one position they most need out of, to enforce a false claim.** Fixed
+  the opposite way: banner copy corrected, and a `role="alert"` in `ClosePositionDialog` names
+  what a blank price field will actually resolve to. ⭐ **When a UI and an action contradict,
+  measure which one is lying before silencing either — disabling a control is not a neutral
+  default, it is a claim that the action is impossible.**
+- ⛔ **`--color-loss` failed AA in the DEFAULT theme** (slate 3.96:1, midnight 4.18:1; 3.36/3.66
+  on hover) — the 2026-09-02 daybreak incident repeating in the dark themes — **and it was the
+  wrong token regardless**: it means "losing money" on that same row, so stale data and a losing
+  trade read identically. Both degraded states now use the `--color-warning` pill idiom;
+  `--color-text-muted` (2.34:1 in daybreak at 11px) → `--color-text-secondary`.
+  ⚠ **Recorded in `tokens.css`:** daybreak's `--color-warning`/`--color-warning-bg` pair clears
+  AA by **0.01** — the tightest margin in the file, now load-bearing for two components.
+- ⛔ Three A24 defects **inside the component built to enforce A24**: `Math.round` rendered a
+  99.5% shortfall as **"100% below"** (asserting zero coverage) while printing 12 names priced
+  two lines above ⇒ new `formatWholePct` **truncates**; `session` was fetched, typed and never
+  rendered despite a backend docstring reading *"Without it the count means nothing"* **and a
+  backend test asserting it**; a null median fell through both branches.
+- ⛔ `DashboardPage`'s predicate tested the **post-filter** list, blaming the scan's scope for
+  what a checkbox did — the exact mis-attribution written directly above it as forbidden.
+- `PositionOut.price_state` is now `Literal["live","minute","daily","none"]` on the wire, with a
+  test deriving the expectation from **both** declarations (W5).
+- ⭐ **Re-review = PASS-WITH-NOTES, and it found nine defects IN THE FIXES.** The reviewer
+  **withdrew its own #3 remedy** after reading `close_position`. The sharpest of the nine: my
+  fix to the filter-vs-scan predicate **was the same error moved one layer up** — I called
+  `signalData.signals` "the UNFILTERED response" in a comment while that query's key carries
+  `direction`, `classification` and `minConfidence`, all server-side, so a min-confidence of 90
+  would have blamed the scan's coverage for a slider. ⇒ **the decision MOVED** to `ScanScope`,
+  which reads the funnel's genuinely unfiltered `signals_live`; `DashboardPage` now carries no
+  predicate at all. Three attempts, three wrong predicates, one structural fix — each time the
+  component that needed the answer was not the one that had it.
+- ⛔ Copy corrections: **"a flat trade" overstated** (the `avg_entry_price` fallback still pays
+  `simulate_fill` + `fees.py`, incl. the flat ₹15.34 DP charge ⇒ a small LOSS, never zero — and
+  **`paper_broker`'s own `# fallback: flat trade` comment was stale** since 6.8.2/A29, now
+  fixed, W1); the banner **was wrong for its own worst case** (no stored close ⇒ booked against
+  the ENTRY price, and 740 instrument-less names have exactly 1 recent bar between them); and a
+  **grammar bug in safety copy** — one stranded position read "This name **receive** no live
+  price", because the plural branch covered every word except the verb.
+- ⚠ **A principle applied to one of its two instances is not applied:** `PriceProvenance` was
+  moved off `--color-loss` because a degraded state is not a negative value, while the banner
+  thirty lines away kept the loss triplet. Now `--color-warning`. Plus a11y — the dialog warning
+  said "see the warning **above**" (meaningless to a screen reader) and had no
+  `aria-describedby`, so it was never announced on focus.
+- ⛔⛔ **A PALETTE-WIDE AA DEFECT, found by a test written for something else.** `tokens.css`
+  records contrast in prose comments and that convention has now failed three times, so
+  `frontend/src/test/tokenContrast.test.ts` measures it instead — and **eight pairs are below
+  the 4.5:1 floor on copy that carries money**: `--color-loss`/`--color-bear` at **4.29** on
+  `--color-loss-bg` and **3.96/4.18** on the row surface in the three dark themes, and
+  `--color-profit`/`--color-bull` at **3.32/3.44** in daybreak. ⭐⭐ **The structural finding:
+  the 2026-09-02 fix was applied to a TOKEN, not a SEMANTIC GROUP** — it moved daybreak's
+  `--color-loss` 3.95 → 5.30, and **`--color-bear` there still measures 3.95**, the very number
+  that triggered it. ⛔ **NOT fixed — the user's call**, since changing the red or green moves
+  every P&L figure in five themes; the test asserts the failing set EXACTLY, so it can only
+  shrink deliberately. Recommendation (measured): dark `#ef4444` → `#f87171`, daybreak
+  `--color-bear` → `#b91c1c`, daybreak green darker.
+- ⚠ **The contrast test caught itself twice first:** `node:fs` did not typecheck under the app
+  tsconfig (`make check` green while `pnpm build` failed — the documented build-gate gap), and
+  Vite's `?raw` made it **silently vacuous** because vitest disables CSS processing, so the
+  import was an empty string and every assertion would have passed while measuring nothing. The
+  parse canary written for exactly that caught it — third instance of the repo's *guard test
+  that cannot fail* pattern.
+
+
 ### Round-4 adjudication — the UI/UX round, and five corrections to our own PART XVIII (2026-09-14)
 
 Five panel responses adjudicated in plan PART XXI. Every checkable claim measured first,

@@ -28,10 +28,12 @@ from app.schemas.signal import (
     ConfidenceBreakdownOut,
     FactorAbstentionOut,
     FactorContributionOut,
+    FunnelOut,
     SignalListResponse,
     SignalOut,
     SignalOutcomeOut,
 )
+from app.services.funnel import load_funnel
 from app.signals import confidence_explain, eligibility
 from app.signals.event_guard import is_signal_suppressed
 from app.trading.atr import atr_timeframe_for, latest_atr
@@ -328,6 +330,37 @@ async def list_active_signals(
             len(enriched),
         )
     return SignalListResponse(total=total, signals=enriched)
+
+
+@router.get("/funnel", response_model=FunnelOut)
+async def signal_funnel(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    _user: Annotated[User, Depends(get_current_active_user)],
+) -> FunnelOut:
+    """V1 — the scope a scan covered: known → in universe → priced today → live signals.
+
+    ⭐ Exists so an empty state can say what it LOOKED AT. An empty state has no stock in
+    context and therefore cannot name a per-stock cause; stating the scope is the honest
+    alternative to "nothing meets the confluence gate right now".
+
+    ⭐⭐ And it doubles as a breadth detector: `priced_today` against `breadth_median`
+    surfaces a coverage collapse, which the 6.8.6 feed alarm cannot see because it
+    asserts RECENCY. The defect that caused the universe rebuild would have shown here.
+
+    ⚠ Declared BEFORE `/{signal_id}`: FastAPI matches in declaration order, so a dynamic
+    segment declared first would swallow `/funnel` as a signal id.
+    """
+    f = await load_funnel(db)
+    return FunnelOut(
+        known=f.known,
+        in_universe=f.in_universe,
+        priced_today=f.priced_today,
+        signals_live=f.signals_live,
+        session=f.session,
+        breadth_median=f.breadth_median,
+        breadth_shortfall_pct=f.breadth_shortfall_pct,
+        assessed_available=f.assessed_available,
+    )
 
 
 @router.get("/{signal_id}", response_model=SignalOut)

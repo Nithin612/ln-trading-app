@@ -29,6 +29,61 @@ function priceFmt(val: string | null): string {
   return `₹${formatINR(parseFloat(val))}`
 }
 
+/**
+ * V2 — how to render a mark given where it came from.
+ *
+ * The backend chain is live tick -> last COMPLETE 1m bar -> DAILY CLOSE, so
+ * `current_price` almost never goes null. Before this, a position whose feed had died
+ * rendered a plausible number from a previous session with nothing marking it — an
+ * em-dash at least signals absence, a stale close signals nothing and looks live.
+ *
+ * Colour is NEVER the only carrier (ui.md): each degraded state has a text label.
+ */
+const PRICE_STATE: Record<
+  PositionOut['price_state'],
+  { label: string; tone: 'secondary' | 'warn' } | null
+> = {
+  live: null, // a live quote needs no annotation — that is the expected state
+  minute: { label: 'last 1m close', tone: 'secondary' },
+  daily: { label: 'prev session close', tone: 'warn' },
+  none: { label: 'no price', tone: 'warn' },
+}
+
+// Renders nothing for a live quote; a one-line provenance label otherwise. Text carries
+// the meaning, colour only reinforces it.
+function PriceProvenance({ state }: { state: PositionOut['price_state'] }) {
+  const meta = PRICE_STATE[state]
+  if (!meta) return null
+  // ⛔ NOT `--color-loss`, which fails AA on this row's surface in slate (the DEFAULT
+  // theme, 3.96:1) and midnight (4.18:1) — and worse, it is the token for "this position
+  // is losing money", used by the SL cell and the P&L cell on the same row. A stale mark
+  // is a DEGRADED STATE, not a negative value; painting it red makes the two
+  // indistinguishable at a glance. `--color-warning` on its own `-bg` is the pill idiom
+  // `HealthBadge` below already uses, and a painted fill is immune to the row's hover
+  // background changing underneath it.
+  // ⛔ NOT `--color-text-muted` either: 2.34:1 in daybreak at this size.
+  if (meta.tone === 'warn') {
+    return (
+      <div className="mt-0.5">
+        <span
+          className="inline-block rounded px-1 py-px text-[11px] font-sans font-normal"
+          style={{ background: 'var(--color-warning-bg)', color: 'var(--color-warning)' }}
+        >
+          {meta.label}
+        </span>
+      </div>
+    )
+  }
+  return (
+    <div
+      className="text-[11px] font-sans font-normal"
+      style={{ color: 'var(--color-text-secondary)' }}
+    >
+      {meta.label}
+    </div>
+  )
+}
+
 const REASON_LABEL: Record<HealthReason['code'], string> = {
   thesis_break: 'stop broken',
   trend_dead: 'trend dead',
@@ -120,6 +175,8 @@ export function PositionsPage() {
   })
 
   const positions = data?.positions ?? []
+  // V2 — computed once; the banner and any future per-row treatment read the same list.
+  const strandedPositions = positions.filter((p) => p.stranded)
 
   return (
     <div className="flex flex-col gap-4">
@@ -131,6 +188,53 @@ export function PositionsPage() {
           <PaperRecordCard />
         </div>
       </div>
+
+      {/*
+        V2 — STRANDED is not a worse staleness, it is a different condition: the name has
+        no tradable instrument, so it receives no ticks and, once live trading exists, no
+        order can be routed for it. That is why it is a page-level banner and not a
+        per-row age badge.
+
+        ⚠ THE QUALIFIER IS LOAD-BEARING: "un-exitable" is true of the LIVE path only.
+        `close_position` needs no instrument — it falls back to the last stored close and,
+        failing that, to `avg_entry_price` ("flat trade"). So closing here SUCCEEDS and
+        books a realized P&L from a stale or fabricated price. An earlier draft of this
+        banner said "cannot be exited here", which is false, and the review that caught
+        the contradiction proposed disabling the row's Close button — that would TRAP the
+        user in the one position they most need to get out of. The honest fix is the
+        opposite: keep the button, correct the claim, and warn at the point of action
+        (see ClosePositionDialog).
+
+        Measured 2026-09-14: 740 stocks have no EQ instrument and exactly ONE of them
+        printed a bar in the latest session — so a stranded name's close is stale, not
+        merely a moment old.
+      */}
+      {strandedPositions.length > 0 && (
+        <div
+          role="alert"
+          className="rounded-lg border px-4 py-3 text-sm"
+          style={{
+            // ⛔ NOT the loss triplet: `--color-loss` encodes a NEGATIVE VALUE (§5.1) and
+            // the rejected/hit_sl states (§5.3). Stranded is a degraded state — the same
+            // distinction `PriceProvenance` above is built on. Applying that rule to the
+            // small annotation and not to the loud banner was inconsistent.
+            borderColor: 'var(--color-warning)',
+            background: 'var(--color-warning-bg)',
+            color: 'var(--color-text)',
+          }}
+        >
+          <span className="font-semibold">
+            {strandedPositions.length} position{strandedPositions.length !== 1 ? 's' : ''} {strandedPositions.length !== 1 ? 'have' : 'has'} no tradable instrument
+          </span>
+          {' — '}
+          {strandedPositions.map((p) => p.symbol).join(', ')}
+          {'. '}
+          {strandedPositions.length !== 1 ? 'These names get' : 'This name gets'}
+          {' no live price, so an exit here is booked against a stale close — or against '}
+          {'your entry price if no close exists at all. '}
+          {'Square off at the broker, or repair the instrument list.'}
+        </div>
+      )}
 
       <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg">
         <div className="px-4 py-3 border-b border-(--color-border) flex items-center justify-between">
@@ -190,7 +294,10 @@ export function PositionsPage() {
                     </td>
                     <td className="px-3 py-2 text-right font-mono">{formatInt(pos.quantity)}</td>
                     <td className="px-3 py-2 text-right font-mono">{priceFmt(pos.avg_entry_price)}</td>
-                    <td className="px-3 py-2 text-right font-mono text-(--color-text)">{priceFmt(pos.current_price)}</td>
+                    <td className="px-3 py-2 text-right font-mono text-(--color-text)">
+                      {priceFmt(pos.current_price)}
+                      <PriceProvenance state={pos.price_state} />
+                    </td>
                     <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bear)' }}>{priceFmt(pos.current_sl)}</td>
                     <td className="px-3 py-2 text-right font-mono" style={{ color: 'var(--color-bull)' }}>{priceFmt(pos.current_tp)}</td>
                     <td className="px-3 py-2 text-right"><TrailBadge state={pos.trail_state} /></td>

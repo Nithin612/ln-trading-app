@@ -1679,7 +1679,7 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-09-14 (overnight run).**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-14 (V1+V2).**
 
 **▶▶ ⛔⛔ THE LIVE THREAD IS `docs/UNIVERSE_REBUILD_PLAN.md` (PARTS VI–XVII).** Every one of the
 3,392 `stocks` rows has `created_at` = 2026-09-07: the master was improvised in one night, so
@@ -1753,8 +1753,49 @@ the `t ≈ 3.6` bar.
 holds only **3** broad indices (exactly why sector-RS was never testable). That is **U8**, and
 the same CSV carries **165 indices**, so it is a registry-population job, not a new source.
 
-**⇒ NEXT:** push (**19 commits unpushed**) · **run `make live-worker` each session** ·
-**U8** (index registry → unblocks sector-RS) · the panel's UI/UX round (PART XVIII §46).
+**✅ V1 + V2 DONE 2026-09-14 (PART XXII) — the first two §62 UI/UX items, backend AND
+frontend in one change.** Shipping the backend alone would have been the exact "built but
+unwired" defect §60/A5 is about.
+⛔ **V2 corrected PART XXI: the price fallback chain is THREE deep, not two** — live tick →
+**last 1m close** → previous daily close → nothing, the middle rung never documented and never
+surfaced. All four rendered IDENTICALLY, and `unrealized_pnl` / the daily P&L card / the paper
+record were all computed from whichever one won, looking equally real. Now labelled per row;
+`get_current_price` **delegates** to the one chain rather than carrying a second copy (W2).
+⭐ **STRANDED is a different condition, not a worse staleness** — no tradable instrument means
+the name can be neither priced nor exited here, so it is a page-level `role="alert"` sourced
+from the same U17 query the live worker logs at ERROR.
+⭐⭐ **V1 `GET /signals/funnel` doubles as the breadth detector 6.8.6 structurally cannot be**
+(that alarm asserts RECENCY, never COVERAGE, and read ✅ right through the outage). Measured on
+dev: **3,395 known → 2,291 in universe → 2,286 priced → 0 live signals**, 30-session median
+2,250, shortfall −1.6% ⇒ **the zero is real.**
+⛔ **A stage nearly shipped wrong:** raw "names with a bar in the latest session" = **2,637** vs
+an in-universe 2,291, because D3 ingests the whole bhavcopy deliberately — a funnel that
+*widens* is a bug that looks like data. Scoped to the universe; nesting asserted by test.
+⛔ **The "scored" stage is ABSENT, not zero** (the scorer persists no panel count) and renders
+"not recorded" — a `0` would assert something we do not know (A24).
+⚠ **Wired into TWO empty states, not the four the queue named:** `LiveSignalsPage` answers "was
+a level touched" and `StylePage` is per-style while the funnel is not, so in both cases the
+counts would not correspond to the list beneath them. **A diagnostic attached to a question it
+does not answer is worse than none, because it reads as an answer.**
+Neither item moves a recorded number. Frontend **454 tests** green + production build; **22**
+new backend tests; ruff/mypy clean.
+⭐ **ui-reviewer FAIL → PASS-WITH-NOTES over two rounds (25 findings).** It **withdrew its own
+top remedy** after reading `close_position`. My own worst defect: the filter-vs-scan fix **was
+the same error one layer up** (`signalData` is NOT unfiltered — its query key carries three
+server-side filters) ⇒ the decision MOVED into `ScanScope`, which reads the funnel's unfiltered
+`signals_live` and is therefore correct on every surface; `DashboardPage` now has no predicate.
+⛔⛔ **PALETTE-WIDE AA DEFECT FOUND, NOT FIXED — USER'S CALL (§71).** A new contrast test finds
+**eight token pairs below 4.5:1 on money copy**: loss/bear **4.29** on `--color-loss-bg` and
+**3.96/4.18** on the row surface across the three dark themes; profit/bull **3.32/3.44** in
+daybreak. ⭐⭐ **The 2026-09-02 fix was applied to a TOKEN, not a SEMANTIC GROUP** — it moved
+daybreak `--color-loss` 3.95 → 5.30 and **`--color-bear` there still measures 3.95.** Changing
+the red/green moves every P&L figure in five themes, so the test records the failing set
+EXACTLY (shrink-only ratchet) and the palette is untouched. Recommendation, measured: dark
+`#ef4444` → `#f87171`; daybreak `--color-bear` → `#b91c1c`; daybreak green darker.
+
+**⇒ NEXT:** push (**unpushed and growing**) · **run `make live-worker` each session** ·
+round-5 reviews (user is gathering them) · **§62 V3–V8** · **U8** (index registry → unblocks
+sector-RS).
 
 ---
 

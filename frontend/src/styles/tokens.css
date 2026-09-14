@@ -295,7 +295,13 @@
   /* amber-700, not amber-600: on this theme's light surfaces amber-600 is
      2.91:1 — below WCAG AA — and --color-warning carries safety copy
      ("chasing N% past entry", "Greeks unavailable", "selling vetoed").
-     amber-700 measures 4.58:1 on --color-surface-2 and 5.02:1 on white. */
+     amber-700 measures 4.58:1 on --color-surface-2 and 5.02:1 on white.
+     ⚠ AND 4.51:1 on --color-warning-bg below — the TIGHTEST margin in this file, clearing
+     the 4.5 AA floor by 0.01. That pair is now load-bearing: the V2 price-provenance pill
+     and the V1 coverage alarm both paint --color-warning ON --color-warning-bg. Nudging
+     EITHER value without re-measuring this pair breaks AA silently, in the one theme
+     where it is closest. (Measured 2026-09-14; the three dark themes sit at 6.97, ocean
+     at 8.97.) */
   --color-warning:        #b45309;
   --color-warning-bg:     #fef3c7;
   --color-info:           #2563eb;

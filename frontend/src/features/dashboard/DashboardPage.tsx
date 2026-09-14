@@ -16,6 +16,7 @@ import { useLiveQuotes } from '@/hooks/useLiveQuotes'
 import { useTradingHaltStore } from '@/store/tradingHaltStore'
 import { Skeleton, SkeletonCard } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
+import { ScanScope } from '@/components/ui/ScanScope'
 import { Sparkline } from '@/components/ui/sparkline'
 import { PriceCell } from '@/components/ui/PriceCell'
 import { formatCurrency, formatINR, formatInt } from '@/lib/format'
@@ -505,7 +506,17 @@ export function DashboardPage() {
           {!signalsLoading && filteredSignals.length === 0 && (
             <EmptyState
               title="No active signals"
-              description="Signals are generated nightly at 18:00 IST. Adjust filters or run manually."
+              description="Signals are generated nightly at 18:00 IST."
+              /*
+                ⚠ NO predicate here, deliberately. Two earlier cuts tried to decide in this
+                component whether the emptiness was the scan's or a filter's, and both were
+                wrong: `signals` is already filtered by the two checkboxes, and
+                `signalData` is the response to a query whose key carries `direction`,
+                `classification` and `minConfidence` — all SERVER-side. `ScanScope` decides
+                from the funnel's unfiltered `signals_live`, so it is correct here, on the
+                opportunities table, and on any surface added later.
+              */
+              footer={<ScanScope />}
             />
           )}
 

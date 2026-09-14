@@ -23,11 +23,16 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.broker import adapter, event_store
 from app.broker.depth import get_live_depths
 from app.broker.paper_broker import (
+    PRICE_LIVE,
+    PRICE_NONE,
     PaperOrderError,
     close_position,
+    get_live_ltps,
     place_paper_order,
+    stored_price_with_source,
     update_position_pnl,
 )
+from app.broker.tick_consumer import held_without_instrument
 from app.core.config import settings
 from app.core.deps import get_current_user, get_db
 from app.models.signal import Signal
@@ -45,6 +50,7 @@ from app.schemas.trading import (
     PositionHealthOut,
     PositionListResponse,
     PositionOut,
+    PriceSource,
     ShadowCompareResponse,
     ShadowComparisonOut,
     TradeHistoryResponse,
@@ -93,10 +99,18 @@ def _enrich_position(
     symbol: str,
     current_price: Decimal | None = None,
     health: PositionHealth | None = None,
+    price_state: PriceSource = PRICE_NONE,
+    stranded: bool = False,
 ) -> PositionOut:
     out = PositionOut.model_validate(position)
     out.symbol = symbol
     out.current_price = current_price
+    # V2 — a mark without its provenance is the defect: `current_price` never goes null
+    # while any stored close exists, so a dead feed rendered a day-old number as though
+    # it were live. Default `none`, so a caller that forgets to pass it understates
+    # freshness rather than overstating it.
+    out.price_state = price_state if current_price is not None else PRICE_NONE
+    out.stranded = stranded
     out.health = _health_out(health) if health is not None else None
     return out
 
@@ -285,10 +299,31 @@ async def list_open_positions(
     advs = await load_median_traded_values_safe(
         db, [p.stock_id for p in positions], lookback=settings.paper_participation_lookback
     )
+    # V2 — LTPs batched in ONE MGET. The depth read above was batched for exactly this
+    # reason and the LTP was missed: `update_position_pnl` falls through to
+    # `get_live_ltp`, which opens its own connection PER CALL (its own docstring says
+    # so), so this loop was one Redis connection per position.
+    ltps = await get_live_ltps([p.stock_id for p in positions])
+    stranded_ids = {sid for sid, _sym in await held_without_instrument(db)}
+
     prices: dict[str, Decimal | None] = {}
+    price_states: dict[str, PriceSource] = {}
     for pos in positions:
+        # Resolve the mark AND its provenance. Passing the price in keeps
+        # `update_position_pnl` from re-deriving it (and re-opening a connection).
+        live = ltps.get(pos.stock_id)
+        price: Decimal | None
+        if live is not None:
+            price, state = live, PRICE_LIVE
+        else:
+            price, state = await stored_price_with_source(db, pos.stock_id)
+        price_states[pos.id] = state
         prices[pos.id] = await update_position_pnl(
-            db, pos, depth=books.get(pos.stock_id), adv_value=advs.get(pos.stock_id)
+            db,
+            pos,
+            price=price,
+            depth=books.get(pos.stock_id),
+            adv_value=advs.get(pos.stock_id),
         )
     await db.commit()
 
@@ -311,7 +346,14 @@ async def list_open_positions(
             now=now,
         )
         enriched.append(
-            _enrich_position(p, await _get_symbol(db, p.stock_id), prices.get(p.id), health)
+            _enrich_position(
+                p,
+                await _get_symbol(db, p.stock_id),
+                prices.get(p.id),
+                health,
+                price_state=price_states.get(p.id, PRICE_NONE),
+                stranded=p.stock_id in stranded_ids,
+            )
         )
     return PositionListResponse(total=len(enriched), positions=enriched)
 

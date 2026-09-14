@@ -2,8 +2,16 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, field_validator
+
+# The wire vocabulary for a price's provenance. ⚠ W5: `paper_broker` OWNS these values
+# (`PRICE_LIVE`/`PRICE_MINUTE`/`PRICE_DAILY`/`PRICE_NONE`); this is the wire contract for
+# them, and `tests/test_position_price_truthfulness.py` asserts the two agree by DERIVING
+# the expectation from both declarations, so adding a source without widening this fails
+# the suite rather than silently serving a value no client can render.
+PriceSource = Literal["live", "minute", "daily", "none"]
 
 # ── Order schemas ─────────────────────────────────────────────────────────────
 
@@ -87,6 +95,24 @@ class PositionOut(BaseModel):
     exit_price: Decimal | None = None    # closing fill price (None while open)
     exit_reason: str | None = None       # sl_hit | tp_hit | manual (None while open)
     current_price: Decimal | None = None  # transient live/last price (open positions)
+    # ── V2: where `current_price` CAME FROM, and whether this position can be priced ──
+    # ⛔ The defect this closes: `current_price` never goes null while any stored close
+    # exists — the chain is live tick → last complete 1m bar → DAILY CLOSE — so a
+    # position whose feed died rendered a plausible number from a previous session with
+    # nothing marking it. A bare `—` at least signals absence; a stale close signals
+    # nothing and looks live.
+    #   live    · a live Redis tick
+    #   minute  · last COMPLETE 1m bar — ticks are cold
+    #   daily   · daily close — up to a full session stale
+    #   none    · no price at all (the `—` case, rarer than it looked)
+    price_state: PriceSource = "none"
+    # ⚠ A DIFFERENT condition, not a worse staleness: no tradable EQ instrument exists,
+    # so this position receives no ticks and — once live trading exists — no order can be
+    # routed for it. Deserves its own copy and a page-level banner, never a per-row badge.
+    # ⛔ It is NOT un-closable: `close_position` needs no instrument and falls back to the
+    # last stored close, then to `avg_entry_price` ("flat trade"). The UI must therefore
+    # keep the Close button and warn about the PRICE, not block the exit.
+    stranded: bool = False
     peak_price: Decimal | None = None    # best price seen while open (MFE)
     peak_pnl: Decimal | None = None      # GROSS peak profit (max favourable excursion)
     health: PositionHealthOut | None = None  # advisory emergency-exit assessment (open)

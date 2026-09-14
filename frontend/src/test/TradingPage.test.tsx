@@ -54,6 +54,10 @@ function makePosition(overrides: Partial<tradingApiModule.PositionOut> = {}): tr
     opened_at: new Date().toISOString(),
     closed_at: null,
     signal_id: 'sig-001',
+    // V2: the mock's default is the honest one for a row that HAS a current_price —
+    // a live tick. Tests that care about the degraded states override it.
+    price_state: 'live',
+    stranded: false,
     ...overrides,
   }
 }
@@ -533,5 +537,189 @@ describe('PaperRecordCard', () => {
     await waitFor(() =>
       expect(screen.getByText(/counting since 2026-08-02/i)).toBeInTheDocument(),
     )
+  })
+})
+
+/**
+ * V2 — price truthfulness.
+ *
+ * The defect these pin: `get_current_price` falls back live → 1m close → daily close and
+ * the UI rendered all three identically. A position whose feed had died showed a
+ * plausible number from a previous session with nothing marking it, and the unrealized
+ * P&L computed from it looked equally real.
+ */
+describe('PositionsPage — price provenance and stranded holds (V2)', () => {
+  beforeEach(() => {
+    vi.spyOn(tradingApiModule.tradingApi, 'getDailyPnl').mockResolvedValue(makeDailyPnl())
+    vi.spyOn(tradingApiModule.tradingApi, 'getPaperRecord').mockResolvedValue(makePaperRecord())
+  })
+
+  function withPositions(positions: tradingApiModule.PositionOut[]) {
+    vi.spyOn(tradingApiModule.tradingApi, 'getOpenPositions').mockResolvedValue({
+      total: positions.length,
+      positions,
+    })
+  }
+
+  it('annotates nothing when the price came from a live tick', async () => {
+    withPositions([makePosition({ price_state: 'live' })])
+    wrap(<PositionsPage />)
+    await waitFor(() => screen.getByText('RELIANCE'))
+    // Canary: any of the degraded labels appearing here means `live` is being annotated.
+    expect(screen.queryByText(/last 1m close/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/prev session close/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/no price/i)).not.toBeInTheDocument()
+  })
+
+  it('labels a price that fell back to the last 1m close', async () => {
+    withPositions([makePosition({ price_state: 'minute' })])
+    wrap(<PositionsPage />)
+    await waitFor(() => screen.getByText('RELIANCE'))
+    expect(screen.getByText(/last 1m close/i)).toBeInTheDocument()
+  })
+
+  it('labels a price that fell back to the previous session close', async () => {
+    withPositions([makePosition({ price_state: 'daily' })])
+    wrap(<PositionsPage />)
+    await waitFor(() => screen.getByText('RELIANCE'))
+    expect(screen.getByText(/prev session close/i)).toBeInTheDocument()
+  })
+
+  it('labels a position with no price at all', async () => {
+    withPositions([makePosition({ current_price: null, price_state: 'none' })])
+    wrap(<PositionsPage />)
+    await waitFor(() => screen.getByText('RELIANCE'))
+    expect(screen.getByText(/^no price$/i)).toBeInTheDocument()
+  })
+
+  it('raises a page-level alert naming every stranded holding', async () => {
+    withPositions([
+      makePosition({ id: 'p1', symbol: 'RELIANCE', stranded: false }),
+      makePosition({ id: 'p2', symbol: 'DEADCO', stranded: true, price_state: 'daily' }),
+    ])
+    wrap(<PositionsPage />)
+    await waitFor(() => screen.getByText('DEADCO'))
+    const alert = screen.getByRole('alert')
+    expect(alert).toHaveTextContent(/1 position has no tradable instrument/i)
+    // ⛔ The claim must stay TRUE. `close_position` needs no instrument — it falls back
+    // to the last stored close, then to `avg_entry_price`. So "cannot be exited here" was
+    // false, and disabling the row's Close button (the review's proposed remedy) would
+    // trap the user in the one position they most need out of.
+    expect(alert).not.toHaveTextContent(/cannot be .*exited/i)
+    expect(alert).toHaveTextContent(/stale close/i)
+    // F3 — the claim must hold for its own WORST case too. With no stored close at all the
+    // exit is booked against the ENTRY price, not a stale close; the first cut said only
+    // "stale close" and was wrong for exactly the position most likely to be stranded.
+    expect(alert).toHaveTextContent(/entry price if no close exists/i)
+    // F8 — the singular/plural branch once covered "position(s)" and "This name" but left
+    // the verb hardcoded, rendering "This name receive no live price" in the common case.
+    expect(alert).toHaveTextContent(/This name gets/i)
+    expect(alert).not.toHaveTextContent(/name receive /i)
+    expect(alert).toHaveTextContent('DEADCO')
+    // The clean name must NOT be listed as stranded.
+    expect(alert).not.toHaveTextContent('RELIANCE')
+  })
+
+  it('raises no stranded alert when every holding has an instrument', async () => {
+    withPositions([makePosition({ stranded: false })])
+    wrap(<PositionsPage />)
+    await waitFor(() => screen.getByText('RELIANCE'))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * V2 — the warning at the point of ACTION.
+ *
+ * The close dialog offers "leave blank to use current market price". For a position with
+ * no live tick that is a promise the backend cannot keep: `close_position` falls back to
+ * the last 1m close, then the daily close, then to `avg_entry_price` — booking a FLAT
+ * trade at a price the market never printed, straight into `realized_pnl` and the paper
+ * record. Blocking the close would be worse; saying what blank resolves to is the fix.
+ */
+describe('ClosePositionDialog — what "current market price" actually resolves to', () => {
+  beforeEach(() => {
+    vi.spyOn(tradingApiModule.tradingApi, 'getDailyPnl').mockResolvedValue(makeDailyPnl())
+    vi.spyOn(tradingApiModule.tradingApi, 'getPaperRecord').mockResolvedValue(makePaperRecord())
+  })
+
+  async function openCloseDialogFor(position: tradingApiModule.PositionOut) {
+    vi.spyOn(tradingApiModule.tradingApi, 'getOpenPositions').mockResolvedValue({
+      total: 1,
+      positions: [position],
+    })
+    wrap(<PositionsPage />)
+    await waitFor(() => screen.getByText(position.symbol))
+    fireEvent.click(screen.getByTitle('Close position'))
+    await screen.findByRole('dialog')
+  }
+
+  it('promises a market price only when there actually is a live tick', async () => {
+    await openCloseDialogFor(makePosition({ price_state: 'live' }))
+    expect(screen.getByText(/leave blank to use current market price/i)).toBeInTheDocument()
+    expect(screen.queryByText(/no live tick/i)).not.toBeInTheDocument()
+  })
+
+  it('names the stale source it will fall back to', async () => {
+    await openCloseDialogFor(makePosition({ price_state: 'daily' }))
+    expect(screen.getByText(/previous session close/i)).toBeInTheDocument()
+    expect(
+      screen.queryByText(/leave blank to use current market price/i),
+    ).not.toBeInTheDocument()
+  })
+
+  it('warns that a priceless close books a flat trade at the ENTRY price', async () => {
+    // ⭐ The worst case, and the least visible: the P&L is not merely stale, it is
+    // fabricated — a trade at a price that never printed, entering the paper record.
+    await openCloseDialogFor(makePosition({ current_price: null, price_state: 'none' }))
+    expect(screen.getByText(/books the exit at your entry price/i)).toBeInTheDocument()
+    expect(screen.getByText(/never.*printed/i)).toBeInTheDocument()
+  })
+
+  it('never blocks the close — the warning replaces a block, it does not add one', async () => {
+    await openCloseDialogFor(makePosition({ current_price: null, price_state: 'none' }))
+    const confirm = screen.getByRole('button', { name: /close position/i })
+    expect(confirm).toBeEnabled()
+    expect(confirm).not.toHaveAttribute('aria-disabled', 'true')
+  })
+})
+
+describe('ClosePositionDialog — the warning is reachable non-visually (F4)', () => {
+  beforeEach(() => {
+    vi.spyOn(tradingApiModule.tradingApi, 'getDailyPnl').mockResolvedValue(makeDailyPnl())
+    vi.spyOn(tradingApiModule.tradingApi, 'getPaperRecord').mockResolvedValue(makePaperRecord())
+  })
+
+  async function openFor(position: tradingApiModule.PositionOut) {
+    vi.spyOn(tradingApiModule.tradingApi, 'getOpenPositions').mockResolvedValue({
+      total: 1, positions: [position],
+    })
+    wrap(<PositionsPage />)
+    await waitFor(() => screen.getByText(position.symbol))
+    fireEvent.click(screen.getByTitle('Close position'))
+    await screen.findByRole('dialog')
+  }
+
+  it('associates the warning with the price field it describes', async () => {
+    // A positional "see the warning above" is meaningless to a screen reader or a
+    // magnifier user; `aria-describedby` is what makes the copy reach them deterministically.
+    await openFor(makePosition({ price_state: 'daily' }))
+    const input = screen.getByLabelText(/exit price/i)
+    expect(input).toHaveAttribute('aria-describedby', 'exit-price-warning')
+    expect(screen.queryByText(/above/i)).not.toBeInTheDocument()
+  })
+
+  it('leaves the field undescribed when there is nothing to warn about', async () => {
+    await openFor(makePosition({ price_state: 'live' }))
+    expect(screen.getByLabelText(/exit price/i)).not.toHaveAttribute('aria-describedby')
+  })
+
+  it('does not claim a priceless close books a FLAT trade', async () => {
+    // F2 — `close_position` routes even the entry-price fallback through `simulate_fill`
+    // and then nets `fees.py` charges (incl. the flat ₹15.34 DP charge on a delivery
+    // sell), so the booked result is a small LOSS. "Flat trade" overstated it.
+    await openFor(makePosition({ current_price: null, price_state: 'none' }))
+    expect(screen.getByText(/less slippage and charges/i)).toBeInTheDocument()
+    expect(screen.queryByText(/a flat trade/i)).not.toBeInTheDocument()
   })
 })
