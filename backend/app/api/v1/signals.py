@@ -355,6 +355,7 @@ async def signal_funnel(
         known=f.known,
         in_universe=f.in_universe,
         priced_today=f.priced_today,
+        admitted_to_scoring=f.admitted_to_scoring,
         signals_live=f.signals_live,
         session=f.session,
         breadth_median=f.breadth_median,

@@ -34,6 +34,10 @@ from typing import Any
 
 from sqlalchemy import text
 
+# ⭐ W5 — the scan OWNS this threshold; the funnel reports the stage it creates. A
+# hardcoded 50 here would drift from the gate it is meant to describe.
+from app.services.signal_service import MIN_CANDLES_TO_SCORE
+
 #: How far back the breadth reference looks. Long enough to span a quiet week, short
 #: enough that a structural change in the universe does not haunt the median for months.
 BREADTH_LOOKBACK_DAYS = 30
@@ -52,6 +56,17 @@ class Funnel:
     priced_today: int
     """...and which of those actually printed a bar on the latest session."""
 
+    admitted_to_scoring: int
+    """...and which of THOSE carry enough history for the scan to score at all.
+
+    ⭐⭐ ROUND 5 ADDED THIS RUNG, and it is the difference between an honest funnel and a
+    misleading one. `signal_service` refuses any name with fewer than
+    `MIN_CANDLES_TO_SCORE` completed daily candles BEFORE scoring. With four rungs the
+    whole drop from `priced_today` to `signals_live` is forced onto the confluence gate,
+    because the gate is the only mechanism left to explain it — so "the engine looked at
+    2,286 names and liked none" renders identically to "the engine never looked at 184 of
+    them". Measured 2026-09-14: **184 of 2,286 (8%) die here, unseen.**"""
+
     signals_live: int
     """...and which produced a signal that is not expired or withdrawn."""
 
@@ -64,8 +79,13 @@ class Funnel:
     tripwire, not a historical series."""
 
     assessed_available: bool = False
-    """⛔ Always False today. The scorer does not persist how many panels it evaluated,
-    so the stage between `priced_today` and `signals_live` is UNKNOWN rather than zero."""
+    """⛔ Always False today, and it now means something NARROWER than it used to.
+
+    `admitted_to_scoring` is computable, so the ADMISSION stage is no longer missing. What
+    remains unknown is whether the scorer actually ran to completion on each admitted name
+    — it persists no panel count. ⇒ the residual `admitted → signals_live` drop is still
+    not fully attributable, and the UI must keep saying so rather than crediting it all to
+    the gate."""
 
     @property
     def breadth_shortfall_pct(self) -> float | None:
@@ -90,6 +110,15 @@ SELECT
     (SELECT count(*) FROM stocks)                              AS known,
     (SELECT count(*) FROM stocks WHERE is_active)              AS in_universe,
     (SELECT n FROM per_session WHERE d = (SELECT d FROM latest)) AS priced_today,
+    (SELECT count(*) FROM (
+        SELECT o.stock_id
+          FROM ohlcv_1d o
+          JOIN stocks s ON s.id = o.stock_id AND s.is_active
+         WHERE o.stock_id IN (
+               SELECT DISTINCT o2.stock_id FROM ohlcv_1d o2
+                WHERE (o2.time AT TIME ZONE 'UTC')::date = (SELECT d FROM latest))
+         GROUP BY o.stock_id
+        HAVING count(*) >= :min_candles) q)                    AS admitted,
     (SELECT count(*) FROM signals
       WHERE status = 'active' AND quarantined_at IS NULL)      AS signals_live,
     (SELECT d FROM latest)                                     AS session,
@@ -98,13 +127,19 @@ SELECT
 
 
 async def load_funnel(db: Any, *, lookback_days: int = BREADTH_LOOKBACK_DAYS) -> Funnel:
-    row = (await db.execute(text(_SQL), {"lookback": lookback_days})).first()
+    row = (
+        await db.execute(
+            text(_SQL),
+            {"lookback": lookback_days, "min_candles": MIN_CANDLES_TO_SCORE},
+        )
+    ).first()
     if row is None:  # pragma: no cover - an empty database
-        return Funnel(0, 0, 0, 0, None, None)
+        return Funnel(0, 0, 0, 0, 0, None, None)
     return Funnel(
         known=int(row.known or 0),
         in_universe=int(row.in_universe or 0),
         priced_today=int(row.priced_today or 0),
+        admitted_to_scoring=int(row.admitted or 0),
         signals_live=int(row.signals_live or 0),
         session=row.session,
         breadth_median=int(row.med) if row.med is not None else None,

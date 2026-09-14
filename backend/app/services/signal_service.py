@@ -25,6 +25,13 @@ from app.signals.expiry import compute_validity_until
 from app.signals.headline import build_headline
 from app.signals.risk_guards import safe_levels
 
+# The scan refuses a name with fewer than this many completed daily candles, before any
+# scoring happens. ⭐ It is EXPORTED because `services/funnel.py` reports the size of the
+# stage it creates: a threshold that silently removes names from a funnel must be readable
+# by the thing that renders the funnel, or the drop gets attributed to the wrong stage.
+MIN_CANDLES_TO_SCORE = 50
+
+
 log = logging.getLogger(__name__)
 
 
@@ -214,7 +221,10 @@ async def generate_signal_for_stock(
     """
     min_conf = min_confidence if min_confidence is not None else settings.min_signal_confidence
     candles = await _load_candles(db, stock.id)
-    if candles.empty or len(candles) < 50:
+    if candles.empty or len(candles) < MIN_CANDLES_TO_SCORE:
+        # ⛔ A SILENT ADMISSION GATE: a name refused here is never scored, and before V1's
+        # fifth rung that drop was invisible — the funnel attributed it to the confluence
+        # gate instead. Measured 2026-09-14: 184 of 2,286 priced names (8%) die here.
         return None
 
     result = score_signal(

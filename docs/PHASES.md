@@ -1793,9 +1793,30 @@ the red/green moves every P&L figure in five themes, so the test records the fai
 EXACTLY (shrink-only ratchet) and the palette is untouched. Recommendation, measured: dark
 `#ef4444` → `#f87171`; daybreak `--color-bear` → `#b91c1c`; daybreak green darker.
 
+**✅ ROUND 5 ADJUDICATED 2026-09-14 (PART XXII) — both blocking questions answered AGAINST my
+own leaning, both settled by a query.**
+⭐⭐ **Q1 = ship FIVE rungs, and the fifth is COMPUTABLE.** The failure mode is not "the reader
+assumes the fifth stage is zero", it is that they assume **the fourth is complete** — four rungs
+force the whole priced→signals drop onto the confluence gate. A reviewer named the deciding query
+and its prediction held: `signal_service.py:217` refuses `< 50` daily candles BEFORE scoring, so
+**184 of 2,286 priced names (8%) were being blamed on the gate, unseen.** Q-R2's "assessed does
+not exist" was about the wrong quantity — the SCORER persists no panel count, but ADMISSION is a
+property of the data. Live: **3,395 → 2,291 → 2,286 → 2,102 → 0**.
+⭐⭐ **Q2 = YES, snapshot the inputs — and my own cost line was wrong, unanimously.** A hash
+cannot serve it: **`kite_instruments` is upserted in place**, so yesterday's state is already
+gone. Four non-historical reasons, the sharpest being that **the collapse rail's refusals are
+unauditable** (it fires on the INPUT, the snapshot records the OUTPUT) ⇒ `0.5` can never be tuned.
+⛔⛔ **SHIPPED: the collapse rail was ONE-SIDED.** Growth is the dangerous direction by
+COMPOSITION — U16's ceiling refuses the ENTIRE subscription past the cap, so an over-including
+parse regression drops the feed for **every open position**. Now bounded by
+`live_universe_max_count` (W5). Headroom **2,291/3,000**.
+⛔ **§42b corrected:** `KITE_TRADABLE` excludes **exactly one name** (kite 10,110 NSE EQ vs
+EQUITY_L 2,292) ⇒ the rule is ~99.96% single-source and "independently derived" was overclaimed.
+⛔ **§60/A1's "1,847" was illustrative, not measured** — struck. ✅ `ca_flagged_at` = 7 (5 active).
+
 **⇒ NEXT:** push (**unpushed and growing**) · **run `make live-worker` each session** ·
-round-5 reviews (user is gathering them) · **§62 V3–V8** · **U8** (index registry → unblocks
-sector-RS).
+**snapshot the rule's inputs** (P0, decided) · **U4′** coverage-aware feed alarm (the PRIMARY
+detector; the funnel is tertiary) · **§62 V3–V8** · **U8** (index registry → unblocks sector-RS).
 
 ---
 

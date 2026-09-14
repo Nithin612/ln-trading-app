@@ -79,14 +79,20 @@ export interface SignalListResponse {
  * stock in context and therefore cannot name a per-stock cause; stating the scope is
  * the honest alternative to "nothing meets the confluence gate right now".
  *
- * ⛔ `assessed_available` is always false today: the scorer does not persist how many
- * panels it evaluated, so that rung is genuinely ABSENT, never zero. Render the
- * absence — a silent missing rung invites the reader to assume zero.
+ * ⭐⭐ `admitted_to_scoring` is the rung that makes the others honest. The scan refuses a
+ * name with too little history BEFORE scoring, so a funnel without it forces that whole
+ * drop onto the confluence gate — the only mechanism a reader has left to explain it.
+ * Measured: 184 of 2,286 priced names (8%) are never looked at.
+ *
+ * ⛔ `assessed_available` is still false, and now means something narrower: admission is
+ * computable, but whether the scorer RAN on each admitted name is not recorded, so the
+ * residual drop stays unattributable and the UI must keep saying so.
  */
 export interface FunnelOut {
   known: number
   in_universe: number
   priced_today: number
+  admitted_to_scoring: number
   signals_live: number
   session: string | null
   breadth_median: number | null

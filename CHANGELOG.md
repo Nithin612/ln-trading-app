@@ -7,6 +7,56 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Round-5 adjudication — both blocking questions answered against my own leaning (2026-09-14)
+
+Six responses. ⭐ **Both were settled by a query, not by the argument**, and two items shipped.
+
+- ⭐⭐⭐ **Q1: ship FIVE rungs, and the fifth is COMPUTABLE — which nobody predicted.** My framing
+  ("a reader may assume the fifth stage is zero") was the weaker half: the real failure is that
+  they assume **the fourth is complete**, so the whole drop from priced → signals is forced onto
+  the confluence gate because it is the only mechanism left to explain it. ⭐ **The deciding
+  query was named by a reviewer and its prediction confirmed:** `signal_service.py:217` refuses
+  any name with `< 50` daily candles BEFORE scoring. **Measured: 184 of 2,286 priced names (8%)
+  were being attributed to the gate having never been looked at.** ⭐⭐ And Q-R2's *"assessed
+  does not exist as a counter"* was about the wrong quantity — the SCORER persists no panel
+  count, but **ADMISSION is a property of the data** and is one `HAVING count(*) >= …` away. So
+  the rung ships as a real number, not a placeholder. `MIN_CANDLES_TO_SCORE` extracted (it was a
+  bare literal with no owner) and read by `funnel.py`, asserted **by identity** not by value (W5).
+  Live: **3,395 → 2,291 → 2,286 → 2,102 → 0**. ⚠ `assessed_available` stays false and now means
+  something narrower — the residual is part gate, part unknown, and the copy says so.
+- ⭐⭐⭐ **Q2: YES, snapshot the inputs — and my own stated cost was wrong, unanimously.** Five of
+  six sources independently said **a hash cannot serve the purpose**; my "one CSV + one
+  instruments hash per day" would have had a future session build an artifact that cannot do its
+  job. The mechanism I missed: **`kite_instruments` is upserted in place** (`57595 rows upserted,
+  0 stale swept`) so yesterday's state is already gone. ⇒ the artifact is the raw CSV **plus the
+  parsed EQ symbol set**. Four reasons that are not "history is unreconstructible": you cannot
+  separate a rule change from a source change; **the collapse rail's refusals are unauditable**
+  (it fires on the INPUT, the snapshot records the OUTPUT — so `UNIVERSE_APPLY_MIN_FRACTION=0.5`
+  can never be tuned because a firing can never be reviewed, and §50's "inspectable" is wrong);
+  rule v2 cannot be regression-tested against v1; and **the funnel is only a detector if it can
+  tell a market event from an ingestion event** — which is the exact basis on which it was ranked P0.
+- ⛔⛔ **SHIPPED: the collapse rail was one-sided, and growth is the dangerous direction.**
+  `universe_materialiser.py:190` read "⚠ GROWTH is never refused." Severity is **composition**:
+  U16's ceiling refuses the ENTIRE subscription past the per-connection cap (deliberately —
+  truncating is a silent selection decision), so an over-including parse regression **— the exact
+  mirror of the `EQ=0` header bug —** passes the rail, exceeds the cap, and the next worker start
+  drops the feed for **every open position, including the held names U17 exists to protect**.
+  Headroom measured **2,291 of 3,000**. `apply_to_stocks` now refuses above
+  `settings.live_universe_max_count` — the worker's own knob (W5), enforced where it is still a
+  refused write rather than at the worker where it is already an outage.
+- ⛔ **CORRECTION to §42b, and it is mine.** The +1,121/−152 diff was called "independently
+  derived … the strongest evidence in this document that the rule is right". **Measured: kite
+  carries 10,110 distinct NSE EQ symbols against EQUITY_L's 2,292, and the universe is 2,291 — so
+  `KITE_TRADABLE` excludes exactly ONE name.** The rule is ~99.96% single-source; two consumers of
+  one CSV agreeing measures **consistency, not correctness**. The conclusion stands on §47's
+  per-name review; the stated evidence was overclaimed.
+- ⛔ **"1,847 with bars today" (§60/A1) was illustrative, not measured** — a made-up number inside
+  the argument for a detector that exists to show real ones. Struck; the real figure is 2,286
+  against a 2,250 median. ✅ **Measured and recorded:** `ca_flagged_at` = **7** (5 active), so the
+  monotonic accumulator is a 7-row problem today, not §32's projected 1,768 — §38c's owed
+  measurement is now taken.
+
+
 ### V1 + V2 — a price says where it came from, and an empty list says what it looked at (2026-09-14)
 
 The first two items of the PART XXI §62 queue, backend **and** frontend in one change:

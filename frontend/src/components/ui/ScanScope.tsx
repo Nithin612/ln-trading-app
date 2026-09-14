@@ -118,6 +118,8 @@ export function ScanScopeBody({ funnel }: { funnel: FunnelOut }) {
         <span aria-hidden="true" className="text-(--color-text-secondary)">→</span>
         <Rung label={pricedLabel} value={formatInt(funnel.priced_today)} />
         <span aria-hidden="true" className="text-(--color-text-secondary)">→</span>
+        <Rung label="with enough history to score" value={formatInt(funnel.admitted_to_scoring)} />
+        <span aria-hidden="true" className="text-(--color-text-secondary)">→</span>
         <Rung label="live signals" value={formatInt(funnel.signals_live)} />
       </div>
 
@@ -126,10 +128,17 @@ export function ScanScopeBody({ funnel }: { funnel: FunnelOut }) {
         panels it evaluated. Saying so is the A24 "not assessable" rendering; printing a
         0 would assert that nothing was scored, which we do not know.
       */}
+      {/*
+        ⛔ The residual is still not fully attributable. Admission is now a rung, but the
+        scorer persists no panel count, so the drop from "admitted" to "live signals" is
+        part gate and part unknown. Saying which is which is not something we can do, and
+        crediting it all to the gate is exactly the false attribution the rung above fixes.
+      */}
       {!funnel.assessed_available && (
         <p className="text-(--color-text-secondary)">
-          How many of those were scored is not recorded, so the drop from priced to
-          signals cannot be attributed here.
+          Of the {formatInt(funnel.admitted_to_scoring)} that could be scored, how many were
+          actually evaluated is not recorded — so the drop to {formatInt(funnel.signals_live)}{' '}
+          cannot be credited to the confluence gate alone.
         </p>
       )}
 

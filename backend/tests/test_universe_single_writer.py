@@ -14,6 +14,7 @@ from __future__ import annotations
 from datetime import date
 
 import pytest
+from app.core.config import settings
 from app.services.universe_materialiser import apply_to_stocks, materialise
 from app.services.universe_rule import UniverseInputs
 from sqlalchemy import text
@@ -223,7 +224,9 @@ class TestTheCollapseRail:
 
         assert await _active(db, "BULK5") is True  # nothing switched off
 
-    async def test_growth_is_never_refused(self, db: AsyncSession) -> None:
+    async def test_growth_below_the_subscription_cap_is_never_refused(
+        self, db: AsyncSession
+    ) -> None:
         """The D2′b flip itself doubled the universe — the rail must not block the
         repair it exists alongside."""
         for i in range(10):
@@ -236,6 +239,72 @@ class TestTheCollapseRail:
         activated, deactivated = await apply_to_stocks(db, as_of=DAY)
 
         assert (activated, deactivated) == (10, 0)
+
+    async def test_a_snapshot_past_the_subscription_cap_is_refused(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """⛔⛔ ROUND 5 — the collapse rail is one-sided, and unbounded growth is the MORE
+        dangerous direction because of how it composes.
+
+        `universe_guard`'s U16 ceiling refuses the ENTIRE subscription when the universe
+        exceeds one WebSocket connection, deliberately, because truncating to the first N
+        is a silent selection decision. So an over-including parse regression — the exact
+        mirror of the `EQ=0` header bug, which shifted a column and could as easily have
+        admitted every row as none — would pass the collapse rail, push the universe past
+        the cap, and make the next worker start exit `EXIT_NO_UNIVERSE`. **Every open
+        position loses its feed at once, including the held names U17 exists to protect.**
+
+        Enforced here, where it is still a refused write, rather than only at the worker,
+        where it is already an outage.
+        """
+        monkeypatch.setattr(settings, "live_universe_max_count", 5)
+        for i in range(8):
+            await make_stock(db, symbol=f"CAP{i}", is_active=False)
+        await make_stock(db, symbol="CAPON", is_active=True)
+        await db.commit()
+
+        syms = {f"CAP{i}" for i in range(8)} | {"CAPON"}
+        await materialise(db, as_of=DAY, inputs=_inputs(syms, syms))
+
+        with pytest.raises(ValueError, match="CEILING refused"):
+            await apply_to_stocks(db, as_of=DAY)
+
+        # Canary: nothing was switched ON either — a refused apply writes nothing at all.
+        assert await _active(db, "CAP0") is False
+
+    async def test_the_cap_is_read_from_the_worker_s_own_setting(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """W5 — a second copy of 3,000 here would drift from the guard it protects, so
+        the rail must track whatever the worker's own knob says."""
+        monkeypatch.setattr(settings, "live_universe_max_count", 3)
+        for i in range(4):
+            await make_stock(db, symbol=f"KNOB{i}", is_active=False)
+        await make_stock(db, symbol="KNOBON", is_active=True)
+        await db.commit()
+        syms = {f"KNOB{i}" for i in range(4)} | {"KNOBON"}
+        await materialise(db, as_of=DAY, inputs=_inputs(syms, syms))
+        with pytest.raises(ValueError, match="cap of 3"):
+            await apply_to_stocks(db, as_of=DAY)
+
+        # ...and raising the knob admits the very same snapshot.
+        monkeypatch.setattr(settings, "live_universe_max_count", 50)
+        activated, _ = await apply_to_stocks(db, as_of=DAY)
+        assert activated == 4
+
+    async def test_a_disabled_cap_does_not_refuse(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """0 disables, matching every other rail's convention."""
+        monkeypatch.setattr(settings, "live_universe_max_count", 0)
+        for i in range(6):
+            await make_stock(db, symbol=f"OFF{i}", is_active=False)
+        await make_stock(db, symbol="OFFON", is_active=True)
+        await db.commit()
+        syms = {f"OFF{i}" for i in range(6)} | {"OFFON"}
+        await materialise(db, as_of=DAY, inputs=_inputs(syms, syms))
+        activated, _ = await apply_to_stocks(db, as_of=DAY)
+        assert activated == 6
 
     async def test_an_explicit_override_gets_through(self, db: AsyncSession) -> None:
         """A deliberate shrink must remain possible — a rail nobody can lower is a

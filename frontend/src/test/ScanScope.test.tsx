@@ -37,6 +37,7 @@ function makeFunnel(
     known: 3395,
     in_universe: 2291,
     priced_today: 2286,
+    admitted_to_scoring: 2102,
     signals_live: 0,
     session: '2026-09-12',
     breadth_median: 2250,
@@ -168,5 +169,36 @@ describe('ScanScope — attribution when the engine DID produce signals', () => 
     wrap(<ScanScope />)
     await waitFor(() => expect(screen.getByText('3,395')).toBeInTheDocument())
     expect(screen.queryByText(/filters on this view/i)).not.toBeInTheDocument()
+  })
+})
+
+describe('ScanScope — the admission rung (round 5)', () => {
+  it('shows the names that were never looked at, instead of crediting the gate', async () => {
+    /*
+      ⭐⭐ THE ROUND-5 FIX. With four rungs the entire drop from "priced" to "live signals"
+      is forced onto the confluence gate, because the gate is the only mechanism a reader
+      has left to explain it — so a scan that never looked at 184 names renders as "the
+      engine looked at 2,286 and liked none of them". `signal_service` refuses a name with
+      fewer than MIN_CANDLES_TO_SCORE daily candles BEFORE scoring, and that drop was
+      invisible. Measured 2026-09-14: 184 of 2,286 (8%).
+    */
+    vi.spyOn(signalsApiModule.signalsApi, 'getFunnel').mockResolvedValue(
+      makeFunnel({ priced_today: 2286, admitted_to_scoring: 2102, signals_live: 0 }),
+    )
+    wrap(<ScanScope />)
+    await waitFor(() => expect(screen.getByText('2,102')).toBeInTheDocument())
+    expect(screen.getByText(/enough history to score/i)).toBeInTheDocument()
+  })
+
+  it('still refuses to credit the residual drop to the gate', async () => {
+    // Admission being computable does NOT make the scorer's panel count known.
+    vi.spyOn(signalsApiModule.signalsApi, 'getFunnel').mockResolvedValue(
+      makeFunnel({ admitted_to_scoring: 2102, signals_live: 0, assessed_available: false }),
+    )
+    wrap(<ScanScope />)
+    await waitFor(() =>
+      expect(screen.getByText(/cannot be credited to the confluence gate alone/i))
+        .toBeInTheDocument(),
+    )
   })
 })

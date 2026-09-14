@@ -126,15 +126,23 @@ class FunnelOut(BaseModel):
     """V1 — the scope a scan actually covered, for empty states and breadth detection.
 
     ⚠ Every count travels with `session` and, where it exists, `breadth_median` (A24: a
-    figure without its reference is decoration). ⛔ `assessed_available` is always False
-    today and the stage is genuinely ABSENT rather than zero — the scorer does not
-    persist how many panels it evaluated, and a silent missing rung invites the reader to
-    assume zero.
+    figure without its reference is decoration).
+
+    ⭐⭐ `admitted_to_scoring` was added in round 5 and it is the rung that makes the rest
+    honest: the scan refuses a name with too little history BEFORE scoring, so a funnel
+    without it forces that entire drop onto the confluence gate — the only mechanism a
+    reader has left to explain it. Measured: 184 of 2,286 priced names (8%) are never
+    looked at.
+
+    ⛔ `assessed_available` stays False and now means something narrower: the ADMISSION
+    stage is computable, but whether the scorer ran to completion on each admitted name is
+    not recorded, so the residual drop is still not fully attributable.
     """
 
     known: int
     in_universe: int
     priced_today: int
+    admitted_to_scoring: int
     signals_live: int
     session: date | None = None
     breadth_median: int | None = None

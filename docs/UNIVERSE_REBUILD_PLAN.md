@@ -3471,3 +3471,219 @@ can only shrink, deliberately.
    for exactly this — "a failure below cannot be an empty-object false pass" — is what caught
    it.** Third instance of the repo's *guard test that cannot fail* pattern, this time caught
    by a guard deliberately planted against it.
+
+---
+
+# PART XXII · ROUND-5 ADJUDICATION (2026-09-14)
+
+> Six responses. **Both blocking questions are now ANSWERED, both against the option I was
+> leaning toward, and both were settled by a query rather than by the argument.** Two items
+> shipped in this round; the rest is recorded with its evidence.
+
+## §72 · ⭐⭐⭐ Q1 ANSWERED: ship FIVE rungs — and the fifth is COMPUTABLE, which nobody predicted
+
+### 72a · Every source rejected four stages, and the best of them reframed the failure
+
+I asked reviewers to "name the failure mode of a funnel with a missing rung, because a user
+reading four stages may assume the fifth is zero." ⛔ **My framing was the weaker half.**
+
+Claude's correction: the danger is not that a reader assumes the fifth stage is **zero**, it
+is that they assume the **fourth is complete**. With four rungs the arithmetic forces the whole
+drop from `priced` to `passed` onto the gate, **because the gate is the only mechanism left to
+explain it**. DeepSeek reached the same place from the other side: the reader resolves the gap
+with the cheapest narrative, and the cheapest one is *"the gate is being picky"* — **a
+SELECTION belief formed from a DATA-PLUMBING fact**, which is the exact category error this
+whole document exists to prevent. Kimi added the operational version: on a scanner-outage day
+a four-rung funnel renders **identically** to a strict-gate day.
+
+⇒ ⭐ **A four-rung funnel does not merely omit information. It manufactures a false
+attribution, in the direction of blaming the engine's judgement for a coverage failure.**
+
+### 72b · ⭐⭐ THE QUERY THAT DECIDED IT — and Claude called the shot
+
+Claude named the exact query he wanted run: *"whether the live scan path carries its own
+bar-count or deadline admission gate. My prediction is yes. That single answer decides whether
+the full fifth rung is P0."*
+
+**Prediction confirmed.** `signal_service.py:217`:
+
+```python
+if candles.empty or len(candles) < 50:
+    return None
+```
+
+A silent admission gate, sitting **exactly** between "has bars" and "was evaluated". Measured
+on dev the same hour:
+
+| stage | count |
+|---|---|
+| priced (latest session, in universe) | 2,286 |
+| **carrying ≥ 50 daily candles** | **2,102** |
+| **refused before scoring, unseen** | **184 (8.0%)** |
+
+⇒ my shipped funnel was attributing **184 names the engine never looked at** to the confluence
+gate. Not hypothetical, not a synthetic test — the live number on the day it shipped.
+
+### 72c · ⭐⭐⭐ And the rung is COMPUTABLE — which reverses Q-R2's premise
+
+Every reviewer, and my own §66b, proceeded from Q-R2's finding that *"assessed does not exist
+as a counter"*. **That finding was about the wrong quantity.** The SCORER persists no panel
+count — true, and still true. But **ADMISSION is a property of the data, not of the scorer**,
+and it is one `HAVING count(*) >= …` away.
+
+So the fifth rung ships as a **real measured number**, not as Claude's `?` placeholder and not
+as Kimi's labelled residual — both of which were the right call given what they knew.
+
+**Shipped:** `MIN_CANDLES_TO_SCORE` extracted in `signal_service` (it was a bare literal with
+no owner) and **read** by `funnel.py` — W5, because a hardcoded 50 in the funnel would drift
+from the gate it describes, and the drift would be silent. Asserted **by identity**, not by
+value, in `test_the_threshold_is_the_scan_s_own_and_not_a_copy`.
+
+**Live now:** `3,395 known → 2,291 in universe → 2,286 priced → 2,102 with enough history → 0`.
+
+⚠ **`assessed_available` stays False and now means something NARROWER.** Admission is
+computable; whether the scorer *ran to completion* on each admitted name is not recorded. The
+residual is part gate and part unknown, and the copy says exactly that rather than crediting
+the gate. **The rung removed a false attribution; it did not remove the unknown.**
+
+### 72d · ✅ Kimi's monotonicity attack — already caught, before the round
+
+> "post-D3, the funnel is non-monotonic unless 'bars today' is defined as a subset of the
+> universe … stage 3 exceeds stage 2 every single day — a visibly broken funnel."
+
+**Correct, and already fixed** (§66b): raw bars = **2,637** against an in-universe 2,291, so
+the stage is scoped to `stocks.is_active` and nesting is asserted by test. Recorded because
+Kimi derived it from the document alone, which is the strongest form this review can take.
+
+## §73 · ⭐⭐⭐ Q2 ANSWERED: YES — and **my own stated cost was wrong**, unanimously
+
+**Five of six sources independently said the same thing: a hash cannot serve the purpose.**
+My §63/Q2 priced this as *"one CSV + one instruments hash per day"*. ⛔ **That line would have
+caused a future session to build an artifact that cannot do the job it is being built for.**
+
+- ChatGPT: *"A hash gives you `H(input)` but Replay needs `input`."*
+- Kimi: *"the document's stated artifact (a hash) would not serve any of the three things it is
+  meant to unblock."*
+- Claude added the mechanism I should have caught: **`kite_instruments` is upserted in place** —
+  the sync log reads `57595 rows upserted, 0 stale swept` — so **yesterday's instrument state is
+  already gone**. A hash detects that something changed and cannot reconstruct what.
+
+⇒ **the artifact is the raw `EQUITY_L.csv` plus the parsed EQ symbol set (~2,300 rows/day),
+not a fingerprint.** Still trivially cheap. ⚠ DeepSeek's split — hash for present-tense
+operation, contents for replay — is the one dissent, and it is a sequencing argument, not a
+disagreement about sufficiency.
+
+### 73a · Four reasons that are NOT "history is unreconstructible"
+
+That was the question I actually asked, and the round answered it four times over:
+
+1. ⭐ **You cannot separate a rule change from a source change.** (ChatGPT, DeepSeek, Gemini)
+   *"did this name flip because the market changed, or because the CSV drifted?"* — a **today**
+   question, unanswerable today.
+2. ⭐⭐ **The collapse rail's refusals are unauditable — and this is about code I shipped this
+   week.** (Claude, Kimi) The rail fires on a property of the **input**; the snapshot records
+   the rule's **output**. So a refusal can never be reviewed, and `UNIVERSE_APPLY_MIN_FRACTION
+   = 0.5` — which I picked by judgement — **can never be tuned, because I can never inspect a
+   firing.** §50 claims the refusal "is inspectable". It is not. ⛔ And per §40d, *"a noisy
+   guard gets ignored, which is how guards die."*
+3. ⭐ **Rule v2 cannot be regression-tested against v1.** (Kimi) Versioning whose inputs float
+   is cosmetic: no two evaluations are comparable, so *"v2 behaves better"* is unfalsifiable.
+   §51 guarantees v2 is coming.
+4. ⭐⭐ **The funnel is only a detector if it can tell a market event from an ingestion event.**
+   (DeepSeek) A drop in `priced` is ambiguous between real breadth collapse and a partial
+   fetch — **and §60/A1 ranks the funnel P0 specifically on the strength of that detector
+   claim.** Without input snapshots the claim is weaker than it reads.
+
+⇒ **DECIDED: snapshot the inputs.** Not queued as a Replay feature — it is a correctness
+primitive for four present-tense jobs. ⚠ Everything in §61's "Parked" that was blocked on this
+is now unblocked in principle.
+
+## §74 · ⛔⛔ SHIPPED THIS ROUND: the collapse rail was ONE-SIDED, and growth is the dangerous direction
+
+Claude and Kimi converged on this independently, and it was the fastest-to-confirm finding of
+the round — `universe_materialiser.py:190` read, verbatim: **"⚠ GROWTH is never refused."**
+
+**Why it is severe is COMPOSITION, not the rail alone.** `universe_guard`'s U16 ceiling refuses
+the **ENTIRE** subscription when the universe exceeds one WebSocket connection — deliberately,
+because truncating to the first N is a silent selection decision (`EXIT_NO_UNIVERSE`). So:
+
+> an over-including parse regression — **the exact mirror of the `EQ=0` header bug**, which
+> shifted a column and could as easily have admitted every row as none — passes the collapse
+> rail unchecked, pushes the universe past 3,000, and the next worker start refuses everything.
+> ⇒ **every open position loses its feed at once, including the held names U17 exists to keep
+> subscribed.**
+
+Headroom measured: **2,291 of 3,000 — 709 names.** ⚠ Note the doc elsewhere says 2,655/345;
+that was the pre-D2′b projection and is stale.
+
+**Shipped:** `apply_to_stocks` now refuses a snapshot above `settings.live_universe_max_count`
+— **the worker's own knob** (W5: a second copy of 3,000 would drift from the guard it
+protects). Enforced where it is still a refused write rather than at the worker where it is
+already an outage. Four tests, including one that raises the knob and admits the very same
+snapshot, and a canary asserting a refused apply writes **nothing** in either direction.
+
+## §75 · ⛔ A CORRECTION TO §42b — Kimi was right, and it is one of mine
+
+§42b claims the +1,121/−152 diff was *"independently derived"* and calls it **"the strongest
+evidence in this document that the rule is right."** Kimi attacked the independence. **Measured:**
+
+| quantity | count |
+|---|---|
+| kite NSE EQ instruments | 10,246 |
+| …excluding `segment='INDICES'`, distinct symbols | **10,110** |
+| `EQUITY_L` EQ rows | 2,292 |
+| resulting universe | **2,291** |
+
+⇒ **`KITE_TRADABLE` excludes exactly ONE name.** The rule is ~99.96% a single-source rule, and
+essentially all discriminating power lives in `EQUITY_L`. Two consumers of one CSV agreeing
+measures **consistency, not correctness** — and §42d is the proof, since the header bug would
+have made any re-derivation from the same malformed file agree enthusiastically.
+
+⭐ **The honest restatement: the rule engine reproduces the ad-hoc query. That is a regression
+test, not independent corroboration.** The conclusion (the rule is right) still stands on §47's
+per-name review of the 152; only the *stated evidence for it* was overclaimed.
+
+## §76 · Measured, recorded, not acted on
+
+- **CA flag (§38c's owed measurement, Kimi §3.1 / DeepSeek C3):** `ca_flagged_at IS NOT NULL` =
+  **7**, of which **5 active**. The backward pass was never run, so the monotonic accumulator is
+  a 7-row problem today, not the 1,768 §32 projected. ⇒ the clearing path stays queued, and the
+  owed measurement is now taken.
+- ⛔ **"1,847 with bars today" (§60/A1) was ILLUSTRATIVE, not measured** — DeepSeek W5 and Kimi
+  both flagged it. The real figure is 2,286 against a 2,250 median. **A made-up number in an
+  argument for a detector that exists to show real numbers**; struck.
+- ⚠ **U4′ and U0.5′** — Kimi §1.1/§3.2 observe neither has a SHIPPED part. Correct: the
+  coverage-aware feed alarm is the PRIMARY detector and the funnel is at best tertiary
+  (it renders only on empty states, to a user who must remember the baseline). **Queued, not
+  argued with.**
+- ⚠ **DeepSeek W1 — does an Alembic migration bypass the single-writer trigger?** Not yet tested.
+  If it does, the invariant is "single-writer among application code", which is a narrower claim
+  than §49 makes. Queued as a one-command check.
+
+## §77 · The round-5 queue
+
+**P0 — decided, two already shipped:**
+1. ✅ **V1 fifth rung** — shipped (§72c).
+2. ✅ **Growth-side ceiling on the materialiser rail** — shipped (§74).
+3. **Snapshot the rule's inputs** — CSV + parsed EQ set, not a hash (§73).
+
+**P1:** U4′ coverage-aware feed alarm (the primary detector) · the `ca_flagged_at` clearing path
+· a `max(as_of)` recency check on `universe_snapshot` · the Alembic-vs-trigger check · a
+freshness assertion on the rule's inputs (same shape as U15's median check).
+
+**P2:** V3–V8 · U0.5′ off-box backup · D0 pin refresh cadence · exclusion reasons rendered
+as-of the last APPLIED snapshot (Kimi §4.2 — otherwise a refused apply puts a false reason on
+screen).
+
+## §78 · ⭐ What this round cost and returned, measured against my own pre-registered bar
+
+My rule was: **a point counts if it changes a decision AND is settleable by a query.** Round 5
+returned **four** — both blocking questions (each answered against the option I was leaning
+toward), the one-sided rail, and the §42b independence claim. Compare §13f, which measured the
+marginal value of review breadth as *negative* at 4-of-37.
+
+⭐⭐ **The two best points in the round were both a reviewer naming a QUERY rather than raising
+a concern** — Claude's *"does the live scan path carry its own bar-count gate?"* and Kimi's
+*"which single EQUITY_L name fails KITE_TRADABLE?"*. Both took one query; both changed
+something. **§63/5 asked for exactly that, and this is the first round where it was the
+dominant mode.**

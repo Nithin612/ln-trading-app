@@ -187,7 +187,23 @@ async def apply_to_stocks(
     done on 2026-09-14 had it reached this path. Same tripwire as
     `kite_client._SWEEP_MIN_FRACTION` and the live worker's universe guard, for the
     same reason: **a feed that looks empty is a bad feed, never an empty market.**
-    ⚠ GROWTH is never refused — the D2′b flip itself doubled the universe.
+    ⛔⛔ **AND REFUSES A SNAPSHOT THAT WOULD EXCEED THE SUBSCRIPTION CAP (round 5).**
+    The collapse rail above is one-sided, and unbounded growth is not the harmless
+    direction — it is the more dangerous one, because of how it COMPOSES. The U16 ceiling
+    in `universe_guard` refuses the ENTIRE subscription when the universe exceeds one
+    WebSocket connection's capacity, deliberately, since truncating to the first N is a
+    silent selection decision. So an over-including parse regression — the exact mirror of
+    the `EQ=0` header bug, which shifted a column and could as easily have admitted every
+    row as none — would pass the collapse rail unchecked, push the universe past the cap,
+    and the next worker start would exit `EXIT_NO_UNIVERSE`. **Every position loses its
+    feed at once, including the held names U17 exists to keep subscribed.**
+
+    ⇒ the ceiling is enforced HERE, where it is still a refused write, instead of only at
+    the worker, where it is already an outage. Headroom measured 2026-09-14: 2,291 of
+    3,000, so 709 names.
+
+    ⚠ W5 — the cap is `settings.live_universe_max_count`, the same value the worker's own
+    guard reads. A second copy of 3,000 here would drift from the thing it protects.
     """
     present = (
         await db.execute(
@@ -212,6 +228,16 @@ async def apply_to_stocks(
             f"against {current_active} currently active (< {fraction:.0%}). A feed that "
             "looks empty is a bad feed, not an empty market. Investigate, then re-run "
             "with an explicit min_fraction to override."
+        )
+
+    ceiling = settings.live_universe_max_count
+    if ceiling and present > ceiling:
+        raise ValueError(
+            f"universe CEILING refused: the {as_of} snapshot holds {present} members "
+            f"against a per-connection subscription cap of {ceiling}. Applying it would "
+            "make the live worker refuse its ENTIRE subscription on next start, dropping "
+            "the feed for every open position. A feed that looks too large is a bad feed, "
+            "not a doubled market. Investigate the parse before overriding."
         )
 
     await db.execute(text("SET LOCAL app.universe_writer = 'on'"))
