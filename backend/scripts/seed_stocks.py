@@ -383,7 +383,16 @@ def seed(dry_run: bool = False) -> None:  # noqa: C901
                             :sector, :sector,
                             :lot_size, 0.05,
                             :is_fno, :is_nifty50, :is_banknifty, :is_finnifty,
-                            true, :listed_on
+                            -- D2′b: a NEW row starts OUT of the universe. Seeding a
+                            -- symbol is not a tradeability verdict — that belongs to
+                            -- the universe rule, whose one writer is
+                            -- `universe_materialiser.apply_to_stocks`. `false` is the
+                            -- safe initial value: out until the rule admits it.
+                            -- ⚠ Consequence: after a FRESH seed nothing is active
+                            -- until the materialiser runs. That is the documented
+                            -- recovery order (seed → kite instruments → backfill →
+                            -- universe), and the notice below says so.
+                            false, :listed_on
                         )
                         ON CONFLICT (symbol, exchange) DO UPDATE SET
                             -- D1′: the identity anchor is FILLED ONCE and never
@@ -469,6 +478,15 @@ def seed(dry_run: bool = False) -> None:  # noqa: C901
 
             await session.commit()
             print(f"\nDone. Inserted: {inserted}, Updated: {updated}, Skipped: {skipped}")
+            if inserted:
+                print(
+                    f"\n⚠ {inserted} NEW row(s) were created INACTIVE. Seeding a symbol is not a\n"
+                    "  tradeability verdict — the universe rule decides. Next steps, in order:\n"
+                    "    1. uv run python scripts/sync_instruments.py\n"
+                    "    2. uv run python scripts/universe_snapshot.py --materialise\n"
+                    "    3. uv run python scripts/universe_snapshot.py --apply\n"
+                    "  (or wait for the nightly beat, which does 1 and 2 automatically)"
+                )
             # Renames change what a ticker MEANS, so they are never silent.
             if renamed:
                 print(f"\nRenamed {len(renamed)} symbol(s) in place (history preserved):")

@@ -1703,22 +1703,22 @@ there was never anything to "restore" (§25a). ⇒ **REBUILD-D: derive, don't re
   (the merge overwrites its own evidence). §41.
 - **D2′a** — the universe as a **versioned rule, SHADOW ONLY**. §42.
 
-**⇒ ⭐⭐ THE DECISION WAITING FOR YOU — D2′b.** The rule's first evaluation says:
-**WOULD ACTIVATE 1,121 · WOULD DEACTIVATE 152 · resulting universe 2,291.** The 152 are all
-`not_eq_listed` — **exactly** round 2's "currently active but not in the EQ list" count, reached
-by an independent route. **Nothing writes `is_active` yet.** The question is no longer *"is the
-rule right"* but *"do we accept these 1,273 changes"*. Run
-`uv run python scripts/universe_snapshot.py --diff` to see it yourself.
+**✅ D2′b DONE 2026-09-14 — THE OUTAGE IS REPAIRED.** User approved +1,121 / −152.
+**Active stocks 1,322 → 2,291; Nifty 50 constituents active 5 → 50**; subscription universe
+2,291 (76 % of Kite's cap). `RELIANCE`/`TCS`/`HDFCBANK`/`ABB`/`ACC` active; `QUINTEGRA`,
+the `KNOWNCO` test fixture, the `NIFTYNXT50` index row and the `DUCON-RE1` rights entitlement
+excluded. ⭐ The 152 were **139 `BE`-series** (the T2T ruling already excluded them) **+ 13
+junk** — two piles, nothing in between.
+⭐⭐ **`is_active` is now written by ONE code path and a DATABASE TRIGGER refuses the rest**
+(`app.universe_writer`, `SET LOCAL`). `deactivate_dead_stocks.py` **retired**; `seed_stocks`
+inserts `false`. ⛔ **A collapse rail was added that §43 did not ask for** — the beat applies
+nightly from an internet CSV, and it refuses a snapshot below 50 % of the active set (exactly
+what the `EQ=0` header bug would have done). ⚠ **Membership flags deferred** to U9 with
+reasons (§51); `forensic_stocks_deactivated` did not survive 09-07 so the "15 July judgements"
+acceptance test was impossible.
 
-**⇒ THEN D2′b (§43):** remove the three writers (`bhavcopy_service:216` · `seed_stocks:345` ·
-`deactivate_dead_stocks:100`) · enforce single-writer in the DB · materialiser becomes the writer,
-first evaluation inside the migration · extend to the four membership flags (same defect, but they
-**self-heal on reseed** so they fail as silent DRIFT) · retire `deactivate_dead_stocks.py` with its
-15 July judgements as an acceptance test.
-
-⚠ **U16's pressure is LOWER than reported:** the rule's universe is **2,291 = 76 %** of Kite's
-3,000 cap (headroom 709), not §29f's 2,655/88 %. ⚠ **D4b is still NOT half a day** (a backward CA
-pass flags 1,768 of 3,395 stocks, 386 of them ACTIVE) — §32.
+**⇒ NEXT:** push (**11 commits unpushed**) · **U11** quarantine the 35 stale signals ·
+**intraday capture still 0 rows** · index/VIX backfill · the panel's UI/UX round (PART XVIII).
 
 ---
 

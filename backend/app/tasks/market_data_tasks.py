@@ -99,10 +99,14 @@ async def _run_sync_instruments() -> dict[str, object]:
 def materialise_universe(self: object) -> dict[str, object]:  # noqa: ARG001
     """D2′a — record today's universe membership. Beat: 08:35 IST weekdays.
 
-    ⚠ **SHADOW ONLY — this does not write `is_active`.** It evaluates the versioned
-    rule and stores the outcome, so that "was X in the universe on date D" becomes
-    answerable and the diff against the live flag is measurable. Making the rule the
-    source of truth is D2′b.
+    ⭐ **D2′b: this now APPLIES.** It evaluates the versioned rule, records the outcome,
+    and adopts it — `apply_to_stocks` is the single writer a database trigger permits.
+    That is the point: `is_active` had three uncoordinated writers, and on 2026-09-07
+    one of them wrote it wrong and the system scanned micro-caps for five days.
+
+    ⛔ **A collapse is refused, not applied.** The rule's input is a CSV fetched over
+    the internet and this runs unattended; a truncated feed must never switch off the
+    market. The task logs the refusal and leaves the universe alone.
 
     ⚠ Runs AFTER `sync_kite_instruments` (02:30 UTC): the rule reads
     `kite_instruments`, so evaluating first would judge the universe against
@@ -114,7 +118,7 @@ def materialise_universe(self: object) -> dict[str, object]:  # noqa: ARG001
 async def _run_materialise_universe() -> dict[str, object]:
     from app.db.session import AsyncSessionFactory
     from app.services.universe_materialiser import (
-        diff_against_live,
+        apply_to_stocks,
         load_inputs,
         materialise,
     )
@@ -123,13 +127,23 @@ async def _run_materialise_universe() -> dict[str, object]:
     async with AsyncSessionFactory() as db:
         inputs = await load_inputs(db)
         members = await materialise(db, as_of=today_ist, inputs=inputs)
-        d = await diff_against_live(db, inputs=inputs)
-    log.info(
-        "universe %s: %d member(s); vs is_active would activate %d, deactivate %d",
-        today_ist, members, len(d.would_activate), len(d.would_deactivate),
-    )
+        try:
+            activated, deactivated = await apply_to_stocks(db, as_of=today_ist)
+        except ValueError as exc:
+            # The snapshot is recorded either way, so the refusal is inspectable.
+            log.error("universe %s NOT applied: %s", today_ist, exc)
+            return {"members": members, "applied": False, "reason": str(exc)}
+
+    if activated or deactivated:
+        log.warning(
+            "universe %s: %d member(s); is_active changed — +%d activated, -%d deactivated",
+            today_ist, members, activated, deactivated,
+        )
+    else:
+        log.info("universe %s: %d member(s); no change", today_ist, members)
     return {
         "members": members,
-        "would_activate": len(d.would_activate),
-        "would_deactivate": len(d.would_deactivate),
+        "applied": True,
+        "activated": activated,
+        "deactivated": deactivated,
     }

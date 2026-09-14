@@ -1,148 +1,140 @@
-"""deactivate_dead_stocks.py — the (a)+(c) universe ruling (2026-07-17).
+"""The (a)+(c) universe ruling of 2026-07-17, now enforced by the RULE.
 
-Real test Postgres. The load-bearing assertion is the T2T canary: a
-stock whose ONLY listing is a series-suffixed NSE row (SYMBOL-BE) must
-NOT be deactivated — ruling (a) keeps surveillance-series stocks active
-in the master (EOD flows) while the live join excludes them naturally.
+⛔ `deactivate_dead_stocks.py` was RETIRED on 2026-09-14 (D2′b): it was the repository's
+only `UPDATE stocks SET is_active`, and that job now belongs to the universe rule's
+`KITE_TRADABLE` term, evaluated nightly and applied by a single writer.
+
+⭐ **Retiring a script does not retire the behaviour it guarded.** Its dry-run and
+idempotence tests died with it — they tested script mechanics — but the two BEHAVIOURAL
+cases it pinned are re-asserted here against the rule that replaced it.
 """
 
 from __future__ import annotations
 
-import sys
 from datetime import UTC, datetime
-from pathlib import Path
-from typing import Any
+from decimal import Decimal
 
-from sqlalchemy import text
+from app.models.broker import KiteInstrument
+from app.services.universe_materialiser import load_inputs
+from app.services.universe_rule import REASON_NOT_KITE_TRADABLE, evaluate
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from tests.helpers import make_stock
+HEADER = (
+    "SYMBOL,NAME OF COMPANY, SERIES, DATE OF LISTING, PAID UP VALUE,"
+    " MARKET LOT, ISIN NUMBER, FACE VALUE\n"
+)
 
-sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "scripts"))
-from deactivate_dead_stocks import deactivate_dead_stocks  # noqa: E402
+
+def _csv(*symbols: str) -> str:
+    return HEADER + "".join(
+        f"{s},{s} Ltd,EQ,01-JAN-2000,10,1,INE000A0{i:04d},10\n"
+        for i, s in enumerate(symbols)
+    )
 
 
 async def _instrument(
-    db: AsyncSession,
-    token: int,
-    symbol: str,
-    exchange: str = "NSE",
-    segment: str = "NSE",
-    itype: str = "EQ",
+    db: AsyncSession, token: int, symbol: str, *, segment: str = "NSE"
 ) -> None:
-    await db.execute(
-        text(
-            "INSERT INTO kite_instruments (instrument_token, exchange_token,"
-            " tradingsymbol, exchange, instrument_type, name, last_price,"
-            " tick_size, lot_size, segment, expiry, strike, synced_at)"
-            " VALUES (:t, :et, :sym, :ex, :it, :nm, 100, 0.05, 1, :seg, '', 0, :ts)"
-        ),
-        {
-            "t": token, "et": token >> 8, "sym": symbol, "ex": exchange,
-            "it": itype, "nm": f"{symbol} Ltd", "seg": segment,
-            "ts": datetime.now(UTC),
-        },
+    db.add(
+        KiteInstrument(
+            instrument_token=token,
+            exchange_token=token >> 8,
+            tradingsymbol=symbol,
+            exchange="NSE",
+            instrument_type="EQ",
+            name=symbol,
+            last_price=Decimal("100"),
+            tick_size=Decimal("0.05"),
+            lot_size=1,
+            segment=segment,
+            expiry="",
+            strike=Decimal("0"),
+            synced_at=datetime.now(tz=UTC),
+        )
     )
 
 
-async def _is_active(db: AsyncSession, stock_id: int) -> bool:
-    return bool(
-        (
-            await db.execute(
-                text("SELECT is_active FROM stocks WHERE id = :sid"), {"sid": stock_id}
-            )
-        ).scalar_one()
-    )
+class TestTheIndexGhost:
+    """⚠ REGRESSION, and a latent defect this file caught on the day it was rewritten.
 
+    Measured 2026-09-14: **212 `kite_instruments` rows with `segment='INDICES'` carry
+    `instrument_type='EQ'`** — an index can present itself as a tradable equity. The
+    retired script excluded `segment='INDICES'` explicitly; the first version of the
+    universe rule did not, and was saved only by its OTHER term (an index name is not
+    in `EQUITY_L`). A term that depends on a different term to be correct is how a
+    latent defect waits for a coincidence.
+    """
 
-async def _forensic_reasons(db: AsyncSession) -> dict[str, str]:
-    rows = await db.execute(text("SELECT symbol, reason FROM forensic_stocks_deactivated"))
-    return dict(rows.all())
-
-
-class TestDeactivateDeadStocks:
-    async def test_classification_and_t2t_canary(
-        self, db: AsyncSession, monkeypatch: Any
+    async def test_an_index_row_does_not_make_a_symbol_tradable(
+        self, db: AsyncSession
     ) -> None:
-        """Four stocks, four fates: dead → deactivated; BSE-mover →
-        deactivated (separate reason); healthy EQ → untouched; T2T
-        (suffixed-only listing) → UNTOUCHED (ruling (a))."""
-        await db.execute(text("DROP TABLE IF EXISTS forensic_stocks_deactivated"))
-        dead = await make_stock(db, symbol="DEADCO")
-        moved = await make_stock(db, symbol="MOVEDCO")
-        healthy = await make_stock(db, symbol="HEALTHCO")
-        t2t = await make_stock(db, symbol="WATCHCO")
-        await _instrument(db, 11, "MOVEDCO", exchange="BSE", segment="BSE")
-        await _instrument(db, 22, "HEALTHCO")
-        await _instrument(db, 33, "WATCHCO-BE")  # T2T series listing only
+        await _instrument(db, 7001, "GHOSTIDX", segment="INDICES")
+        await db.commit()
 
-        counts = await deactivate_dead_stocks(db, dry_run=False)
+        inputs = await load_inputs(db, csv_text=_csv("GHOSTIDX"))
 
-        assert counts == {"dead_no_listing": 1, "moved_bse_only": 1}
-        assert not await _is_active(db, dead.id)
-        assert not await _is_active(db, moved.id)
-        assert await _is_active(db, healthy.id)
-        assert await _is_active(db, t2t.id)  # THE canary: T2T stays active
-        assert await _forensic_reasons(db) == {
-            "DEADCO": "dead_no_listing",
-            "MOVEDCO": "moved_bse_only",
-        }
+        assert "GHOSTIDX" not in inputs.kite_tradable
+        assert evaluate("GHOSTIDX", inputs) == (False, REASON_NOT_KITE_TRADABLE)
 
-    async def test_index_row_is_not_a_listing(self, db: AsyncSession) -> None:
-        """A segment='INDICES' row sharing the symbol must not keep a
-        master row alive (the NIFTYNXT50-style ghost)."""
-        await db.execute(text("DROP TABLE IF EXISTS forensic_stocks_deactivated"))
-        ghost = await make_stock(db, symbol="IDXGHOST")
-        await _instrument(db, 44, "IDXGHOST", segment="INDICES")
+    async def test_a_real_equity_row_still_counts(self, db: AsyncSession) -> None:
+        await _instrument(db, 7002, "REALEQ", segment="NSE")
+        await db.commit()
 
-        counts = await deactivate_dead_stocks(db, dry_run=False)
+        inputs = await load_inputs(db, csv_text=_csv("REALEQ"))
 
-        assert counts == {"dead_no_listing": 1}
-        assert not await _is_active(db, ghost.id)
+        assert "REALEQ" in inputs.kite_tradable
+        assert evaluate("REALEQ", inputs)[0] is True
 
-    async def test_bse_index_row_does_not_flip_the_reason(self, db: AsyncSession) -> None:
-        """The reason drives group-wise REVERSAL, so mislabels matter: a
-        BSE row with segment='INDICES' sharing a dead stock's symbol must
-        not flip dead_no_listing → moved_bse_only (bug-hunter mutant C —
-        the reason-CASE's INDICES exclusion was unpinned)."""
-        await db.execute(text("DROP TABLE IF EXISTS forensic_stocks_deactivated"))
-        dead = await make_stock(db, symbol="IDXREASON")
-        await _instrument(db, 55, "IDXREASON", exchange="BSE", segment="INDICES")
+    async def test_a_symbol_with_both_rows_is_tradable(self, db: AsyncSession) -> None:
+        """The exclusion must remove the ghost, not the company behind it."""
+        await _instrument(db, 7003, "BOTHROWS", segment="NSE")
+        await _instrument(db, 7004, "BOTHROWS", segment="INDICES")
+        await db.commit()
 
-        counts = await deactivate_dead_stocks(db, dry_run=False)
+        inputs = await load_inputs(db, csv_text=_csv("BOTHROWS"))
 
-        assert counts == {"dead_no_listing": 1}
-        assert not await _is_active(db, dead.id)
-        assert await _forensic_reasons(db) == {"IDXREASON": "dead_no_listing"}
+        assert "BOTHROWS" in inputs.kite_tradable
 
-    async def test_dry_run_writes_nothing(self, db: AsyncSession) -> None:
-        await db.execute(text("DROP TABLE IF EXISTS forensic_stocks_deactivated"))
-        dead = await make_stock(db, symbol="DRYCO")
 
-        counts = await deactivate_dead_stocks(db, dry_run=True)
+class TestTheT2TRuling:
+    """Ruling (a), 2026-07-17: `BE`/`BZ` names are excluded from LIVE SCANNING. Under
+    D2′b that is the rule's `EQ_LISTED` term rather than a script's judgement — and it
+    is why 139 of the 152 deactivated on 2026-09-14 were `BE` series."""
 
-        assert counts == {"dead_no_listing": 1}
-        assert await _is_active(db, dead.id)  # untouched
-        exists = (
-            await db.execute(
-                text(
-                    "SELECT count(*) FROM information_schema.tables"
-                    " WHERE table_name = 'forensic_stocks_deactivated'"
-                )
-            )
-        ).scalar_one()
-        assert exists == 0  # no forensic table minted on dry-run
+    async def test_a_be_series_name_is_not_in_the_universe(
+        self, db: AsyncSession
+    ) -> None:
+        await _instrument(db, 7005, "T2TNAME", segment="NSE")
+        await db.commit()
 
-    async def test_second_run_is_idempotent(self, db: AsyncSession) -> None:
-        await db.execute(text("DROP TABLE IF EXISTS forensic_stocks_deactivated"))
-        await make_stock(db, symbol="ONCECO")
+        csv_text = HEADER + "T2TNAME,T2t Ltd,BE,01-JAN-2000,10,1,INE111A01011,10\n"
+        inputs = await load_inputs(db, csv_text=csv_text)
 
-        first = await deactivate_dead_stocks(db, dry_run=False)
-        second = await deactivate_dead_stocks(db, dry_run=False)
+        assert "T2TNAME" not in inputs.eq_listed
+        assert evaluate("T2TNAME", inputs)[0] is False
 
-        assert first == {"dead_no_listing": 1}
-        assert second == {}  # nothing active left to match
-        n = (
-            await db.execute(text("SELECT count(*) FROM forensic_stocks_deactivated"))
-        ).scalar_one()
-        assert n == 1  # no duplicate forensic rows
+    async def test_the_same_name_in_eq_series_is(self, db: AsyncSession) -> None:
+        await _instrument(db, 7006, "EQNAME", segment="NSE")
+        await db.commit()
+
+        inputs = await load_inputs(db, csv_text=_csv("EQNAME"))
+
+        assert evaluate("EQNAME", inputs)[0] is True
+
+
+class TestTheScriptIsRetired:
+    def test_it_refuses_to_run_and_says_where_the_logic_went(self) -> None:
+        """A tombstone that redirects beats a deleted file: someone who remembers the
+        script finds it and learns what replaced it."""
+        import subprocess
+        import sys
+        from pathlib import Path
+
+        script = Path(__file__).resolve().parents[1] / "scripts" / "deactivate_dead_stocks.py"
+        proc = subprocess.run(
+            [sys.executable, str(script)], capture_output=True, text=True, timeout=60
+        )
+
+        assert proc.returncode != 0
+        assert "RETIRED" in proc.stderr
+        assert "universe_snapshot.py" in proc.stderr

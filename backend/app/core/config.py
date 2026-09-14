@@ -39,6 +39,11 @@ class Settings(BaseSettings):
     # and live_worker subscribes in a single unchunked call. Exceeding it drops the
     # excess server-side silently, so the worker refuses instead. 0 disables.
     live_universe_max_count: int = 3000
+    # D2′b — `apply_to_stocks` refuses to adopt a snapshot smaller than this fraction
+    # of the currently-active set. The rule's input is a CSV fetched over the internet
+    # and the job runs unattended; a truncated feed must not switch off the market.
+    # Growth is never refused. 0 disables.
+    universe_apply_min_fraction: float = 0.5
     # Session notifier (A11). Unset ⇒ log-only, which is the DEFAULT and not a degraded
     # mode: the policy still runs and still logs at the level it chose. Set it and the same
     # messages also POST as JSON. Vendor-neutral on purpose — Slack/Discord accept the

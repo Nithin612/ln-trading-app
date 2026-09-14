@@ -2735,3 +2735,102 @@ carrying safety copy** (a 0.55 row × the Button's `disabled:opacity-50` put "Bl
 **1.52:1** against a 4.5 AA floor); use **`aria-disabled` + a click guard**, never native
 `disabled`, whenever the reason must stay readable; and **A24** — no bare point estimate for
 anything predictive.
+
+
+---
+
+# PART XIX — D2′b SHIPPED: THE UNIVERSE IS REPAIRED (2026-09-14)
+
+**User approved the +1,121 / −152.** `stocks.is_active` is now derived from the versioned
+rule, written by exactly one code path, and enforced by the database.
+
+## §47 · What the 152 actually were — checked before flipping
+
+Presenting "152 names will be deactivated" as a number would have been asking for a
+decision without the evidence. Broken down:
+
+| count | what | verdict |
+|--:|---|---|
+| **139** | **`BE` series (trade-to-trade)** in EQUITY_L | ⭐ The **2026-07-17 T2T ruling already excludes these from live scanning.** Deactivating them *implements* an existing ruling; it decides nothing new. |
+| **13** | absent from EQUITY_L entirely | `KNOWNCO` (**a test fixture — "Test Company Ltd" — in the production stock master**), `NIFTYNXT50` + `NIFTYFPI` (**indices carried as stock rows**), `DUCON-RE1` + `VHLTD-RE1` (**rights entitlements**), `QUINTEGRA` (the round-2 delisting), and six delisted/suspended names. |
+
+⭐ **Two piles, nothing in between** — and only **15 of the 152 had traded since 09-04**,
+all of them `BE`. There was no name in that list worth arguing about, which is what made
+this approvable rather than a judgement call.
+
+## §48 · The result, measured
+
+| | before | after |
+|---|--:|--:|
+| active stocks | 1,322 | **2,291** |
+| **Nifty 50 constituents active** | **5** | **50** |
+| subscription universe | 1,178 | **2,291** (76 % of Kite's 3,000 cap) |
+
+`RELIANCE` · `TCS` · `HDFCBANK` · `INFY` · `ABB` · `ACC` · `ADANIENT` — active.
+`QUINTEGRA` · `KNOWNCO` · `NIFTYNXT50` · `DUCON-RE1` — excluded. **The 2026-09-07 outage
+is repaired.**
+
+## §49 · How it is enforced, and the three writers that are gone
+
+⭐⭐ **A database trigger**, because a convention decays and this one already did.
+`stocks.is_active` may now only change inside a transaction that sets
+`app.universe_writer = 'on'`, and **`universe_materialiser.apply_to_stocks` is the only
+code that does.** Verified: a raw `UPDATE` is refused, and so is the ORM path a
+well-meaning service would take.
+
+| writer | disposition |
+|---|---|
+| `deactivate_dead_stocks.py:100` — the repo's only `UPDATE` | ⛔ **RETIRED.** Its logic is the rule's `KITE_TRADABLE` term. Left as a tombstone that redirects. |
+| `seed_stocks.py:345` — INSERT literal `true` | now inserts **`false`** — seeding a symbol is not a tradeability verdict |
+| `bhavcopy_service.py:216` — INSERT `false` | unchanged; `false` was already the safe initial value |
+
+⚠ **INSERTs are deliberately NOT blocked.** A row that does not exist cannot have been
+evaluated, so its creator must supply an initial value. **Only *changing* the flag is a
+universe decision.**
+
+⚠ **The escape hatch is deliberate and the exception message teaches it.** A guard nobody
+can bypass in an emergency is a guard that gets *dropped* in an emergency. `SET LOCAL`,
+not `SET` — the permission dies with the transaction, so a pooled connection cannot
+inherit the right to write (pinned by test).
+
+⚠ **`deactivate_dead_stocks.py`'s documented reversal SQL was REMOVED, not preserved.** It
+joined on raw `stock_id`, and §20/2 measured that every id was reassigned on 09-07 — running
+it would have reactivated the wrong companies. Keeping a loaded reversal in a docstring where
+someone might paste it *was* the hazard.
+
+## §50 · ⛔ The rail I added that §43 did not ask for
+
+The beat now **applies** nightly, unattended, from a rule whose input is **a CSV fetched over
+the internet**. So `apply_to_stocks` refuses a snapshot holding less than
+`UNIVERSE_APPLY_MIN_FRACTION` (0.5) of the currently-active set.
+
+⭐ **This is not hypothetical: it is precisely what my own `EQ=0` header bug would have done
+on 2026-09-14** had it reached this path instead of a `--diff`. Same tripwire as
+`kite_client._SWEEP_MIN_FRACTION` and the live worker's collapse arm, for the same reason —
+**a feed that looks empty is a bad feed, never an empty market.** ⚠ Growth is never refused;
+the flip itself nearly doubled the universe. A refusal logs at ERROR and **leaves the universe
+alone**, while the snapshot is still recorded so the refusal is inspectable.
+
+## §51 · Deferred from §43, with the reason
+
+**The four membership flags (`is_nifty50` / `is_banknifty` / `is_finnifty` / `is_fno`) are NOT
+rule-derived.** They have the same ownership shape, but:
+
+1. they **self-heal on every reseed** (they ARE in `seed_stocks`' `ON CONFLICT DO UPDATE`,
+   which is exactly why `is_active` alone got *stuck* wrong), so they fail as slow drift
+   rather than a stuck value;
+2. deriving them means the nightly rule must fetch **three more index CSVs**, making the job
+   that now owns the money-path universe materially more fragile;
+3. their real defect is **point-in-time** (`is_nifty50` describes today's composition, so
+   "was X in the Nifty 50 in July" is unanswerable) — and that is A2/U9, a different problem
+   that a snapshot solves, not a single-writer guard.
+
+⇒ **Deferred deliberately. Unblocks with U9 (index constituents), where the point-in-time
+question actually lives.**
+
+⚠ **Also gone and worth recording: `forensic_stocks_deactivated` did not survive 09-07**, so
+§43's "the 15 July judgements as an acceptance test" was **not possible**. `universe_snapshot`
+is the durable replacement — dated, per-stock, reproducible.
+
+**Tests: 14** (7 trigger · 4 apply · 3 collapse rail). Migration `e7f8a9b0c1d2`, downgrade
+round-tripped on dev.

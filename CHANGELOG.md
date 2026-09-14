@@ -7,6 +7,48 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### D2′b — the universe rule owns `stocks.is_active`, enforced by the database (2026-09-14)
+
+User approved the +1,121 / −152. **The 2026-09-07 outage is repaired.**
+
+| | before | after |
+|---|--:|--:|
+| active stocks | 1,322 | **2,291** |
+| **Nifty 50 constituents active** | **5** | **50** |
+| subscription universe | 1,178 | **2,291** (76% of Kite's cap) |
+
+- **The 152 were checked before flipping, not presented as a number:** **139 are `BE`
+  series**, which the 2026-07-17 T2T ruling already excludes from live scanning — so
+  deactivating them implements an existing ruling rather than deciding anything; the other
+  **13 are junk**: `KNOWNCO` (a test fixture in the production stock master), `NIFTYNXT50`
+  and `NIFTYFPI` (indices carried as stock rows), two rights entitlements, `QUINTEGRA`, and
+  six delisted names. Two piles, nothing in between.
+- ⭐⭐ **Enforced by a database trigger**, because a convention decays and this one already
+  did. `is_active` may only change inside a transaction setting `app.universe_writer='on'`,
+  and only `universe_materialiser.apply_to_stocks` does. Raw SQL and the ORM path are both
+  refused. `SET LOCAL`, not `SET`, so a pooled connection cannot inherit the right to write.
+- **Three writers gone:** `deactivate_dead_stocks.py` **retired** (its logic is the rule's
+  `KITE_TRADABLE` term; left as a redirecting tombstone, and ⛔ **its documented reversal SQL
+  was removed rather than preserved** — it joins on raw `stock_id`, and §20/2 proved every id
+  was reassigned on 09-07, so running it would reactivate the wrong companies);
+  `seed_stocks` now inserts `false` (seeding a symbol is not a tradeability verdict);
+  `bhavcopy_service` already did. ⚠ INSERTs are deliberately not blocked — a row that does
+  not exist cannot have been evaluated.
+- ⛔ **A collapse rail §43 did not ask for.** The beat now applies nightly, unattended, from
+  a CSV fetched over the internet, so `apply_to_stocks` refuses a snapshot below
+  `UNIVERSE_APPLY_MIN_FRACTION` (0.5) of the active set. **This is exactly what my own
+  `EQ=0` header bug would have done** had it reached this path instead of a `--diff`. Growth
+  is never refused; a refusal logs at ERROR and leaves the universe alone.
+- ⚠ **Deferred from §43 with reasons:** the four membership flags are NOT rule-derived —
+  they self-heal on every reseed (which is why `is_active` alone got *stuck*), deriving them
+  needs three more index CSVs in the job that now owns the money-path universe, and their
+  real defect is point-in-time, which is U9's problem. And `forensic_stocks_deactivated` did
+  not survive 09-07, so "the 15 July judgements as an acceptance test" was not possible.
+- Migration `e7f8a9b0c1d2` (downgrade round-tripped on dev; it applies the *recorded*
+  snapshot in pure SQL — a migration that fetches from the internet fails in a way nobody can
+  reproduce). 14 tests.
+
+
 ### Calendar + UI/UX status for the panel (2026-09-14)
 
 - **Added 2026-09-14 Ganesh Chaturthi to `nse_holidays`** (`source='manual'`, the model's

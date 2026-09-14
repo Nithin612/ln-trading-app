@@ -23,6 +23,7 @@ from typing import Any
 import httpx
 from sqlalchemy import text
 
+from app.core.config import settings
 from app.services.universe_rule import (
     RULE_VERSION,
     ShadowDiff,
@@ -90,8 +91,17 @@ async def load_inputs(db: Any, *, csv_text: str | None = None) -> UniverseInputs
         for r in (
             await db.execute(
                 text(
+                    # ⚠ `segment <> 'INDICES'` is NOT redundant. Measured 2026-09-14:
+                    # **212 INDICES rows carry `instrument_type = 'EQ'`**, so an index
+                    # can present itself as a tradable equity. Today nothing reaches
+                    # the universe that way only because the EQ_LISTED term already
+                    # rejects index names — but that makes this term rely on the other
+                    # one to be correct, which is how a latent defect waits. The
+                    # retired `deactivate_dead_stocks.py` guarded exactly this (the
+                    # "NIFTYNXT50-style ghost") and its test is preserved below.
                     "SELECT DISTINCT tradingsymbol FROM kite_instruments"
                     " WHERE instrument_type = 'EQ' AND exchange = 'NSE'"
+                    "   AND segment <> 'INDICES'"
                 )
             )
         ).fetchall()
@@ -147,3 +157,77 @@ async def diff_against_live(db: Any, *, inputs: UniverseInputs) -> ShadowDiff:
     ).fetchall()
     live = {str(r[0]): bool(r[1]) for r in rows}
     return shadow_diff(live, evaluate_all(sorted(live), inputs))
+
+
+async def apply_to_stocks(
+    db: Any, *, as_of: date, min_fraction: float | None = None
+) -> tuple[int, int]:
+    """⭐ **The ONLY code path permitted to change `stocks.is_active` (D2′b).**
+
+    Adopts the recorded verdict for `as_of`. Returns `(activated, deactivated)`.
+
+    A database trigger refuses every other write — three uncoordinated writers is what
+    broke the universe on 2026-09-07 — so this sets `app.universe_writer` for the
+    transaction to identify itself. ⚠ `SET LOCAL` is used deliberately: the permission
+    dies with the transaction, so a later statement on a pooled connection cannot
+    inherit it.
+
+    ⚠ Reads the SNAPSHOT, never the rule. `materialise()` decides and records; this
+    applies what was recorded. Keeping them apart is what makes the flag's value
+    explainable after the fact — the snapshot says what was decided and when, and this
+    function cannot quietly decide something else.
+
+    ⚠ Refuses an `as_of` with no snapshot rather than deactivating the entire universe.
+    That is the same class of accident as the empty-dump sweep in `kite_client`.
+
+    ⛔ **And refuses a COLLAPSE.** This runs unattended on a beat, from a rule whose
+    input is a CSV fetched over the internet. A truncated or reshaped feed yields a
+    small `eq_listed` set, and without this rail the nightly job would quietly switch
+    off most of the market — which is precisely what the `EQ=0` header bug would have
+    done on 2026-09-14 had it reached this path. Same tripwire as
+    `kite_client._SWEEP_MIN_FRACTION` and the live worker's universe guard, for the
+    same reason: **a feed that looks empty is a bad feed, never an empty market.**
+    ⚠ GROWTH is never refused — the D2′b flip itself doubled the universe.
+    """
+    present = (
+        await db.execute(
+            text("SELECT count(*) FROM universe_snapshot WHERE as_of = :d"), {"d": as_of}
+        )
+    ).scalar_one()
+    if not present:
+        raise ValueError(
+            f"no universe_snapshot for {as_of} — refusing to apply an empty universe. "
+            "Run materialise() first."
+        )
+
+    fraction = (
+        settings.universe_apply_min_fraction if min_fraction is None else min_fraction
+    )
+    current_active = (
+        await db.execute(text("SELECT count(*) FROM stocks WHERE is_active"))
+    ).scalar_one()
+    if fraction and current_active and present < fraction * current_active:
+        raise ValueError(
+            f"universe COLLAPSE refused: the {as_of} snapshot holds {present} members "
+            f"against {current_active} currently active (< {fraction:.0%}). A feed that "
+            "looks empty is a bad feed, not an empty market. Investigate, then re-run "
+            "with an explicit min_fraction to override."
+        )
+
+    await db.execute(text("SET LOCAL app.universe_writer = 'on'"))
+    result = await db.execute(
+        text(
+            "UPDATE stocks s SET is_active = m.included, updated_at = now()"
+            " FROM (SELECT s2.id,"
+            "              EXISTS (SELECT 1 FROM universe_snapshot u"
+            "                       WHERE u.stock_id = s2.id AND u.as_of = :d) AS included"
+            "         FROM stocks s2) m"
+            " WHERE m.id = s.id AND s.is_active IS DISTINCT FROM m.included"
+            " RETURNING s.is_active"
+        ),
+        {"d": as_of},
+    )
+    changed = [bool(r[0]) for r in result.fetchall()]
+    await db.commit()
+    activated = sum(changed)
+    return activated, len(changed) - activated

@@ -627,8 +627,20 @@ else.
   — TimescaleDB hypertables need `timescaledb_pre_restore()`/`post_restore()`) — details in
   `RUNBOOK.md` §9. **Ask before anything that writes to, truncates or migrates live data.**
 
-- **✅ THE D3 → U17 → D0 → D1′ → D2′a QUEUE IS DONE (overnight 2026-09-14), and ONE DECISION
-  WAITS.** ⭐⭐ **D2′a evaluated the universe as a versioned rule and the first run says: WOULD
+- **✅✅ THE UNIVERSE OUTAGE IS REPAIRED (D2′b, 2026-09-14).** User approved +1,121 / −152.
+  **Active stocks 1,322 → 2,291; Nifty 50 constituents active 5 → 50.** ⭐ The 152 deactivated
+  were **139 `BE`-series** (the 2026-07-17 T2T ruling already excluded them from live scanning)
+  **+ 13 junk** — incl. `KNOWNCO`, a **test fixture in the production stock master**, and two
+  **indices carried as stock rows**. ⭐⭐ **`is_active` now has ONE writer and a DATABASE TRIGGER
+  refuses every other** (`app.universe_writer`, `SET LOCAL` so a pooled connection cannot inherit
+  it); `deactivate_dead_stocks.py` is **retired** and **its reversal SQL REMOVED rather than
+  preserved** (it joins on raw `stock_id`, all of which were reassigned 09-07 — §20/2).
+  ⛔ **A collapse rail was added that §43 did not ask for:** the beat applies nightly from an
+  internet CSV, so it refuses a snapshot below 50% of the active set — **exactly what my own
+  `EQ=0` header bug would have done.** ⚠ **Membership flags deferred to U9** (they self-heal on
+  reseed, which is why `is_active` alone got STUCK; their real defect is point-in-time).
+
+- **✅ THE D3 → U17 → D0 → D1′ → D2′a QUEUE IS DONE (overnight 2026-09-14).** ⭐⭐ **D2′a evaluated the universe as a versioned rule and the first run says: WOULD
   ACTIVATE 1,121 · WOULD DEACTIVATE 152 · resulting universe 2,291** — the 152 all
   `not_eq_listed`, **exactly** round 2's independently-derived "active but not in the EQ list"
   count. ⚠ **SHADOW ONLY — nothing writes `is_active`**; the flip is D2′b and the question is

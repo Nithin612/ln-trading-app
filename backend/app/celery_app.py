@@ -117,10 +117,11 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.market_data_tasks.sync_kite_instruments",
         "schedule": crontab(hour=2, minute=30, day_of_week="1-5"),
     },
-    # D2′a — materialise the universe rule's verdict. 03:05 UTC = 08:35 IST, AFTER
-    # sync-kite-instruments (02:30 UTC) because the rule reads kite_instruments, and
-    # before the 09:15 session. ⚠ SHADOW ONLY — it records an outcome and measures the
-    # diff against `is_active`; it does not write the flag.
+    # D2′a/b — evaluate the universe rule, record it, and APPLY it. 03:05 UTC = 08:35
+    # IST, AFTER sync-kite-instruments (02:30 UTC) because the rule reads
+    # kite_instruments, and before the 09:15 session. ⭐ This is the single writer of
+    # `stocks.is_active`; a database trigger refuses every other one. A collapsed
+    # snapshot is refused rather than applied.
     "materialise-universe": {
         "task": "app.tasks.market_data_tasks.materialise_universe",
         "schedule": crontab(hour=3, minute=5, day_of_week="1-5"),

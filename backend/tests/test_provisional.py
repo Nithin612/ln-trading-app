@@ -516,9 +516,11 @@ class TestHotSet:
     ) -> None:
         monkeypatch.setattr(settings, "live_provisional_trigger_market_max", 1)
         ts = int(NOW.timestamp()) - 5
-        dead = await make_stock(db, symbol="MKTDEAD")
+        # D2′b: `is_active` is set at CREATION here rather than updated afterwards —
+        # a database trigger now refuses direct updates to it (the universe rule's
+        # materialiser is the single writer).
+        dead = await make_stock(db, symbol="MKTDEAD", is_active=False)
         live = await make_stock(db, symbol="MKTLIVE")
-        dead.is_active = False
         await db.commit()
         sync_redis.xadd(alert_stream, {"sid": live.id, "style": "market", "ts": ts})
         sync_redis.xadd(alert_stream, {"sid": dead.id, "style": "market", "ts": ts})
