@@ -119,18 +119,33 @@ async def _run_materialise_universe() -> dict[str, object]:
     from app.db.session import AsyncSessionFactory
     from app.services.universe_materialiser import (
         apply_to_stocks,
+        download_equity_l,
         load_inputs,
         materialise,
+        record_inputs,
     )
 
     today_ist = datetime.now(UTC).astimezone(_IST).date()
     async with AsyncSessionFactory() as db:
-        inputs = await load_inputs(db)
+        # ⭐ The raw source is fetched HERE rather than inside `load_inputs` so the exact
+        # bytes can be recorded. §73: the artifact is contents, not a hash — a hash gives
+        # you `H(input)` while every consumer needs `input`, and `kite_instruments` is
+        # upserted in place, so its state is otherwise gone by tomorrow.
+        csv_text = await download_equity_l()
+        inputs = await load_inputs(db, csv_text=csv_text)
+        # ⚠ BEFORE the decision, and committed on its own. The refusal path below is the
+        # single most important thing to be able to audit, and it is precisely the path
+        # where the later steps do not run.
+        await record_inputs(db, as_of=today_ist, csv_text=csv_text, inputs=inputs)
         members = await materialise(db, as_of=today_ist, inputs=inputs)
         try:
             activated, deactivated = await apply_to_stocks(db, as_of=today_ist)
         except ValueError as exc:
-            # The snapshot is recorded either way, so the refusal is inspectable.
+            # ⭐ CORRECTED (§73/2): this used to claim the snapshot alone made a refusal
+            # "inspectable". It did not — the rail fires on a property of the INPUT while
+            # `universe_snapshot` records the rule's OUTPUT, so a firing could be seen but
+            # never explained, and `universe_apply_min_fraction` could never be tuned.
+            # `universe_rule_inputs` is what actually makes this line true.
             log.error("universe %s NOT applied: %s", today_ist, exc)
             return {"members": members, "applied": False, "reason": str(exc)}
 

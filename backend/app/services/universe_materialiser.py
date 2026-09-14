@@ -15,6 +15,8 @@ rewrite an earlier one.
 from __future__ import annotations
 
 import csv
+import gzip
+import hashlib
 import io
 import logging
 from datetime import date
@@ -40,7 +42,7 @@ _EQUITY_L = "https://archives.nseindia.com/content/equities/EQUITY_L.csv"
 _NSE_HEADERS = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64)"}
 
 
-async def _download_equity_l() -> str:
+async def download_equity_l() -> str:
     """⚠ Deliberately NOT `scripts.seed_stocks._fetch`: `app/` must not import from
     `scripts/`, and doing so also drags that module's relaxed typing in here."""
     async with httpx.AsyncClient(
@@ -84,7 +86,7 @@ def parse_eq_listed(csv_text: str) -> frozenset[str]:
 async def load_inputs(db: Any, *, csv_text: str | None = None) -> UniverseInputs:
     """Gather the rule's inputs. `csv_text` short-circuits the download for tests."""
     if csv_text is None:
-        csv_text = await _download_equity_l()
+        csv_text = await download_equity_l()
 
     kite = {
         str(r[0])
@@ -109,6 +111,93 @@ async def load_inputs(db: Any, *, csv_text: str | None = None) -> UniverseInputs
     return UniverseInputs(
         eq_listed=parse_eq_listed(csv_text), kite_tradable=frozenset(kite)
     )
+
+
+async def record_inputs(
+    db: Any, *, as_of: date, csv_text: str, inputs: UniverseInputs
+) -> str:
+    """Persist the rule's INPUTS for `as_of`, and commit. Returns the CSV's sha256.
+
+    ⭐ **Call this BEFORE materialise/apply, not after.** The point of the artifact is
+    that `apply_to_stocks`'s refusals become auditable, and a refusal is exactly the
+    case where the later steps do not complete — recording afterwards would miss the
+    only firing anyone ever needs to inspect. `universe_snapshot` stores the rule's
+    OUTPUT; the collapse rail fires on a property of the INPUT, so before this table
+    `universe_apply_min_fraction = 0.5` could never be tuned, because a firing could
+    never be examined (§73/2).
+
+    ⚠ Contents, not a fingerprint. A hash gives you `H(input)` while every consumer
+    needs `input`, and `kite_instruments` is UPSERTED IN PLACE — so `kite_tradable` is
+    unrecoverable after the fact by any route other than storing it here.
+
+    ⚠ Idempotent per day: re-running REPLACES that date, the same contract
+    `materialise()` keeps, so a re-run after a fixed input cannot leave two
+    contradictory records for one date.
+    """
+    raw = csv_text.encode("utf-8")
+    digest = hashlib.sha256(raw).hexdigest()
+    await db.execute(
+        text(
+            "INSERT INTO universe_rule_inputs"
+            " (as_of, source_url, csv_gz, csv_sha256, eq_listed, kite_tradable,"
+            "  rule_version)"
+            " VALUES (:d, :url, :gz, :sha, :eq, :kite, :v)"
+            " ON CONFLICT (as_of) DO UPDATE SET"
+            "   captured_at = now(), source_url = EXCLUDED.source_url,"
+            "   csv_gz = EXCLUDED.csv_gz, csv_sha256 = EXCLUDED.csv_sha256,"
+            "   eq_listed = EXCLUDED.eq_listed,"
+            "   kite_tradable = EXCLUDED.kite_tradable,"
+            "   rule_version = EXCLUDED.rule_version"
+        ),
+        {
+            "d": as_of,
+            "url": _EQUITY_L,
+            "gz": gzip.compress(raw),
+            "sha": digest,
+            "eq": sorted(inputs.eq_listed),
+            "kite": sorted(inputs.kite_tradable),
+            "v": RULE_VERSION,
+        },
+    )
+    await db.commit()
+    log.info(
+        "universe inputs %s recorded: %d EQ-listed, %d kite-tradable, csv %d B (sha %s)",
+        as_of, len(inputs.eq_listed), len(inputs.kite_tradable), len(raw), digest[:12],
+    )
+    return digest
+
+
+async def load_recorded_inputs(db: Any, *, as_of: date) -> UniverseInputs | None:
+    """Rebuild a past day's `UniverseInputs` from the record — the replay half, and the
+    reason the artifact is contents rather than a hash. `None` when that day was never
+    captured (every day before 2026-09-14, which is most of them)."""
+    row = (
+        await db.execute(
+            text(
+                "SELECT eq_listed, kite_tradable FROM universe_rule_inputs"
+                " WHERE as_of = :d"
+            ),
+            {"d": as_of},
+        )
+    ).first()
+    if row is None:
+        return None
+    return UniverseInputs(
+        eq_listed=frozenset(row.eq_listed), kite_tradable=frozenset(row.kite_tradable)
+    )
+
+
+async def load_recorded_csv(db: Any, *, as_of: date) -> str | None:
+    """The raw source text as served that day, decompressed. Separate from
+    `load_recorded_inputs` because it answers a different question: re-parsing THIS is
+    what separates a source change from a parser change."""
+    row = (
+        await db.execute(
+            text("SELECT csv_gz FROM universe_rule_inputs WHERE as_of = :d"),
+            {"d": as_of},
+        )
+    ).first()
+    return None if row is None else gzip.decompress(row.csv_gz).decode("utf-8")
 
 
 async def _symbols(db: Any) -> dict[str, int]:

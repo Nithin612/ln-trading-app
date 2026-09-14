@@ -7,6 +7,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### §73 — the universe rule's INPUTS are recorded, not just its verdict (2026-09-14)
+
+Queue item 2. ⭐ **Contents, not a fingerprint.** The plan originally priced this as "one CSV +
+one instruments hash per day"; a hash gives you `H(input)` while every consumer needs `input` —
+and **`kite_instruments` is UPSERTED IN PLACE** ("57595 rows upserted, 0 stale swept"), so
+yesterday's instrument state is already gone by the time anyone asks.
+
+- **New table `universe_rule_inputs`** (migration `a9b0c1d2e3f4`, reversible — `downgrade -1`
+  and re-`upgrade` both verified): `as_of` PK · `captured_at` · `source_url` · `csv_gz` (the raw
+  bytes, gzipped, ~60 KB/day) · `csv_sha256` · `eq_listed` · `kite_tradable` · `rule_version`.
+  Idempotent per day — a re-run REPLACES that date, the contract `materialise()` already keeps.
+- ⭐⭐ **Recorded BEFORE the decision, which is the whole point.** `apply_to_stocks` refuses a
+  snapshot below `universe_apply_min_fraction`, but the rail fires on a property of the **INPUT**
+  while `universe_snapshot` records the rule's **OUTPUT**. A refusal could be seen and never
+  explained, so 0.5 — picked by judgement — could never be tuned. A refusal is also exactly the
+  path where the later steps do not run, so recording afterwards would miss the only firing
+  anyone needs. ⭐ This also **corrects a stale comment** in `market_data_tasks.py` that claimed
+  the snapshot alone made a refusal "inspectable" (W1).
+- **Replay readers:** `load_recorded_inputs` (re-evaluate the rule against a past day's inputs —
+  what makes "rule v2 behaves better than v1" falsifiable) and `load_recorded_csv` (re-parse the
+  bytes as served — the half that separates a **source** change from a **parser** change, which
+  is exactly what the `EQ=0` header bug would have needed).
+- `_download_equity_l` became public `download_equity_l` so the caller owns the bytes;
+  `load_inputs`'s signature is unchanged, leaving its 7 call sites untouched (W2).
+- ⚠ `rule_version` is `String(16)`, matching `universe_snapshot` — `RULE_VERSION` is `"v1"`, not
+  a number. Caught by the tests on first run.
+- Migration applied to **dev** as well as test, so the 08:35 IST beat does not meet a missing
+  table. ⚠ The running celery worker must be restarted to pick up this code AND U4′'s new beat
+  entry. 7 new tests; 92 green across the universe suites; ruff/mypy clean.
+
 ### U4′ — the feed alarm learns to assert COVERAGE, not just recency (2026-09-14)
 
 The 6.8.6 alarm asserts **recency** (`max(time)` vs the trading calendar) and read ✅ straight

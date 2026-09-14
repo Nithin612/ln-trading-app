@@ -1875,7 +1875,12 @@ a fact that contradicts a decision below.
    and floor, and an ABSOLUTE-count rule where a segment is small enough that one name exceeds
    the fraction. ⚠ A different instrument: do NOT overload `FeedCoverage`'s fields with a second
    meaning.
-2. **Snapshot the rule's inputs** (§73, DECIDED). ⛔ **The artifact is the raw `EQUITY_L.csv`
+2. ✅ **Snapshot the rule's inputs — DONE 2026-09-14.** Table `universe_rule_inputs`
+   (migration `a9b0c1d2e3f4`, applied to dev + test): gzipped raw CSV + sha256 + BOTH parsed
+   input sets + rule version, recorded **before** the decision so a refused apply is auditable
+   and `universe_apply_min_fraction` can finally be tuned. Replay readers
+   `load_recorded_inputs` / `load_recorded_csv`. Original spec below, kept for the reasoning:
+   ⛔ **The artifact is the raw `EQUITY_L.csv`
    PLUS the parsed EQ symbol set — NOT a hash.** `kite_instruments` is upserted in place, so
    yesterday's state is already gone and a hash cannot reconstruct it. Unblocks four
    present-tense jobs, the sharpest being that the collapse rail's refusals are currently
