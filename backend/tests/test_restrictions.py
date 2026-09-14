@@ -85,14 +85,28 @@ def _ctx(**kw: object) -> restrictions.RestrictionContext:
 class TestRegistryIsCoherent:
     def test_every_moded_gate_is_reachable_from_the_registry(self) -> None:
         """`config_from_settings` and the registry must not drift: a mode with no rule is
-        a knob that does nothing, and a rule with no mode raises a KeyError at runtime."""
+        a knob that does nothing, and a rule with no mode raises a KeyError at runtime.
+
+        ⚠ U11 added `always_on`, and this test is where its absence bit first — 52 tests
+        KeyError'd on `cfg.mode('signal_quarantine')`. An unconditional rule is EXACTLY
+        the one that must not appear in `MODED_GATES`: giving a recorded human withdrawal
+        a mode would create a `..._gate_mode = off` that silently re-admits it."""
         reachable: set[str] = set()
         for r in restrictions.REGISTRY:
+            if r.always_on:
+                continue
             if r.gate == restrictions.GATE_ENTRY_QUALITY:
                 reachable |= {restrictions.GATE_DIVERSITY, restrictions.GATE_SL_ATR}
             elif r.enforced_by is EnforcedBy.OVERLAY:
                 reachable.add(r.gate)
         assert reachable == set(restrictions.MODED_GATES)
+
+    def test_an_always_on_rule_has_no_mode_and_cannot_be_switched_off(self) -> None:
+        """The safety property behind `always_on`, asserted directly."""
+        always_on = [r for r in restrictions.REGISTRY if r.always_on]
+        assert always_on, "nothing is always_on — this test has stopped testing anything"
+        for r in always_on:
+            assert r.gate not in restrictions.MODED_GATES
 
     def test_config_from_settings_supplies_every_moded_gate(self) -> None:
         cfg = restrictions.config_from_settings()
@@ -119,10 +133,19 @@ class TestRegistryIsCoherent:
 
 
 class TestOffIsATrueNoOp:
-    def test_all_off_yields_no_judgements_and_no_stamps(self) -> None:
+    def test_all_off_yields_no_judgements_from_moded_gates(self) -> None:
+        """⚠ Amended by U11. "Off is a true no-op" is an invariant about MODED gates;
+        an `always_on` restriction has no mode to switch off, and that is the point —
+        a recorded human withdrawal must not be re-admitted by setting a knob to `off`.
+        So the assertion is now that every judgement surviving an all-off config comes
+        from an unconditional rule."""
         out = restrictions.check(_ctx(), _cfg(), enforced_by=EnforcedBy.OVERLAY)
         assert out.blocked is False
-        assert out.judgements == ()
+        always_on = {
+            r.gate for r in restrictions.REGISTRY if r.always_on
+        }
+        assert {j.gate for j in out.judgements} <= always_on
+        assert always_on, "if nothing is always_on this test has stopped testing anything"
         assert out.stamps() == {}
 
     def test_a_shadow_gate_stamps_but_does_not_block(self) -> None:
@@ -245,6 +268,10 @@ class TestTheDisplayPathCannotReachFabricatedThresholds:
             if r.enforced_by is EnforcedBy.OVERLAY and r.requires <= eligibility.LIST_AVAILABLE
         }
         assert reachable == {
+            # U11: reachable ON PURPOSE. The quarantine needs no context, so the LIST
+            # can judge it — which is the whole design: a withdrawn signal is rendered
+            # `⊘ blocked` with its reason rather than silently vanishing from the list.
+            restrictions.GATE_QUARANTINE,
             restrictions.GATE_REGIME,
             restrictions.GATE_ENTRY_QUALITY,
             restrictions.GATE_RR,
@@ -369,8 +396,13 @@ class TestCompositionInvariants:
         )
         assert out.blocked is True
         assert out.gate == restrictions.GATE_OFFMARKET
-        # offmarket is first in the registry, so nothing after it should have been judged.
-        assert [j.gate for j in out.judgements] == [restrictions.GATE_OFFMARKET]
+        # ⚠ U11 put the quarantine check first — it runs and passes (this signal is not
+        # withdrawn), then offmarket blocks. Nothing AFTER the blocker is judged, which
+        # is the invariant this test exists for.
+        assert [j.gate for j in out.judgements] == [
+            restrictions.GATE_QUARANTINE,
+            restrictions.GATE_OFFMARKET,
+        ]
 
     def test_every_context_a_rule_needs_has_an_order_path_loader(self) -> None:
         """The order path used to key its loads on gate MODES, not on `requires` — so the

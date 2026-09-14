@@ -87,6 +87,7 @@ GATE_LIQUIDITY = "liquidity_gate"
 GATE_CHASE = "chase_gate"
 GATE_THROUGH_STOP = "through_stop"
 GATE_OFFMARKET = "offmarket"
+GATE_QUARANTINE = "signal_quarantine"
 
 # ── Context keys ──────────────────────────────────────────────────────────────
 # What a restriction may require. Named constants because `requires` is compared against
@@ -220,6 +221,12 @@ class Restriction:
     sub_requires: tuple[tuple[str, str, frozenset[str]], ...] = ()
     #: `broker_payload` key for the verdict stamp; None = this gate leaves no footprint.
     stamp_key: str | None = None
+    #: Always on, with no mode and no setting. ⚠ Distinct from `EnforcedBy.BROKER`, which
+    #: was previously the only way to say this and meant something else — *the broker
+    #: rejects it*. U11's quarantine is ours and unconditional: a recorded human
+    #: withdrawal must not be disableable by a knob, and giving it a mode would create a
+    #: `..._gate_mode = off` that silently re-admits a signal a person removed.
+    always_on: bool = False
 
 
 @dataclass(frozen=True)
@@ -467,6 +474,32 @@ def _judge_offmarket(ctx: RestrictionContext, cfg: RestrictionConfig) -> Judgeme
     )
 
 
+def _judge_quarantine(ctx: RestrictionContext, cfg: RestrictionConfig) -> Judgement:
+    """U11 — a signal a human WITHDREW after the fact.
+
+    ⚠ Unconditional, like the broker's own rejections: it takes no mode and no setting,
+    because it is not a claim about the tape that might be wrong. It is a recorded
+    statement that this signal should not have existed — the only gate here whose
+    authority is a person rather than a measurement.
+
+    ⭐ It is a RESTRICTION rather than a filter on the list query on purpose. A filtered
+    signal simply vanishes, which is precisely the invisibility PART XVIII objects to;
+    a restriction is rendered by the existing `tradeBlock()` on all four Buy surfaces,
+    with its reason verbatim. **The withdrawal stays visible instead of becoming an
+    absence nobody can ask about.**
+    """
+    at = getattr(ctx.signal, "quarantined_at", None)
+    if at is None:
+        return Judgement(gate=GATE_QUARANTINE, mode="active", blocked=False, reason=None)
+    why = getattr(ctx.signal, "quarantine_reason", None) or "no reason recorded"
+    return Judgement(
+        gate=GATE_QUARANTINE,
+        mode="active",
+        blocked=True,
+        reason=f"signal withdrawn: {why}",
+    )
+
+
 def _judge_through_stop(ctx: RestrictionContext, cfg: RestrictionConfig) -> Judgement:
     price = ctx.fill_price if ctx.fill_price is not None else ctx.market_price
     reason = (
@@ -483,6 +516,12 @@ def _judge_through_stop(ctx: RestrictionContext, cfg: RestrictionConfig) -> Judg
 #: gates exist or which reason a user sees first. Selection gates precede execution
 #: checks; the broker's own rejections come last, as they do in reality.
 REGISTRY: tuple[Restriction, ...] = (
+    # U11 FIRST, ahead of everything: a withdrawn signal should not be evaluated further,
+    # and its reason is the one a user must see. It needs no context — the verdict is
+    # recorded on the signal row itself.
+    Restriction(
+        GATE_QUARANTINE, frozenset(), EnforcedBy.OVERLAY, _judge_quarantine, always_on=True
+    ),
     # offmarket requires NOTHING: the ABSENCE of a price is precisely its trigger, so a
     # missing one is an answer rather than a gap.
     Restriction(GATE_OFFMARKET, frozenset(), EnforcedBy.BROKER, _judge_offmarket),
@@ -526,7 +565,7 @@ def _mode_of(r: Restriction, cfg: RestrictionConfig) -> str:
     two moded checks behind one id; the broker's rejections are always on."""
     if r.gate == GATE_ENTRY_QUALITY:
         return _effective_mode(cfg.mode(GATE_DIVERSITY), cfg.mode(GATE_SL_ATR))
-    if r.enforced_by is EnforcedBy.BROKER:
+    if r.always_on or r.enforced_by is EnforcedBy.BROKER:
         return "active"
     return cfg.mode(r.gate)
 

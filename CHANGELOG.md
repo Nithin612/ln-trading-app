@@ -7,6 +7,36 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### U11 — the 35 stale signals are withdrawn, not deleted (2026-09-14)
+
+- ⭐ **Round 2's framing was wrong, and measuring first showed it.** These were queued as
+  "the 35 microcap signals"; in fact **34 of 35 point at stocks the repaired rule says are
+  tradeable** (ZYDUSLIFE, MAXHEALTH, DREAMFOLKS…), all were `status='active'`, and all were
+  **still inside their validity window** — live and clickable. The real contamination is
+  narrower: minted 09-09→09-11 by scanning 1,322 names with every blue chip excluded, **they
+  won the wrong tournament.** Each signal's arithmetic is sound; the candidate SET was wrong.
+- **Withdrawn, not deleted** — the rows are the forensic record of what the broken system
+  emitted. ⚠ And deliberately **not** expressed through `status`: that is a lifecycle field
+  the sweeper overwrites, so a verdict there could be silently undone and "expired by time"
+  would be indistinguishable from "withdrawn as contaminated". New `quarantined_at` +
+  `quarantine_reason`, mirroring `stocks.ca_flagged_at`.
+- ⭐⭐ **Implemented as a `Restriction`, not a list filter.** A filtered signal vanishes —
+  the invisibility PART XVIII objects to. As a restriction, the order path 409s and the
+  display path returns `blocked=True, gate='signal_quarantine'` with the reason verbatim,
+  so the existing `tradeBlock()` renders `⊘ Blocked` on all four Buy surfaces with **zero
+  new UI**. Verified end-to-end against the live rows.
+- ⛔ **New `Restriction.always_on`.** An OVERLAY rule with no mode KeyError'd 52 tests —
+  the registry's coherence test doing its job. Giving the quarantine a mode would have
+  created a `..._gate_mode = off` that **silently re-admits a signal a human removed**, so
+  instead the concept "unconditional" is now explicit (it existed, conflated with "the
+  broker rejects it"). A test asserts that with **every moded gate off**, a withdrawn signal
+  is still blocked.
+- Three registry-shape tests amended rather than silenced; `scripts/quarantine_signals.py`
+  with `--list`/`--before`+`--reason`/`--release` (`--before` requires a reason — an
+  unexplained withdrawal is not reviewable). Migration `f8a9b0c1d2e3`. 11 new tests.
+  **Applied: 35 of 35.**
+
+
 ### D2′b — the universe rule owns `stocks.is_active`, enforced by the database (2026-09-14)
 
 User approved the +1,121 / −152. **The 2026-09-07 outage is repaired.**

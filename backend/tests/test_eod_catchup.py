@@ -138,7 +138,7 @@ async def test_eod_outage_multi_day_gap_healed_in_one_run(
     published = {d: _bhav_csv(d) for d in (date(2026, 7, 9), date(2026, 7, 10), date(2026, 7, 13))}
     downloads: list[date] = []
 
-    async def fake_download(trade_date: date) -> str | None:
+    async def fake_download(trade_date: date, *, client: object | None = None) -> str | None:
         downloads.append(trade_date)
         return published.get(trade_date)
 
@@ -176,7 +176,7 @@ async def test_catchup_equities_up_to_date_makes_no_downloads(
     await ingest_bhavcopy_date(db, date(2026, 7, 9), csv_text=_bhav_csv(date(2026, 7, 9)))
     await ingest_bhavcopy_date(db, date(2026, 7, 10), csv_text=_bhav_csv(date(2026, 7, 10)))
 
-    async def fail_download(trade_date: date) -> str | None:
+    async def fail_download(trade_date: date, *, client: object | None = None) -> str | None:
         raise AssertionError("up-to-date catch-up must not touch NSE")
 
     monkeypatch.setattr("app.services.bhavcopy_service.download_bhavcopy", fail_download)
@@ -199,7 +199,7 @@ async def test_network_failure_isolated_to_one_session(
     await make_stock(db, symbol="TCS", company_name="TCS Ltd")
     await ingest_bhavcopy_date(db, date(2026, 7, 8), csv_text=_bhav_csv(date(2026, 7, 8)))
 
-    async def flaky_download(trade_date: date) -> str | None:
+    async def flaky_download(trade_date: date, *, client: object | None = None) -> str | None:
         if trade_date == date(2026, 7, 9):
             raise httpx.ConnectError("simulated NSE reset")
         if trade_date == date(2026, 7, 14):
@@ -277,7 +277,7 @@ async def test_missed_ca_sweep_healed_on_next_run(
         csv_text=_bhav_csv(date(2026, 7, 10), reliance_open="4500.00", reliance_close="4510.00"),
     )
 
-    async def fail_download(trade_date: date) -> str | None:
+    async def fail_download(trade_date: date, *, client: object | None = None) -> str | None:
         raise AssertionError("table is current — no downloads expected")
 
     monkeypatch.setattr("app.services.bhavcopy_service.download_bhavcopy", fail_download)
@@ -306,7 +306,7 @@ async def test_catchup_equities_ca_sweeps_each_healed_session(
 
     gap_csv = _bhav_csv(date(2026, 7, 10), reliance_open="4500.00", reliance_close="4510.00")
 
-    async def fake_download(trade_date: date) -> str | None:
+    async def fake_download(trade_date: date, *, client: object | None = None) -> str | None:
         return gap_csv if trade_date == date(2026, 7, 10) else None
 
     monkeypatch.setattr("app.services.bhavcopy_service.download_bhavcopy", fake_download)

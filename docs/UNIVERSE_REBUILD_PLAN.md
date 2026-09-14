@@ -2834,3 +2834,97 @@ is the durable replacement — dated, per-stock, reproducible.
 
 **Tests: 14** (7 trigger · 4 apply · 3 collapse rail). Migration `e7f8a9b0c1d2`, downgrade
 round-tripped on dev.
+
+
+---
+
+# PART XX — U11 SHIPPED: THE 35 SIGNALS ARE WITHDRAWN, NOT DELETED (2026-09-14)
+
+## §52 · What the 35 actually were — and the round-2 framing was wrong
+
+Round 2 queued this as *"quarantine the 35 microcap signals"*, on the assumption they
+pointed at junk. **Measured before acting, and they do not:**
+
+- all 35 are `status='active'` and **still inside their validity window** (09-16 → 10-26),
+  so they were **live and clickable** on a repaired universe;
+- **34 of 35 point at stocks the repaired rule says ARE tradeable** — `ZYDUSLIFE`,
+  `MAXHEALTH`, `DREAMFOLKS`, `TRAVELFOOD` are not junk;
+- 0 are shadow.
+
+⇒ ⭐ **The contamination is narrower and more precise than "microcap signals": they won
+the wrong tournament.** They were minted 09-09 → 09-11 by scanning **1,322 names with
+every blue chip excluded** — RELIANCE and TCS could not compete for a slot. Each signal's
+arithmetic is sound (those stocks had bars; the scorer ran correctly). **The candidate SET
+was wrong, not the scoring.** That is a real reason to withdraw them and a different reason
+from the one assumed.
+
+## §53 · Withdrawn, not deleted — and not through `status`
+
+**Not deleted:** the rows are the forensic record of what the broken system actually
+emitted. Deleting them destroys the evidence of the failure that produced them.
+
+⚠ **And deliberately NOT expressed through `signals.status`.** That is a **LIFECYCLE**
+field the sweeper overwrites (CLAUDE.md), so a verdict parked there can be **silently
+undone** — and "expired by time" would become indistinguishable from "withdrawn as
+contaminated". New `quarantined_at` + `quarantine_reason`, mirroring the
+`stocks.ca_flagged_at` idiom already in this schema. **Verified: `status` is untouched and
+the confidence scores survive.**
+
+## §54 · ⭐⭐ It is a RESTRICTION, not a filter — which is the point
+
+The obvious implementation is `WHERE quarantined_at IS NULL` on the list query. **That is
+exactly the invisibility PART XVIII objects to:** the signal would simply vanish, and the
+user could not ask about a row they cannot see.
+
+Instead it is a `Restriction` in the A38 registry, so **both paths already know about it**:
+
+| path | behaviour |
+|---|---|
+| order (`place_order`) | 409 with the reason verbatim |
+| display (`eligibility.preview`) | `blocked=True`, `gate='signal_quarantine'`, reason verbatim |
+| the four Buy surfaces | the existing `tradeBlock()` renders `⊘ Blocked` + the reason |
+
+⭐ **Zero new UI.** End-to-end verified against the live rows:
+`blocked=True by=signal_quarantine reason=signal withdrawn: minted 09-09..09-11 against the
+broken universe…`. **The withdrawal is visible instead of being an absence nobody can ask
+about** — the first thing built since PART XVIII that answers its complaint rather than
+adding to it.
+
+## §55 · ⛔ `always_on` — a new concept the registry needed
+
+The quarantine hit a real gap. `_mode_of` returned `"active"` only for
+`EnforcedBy.BROKER`; every other rule read `cfg.mode(gate)`. Adding an OVERLAY rule with no
+mode **KeyError'd 52 tests** — the registry's own coherence test catching exactly what it
+exists for.
+
+Two ways out, and the choice matters:
+
+- **Give it a mode** — which creates `signal_quarantine_gate_mode`, and therefore an
+  `off` that **silently re-admits a signal a human removed.** ⛔ Rejected.
+- ⭐ **Declare it `always_on`.** The concept *"this rule is unconditional"* already existed
+  but was conflated with *"the broker rejects it"*. Now it is explicit, and
+  `_mode_of` honours it.
+
+⭐ **The safety property is asserted directly**: with **every moded gate off** — a config a
+user can actually produce — a withdrawn signal is still blocked. **A human decision must
+not be reversible by a knob.** And a test asserts no `always_on` rule appears in
+`MODED_GATES`, so the escape cannot be reintroduced by accident.
+
+⚠ Three registry-shape tests legitimately changed and were **amended rather than
+silenced**: "all off is a true no-op" is now an invariant about *moded* gates; the
+first-block test expects the quarantine to run-and-pass before offmarket blocks; and the
+list-reachable set gained the quarantine **on purpose** — that is what makes it render.
+
+## §56 · Shipped
+
+| piece | what |
+|---|---|
+| migration `f8a9b0c1d2e3` | `signals.quarantined_at` + `quarantine_reason`, partial index |
+| `restrictions.py` | `GATE_QUARANTINE`, `_judge_quarantine`, **first in the registry**, `always_on=True` |
+| `Restriction.always_on` | new field + `_mode_of` honours it |
+| `scripts/quarantine_signals.py` | `--list` · `--before/--reason` (`--dry-run`) · `--release` |
+| tests | **11** new + 3 registry invariants amended + 1 added |
+
+**Applied: 35 of 35 withdrawn.** ⚠ `--before` **requires** `--reason` — an unexplained
+withdrawal is not reviewable — and `--release` exists because a quarantine a human cannot
+lift is a deletion with extra steps.

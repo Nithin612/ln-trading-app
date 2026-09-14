@@ -96,6 +96,14 @@ class Signal(Base):
     # never rewritten, so "was this evidence tradeable?" stays answerable
     # forever. Profile status is not a substitute either: activating a profile
     # later would retroactively relabel its entire shadow history.
+    # U11 — a signal WITHDRAWN after the fact, without deleting it.
+    # ⚠ Deliberately NOT expressed through `status`: that is a LIFECYCLE field the
+    # sweeper overwrites, so a verdict parked there can be silently undone, and
+    # "expired by time" would become indistinguishable from "withdrawn as
+    # contaminated". Mirrors `stocks.ca_flagged_at`.
+    quarantined_at: Mapped[datetime | None] = mapped_column(TZ, nullable=True)
+    quarantine_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+
     is_shadow: Mapped[bool] = mapped_column(
         Boolean, nullable=False, server_default="false", default=False
     )

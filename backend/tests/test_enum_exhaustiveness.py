@@ -109,6 +109,10 @@ class TestRegistryIsDeterministic:
         written to that comment passes vacuously; this one cannot.
         """
         assert [r.gate for r in rx.REGISTRY] == [
+            # U11: FIRST, ahead of even `offmarket`. A signal a human WITHDREW should
+            # not be evaluated further, and the reason a user sees must be the
+            # withdrawal rather than whichever gate happens to fire next.
+            "signal_quarantine",
             "offmarket",
             "regime_gate",
             "circuit_gate",
