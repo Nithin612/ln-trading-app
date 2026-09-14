@@ -438,7 +438,16 @@ Ordering is dependency-driven; U1 gates U2, U2 gates U3.
 
 ---
 
-### U4 — Make the feed alarm coverage-aware *(P1)*
+### U4 — Make the feed alarm coverage-aware *(P1)* — ✅ **DONE 2026-09-14 (as U4′)**
+> ✅ **SHIPPED.** `feed_health.py` coverage half + a 13:40 UTC beat. ⛔ **Counted RAW, never
+> scoped to `is_active`** — scoping it makes numerator and baseline share one mutable set, so the
+> 09-07 collapse reads 100% healthy (which is why `funnel.py` cannot serve as this detector).
+> Baseline **30** sessions, not the 5 below: a 5-session median goes silent on the 4th session of
+> a persistent outage. Floor **0.90**, measured (worst benign shortfall 2.21% / 3.21% / 8.17%
+> across three windows; 0 firings over all 1,098 sessions). Acceptance met — the test reproduces
+> the silence of BOTH prior instruments first. ⚠ Known limit → **U4″**: unweighted, so losing all
+> 50 Nifty-50 names (1.90%) or all 210 F&O underlyings (7.96%) fires nothing.
+
 - **WHY** §4a. The alarm reported ✅ throughout. Recency is not health.
 - **SCOPE** Extend the 6.8.6 EOD staleness header to assert **breadth**: names with a
   bar today vs the trailing 5-session median, with an explicit threshold. Alarm on a

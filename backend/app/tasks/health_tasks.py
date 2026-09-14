@@ -12,9 +12,13 @@ the reader of these heartbeats (`make analysis`) lives in a different process.
 from __future__ import annotations
 
 import logging
+from typing import TYPE_CHECKING
 
 from app.celery_app import celery_app
 from app.tasks._runner import run_db_task
+
+if TYPE_CHECKING:  # pragma: no cover - annotation only
+    from sqlalchemy.ext.asyncio import AsyncSession
 
 log = logging.getLogger(__name__)
 
@@ -79,3 +83,53 @@ async def _run_check_calendar_coverage() -> dict[str, object]:
         "trading_days_remaining": status.trading_days_remaining,
         "covered_through": str(status.coverage_end),
     }
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="app.tasks.health_tasks.check_feed_coverage", bind=True, max_retries=0
+)
+def check_feed_coverage(self: object) -> dict[str, object]:  # noqa: ARG001
+    """U4′ — push PROACTIVELY when an EOD feed is current but THIN.
+
+    Same absence-vs-presence pairing as A36 above, and the same reason: the coverage
+    check's only other caller is `build_daily_report`, i.e. `make analysis`, which a
+    human runs by hand. A breadth collapse on a day nobody ran the report was therefore
+    never seen — the detector examines the newest session only, and that session then
+    joins the baseline it is judged against. The daily report still carries the same
+    numbers as a human-read surface, so a quiet channel is never the only evidence.
+    """
+    return run_db_task(_run_check_feed_coverage)
+
+
+async def _run_check_feed_coverage() -> dict[str, object]:
+    from app.db.session import AsyncSessionFactory
+
+    async with AsyncSessionFactory() as db:
+        return await _coverage_alert_payload(db)
+
+
+async def _coverage_alert_payload(db: AsyncSession) -> dict[str, object]:
+    """The task's body, taking its session as an argument so the `notify` seam can be
+    tested through BOTH sides (`.claude/rules/testing.md`: mocking the seam hides it).
+
+    ⚠ The split is not cosmetic. `AsyncSessionFactory` is a module-level POOLED engine,
+    while the suite runs function-scoped event loops with NullPool — so a second test in
+    the same run gets a pooled connection bound to a closed loop and dies with "Event
+    loop is closed". That is the configured pattern the testing rules say not to fight,
+    so the session comes in as a parameter and only the three-line `async with` wrapper
+    above stays uncovered.
+    """
+    from app.services.feed_health import check_feed_coverage as read_coverage
+    from app.services.feed_health import coverage_to_notification
+    from app.services.notifier import notify
+
+    rows = await read_coverage(db)
+    n = coverage_to_notification(rows)
+    measured = {
+        r.table: {"names": r.names, "baseline": r.baseline, "shortfall_pct": r.shortfall_pct}
+        for r in rows
+    }
+    if n is not None:
+        notify(n)
+        return {"status": "alert", "level": n.level.value, "feeds": measured}
+    return {"status": "ok", "feeds": measured}

@@ -44,6 +44,17 @@ class Settings(BaseSettings):
     # and the job runs unattended; a truncated feed must not switch off the market.
     # Growth is never refused. 0 disables.
     universe_apply_min_fraction: float = 0.5
+    # U4′ — the coverage-aware feed alarm fires when a feed still CURRENT carries
+    # fewer names than usual: today's breadth below this fraction of the median over
+    # the trailing COVERAGE_BASELINE_SESSIONS.
+    # ⚠ Measured, not chosen — and the margin depends on WHICH window you measure, so
+    # all three are recorded rather than the flattering one: the worst BENIGN shortfall
+    # vs the trailing median is 2.21% over the last 239 sessions, 3.21% over the 791
+    # post-gap sessions (2024-09-05), and 8.17% over all 1,098 (2020-07-03, 1,383 vs
+    # 1,506 — the pre-gap ingestion era). So 0.90 sits ~4.5x above the RECENT noise
+    # floor but only ~1.2x above the archive's worst, against a ~50% collapse. Replaying
+    # the shipped detector over all 1,098 sessions fires 0 times. 0 disables.
+    feed_coverage_min_fraction: float = 0.90
     # Session notifier (A11). Unset ⇒ log-only, which is the DEFAULT and not a degraded
     # mode: the policy still runs and still logs at the level it chose. Set it and the same
     # messages also POST as JSON. Vendor-neutral on purpose — Slack/Discord accept the

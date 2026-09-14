@@ -133,6 +133,14 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.health_tasks.check_calendar_coverage",
         "schedule": crontab(hour=4, minute=0, day_of_week="1-5"),
     },
+    # U4′ — coverage (breadth) alarm. 13:40 UTC = 19:10 IST: AFTER both EOD ingests
+    # (equities 13:10, F&O 13:15) and BEFORE nightly generation at 13:45, so a thin
+    # feed is flagged before the scan runs against it. Both ingest paths commit once
+    # per date, so this never observes a half-written session.
+    "check-feed-coverage": {
+        "task": "app.tasks.health_tasks.check_feed_coverage",
+        "schedule": crontab(hour=13, minute=40, day_of_week="1-5"),
+    },
     # Option-chain snapshots every minute in the market window (task itself
     # re-checks 9:15–15:30 IST and idles without a Kite token)
     "record-option-chains": {

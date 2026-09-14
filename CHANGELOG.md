@@ -7,6 +7,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### U4′ — the feed alarm learns to assert COVERAGE, not just recency (2026-09-14)
+
+The 6.8.6 alarm asserts **recency** (`max(time)` vs the trading calendar) and read ✅ straight
+through the 2026-09-07 outage, which froze daily bars for 1,278 names — every blue chip among
+them — across five sessions. Recency is not health. Queue item 1 of the post-round-5 build.
+
+- ⭐ **`feed_health.py` now answers two independent questions.** COVERAGE = distinct names on a
+  feed's latest session vs the median over the trailing **30** sessions, alarming below
+  `feed_coverage_min_fraction` (**0.90**). A feed can be current-and-thin, stale-and-broad, or
+  both; each verdict is reported separately.
+- ⛔⛔ **Counted RAW, never scoped to `stocks.is_active` — the single decision it turns on.**
+  Scoping it makes the numerator and its own baseline share one mutable set: during the outage
+  that set WAS what collapsed, so 1,322 active names against a median of 1,322 reads **100%
+  healthy**. That is why `funnel.py`'s breadth stage cannot serve as this detector, and the
+  acceptance test pins **both** silences on one fixture before asserting the new alarm fires.
+  test-guardian confirmed by mutation that all three assertions are load-bearing.
+- ⭐ **Threshold measured, then CORRECTED.** Worst BENIGN shortfall vs the trailing median:
+  **2.21%** over the last 239 sessions · **3.21%** over the 791 post-gap · **8.17%** over all
+  1,098 (2020-07-03, pre-gap ingestion era), against a ~50% failure. **0 firings across all
+  1,098.** My first write-up quoted only the 239-session slice and claimed ~4.5× headroom; the
+  honest worst-case margin is **~1.2×**. All three windows are recorded, and a test fails if a
+  retune drops the threshold below the recorded floor.
+- ⚠ **30 sessions, not the 5 the spec asked for.** A median is overtaken once half its window is
+  collapsed, so a 5-session reference goes silent on the **4th session** of a persistent outage —
+  it switches itself off inside the failure. One test runs the same fixture through both windows
+  to opposite verdicts, so the choice is demonstrated rather than asserted.
+- ⭐ **A daily beat at 13:40 UTC** (after both EOD ingests, before nightly generation) pushes
+  through the A11 notifier. Before it, the check's only caller was `build_daily_report` — i.e.
+  `make analysis`, run by hand — so a collapse on a day nobody ran the report was never seen.
+  **A detector that waits to be asked is not a detector.**
+- ⭐ **A health probe must not raise into its own report** (the rule `calendar_health` states):
+  the probe now runs per-feed inside a `begin_nested` savepoint and degrades to "not assessable",
+  never to green. Found by test-guardian as a CODE defect, not a test gap.
+- ⛔ **And that guard immediately masked a real bug** — the first beat test returned `status: ok`
+  with no numbers because the guard swallowed an `Event loop is closed` error. Caught ONLY
+  because the test asserts measured VALUES rather than "did not raise". **A fail-open probe hides
+  its own bugs.**
+- ⚠ **KNOWN LIMIT, queued as U4″:** it is an UNWEIGHTED count, so the 10% floor is ~264 of ~2,637
+  names. The 50 active Nifty-50 constituents are **1.90%** and all 210 active F&O underlyings
+  **7.96%** — an ingestion bug that drops every blue chip fires nothing, and the funnel cannot
+  see it either.
+- Also fixed from review: healthy feeds vanishing from the header whenever any feed alarmed; a
+  future-dated row silencing the alarm; `-0.0%` on an exactly-normal feed; copy claiming "today's
+  session" when the check reads no clock; an off-by-one in the module's own justification.
+- New knob `FEED_COVERAGE_MIN_FRACTION=0.90` (`.env.example`, W3). 25 new tests in
+  `test_feed_coverage.py` + 2 beat-ordering invariants; ruff/mypy clean.
+
 ### Round-5 adjudication — both blocking questions answered against my own leaning (2026-09-14)
 
 Six responses. ⭐ **Both were settled by a query, not by the argument**, and two items shipped.

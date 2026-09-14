@@ -136,3 +136,35 @@ def test_the_universe_materialiser_is_registered() -> None:
         importlib.import_module(mod)
     entry = _entry_for("app.tasks.market_data_tasks.materialise_universe")
     assert entry["task"] in celery_app.tasks
+
+
+def test_the_coverage_alarm_runs_after_both_eod_ingests_and_before_generation() -> None:
+    """U4′ — the beat comment makes a checkable ordering claim and nothing enforced it.
+
+    The alarm reads the LATEST session's breadth, so running it before the equity
+    (13:10 UTC) or F&O (13:15) ingest would measure yesterday's feed and read healthy
+    through a collapse. Running it after nightly generation (13:45) would flag a thin
+    feed only once the scan had already consumed it. A future reschedule of any of the
+    four silently breaks that, which is exactly what this pins — same shape as
+    `test_the_universe_materialiser_runs_after_the_instrument_sync` above."""
+    for mod in celery_app.conf.include:
+        importlib.import_module(mod)
+
+    def _minute_of_day(task: str) -> int:
+        cron = _entry_for(task)["schedule"]
+        return min(int(h) for h in cron.hour) * 60 + min(int(m) for m in cron.minute)
+
+    equities = _minute_of_day("app.tasks.market_data_tasks.ingest_equities_eod")
+    fo = _minute_of_day("app.tasks.fo_tasks.fo_eod_ingestion")
+    coverage = _minute_of_day("app.tasks.health_tasks.check_feed_coverage")
+    generation = _minute_of_day("app.tasks.signal_tasks.nightly_signal_generation")
+
+    assert max(equities, fo) < coverage, "coverage would measure a pre-ingest feed"
+    assert coverage < generation, "a thin feed must be flagged before the scan uses it"
+
+
+def test_the_coverage_alarm_is_weekdays_only() -> None:
+    """NSE does not trade at the weekend, so there is no new session to judge and the
+    trailing median would be compared against a feed nobody wrote."""
+    cron = _entry_for("app.tasks.health_tasks.check_feed_coverage")["schedule"]
+    assert {int(d) for d in cron.day_of_week} == {1, 2, 3, 4, 5}

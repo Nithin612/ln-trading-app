@@ -627,6 +627,24 @@ else.
   — TimescaleDB hypertables need `timescaledb_pre_restore()`/`post_restore()`) — details in
   `RUNBOOK.md` §9. **Ask before anything that writes to, truncates or migrates live data.**
 
+- **✅ THE FEED ALARM NOW ASSERTS COVERAGE, NOT JUST RECENCY (U4′, 2026-09-14).** 6.8.6 asserts
+  `max(time)` and read ✅ straight through the 09-07 outage. `feed_health.py` gained a coverage
+  half — distinct names on a feed's latest session vs the median over the trailing **30**
+  sessions, floor `FEED_COVERAGE_MIN_FRACTION`=**0.90** — plus a **13:40 UTC beat** that PUSHES
+  via the A11 notifier (before it, the only caller was a hand-run `make analysis`; **a detector
+  that waits to be asked is not a detector**). ⛔⛔ **Counted RAW, never scoped to `is_active`:**
+  a scoped measure shares its mutable set with its own baseline, so during the outage 1,322
+  active names against a median of 1,322 reads **100% healthy** ⇒ **`funnel.py`'s breadth stage
+  is structurally blind to it.** ⭐ Threshold measured then corrected: worst BENIGN shortfall
+  **2.21%** (239 sessions) / **3.21%** (791 post-gap) / **8.17%** (all 1,098) vs a ~50% failure,
+  **0 firings over 1,098**. ⚠ 30 sessions not the spec's 5 — a 5-session median goes silent on
+  the **4th session** of a persistent outage. ⚠ **UNWEIGHTED ⇒ losing all 50 Nifty-50 names
+  (1.90%) or all 210 F&O underlyings (7.96%) fires NOTHING → queued as U4″.** ⭐ Two rules
+  earned: **a health probe must not raise into its own report** (now per-feed in a `begin_nested`
+  savepoint, degrading to "not assessable" never to green), and ⛔ **a fail-open probe hides its
+  own bugs** — that guard instantly masked an `Event loop is closed`, caught only because the
+  test asserts VALUES not "did not raise".
+
 - **✅✅ THE UNIVERSE OUTAGE IS REPAIRED (D2′b, 2026-09-14).** User approved +1,121 / −152.
   **Active stocks 1,322 → 2,291; Nifty 50 constituents active 5 → 50.** ⭐ The 152 deactivated
   were **139 `BE`-series** (the 2026-07-17 T2T ruling already excluded them from live scanning)

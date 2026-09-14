@@ -10,6 +10,42 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
+## ▶ STATE AT A GLANCE (updated 2026-09-14) — overnight build — read this block first
+
+**▶▶ 2026-09-14 — ✅ QUEUE ITEM 1 DONE: U4′, THE COVERAGE-AWARE FEED ALARM.**
+⭐ **The overnight handoff is `docs/OVERNIGHT_2026-09-14.md`** — read it before PHASES if you are
+resuming; it carries the NEXT STEP line, the per-item state and every decision taken.
+The 6.8.6 alarm asserts **recency** and read ✅ through the 2026-09-07 outage. `feed_health.py`
+now also asserts **COVERAGE**: distinct names on a feed's latest session vs the median over the
+trailing **30** sessions, alarming below **0.90** (`FEED_COVERAGE_MIN_FRACTION`).
+⛔⛔ **Counted RAW, never scoped to `is_active` — the decision it turns on.** Scoping it makes the
+numerator and its own baseline share one mutable set: during the outage that set WAS what
+collapsed, so 1,322 active names against a median of 1,322 reads **100% healthy**. ⇒ **`funnel.py`'s
+breadth stage is structurally blind to it**, and the acceptance test pins BOTH silences on one
+fixture before the new alarm fires (mutation-proven load-bearing by test-guardian).
+⭐ **Threshold measured then CORRECTED:** worst BENIGN shortfall vs the trailing median is **2.21%**
+(last 239 sessions) · **3.21%** (791 post-gap) · **8.17%** (all 1,098 — pre-gap era), vs a ~50%
+failure; **0 firings across all 1,098**. My first write-up quoted only the 239-session slice and
+claimed ~4.5× headroom — the honest worst-case margin is **~1.2×**, and a test now fails if a
+retune drops below the recorded floor.
+⚠ **30 sessions, not the spec's 5:** a 5-session median goes silent on the **4th session** of a
+persistent outage — it switches itself off inside the failure. Same fixture, both windows,
+opposite verdicts, in a test.
+⭐ **A daily beat (13:40 UTC, after both EOD ingests, before nightly generation) pushes via the A11
+notifier** — before it the only caller was a hand-run `make analysis`. **A detector that waits to
+be asked is not a detector.**
+⭐ **A health probe must not raise into its own report** — now per-feed inside a `begin_nested`
+savepoint, degrading to "not assessable", never to green. ⛔ **And that guard instantly masked a
+real bug** (an `Event loop is closed` swallowed into `status: ok`), caught only because the test
+asserts VALUES, not "did not raise". **A fail-open probe hides its own bugs.**
+⚠ **KNOWN LIMIT → queued as U4″:** an UNWEIGHTED count, so the 10% floor is ~264 of ~2,637 names.
+The **50** active Nifty-50 constituents are **1.90%** and all **210** active F&O underlyings
+**7.96%** ⇒ **an ingestion bug that drops every blue chip fires NOTHING**, and the funnel cannot
+see it either. The 09-07 outage is written up as "1,278 names, every blue chip among them": U4′
+detects the 1,278, not the blue chips.
+⛔ **NOTHING PUSHED.** 25 new tests + 2 beat invariants; bug-hunter (8 findings) and test-guardian
+(5 gaps) both closed.
+
 ## ▶ STATE AT A GLANCE (updated 2026-09-11) — round 10 — read this block first
 
 **▶▶ 2026-09-12 — ✅ THE B-QUEUE IS COMPLETE (7/7), AND E2 RETURNED A NULL.**
@@ -1824,12 +1860,21 @@ a fact that contradicts a decision below.
 
 **Do these in order. Each is self-contained; none blocks on the user except where marked.**
 
-1. **U4′ — the coverage-aware feed alarm.** ⭐ **Highest value and on nobody's tier list until
-   round 5.** The 6.8.6 alarm asserts **RECENCY** and read ✅ right through the outage that
-   caused this entire rebuild; V1's funnel is at best a **tertiary** detector because it renders
-   only on empty states, to a reader who must remember the baseline. This is the PRIMARY one and
-   it still does not exist. Acceptance (from §7/U4): replay the 09-04 → 09-07 breadth collapse
-   and assert the alarm fires.
+1. ✅ **U4′ — the coverage-aware feed alarm. DONE 2026-09-14** (see the top block and
+   `docs/OVERNIGHT_2026-09-14.md`). Shipped RAW-counted (never scoped to `is_active`, which is
+   what makes it see what the funnel cannot), 30-session baseline, 0.90 floor, a 13:40 UTC beat
+   that pushes via the notifier, and fail-open per feed. Acceptance met: the regression test
+   replays the collapse and reproduces BOTH existing instruments' silence first.
+
+1b. ⬜ **U4″ — per-segment coverage (queued 2026-09-14 at the user's request).** U4′ is an
+   **unweighted** name count, so its 10% floor is ~264 of ~2,637. Measured: the 50 active
+   Nifty-50 constituents are **1.90%** of the archive and all 210 active F&O underlyings
+   **7.96%** ⇒ **losing every blue chip fires nothing**, and the funnel is blind to it too (they
+   stay `is_active`). Shape: coverage per SEGMENT — `is_nifty50`, `is_fno`, and **names with an
+   open paper position** (the set whose absence stops us exiting) — each with its own baseline
+   and floor, and an ABSOLUTE-count rule where a segment is small enough that one name exceeds
+   the fraction. ⚠ A different instrument: do NOT overload `FeedCoverage`'s fields with a second
+   meaning.
 2. **Snapshot the rule's inputs** (§73, DECIDED). ⛔ **The artifact is the raw `EQUITY_L.csv`
    PLUS the parsed EQ symbol set — NOT a hash.** `kite_instruments` is upserted in place, so
    yesterday's state is already gone and a hash cannot reconstruct it. Unblocks four

@@ -57,7 +57,14 @@ from app.services.beta_ir import BetaIr
 from app.services.buy_and_hold import BuyAndHold
 from app.services.deflated_sharpe import DEFAULT_TRIALS
 from app.services.excursion import Excursion, load_1m_bars, tape_excursion
-from app.services.feed_health import FeedStatus, check_feed_staleness, render_feed_health
+from app.services.feed_health import (
+    FeedCoverage,
+    FeedStatus,
+    check_feed_coverage,
+    check_feed_staleness,
+    render_feed_coverage,
+    render_feed_health,
+)
 from app.services.liquidity import load_median_traded_values_safe
 from app.services.profit_lock_shadow import ShadowComparison, compare_position
 from app.services.worker_health import CasCoverage, RoleStatus, read_statuses
@@ -275,6 +282,7 @@ class DailyReport:
     fill_realism: list[FillRealismRow] = field(default_factory=list)
     # Silent-feed-outage alarm (6.8.6) — staleness of each EOD feed vs the calendar.
     feed_health: list[FeedStatus] = field(default_factory=list)
+    feed_coverage: list[FeedCoverage] = field(default_factory=list)
     # Buy-and-hold benchmark over the paper-clock window (H2). None = not assessable.
     buy_and_hold: BuyAndHold | None = None
     # Market exposure of the closed book, whole and split by side (H12). "is it just the
@@ -554,6 +562,7 @@ async def build_daily_report(
     # Silent-feed-outage alarm (6.8.6) — independent of trading; a loud header when
     # any EOD feed is behind the trading calendar.
     report.feed_health = await check_feed_staleness(db, now=now)
+    report.feed_coverage = await check_feed_coverage(db)
     # Tick-mode degradation (A25) — did the live feed actually deliver full-mode
     # ticks on the day whose fills this report is judging? Keyed by the REPORT
     # day, not by now: a --DATE run must read that day's counters.
@@ -757,6 +766,11 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
     # Feed-staleness alarm (6.8.6) — a loud header ABOVE the scorecard when any EOD
     # feed is behind the trading calendar; a quiet one-liner when all are current.
     out.extend(render_feed_health(r.feed_health))
+
+    # U4′ — breadth, immediately beneath recency and deliberately NOT folded into
+    # it: a feed that is current and thin passes the check above, which is exactly
+    # how the 2026-09-07 outage went five sessions unseen.
+    out.extend(render_feed_coverage(r.feed_coverage))
 
     # A40 — worker liveness and the CAS absence alarm, ABOVE the scorecard: if the worker
     # was down, every number below it is suspect and the reader must know that first.
