@@ -7,6 +7,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Intraday capture restored — 16.2M bars, back to the daily archive's clean block (2026-09-14)
+
+`ohlcv_5m`/`15m`/`1h` have been **empty since the 2026-09-07 DB loss**, which made every
+opening-range idea untestable and is a stated prerequisite before cycle 2.
+
+- ⭐ **CLAUDE.md's "accrues only in real time" was imprecise, and checking rather than
+  trusting it changed the plan.** Kite serves deep intraday history, and
+  `scripts/backfill_intraday.py` already existed to fetch it — so the *history* was
+  recoverable today rather than needing weeks of live accrual.
+
+  | table | rows | stocks | span |
+  |---|--:|--:|---|
+  | `ohlcv_5m` | **12,189,732** | 210 | 2023-07-03 → 2026-09-11 |
+  | `ohlcv_15m` | **4,051,153** | 210 | 2023-07-03 → 2026-09-11 |
+
+- Depth lands exactly on **2023-07-03**, the first date of `ohlcv_1d`'s contiguous modern
+  block, so the daily and intraday archives now cover the same period — no study can
+  straddle a boundary that exists in one and not the other.
+- **419 of 420 (symbol, timeframe) pairs admitted** at ≤5% gap. The exclusion is
+  `FORCEMOT` 15m, **recorded and not patched** — the script's stated design.
+- ⭐ **Sequencing mattered:** the backfill's universe is
+  `is_active AND NOT ca_flagged AND (is_nifty50 OR is_fno)`. Run before D2′b it would have
+  fetched microcaps; run after, it fetched the right 210 names with all 50 Nifty
+  constituents inside them.
+- ⛔ **`ohlcv_1h` remains EMPTY and has no backfill path** — the script's timeframe map
+  covers 5m and 15m only. Hourly can accrue *only* from the live worker's `LiveBook`, so
+  the 09-07 → now gap in it is **permanently unrecoverable**.
+- ⚠ **Forward capture is ready but not running.** The persist path is sound (upsert with a
+  monotone high/low/volume merge, so a restart re-mint cannot corrupt a bar) and the
+  preflight now passes with **2,291 instruments** — the guard's baseline ratcheted
+  1,178 → 2,291, growth accepted as designed. But no live-worker process is running, and
+  `make live-worker` is a supervised ritual needing a fresh Kite token each morning.
+
+
 ### U11 — the 35 stale signals are withdrawn, not deleted (2026-09-14)
 
 - ⭐ **Round 2's framing was wrong, and measuring first showed it.** These were queued as

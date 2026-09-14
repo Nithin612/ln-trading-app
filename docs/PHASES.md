@@ -1727,8 +1727,21 @@ existing `tradeBlock()` renders `⊘ Blocked` with the reason verbatim on all fo
 `Restriction.always_on`**: giving a quarantine a mode would create an `off` that silently
 re-admits a signal a human removed. **A human decision must not be reversible by a knob.**
 
-**⇒ NEXT:** push (**17 commits unpushed**) · **intraday capture still 0 rows** (real-time only —
-start before cycle 2) · index/VIX backfill · the panel's UI/UX round (PART XVIII §46).
+**✅ INTRADAY RESTORED 2026-09-14: `ohlcv_5m` 12,189,732 rows · `ohlcv_15m` 4,051,153 ·
+210 stocks · 2023-07-03 → 2026-09-11**, 419/420 admitted at ≤5% gap (`FORCEMOT` 15m excluded,
+recorded not patched). ⭐ **"Accrues only in real time" was imprecise** — Kite serves deep
+intraday history and `backfill_intraday.py` already existed, so the HISTORY was recoverable in
+an hour. Depth lands on **2023-07-03**, the same clean block as `ohlcv_1d`. ⭐ Sequencing
+mattered: the script's universe is `is_active AND (is_nifty50 OR is_fno)`, so running it AFTER
+D2′b fetched the right 210 names.
+⛔ **`ohlcv_1h` is STILL 0 and has NO backfill path** (the script covers 5m/15m only) — hourly
+accrues ONLY from the live worker, so its 09-07→now gap is **permanently unrecoverable**.
+⚠ **Forward capture is ready but NOT RUNNING:** preflight passes with **2,291 instruments**
+(baseline ratcheted 1,178 → 2,291), but `make live-worker` is a supervised ritual needing a
+FRESH KITE TOKEN each morning. **Start it tomorrow, 09:15 IST.**
+
+**⇒ NEXT:** push (**18 commits unpushed**) · **run `make live-worker` each session** ·
+index/VIX backfill · the panel's UI/UX round (PART XVIII §46).
 
 ---
 
