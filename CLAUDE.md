@@ -663,8 +663,10 @@ else.
   LEADING SPACE on every column after the first (`seed_stocks._csv_rows` already strips keys and
   says so — a documented trap, reintroduced). Both now raise instead of succeeding quietly.
 
-- **⛔⛔ THE LIVE THREAD IS `docs/UNIVERSE_REBUILD_PLAN.md` — the stock master has been WRONG
-  since the 2026-09-07 DB loss, and PART VII settles what that means.** ⭐⭐ **Every one of the
+- **⛔⛔ THE LIVE THREAD IS `docs/UNIVERSE_REBUILD_PLAN.md`. ⚠ HISTORICAL FROM HERE DOWN — the
+  master WAS wrong from the 2026-09-07 DB loss until D2′b repaired it on 2026-09-14 (see the
+  ✅✅ bullet above, which supersedes the present-tense framing in this one). PART VII settles
+  what the breakage meant.** ⭐⭐ **Every one of the
   3,392 `stocks` rows has `created_at` = 2026-09-07**, so there was never anything to "restore":
   the whole master was improvised in one night by the emergency recovery. The choice is keep that,
   or replace it with one that was chosen ⇒ **REBUILD-D: derive, don't repair** (§26) — collapse the

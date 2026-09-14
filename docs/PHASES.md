@@ -1814,9 +1814,47 @@ parse regression drops the feed for **every open position**. Now bounded by
 EQUITY_L 2,292) ⇒ the rule is ~99.96% single-source and "independently derived" was overclaimed.
 ⛔ **§60/A1's "1,847" was illustrative, not measured** — struck. ✅ `ca_flagged_at` = 7 (5 active).
 
-**⇒ NEXT:** push (**unpushed and growing**) · **run `make live-worker` each session** ·
-**snapshot the rule's inputs** (P0, decided) · **U4′** coverage-aware feed alarm (the PRIMARY
-detector; the funnel is tertiary) · **§62 V3–V8** · **U8** (index registry → unblocks sector-RS).
+### ⇒ START BUILDING HERE — the ordered queue, decided 2026-09-14
+
+⛔⛔ **DO NOT RUN ANOTHER REVIEW ROUND.** The external panel is at round 5 and **both blocking
+questions are CLOSED** (PART XXII §72, §73). What remains is a build queue, not open questions.
+§13f measured the marginal value of review breadth as NEGATIVE; round 5 beat that bar, but it
+beat it by closing the questions. **Ship, do not review.** Re-open only if a build step turns up
+a fact that contradicts a decision below.
+
+**Do these in order. Each is self-contained; none blocks on the user except where marked.**
+
+1. **U4′ — the coverage-aware feed alarm.** ⭐ **Highest value and on nobody's tier list until
+   round 5.** The 6.8.6 alarm asserts **RECENCY** and read ✅ right through the outage that
+   caused this entire rebuild; V1's funnel is at best a **tertiary** detector because it renders
+   only on empty states, to a reader who must remember the baseline. This is the PRIMARY one and
+   it still does not exist. Acceptance (from §7/U4): replay the 09-04 → 09-07 breadth collapse
+   and assert the alarm fires.
+2. **Snapshot the rule's inputs** (§73, DECIDED). ⛔ **The artifact is the raw `EQUITY_L.csv`
+   PLUS the parsed EQ symbol set — NOT a hash.** `kite_instruments` is upserted in place, so
+   yesterday's state is already gone and a hash cannot reconstruct it. Unblocks four
+   present-tense jobs, the sharpest being that the collapse rail's refusals are currently
+   **unauditable** (it fires on the INPUT; the snapshot records the OUTPUT), so
+   `universe_apply_min_fraction = 0.5` can never be tuned.
+3. **§77 P1 batch** — `ca_flagged_at` clearing path (only 7 rows today, so it is cheap NOW) ·
+   `max(as_of)` recency check on `universe_snapshot` · does an Alembic migration bypass the
+   single-writer trigger (one command) · a freshness assertion on the rule's inputs.
+4. **§62 V3–V8** — hold-only badge · search answers absence · stock-detail eligibility panel ·
+   wiring lint + emptiness alarm · CA clearing path · report heartbeat.
+5. **U8** — populate the index registry from the CSV we already download (165 indices, only 3
+   registered) → unblocks sector-RS.
+
+**⚠ USER'S CALL, do not decide these unilaterally:**
+- **push** (the branch is well ahead of `main`; push/merge are the user's — W4).
+- **The palette AA defect** (PART XXI §71): 8 token pairs below 4.5:1 on money copy. A
+  shrink-only ratchet pins it in `frontend/src/test/tokenContrast.test.ts`; changing the red or
+  green moves every P&L figure in five themes. Measured recommendation is in §71.
+- **§64's three parked items** (deep `ohlcv_1d` history · the other ~162 indices · the
+  market-regime flip + sector-RS limits) — Claude OWNS raising these, per CLAUDE.md §8.
+
+**⚠ Standing operational item:** `make live-worker` needs a FRESH KITE TOKEN each morning and is
+a supervised ritual — run it each session or intraday capture accrues nothing (and cannot be
+back-filled).
 
 ---
 
@@ -1872,7 +1910,7 @@ is 09-07 rebuilt inside the fix. It becomes a **scoring-time** check instead.
 
 ---
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-09-11 (round 10).**
+**▶ CONTINUE HERE (SUPERSEDED — see the 2026-09-14 block at the top) — updated 2026-09-11 (round 10).**
 
 **▶▶ ⭐⭐ READ `docs/BUILD_QUEUE.md`, NOT THE ADJUDICATION.** It carries B1–B8 with `WHY · SCOPE ·
 FILES · ACCEPTANCE · ARTIFACT · DO NOT` per item, the round-10 ordering, the parked register and the
