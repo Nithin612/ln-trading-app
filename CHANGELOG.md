@@ -7,6 +7,38 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Round-4 adjudication — the UI/UX round, and five corrections to our own PART XVIII (2026-09-14)
+
+Five panel responses adjudicated in plan PART XXI. Every checkable claim measured first,
+including the six questions asked with predictions stated.
+
+- ⭐⭐ **S2 was about a third wrong, and the refutation dissolves Q1.** PART XVIII dismissed
+  "a why-isn't-X-here lookup" as *"solves nothing, the user must already suspect"*. **Typing a
+  symbol into search IS suspecting** — absence is not *notifiable* but it is *answerable* at
+  two surfaces (search, direct navigation). Complementary correction: the unaskable set and the
+  harmful set differ, since a user only feels absence when they hold a prior reference
+  (searched / hold / held / watchlisted / saw it signal) — **all five already observable**.
+- ⛔ **S3 understated it. `current_price` does NOT go null** — `update_position_pnl` falls back
+  "live LTP → **last daily close**", so a stranded position renders a plausible price from a
+  previous session. An em-dash at least signals absence; a stale close signals nothing.
+- ⛔ **`ca_flagged_at` has NO clearing path** (measured). The only writer is the detector; the
+  model docstring promises an admin unflag that does not exist. **A monotonic accumulator** —
+  which retroactively strengthens §32's refusal to run the CA backward pass, since it would
+  have permanently quarantined 1,768 of 3,395 stocks with no undo.
+- ⛔ **The daily report has failed silently: 26 reports against 30 trading sessions.** Direct
+  evidence for the panel's heartbeat requirement, and it refutes S4's *argument* while leaving
+  its conclusion standing — 6.8.6 failed on **predicate**, not delivery.
+- ✅ Predictions confirmed: `universe_snapshot` is **100% EQ (2,291/2,291)**, so the rule does
+  what §42a claims; and only **1 of the 35** quarantined signals points at a stock the rule
+  deactivated, confirming §52 from the other direction.
+- ⭐ **Adopted, P0: the funnel counter** — an empty state has no stock in context, so naming a
+  per-stock cause is a category error; show the scope searched instead. It ranks first not for
+  the copy but because *"1,847 with bars today"* on a ~2,290 day **second-detects the breadth
+  collapse 6.8.6 was blind to**, as a side effect of fixing a message.
+- Eight-item queue in §62; three parked user items recorded in §64 (deep `ohlcv_1d` history,
+  the other ~162 indices, and the market-regime/sector-RS limits).
+
+
 ### Index + VIX backfill — the market-regime overlay is evaluable again (2026-09-14)
 
 `index_ohlcv_1d` and `india_vix_daily` were destroyed on 2026-09-07 and never redone: 54 and

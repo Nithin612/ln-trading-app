@@ -44,6 +44,11 @@ claim**:
   boolean and one empty table broke), §23.3 proves by measurement that **U3 does not depend
   on U2**, and §23.6 proposes **REBUILD-D: derive, don't repair** — collapsing U2 into U13.
   ⚠ **§24 held six questions for round 3; they are answered in PART VII.**
+- ⭐⭐ **PART XXI (§57–§64) is the ROUND-4 ADJUDICATION of the UI/UX round — read it WITH
+  PART XVIII, because it corrects five of PART XVIII's own claims.** §58 carries the measured
+  answers to every question the panel asked with a prediction (incl. **`ca_flagged_at` has NO
+  clearing path** and **positions render a stale DAILY CLOSE, not an em-dash**); §59 the
+  corrections; §62 the eight-item queue; **§64 records three items the user parked.**
 - ⭐⭐ **PART XVIII (§44–§46) is the UI/UX surface, and it is the NEW question for the panel.**
   §44 is a *verified* inventory of what a user can see (absences checked in the frontend
   source, not assumed); §45 holds six statements to attack; §46 holds eight questions.
@@ -2928,3 +2933,209 @@ list-reachable set gained the quarantine **on purpose** — that is what makes i
 **Applied: 35 of 35 withdrawn.** ⚠ `--before` **requires** `--reason` — an unexplained
 withdrawal is not reviewable — and `--release` exists because a quarantine a human cannot
 lift is a deletion with extra steps.
+
+
+---
+
+# PART XXI — ROUND 4 ADJUDICATION: THE UI/UX ROUND (2026-09-14)
+
+Five responses to PART XVIII (Claude external · ChatGPT · Gemini · DeepSeek · Kimi).
+**Every checkable claim below was measured before disposition**, including the six questions
+the Claude review asked with predictions stated first, and the five Kimi asked.
+⭐ **The round produced five corrections to PART XVIII and every one of them is mine.**
+
+## §57 · What changed after the panel read the document
+
+The reviews predate three things, so some of their arithmetic is stale in our favour:
+
+| | then | now |
+|---|--:|--:|
+| active stocks (D2′b applied) | 1,322 | **2,291** |
+| Nifty 50 constituents active | 5 | **50** |
+| `ohlcv_5m` / `ohlcv_15m` | 0 / 0 | **12,189,732 / 4,051,153** |
+| index + VIX series | ~18 sessions | **789 sessions each** |
+| the 35 signals | live | **withdrawn (U11)** |
+
+⇒ ⭐ **Q-R4's "after D2′b" case is the present tense.** Search reaches **2,291** names today,
+not ~1,170 — so Tier 1 of the Q1 answer has something to render *now*.
+
+## §58 · Measured answers — predictions first, then the number
+
+| # | question | prediction | **measured** |
+|---|---|---|---|
+| **Q-R5** | `series` mix inside `universe_snapshot` | 100 % EQ | ✅ **2,291 of 2,291 EQ.** The rule does what §42a says. *(They asked specifically hoping to be told their Q6 was narrow — it is.)* |
+| **Q-R3** | does `ca_flagged_at` have a clearing path? | write-once, no clearer | ⛔ **CONFIRMED, and it is a defect.** The ONLY writer anywhere is `ca_detector.py:92`. **No script, no API, no admin endpoint clears it** — while `stock.py`'s own docstring says *"unflag via admin after verifying"*. ⭐ **The CA quarantine is a MONOTONIC ACCUMULATOR.** |
+| **Q-R6** | has the daily report failed silently? | yes, ≥ once | ✅ **26 reports against 30 trading sessions** since 2026-08-01 — **4 missing, unnoticed.** |
+| **Q-R1** | is `price_state` one serialisation away? | yes | ⚠ **PARTLY.** `held_without_instrument()` exists (§39c) but **the positions read path never calls it**. Not a new join; it is a new call plus a field. Cost estimate holds. |
+| **Q-R4** | search reachability | ~1,170 now | ⚠ **2,291 now** — D2′b already flipped (§57). |
+| **Kimi 3** | how many of the 152 appear in the 35? | — | **1 of 35.** The two sets barely intersect — which independently confirms §52's finding from the other direction. |
+| **Kimi 4** | does `current_price` go null or hold stale? | null (per §44b/5) | ⛔⛔ **WORSE THAN EITHER OF US SAID.** `update_position_pnl` is documented **"live LTP → last daily close"**. It does **not** go null — it renders a **stale DAILY CLOSE**. |
+| **Kimi 1** | materialiser fetch-failure behaviour | — | `_download_equity_l` **raises**, so no snapshot is written and `apply_to_stocks` never runs ⇒ **fail-CLOSED on the snapshot, fail-STALE on the flag.** Correct, and **pinned by no test.** |
+
+## §59 · ⛔ Five corrections to PART XVIII, all of them mine
+
+**1 — ⭐⭐ S2 is about a third wrong, and Kimi's refutation is sharper than Claude's.**
+I wrote that absence is unaskable, then dismissed option (b) as *"solves nothing, since the
+user must already suspect."* **That is the error. Typing a symbol into search IS suspecting.**
+The user who types `RELIANCE` and gets nothing has asked the question exactly as clearly as the
+user who clicked Buy and got a 409 — and **search is where the feedback attaches.**
+⇒ **Absence is not NOTIFIABLE, but it is ANSWERABLE at two known surfaces: search, and direct
+navigation to a detail page.** That converts an unsolvable problem into a bounded one, and it
+dissolves Q1.
+⭐ Claude's version is complementary and also right: the *unaskable* set and the *harmful* set
+are not the same. A user only experiences absence as a problem when they hold a **prior
+reference** — searched, hold, held, watchlisted, or saw it signal — **and all five are events we
+already observe.** For a name with no reference, the absence is unaskable *and harmless*.
+⇒ **Q1 is a TIER keyed on reference strength, not one surface.**
+
+**2 — ⛔ S3 understates the defect, and the truth is worse than an em-dash.** I wrote that a
+stranded position is *"pixel-identical to a momentary gap"*. Measured: `current_price` falls
+back to the **last daily close**, so a stranded position renders **a plausible price from a
+previous session with nothing marking it**. ⭐ **An em-dash at least signals absence; a stale
+close signals nothing and looks live.** The `—` case is rarer than I claimed — it needs even
+the daily close to be missing.
+
+**3 — S4's conclusion survives; its ARGUMENT is refuted, independently, by two reviewers.**
+6.8.6 read ✅ through the outage because it asserted **recency instead of coverage** (§4a) —
+a **predicate** failure, not a **delivery** failure. A dashboard fed by the same service would
+have been equally green. ⇒ *"a report that arrives beats a page you must open"* is the wrong
+axis. ⚠ And Q-R6 turns it on me: **the report itself failed 4 times in 30 sessions and nobody
+noticed**, which is the same defect one layer up. The empty quadrant is **push + event**, and a
+channel without a heartbeat cannot distinguish "nothing happened" from "nothing ran".
+
+**4 — S1 undercounts the invisible paths.** Not three: **search is a fourth**
+(`StocksPage` inherits `is_active=True`, so an excluded name is not merely unbadged, it is
+**unfindable**), and D2′b adds a **fifth** — a *transition* mechanism, where names begin
+**disappearing between sessions with no event surfaced anywhere**.
+
+**5 — S5 carries a tension I did not notice.** I want "the REASON, not the flag" — but §42a
+says the rule's **inputs are not snapshotted**. ⇒ **every reason we can render is PRESENT-TENSE
+ONLY.** *"Excluded: not in EQUITY_L"* is honest; *"excluded since 09-14 because…"* is not
+something we can currently back. **Constrain the copy, or snapshot the inputs — deliberately.**
+
+## §60 · ✅ Adopted
+
+**A1 — ⭐⭐ The funnel replaces the empty-state copy problem (Claude Q7, Kimi Q7).** Both
+reframed it identically and correctly: an empty state has **no stock in context**, so asking it
+to name a per-stock cause is a **category error**. Show the **scope that was searched** — known
+→ in universe → bars today → assessed → passed the gate. One renderer, four surfaces, same
+shape as `tradeBlock()`. It is **measurement, not verdict**, so A24 is satisfied by
+construction.
+⭐⭐ **And the reason it ranks P0 is not the copy: a user seeing "1,847 with bars today" on a
+day that is normally ~2,290 SEES the breadth collapse that 6.8.6 was structurally blind to.**
+**A second, independent detector for the defect that caused this entire rebuild — as a side
+effect of fixing a message.**
+
+**A2 — Q1 is a tier, and all of (a), (c), (d) ship; (b) is redundant.** Search returns excluded
+names **on tight symbol match only** (unrestricted greyed rows = untradeable clutter in fuzzy
+results); the detail page carries the full reason; the daily report carries the aggregate.
+⚠ **(c) without (a) is dead** — if search returns nothing the user never reaches the detail
+page. **(b) is redundant because search IS the lookup.**
+
+**A3 — `price_state` + `ltp_as_of` on `PositionOut`, per-row age AND a page banner.** Both,
+not either. ⚠ **Two distinct states, not one** (Kimi): *stale* (has an instrument, ticks
+stopped → recoverable, show age) versus *stranded* (`held_without_instrument()` → **needs a
+human**, banner). ⛔ **Do NOT reuse `PositionHealth.stale`** — it already means signal age, and
+overloading it would put a third meaning on one word.
+
+**A4 — ⭐ The hold-only state, which PART XVIII missed entirely (Kimi).** After D2′b a held
+name can leave the universe overnight. U17 keeps its ticks alive, but **nothing tells the
+user** — and the correct message is specific: *"no longer in the tradeable universe — you can
+exit, not re-enter."* **This is S2 with money attached**, and it is the most important new UI
+state in the document.
+
+**A5 — Q8 needs two checks because there are two diseases** (Kimi, and Claude's four-defect
+split agrees). *Built-not-wired* (`filingsApi.getGuard`) ⇒ a **static wiring lint** with an
+explicit allowlist. *Built-and-starved* (`categories`, `strategy_profiles`, `kite_instruments`
+pre-U1) ⇒ a **runtime emptiness alarm**: any table that is *consumed* and empty appears in the
+daily report. ⚠ Neither catches `ca_detector`, which was wired and wired **wrong** — for that
+the rule is Claude's: **an acceptance test that can pass while the capability is unreachable is
+not an acceptance test.** ⭐ And the cheapest version of all of it is one extra column in the §7
+queue — **"what observes this?"** — which would have caught all five at planning time.
+
+**A6 — `series` is narrower than I thought, and Claude corrected itself in public.** Inside the
+universe `EQ_LISTED` requires EQ, so a `series` column would render **a constant**. What
+survives is better: a series move **off** EQ is visible in `EQUITY_L.csv` *before* the
+materialiser acts on it that night ⇒ for a held name it is the one mechanism anywhere in this
+part that gets **ahead** of S2 instead of explaining it afterwards. Surface it as **reason
+text**, never a column.
+
+**A7 — `symbol_history`'s one user-facing use is search continuity.** A rename keeps the id
+(§41c) so positions survive, but a user typing the **old** ticker gets nothing. Resolve old
+symbols in search: *"AEROPLANE (formerly AMIRCHAND)"*. The rest is analyst-only.
+
+**A8 — A thin ops page, and the report stays.** Not a monitoring wall: its job is
+**answering when the operator is already suspicious**, which is cheap because
+`feed_health`/`worker_health`/`calendar_health` already exist as services **with no endpoint**.
+⚠ **If we find ourselves designing new metrics for it, stop** — that is the §A8 scale failure.
+⭐ Q-R6 adds a requirement the panel is right about: **the report needs a heartbeat**, or its
+silence is indistinguishable from a quiet day.
+
+**A9 — ⛔ Fix the CA mechanism before deciding its UI (Q-R3).** A monotonic accumulator with no
+clearer should not get a surface that invites an unflag request nobody can grant. ⭐ **This also
+retroactively strengthens §32's refusal to run the backward pass:** it would have permanently
+quarantined **1,768 of 3,395 stocks** with no undo path.
+
+**A10 — Pin the materialiser's failure mode with a test** (Kimi 1). It is currently correct by
+accident of `raise_for_status`, and §42d is the proof that this class of thing fails silently.
+
+## §61 · ⏸ Parked · ⛔ Rejected
+
+| item | disposition |
+|---|---|
+| ChatGPT's **Decision Trace** and **Replay this decision** | ⏸ **PARK, and they are the best ideas in that response.** Replay in particular mirrors `universe_snapshot` exactly. ⛔ Blocked by the same §42a limit as S5: **the rule's inputs are not snapshotted**, so a replay would reconstruct a decision from *today's* facts and present it as history. **Unblocks if and when we snapshot the inputs.** |
+| ChatGPT's **Universe Explorer**, **What Changed**, **Evidence drawer**, **Command palette**, **Cockpit** | ⏸ **PARK.** Each is defensible; together they are a product rebuild for a solo operator in evenings (**§A8**). ⭐ ChatGPT says so itself — *"don't start UI implementation yet"* — and its §25 warning against a Bloomberg clone is the most valuable paragraph in that response. **The funnel (A1) delivers the honest core of "What Changed" and "Explorer" for a fraction of the cost.** |
+| Gemini's **Refusal Inspector endpoint first** | ✅ **ADOPT the sequencing, narrow the scope.** Yes — the backend verdict must be authoritative, per ChatGPT's §28 (*never let the frontend derive universe state*). But it is **not a new endpoint**: it is `restrictions.check` + the rule's per-term reason, exposed on the **existing** stock detail endpoint. |
+| Gemini's **Rule Workbench / diff engine** | ⏸ **PARK** — `scripts/universe_snapshot.py --diff` already answers it on the CLI, and a GUI for a once-a-quarter rule change is inverted cost. |
+| DeepSeek's response | ⚠ **Already adjudicated** — it is the round-3 review of PART VI re-sent, and PARTS VII/XVI/XIX dispositioned every point (incl. membership flags **deferred with reasons**, `isin IS NOT NULL` **rejected as redundant**, and *"run U3 now"* **done**). |
+| ChatGPT's **AI assistant layer** | ⏸ **PARK** with its own constraint, which ChatGPT states correctly: grounded in stored evidence, **never inventing a reason**. Worth revisiting only after the funnel and the decision reasons exist to ground it. |
+
+## §62 · The queue this round produces
+
+| # | item | why | size |
+|--:|---|---|--:|
+| **V1** | **The funnel counter** on all four empty states | A1 — answers Q7, most of Q1/T3 and Q2, **and second-detects breadth collapse** | 1 d |
+| **V2** | **`price_state` + `ltp_as_of` + `stranded` on `PositionOut`**, per-row age + banner | A3 — money-path, and **worse than PART XVIII stated** | 1 d |
+| **V3** | **Hold-only badge** — "exit, not re-enter" | A4 — S2 with money attached | ½ d |
+| **V4** | **Search answers absence** — tight-match excluded names + reason + old-symbol resolution | A2 + A7 — where absence attaches | 1 d |
+| **V5** | **Stock-detail eligibility panel** — membership, failed term, data coverage | A2 tier 3 | 1 d |
+| **V6** | **Wiring lint + emptiness alarm + "what observes this?" column** | A5 — the project's own recurring defect | 1 d |
+| **V7** | **CA clearing path**, then decide its UI | A9 — ⛔ **before** any CA surface | ½ d |
+| **V8** | **Materialiser failure-mode test** + report heartbeat | A10 + Q-R6 | ½ d |
+
+⚠ **V1 and V2 are the two that pay for themselves.** Everything else is real and none of it is
+urgent.
+
+## §63 · Questions for round 5
+
+1. **[BLOCKING] Is the funnel's "assessed" stage worth instrumenting, or do we ship four
+   stages?** Q-R2 predicted the first three exist and **"assessed" does not exist as a
+   counter**. ⭐ We would rather ship four honest stages than wait — **name the failure mode of
+   a funnel with a missing rung**, because a user reading four stages may assume the fifth is
+   zero.
+2. **[BLOCKING] Should we snapshot the rule's INPUTS?** It is the single blocker behind S5's
+   present-tense constraint, ChatGPT's Decision Trace, and Replay. Cost is one CSV + one
+   instruments hash per day. ⚠ **What breaks if we do not** — beyond "history is
+   unreconstructible", which we already accept elsewhere?
+3. **[BLOCKING] The CA accumulator (Q-R3).** Given no clearer exists: is the right fix a
+   clearing path, an expiry, or **per-event records** (§32's D4b) that make the flag derived
+   rather than stored? ⭐ We think the third, but it is the largest of the three.
+4. **Does the hold-only state (A4) need to reach the user any faster than the positions page?**
+   It is knowable the evening before, from `EQUITY_L`, per A6. Is a next-morning badge
+   sufficient, or is this the first real case for a push channel?
+5. **⭐ What did THIS round miss?** Round 3 asked for the check, not the concern. The pattern
+   holds: **the five best points this round were all produced by asking a question whose answer
+   was one query away** — the `series` mix, the CA clearer, the report count, the 1-of-35 join,
+   and the daily-close fallback. **Name the next query, not the next concern.**
+
+## §64 · Three items the user parked, recorded so they are not lost
+
+1. **`ohlcv_1d` deep history** — can it be fetched the way 5m/15m were, rather than only
+   accrued? ⚠ Note the standing blocker: the **922-day hole (2020-12-23 → 2023-07-03)** is why
+   every archive now starts at 2023-07-03. **To revisit after the UI round.**
+2. **The other ~162 indices.** Only NIFTY50 / BANKNIFTY / FINNIFTY are registered, which is
+   exactly why sector-RS was never testable. ⭐ **The same CSV already downloaded carries 165**,
+   so this is a **registry-population job, not a new data source** — plan it now, use it later.
+3. **Deferred for discussion, and Claude is to raise both:** ⛔ the index backfill **does not
+   license** a `market_regime_gate_mode` flip (§9/4 — two gates promoted on arguments, both
+   refuted within weeks; promotion needs `t ≈ 3.6`), and ⚠ **sector-RS stays blocked on U8**.
