@@ -1717,8 +1717,18 @@ what the `EQ=0` header bug would have done). ⚠ **Membership flags deferred** t
 reasons (§51); `forensic_stocks_deactivated` did not survive 09-07 so the "15 July judgements"
 acceptance test was impossible.
 
-**⇒ NEXT:** push (**11 commits unpushed**) · **U11** quarantine the 35 stale signals ·
-**intraday capture still 0 rows** · index/VIX backfill · the panel's UI/UX round (PART XVIII).
+**✅ U11 DONE 2026-09-14 — all 35 signals WITHDRAWN (PART XX).** ⚠ Round 2's framing was
+wrong: **34 of 35 pointed at stocks the repaired rule says ARE tradeable**, and all were still
+inside their validity window — live and clickable. The real defect is narrower: **they won the
+wrong tournament** (minted 09-09…09-11 against 1,322 names with every blue chip excluded).
+⭐⭐ **Implemented as a `Restriction`, not a list filter** — so the order path 409s AND the
+existing `tradeBlock()` renders `⊘ Blocked` with the reason verbatim on all four Buy surfaces,
+**zero new UI**. First thing built since PART XVIII that ANSWERS its complaint. ⛔ **New
+`Restriction.always_on`**: giving a quarantine a mode would create an `off` that silently
+re-admits a signal a human removed. **A human decision must not be reversible by a knob.**
+
+**⇒ NEXT:** push (**17 commits unpushed**) · **intraday capture still 0 rows** (real-time only —
+start before cycle 2) · index/VIX backfill · the panel's UI/UX round (PART XVIII §46).
 
 ---
 
