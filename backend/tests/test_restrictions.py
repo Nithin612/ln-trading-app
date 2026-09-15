@@ -76,7 +76,15 @@ def _signal(**kw: object) -> Signal:
 def _ctx(**kw: object) -> restrictions.RestrictionContext:
     base: dict[str, object] = dict(
         signal=_signal(), side="LONG", as_of=datetime.now(tz=UTC), allow_offmarket=True,
-        available=frozenset({restrictions.CTX_MARKET_PRICE}), market_price=Decimal("100"),
+        available=frozenset(
+            # V3 — membership is resolved by BOTH real paths (the order path's context
+            # loader and the list's batched query), so the default fixture resolves it
+            # too. Leaving it out would report the always-on universe gate as unassessed
+            # in every unrelated test, which is true but drowns what each test is about.
+            {restrictions.CTX_MARKET_PRICE, restrictions.CTX_IN_UNIVERSE}
+        ),
+        market_price=Decimal("100"),
+        in_universe=True,
     )
     base.update(kw)
     return restrictions.RestrictionContext(**base)  # type: ignore[arg-type]
@@ -272,6 +280,11 @@ class TestTheDisplayPathCannotReachFabricatedThresholds:
             # can judge it — which is the whole design: a withdrawn signal is rendered
             # `⊘ blocked` with its reason rather than silently vanishing from the list.
             restrictions.GATE_QUARANTINE,
+            # V3: also reachable ON PURPOSE. Membership is one already-joined boolean per
+            # row, not per-row I/O, so the list judges it exactly as the order path does.
+            # Had it stayed uncovered, the most important new block in PART XXI would have
+            # rendered as `unassessed` — enabled-but-marked — on all five Buy surfaces.
+            restrictions.GATE_UNIVERSE,
             restrictions.GATE_REGIME,
             restrictions.GATE_ENTRY_QUALITY,
             restrictions.GATE_RR,

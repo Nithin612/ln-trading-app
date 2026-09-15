@@ -177,6 +177,8 @@ export function PositionsPage() {
   const positions = data?.positions ?? []
   // V2 — computed once; the banner and any future per-row treatment read the same list.
   const strandedPositions = positions.filter((p) => p.stranded)
+  // V3 — the same computed-once pattern; the banner and the per-row badge read one list.
+  const holdOnlyPositions = positions.filter((p) => p.hold_only)
 
   return (
     <div className="flex flex-col gap-4">
@@ -236,6 +238,38 @@ export function PositionsPage() {
         </div>
       )}
 
+      {/*
+        V3 / A4 — the page-level half. The per-row badge says WHICH; this says WHAT IT
+        MEANS, once, because the consequence (an order will be refused) is not visible
+        from the positions table at all.
+
+        ⚠ Deliberately NOT an `role="alert"`: unlike stranded, nothing is broken and no
+        action is required — the position is healthy and exitable. Announcing it as an
+        alert on every render would be crying wolf about a normal overnight event.
+      */}
+      {holdOnlyPositions.length > 0 && (
+        <div
+          className="rounded-lg border px-4 py-3 text-sm"
+          style={{
+            borderColor: 'var(--color-warning)',
+            background: 'var(--color-warning-bg)',
+            color: 'var(--color-text)',
+          }}
+        >
+          <span className="font-semibold">
+            {holdOnlyPositions.length} position{holdOnlyPositions.length !== 1 ? 's' : ''}{' '}
+            {holdOnlyPositions.length !== 1 ? 'are' : 'is'} hold-only
+          </span>
+          {' — '}
+          {holdOnlyPositions.map((p) => p.symbol).join(', ')}
+          {'. '}
+          {holdOnlyPositions.length !== 1 ? 'These names are' : 'This name is'}
+          {' no longer in the tradeable universe. You can still monitor and exit '}
+          {holdOnlyPositions.length !== 1 ? 'them' : 'it'}
+          {' normally — prices keep updating — but an order to open or add will be refused.'}
+        </div>
+      )}
+
       <div className="bg-(--color-surface-2) border border-(--color-border) rounded-lg">
         <div className="px-4 py-3 border-b border-(--color-border) flex items-center justify-between">
           <span className="text-xs font-semibold uppercase tracking-wide text-(--color-text-muted)">
@@ -282,6 +316,33 @@ export function PositionsPage() {
                       >
                         {pos.symbol}
                       </Link>
+                      {/*
+                        V3 / A4 — HOLD-ONLY. A held name can leave the tradeable universe
+                        overnight, and this page is where the user finds out. The sentence
+                        has to be specific: the position is fine, the RE-ENTRY is not.
+
+                        ⛔ NOT `--color-loss`: that token means "this position is losing
+                        money" and is used by the P&L cell on this very row. Hold-only is
+                        a degraded PERMISSION, not a negative value — the same distinction
+                        `PriceProvenance` above is built on, and `--color-warning` on its
+                        own `-bg` is the pill idiom already in use here.
+
+                        ⚠ Text carries the meaning; colour only reinforces it (ui.md).
+                      */}
+                      {pos.hold_only && (
+                        <div className="mt-0.5">
+                          <span
+                            className="inline-block rounded px-1 py-px text-[11px] font-sans font-normal"
+                            style={{
+                              background: 'var(--color-warning-bg)',
+                              color: 'var(--color-warning)',
+                            }}
+                            title="No longer in the tradeable universe — you can exit this position, not open or add to one."
+                          >
+                            hold only
+                          </span>
+                        </div>
+                      )}
                     </td>
                     <td className="px-3 py-2 text-right">
                       <span style={{

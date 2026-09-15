@@ -82,7 +82,15 @@ __all__ = [
 #: believed it was reported, not judged) while `check` in fact judged it against the
 #: stand-in thresholds below (bug-hunter LOW, 2026-09-05).
 LIST_AVAILABLE = frozenset(
-    {restrictions.CTX_MARKET_PRICE, restrictions.CTX_FILL_PRICE, restrictions.CTX_ATR}
+    {
+        restrictions.CTX_MARKET_PRICE,
+        restrictions.CTX_FILL_PRICE,
+        restrictions.CTX_ATR,
+        # V3 — membership is ONE already-joined boolean per row, not per-row I/O, so the
+        # display path can judge it exactly as the order path does. Leaving it out would
+        # have made the most important new block in the document render as `unassessed`.
+        restrictions.CTX_IN_UNIVERSE,
+    }
 )
 
 
@@ -130,6 +138,7 @@ def preview(
     atr: Decimal | None = None,
     market_price: Decimal | None = None,
     fill_price: Decimal | None = None,
+    in_universe: bool | None = None,
     allow_offmarket: bool = True,
     max_chase_r: Decimal | None = None,
     rr_min: Decimal | None = None,
@@ -162,6 +171,8 @@ def preview(
         available.add(restrictions.CTX_FILL_PRICE)
     if atr is not None:
         available.add(restrictions.CTX_ATR)
+    if in_universe is not None:
+        available.add(restrictions.CTX_IN_UNIVERSE)
     # Intersect, so what a list SUPPLIES can never exceed what `LIST_AVAILABLE` claims it
     # supplies — the derivation of COVERED/UNCOVERED depends on those being the same set.
     available &= LIST_AVAILABLE
@@ -174,6 +185,7 @@ def preview(
         atr=atr,
         market_price=market_price,
         fill_price=fill_price,
+        in_universe=in_universe,
         allow_offmarket=allow_offmarket,
     )
     cfg = restrictions.RestrictionConfig(

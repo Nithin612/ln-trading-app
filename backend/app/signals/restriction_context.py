@@ -21,10 +21,12 @@ import logging
 from decimal import Decimal
 from typing import TYPE_CHECKING
 
+from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 
 from app.broker.circuit_bands import get_circuit_band_checked
 from app.broker.paper_broker import get_live_ltp
+from app.models.stock import Stock
 from app.services.benchmark import load_market_regime_context, load_rs_context
 from app.services.liquidity import load_traded_values
 from app.signals import restrictions
@@ -51,6 +53,7 @@ _LOADABLE_CONTEXT: frozenset[str] = frozenset(
         restrictions.CTX_MARKET,
         restrictions.CTX_TRADED_VALUES,
         restrictions.CTX_MARKET_PRICE,
+        restrictions.CTX_IN_UNIVERSE,
     }
 )
 
@@ -211,12 +214,33 @@ async def load_restriction_context(  # noqa: C901 — a flat sequence of INDEPEN
         if ltp is not None:
             available.add(restrictions.CTX_MARKET_PRICE)
 
+    # V3 — universe membership. Unconditional (the rule is `always_on`) and one indexed
+    # column on a row the order path has already touched, so there is no mode to check and
+    # no cost worth deferring. A failed read fails OPEN — `None` leaves the gate
+    # unsatisfied, which `check` reports in `unassessed` rather than treating as excluded.
+    in_universe: bool | None = None
+    try:
+        async with db.begin_nested():
+            in_universe = (
+                await db.execute(
+                    select(Stock.is_active).where(Stock.id == signal.stock_id)
+                )
+            ).scalar_one_or_none()
+    except SQLAlchemyError:
+        log.exception(
+            "universe-membership load failed; failing open for stock_id=%s", signal.stock_id
+        )
+        in_universe = None
+    if in_universe is not None:
+        available.add(restrictions.CTX_IN_UNIVERSE)
+
     return restrictions.RestrictionContext(
         signal=signal,
         side=side,
         as_of=as_of,
         allow_offmarket=allow_offmarket,
         available=frozenset(available),
+        in_universe=in_universe,
         atr=atr,
         market_price=ltp,
         circuit_band=band,

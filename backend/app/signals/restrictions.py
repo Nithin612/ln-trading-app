@@ -88,6 +88,7 @@ GATE_CHASE = "chase_gate"
 GATE_THROUGH_STOP = "through_stop"
 GATE_OFFMARKET = "offmarket"
 GATE_QUARANTINE = "signal_quarantine"
+GATE_UNIVERSE = "universe_membership"
 
 # ── Context keys ──────────────────────────────────────────────────────────────
 # What a restriction may require. Named constants because `requires` is compared against
@@ -99,6 +100,7 @@ CTX_CIRCUIT_BAND = "circuit_band"
 CTX_RS = "rs"
 CTX_MARKET = "market"
 CTX_TRADED_VALUES = "traded_values"
+CTX_IN_UNIVERSE = "in_universe"
 
 
 class EnforcedBy(Enum):
@@ -134,6 +136,11 @@ class RestrictionContext:
     rs: RsContext | None = None
     market: MarketRegimeContext | None = None
     traded_values: Sequence[Decimal] | None = None
+    #: V3 — is the signal's stock still in the tradeable universe? `None` means nobody
+    #: looked; `CTX_IN_UNIVERSE` in `available` plus `False` means it was looked up and
+    #: the rule excludes it. A held name can leave overnight (D2′b), which is the whole
+    #: point: the position stays, the re-entry must not.
+    in_universe: bool | None = None
 
     @property
     def entry(self) -> Decimal:
@@ -500,6 +507,39 @@ def _judge_quarantine(ctx: RestrictionContext, cfg: RestrictionConfig) -> Judgem
     )
 
 
+def _judge_universe(ctx: RestrictionContext, cfg: RestrictionConfig) -> Judgement:
+    """V3 / A4 — the stock is no longer in the tradeable universe.
+
+    ⭐ **The state PART XVIII missed entirely, and the one with money attached.** After
+    D2′b a HELD name can leave the universe overnight: U17 keeps its ticks alive so the
+    position can still be priced and exited, but nothing stopped a user buying MORE of
+    it. The correct message is specific — *you can exit, not re-enter* — and that is a
+    different sentence from every other block here.
+
+    ⚠ `always_on`, for the same reason as the U11 quarantine: membership is a RECORDED
+    VERDICT of the universe rule, not a claim about the tape that might be wrong. Giving
+    it a mode would create an `off` that silently re-admits a name the rule excluded, and
+    `is_active` is exactly the flag whose uncoordinated writers broke the system on
+    2026-09-07.
+
+    ⚠ It judges only what it was told. `in_universe is None` cannot happen once the
+    registry requires `CTX_IN_UNIVERSE` — `check` skips an unsatisfied rule and reports it
+    in `unassessed` — but the guard stays so a future caller that fakes the key without
+    the value fails OPEN rather than blocking every signal.
+    """
+    if ctx.in_universe is not False:
+        return Judgement(gate=GATE_UNIVERSE, mode="active", blocked=False, reason=None)
+    return Judgement(
+        gate=GATE_UNIVERSE,
+        mode="active",
+        blocked=True,
+        reason=(
+            "no longer in the tradeable universe — you can exit an existing position, "
+            "not open or add to one"
+        ),
+    )
+
+
 def _judge_through_stop(ctx: RestrictionContext, cfg: RestrictionConfig) -> Judgement:
     price = ctx.fill_price if ctx.fill_price is not None else ctx.market_price
     reason = (
@@ -521,6 +561,13 @@ REGISTRY: tuple[Restriction, ...] = (
     # recorded on the signal row itself.
     Restriction(
         GATE_QUARANTINE, frozenset(), EnforcedBy.OVERLAY, _judge_quarantine, always_on=True
+    ),
+    # V3 SECOND: a name the universe rule excludes is not tradeable at all, so its reason
+    # outranks every gate that asks whether THIS setup is good. Only a human withdrawal
+    # (U11) comes first.
+    Restriction(
+        GATE_UNIVERSE, frozenset({CTX_IN_UNIVERSE}), EnforcedBy.OVERLAY, _judge_universe,
+        always_on=True,
     ),
     # offmarket requires NOTHING: the ABSENCE of a price is precisely its trigger, so a
     # missing one is an answer rather than a gap.

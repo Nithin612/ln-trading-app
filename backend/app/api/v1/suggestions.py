@@ -106,6 +106,19 @@ async def list_suggestions(
     # eligibility preview the signals endpoints use — one source of truth, so this
     # surface cannot drift from the others.
     ltps = await get_live_ltps([sig.stock_id for sig, _p, _s in page])
+    # V3 — universe membership for the page in ONE query, the same as the signals list.
+    # StylePage is the fifth Buy surface; leaving it out would have recreated exactly the
+    # display/order drift `restrictions.py` exists to prevent.
+    active_map: dict[int, bool] = {
+        int(r.id): bool(r.is_active)
+        for r in (
+            await db.execute(
+                select(Stock.id, Stock.is_active).where(
+                    Stock.id.in_({sig.stock_id for sig, _p, _s in page})
+                )
+            )
+        ).all()
+    } if page else {}
     allow_offmarket = bool(user.allow_offmarket_entry)
 
     def _elig(sig: Signal) -> eligibility.EligibilityPreview:
@@ -122,6 +135,7 @@ async def list_suggestions(
                 atr=None,
                 market_price=px,
                 fill_price=fill,
+                in_universe=active_map.get(sig.stock_id),
                 allow_offmarket=allow_offmarket,
                 max_chase_r=Decimal(str(settings.chase_max_r)),
         rr_min=Decimal(str(settings.rr_min)),

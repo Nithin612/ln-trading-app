@@ -99,6 +99,7 @@ def _apply_eligibility(
     atr: Decimal | None,
     market_price: Decimal | None = None,
     *,
+    in_universe: bool | None = None,
     allow_offmarket: bool = True,
 ) -> bool:
     """Stamp the order-eligibility preview onto a response row.
@@ -126,6 +127,7 @@ def _apply_eligibility(
         atr=atr,
         market_price=market_price,
         fill_price=fill,
+        in_universe=in_universe,
         allow_offmarket=allow_offmarket,
         max_chase_r=Decimal(str(settings.chase_max_r)),
         rr_min=Decimal(str(settings.rr_min)),
@@ -195,6 +197,20 @@ async def _enrich_page(
     all 200 rows down with it (bug-hunter, 2026-09-02) — on a read path whose whole
     philosophy is fail-open, one bad row must degrade to "unknown", not a 500.
     """
+    # V3 — universe membership for the whole page in ONE query. A held name can leave the
+    # universe overnight (D2′b) and nothing stopped a user re-entering it; the gate is
+    # `always_on`, so a row we cannot resolve lands in `unassessed`, never in "clear".
+    active_map: dict[int, bool] = {
+        int(r.id): bool(r.is_active)
+        for r in (
+            await db.execute(
+                select(Stock.id, Stock.is_active).where(
+                    Stock.id.in_({s.stock_id for s, _n in page})
+                )
+            )
+        ).all()
+    } if page else {}
+
     rows: list[SignalOut] = []
     incomplete = False
     for s, n in page:
@@ -210,7 +226,9 @@ async def _enrich_page(
         try:
             incomplete = (
                 _apply_eligibility(
-                    out, s, None, ltps.get(s.stock_id), allow_offmarket=allow_offmarket
+                    out, s, None, ltps.get(s.stock_id),
+                    in_universe=active_map.get(s.stock_id),
+                    allow_offmarket=allow_offmarket,
                 )
                 or incomplete
             )
@@ -399,6 +417,11 @@ async def get_signal(
             signal,
             atr,
             await get_live_ltp(signal.stock_id),
+            in_universe=(
+                await db.execute(
+                    select(Stock.is_active).where(Stock.id == signal.stock_id)
+                )
+            ).scalar_one_or_none(),
             allow_offmarket=bool(user.allow_offmarket_entry),
         )
     except Exception:  # noqa: BLE001 — a PREVIEW must never 500 a detail read either

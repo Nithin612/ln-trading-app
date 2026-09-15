@@ -32,6 +32,12 @@ _THRESHOLDS = dict(
     min_scoring_factors=2,
     max_dominant_share=Decimal("0.9"),
     min_sl_atr_mult=Decimal("1.0"),
+    # V3 — every real caller resolves universe membership (both list surfaces batch it in
+    # one query, the detail endpoint reads one scalar), so the shared fixture does too.
+    # Omitting it would report the always-on universe gate as unassessed in every test
+    # here, which is true but says nothing about what these tests are checking. The
+    # EXCLUDED case has its own class below.
+    in_universe=True,
 )
 
 _ALL_OFF = dict.fromkeys(eligibility.COVERED_GATES + eligibility.UNCOVERED_GATES, "off")
@@ -459,3 +465,68 @@ class TestActiveListReportsBlocks:
         )
         assert order.status_code == 409
         assert order.json()["detail"] == listed["block_reason"]
+
+
+class TestHoldOnlyIsBlockedOnTheDisplayPath:
+    """V3 / A4 — the state PART XVIII missed entirely, and the one with money attached.
+
+    After D2′b a HELD name can leave the tradeable universe overnight. U17 keeps its ticks
+    alive so the position can still be priced and exited, but **nothing stopped a user
+    buying more of it** — there was no restriction for membership at all. The message has
+    to be specific: you can exit, not re-enter.
+    """
+
+    def test_a_name_outside_the_universe_is_blocked_with_the_exit_not_reenter_reason(
+        self,
+    ) -> None:
+        v = eligibility.preview(
+            _signal(),
+            market_price=Decimal("500"),
+            modes=_modes(),  # every other gate OFF — this one has no mode
+            **{**_THRESHOLDS, "in_universe": False},  # type: ignore[arg-type]
+        )
+        assert v.blocked is True
+        assert v.gate == "universe_membership"
+        assert v.reason is not None
+        assert "exit an existing position" in v.reason
+        assert "not open or add to one" in v.reason
+
+    def test_it_outranks_every_gate_except_a_human_withdrawal(self) -> None:
+        """⭐ Ordering is the message. A name that is not tradeable AT ALL must not be
+        explained to the user as "the ADX regime is transitional" — the registry order is
+        what guarantees which sentence they see, and only U11's recorded human withdrawal
+        comes first."""
+        v = eligibility.preview(
+            _signal(),
+            market_price=Decimal("500"),
+            modes=_modes(
+                **{eligibility.GATE_REGIME: "active", eligibility.GATE_DIVERSITY: "active"}
+            ),
+            **{**_THRESHOLDS, "in_universe": False},  # type: ignore[arg-type]
+        )
+        assert v.gate == "universe_membership"
+
+    def test_a_name_inside_the_universe_is_untouched(self) -> None:
+        v = eligibility.preview(
+            _signal(),
+            market_price=Decimal("500"),
+            modes=_modes(),
+            **{**_THRESHOLDS, "in_universe": True},  # type: ignore[arg-type]
+        )
+        assert v.blocked is False and v.unassessed == ()
+
+    def test_unresolved_membership_is_unassessed_never_clear_and_never_blocked(
+        self,
+    ) -> None:
+        """⚠ The gate is `always_on`, so a caller that cannot resolve membership must land
+        in `unassessed` — "unknown", rendered enabled-but-marked. Failing CLOSED here
+        would block every row the moment a lookup broke; failing SILENT would be the
+        display/order drift this whole module exists to prevent."""
+        v = eligibility.preview(
+            _signal(),
+            market_price=Decimal("500"),
+            modes=_modes(),
+            **{**_THRESHOLDS, "in_universe": None},  # type: ignore[arg-type]
+        )
+        assert v.blocked is False
+        assert "universe_membership" in v.unassessed

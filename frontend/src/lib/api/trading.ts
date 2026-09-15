@@ -44,6 +44,14 @@ export interface PositionOut {
    * position cannot be priced or exited through the live path at all and needs a human.
    */
   stranded: boolean
+  /**
+   * V3 / A4 — the universe rule no longer admits this name, so you may EXIT but
+   * must not re-enter. A THIRD condition, distinct from `stranded` (no tradable
+   * instrument at all) and from `price_state` (how fresh the mark is): this name
+   * is perfectly priceable — U17 keeps a held name subscribed precisely so it stays
+   * exitable — it is PERMISSION that changed, and it can change overnight.
+   */
+  hold_only: boolean
   peak_price: string | null
   peak_pnl: string | null
   health: PositionHealth | null

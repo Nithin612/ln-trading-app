@@ -58,6 +58,9 @@ function makePosition(overrides: Partial<tradingApiModule.PositionOut> = {}): tr
     // a live tick. Tests that care about the degraded states override it.
     price_state: 'live',
     stranded: false,
+    // V3: the default is the normal case — the name is still tradeable. Tests that
+    // care about the hold-only state override it.
+    hold_only: false,
     ...overrides,
   }
 }
@@ -625,6 +628,86 @@ describe('PositionsPage — price provenance and stranded holds (V2)', () => {
     wrap(<PositionsPage />)
     await waitFor(() => screen.getByText('RELIANCE'))
     expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+})
+
+/**
+ * V3 / A4 — HOLD-ONLY, the state PART XVIII missed entirely and the one with money
+ * attached. After D2′b a held name can leave the tradeable universe overnight: U17 keeps
+ * its ticks alive so the position stays priceable and exitable, but an order to open or
+ * add is refused by the `universe_membership` restriction. The positions page is where
+ * the user finds out, and the sentence has to separate the two halves.
+ */
+describe('PositionsPage — hold-only holdings (V3)', () => {
+  beforeEach(() => {
+    vi.spyOn(tradingApiModule.tradingApi, 'getDailyPnl').mockResolvedValue(makeDailyPnl())
+    vi.spyOn(tradingApiModule.tradingApi, 'getPaperRecord').mockResolvedValue(makePaperRecord())
+  })
+
+  function withPositions(positions: tradingApiModule.PositionOut[]) {
+    vi.spyOn(tradingApiModule.tradingApi, 'getOpenPositions').mockResolvedValue({
+      total: positions.length,
+      positions,
+    })
+  }
+
+  it('badges the row and explains the consequence once, at page level', async () => {
+    withPositions([
+      makePosition({ id: 'p1', symbol: 'RELIANCE', hold_only: false }),
+      makePosition({ id: 'p2', symbol: 'LEFTUNIV', hold_only: true }),
+    ])
+    wrap(<PositionsPage />)
+    await waitFor(() => screen.getByText('LEFTUNIV'))
+
+    // The per-row badge says WHICH…
+    expect(screen.getByText('hold only')).toBeInTheDocument()
+    // …and the page-level copy says WHAT IT MEANS, because the consequence (an order will
+    // be refused) is invisible from the table itself.
+    expect(screen.getByText(/1 position is hold-only/i)).toBeInTheDocument()
+    expect(screen.getByText(/no longer in the tradeable universe/i)).toBeInTheDocument()
+    expect(screen.getByText(/an order to open or add will be refused/i)).toBeInTheDocument()
+  })
+
+  it('does not claim the position is stuck — exiting still works normally', async () => {
+    // ⛔ The failure this guards: the obvious copy ("this position cannot be traded") is
+    // FALSE and dangerous. Monitoring and exiting are unaffected — only re-entry is
+    // refused — and telling a user otherwise would make them think they were trapped.
+    withPositions([makePosition({ symbol: 'LEFTUNIV', hold_only: true })])
+    wrap(<PositionsPage />)
+    await waitFor(() => screen.getByText('LEFTUNIV'))
+    expect(screen.getByText(/monitor and exit/i)).toBeInTheDocument()
+    expect(screen.queryByText(/cannot be traded/i)).not.toBeInTheDocument()
+    expect(screen.queryByText(/cannot be exited/i)).not.toBeInTheDocument()
+  })
+
+  it('is not an alert — nothing is broken and no action is required', async () => {
+    // ⚠ Unlike `stranded`, this is a normal overnight event on a healthy position.
+    // Announcing it via role="alert" on every render would be crying wolf.
+    withPositions([makePosition({ symbol: 'LEFTUNIV', hold_only: true, stranded: false })])
+    wrap(<PositionsPage />)
+    await waitFor(() => screen.getByText('LEFTUNIV'))
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument()
+  })
+
+  it('says nothing at all when every holding is still tradeable', async () => {
+    withPositions([makePosition({ symbol: 'RELIANCE', hold_only: false })])
+    wrap(<PositionsPage />)
+    await waitFor(() => screen.getByText('RELIANCE'))
+    expect(screen.queryByText('hold only')).not.toBeInTheDocument()
+    expect(screen.queryByText(/hold-only/i)).not.toBeInTheDocument()
+  })
+
+  it('pluralises both the count and the verb', async () => {
+    // F8's lesson from the stranded banner: the count branched and the verb did not,
+    // rendering "This name receive no live price" in the common case.
+    withPositions([
+      makePosition({ id: 'p1', symbol: 'ONE', hold_only: true }),
+      makePosition({ id: 'p2', symbol: 'TWO', hold_only: true }),
+    ])
+    wrap(<PositionsPage />)
+    await waitFor(() => screen.getByText('ONE'))
+    expect(screen.getByText(/2 positions are hold-only/i)).toBeInTheDocument()
+    expect(screen.getByText(/These names are/i)).toBeInTheDocument()
   })
 })
 

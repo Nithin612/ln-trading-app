@@ -101,6 +101,7 @@ def _enrich_position(
     health: PositionHealth | None = None,
     price_state: PriceSource = PRICE_NONE,
     stranded: bool = False,
+    hold_only: bool = False,
 ) -> PositionOut:
     out = PositionOut.model_validate(position)
     out.symbol = symbol
@@ -111,6 +112,7 @@ def _enrich_position(
     # freshness rather than overstating it.
     out.price_state = price_state if current_price is not None else PRICE_NONE
     out.stranded = stranded
+    out.hold_only = hold_only
     out.health = _health_out(health) if health is not None else None
     return out
 
@@ -305,6 +307,21 @@ async def list_open_positions(
     # so), so this loop was one Redis connection per position.
     ltps = await get_live_ltps([p.stock_id for p in positions])
     stranded_ids = {sid for sid, _sym in await held_without_instrument(db)}
+    # V3 — one query for the page: which held names has the universe rule stopped
+    # admitting? A held name can leave overnight (D2′b), and the position page is where
+    # the user finds out. `False` for a stock row that has vanished entirely — that is
+    # `stranded`'s job to report, and claiming hold-only as well would double-badge it.
+    hold_only_ids = {
+        int(r.id)
+        for r in (
+            await db.execute(
+                select(Stock.id).where(
+                    Stock.id.in_({p.stock_id for p in positions}),
+                    Stock.is_active.is_(False),
+                )
+            )
+        ).all()
+    }
 
     prices: dict[str, Decimal | None] = {}
     price_states: dict[str, PriceSource] = {}
@@ -353,6 +370,7 @@ async def list_open_positions(
                 health,
                 price_state=price_states.get(p.id, PRICE_NONE),
                 stranded=p.stock_id in stranded_ids,
+                hold_only=p.stock_id in hold_only_ids,
             )
         )
     return PositionListResponse(total=len(enriched), positions=enriched)

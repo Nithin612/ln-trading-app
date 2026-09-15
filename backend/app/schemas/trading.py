@@ -113,6 +113,14 @@ class PositionOut(BaseModel):
     # last stored close, then to `avg_entry_price` ("flat trade"). The UI must therefore
     # keep the Close button and warn about the PRICE, not block the exit.
     stranded: bool = False
+    # ── V3 / A4: the universe rule no longer admits this name ────────────────────────
+    # ⚠ A THIRD condition, distinct from both of the above. `stranded` means no tradable
+    # instrument exists (cannot be priced or routed); `price_state` is about the mark's
+    # freshness. This one is about PERMISSION: the name is perfectly priceable — U17 keeps
+    # a held name subscribed precisely so it stays exitable — but the rule excluded it, so
+    # you may exit and must not re-enter. The order path enforces the same fact through
+    # the `universe_membership` restriction, so the badge and the 409 cannot disagree.
+    hold_only: bool = False
     peak_price: Decimal | None = None    # best price seen while open (MFE)
     peak_pnl: Decimal | None = None      # GROSS peak profit (max favourable excursion)
     health: PositionHealthOut | None = None  # advisory emergency-exit assessment (open)
