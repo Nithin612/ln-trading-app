@@ -149,6 +149,13 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.health_tasks.check_universe_health",
         "schedule": crontab(hour=4, minute=10, day_of_week="1-5"),
     },
+    # Q-R6 — the daily report's own heartbeat. 14:20 UTC = 19:50 IST, AFTER the report
+    # would normally be generated for the session, so a same-day run is not reported
+    # missing. It must live out here: a report that did not run cannot tell you so.
+    "check-report-health": {
+        "task": "app.tasks.health_tasks.check_report_health",
+        "schedule": crontab(hour=14, minute=20, day_of_week="1-5"),
+    },
     # Option-chain snapshots every minute in the market window (task itself
     # re-checks 9:15–15:30 IST and idles without a Kite token)
     "record-option-chains": {

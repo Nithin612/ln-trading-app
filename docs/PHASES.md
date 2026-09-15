@@ -1901,8 +1901,11 @@ a fact that contradicts a decision below.
    `⊘ Blocked` with zero new UI, plus a `hold_only` badge on positions. ⛔ Before it, re-entry
    into a name the rule had just excluded returned **201** — there was no membership rule in
    the registry at all. Remaining: search answers absence · stock-detail eligibility panel ·
-   wiring lint + emptiness alarm · CA clearing-path UI (its BACKEND shipped in item 3) ·
-   materialiser failure-mode test + report heartbeat.
+   wiring lint + emptiness alarm · CA clearing-path UI (its BACKEND shipped in item 3).
+   ✅ **V8's report heartbeat DONE 2026-09-15** — measured **26 reports against 30
+   trading sessions**, four missing and unnoticed; the report is where every other alarm
+   is READ, so those sessions ran unwatched. Checked from the ARTIFACTS on disk (no new
+   counter — §A8), in the BEAT not the report (a report that did not run cannot say so).
 5. **U8** — populate the index registry from the CSV we already download (165 indices, only 3
    registered) → unblocks sector-RS.
 

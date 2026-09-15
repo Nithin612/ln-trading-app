@@ -6,10 +6,11 @@ merge and branch creation are the user's). Branch: `feature/pre-cycle2-hardening
 
 ## NEXT STEP
 
-> **Queue item 4 — §62 V4–V8.** V3 is DONE. Five left: V4 search answers absence · V5
+> **Queue item 4 — §62 V4–V7.** V3 and V8's heartbeat are DONE. Four left: V4 search answers absence · V5
 > stock-detail eligibility panel · V6 wiring lint + emptiness alarm · V7 CA clearing-path UI
-> (⚠ its BACKEND shipped in item 3, so V7 is UI-only now) · V8 materialiser failure-mode test
-> + report heartbeat. ⚠ **ui-reviewer is mandatory** on anything under `frontend/src/`, and it
+> (⚠ its BACKEND shipped in item 3, so V7 is UI-only now). ⬜ **V8's OTHER half (A10 — pin the
+> materialiser's download failure mode with a test) is NOT done**; only the report heartbeat
+> shipped. ⚠ **ui-reviewer is mandatory** on anything under `frontend/src/`, and it
 > has failed this project's frontend work before on contrast and on disabled-control semantics.
 
 ## The queue, in order
@@ -280,3 +281,33 @@ their clear.
 they COLLIDE silently — two of my first three picks were already taken, producing an
 opaque `CycleDetected` rather than a duplicate-id error. Check with
 `grep -rl <id> alembic/versions/` before using one.
+
+
+---
+
+## Item 4 (part) — V8's report heartbeat ✅ (A10 half NOT done)
+
+⭐ **26 reports against 30 trading sessions since 2026-08-01 — four missing, unnoticed.**
+The daily report is where every other alarm is READ, so a session without one ran
+completely unwatched, and the absence is invisible by construction: **silence is
+indistinguishable from a quiet day.**
+
+`report_health.py` counts `docs/analysis/<date>.md` against the trading calendar over 20
+sessions. ⚠ Reads the ARTIFACTS, not a new counter — §A8 says inventing a metrics stack
+here is the failure mode, and the files are the real evidence. ⚠ Runs in the BEAT (14:20
+UTC), because a report that did not run cannot report that it did not run — A40's
+asymmetry. The report renders a back-look so reading today's tells you what you missed.
+⛔ Sidecars (`chase-shadow-…`, `WEEK-…`, `LEDGER.md`) share that folder and a loose date
+match would count one as the day's report — anchored regex, pinned by test.
+
+⬜ **Not done: A10**, the other half of V8 — pin the materialiser's download failure mode
+(it is "correct by accident of `raise_for_status`", and §42d is the proof this class fails
+silently).
+
+## Full-suite state at hand-off
+
+`pytest -m "not walkforward and not parity and not replay"` → **2,593 passed, 1 failed**
+(38 min). The one failure was a THIRD pinned-order ratchet (`test_enum_exhaustiveness`)
+firing on the new registry entry — updated deliberately, now green.
+⚠ **The background job reported "exit code 0" because the command was piped through
+`tail`** — the status was the pipe's, not pytest's. Read the output, not the exit code.

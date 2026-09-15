@@ -7,6 +7,31 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### V8 / Q-R6 — the daily report gets a heartbeat (2026-09-15)
+
+⭐ **Measured: 26 reports against 30 trading sessions since 2026-08-01 — four missing, and
+nobody noticed.** The daily report is where every other alarm in this system is READ (feed
+staleness, feed coverage, worker liveness, universe health, token and calendar horizons), so
+a session without one ran **completely unwatched** — and its absence is invisible by
+construction, because **silence is indistinguishable from a quiet day.**
+
+- **`report_health.py`** counts `docs/analysis/<date>.md` against the trading calendar over
+  the last 20 sessions. ⚠ **It reads the ARTIFACTS, not a new counter** — the files already
+  exist, and counting them is exactly what would have caught the 26-of-30. §A8 is explicit
+  that inventing a metrics stack here is the failure mode, so there is no new table and no
+  new writer.
+- ⚠ **The check runs in the BEAT, not in the report** (14:20 UTC = 19:50 IST, after the
+  report's usual window). A report that did not run cannot tell you it did not run — the same
+  asymmetry A40 states for the worker heartbeat. The report still renders a **back-look**, so
+  reading today's tells you whether you missed any recent ones.
+- ⚠ Counts **sessions, not calendar days** (a weekend would otherwise read as two misses every
+  week and be ignored within a fortnight), and carries a one-session grace so the newest
+  session is never "late".
+- ⛔ **Sidecars are not reports.** The folder holds `chase-shadow-<date>.md`,
+  `WEEK-<monday>.md`, `LEDGER.md` and more; a loose date match would count a sidecar as the
+  day's report and declare the history complete on a day the report never ran — the precise
+  failure this exists to catch, reintroduced by a sloppy regex. Anchored match, pinned by test.
+
 ### Review round on §73 + §77 — nine findings, one HIGH, one of them mine (2026-09-15)
 
 bug-hunter on `ef812eb` + `8318527`. The two that mattered were both instruments reporting

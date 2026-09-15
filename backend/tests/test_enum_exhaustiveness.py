@@ -113,6 +113,11 @@ class TestRegistryIsDeterministic:
             # not be evaluated further, and the reason a user sees must be the
             # withdrawal rather than whichever gate happens to fire next.
             "signal_quarantine",
+            # V3: SECOND, ahead of offmarket and every selection gate. A name the
+            # universe rule excludes is not tradeable AT ALL, so explaining it to the
+            # user as "the ADX regime is transitional" would be answering a question they
+            # did not ask. Only a recorded human withdrawal outranks it.
+            "universe_membership",
             "offmarket",
             "regime_gate",
             "circuit_gate",

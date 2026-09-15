@@ -179,3 +179,46 @@ async def _universe_health_payload(db: AsyncSession) -> dict[str, object]:
         notify(n)
         return {"status": "alert", "level": n.level.value, **measured}
     return {"status": "ok", **measured}
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="app.tasks.health_tasks.check_report_health", bind=True, max_retries=0
+)
+def check_report_health(self: object) -> dict[str, object]:  # noqa: ARG001
+    """Q-R6 / V8 — push when recent trading sessions have no daily report.
+
+    ⭐ Measured: **26 reports against 30 trading sessions** since 2026-08-01 — four
+    missing, unnoticed. The report is where every other alarm in this system is READ, so
+    a session without one ran unwatched, and **its silence is indistinguishable from a
+    quiet day.**
+
+    ⚠ It must live OUT here, in the beat. A report that did not run cannot tell you it did
+    not run — the same asymmetry A40 states for the worker heartbeat.
+    """
+    return run_db_task(_run_check_report_health)
+
+
+async def _run_check_report_health() -> dict[str, object]:
+    from app.db.session import AsyncSessionFactory
+
+    async with AsyncSessionFactory() as db:
+        return await _report_health_payload(db)
+
+
+async def _report_health_payload(db: AsyncSession) -> dict[str, object]:
+    """Session-injected for the same reason as the other two payloads — a pooled
+    module-level engine cannot be opened twice across function-scoped event loops."""
+    from app.services.notifier import notify
+    from app.services.report_health import read_report_health, to_notification
+
+    health = await read_report_health(db)
+    measured = {
+        "expected": len(health.expected),
+        "present": len(health.present),
+        "missing": [d.isoformat() for d in health.missing],
+    }
+    n = to_notification(health)
+    if n is not None:
+        notify(n)
+        return {"status": "alert", "level": n.level.value, **measured}
+    return {"status": "ok", **measured}
