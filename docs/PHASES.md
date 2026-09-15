@@ -1886,9 +1886,16 @@ a fact that contradicts a decision below.
    present-tense jobs, the sharpest being that the collapse rail's refusals are currently
    **unauditable** (it fires on the INPUT; the snapshot records the OUTPUT), so
    `universe_apply_min_fraction = 0.5` can never be tuned.
-3. **§77 P1 batch** — `ca_flagged_at` clearing path (only 7 rows today, so it is cheap NOW) ·
-   `max(as_of)` recency check on `universe_snapshot` · does an Alembic migration bypass the
-   single-writer trigger (one command) · a freshness assertion on the rule's inputs.
+3. ✅ **§77 P1 batch — DONE 2026-09-15.** All four: the `ca_flagged_at` clearing path
+   (admin endpoints + an APPEND-ONLY `ca_flag_events` log, because the detector re-flags a
+   cleared name and columns would be overwritten; an expiry was rejected — contamination in
+   unadjusted history does not heal with time) · `max(as_of)` recency AND the inputs-freshness
+   assertion, together in one `universe_health` instrument (report + 04:10 UTC beat, alarming at
+   2 days not 1) · ⭐ **the Alembic-vs-trigger question answered by probe**
+   (`scripts/universe_writer_probe.py`): a plain UPDATE from a migration IS refused, but
+   `session_replication_role='replica'` bypassed it — closed by `ENABLE ALWAYS`
+   (`b0c1d2e3f4a5`), verified `tgenabled` O→A. ⛔ Also fixed: `conftest` left **16 of 56** tables
+   uncleared between tests (every migration-only table).
 4. **§62 V3–V8** — hold-only badge · search answers absence · stock-detail eligibility panel ·
    wiring lint + emptiness alarm · CA clearing path · report heartbeat.
 5. **U8** — populate the index registry from the CSV we already download (165 indices, only 3

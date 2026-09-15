@@ -6,10 +6,10 @@ merge and branch creation are the user's). Branch: `feature/pre-cycle2-hardening
 
 ## NEXT STEP
 
-> **Queue item 3 — the §77 P1 batch.** Not started. Four sub-items: the `ca_flagged_at`
-> clearing path · a `max(as_of)` recency check on `universe_snapshot` · does an Alembic
-> migration bypass the single-writer trigger (one command) · a freshness assertion on the
-> rule's inputs (now possible — item 2 shipped the table it reads).
+> **Queue item 4 — §62 V3–V8** (the UI/UX batch). Not started. Six sub-items: hold-only badge ·
+> search answers absence · stock-detail eligibility panel · wiring lint + emptiness alarm ·
+> CA clearing-path UI (⚠ its BACKEND shipped in item 3, so V7 is now UI-only) · report
+> heartbeat. ⚠ ui-reviewer is mandatory on anything under `frontend/src/`.
 
 ## The queue, in order
 
@@ -18,8 +18,8 @@ merge and branch creation are the user's). Branch: `feature/pre-cycle2-hardening
 | 1 | **U4′ — coverage-aware feed alarm** | ✅ **DONE**, committed. Reviews: bug-hunter (8 findings, all fixed) + test-guardian (5 gaps, all closed). |
 | 1b | **U4″ — per-segment coverage** (queued tonight at the user's request) | ⬜ queued, not started — see below |
 | 2 | **Snapshot the rule's inputs** — raw `EQUITY_L.csv` + the parsed EQ symbol set, NOT a hash | ✅ **DONE**, committed |
-| 3 | **§77 P1 batch** ← NEXT — `ca_flagged_at` clearing path · `max(as_of)` recency on `universe_snapshot` · does an Alembic migration bypass the single-writer trigger · freshness assertion on the rule's inputs | ⬜ |
-| 4 | **§62 V3–V8** — hold-only badge · search answers absence · stock-detail eligibility panel · wiring lint + emptiness alarm · CA clearing path · report heartbeat | ⬜ |
+| 3 | **§77 P1 batch** — all four sub-items | ✅ **DONE**, committed |
+| 4 | **§62 V3–V8** ← NEXT — hold-only badge · search answers absence · stock-detail eligibility panel · wiring lint + emptiness alarm · CA clearing path · report heartbeat | ⬜ |
 | 5 | **U8** — populate the index registry from the CSV already downloaded (165 indices, 3 registered) → unblocks sector-RS | ⬜ |
 
 **Not in scope tonight (explicitly the user's call):** the `git push`; the palette AA defect
@@ -177,3 +177,45 @@ then; the old code path still works against the new schema.
 **Tests:** 7 new in `test_universe_rule_inputs.py`; 92 green across all universe suites.
 ⚠ `rule_version` had to be `String(16)` not `Integer` — `RULE_VERSION` is `"v1"`. The tests
 caught it on first run.
+
+
+---
+
+## Item 3 — the §77 P1 batch ✅
+
+**(c) "Does an Alembic migration bypass the single-writer trigger?" — the answer is not binary.**
+`scripts/universe_writer_probe.py` (new, re-runnable, rolls back every write) measured three
+routes: a plain `UPDATE` is **REFUSED** ⇒ migrations ARE covered and §49's invariant is stronger
+than §76's downgrade to "single-writer among application code"; the materialiser's
+`SET LOCAL app.universe_writer` path still works; ⛔ but `session_replication_role = 'replica'`
+disabled the trigger wholesale, and the connecting role is a superuser. Cause: `tgenabled = 'O'`
+(origin only). Migration `b0c1d2e3f4a5` sets `ENABLE ALWAYS`; re-running the probe confirms
+route 3 → REFUSED and `tgenabled` → `A`. Safe for `backup-verify`'s real restore (the trigger is
+`BEFORE UPDATE`; a restore INSERTs).
+
+**(b)+(d) `universe_health`** — recency of `max(universe_snapshot.as_of)` AND whether that
+evaluation's inputs were captured, in one instrument because they are two facts about one job.
+Report header + a 04:10 UTC beat via the notifier. ⚠ Alarms at **2** trading days, not 1: one day
+behind is normal for most of a trading day. ⚠ `expected_latest_trading_day` gained a `due`
+parameter — the universe beat is 08:35 IST, not the EOD feeds' 18:45, and inheriting that cutoff
+would have alarmed every morning.
+
+**(a) The CA quarantine clearing path.** Measured: 7 flagged, 5 active, **4 of the 7 flagged that
+same day** — accruing ~4/week with no way out, shrinking the tradeable universe silently.
+⛔ **Expiry rejected**: contamination lives in unadjusted price history and does not heal with
+time. ⭐ **Append-only `ca_flag_events`, not columns on `stocks`**: the detector re-flags a
+cleared name, so a `ca_cleared_at/_by/_reason` triple would be overwritten by the next flag —
+§41's "the merge overwrites its own evidence". Backfilled with the 7 existing flags and their
+original detector reasons. Admin-only; the clear reason is required and ≥10 chars.
+
+⛔ **A HARNESS DEFECT, found by my own tests colliding and worth more than the item:**
+`conftest.clean_tables` walked `Base.metadata`, so every migration-only table was **never
+cleared between tests — 16 of 56**, including `universe_snapshot`, `corporate_filings`,
+`manual_assets`, `mf_holdings`, `mf_import_batches`. Cross-test state leaked silently. The list
+is now derived from the database. ⚠ I could not apply the cleaner version of this fix (rewriting
+the existing loop) because the repo's bash guard blocks any command text containing that SQL
+keyword and W4 forbids the worktree the Edit tool wanted — so the unmanaged tables are cleared
+with a second, additive statement instead. **Worth a follow-up by hand.**
+
+**Tests:** 11 quarantine + 11 universe health + the earlier 18; 161 green across affected suites.
+⚠ bug-hunter on item 2 was killed mid-run by the spend limit and has NOT been re-run.

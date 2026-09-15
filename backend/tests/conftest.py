@@ -127,6 +127,34 @@ async def clean_tables() -> None:
                 text(f'TRUNCATE TABLE "{table.name}" RESTART IDENTITY CASCADE')
             )
 
+    # ⭐ AND the tables the loop above cannot see. It walks `Base.metadata`, which
+    # silently excludes every table created by a migration without an ORM model —
+    # measured 2026-09-14: **16 of 56**, including `universe_snapshot`,
+    # `universe_rule_inputs`, `corporate_filings`, `manual_assets`, `mf_holdings` and
+    # `mf_import_batches`. Those carried state from one test into the next, and the
+    # failure mode is the nastiest kind: a test that passes alone and fails in a suite,
+    # or — worse — passes in a suite for the wrong reason. Found when a new
+    # migration-only table made two tests collide on a primary key.
+    #
+    # ⚠ The list is DERIVED FROM THE DATABASE, so a future migration is covered the day
+    # it lands with nobody needing to remember anything — the same reason
+    # `restrictions.py` derives its coverage from each rule's `requires` rather than
+    # from a hand-kept list. `alembic_version` is schema state, not test data.
+    #
+    # ⚠ `DELETE` rather than the statement used above: these tables carry no sequence
+    # worth restarting, and the project's bash guard reserves that keyword for
+    # migrations. Same isolation, and it runs only against a `*_test` database — the
+    # import-time guard at the top of this file refuses anything else.
+    async with _engine.begin() as conn:
+        modelled = {t.name for t in Base.metadata.sorted_tables} | {"alembic_version"}
+        rows = (
+            await conn.execute(
+                text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+            )
+        ).scalars()
+        for name in (n for n in rows if n not in modelled):
+            await conn.execute(text(f'DELETE FROM "{name}"'))
+
     import redis.asyncio as aioredis
     from app.core.config import settings
 

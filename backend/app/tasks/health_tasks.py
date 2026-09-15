@@ -133,3 +133,49 @@ async def _coverage_alert_payload(db: AsyncSession) -> dict[str, object]:
         notify(n)
         return {"status": "alert", "level": n.level.value, "feeds": measured}
     return {"status": "ok", "feeds": measured}
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="app.tasks.health_tasks.check_universe_health", bind=True, max_retries=0
+)
+def check_universe_health(self: object) -> dict[str, object]:  # noqa: ARG001
+    """§77 — push when the universe rule has stopped running.
+
+    ⭐ The failure this catches has no symptom of its own. `materialise_universe` is the
+    only writer of `stocks.is_active`, and that flag gates ingestion breadth, the scan
+    universe and the live subscription — so a beat that silently stopped leaves the whole
+    system running confidently on a decision nobody re-took. That is the 2026-09-07 shape
+    exactly: **the absence of a write is not an error anyone raises.**
+
+    ⚠ Runs at 04:10 UTC = 09:40 IST — AFTER `materialise-universe` (03:05 UTC), so a
+    healthy morning is quiet and only a genuinely missed run alarms.
+    """
+    return run_db_task(_run_check_universe_health)
+
+
+async def _run_check_universe_health() -> dict[str, object]:
+    from app.db.session import AsyncSessionFactory
+
+    async with AsyncSessionFactory() as db:
+        return await _universe_health_payload(db)
+
+
+async def _universe_health_payload(db: AsyncSession) -> dict[str, object]:
+    """The task body, session-injected for the same reason as
+    `_coverage_alert_payload` — a pooled module-level engine cannot be opened twice
+    across function-scoped event loops."""
+    from app.services.notifier import notify
+    from app.services.universe_health import read_universe_health, to_notification
+
+    health = await read_universe_health(db)
+    measured = {
+        "snapshot_as_of": str(health.snapshot_as_of) if health.snapshot_as_of else None,
+        "days_behind": health.snapshot_days_behind,
+        "active_stocks": health.active_stocks,
+        "inputs_on_record": health.inputs_match_snapshot,
+    }
+    n = to_notification(health)
+    if n is not None:
+        notify(n)
+        return {"status": "alert", "level": n.level.value, **measured}
+    return {"status": "ok", **measured}

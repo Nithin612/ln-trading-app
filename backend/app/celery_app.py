@@ -141,6 +141,14 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.health_tasks.check_feed_coverage",
         "schedule": crontab(hour=13, minute=40, day_of_week="1-5"),
     },
+    # §77 — universe-rule staleness. 04:10 UTC = 09:40 IST, AFTER materialise-universe
+    # (03:05 UTC) so a healthy morning is quiet and only a genuinely missed run alarms.
+    # `is_active` has no symptom of its own when it freezes, which is why this is a
+    # scheduled absence check rather than something a failing job would report itself.
+    "check-universe-health": {
+        "task": "app.tasks.health_tasks.check_universe_health",
+        "schedule": crontab(hour=4, minute=10, day_of_week="1-5"),
+    },
     # Option-chain snapshots every minute in the market window (task itself
     # re-checks 9:15–15:30 IST and idles without a Kite token)
     "record-option-chains": {

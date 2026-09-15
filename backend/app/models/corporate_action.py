@@ -109,3 +109,49 @@ class PositionCorporateAction(Base):
             f"<PositionCorporateAction pos={self.position_id[:8]}… "
             f"ca={self.corporate_action_id} {self.old_quantity}→{self.new_quantity}>"
         )
+
+
+CA_FLAG_EVENTS = ("flagged", "cleared")
+
+
+class CaFlagEvent(Base):
+    """⭐ APPEND-ONLY history of the CA quarantine — every flag and every clear.
+
+    **Why a log and not three columns on `stocks`.** `ca_flagged_at` is set by
+    `ca_detector` and, once a clear exists, the same name can be flagged again — the
+    detector only skips rows where `ca_flagged_at IS NULL`. A single
+    `ca_cleared_at/_by/_reason` triple would therefore be OVERWRITTEN by the next flag,
+    destroying the record of the review that preceded it. That is the same trap §41 named
+    when it refused to drop `uq_stocks_symbol_exchange`: **the merge overwrites its own
+    evidence**, and the rate of the thing you wanted to measure becomes unmeasurable
+    retrospectively.
+
+    **Why the quarantine needed a clear at all.** Measured 2026-09-14: 7 stocks flagged,
+    5 of them active, **4 of the 7 flagged that same day** — so it accrues at roughly four
+    a week with no way to empty it, while `stock.py`'s own docstring says "unflag via admin
+    after verifying" and no such path existed anywhere (Q-R3: *the CA quarantine is a
+    MONOTONIC ACCUMULATOR*).
+
+    ⛔ **An EXPIRY was considered and rejected.** The contamination is in the unadjusted
+    PRICE HISTORY, and that does not heal with time: a split's bars stay wrong until the
+    series is adjusted or aged out of every indicator window. An expiry would silently
+    re-admit contaminated history on a timer, which is worse than a flag nobody clears.
+    A human verifying and saying why is the only honest clear.
+    """
+
+    __tablename__ = "ca_flag_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    stock_id: Mapped[int] = mapped_column(
+        Integer, ForeignKey("stocks.id", ondelete="CASCADE"), nullable=False, index=True
+    )
+    event: Mapped[str] = mapped_column(String(16), nullable=False)
+    at: Mapped[datetime] = mapped_column(TZ, nullable=False, server_default=func.now())
+    #: The detector's gap description when flagged; the reviewer's justification when
+    #: cleared. Required on a clear — "cleared, no reason given" is not an audit trail.
+    reason: Mapped[str] = mapped_column(Text, nullable=False)
+    #: NULL for a machine flag; the admin who reviewed it on a clear. The asymmetry is
+    #: the point: a machine may quarantine, only a person may release.
+    actor_user_id: Mapped[int | None] = mapped_column(
+        Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True
+    )

@@ -67,6 +67,8 @@ from app.services.feed_health import (
 )
 from app.services.liquidity import load_median_traded_values_safe
 from app.services.profit_lock_shadow import ShadowComparison, compare_position
+from app.services.universe_health import UniverseHealth, read_universe_health
+from app.services.universe_health import render_lines as render_universe_health
 from app.services.worker_health import CasCoverage, RoleStatus, read_statuses
 from app.trading.regime import CHOPPY_ER, er_by_stock
 from app.trading.trail_sl import compute_pnl
@@ -283,6 +285,8 @@ class DailyReport:
     # Silent-feed-outage alarm (6.8.6) — staleness of each EOD feed vs the calendar.
     feed_health: list[FeedStatus] = field(default_factory=list)
     feed_coverage: list[FeedCoverage] = field(default_factory=list)
+    # §77 — is the universe rule still running, and were its inputs captured?
+    universe_health: UniverseHealth | None = None
     # Buy-and-hold benchmark over the paper-clock window (H2). None = not assessable.
     buy_and_hold: BuyAndHold | None = None
     # Market exposure of the closed book, whole and split by side (H12). "is it just the
@@ -563,6 +567,7 @@ async def build_daily_report(
     # any EOD feed is behind the trading calendar.
     report.feed_health = await check_feed_staleness(db, now=now)
     report.feed_coverage = await check_feed_coverage(db)
+    report.universe_health = await read_universe_health(db, now=now)
     # Tick-mode degradation (A25) — did the live feed actually deliver full-mode
     # ticks on the day whose fills this report is judging? Keyed by the REPORT
     # day, not by now: a --DATE run must read that day's counters.
@@ -771,6 +776,12 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
     # it: a feed that is current and thin passes the check above, which is exactly
     # how the 2026-09-07 outage went five sessions unseen.
     out.extend(render_feed_coverage(r.feed_coverage))
+
+    # §77 — universe-rule staleness, beside the feed alarms because it answers the
+    # same class of question: a frozen `is_active` has no symptom of its own, and it
+    # gates ingestion breadth, the scan universe AND the live subscription.
+    if r.universe_health is not None:
+        out.extend(render_universe_health(r.universe_health))
 
     # A40 — worker liveness and the CAS absence alarm, ABOVE the scorecard: if the worker
     # was down, every number below it is suspect and the reader must know that first.

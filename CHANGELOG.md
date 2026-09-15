@@ -7,6 +7,55 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### §77 P1 batch — the universe's absences get instruments, and the CA quarantine gets a way out (2026-09-15)
+
+Queue item 3. Four sub-items, and two of them changed what we believed.
+
+- ⭐⭐ **"Does an Alembic migration bypass the `stocks.is_active` single-writer trigger?" —
+  ANSWERED, and it is not the binary the question assumed.** Measured with a new re-runnable
+  probe (`scripts/universe_writer_probe.py`): a plain `UPDATE` — what a naive migration does —
+  is **REFUSED**, so the guard does cover migrations and §49's invariant is stronger than the
+  "single-writer among application code" §76 settled for. ⛔ **But the probe found a bypass the
+  question did not ask about:** the trigger was created `ENABLE`d (`tgenabled = 'O'`, origin
+  only), so `SET LOCAL session_replication_role = 'replica'` disabled it wholesale — and the
+  connecting role is a superuser. Migration `b0c1d2e3f4a5` sets `ENABLE ALWAYS`; re-running the
+  probe confirms route 3 flips REFUSED and `tgenabled` `O` → `A`, with the legitimate writer
+  still working. ⚠ Safe for `make backup-verify`'s real restore: the trigger is `BEFORE UPDATE`
+  and a restore INSERTs.
+- ⭐ **New `universe_health` instrument** — `max(as_of)` recency on `universe_snapshot` AND
+  whether that evaluation's inputs were captured, in ONE surface because they are two facts
+  about one nightly job. Rendered in the daily report; pushed by a **04:10 UTC beat**. The
+  failure it catches has **no symptom of its own**: `materialise_universe` is the only writer of
+  `is_active`, which gates ingestion breadth, the scan universe and the live subscription, so a
+  beat that silently stopped leaves everything running on a decision nobody re-took. ⚠ Alarms at
+  **2** trading days, not 1 — one day behind is the normal state for most of a trading day, and
+  alarming on it would train the reader to ignore the channel. ⚠ `expected_latest_trading_day`
+  gained a `due` parameter because the universe beat lands 08:35 IST, not the EOD feeds' 18:45;
+  inheriting that cutoff would have declared the universe stale every morning.
+- ⭐⭐ **The CA quarantine has a clearing path (Q-R3).** `stocks.ca_flagged_at` had one writer and
+  **no clearer anywhere**, while `ca_detector`'s own docstring promised "unflag via admin after
+  verifying". Measured 2026-09-14: **7 flagged, 5 active, 4 of the 7 flagged that same day** — a
+  monotonic accumulator shrinking the tradeable universe by ~4 names a week, whose only symptom
+  would have been suggestions quietly covering fewer stocks. Now
+  `GET/POST /corporate-actions/quarantine…` (admin) with a **required, non-trivial reason**.
+  ⛔ **An EXPIRY was considered and REJECTED:** the contamination is in the unadjusted price
+  history and does not heal with time, so a timer would re-admit contaminated bars on a schedule.
+  ⭐ **A LOG, not three columns on `stocks`** (`ca_flag_events`, append-only, migration
+  `c1d2e3f4a5b6`, backfilled with the 7 existing flags): the detector re-flags a cleared name, so
+  a single `ca_cleared_at/_by/_reason` triple would be overwritten by the next flag — §41's
+  "the merge overwrites its own evidence" trap. A machine may quarantine; only a person may
+  release, and the log keeps both sides.
+- ⛔ **A HARNESS DEFECT FOUND WHILE DOING THIS, affecting the whole suite:** `conftest.clean_tables`
+  walked `Base.metadata`, so every table created by a migration without an ORM model was **never
+  cleared between tests** — measured **16 of 56**, including `universe_snapshot`,
+  `corporate_filings`, `manual_assets`, `mf_holdings` and `mf_import_batches`. State leaked from
+  one test into the next; the failure mode is a test that passes alone and fails in a suite, or
+  passes in a suite for the wrong reason. The list is now DERIVED FROM THE DATABASE, so a future
+  migration is covered the day it lands.
+- 36 new tests (11 quarantine + 11 universe health + the rest); 161 green across the affected
+  suites; ruff/mypy clean. Migrations applied to dev and test; reversibility verified by a real
+  `downgrade -1` + re-`upgrade`.
+
 ### §73 — the universe rule's INPUTS are recorded, not just its verdict (2026-09-14)
 
 Queue item 2. ⭐ **Contents, not a fingerprint.** The plan originally priced this as "one CSV +

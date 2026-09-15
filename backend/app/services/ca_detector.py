@@ -4,7 +4,8 @@ Raw bhavcopy history is unadjusted: a split/bonus shows up as a huge
 overnight "gap" that would poison every indicator window. Policy
 (ARCHITECTURE.md §Corporate actions): DETECT and QUARANTINE — never
 auto-adjust and never trade a poisoned window. Flagged stocks are excluded
-from universe resolution until manually reviewed (unflag via admin after
+from universe resolution until manually reviewed (cleared via
+`POST /corporate-actions/quarantine/{stock_id}/clear` after
 verifying the data or re-fetching adjusted history).
 
 Heuristic: |open ÷ prev_close − 1| > threshold (default 20%) between two
@@ -28,6 +29,8 @@ from datetime import UTC, date, datetime
 
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.services.ca_quarantine import record_flag
 
 log = logging.getLogger(__name__)
 
@@ -93,6 +96,10 @@ async def scan_for_discontinuities(
             ),
             {"now": now, "reason": reason[:255], "sid": r.stock_id},
         )
+        # ⭐ The machine's side of the append-only log, in the SAME transaction as the
+        # flag — a log that can disagree with `stocks` is worse than no log. The clear
+        # side is `ca_quarantine.clear_flag`, which is the human's.
+        await record_flag(db, stock_id=r.stock_id, reason=reason)
         flagged.append((r.stock_id, reason))
         log.warning("CA quarantine: stock_id=%s %s", r.stock_id, reason)
 

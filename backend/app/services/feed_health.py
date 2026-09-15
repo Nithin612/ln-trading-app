@@ -78,18 +78,26 @@ async def _latest_trade_date(db: AsyncSession, column: Any) -> date | None:
     return latest
 
 
-async def _expected_latest_trading_day(db: AsyncSession, now_ist: datetime) -> date:
-    """The most recent trading day whose EOD is DUE as of `now`: today if it's a
-    trading day past the ingestion window (18:45 IST), else the previous trading
-    day. So a weekend/holiday — or a pre-EOD morning run — expects only through the
-    last completed cycle, never raising a false alarm for data that isn't due yet."""
+async def expected_latest_trading_day(
+    db: AsyncSession, now_ist: datetime, *, due: time = _EOD_DUE_IST
+) -> date:
+    """The most recent trading day whose work is DUE as of `now`: today if it's a
+    trading day past `due`, else the previous trading day. So a weekend/holiday — or a
+    run before the job was scheduled to happen — expects only through the last
+    completed cycle, never raising a false alarm for work that isn't due yet.
+
+    ⚠ `due` is a parameter because not every nightly job shares the EOD window: the
+    universe rule's beat lands at 08:35 IST while the EOD feeds land at 18:45, and a
+    single hardcoded cutoff would have declared the universe stale every morning."""
     d = now_ist.date()
-    if now_ist.time() >= _EOD_DUE_IST and await is_trading_day(db, d):
+    if now_ist.time() >= due and await is_trading_day(db, d):
         return d
     return await prev_trading_day(db, d)
 
 
-async def _days_behind(db: AsyncSession, latest: date | None, expected: date) -> int | None:
+async def trading_days_missing(
+    db: AsyncSession, latest: date | None, expected: date
+) -> int | None:
     """Trading days MISSING between the feed's latest row and the expected cycle:
     the count of trading days STRICTLY AFTER `latest` up to and including `expected`.
     None if the feed is empty; 0 when current. Counting from `latest + 1` (rather
@@ -110,7 +118,7 @@ async def check_feed_staleness(
     """Staleness of each EOD feed vs the trading calendar. Logs a warning per stale
     feed (loud even without the report). Read-only."""
     now_ist = (now or datetime.now(UTC)).astimezone(_IST)
-    expected = await _expected_latest_trading_day(db, now_ist)
+    expected = await expected_latest_trading_day(db, now_ist)
     feeds: list[tuple[str, str, date | None]] = [
         ("Equity EOD", "ohlcv_1d", await _latest_ohlcv_1d(db)),
         ("F&O bhavcopy", "fo_bhavcopy", await _latest_trade_date(db, FoBhavcopy.trade_date)),
@@ -118,7 +126,7 @@ async def check_feed_staleness(
     ]
     out: list[FeedStatus] = []
     for name, table, latest in feeds:
-        behind = await _days_behind(db, latest, expected)
+        behind = await trading_days_missing(db, latest, expected)
         status = FeedStatus(
             name=name, table=table, latest=latest, expected=expected, days_behind=behind
         )
