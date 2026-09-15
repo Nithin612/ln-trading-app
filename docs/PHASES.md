@@ -1917,8 +1917,12 @@ a fact that contradicts a decision below.
    the sharpest were a hand-rolled dialog whose **Escape provably did not work** (measured),
    two new sub-AA token pairs the contrast ratchet structurally cannot see, an error naming
    the one cause it could not have, and **a tautological test of mine** that matched the
-   fixture's own string rather than the copy. Remaining: V4 search answers absence · V5
-   stock-detail eligibility panel.
+   fixture's own string rather than the copy. ✅ **V4 DONE 2026-09-15** — `GET /stocks/search` answers absence: **1,104 of 3,395 stocks
+   were invisible** to a list that defaults `is_active=True`. ⭐ It separates the TWO
+   exclusions nothing else could — **5 of 7 CA-quarantined names are ACTIVE**, so they look
+   tradeable everywhere while being dropped from every suggestion. Reasons are justified
+   from §73's RECORDED inputs and carry their date; A7 former-ticker resolution ships
+   correct-but-inert (0 renames on record). Remaining: V5 stock-detail eligibility panel.
    ✅ **V8 DONE 2026-09-15 — both halves.** A10: the fetch was NOT "correct by accident" —
    measured, **four of seven failure bodies parsed to empty and reported success** (empty,
    whitespace, HTML interstitial, header-only); the parser's schema guard fires only when

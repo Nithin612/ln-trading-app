@@ -47,3 +47,33 @@ class StockListResponse(BaseModel):
     page: int
     page_size: int
     pages: int
+
+
+class ResolvedStockOut(BaseModel):
+    """V4 — a search hit that explains itself."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    stock_id: int
+    symbol: str
+    company_name: str
+    #: Admitted by the universe rule — scannable and orderable at all.
+    in_universe: bool
+    #: ⚠ INDEPENDENT of `in_universe`: a quarantined name can be perfectly tradeable and
+    #: still absent from every suggestion, which no other surface can explain.
+    ca_quarantined: bool
+    #: True only when BOTH hold — what `resolve_universe` actually requires.
+    suggestible: bool
+    exclusion_reasons: list[str] = []
+    #: Tickers this row used to trade under (A7), newest first.
+    former_symbols: list[str] = []
+    #: The date the rule reason was justified from. `None` = the term could not be
+    #: justified from a record, and the reason says only THAT it is excluded (A24).
+    reason_as_of: date | None = None
+
+
+class StockSearchResponse(BaseModel):
+    query: str
+    hits: list[ResolvedStockOut]
+    #: Set when the query matched a FORMER ticker — "AEROPLANE (formerly AMIRCHAND)".
+    matched_former_symbol: str | None = None

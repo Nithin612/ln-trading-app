@@ -101,6 +101,34 @@ function buildQuery(params: Record<string, unknown>): string {
   return parts.length ? `?${parts.join('&')}` : ''
 }
 
+/** A search hit that explains why it is, or is not, usable. */
+export interface ResolvedStock {
+  stock_id: number
+  symbol: string
+  company_name: string
+  /** Admitted by the universe rule — scannable and orderable at all. */
+  in_universe: boolean
+  /**
+   * ⚠ INDEPENDENT of `in_universe`: a quarantined name can be perfectly tradeable and
+   * still absent from every suggestion, which no other surface can explain.
+   */
+  ca_quarantined: boolean
+  /** True only when BOTH hold — what the suggestion universe actually requires. */
+  suggestible: boolean
+  exclusion_reasons: string[]
+  /** Tickers this row used to trade under, newest first. */
+  former_symbols: string[]
+  /** `null` = the rule term could not be justified from a record, so none is claimed. */
+  reason_as_of: string | null
+}
+
+export interface StockSearchResponse {
+  query: string
+  hits: ResolvedStock[]
+  /** Set when the query matched a FORMER ticker — "AEROPLANE (formerly AMIRCHAND)". */
+  matched_former_symbol: string | null
+}
+
 export const stocksApi = {
   list: (params: StockListParams, token: string) =>
     api.get<StockListResponse>(
@@ -110,6 +138,17 @@ export const stocksApi = {
 
   get: (id: number, token: string) =>
     api.get<Stock>(`/stocks/${id}`, token),
+
+  /**
+   * V4 — search that answers ABSENCE. Unlike `list`, it does NOT filter by `is_active`,
+   * so a name the universe rule excluded comes back WITH its reason instead of returning
+   * nothing. It also resolves former tickers after a rename.
+   */
+  search: (q: string, token: string) =>
+    api.get<StockSearchResponse>(
+      `/stocks/search?q=${encodeURIComponent(q)}`,
+      token,
+    ),
 
   screenerFields: (token: string) =>
     api.get<ScreenerFieldsResponse>('/screener/fields', token),

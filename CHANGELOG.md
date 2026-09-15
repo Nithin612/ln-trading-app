@@ -7,6 +7,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### V4 / A2 + A7 — search answers ABSENCE (2026-09-15)
+
+⭐ **§45/S2: an absence is not askable.** Everywhere else, a name the universe rule excluded
+simply is not there, and the user has no way to ask why — the UI can only show what it has.
+**Search is the one surface where the user names a specific stock**, so it is the one place
+the question can be answered.
+
+- ⛔ **Measured: 1,104 of 3,395 stocks are invisible to search today.** The list endpoint
+  defaults `is_active=True`, so a third of the master returns nothing at all — and
+  "No stocks found" cannot distinguish *"no such company"* from *"excluded, and here is why"*.
+- **`GET /stocks/search`** deliberately does NOT filter by `is_active`. Excluded names come
+  back ranked BELOW usable ones, carrying their reason — visible, never hidden. It reuses
+  `list_stocks`' existing relevance ranking rather than writing a second search (W2).
+- ⭐⭐ **TWO independent exclusions, with different remedies, and only search can tell them
+  apart.** `is_active=false` (the universe rule did not admit it) and `ca_flagged_at`
+  (quarantined by the CA detector). **Measured: 5 of the 7 quarantined names are ACTIVE** —
+  they look perfectly tradeable on every surface while `resolve_universe` silently drops them
+  from every suggestion. Verified live: `DUCON` returns `in_universe=true, ca_quarantined=true,
+  suggestible=false` with the sentence that explains the gap.
+- ⭐ **The reason is justified from the RECORDED inputs** (§73's `load_recorded_inputs`), not a
+  fresh fetch and never a guess — and it carries **the date it was evaluated**, so a reason is
+  never read as a timeless fact about the company.
+- ⚠ **It degrades honestly (A24).** `universe_rule_inputs` is empty until the materialiser beat
+  next runs the §73 code, so today an exclusion reports THAT it is excluded without naming a
+  term it cannot prove. Pinned by a test that asserts the guess is absent.
+- **A7 — former tickers resolve.** A rename keeps the row id (bars, signals and positions
+  survive) but the old ticker then matches nothing. `symbol_history`'s closed intervals answer
+  it: *"AEROPLANE (formerly AMIRCHAND)"*. ⛔ **Inert today by measurement — 0 renames, 0 closed
+  intervals** — so it is correct and waiting, which is stated in the code rather than
+  discovered later. Exercised by a fixture that creates the interval a real rename would.
+- **UI:** `AbsenceAnswer` replaces the bare "No stocks found" — but only on a real QUERY, since
+  with filters alone there is no name to ask about. Same discipline as V1's funnel.
+- 13 backend + 5 frontend tests; 49 backend and 480 frontend green.
+
 ### V7 / A9 — the CA quarantine review queue (2026-09-15)
 
 A9 refused this page while the quarantine had no clearer: *"a monotonic accumulator with no

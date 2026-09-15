@@ -17,6 +17,7 @@ import {
 } from '@/components/ui/table'
 import { Pagination } from '@/components/ui/pagination'
 import { SkeletonTable } from '@/components/ui/skeleton'
+import { AbsenceAnswer } from './AbsenceAnswer'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Sparkline } from '@/components/ui/sparkline'
 import { Popover } from '@/components/ui/popover'
@@ -430,7 +431,20 @@ export function StocksPage() {
             {!isLoading && !isError && data?.items.length === 0 && (
               <TableRow>
                 <TableCell colSpan={COLUMNS.length} className="p-0">
-                  <EmptyState title="No stocks found" description="Try adjusting filters or search query" />
+                  {/*
+                    V4 / A2 — when the user SEARCHED and got nothing, answer the absence
+                    instead of shrugging at it. "No stocks found" cannot distinguish "no
+                    such company" from "excluded from the tradeable universe, and here is
+                    why" — and measured, 1,104 of 3,395 stocks fall in the second bucket
+                    because this list defaults `is_active=true`.
+                    ⚠ Only for a real query: with filters alone there is no name to ask
+                    about, so the generic empty state is still the honest one.
+                  */}
+                  {debouncedSearch ? (
+                    <AbsenceAnswer query={debouncedSearch} />
+                  ) : (
+                    <EmptyState title="No stocks found" description="Try adjusting filters" />
+                  )}
                 </TableCell>
               </TableRow>
             )}
