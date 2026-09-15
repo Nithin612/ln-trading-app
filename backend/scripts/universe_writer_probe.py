@@ -26,7 +26,7 @@ from app.db.session import AsyncSessionFactory
 from sqlalchemy import text
 
 
-async def main():
+async def main() -> None:
     async with AsyncSessionFactory() as db:
         sym = (await db.execute(text("SELECT symbol FROM stocks WHERE is_active LIMIT 1"))).scalar()
         print(f"probe target: {sym}\n")
