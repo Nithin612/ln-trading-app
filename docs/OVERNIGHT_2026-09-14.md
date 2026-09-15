@@ -6,10 +6,11 @@ merge and branch creation are the user's). Branch: `feature/pre-cycle2-hardening
 
 ## NEXT STEP
 
-> **Queue item 4 — §62 V3–V8** (the UI/UX batch). Not started. Six sub-items: hold-only badge ·
-> search answers absence · stock-detail eligibility panel · wiring lint + emptiness alarm ·
-> CA clearing-path UI (⚠ its BACKEND shipped in item 3, so V7 is now UI-only) · report
-> heartbeat. ⚠ ui-reviewer is mandatory on anything under `frontend/src/`.
+> **Queue item 4 — §62 V4–V8.** V3 is DONE. Five left: V4 search answers absence · V5
+> stock-detail eligibility panel · V6 wiring lint + emptiness alarm · V7 CA clearing-path UI
+> (⚠ its BACKEND shipped in item 3, so V7 is UI-only now) · V8 materialiser failure-mode test
+> + report heartbeat. ⚠ **ui-reviewer is mandatory** on anything under `frontend/src/`, and it
+> has failed this project's frontend work before on contrast and on disabled-control semantics.
 
 ## The queue, in order
 
@@ -19,7 +20,7 @@ merge and branch creation are the user's). Branch: `feature/pre-cycle2-hardening
 | 1b | **U4″ — per-segment coverage** (queued tonight at the user's request) | ⬜ queued, not started — see below |
 | 2 | **Snapshot the rule's inputs** — raw `EQUITY_L.csv` + the parsed EQ symbol set, NOT a hash | ✅ **DONE**, committed |
 | 3 | **§77 P1 batch** — all four sub-items | ✅ **DONE**, committed |
-| 4 | **§62 V3–V8** ← NEXT — hold-only badge · search answers absence · stock-detail eligibility panel · wiring lint + emptiness alarm · CA clearing path · report heartbeat | ⬜ |
+| 4 | **§62 V4–V8** (V3 done) ← NEXT — hold-only badge · search answers absence · stock-detail eligibility panel · wiring lint + emptiness alarm · CA clearing path · report heartbeat | ⬜ |
 | 5 | **U8** — populate the index registry from the CSV already downloaded (165 indices, 3 registered) → unblocks sector-RS | ⬜ |
 
 **Not in scope tonight (explicitly the user's call):** the `git push`; the palette AA defect
@@ -219,3 +220,63 @@ with a second, additive statement instead. **Worth a follow-up by hand.**
 
 **Tests:** 11 quarantine + 11 universe health + the earlier 18; 161 green across affected suites.
 ⚠ bug-hunter on item 2 was killed mid-run by the spend limit and has NOT been re-run.
+
+
+---
+
+## Item 4 (part) — V3, the hold-only state ✅
+
+**The defect, in one sentence:** after D2′b a name you HOLD can leave the universe
+overnight, and **nothing stopped you buying more of it** — there was no membership
+restriction anywhere in the registry, so re-entry returned 201.
+
+**Built as a `Restriction`, which is what made it cheap.** `universe_membership`,
+`always_on`, second in the registry (only U11's human withdrawal outranks it). That one
+registration buys the order path's 409, the display path's `⊘ Blocked` with the reason
+verbatim, and all five Buy surfaces through the existing `tradeBlock()` — zero new UI.
+Both paths supply the context in the SAME commit, as the standing rule demands: the order
+path's loader reads one indexed column in a savepoint, and `CTX_IN_UNIVERSE` joined
+`LIST_AVAILABLE` so the list judges it identically (both list surfaces batch it in one
+query per page). Had it stayed uncovered it would have rendered `unassessed`.
+
+**The positions half:** `hold_only` is a THIRD condition, distinct from `stranded` (no
+tradable instrument) and `price_state` (mark freshness) — the name is perfectly priceable,
+it is PERMISSION that changed. Per-row badge + one page-level line, `--color-warning` not
+`--color-loss` (that token means "losing money" and is on the same row), and deliberately
+NOT `role="alert"` — nothing is broken and no action is required.
+
+Two existing ratchets fired and were updated on purpose: the pinned reachable-gate
+partition, and the shared fixtures (every real caller now resolves membership).
+
+---
+
+## Review round on items 2 + 3 ✅ — nine findings, one HIGH, one of them mine
+
+⛔⛔ **HIGH: `universe_health` watched the EVALUATION and never the APPLY.** A refused
+apply (collapse rail / subscription ceiling) leaves the snapshot current, so the report
+rendered **"✅ Universe current"** while `is_active` stayed frozen — the exact failure the
+module claims to catch. Fixed with `apply_diverged`, a separate message (different fault,
+different remedy), and a push from the task itself on refusal.
+
+⛔ **The input snapshot missed its own motivating case:** it recorded AFTER parsing, and
+the parser RAISES on a bad header — so on the `EQ=0` bug nothing was written. Now
+`record_source` (bytes, before) + `record_parsed` (sets, after), with nullable set columns
+so "source captured, parse rejected" is representable.
+
+⚠ **"Bytes as served" was true by luck** — `resp.text` re-encodes through a lossy decode.
+Now `resp.content`, decode at the parse boundary only, pinned with a Latin-1 byte.
+
+⛔ **One finding was mine:** the conftest "16 of 56" claim was measured against the DEV DB
+and a partial import set. Truth: 47 tables, 45 modelled, **2 unmanaged**, and only
+`universe_rule_inputs` was actually leaking. Corrected in place (W1) — the mechanism
+stands, the number did not. The cleanup also now shares one connection: **~90 s off a full
+suite run.**
+
+⚠ **Left open (latent, no path exists today):** `actor_user_id` is `ON DELETE SET NULL`
+and NULL already means "machine flagged", so deleting a reviewing admin would disguise
+their clear.
+
+⚠ **A trap worth knowing:** this repo hand-writes hex-looking Alembic revision ids and
+they COLLIDE silently — two of my first three picks were already taken, producing an
+opaque `CycleDetected` rather than a duplicate-id error. Check with
+`grep -rl <id> alembic/versions/` before using one.

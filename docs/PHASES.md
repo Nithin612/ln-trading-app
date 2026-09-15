@@ -1896,8 +1896,13 @@ a fact that contradicts a decision below.
    `session_replication_role='replica'` bypassed it — closed by `ENABLE ALWAYS`
    (`b0c1d2e3f4a5`), verified `tgenabled` O→A. ⛔ Also fixed: `conftest` left **16 of 56** tables
    uncleared between tests (every migration-only table).
-4. **§62 V3–V8** — hold-only badge · search answers absence · stock-detail eligibility panel ·
-   wiring lint + emptiness alarm · CA clearing path · report heartbeat.
+4. **§62 V4–V8** — ✅ **V3 (hold-only) DONE 2026-09-15**: built as an `always_on`
+   `universe_membership` Restriction, so the order path 409s and all five Buy surfaces render
+   `⊘ Blocked` with zero new UI, plus a `hold_only` badge on positions. ⛔ Before it, re-entry
+   into a name the rule had just excluded returned **201** — there was no membership rule in
+   the registry at all. Remaining: search answers absence · stock-detail eligibility panel ·
+   wiring lint + emptiness alarm · CA clearing-path UI (its BACKEND shipped in item 3) ·
+   materialiser failure-mode test + report heartbeat.
 5. **U8** — populate the index registry from the CSV we already download (165 indices, only 3
    registered) → unblocks sector-RS.
 
