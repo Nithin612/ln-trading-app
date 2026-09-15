@@ -1912,8 +1912,13 @@ a fact that contradicts a decision below.
    cannot replay — `alembic upgrade` is a no-op on an applied revision — so the style engines
    have produced nothing for 8 days with a green suite), and the WIRING lint found a third
    unwired API function nobody had named (`watchlistsApi.rename`: the UI cannot rename a
-   watchlist; it is only ever MOCKED in a test). Remaining: V4 search answers absence · V5
-   stock-detail eligibility panel · V7 CA clearing-path UI (its BACKEND shipped in item 3).
+   watchlist; it is only ever MOCKED in a test). ✅ **V7 DONE 2026-09-15** — `/admin/ca-quarantine`, the review queue A9 refused to build
+   until the quarantine had a clearer. ⛔ **ui-reviewer FAILed it with 21 findings, all fixed**;
+   the sharpest were a hand-rolled dialog whose **Escape provably did not work** (measured),
+   two new sub-AA token pairs the contrast ratchet structurally cannot see, an error naming
+   the one cause it could not have, and **a tautological test of mine** that matched the
+   fixture's own string rather than the copy. Remaining: V4 search answers absence · V5
+   stock-detail eligibility panel.
    ✅ **V8 DONE 2026-09-15 — both halves.** A10: the fetch was NOT "correct by accident" —
    measured, **four of seven failure bodies parsed to empty and reported success** (empty,
    whitespace, HTML interstitial, header-only); the parser's schema guard fires only when

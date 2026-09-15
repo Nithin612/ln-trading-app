@@ -6,7 +6,8 @@ import { LoginPage } from '@/pages/LoginPage'
 import {
   CategoriesPage, CohortPage, DashboardPage, FiiDiiPage, FilingsPage, FoPage, GoLivePage, JournalPage,
   KiteConnectPage, LiveSignalsPage, OutcomesPage, PortfolioPage, PositionsPage, ProfilePage, RegistryPage, ScreenerPage,
-  SettingsPage, StockDetailPage, StocksPage, StrategyLabPage, StylePage, TradeHistoryPage,
+  CaQuarantinePage, SettingsPage, StockDetailPage, StocksPage, StrategyLabPage, StylePage,
+  TradeHistoryPage,
   UsersPage, WatchlistsPage,
 } from '@/routes/lazyPages'
 
@@ -61,6 +62,12 @@ export const router = createBrowserRouter([
       {
         path: 'admin/settings',
         element: <RequireAdmin><SettingsPage /></RequireAdmin>,
+      },
+      {
+        // V7/A9 — the CA quarantine review queue. Admin-only: the clear is a recorded
+        // human judgement about price history, and the log stores who made it.
+        path: 'admin/ca-quarantine',
+        element: <RequireAdmin><CaQuarantinePage /></RequireAdmin>,
       },
     ],
   },

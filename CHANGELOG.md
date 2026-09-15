@@ -7,6 +7,58 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### V7 / A9 — the CA quarantine review queue (2026-09-15)
+
+A9 refused this page while the quarantine had no clearer: *"a monotonic accumulator with no
+clearer should not get a surface that invites an unflag request nobody can grant."* The
+mechanism shipped in the §77 P1 batch; this is the surface it unblocked.
+
+- **`/admin/ca-quarantine`** — the review queue, the detector's own reason per row, and a
+  clear dialog that records who and why. Admin-only.
+- ⭐ **The copy is built around one distinction:** clearing **adjusts nothing**. It records a
+  human judgement that the unadjusted history is safe to score again. A name that genuinely
+  split needs a VERIFIED RATIO recorded as a corporate action, and a reviewer who clears it
+  instead re-admits poisoned bars to every indicator window. That sentence now appears **in
+  the dialog**, not only in the page banner the reviewer already scrolled past.
+- ⭐ **The dialog shows how many times the name has been cleared BEFORE.** A first-time flag
+  and a fourth are different decisions — the second says either the detector keeps mis-reading
+  this stock or somebody keeps waving it through.
+- ⛔ **My own V6 lint failed this page's first commit**, one commit after being built:
+  `getQuarantineHistory` had no caller. Exactly the `filingsApi.getGuard` shape it exists to
+  catch. Wired rather than deleted, because the prior-clear count earns its place.
+
+**⛔ ui-reviewer returned FAIL with 21 findings; all are fixed.** The four that mattered:
+
+- **The dialog was hand-rolled and Escape provably did not work** — measured: focus stays on
+  the trigger, which is outside the dialog subtree, so the keydown never reached the handler.
+  It only worked after clicking inside. No Portal, no focus trap, no focus restore, while
+  claiming `aria-modal`. Replaced with the `Dialog` primitive four other surfaces already use
+  (W2), which brings all of it for free — and closed findings 1, 2, 14, 16 and 17 at once.
+- **Two new sub-AA pairs**: `--color-text-muted` measures **3.52 in slate (the default theme)
+  and 2.34 in daybreak** — and one of them carried the caveat *"recorded permanently, with
+  your name"*. The contrast ratchet cannot see it, by its own stated scope: it checks pairs it
+  lists, not pairs assembled in a component. Now `--color-text-secondary` (6.13–10.21).
+- **The error copy named the one cause it could not have.** It hardcoded "the reason must be
+  at least 10 characters" while the submit is already guarded — so every error a user actually
+  sees (403, a 404 "not currently quarantined", 500, offline) was reported as a false cause.
+- ⭐ **A test of mine was tautological.** It asserted the dialog mentioned "corporate action"
+  — and the DETECTOR's own reason string ends "— possible corporate action", which the dialog
+  echoes. It passed on the fixture's text, not the copy, and would have kept passing with the
+  sentence deleted. The fixture now uses `reason: null` so the phrase can only come from the
+  copy under test.
+- Also fixed: UTC timestamps string-sliced instead of `formatIstDateTime` (renders the PREVIOUS
+  day for any flag after 18:30 IST — which is when EOD ingest runs) · unknown prior-clear
+  history rendering as a verified zero (A24) · the submit reachable before that history loaded
+  · `animate-pulse` off `<Skeleton>` · raw `<button>`/`<table>` instead of the primitives · no
+  `PageHeader`/`h1` · missing focus ring on the textarea · missing `staleTime`.
+- 11 frontend tests (4 of them pinning defects ui-reviewer MEASURED); 475 green, eslint + tsc
+  clean.
+- ⚠ **Left for the user / queue:** ui-reviewer flagged four PRE-EXISTING issues, the sharpest
+  being that `UsersPage`'s `CreateUserModal` is the same hand-rolled modal with no Portal,
+  no `role="dialog"` and no Escape. This page followed that precedent rather than the
+  compliant one, and *"fix the second instance, leave the first"* is how the five-Buy-surface
+  problem happened.
+
 ### V6 / A5 — the two "built but not working" detectors (2026-09-15)
 
 A5 names the project's two recurring defect shapes. Both now have an instrument, and **each

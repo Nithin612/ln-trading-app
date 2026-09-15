@@ -1,7 +1,7 @@
 import {
   LayoutDashboard, TrendingUp, SlidersHorizontal, ListChecks, Tags, Building2,
   FileText, Briefcase, History, FlaskConical, BookOpen, Wallet, Zap, Users, Settings,
-  Activity, Layers, Landmark, Rocket, PieChart, BellRing, ClipboardList,
+  Activity, Layers, Landmark, Rocket, PieChart, BellRing, ClipboardList, ShieldAlert,
 } from 'lucide-react'
 
 export interface NavItem {
@@ -66,6 +66,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { to: '/broker/kite',    icon: <Zap size={18} />,      label: 'Kite' },
       { to: '/admin/users',    icon: <Users size={18} />,    label: 'Users' },
       { to: '/admin/settings', icon: <Settings size={18} />, label: 'Settings' },
+      { to: '/admin/ca-quarantine', icon: <ShieldAlert size={18} />, label: 'CA Quarantine' },
     ],
   },
 ]

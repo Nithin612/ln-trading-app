@@ -41,7 +41,7 @@ describe('SidebarNav', () => {
     renderNav({ isAdmin: true })
     expect(screen.getByText('Admin')).toBeInTheDocument()
     expect(screen.getByRole('link', { name: /Users/ })).toHaveAttribute('href', '/admin/users')
-    expect(screen.getAllByRole('link')).toHaveLength(23) // 20 base + 3 admin
+    expect(screen.getAllByRole('link')).toHaveLength(24) // 20 base + 4 admin
   })
 
   it('marks the active route with aria-current', () => {

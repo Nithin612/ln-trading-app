@@ -10,6 +10,7 @@ const named = (p: Promise<Record<string, unknown>>, key: string) =>
 
 export const UsersPage = lazy(() => named(import('@/pages/admin/UsersPage'), 'UsersPage'))
 export const SettingsPage = lazy(() => named(import('@/pages/admin/SettingsPage'), 'SettingsPage'))
+export const CaQuarantinePage = lazy(() => named(import('@/pages/admin/CaQuarantinePage'), 'CaQuarantinePage'))
 export const StocksPage = lazy(() => named(import('@/features/stocks/StocksPage'), 'StocksPage'))
 export const StockDetailPage = lazy(() => named(import('@/pages/stocks/StockDetailPage'), 'StockDetailPage'))
 export const ScreenerPage = lazy(() => named(import('@/features/screener/ScreenerPage'), 'ScreenerPage'))
