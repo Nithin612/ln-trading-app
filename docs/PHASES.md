@@ -1909,7 +1909,11 @@ a fact that contradicts a decision below.
    into a name the rule had just excluded returned **201** — there was no membership rule in
    the registry at all. Remaining: search answers absence · stock-detail eligibility panel ·
    wiring lint + emptiness alarm · CA clearing-path UI (its BACKEND shipped in item 3).
-   ✅ **V8's report heartbeat DONE 2026-09-15** — measured **26 reports against 30
+   ✅ **V8 DONE 2026-09-15 — both halves.** A10: the fetch was NOT "correct by accident" —
+   measured, **four of seven failure bodies parsed to empty and reported success** (empty,
+   whitespace, HTML interstitial, header-only); the parser's schema guard fires only when
+   rows EXIST, so they slipped past. Now refused at the SOURCE by `_assert_plausible_equity_l`
+   (1,000-line floor vs a real ~2,568). The report heartbeat: — measured **26 reports against 30
    trading sessions**, four missing and unnoticed; the report is where every other alarm
    is READ, so those sessions ran unwatched. Checked from the ARTIFACTS on disk (no new
    counter — §A8), in the BEAT not the report (a report that did not run cannot say so).

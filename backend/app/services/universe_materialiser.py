@@ -64,7 +64,58 @@ async def download_equity_l() -> bytes:
             pass
         resp = await c.get(_EQUITY_L)
     resp.raise_for_status()
+    _assert_plausible_equity_l(resp.content)
     return resp.content
+
+
+#: The live file carries ~2,292 EQ names inside ~2,568 rows (measured 2026-09-14). A floor
+#: of 1,000 sits more than 2x below any plausible real value and infinitely above every
+#: failure mode below, all of which yield ZERO.
+MIN_EQUITY_L_ROWS = 1000
+
+
+def _assert_plausible_equity_l(raw: bytes) -> None:
+    """A10 — refuse a 200 OK that is not the file we asked for.
+
+    ⛔ **`raise_for_status` covers only the status code, and the failures that actually
+    happen here return 200.** Measured against
+    `parse_eq_listed`, FOUR bodies parse to an empty set and report success: an empty
+    body, whitespace, an HTML access-denied interstitial, and a header with no data rows.
+    The schema guard inside the parser does not catch them -- it fires only when rows
+    EXIST and the header is wrong -- so each would have produced `eq_listed = 0` and been
+    reported up the stack as a successful fetch.
+
+    ⭐ **This is §42d's shape through a different door**, and the project has been bitten by the
+    identical thing twice: the EQ=0 header bug, and a 200-OK login interstitial in
+    `sync_instruments` that "parsed to zero records and reported success".
+
+    ⚠ **What saved us until now was the collapse rail**, which refuses an apply below half the
+    active set. That is a LAST line and it guards only the APPLY: `materialise()` would
+    still have written a near-empty snapshot as the recorded truth for that date, and the
+    rail is tunable and disableable. An absolute plausibility check at the SOURCE is a
+    different question from a relative one at the destination, and it fails loudly where
+    the cause is still visible.
+
+    ⚠ Deliberately NOT inside `parse_eq_listed`, which stays a pure function of its text.
+    "Zero EQ names is not a true statement about NSE" is a judgement about the SOURCE and
+    belongs to the function whose job is to talk to NSE. It also keeps every test fixture
+    -- which legitimately holds two or three symbols -- working unchanged.
+    """
+    if not raw.strip():
+        raise ValueError("EQUITY_L fetch returned an EMPTY body with status 200")
+    head = raw[:512].lstrip().lower()
+    if head.startswith((b"<!doctype", b"<html")):
+        raise ValueError(
+            "EQUITY_L fetch returned HTML with status 200 - an interstitial or an error "
+            "page, not the CSV. Refusing to report an empty universe from it."
+        )
+    rows = raw.count(b"\n")
+    if rows < MIN_EQUITY_L_ROWS:
+        raise ValueError(
+            f"EQUITY_L fetch returned only {rows} line(s), below the {MIN_EQUITY_L_ROWS} "
+            "floor - the real file carries ~2,568. A truncated feed must never be read "
+            "as a shrunken market."
+        )
 
 
 def decode_csv(raw: bytes) -> str:

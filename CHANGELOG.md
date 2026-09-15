@@ -7,6 +7,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### A10 — the materialiser's fetch refuses a 200 OK that is not the file (2026-09-15)
+
+Queued as "pin the failure mode with a test, it is correct by accident of
+`raise_for_status`". ⛔ **It was not correct.** Measured against `parse_eq_listed`, **four of
+seven failure bodies parsed to an empty set and reported success**: an empty body, whitespace,
+an HTML access-denied interstitial, and a header with no data rows.
+
+- ⭐ **The parser's schema guard cannot catch them** — it fires only when rows EXIST and the
+  header is wrong, so a body with nothing parseable slips straight past it. This is §42d's
+  shape through a different door, and the project has been bitten by the identical thing
+  twice: the `EQ=0` header bug, and a 200-OK login interstitial in `sync_instruments` that
+  "parsed to zero records and reported success".
+- ⚠ **What saved us until now was the collapse rail** — but that is a LAST line and it guards
+  only the APPLY. `materialise()` would still have written a near-empty snapshot as the
+  recorded truth for that date, and the rail is tunable and disableable. An absolute
+  plausibility check at the SOURCE is a different question from a relative one at the
+  destination, and it fails where the cause is still visible.
+- `_assert_plausible_equity_l` now refuses an empty body, an HTML interstitial, and anything
+  under **1,000 lines** — measured: the live file carries ~2,292 EQ names in ~2,568 rows, so
+  the floor has >2× headroom while every failure mode yields zero.
+- ⚠ **Deliberately NOT inside `parse_eq_listed`**, which stays a pure function of its text.
+  "Zero EQ names is not a true statement about NSE" is a judgement about the SOURCE, and it
+  belongs to the function whose job is to talk to NSE — which also keeps every fixture holding
+  two or three symbols working unchanged.
+- ⭐ **It also resolved a contradiction between two existing sibling tests**: one asserted that
+  a parser returning EMPTY on an unrecognised schema is this rebuild's signature failure, the
+  three lines below it asserted an empty body "is empty, not an error". Both were right about
+  different things, and the split is now stated in both places.
+- 11 new tests, including a canary that a real-sized file passes (a guard rejecting everything
+  would otherwise pass every negative test — this project has shipped a guard that could not
+  fail before) and an end-to-end case through `download_equity_l` itself, because "built but
+  not wired" is the defect class V6 exists for.
+
 ### U4″ — coverage of the sets whose membership we KNOW (2026-09-15)
 
 The gap U4′ left, closed. Queued at the user's request after U4′ shipped.

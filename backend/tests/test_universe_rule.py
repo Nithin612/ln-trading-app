@@ -128,7 +128,20 @@ class TestParseEqListed:
         with pytest.raises(ValueError, match="no SERIES column"):
             parse_eq_listed("COL_A,COL_B\nx,y\n")
 
-    def test_an_empty_body_is_empty_not_an_error(self) -> None:
+    def test_a_header_with_no_rows_parses_to_empty_here(self) -> None:
+        """⚠ **This test and the one directly above it were in tension, and A10 resolved
+        it by splitting the question.** That one says a parser returning EMPTY on a schema
+        it does not recognise is the silent-partial failure of this whole rebuild; this
+        one said an empty body "is empty, not an error". Both are right, about different
+        things.
+
+        `parse_eq_listed` is a PURE function of its text, and a header with no data rows
+        genuinely parses to no symbols — that is arithmetic, not a judgement. What is NOT
+        true is that zero EQ names can describe NSE: the real file carries ~2,292. That
+        judgement is about the SOURCE, so it now lives in `_assert_plausible_equity_l`,
+        which `download_equity_l` runs before this function ever sees the bytes
+        (`test_equity_l_fetch.py`). Keeping it out of here is also what lets every fixture
+        in this file hold two or three symbols."""
         assert parse_eq_listed(self.REAL_HEADER) == frozenset()
 
 
