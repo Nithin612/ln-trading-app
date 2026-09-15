@@ -1894,8 +1894,13 @@ a fact that contradicts a decision below.
    2 days not 1) · ⭐ **the Alembic-vs-trigger question answered by probe**
    (`scripts/universe_writer_probe.py`): a plain UPDATE from a migration IS refused, but
    `session_replication_role='replica'` bypassed it — closed by `ENABLE ALWAYS`
-   (`b0c1d2e3f4a5`), verified `tgenabled` O→A. ⛔ Also fixed: `conftest` left **16 of 56** tables
-   uncleared between tests (every migration-only table).
+   (`b0c1d2e3f4a5`), verified `tgenabled` O→A. ⛔ Also fixed: `conftest` cleared only tables in
+   `Base.metadata`, so a migration-only table leaked state between tests. ⚠ **My first
+   write-up of this said "16 of 56" — measured against the DEV database and a partial import
+   set, and wrong.** Re-measured against the TEST database: 47 tables, 45 modelled, **2
+   unmanaged**, and `universe_snapshot` was already reached by CASCADE from `stocks` — so the
+   only table actually leaking was `universe_rule_inputs`. The mechanism stands (the list is
+   now derived from the database); the number did not.
 4. **§62 V4–V8** — ✅ **V3 (hold-only) DONE 2026-09-15**: built as an `always_on`
    `universe_membership` Restriction, so the order path 409s and all five Buy surfaces render
    `⊘ Blocked` with zero new UI, plus a `hold_only` badge on positions. ⛔ Before it, re-entry
