@@ -99,7 +99,7 @@ async def scan_for_discontinuities(
         # ⭐ The machine's side of the append-only log, in the SAME transaction as the
         # flag — a log that can disagree with `stocks` is worse than no log. The clear
         # side is `ca_quarantine.clear_flag`, which is the human's.
-        await record_flag(db, stock_id=r.stock_id, reason=reason)
+        await record_flag(db, stock_id=r.stock_id, reason=reason, at=now)
         flagged.append((r.stock_id, reason))
         log.warning("CA quarantine: stock_id=%s %s", r.stock_id, reason)
 

@@ -42,8 +42,18 @@ _EQUITY_L = "https://archives.nseindia.com/content/equities/EQUITY_L.csv"
 _NSE_HEADERS = {"User-Agent": "Mozilla/5.0 (X11; Linux x86_64)"}
 
 
-async def download_equity_l() -> str:
-    """⚠ Deliberately NOT `scripts.seed_stocks._fetch`: `app/` must not import from
+async def download_equity_l() -> bytes:
+    """The source as the server sent it, in BYTES.
+
+    ⚠ **Not `resp.text`.** httpx decodes with `errors="replace"`, and NSE declares no
+    charset — so a single non-UTF-8 byte (a Latin-1 accent in a company name) would
+    become U+FFFD and be UNRECOVERABLE, while `csv_sha256` silently stopped matching a
+    `sha256sum` of an independently fetched copy. Measured 2026-09-15 the live file is
+    182,540 bytes with zero non-ASCII, so today the two agree — but "the bytes as served"
+    must be true by construction, not by luck, in the one artifact whose job is to be
+    re-parsed later (bug-hunter, 2026-09-15). Decoding happens at the PARSE boundary only.
+
+    ⚠ Deliberately NOT `scripts.seed_stocks._fetch`: `app/` must not import from
     `scripts/`, and doing so also drags that module's relaxed typing in here."""
     async with httpx.AsyncClient(
         headers=_NSE_HEADERS, timeout=60, follow_redirects=True
@@ -54,7 +64,17 @@ async def download_equity_l() -> str:
             pass
         resp = await c.get(_EQUITY_L)
     resp.raise_for_status()
-    return resp.text
+    return resp.content
+
+
+def decode_csv(raw: bytes) -> str:
+    """Bytes → text, at the one boundary where a decode belongs.
+
+    ⚠ `errors="replace"` is explicit here rather than inherited from httpx: the RAW bytes
+    are already recorded by then, so a lossy decode costs nothing that cannot be recovered
+    by re-reading `universe_rule_inputs.csv_gz`. That is the entire reason the artifact
+    stores bytes."""
+    return raw.decode("utf-8", errors="replace")
 
 
 def parse_eq_listed(csv_text: str) -> frozenset[str]:
@@ -86,7 +106,7 @@ def parse_eq_listed(csv_text: str) -> frozenset[str]:
 async def load_inputs(db: Any, *, csv_text: str | None = None) -> UniverseInputs:
     """Gather the rule's inputs. `csv_text` short-circuits the download for tests."""
     if csv_text is None:
-        csv_text = await download_equity_l()
+        csv_text = decode_csv(await download_equity_l())
 
     kite = {
         str(r[0])
@@ -113,10 +133,68 @@ async def load_inputs(db: Any, *, csv_text: str | None = None) -> UniverseInputs
     )
 
 
+async def record_source(db: Any, *, as_of: date, raw: bytes) -> str:
+    """Record the raw source for `as_of`, BEFORE anything tries to understand it.
+
+    ⛔ **This split is the whole fix.** `record_inputs` used to run after `load_inputs`,
+    which parses — and `parse_eq_listed` RAISES on an unrecognised header. So on the
+    single failure the artifact names as its motivating consumer (the `EQ=0` header bug:
+    a shifted column that makes the parse return nothing), the task died before recording
+    anything, and the one artifact that separates a SOURCE change from a PARSER change was
+    absent for the only day it was ever needed (bug-hunter, 2026-09-15).
+
+    Now the bytes land first and the parsed sets are filled in afterwards, so
+    **"source captured, parse rejected" is a representable state** — and it is the most
+    informative row this table can hold.
+    """
+    digest = hashlib.sha256(raw).hexdigest()
+    await db.execute(
+        text(
+            "INSERT INTO universe_rule_inputs"
+            " (as_of, source_url, csv_gz, csv_sha256, rule_version)"
+            " VALUES (:d, :url, :gz, :sha, :v)"
+            " ON CONFLICT (as_of) DO UPDATE SET"
+            "   captured_at = now(), source_url = EXCLUDED.source_url,"
+            "   csv_gz = EXCLUDED.csv_gz, csv_sha256 = EXCLUDED.csv_sha256,"
+            "   rule_version = EXCLUDED.rule_version,"
+            # A fresh source invalidates the previous parse of a DIFFERENT source.
+            "   eq_listed = NULL, kite_tradable = NULL"
+        ),
+        {"d": as_of, "url": _EQUITY_L, "gz": gzip.compress(raw), "sha": digest, "v": RULE_VERSION},
+    )
+    await db.commit()
+    log.info(
+        "universe source %s recorded: %d B (sha %s)", as_of, len(raw), digest[:12]
+    )
+    return digest
+
+
+async def record_parsed(db: Any, *, as_of: date, inputs: UniverseInputs) -> None:
+    """Fill in the parsed sets for a source already recorded by `record_source`."""
+    await db.execute(
+        text(
+            "UPDATE universe_rule_inputs SET eq_listed = :eq, kite_tradable = :kite"
+            " WHERE as_of = :d"
+        ),
+        {"d": as_of, "eq": sorted(inputs.eq_listed), "kite": sorted(inputs.kite_tradable)},
+    )
+    await db.commit()
+    log.info(
+        "universe inputs %s parsed: %d EQ-listed, %d kite-tradable",
+        as_of, len(inputs.eq_listed), len(inputs.kite_tradable),
+    )
+
+
 async def record_inputs(
     db: Any, *, as_of: date, csv_text: str, inputs: UniverseInputs
 ) -> str:
-    """Persist the rule's INPUTS for `as_of`, and commit. Returns the CSV's sha256.
+    """Both halves at once, for a caller that already has a successful parse in hand.
+
+    ⚠ The ORDER-PATH caller does NOT use this — it calls `record_source` before parsing
+    and `record_parsed` after, so a parse failure still leaves the source on record. This
+    remains for callers (tests, back-fills) holding text that has already parsed cleanly.
+
+    Persists the rule's INPUTS for `as_of`, and commits. Returns the CSV's sha256.
 
     ⭐ **Call this BEFORE materialise/apply, not after.** The point of the artifact is
     that `apply_to_stocks`'s refusals become auditable, and a refusal is exactly the
@@ -134,36 +212,8 @@ async def record_inputs(
     `materialise()` keeps, so a re-run after a fixed input cannot leave two
     contradictory records for one date.
     """
-    raw = csv_text.encode("utf-8")
-    digest = hashlib.sha256(raw).hexdigest()
-    await db.execute(
-        text(
-            "INSERT INTO universe_rule_inputs"
-            " (as_of, source_url, csv_gz, csv_sha256, eq_listed, kite_tradable,"
-            "  rule_version)"
-            " VALUES (:d, :url, :gz, :sha, :eq, :kite, :v)"
-            " ON CONFLICT (as_of) DO UPDATE SET"
-            "   captured_at = now(), source_url = EXCLUDED.source_url,"
-            "   csv_gz = EXCLUDED.csv_gz, csv_sha256 = EXCLUDED.csv_sha256,"
-            "   eq_listed = EXCLUDED.eq_listed,"
-            "   kite_tradable = EXCLUDED.kite_tradable,"
-            "   rule_version = EXCLUDED.rule_version"
-        ),
-        {
-            "d": as_of,
-            "url": _EQUITY_L,
-            "gz": gzip.compress(raw),
-            "sha": digest,
-            "eq": sorted(inputs.eq_listed),
-            "kite": sorted(inputs.kite_tradable),
-            "v": RULE_VERSION,
-        },
-    )
-    await db.commit()
-    log.info(
-        "universe inputs %s recorded: %d EQ-listed, %d kite-tradable, csv %d B (sha %s)",
-        as_of, len(inputs.eq_listed), len(inputs.kite_tradable), len(raw), digest[:12],
-    )
+    digest = await record_source(db, as_of=as_of, raw=csv_text.encode("utf-8"))
+    await record_parsed(db, as_of=as_of, inputs=inputs)
     return digest
 
 
@@ -180,7 +230,11 @@ async def load_recorded_inputs(db: Any, *, as_of: date) -> UniverseInputs | None
             {"d": as_of},
         )
     ).first()
-    if row is None:
+    if row is None or row.eq_listed is None or row.kite_tradable is None:
+        # ⚠ NULL sets mean "source captured, parse rejected" — a DIFFERENT state from
+        # "never captured", and emphatically not an empty universe. Both answer `None`
+        # here because neither can be replayed; `load_recorded_csv` is what distinguishes
+        # them, and it is the one that still has something useful to give.
         return None
     return UniverseInputs(
         eq_listed=frozenset(row.eq_listed), kite_tradable=frozenset(row.kite_tradable)

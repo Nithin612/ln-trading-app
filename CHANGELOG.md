@@ -7,6 +7,56 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Review round on §73 + §77 — nine findings, one HIGH, one of them mine (2026-09-15)
+
+bug-hunter on `ef812eb` + `8318527`. The two that mattered were both instruments reporting
+health they had not actually measured.
+
+- ⛔⛔ **HIGH — `universe_health` measured the EVALUATION and never the APPLY, so it was
+  silent in the dangerous direction.** `materialise()` commits the snapshot; `apply_to_stocks`
+  may then REFUSE it (collapse rail or subscription ceiling), log an error and return
+  `applied: False`. Recency alone reads that as perfect: the snapshot IS today's, so the
+  report rendered **"✅ Universe current"** while `is_active` stayed frozen for as many days
+  as the rail kept firing — and every consumer reads `is_active`, not the snapshot. Fixed with
+  `apply_diverged` (decided members vs active count) folded into `is_alarming`, plus a
+  **separate message**: "the beat stopped" sends you to the scheduler, "the verdict was
+  refused" sends you to the rail and its threshold. The refusal now also **pushes from the
+  task itself**, since it runs unattended and a log line nobody tails was the whole alarm.
+- ⛔ **The input snapshot missed its own motivating case.** `record_inputs` ran AFTER
+  `load_inputs`, which parses — and `parse_eq_listed` RAISES on an unrecognised header. So on
+  the `EQ=0` header bug, the exact failure the artifact exists for, the task died before
+  recording anything. Split into `record_source` (bytes, BEFORE the parse) and `record_parsed`
+  (sets, after), with `eq_listed`/`kite_tradable` nullable (migration `f9e8d7c6b5a4`) so
+  **"source captured, parse rejected" is representable** — the most informative row the table
+  can hold. A replayed row with NULL sets reads as ABSENT, never as an empty universe.
+- ⚠ **"The bytes as served" was true by luck, not construction.** `download_equity_l` returned
+  `resp.text`; httpx decodes with `errors="replace"` and NSE declares no charset, so one
+  Latin-1 byte would have become U+FFFD, unrecoverable, and `csv_sha256` would have stopped
+  matching a `sha256sum` of an independent copy. Now returns `resp.content`; decoding happens
+  at the parse boundary only. (Measured: the live file is 182,540 B, zero non-ASCII — so the
+  two agreed today.) Pinned by a test with a real Latin-1 byte.
+- ⚠ `universe_health`'s SQL correlated `max(as_of)` with `max(captured_at)` — **different
+  rows** once a replay back-fills an older day — and asked "are the maxima equal" instead of
+  "is there an inputs row FOR this snapshot", which false-alarmed on the normal sequence
+  (source committed before the snapshot is written). Both fixed in the query.
+- ⛔ **A claim of mine was wrong and is corrected in place (W1).** The conftest comment said
+  migration-only tables leaked "16 of 56, including `corporate_filings`, `manual_assets`,
+  `mf_holdings`, `mf_import_batches`" — measured against the DEV database and a partial import
+  set. Re-measured against the TEST database: **47 tables, 45 modelled, 2 unmanaged**, and
+  `universe_snapshot` was already cleared by CASCADE from `stocks`. **The only table that was
+  actually leaking is `universe_rule_inputs`.** The mechanism still stands; the number did not.
+- The cleanup now shares the existing connection instead of opening a second one on a NullPool
+  engine — ~40 ms × 2,308 test functions ≈ **90 s off a full run** — which also removes the
+  FK-ordering and id-drift hazards of a bare per-table loop.
+- `ca_detector` now passes its own `now` into `record_flag`: the column's `server_default
+  now()` is `transaction_timestamp()`, and `eod_catchup` scans up to 21 sessions in ONE
+  transaction, so an event could be stamped minutes before the flag it records — in a log
+  whose entire semantic is ordering.
+- ⚠ **Left open, latent:** `actor_user_id` is `ON DELETE SET NULL` and NULL already means "a
+  machine flagged this", so deleting a reviewing admin would make their clear look like a
+  machine event. No user-delete path exists today.
+- 20 new tests across the three suites; 100 green; ruff/mypy clean.
+
 ### §77 P1 batch — the universe's absences get instruments, and the CA quarantine gets a way out (2026-09-15)
 
 Queue item 3. Four sub-items, and two of them changed what we believed.

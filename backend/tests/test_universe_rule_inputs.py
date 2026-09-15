@@ -14,9 +14,11 @@ and never explained, so the 0.5 threshold could never be tuned.
 from __future__ import annotations
 
 import gzip
+import hashlib
 from datetime import UTC, date, datetime
 from decimal import Decimal
 
+import pytest
 from app.models.broker import KiteInstrument
 from app.services.universe_materialiser import (
     load_inputs,
@@ -25,6 +27,8 @@ from app.services.universe_materialiser import (
     materialise,
     parse_eq_listed,
     record_inputs,
+    record_parsed,
+    record_source,
 )
 from app.services.universe_rule import RULE_VERSION, UniverseInputs, evaluate_all
 from sqlalchemy import text
@@ -207,3 +211,94 @@ class TestTheRefusalIsNowAuditable:
         assert recorded is not None
         assert recorded.eq_listed == frozenset({"AAA"})
         assert await load_recorded_csv(db, as_of=AS_OF) == truncated
+
+
+class TestTheSourceSurvivesAParseFailure:
+    """⛔ THE FIX FOR THE ARTIFACT'S OWN MOTIVATING CASE (bug-hunter, 2026-09-15).
+
+    `record_inputs` originally ran AFTER `load_inputs`, which parses — and
+    `parse_eq_listed` RAISES on an unrecognised header. So on the `EQ=0` header bug (a
+    shifted column that makes the parse return nothing), the task died before recording
+    anything, and the one artifact that separates a SOURCE change from a PARSER change was
+    absent for the only day it was ever needed.
+    """
+
+    async def test_a_rejected_parse_still_leaves_the_bytes_on_record(
+        self, db: AsyncSession
+    ) -> None:
+        shifted = _csv("AAA", "BBB").replace("SERIES", "SERIES_X", 1)
+        # The parser refuses it — that is the guard working, and the whole problem.
+        with pytest.raises(ValueError, match="no SERIES column"):
+            parse_eq_listed(shifted)
+
+        # The order path records the source BEFORE parsing, so the bytes survive.
+        await record_source(db, as_of=AS_OF, raw=shifted.encode())
+        assert await load_recorded_csv(db, as_of=AS_OF) == shifted
+
+    async def test_an_unparsed_row_reads_as_absent_not_as_an_empty_universe(
+        self, db: AsyncSession
+    ) -> None:
+        """⚠ The dangerous reading. NULL sets mean "captured, not understood"; returning
+        an EMPTY UniverseInputs would replay as "the rule saw no listed equities", which
+        is the same shape as the outage this whole rebuild is about."""
+        await record_source(db, as_of=AS_OF, raw=_csv("AAA").encode())
+        assert await load_recorded_inputs(db, as_of=AS_OF) is None
+        # …and the raw half still answers, which is the point of keeping them separable.
+        assert await load_recorded_csv(db, as_of=AS_OF) is not None
+
+    async def test_parsed_sets_fill_in_afterwards(self, db: AsyncSession) -> None:
+        await record_source(db, as_of=AS_OF, raw=_csv("AAA", "BBB").encode())
+        await record_parsed(
+            db,
+            as_of=AS_OF,
+            inputs=UniverseInputs(
+                eq_listed=frozenset({"AAA", "BBB"}), kite_tradable=frozenset({"AAA"})
+            ),
+        )
+        replayed = await load_recorded_inputs(db, as_of=AS_OF)
+        assert replayed is not None
+        assert replayed.eq_listed == frozenset({"AAA", "BBB"})
+
+    async def test_a_new_source_invalidates_the_previous_parse(
+        self, db: AsyncSession
+    ) -> None:
+        """⚠ Re-recording a day's SOURCE must not leave yesterday's parse attached to it —
+        that would assert a set of symbols was derived from bytes it never came from."""
+        await record_source(db, as_of=AS_OF, raw=_csv("AAA").encode())
+        await record_parsed(
+            db,
+            as_of=AS_OF,
+            inputs=UniverseInputs(eq_listed=frozenset({"AAA"}), kite_tradable=frozenset()),
+        )
+        assert await load_recorded_inputs(db, as_of=AS_OF) is not None
+
+        await record_source(db, as_of=AS_OF, raw=_csv("ZZZ").encode())
+        assert await load_recorded_inputs(db, as_of=AS_OF) is None
+        assert await load_recorded_csv(db, as_of=AS_OF) == _csv("ZZZ")
+
+
+class TestTheStoredBytesAreTheServedBytes:
+    async def test_a_non_utf8_source_round_trips_exactly(
+        self, db: AsyncSession
+    ) -> None:
+        """⚠ `download_equity_l` returns `resp.content`, not `resp.text`. httpx decodes
+        with `errors="replace"` and NSE declares no charset, so a single Latin-1 byte
+        would have become U+FFFD and been UNRECOVERABLE — while `csv_sha256` silently
+        stopped matching a `sha256sum` of an independently fetched copy. Today's live file
+        is pure ASCII, so the two agreed by luck; this pins it by construction."""
+        served = "SYMBOL,NAME OF COMPANY, SERIES\nCAFé,Café Ltd,EQ\n".encode("latin-1")
+        assert b"\xe9" in served  # the byte that a text round-trip destroys
+
+        await record_source(db, as_of=AS_OF, raw=served)
+        row = (
+            await db.execute(
+                text("SELECT csv_gz, csv_sha256 FROM universe_rule_inputs WHERE as_of = :d"),
+                {"d": AS_OF},
+            )
+        ).one()
+        assert gzip.decompress(row.csv_gz) == served  # byte for byte
+        assert row.csv_sha256 == hashlib.sha256(served).hexdigest()
+        # …and a lossy decode would NOT have produced that digest.
+        lossy = served.decode("utf-8", errors="replace").encode("utf-8")
+        assert lossy != served
+        assert row.csv_sha256 != hashlib.sha256(lossy).hexdigest()

@@ -69,14 +69,39 @@ class UniverseHealth:
     def inputs_are_stale(self) -> bool:
         return self.inputs_days_behind is None or self.inputs_days_behind >= 1
 
+    #: Is there an inputs row for the snapshot being judged? Answered by the query, not
+    #: by comparing maxima — see the note on `_SQL`.
+    inputs_for_snapshot: bool = False
+
     @property
     def inputs_match_snapshot(self) -> bool:
         """The evaluation that decided today's universe has its source on record.
 
         ⚠ Every day before 2026-09-14 fails this by construction — the table did not
         exist. That is why the renderer says "not captured", never "missing" (A24)."""
+        return self.snapshot_as_of is not None and self.inputs_for_snapshot
+
+    @property
+    def apply_diverged(self) -> bool:
+        """⛔ The rule DECIDED a membership and `is_active` says something else.
+
+        **This is the half the first version missed, and it was silent in the dangerous
+        direction.** `materialise()` commits the snapshot and `apply_to_stocks` may then
+        REFUSE it — the collapse rail or the subscription ceiling — after which the task
+        logs an error and returns `applied: False`. Recency alone reads that as perfectly
+        healthy: the snapshot IS today's, so `days_behind == 0` and the report rendered
+        **"✅ Universe current"** while `is_active` stayed frozen for as many consecutive
+        days as the rail kept firing. Every downstream consumer reads `is_active`, not the
+        snapshot, so the instrument was measuring the wrong one of the two (bug-hunter
+        HIGH, 2026-09-15).
+
+        ⚠ Compares against the count, which is the only cross-check available without a
+        per-stock diff. It can miss a same-size swap (one name in, one out) — a real limit,
+        but the failure this exists to catch is a REFUSED apply, and a refusal leaves the
+        counts differing by construction."""
         return (
-            self.snapshot_as_of is not None and self.inputs_as_of == self.snapshot_as_of
+            self.snapshot_members is not None
+            and self.active_stocks != self.snapshot_members
         )
 
     @property
@@ -84,20 +109,34 @@ class UniverseHealth:
         """⚠ Deliberately NOT `snapshot_is_stale`. One day behind is the normal state
         for most of a trading day — the beat runs in the morning and a report generated
         before it, or on a day it has not yet fired, is not a fault. The alarm is for a
-        universe nobody has re-decided for `STALE_ALARM_DAYS` sessions."""
+        universe nobody has re-decided for `STALE_ALARM_DAYS` sessions — or one whose
+        decision was never APPLIED."""
         return (
             self.snapshot_days_behind is None
             or self.snapshot_days_behind >= STALE_ALARM_DAYS
+            or self.apply_diverged
         )
 
 
+# ⚠ `in_captured` is the captured_at OF THE LATEST ROW, not `max(captured_at)`: those are
+# different rows the moment a replay back-fills an older `as_of`, and an audit instrument
+# printing one row's date beside another row's time is worse than printing neither.
+# ⚠ `in_for_snapshot` ASKS THE REAL QUESTION — "is there an inputs row for the snapshot we
+# are judging" — rather than comparing two independent maxima, which false-alarmed whenever
+# `record_inputs` had committed today's row and `materialise` had not yet written its
+# snapshot (bug-hunter, 2026-09-15).
 _SQL = """
+WITH snap AS (SELECT max(as_of) AS d FROM universe_snapshot),
+     inp  AS (SELECT max(as_of) AS d FROM universe_rule_inputs)
 SELECT
-    (SELECT max(as_of) FROM universe_snapshot)                       AS snap_as_of,
+    (SELECT d FROM snap)                                             AS snap_as_of,
     (SELECT count(*) FROM universe_snapshot
-      WHERE as_of = (SELECT max(as_of) FROM universe_snapshot))      AS snap_members,
-    (SELECT max(as_of) FROM universe_rule_inputs)                    AS in_as_of,
-    (SELECT max(captured_at) FROM universe_rule_inputs)              AS in_captured,
+      WHERE as_of = (SELECT d FROM snap))                            AS snap_members,
+    (SELECT d FROM inp)                                              AS in_as_of,
+    (SELECT captured_at FROM universe_rule_inputs
+      WHERE as_of = (SELECT d FROM inp))                             AS in_captured,
+    (SELECT EXISTS (SELECT 1 FROM universe_rule_inputs
+                     WHERE as_of = (SELECT d FROM snap)))            AS in_for_snapshot,
     (SELECT count(*) FROM stocks WHERE is_active)                    AS active
 """
 
@@ -117,7 +156,7 @@ async def read_universe_health(
     except Exception:  # noqa: BLE001 — a health probe must not raise into its own report
         log.exception("universe health read failed; reporting as unknown")
         today = now_ist.date()
-        return UniverseHealth(today, None, None, None, None, None, None, 0)
+        return UniverseHealth(today, None, None, None, None, None, None, 0, False)
 
     health = UniverseHealth(
         expected=expected,
@@ -128,6 +167,7 @@ async def read_universe_health(
         inputs_captured_at=row.in_captured,
         inputs_days_behind=in_behind,
         active_stocks=int(row.active or 0),
+        inputs_for_snapshot=bool(row.in_for_snapshot),
     )
     if health.is_alarming:
         log.warning(
@@ -145,6 +185,29 @@ def to_notification(health: UniverseHealth) -> Notification | None:
 
     if not health.is_alarming:
         return None
+    # ⭐ Two failures, two remedies, so two messages. "The beat stopped" sends you to the
+    # scheduler; "the rule ran and its verdict was refused" sends you to the rail and its
+    # threshold. Merging them would send every reader to the wrong place half the time.
+    if health.apply_diverged and not health.snapshot_is_stale:
+        return Notification(
+            event="universe_not_applied",
+            level=Level.ERROR,
+            title=(
+                f"UNIVERSE VERDICT NOT APPLIED — rule decided "
+                f"{health.snapshot_members:,}, {health.active_stocks:,} active"
+            ),
+            lines=[
+                f"the rule evaluated {health.snapshot_as_of} and recorded "
+                f"{health.snapshot_members:,} members, but is_active holds "
+                f"{health.active_stocks:,}",
+                "that gap is what a REFUSED apply looks like — the collapse rail or the "
+                "subscription ceiling fired and the universe was left frozen",
+                "every consumer reads is_active, not the snapshot, so the scan universe "
+                "and the live subscription are running on an older decision",
+                "REMEDY: read the materialise_universe log for the refusal, then inspect "
+                "that day's row in universe_rule_inputs to see WHY the input was small",
+            ],
+        )
     behind = (
         "NEVER evaluated"
         if health.snapshot_days_behind is None
@@ -169,7 +232,22 @@ def render_lines(health: UniverseHealth) -> list[str]:
     otherwise — and the INPUTS line is always present, because "the rule ran" and "we can
     explain what it decided" are different facts."""
     out: list[str] = []
-    if health.is_alarming:
+    if health.apply_diverged and not health.snapshot_is_stale:
+        # The rule is CURRENT; its verdict was not adopted. A different sentence, because
+        # it is a different fault with a different fix.
+        out += [
+            "> ## ⚠️ UNIVERSE VERDICT NOT APPLIED (live — as of report generation)",
+            ">",
+            f"> The rule evaluated **{health.snapshot_as_of}** and recorded "
+            f"**{health.snapshot_members:,}** members, but `is_active` holds "
+            f"**{health.active_stocks:,}**. That gap is what a **refused apply** looks "
+            "like — the collapse rail or the subscription ceiling fired and the universe "
+            "was left frozen. Every consumer reads `is_active`, not the snapshot.",
+            "> REMEDY: read the `materialise_universe` log for the refusal, then that "
+            "day's row in `universe_rule_inputs` for WHY the input was small.",
+            "",
+        ]
+    elif health.is_alarming:
         behind = (
             "**NEVER evaluated**"
             if health.snapshot_days_behind is None

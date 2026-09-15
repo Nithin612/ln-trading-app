@@ -127,33 +127,48 @@ async def clean_tables() -> None:
                 text(f'TRUNCATE TABLE "{table.name}" RESTART IDENTITY CASCADE')
             )
 
-    # ⭐ AND the tables the loop above cannot see. It walks `Base.metadata`, which
-    # silently excludes every table created by a migration without an ORM model —
-    # measured 2026-09-14: **16 of 56**, including `universe_snapshot`,
-    # `universe_rule_inputs`, `corporate_filings`, `manual_assets`, `mf_holdings` and
-    # `mf_import_batches`. Those carried state from one test into the next, and the
-    # failure mode is the nastiest kind: a test that passes alone and fails in a suite,
-    # or — worse — passes in a suite for the wrong reason. Found when a new
-    # migration-only table made two tests collide on a primary key.
-    #
-    # ⚠ The list is DERIVED FROM THE DATABASE, so a future migration is covered the day
-    # it lands with nobody needing to remember anything — the same reason
-    # `restrictions.py` derives its coverage from each rule's `requires` rather than
-    # from a hand-kept list. `alembic_version` is schema state, not test data.
-    #
-    # ⚠ `DELETE` rather than the statement used above: these tables carry no sequence
-    # worth restarting, and the project's bash guard reserves that keyword for
-    # migrations. Same isolation, and it runs only against a `*_test` database — the
-    # import-time guard at the top of this file refuses anything else.
-    async with _engine.begin() as conn:
+        # ⭐ AND the tables the loop above cannot see. It walks `Base.metadata`, which
+        # silently excludes every table created by a migration without an ORM model.
+        #
+        # ⛔ **CORRECTED 2026-09-15 — the first number here was mine and it was wrong.**
+        # The original comment claimed "16 of 56 … including `corporate_filings`,
+        # `manual_assets`, `mf_holdings`, `mf_import_batches`", measured against the DEV
+        # database (which also carries ten dev-only `forensic_*` tables) and a partial
+        # import set. Re-measured against the TEST database with conftest's own imports:
+        # **47 public tables, 45 modelled, 2 unmanaged** — `universe_snapshot` and
+        # `universe_rule_inputs`. Every table I named is in fact in `Base.metadata`, and
+        # `universe_snapshot` was ALREADY cleared, because clearing `stocks` CASCADEs to
+        # everything referencing it.
+        #
+        # ⇒ **the only table this newly clears is `universe_rule_inputs`** — real and
+        # necessary (its tests reuse a fixed `as_of` primary key and collided without
+        # it), just not the leak the first version described. The MECHANISM still stands
+        # on its own: derived from the database, so a future migration-only table is
+        # covered the day it lands rather than when someone remembers — the same reason
+        # `restrictions.py` derives coverage from each rule's `requires`.
+        #
+        # ⚠ Same connection as the loop above, deliberately. A second `_engine.begin()`
+        # costs a fresh connect on a NullPool engine — measured ~40 ms, against ~1 ms for
+        # the query itself — and at 2,308 test functions that is ~90 s of pure setup
+        # added to every full run (bug-hunter, 2026-09-15).
+        #
+        # ⚠ `DELETE` rather than the statement used above: these tables carry no sequence
+        # worth restarting, and the project's bash guard reserves that keyword for
+        # migrations. Same isolation, and it only ever runs against a `*_test` database —
+        # the import-time guard at the top of this file refuses anything else.
         modelled = {t.name for t in Base.metadata.sorted_tables} | {"alembic_version"}
-        rows = (
-            await conn.execute(
-                text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
-            )
-        ).scalars()
-        for name in (n for n in rows if n not in modelled):
+        extra = [
+            n
+            for n in (
+                await conn.execute(
+                    text("SELECT tablename FROM pg_tables WHERE schemaname = 'public'")
+                )
+            ).scalars()
+            if n not in modelled
+        ]
+        for name in extra:
             await conn.execute(text(f'DELETE FROM "{name}"'))
+
 
     import redis.asyncio as aioredis
     from app.core.config import settings

@@ -77,13 +77,23 @@ async def list_flagged(db: AsyncSession) -> list[FlaggedStock]:
     ]
 
 
-async def record_flag(db: AsyncSession, *, stock_id: int, reason: str) -> None:
+async def record_flag(
+    db: AsyncSession, *, stock_id: int, reason: str, at: datetime
+) -> None:
     """Append the machine's side of the log. Called by `ca_detector` in the same
     transaction as the flag, so the log cannot disagree with `stocks`.
 
+    ⚠ `at` is REQUIRED, and it must be the same value written to `stocks.ca_flagged_at`.
+    Leaving it to the column's `server_default now()` used a different clock:
+    Postgres `now()` is `transaction_timestamp()`, and `eod_catchup` scans up to 21
+    sessions in ONE session — so an event could be timestamped minutes before the flag it
+    records, and disagree with `stocks` for the same event. In a log whose whole semantic
+    is ORDERING, and which `history()` sorts by `at`, that is enough to put an admin's
+    clear before the re-flag it actually preceded (bug-hunter, 2026-09-15).
+
     ⚠ No commit here — the detector commits once for the whole batch, and splitting that
     would let a crash leave flags without their events."""
-    db.add(CaFlagEvent(stock_id=stock_id, event="flagged", reason=reason))
+    db.add(CaFlagEvent(stock_id=stock_id, event="flagged", reason=reason, at=at))
 
 
 async def clear_flag(

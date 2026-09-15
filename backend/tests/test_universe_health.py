@@ -222,3 +222,117 @@ class TestBeatTask:
         result = await _universe_health_payload(db)
         assert result["status"] == "ok" and sent == []
         assert result["inputs_on_record"] is True
+
+
+class TestTheApplyIsAsserted:
+    """⛔ THE HIGH FINDING (bug-hunter, 2026-09-15): recency alone was silent on exactly
+    the failure this module claims to catch.
+
+    `materialise()` commits the snapshot and `apply_to_stocks` may then REFUSE it — the
+    collapse rail or the subscription ceiling — after which the task logs an error and
+    returns `applied: False`. The snapshot IS today's, so `days_behind == 0` and the
+    report rendered **"✅ Universe current"** while `is_active` stayed frozen for as many
+    consecutive days as the rail kept firing. Every downstream consumer reads `is_active`,
+    not the snapshot, so the instrument was watching the wrong one of the two.
+    """
+
+    async def test_a_refused_apply_alarms_even_though_the_rule_ran_today(
+        self, db: AsyncSession
+    ) -> None:
+        # The rule decided ONE member today; 3 stocks are still active ⇒ not adopted.
+        for sym in ("AAA", "BBB", "CCC"):
+            await make_stock(db, symbol=sym, is_active=True)
+        first = (await db.execute(text("SELECT min(id) FROM stocks"))).scalar()
+        await _snapshot(db, TUE, [int(first)])
+        await _inputs(db, TUE)
+        await db.commit()
+
+        h = await read_universe_health(db, now=TUE_1000)
+        assert h.snapshot_days_behind == 0  # the rule IS current …
+        assert h.snapshot_members == 1 and h.active_stocks == 3
+        assert h.apply_diverged is True  # … and its verdict was never adopted
+        assert h.is_alarming is True
+
+    async def test_the_refusal_gets_its_own_message_not_the_stale_one(
+        self, db: AsyncSession
+    ) -> None:
+        """⭐ Two failures, two remedies, so two messages: "the beat stopped" sends you to
+        the scheduler, "the verdict was refused" sends you to the rail and its threshold.
+        Merging them would send every reader to the wrong place half the time."""
+        for sym in ("AAA", "BBB"):
+            await make_stock(db, symbol=sym, is_active=True)
+        first = (await db.execute(text("SELECT min(id) FROM stocks"))).scalar()
+        await _snapshot(db, TUE, [int(first)])
+        await db.commit()
+
+        h = await read_universe_health(db, now=TUE_1000)
+        md = "\n".join(render_lines(h))
+        assert "UNIVERSE VERDICT NOT APPLIED" in md
+        assert "UNIVERSE RULE STALE" not in md
+        assert "refused apply" in md
+        assert "universe_rule_inputs" in md  # points at WHY the input was small
+
+        n = to_notification(h)
+        assert n is not None and n.event == "universe_not_applied"
+        assert "1" in n.title and "2" in n.title  # decided vs active, both named
+
+    async def test_an_adopted_verdict_is_quiet(self, db: AsyncSession) -> None:
+        """The canary: without it, an alarm that fires on EVERY book passes the two above."""
+        for sym in ("AAA", "BBB"):
+            await make_stock(db, symbol=sym, is_active=True)
+        ids = [
+            int(r[0]) for r in (await db.execute(text("SELECT id FROM stocks"))).fetchall()
+        ]
+        await _snapshot(db, TUE, ids)  # the snapshot matches what is active
+        await _inputs(db, TUE)
+        await db.commit()
+
+        h = await read_universe_health(db, now=TUE_1000)
+        assert h.apply_diverged is False and h.is_alarming is False
+        assert "Universe current" in "\n".join(render_lines(h))
+
+
+class TestInputsAreCorrelatedNotMaximised:
+    async def test_a_back_filled_older_row_does_not_lend_its_timestamp(
+        self, db: AsyncSession
+    ) -> None:
+        """⚠ `max(as_of)` and `max(captured_at)` are DIFFERENT ROWS the moment a replay
+        back-fills an older day. Printing one row's date beside another row's time is a
+        wrong fact in an instrument whose only job is audit (bug-hunter, 2026-09-15)."""
+        s = await make_stock(db, symbol="AAA")
+        await _snapshot(db, TUE, [s.id])
+        await _inputs(db, TUE)
+        await db.execute(
+            text("UPDATE universe_rule_inputs SET captured_at = :t WHERE as_of = :d"),
+            {"t": datetime(2026, 9, 15, 3, 5, tzinfo=UTC), "d": TUE},
+        )
+        # A replay records an OLDER day, LATER.
+        await _inputs(db, MON)
+        await db.execute(
+            text("UPDATE universe_rule_inputs SET captured_at = :t WHERE as_of = :d"),
+            {"t": datetime(2026, 9, 15, 10, 0, tzinfo=UTC), "d": MON},
+        )
+        await db.commit()
+
+        h = await read_universe_health(db, now=TUE_1000)
+        assert h.inputs_as_of == TUE
+        assert h.inputs_captured_at == datetime(2026, 9, 15, 3, 5, tzinfo=UTC)
+
+    async def test_inputs_recorded_before_the_snapshot_do_not_false_alarm(
+        self, db: AsyncSession
+    ) -> None:
+        """⚠ `record_source` commits BEFORE `materialise()` writes its snapshot, so
+        comparing two maxima reported "inputs NOT captured" for yesterday whenever today's
+        source had landed and today's snapshot had not — a false alarm on the normal
+        sequence. The question is "is there a row FOR the snapshot", not "are the maxima
+        equal"."""
+        s = await make_stock(db, symbol="AAA")
+        await _snapshot(db, MON, [s.id])
+        await _inputs(db, MON)
+        await _inputs(db, TUE)  # today's source already recorded; snapshot not yet
+        await db.commit()
+
+        h = await read_universe_health(db, now=TUE_1000)
+        assert h.snapshot_as_of == MON and h.inputs_as_of == TUE
+        assert h.inputs_match_snapshot is True  # MON's inputs ARE on record
+        assert "Rule inputs NOT captured" not in "\n".join(render_lines(h))

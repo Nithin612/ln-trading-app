@@ -117,12 +117,15 @@ def materialise_universe(self: object) -> dict[str, object]:  # noqa: ARG001
 
 async def _run_materialise_universe() -> dict[str, object]:
     from app.db.session import AsyncSessionFactory
+    from app.services.notifier import Level, Notification, notify
     from app.services.universe_materialiser import (
         apply_to_stocks,
+        decode_csv,
         download_equity_l,
         load_inputs,
         materialise,
-        record_inputs,
+        record_parsed,
+        record_source,
     )
 
     today_ist = datetime.now(UTC).astimezone(_IST).date()
@@ -131,12 +134,20 @@ async def _run_materialise_universe() -> dict[str, object]:
         # bytes can be recorded. §73: the artifact is contents, not a hash — a hash gives
         # you `H(input)` while every consumer needs `input`, and `kite_instruments` is
         # upserted in place, so its state is otherwise gone by tomorrow.
-        csv_text = await download_equity_l()
-        inputs = await load_inputs(db, csv_text=csv_text)
-        # ⚠ BEFORE the decision, and committed on its own. The refusal path below is the
-        # single most important thing to be able to audit, and it is precisely the path
-        # where the later steps do not run.
-        await record_inputs(db, as_of=today_ist, csv_text=csv_text, inputs=inputs)
+        raw = await download_equity_l()
+        # ⛔ SOURCE FIRST, before anything tries to understand it. `load_inputs` parses,
+        # and `parse_eq_listed` RAISES on an unrecognised header — so recording after it
+        # meant that on the `EQ=0` header bug, the exact failure this artifact exists for,
+        # nothing was written at all (bug-hunter, 2026-09-15). Now a rejected parse leaves
+        # a row holding the bytes with NULL sets, which is the most informative state the
+        # table can hold: we have precisely what the server sent, and our parser could not
+        # read it.
+        await record_source(db, as_of=today_ist, raw=raw)
+        inputs = await load_inputs(db, csv_text=decode_csv(raw))
+        # …and the parsed sets, once there ARE parsed sets. Both committed before the
+        # decision below, because a refused apply is the case most needing an audit and is
+        # precisely the path where the later steps do not run.
+        await record_parsed(db, as_of=today_ist, inputs=inputs)
         members = await materialise(db, as_of=today_ist, inputs=inputs)
         try:
             activated, deactivated = await apply_to_stocks(db, as_of=today_ist)
@@ -147,6 +158,25 @@ async def _run_materialise_universe() -> dict[str, object]:
             # never explained, and `universe_apply_min_fraction` could never be tuned.
             # `universe_rule_inputs` is what actually makes this line true.
             log.error("universe %s NOT applied: %s", today_ist, exc)
+            # ⭐ AND IT PUSHES. A refusal leaves `is_active` frozen while every consumer
+            # keeps reading it, and this task runs unattended — so a log line nobody
+            # tails was the entire alarm. The 09:40 health beat catches a refusal too,
+            # but an hour later and by inference from a count; this one knows.
+            notify(
+                Notification(
+                    event="universe_not_applied",
+                    level=Level.ERROR,
+                    title=f"UNIVERSE {today_ist} NOT APPLIED — {exc}",
+                    lines=[
+                        f"the rule decided {members:,} members and the apply was refused",
+                        "is_active is unchanged, so the scan universe and the live "
+                        "subscription are running on an older decision",
+                        f"REMEDY: inspect universe_rule_inputs for {today_ist} to see WHY "
+                        "the input was small, then decide whether the threshold is wrong "
+                        "or the feed is",
+                    ],
+                )
+            )
             return {"members": members, "applied": False, "reason": str(exc)}
 
     if activated or deactivated:
