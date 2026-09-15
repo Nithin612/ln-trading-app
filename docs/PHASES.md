@@ -1866,15 +1866,17 @@ a fact that contradicts a decision below.
    that pushes via the notifier, and fail-open per feed. Acceptance met: the regression test
    replays the collapse and reproduces BOTH existing instruments' silence first.
 
-1b. ⬜ **U4″ — per-segment coverage (queued 2026-09-14 at the user's request).** U4′ is an
+1b. ✅ **U4″ — per-segment coverage. DONE 2026-09-15.** U4′ is an
    **unweighted** name count, so its 10% floor is ~264 of ~2,637. Measured: the 50 active
    Nifty-50 constituents are **1.90%** of the archive and all 210 active F&O underlyings
    **7.96%** ⇒ **losing every blue chip fires nothing**, and the funnel is blind to it too (they
    stay `is_active`). Shape: coverage per SEGMENT — `is_nifty50`, `is_fno`, and **names with an
    open paper position** (the set whose absence stops us exiting) — each with its own baseline
-   and floor, and an ABSOLUTE-count rule where a segment is small enough that one name exceeds
-   the fraction. ⚠ A different instrument: do NOT overload `FeedCoverage`'s fields with a second
-   meaning.
+   and floor. ⭐⭐ **Built WITHOUT a baseline, which the measurement decided:** a segment's
+   denominator is its membership, so completeness is exact, and both named segments price
+   **100.0% on every one of the last 20 sessions** (vs 97.0% min for the archive) ⇒ the noise
+   floor is zero and **ANY absence alarms**. Far more sensitive than a fraction. Separate
+   dataclass — `FeedCoverage`'s `baseline`/`min_fraction` would be meaningless here.
 2. ✅ **Snapshot the rule's inputs — DONE 2026-09-14.** Table `universe_rule_inputs`
    (migration `a9b0c1d2e3f4`, applied to dev + test): gzipped raw CSV + sha256 + BOTH parsed
    input sets + rule version, recorded **before** the decision so a refused apply is auditable

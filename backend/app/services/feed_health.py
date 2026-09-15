@@ -505,3 +505,217 @@ def render_feed_coverage(rows: list[FeedCoverage]) -> list[str]:
         )
         out += [f"> ⚠ **Breadth not assessable** for {r.name} (`{r.table}`): {reason}.", ""]
     return out
+
+
+# ── U4″ · segment coverage ───────────────────────────────────────────────────────
+#
+# ⭐ WHY A THIRD INSTRUMENT AND NOT A PARAMETER ON THE SECOND. U4′ above is an
+# UNWEIGHTED count against a trailing median, and that is the right shape for the whole
+# archive, whose membership drifts — names list, delist and move series, so there is no
+# exact denominator to check against and a median is the only honest reference.
+#
+# ⛔ But that shape has a floor it cannot see under. The threshold is a fraction of ~2,637
+# names, so ~264 must vanish before anything fires. Measured 2026-09-14: the **50** active
+# Nifty-50 constituents are **1.90%** of the archive and all **210** active F&O underlyings
+# are **7.96%** ⇒ **an ingestion bug that drops every blue chip fires NOTHING**, and the V1
+# funnel cannot see it either because those names stay `is_active`. The 09-07 outage is
+# written up as "1,278 names, every blue chip among them": U4′ detects the 1,278.
+#
+# ⭐⭐ A SEGMENT HAS A KNOWN MEMBERSHIP, SO IT NEEDS NO BASELINE AT ALL. The denominator is
+# the constituent list itself, which means completeness is checkable EXACTLY rather than
+# statistically. Measured over the trailing 20 sessions, both named segments price
+# **100.0% every single session** — minimum, median and maximum all 100 — against 97.0%
+# minimum for the whole universe. ⇒ **the noise floor for a segment is literally zero, so
+# ANY absence is the alarm.** That is both simpler and far more sensitive than a fraction,
+# and it is measured rather than argued.
+#
+# ⚠ THE THIRD SEGMENT IS THE MONEY ONE. "Names with an open position" is the set whose
+# absence stops us MARKING and EXITING — a held name with no bar has no honest price, and
+# `close_position` then books against a stale close or the entry itself. It is not a
+# membership list anyone curates; it is whatever we happen to hold, which is exactly why
+# no static configuration would have covered it.
+
+#: Absences tolerated per segment before it alarms. Zero, from the measurement above —
+#: these sets price completely, every session, so one missing name is already abnormal.
+SEGMENT_MAX_ABSENT = 0
+#: Cap on the symbols named in a rendered alarm. The NAMES are the actionable part for a
+#: small segment, but an unbounded list in a report header is unreadable.
+SEGMENT_NAME_LIMIT = 10
+
+
+@dataclass(frozen=True)
+class SegmentCoverage:
+    """Of the names we KNOW we should be pricing, how many printed on the latest session.
+
+    ⚠ Deliberately NOT a `FeedCoverage` with different numbers: that one carries a
+    `baseline` and a `min_fraction` because its denominator drifts. Here the denominator
+    is a membership, so those fields would be meaningless and giving them a second meaning
+    is how an instrument stops being readable."""
+
+    name: str  # human label
+    expected: int  # constituents of the segment
+    priced: int  # …that printed a bar on the latest session
+    absent: tuple[str, ...]  # symbols that did not, capped for display
+    session: date | None
+    max_absent: int
+
+    @property
+    def absent_count(self) -> int:
+        return max(0, self.expected - self.priced)
+
+    @property
+    def is_measurable(self) -> bool:
+        """An empty segment is not a healthy segment — it is a segment with nothing to
+        say. Holding no positions is the normal version of that (A24)."""
+        return self.expected > 0
+
+    @property
+    def coverage_pct(self) -> float | None:
+        if not self.is_measurable:
+            return None
+        return round(self.priced / self.expected * 100.0, 1)
+
+    @property
+    def is_collapsed(self) -> bool:
+        return self.is_measurable and self.absent_count > self.max_absent
+
+
+# One statement per segment, each naming its own membership. `latest` is the archive's
+# newest session, shared, so a segment is never judged against a date it alone is missing.
+_SEGMENT_SQL = """
+WITH latest AS (
+    SELECT max((time AT TIME ZONE 'UTC')::date) AS d
+      FROM ohlcv_1d WHERE time < (current_date + 2)::timestamptz
+),
+members AS ({members}),
+priced AS (
+    SELECT DISTINCT o.stock_id
+      FROM ohlcv_1d o
+     WHERE (o.time AT TIME ZONE 'UTC')::date = (SELECT d FROM latest)
+)
+SELECT (SELECT d FROM latest)                                   AS session,
+       (SELECT count(*) FROM members)                           AS expected,
+       (SELECT count(*) FROM members m
+         WHERE m.id IN (SELECT stock_id FROM priced))           AS priced,
+       (SELECT array_agg(m.symbol ORDER BY m.symbol)
+          FROM members m
+         WHERE m.id NOT IN (SELECT stock_id FROM priced))       AS absent
+"""
+
+#: Each segment's membership, as a query returning (id, symbol). No identifier here is
+#: caller-supplied, so there is nothing to guard against injection.
+_SEGMENTS: tuple[tuple[str, str], ...] = (
+    (
+        "Nifty 50",
+        "SELECT id, symbol FROM stocks WHERE is_nifty50 AND is_active",
+    ),
+    (
+        "F&O underlyings",
+        "SELECT id, symbol FROM stocks WHERE is_fno AND is_active",
+    ),
+    (
+        # ⭐ The money segment: whatever we currently hold, regardless of flags or
+        # membership. A held name with no bar cannot be marked or honestly exited.
+        "Open positions",
+        "SELECT DISTINCT s.id, s.symbol FROM stocks s"
+        " JOIN positions p ON p.stock_id = s.id AND p.closed_at IS NULL",
+    ),
+)
+
+
+async def check_segment_coverage(
+    db: AsyncSession, *, max_absent: int = SEGMENT_MAX_ABSENT
+) -> list[SegmentCoverage]:
+    """Completeness of each known-membership segment on the latest session. Read-only,
+    and NEVER raises — a failed segment degrades to "not assessable", never to green."""
+    out: list[SegmentCoverage] = []
+    for label, members in _SEGMENTS:
+        try:
+            async with db.begin_nested():
+                row = (
+                    await db.execute(text(_SEGMENT_SQL.format(members=members)))
+                ).one()
+        except Exception:  # noqa: BLE001 — a health probe must not raise into its report
+            log.exception("SEGMENT COVERAGE probe failed for %s; not assessable", label)
+            out.append(SegmentCoverage(label, 0, 0, (), None, max_absent))
+            continue
+        cov = SegmentCoverage(
+            name=label,
+            expected=int(row.expected or 0),
+            priced=int(row.priced or 0),
+            absent=tuple(row.absent or ())[:SEGMENT_NAME_LIMIT],
+            session=row.session,
+            max_absent=max_absent,
+        )
+        if cov.is_collapsed:
+            log.warning(
+                "SEGMENT COVERAGE GAP: %s — %d of %d priced on %s; absent: %s",
+                label, cov.priced, cov.expected, cov.session, ", ".join(cov.absent),
+            )
+        out.append(cov)
+    return out
+
+
+def segments_to_notification(rows: list[SegmentCoverage]) -> Notification | None:
+    from app.services.notifier import Level, Notification
+
+    gaps = [r for r in rows if r.is_collapsed]
+    if not gaps:
+        return None
+    lines = [
+        f"{r.name}: {r.priced}/{r.expected} priced on {r.session} — absent: "
+        + ", ".join(r.absent)
+        + ("…" if r.absent_count > len(r.absent) else "")
+        for r in gaps
+    ]
+    lines.append(
+        "these sets price COMPLETELY every session (measured: 100.0% min over 20 "
+        "sessions), so any absence is abnormal"
+    )
+    lines.append(
+        "the whole-archive coverage alarm cannot see this — 50 Nifty-50 names are 1.9% "
+        "of the archive, well under its threshold"
+    )
+    lines.append("REMEDY: check the EOD ingest for those names, and the universe rule")
+    return Notification(
+        event="segment_coverage",
+        level=Level.ERROR,
+        title=f"SEGMENT COVERAGE GAP — {gaps[0].name} {gaps[0].absent_count} name(s) absent",
+        lines=lines,
+    )
+
+
+def render_segment_coverage(rows: list[SegmentCoverage]) -> list[str]:
+    """Daily-report header. Names the missing SYMBOLS, because for a segment this small
+    the names are the actionable part, not the count."""
+    if not rows:
+        return []
+    gaps = [r for r in rows if r.is_collapsed]
+    measurable = [r for r in rows if r.is_measurable]
+    out: list[str] = []
+    if gaps:
+        out += [
+            "> ## ⚠️ SEGMENT COVERAGE GAP (live — as of report generation)",
+            ">",
+            "> A set whose membership we KNOW is incomplete. These segments price "
+            "completely every session — measured 100.0% minimum over 20 sessions — so a "
+            "single absence is abnormal, and the whole-archive alarm above cannot see it "
+            "(the 50 Nifty-50 names are 1.9% of the archive, far under its threshold).",
+            ">",
+        ]
+        for r in gaps:
+            more = "…" if r.absent_count > len(r.absent) else ""
+            out.append(
+                f"> - **{r.name}**: **{r.priced}/{r.expected}** priced on {r.session} — "
+                f"**{r.absent_count}** absent: {', '.join(r.absent)}{more}"
+            )
+        out.append("")
+    elif measurable:
+        summary = " · ".join(f"{r.name} {r.priced}/{r.expected}" for r in measurable)
+        out += [f"> ✅ **Segment coverage complete**: {summary}.", ""]
+    for r in rows:
+        if not r.is_measurable:
+            # A24 — an empty segment says nothing, and "nothing to check" must not read
+            # as "checked and fine". Holding no positions is the normal version of this.
+            out += [f"> ⚠ **{r.name}**: no members — nothing to check.", ""]
+    return out

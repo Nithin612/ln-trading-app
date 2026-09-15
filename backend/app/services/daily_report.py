@@ -60,10 +60,13 @@ from app.services.excursion import Excursion, load_1m_bars, tape_excursion
 from app.services.feed_health import (
     FeedCoverage,
     FeedStatus,
+    SegmentCoverage,
     check_feed_coverage,
     check_feed_staleness,
+    check_segment_coverage,
     render_feed_coverage,
     render_feed_health,
+    render_segment_coverage,
 )
 from app.services.liquidity import load_median_traded_values_safe
 from app.services.profit_lock_shadow import ShadowComparison, compare_position
@@ -287,6 +290,10 @@ class DailyReport:
     # Silent-feed-outage alarm (6.8.6) — staleness of each EOD feed vs the calendar.
     feed_health: list[FeedStatus] = field(default_factory=list)
     feed_coverage: list[FeedCoverage] = field(default_factory=list)
+    # U4″ — of the names we KNOW we should price (index/F&O members, held
+    # positions), how many printed. A different question from the archive-wide one
+    # above, which cannot see under its own threshold.
+    segment_coverage: list[SegmentCoverage] = field(default_factory=list)
     # §77 — is the universe rule still running, and were its inputs captured?
     universe_health: UniverseHealth | None = None
     # Q-R6 — did the report itself run on the recent sessions? A back-look only:
@@ -572,6 +579,7 @@ async def build_daily_report(
     # any EOD feed is behind the trading calendar.
     report.feed_health = await check_feed_staleness(db, now=now)
     report.feed_coverage = await check_feed_coverage(db)
+    report.segment_coverage = await check_segment_coverage(db)
     report.universe_health = await read_universe_health(db, now=now)
     report.report_health = await read_report_health(db, now=now)
     # Tick-mode degradation (A25) — did the live feed actually deliver full-mode
@@ -782,6 +790,10 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
     # it: a feed that is current and thin passes the check above, which is exactly
     # how the 2026-09-07 outage went five sessions unseen.
     out.extend(render_feed_coverage(r.feed_coverage))
+
+    # U4″ — segment completeness, directly beneath archive breadth: same family,
+    # finer grain, and it fires on cases the one above is structurally blind to.
+    out.extend(render_segment_coverage(r.segment_coverage))
 
     # §77 — universe-rule staleness, beside the feed alarms because it answers the
     # same class of question: a frozen `is_active` has no symptom of its own, and it

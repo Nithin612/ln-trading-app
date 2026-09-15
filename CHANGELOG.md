@@ -7,6 +7,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### U4″ — coverage of the sets whose membership we KNOW (2026-09-15)
+
+The gap U4′ left, closed. Queued at the user's request after U4′ shipped.
+
+- ⛔ **What U4′ cannot see.** It is an unweighted count against a trailing median — right for
+  the whole archive, whose membership drifts — but its threshold is a fraction of ~2,637 names,
+  so **~264 must vanish before anything fires**. Measured: the 50 active Nifty-50 constituents
+  are **1.90%** of the archive and all 210 F&O underlyings **7.96%**. **An ingestion bug that
+  drops every blue chip fires nothing**, and the V1 funnel is blind too (they stay `is_active`).
+- ⭐⭐ **A segment needs NO baseline, because its denominator is a membership.** Completeness is
+  checkable exactly rather than statistically. Measured over 20 sessions both named segments
+  price **100.0% every session** — min, median and max all 100 — against **97.0% minimum** for
+  the whole universe. ⇒ **the noise floor is literally zero, so ANY absence is the alarm.**
+  That is measured, not chosen, and it makes U4″ far more sensitive than U4′ rather than a
+  copy with different parameters.
+- ⭐ **Three segments, and the third is the money one.** Nifty 50 · F&O underlyings · **names
+  with an open position** — the set whose absence stops us MARKING and EXITING, since a held
+  name with no bar has no honest price and `close_position` then books against a stale close or
+  the entry itself. It is not a curated list but whatever we happen to hold, which is exactly
+  why no static configuration would have covered it.
+- ⚠ Deliberately a **separate dataclass**, not `FeedCoverage` with different numbers: that one
+  carries `baseline`/`min_fraction` because its denominator drifts, and giving those fields a
+  second meaning is how an instrument stops being readable.
+- ⚠ **An empty segment renders "nothing to check", never a green tick** (A24) — holding no
+  positions is the normal version of that, and it is what the dev book shows today.
+- Rides the existing 13:40 UTC beat (same question, finer grain, same remedy) but pushes a
+  **separate** notification: a whole-archive collapse and a missing blue chip need different
+  first moves. ⚠ Adding it dropped `level` from the beat payload; the existing beat test caught
+  that, which is the argument for asserting payload SHAPE and not just the status string.
+- 8 new tests. The acceptance one asserts BOTH instruments on ONE fixture: 50 index names go
+  dark out of 1,000, U4′ measures a 5% shortfall and stays **silent**, U4″ names every missing
+  constituent.
+
 ### V8 / Q-R6 — the daily report gets a heartbeat (2026-09-15)
 
 ⭐ **Measured: 26 reports against 30 trading sessions since 2026-08-01 — four missing, and

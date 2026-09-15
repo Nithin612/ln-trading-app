@@ -120,19 +120,42 @@ async def _coverage_alert_payload(db: AsyncSession) -> dict[str, object]:
     above stays uncovered.
     """
     from app.services.feed_health import check_feed_coverage as read_coverage
-    from app.services.feed_health import coverage_to_notification
+    from app.services.feed_health import (
+        check_segment_coverage,
+        coverage_to_notification,
+        segments_to_notification,
+    )
     from app.services.notifier import notify
 
     rows = await read_coverage(db)
-    n = coverage_to_notification(rows)
+    # U4″ — the same beat, because it is the same question at a finer grain with the same
+    # remedy. Two notifications rather than one merged: a whole-archive collapse and a
+    # missing blue chip need different first moves, and a reader who gets one message for
+    # both learns to skim it.
+    segments = await check_segment_coverage(db)
     measured = {
         r.table: {"names": r.names, "baseline": r.baseline, "shortfall_pct": r.shortfall_pct}
         for r in rows
     }
-    if n is not None:
+    seg_measured = {
+        r.name: {"expected": r.expected, "priced": r.priced, "absent": list(r.absent)}
+        for r in segments
+    }
+    alerts = [n for n in (coverage_to_notification(rows), segments_to_notification(segments))
+              if n is not None]
+    for n in alerts:
         notify(n)
-        return {"status": "alert", "level": n.level.value, "feeds": measured}
-    return {"status": "ok", "feeds": measured}
+    if not alerts:
+        return {"status": "ok", "feeds": measured, "segments": seg_measured}
+    # ⚠ `level` stays in the payload. Adding the segment check turned one notification into
+    # a list and the first cut dropped this field — the existing beat test caught it, which
+    # is the argument for asserting the payload SHAPE and not just the status string.
+    return {
+        "status": "alert",
+        "level": max(n.level.value for n in alerts),
+        "feeds": measured,
+        "segments": seg_measured,
+    }
 
 
 @celery_app.task(  # type: ignore[untyped-decorator]
