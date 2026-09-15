@@ -1907,8 +1907,13 @@ a fact that contradicts a decision below.
    `universe_membership` Restriction, so the order path 409s and all five Buy surfaces render
    `⊘ Blocked` with zero new UI, plus a `hold_only` badge on positions. ⛔ Before it, re-entry
    into a name the rule had just excluded returned **201** — there was no membership rule in
-   the registry at all. Remaining: search answers absence · stock-detail eligibility panel ·
-   wiring lint + emptiness alarm · CA clearing-path UI (its BACKEND shipped in item 3).
+   the registry at all. ✅ **V6 DONE 2026-09-15 — both halves, each finding a live defect on its first run:**
+   the STARVATION alarm found **`strategy_profiles` empty on a DB at head** (its seed migration
+   cannot replay — `alembic upgrade` is a no-op on an applied revision — so the style engines
+   have produced nothing for 8 days with a green suite), and the WIRING lint found a third
+   unwired API function nobody had named (`watchlistsApi.rename`: the UI cannot rename a
+   watchlist; it is only ever MOCKED in a test). Remaining: V4 search answers absence · V5
+   stock-detail eligibility panel · V7 CA clearing-path UI (its BACKEND shipped in item 3).
    ✅ **V8 DONE 2026-09-15 — both halves.** A10: the fetch was NOT "correct by accident" —
    measured, **four of seven failure bodies parsed to empty and reported success** (empty,
    whitespace, HTML interstitial, header-only); the parser's schema guard fires only when

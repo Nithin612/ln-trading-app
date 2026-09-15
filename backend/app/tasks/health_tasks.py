@@ -245,3 +245,46 @@ async def _report_health_payload(db: AsyncSession) -> dict[str, object]:
         notify(n)
         return {"status": "alert", "level": n.level.value, **measured}
     return {"status": "ok", **measured}
+
+
+@celery_app.task(  # type: ignore[untyped-decorator]
+    name="app.tasks.health_tasks.check_starved_tables", bind=True, max_retries=0
+)
+def check_starved_tables(self: object) -> dict[str, object]:  # noqa: ARG001
+    """V6/A5 — push when a table a consumer depends on is EMPTY.
+
+    ⭐ One of the project's two recurring defect shapes: the code is correct, wired and
+    green, and simply has no data to act on. `kite_instruments` before U1,
+    `strategy_profiles` today — four production call sites read it and it has held zero
+    rows since the 2026-09-07 rebuild, because `alembic upgrade` will not replay a data
+    seed on a revision it has already marked applied.
+
+    ⚠ **Its own task, not folded into `check_universe_health`.** The first cut rode that
+    beat on the argument that both ask "is the machinery alive"; it broke that beat's own
+    tests, and they were right to break — a task whose contract says "pushes nothing when
+    the universe is current" must not push for an unrelated reason. Separate remedies want
+    separate alarms.
+    """
+    return run_db_task(_run_check_starved_tables)
+
+
+async def _run_check_starved_tables() -> dict[str, object]:
+    from app.db.session import AsyncSessionFactory
+
+    async with AsyncSessionFactory() as db:
+        return await _starvation_payload(db)
+
+
+async def _starvation_payload(db: AsyncSession) -> dict[str, object]:
+    """Session-injected, like the other payloads — a pooled module-level engine cannot be
+    opened twice across function-scoped event loops."""
+    from app.services.notifier import notify
+    from app.services.starvation import check_starvation, to_notification
+
+    rows = await check_starvation(db)
+    starved = [r.entry.table for r in rows if r.is_starved]
+    n = to_notification(rows)
+    if n is not None:
+        notify(n)
+        return {"status": "alert", "level": n.level.value, "starved": starved}
+    return {"status": "ok", "starved": []}

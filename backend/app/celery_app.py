@@ -156,6 +156,13 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.health_tasks.check_report_health",
         "schedule": crontab(hour=14, minute=20, day_of_week="1-5"),
     },
+    # V6/A5 — starved-table alarm. 04:25 UTC = 09:55 IST, after the universe check, so a
+    # morning that repaired its own data is not reported as starved. Its own entry rather
+    # than a rider on another beat: separate remedies want separate alarms.
+    "check-starved-tables": {
+        "task": "app.tasks.health_tasks.check_starved_tables",
+        "schedule": crontab(hour=4, minute=25, day_of_week="1-5"),
+    },
     # Option-chain snapshots every minute in the market window (task itself
     # re-checks 9:15–15:30 IST and idles without a Kite token)
     "record-option-chains": {

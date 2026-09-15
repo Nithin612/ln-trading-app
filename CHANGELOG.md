@@ -7,6 +7,51 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### V6 / A5 — the two "built but not working" detectors (2026-09-15)
+
+A5 names the project's two recurring defect shapes. Both now have an instrument, and **each
+one found a live defect on its first run.**
+
+**Built-and-STARVED — `app/services/starvation.py`**
+
+- ⭐⭐ **`strategy_profiles` holds ZERO rows on a database at head.** It is seeded by migration
+  `o1p2q3r4s5t6_phase2_profile_seeds`, but the 2026-09-07 rebuild restored the SCHEMA with
+  alembic already marked applied, so the data seed never re-ran and **cannot** — `alembic
+  upgrade` is a no-op on a revision it thinks is done. Four production call sites read that
+  table (`profiles/pipeline`, `broker/provisional`, `api/v1/suggestions`, `daily_report`), so
+  the style engines have been structurally unable to produce anything for eight days, at head,
+  with a green suite. **A migration that seeds reference data is invisible to every check we
+  own once it has been marked applied.**
+- ⚠ **The registry is DECLARED, not derived.** "Empty" alone means nothing: 21 of 57 tables are
+  empty in dev and most correctly so — nobody has made a watchlist or written a journal entry.
+  Starved vs not-used-yet is a fact about intent no query recovers. Each entry names **what
+  fills it** (the remedy travels with the alarm) and **what consumes it** — A5's "what observes
+  this?" column, which it calls the cheapest version of the whole idea.
+- ⛔ Tables with a dedicated alarm are excluded deliberately (`ohlcv_1d`→feed_health,
+  `nse_holidays`→calendar_health, `universe_snapshot`→universe_health): restating them here
+  would be a second instrument for one fact.
+- ⚠ Its own beat (04:25 UTC), not a rider on the universe one. The first cut folded it in and
+  **broke that beat's own tests — correctly**: a task whose contract says "pushes nothing when
+  the universe is current" must not push for an unrelated reason.
+
+**Built-not-WIRED — `frontend/src/test/apiWiring.test.ts`**
+
+- A shrink-only ratchet over all **72** API client functions, same contract as
+  `tokenContrast.test.ts`: a NEW unwired function fails, and so does wiring one up without
+  deleting its line.
+- ⭐ **It found a third debt nobody had named.** `watchlistsApi.rename` exists, the backend
+  endpoint exists, and the UI offers no way to rename a watchlist — it is only ever **mocked**
+  in `WatchlistsPage.test.tsx`. The purest instance of A5's *"an acceptance test that can pass
+  while the capability is unreachable is not an acceptance test"*. Joins `filingsApi.getGuard`
+  (A5's own example) and `strategyApi.getRun`.
+- ⭐ It surfaced only once **`src/test` was excluded from the corpus** — a design decision, not
+  a convenience: a function called only from a test is not wired. Including tests also made the
+  lint find its own allowlist and declare every debt paid, which is how it first failed.
+- ⚠ Both §71a traps honoured: file-scoped `/// <reference types="node" />` (not a widened
+  tsconfig) and a **parse canary** first, because a `?raw` import silently resolving to an empty
+  string has already shipped a vacuously-green test in this repo once.
+- 9 backend + 3 frontend tests; 77 backend and 464 frontend green.
+
 ### A10 — the materialiser's fetch refuses a 200 OK that is not the file (2026-09-15)
 
 Queued as "pin the failure mode with a test, it is correct by accident of

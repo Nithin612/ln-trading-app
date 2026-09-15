@@ -72,6 +72,8 @@ from app.services.liquidity import load_median_traded_values_safe
 from app.services.profit_lock_shadow import ShadowComparison, compare_position
 from app.services.report_health import ReportHealth, read_report_health
 from app.services.report_health import render_lines as render_report_health
+from app.services.starvation import Starvation, check_starvation
+from app.services.starvation import render_lines as render_starvation
 from app.services.universe_health import UniverseHealth, read_universe_health
 from app.services.universe_health import render_lines as render_universe_health
 from app.services.worker_health import CasCoverage, RoleStatus, read_statuses
@@ -299,6 +301,9 @@ class DailyReport:
     # Q-R6 — did the report itself run on the recent sessions? A back-look only:
     # today's report cannot announce its own absence (that is the beat's job).
     report_health: ReportHealth | None = None
+    # V6/A5 — a table a consumer depends on, holding nothing. The code is correct
+    # and wired; it simply has no data, and the consumers quietly do nothing.
+    starvation: list[Starvation] = field(default_factory=list)
     # Buy-and-hold benchmark over the paper-clock window (H2). None = not assessable.
     buy_and_hold: BuyAndHold | None = None
     # Market exposure of the closed book, whole and split by side (H12). "is it just the
@@ -582,6 +587,7 @@ async def build_daily_report(
     report.segment_coverage = await check_segment_coverage(db)
     report.universe_health = await read_universe_health(db, now=now)
     report.report_health = await read_report_health(db, now=now)
+    report.starvation = await check_starvation(db)
     # Tick-mode degradation (A25) — did the live feed actually deliver full-mode
     # ticks on the day whose fills this report is judging? Keyed by the REPORT
     # day, not by now: a --DATE run must read that day's counters.
@@ -802,6 +808,9 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
         out.extend(render_universe_health(r.universe_health))
     if r.report_health is not None:
         out.extend(render_report_health(r.report_health))
+    # V6/A5 — beside the other liveness surfaces: same question one layer down. Those ask
+    # whether the machinery RAN; this asks whether it had anything to run on.
+    out.extend(render_starvation(r.starvation))
 
     # A40 — worker liveness and the CAS absence alarm, ABOVE the scorecard: if the worker
     # was down, every number below it is suspect and the reader must know that first.
