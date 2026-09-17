@@ -7,6 +7,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### The 922-day hole is filled — 1,101 → 1,723 sessions, and the archive gains a zero-drift year (2026-09-17)
+
+Ran `scripts/backfill_ohlcv_history.py --start 2020-12-24 --end 2023-07-02 --sleep 1.0` on the
+user's instruction (round-7 queue item 7). 654 sessions requested, ~30 minutes: **652 ingested, 1 holiday (404), 1 FAILED**.
+The first write this review thread has made; everything before it was read-only.
+
+**Measured before → after:** sessions **1,101 → 1,723** · bars **2,095,287 → 3,158,638**
+(+1,063,351) · **largest gap 922 days → 5 days** (holiday clusters) · distinct names with bars
+3,387 → 3,402 · `stocks` 3,395 → 3,415 with **active unchanged at 2,299** and +20 inactive
+historical names. Every year is now complete: 2020 **251** · 2021 **248** · 2022 **247** ·
+2023 **245** · 2024 **248** · 2025 **248**.
+
+⭐ **The 307 pre-2021 sessions were an interrupted earlier run, not an archive boundary.** The
+script's own defaults are `--start 2019-10-01 --end 2023-07-02`; something stopped it at
+2020-12-23 and the resulting edge was later reasoned about as a property of the data.
+
+⭐ **Survivorship was the point.** `historical=True` creates a stock row for any symbol the
+bhavcopy names that today's master has never heard of, so the point-in-time universe falls out of
+ingesting the files. Twenty were created, all inactive. The `is_active` single-writer trigger is
+`BEFORE UPDATE` and these are `INSERT … ON CONFLICT DO NOTHING`, so the active set was untouched —
+verified after the run.
+
+⭐⭐ **WHAT IT BOUGHT: a zero-drift regime the archive did not contain.** Equal-weight daily return
+of a cohort ranked only on 2019-10 → 2020-10 and applied forward (the point-in-time construction
+M31 forced on us): COVID block **+38.1%/yr** · 2021 **+34.7%** · **2022 −0.0006%/day = −0.1%/yr,
+42.7% down-days, 246 sessions** · 2023-07 → 2026-09 (the old sample) **+13.9%**. Every previous
+verdict in this programme was measured on a sample running at +13.9% to +38.1% annualised.
+⇒ Grok's F5 (*"an imported filter will look like edge in a bull tape and there is no bear sample to
+falsify against"*) is now answerable, and **2021-01 → 2023-07 (620 sessions) is a genuinely
+untouched holdout** — not reserved, but never seen by any study or reviewer because it did not
+exist in the database until today. Claude's H4 and ChatGPT's Q8 both argued this was infeasible.
+
+⛔ **And the retained block was the mildest of the three.** Full-archive overnight-gap exposure vs
+the old 3.2-year sample: long stop-side tail **1.15×**, short **1.25×**, extreme (≤−5%) **1.77×**.
+Every risk number sourced from the old block is a benign-regime number, including the exposure
+figures behind the gap-defect falsifier — which must be recomputed on the full archive.
+⚠ It did **not** buy a bear market: 2021 is a strong bull and the only crash regime is still COVID.
+
+⚠ **Owed, and deliberately not done here:** four study scripts hardcode `_CLEAN_SINCE =
+2023-07-03` (`tp_geometry_study`, `squeeze_study`, `confirmation_base_rate`, `rvol_factor_study`) —
+once the data boundary, now an undeclared truncation discarding 622 sessions; two of them are
+already queued for a CA-screened re-run and the window is a separate decision from the screen.
+Also: `nse_holidays` has no 2021-22 coverage; regenerating the walk-forward goldens would now
+produce different fixtures (committed goldens and the test DB are untouched); and prices remain
+CA-UNADJUSTED over a span with far more splits and bonuses, so the CA screen is now more
+load-bearing, not less. ✅ The gap guard self-heals — `observed_session_index` reads live.
+
 ### Round-7 panel adjudicated — the 922-day hole is fillable, and six things I decided were never done (2026-09-18)
 
 `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` PART 8. Seven responses (ChatGPT · Gemini · DeepSeek ·

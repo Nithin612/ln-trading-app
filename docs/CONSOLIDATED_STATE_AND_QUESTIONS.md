@@ -56,12 +56,12 @@ One table. Everything else in this document refers back to it.
 
 | Table / fact | `SYSTEM_REVIEW` said (2026-09-10) | **Measured 2026-09-17** | Read |
 |---|---|---|---|
-| `stocks` | 3,392 · **1,322 active** | **3,395 · 2,299 active** | ✅ repaired (D2′b) |
+| `stocks` | 3,392 · **1,322 active** | **3,415 · 2,299 active · 1,116 inactive** | ✅ repaired (D2′b); **+20 historical names from the backfill, active set untouched** (PART 9) |
 | …`sector` populated | 500 | **500** | ⛔ unchanged — U7 never ran |
 | …`is_nifty50` active | 50 (of which 5 active) | **50 active** | ✅ repaired |
 | …`is_fno` active | 212 | **210 active** | ✅ |
 | …`ca_flagged_at` | — | **7** (5 of them active) | ⚠ has a clearing path now |
-| `ohlcv_1d` | 2,080,305 bars → 2026-09-09 | **2,095,287 bars · 1,101 sessions · 2019-10-01 → 2026-09-17** ⛔ **with a 922-day hole: 2020-12-23 → 2023-07-03. 2021 and 2022 do not exist** (307 sessions pre-2021 + 794 from 2023-07-03) | ⭐⭐ **THE HOLE IS FILLABLE — M38:** NSE serves `sec_bhavdata_full` for 2021 and 2022 today (HTTP 200, correct schema). 1,101 → ~1,714 sessions. **Queue item 7** |
+| `ohlcv_1d` | 2,080,305 bars → 2026-09-09 | ✅ **3,158,638 bars · 1,723 sessions · 2019-10-01 → 2026-09-17 · largest gap 5 days** | ⭐⭐ **HOLE FILLED 2026-09-17 (PART 9).** Was 1,101 sessions with a 922-day hole; +622 sessions, +1,063,351 bars. **Every year now complete (~248 sessions).** |
 | `ohlcv_5m` | **empty** | **12,625,648 rows · 796 sessions · 2023-07-03 → 2026-09-17** | ✅ **backfilled** |
 | `ohlcv_15m` | **empty** | **4,206,475 rows · 796 sessions** | ✅ **backfilled** |
 | `ohlcv_1h` | **empty** | **48,065 rows · 3 sessions · 2026-09-15 → 09-17** | ⚠ live-only; backfill path exists, **not run** |
@@ -1445,7 +1445,7 @@ a prevalence percentage is now stated in R** (Grok's `exposure × 2R` identity).
 | **4** | ⓘ **Fix `_simulate_trade`'s entry-bar gap — MOVED UP** (Claude EX6) | Trade-level studies must not be re-run on an unfixed engine | ⭐ **Grok's identity, not a prevalence %:** report the corpus's **stop-width distribution** first, then bias = `exposure × 2R`. **abs(bias) > 0.05R ⇒ headline invalid as cited; < 0.02R ⇒ footnote.** ⚠ Report **both treatments** — delete (Claude BT7: live would refuse these trades, so they are a *population* error) and re-fill-at-open. ⚠ Compute **per direction** (M30: shorts 2.1× at tight stops) |
 | **5** | **Re-run E2 with a CA screen (M17)** ⚠ and only for that reason (M36 refutes the interval concern) | The central null's one confirmed contamination | Filtered 90% interval still excludes break-even ⇒ null hardens |
 | **6** | **Re-run D5 + D1 + B7 with the CA screen, after item 4** | ⭐ **B7 added (Claude EX7): MFE/MAE is the statistic most corrupted by an entry booked below its own stop** | Signs and t hold ⇒ citable and closed |
-| **7** | ⓘ ⭐⭐ **NEW — backfill 2021–2022 from bhavcopy (M38)** | **The option is still open — M38: NSE serves the files today.** ⚠ The back-fill was **consciously DROPPED in round 8** on a *breadth* argument ("the lever is TURNOVER"). ⭐ **Re-decide it on the two grounds it was never judged on: regime coverage (M32) and holdout feasibility.** 1,101 → ~1,714 sessions (+56%) | A sampled month fails to parse or returns EQ=0 under the A10 plausibility guard |
+| **7** | ✅ **DONE 2026-09-17 (PART 9)** — backfilled 2021–2022 from bhavcopy | ✅ **RAN: 1,101 → 1,723 sessions, +1,063,351 bars, largest gap now 5 days.** ⭐⭐ It bought **a zero-drift regime the archive did not contain (2022: −0.1%/yr, 42.7% down-days)** and **a genuinely untouched 620-session holdout**. ⚠ It did NOT buy a bear market — 2021 is +34.7%/yr | A sampled month fails to parse or returns EQ=0 under the A10 plausibility guard |
 | **8** | ⓘ **Answer capital AND product from M27/M28** | Delivery floor **22.22 bps, 90% statutory STT**; intraday floor **3.52 bps**. ⚠ **Limit orders cannot go under a statutory floor** (Grok E4) | A gross edge estimate clearing ~24 bps on delivery, or ~5 bps intraday. ⚠ **F&O unpriceable — not modelled** |
 | **9** | **Starvation registry + `categories`/`ledger_entries` (M19)** | Unchanged | A table in the registry that is empty-and-fine, showing the registry over-fires |
 | **10** | **Directional entry zone** | Correctness, not P&L | ⭐ Replay the 45 `signal_outcomes` against a direction-aware zone: **0 differences ⇒ pure hygiene**, drop below item 12 |
@@ -1485,3 +1485,166 @@ largest defect class has been *deciding something and not doing it.* §8.10's Q-
 that is measurable next round — if those six are still open, the adjudication process is
 generating conclusions faster than the codebase absorbs them, and the correct response is to stop
 running rounds.
+
+---
+
+# PART 9 — THE BACKFILL, EXECUTED (2026-09-17)
+
+Queue item 7, run on the user's instruction. **This is the first action in this document that
+wrote to the database**; everything before it was read-only.
+
+## §9.1 · What ran, and what it produced
+
+`scripts/backfill_ohlcv_history.py --start 2020-12-24 --end 2023-07-02 --sleep 1.0` — the
+purpose-built script, which already existed and was **idempotent, resumable and
+`ON CONFLICT DO NOTHING`**. 654 weekdays requested, ~30 minutes, 1s between requests. **652 ingested · 1 holiday (404) ·
+**1 FAILED — 2022-08-08**, and the failure is a finding in its own right (§9.5).
+
+⭐ **The 307 pre-2021 sessions turned out to be an interrupted earlier run, not a boundary.** The
+script's defaults are `--start 2019-10-01 --end 2023-07-02`; something stopped it at 2020-12-23
+and the resulting edge was later reasoned about as though it were a property of the archive.
+
+| | before | **after** |
+|---|---|---|
+| sessions | 1,101 | **1,723** |
+| span | 2019-10-01 → 2026-09-17 | 2019-10-01 → 2026-09-17 |
+| **largest gap** | **922 days** (2020-12-23 → 2023-07-03) | **5 days** ×2 — 2022-04-13 (Ambedkar Jayanti + Good Friday + weekend, legitimate) and 2022-08-05 (**the one failed session, §9.5**) |
+| bars | 2,095,287 | **3,158,638** (+1,063,351) |
+| distinct names with bars | 3,387 | **3,402** |
+| `stocks` total | 3,395 | **3,415** |
+| `stocks` **active** | 2,299 | **2,299 — unchanged** |
+| `stocks` inactive | 1,096 | **1,116** (+20 historical names) |
+
+**Sessions per year, all now complete:** 2019 **61** (Oct start) · 2020 **251** · 2021 **248** ·
+2022 **247** · 2023 **245** · 2024 **248** · 2025 **248** · 2026 **175** (YTD).
+
+⭐ **Survivorship was the point, not a side effect.** The run used `historical=True`, so a symbol
+the bhavcopy names but today's master has never heard of is **created as an inactive historical
+stock**. Twenty such names were created; **the active set was not touched**, which also confirms
+the `is_active` single-writer trigger held (it is `BEFORE UPDATE`; these are `INSERT … ON CONFLICT
+DO NOTHING`).
+
+## §9.2 · ⭐⭐ What it bought: a zero-drift regime, which the archive did not previously contain
+
+Measured with a cohort ranked **only on 2019-10 → 2020-10** and applied forward — the
+point-in-time construction M31 forced on us, so this number does not repeat that defect.
+
+**Equal-weight daily return of the PIT cohort — "the tape":**
+
+| block | sessions | mean/day | sd | down-days | worst day | annualised |
+|---|--:|--:|--:|--:|--:|--:|
+| 2019-10 → 2021-01 (COVID) | 311 | **+0.1303%** | 1.702 | 38.3% | **−12.61%** | **+38.1%** |
+| 2021-01 → 2022-01 | 247 | **+0.1202%** | 1.071 | 39.3% | −5.08% | **+34.7%** |
+| ⭐ **2022-01 → 2023-01** | **246** | **−0.0006%** | 1.219 | **42.7%** | −6.00% | **−0.1%** |
+| 2023-01 → 2023-07 | 121 | +0.0626% | 0.684 | 43.0% | −1.87% | +16.8% |
+| 2023-07 → 2026-09 (**the old sample**) | 793 | +0.0526% | 1.021 | 42.0% | −6.87% | **+13.9%** |
+
+⭐⭐ **2022 is a flat-to-bear year — 246 sessions at −0.1% annualised with 42.7% down-days — and
+the archive did not contain one.** Every previous verdict was measured on samples running at
++13.9% to +38.1% annualised. This is the sample that was missing.
+
+⇒ **Grok's F5 is now answerable.** Its warning was that an imported filter (Minervini, 12-month
+momentum) *"will look like edge in a bull tape, and with only 3.2 contiguous years there is no
+bear-regime sample to falsify against."* There is now: **2022**.
+
+⇒ ⭐⭐ **And a genuinely untouched holdout exists for the first time.** Claude's H4 and ChatGPT's
+Q8 both argued a final holdout was infeasible with one contiguous block. **2021-01 → 2023-07 (620
+sessions) has never been seen by any study, script, or reviewer in this programme** — not because
+it was reserved, but because it did not exist in the database until today. That is the strongest
+form of untouched a holdout can have.
+
+## §9.3 · What the backfill also changes, measured
+
+**Overnight-gap exposure, same PIT cohort, by block** — the input to queue item 4's falsifier:
+
+| block | n | long stop-side ≤−0.65% | ≤−5% | short stop-side ≥+0.65% | ≥+5% |
+|---|--:|--:|--:|--:|--:|
+| **FULL archive** | 403,979 | **9.84%** | **0.469%** | **21.20%** | 0.332% |
+| COVID block | 77,277 | 12.45% | **1.470%** | 28.73% | 0.863% |
+| restored 2021-23 | 147,824 | 10.03% | 0.193% | 22.38% | 0.222% |
+| old sample 2023-07→ | 178,399 | **8.57%** | **0.265%** | **16.97%** | 0.193% |
+
+⛔ **The retained sample was the mildest of the three on every measure.** Against the full archive
+it understates the long stop-side tail by **1.15×**, the short by **1.25×**, and the extreme
+(≤−5%) tail by **1.77×**. ⇒ **item 4's exposure figures must be recomputed on the full archive**,
+and any risk number sourced from the 3.2-year block is a benign-regime number.
+
+⚠ **What it did NOT buy, stated so nobody claims it later:** the restored block is *also* a rising
+tape overall (2021 at +34.7%). The archive gained **one flat year and 620 sessions**, not a bear
+market. The only crash regime remains COVID, which was already there.
+
+## §9.4 · Consequences that are now owed
+
+1. ⛔ **Four study scripts hardcode `_CLEAN_SINCE = 2023-07-03`** — `tp_geometry_study.py`,
+   `squeeze_study.py`, `confirmation_base_rate.py`, `rvol_factor_study.py`. That constant *was*
+   the data boundary; it is now an **undeclared deliberate truncation** discarding 622 sessions.
+   ⚠ **Deliberately not changed here:** two of them are already queued for a CA-screened re-run,
+   and the window is a separate decision from the screen. **Whoever re-runs them must decide the
+   window explicitly.** ⭐ And the name is doubly wrong — the "CA-clean" claim was already refuted.
+2. ✅ **The gap guard self-heals.** `observed_session_index` runs `SELECT DISTINCT time::date FROM
+   ohlcv_1d` with no cache, so every consumer of the session calendar picked up 2021–22
+   immediately. Windows that were dropped for straddling the hole will now be admitted — correct,
+   and it means **study output produced before today is not comparable with output produced
+   after**.
+3. ⚠ **`nse_holidays` holds 49 rows, 2023-08-15 → 2026-12-25 — no coverage for 2021–22.**
+   Historical studies use the observed-session calendar rather than that table, so the exposure is
+   limited, but any calendar arithmetic over the new years is unguarded.
+4. ⚠ **`gen_walkforward_goldens.py` reads the dev DB** and its comment reasons from "the dev corpus
+   starts 2023-07-03". The committed goldens are unaffected (the test DB is separate and was not
+   touched), but **regenerating them now would produce different fixtures**. Not a break; a trap.
+5. ⚠ **Prices remain CA-UNADJUSTED**, and over 7 years there are far more splits and bonuses than
+   over 3.2. M37 established there is no back-adjustment anywhere and drop-the-window is the only
+   policy. **The CA screen is now more load-bearing, not less.**
+
+## §9.5 · ⛔ The one failed session, and what it exposes
+
+**2022-08-08 failed, deterministically**, with `Error: new-line character seen in unquoted field`.
+Retried alone: **fails identically.** Diagnosed:
+
+```
+GET .../sec_bhavdata_full_08082022.csv  ->  HTTP 200, 233,582 bytes
+first bytes: PK\x03\x04          # ZIP magic
+zip entries: [Content_Types].xml, xl/workbook.xml, xl/worksheets/sheet1.xml, ...
+```
+
+⇒ **NSE published that date's bhavcopy as an XLSX workbook at the `.csv` URL, with HTTP 200.** It
+is not a transient fetch error; the archive has served the wrong file type for that date since
+2022 and will keep doing so.
+
+⭐ **This is A10's defect class, on a path A10 never covered.** A10 hardened the *universe* CSV
+download against "a 200 OK that is not the file" after measuring that 4 of 7 failure bodies parsed
+to an empty set and reported success. **The bhavcopy downloader has no equivalent check** — no
+content-type assertion, no magic-byte test, no row-count floor.
+
+✅ **It failed loudly here only by accident of the CSV parser raising.** A ZIP whose bytes happened
+to parse as degenerate CSV would have ingested **zero rows and reported success** — the exact
+shape of the `EQ=0` header bug and the `sync_instruments` login interstitial, both of which this
+project has already been bitten by. ⇒ **queue: give `bhavcopy_service` the A10 treatment.**
+
+⛔ **The session is NOT recovered, deliberately.** Extracting it means a bespoke XLSX path inside
+an otherwise clean CSV pipeline, for **one session in 1,724 (0.06%)**, existing for exactly one
+date in history — a parallel implementation (W2) with a permanent maintenance cost and no
+generalisable benefit. **Recorded as a known one-session hole at 2022-08-08**, which is one of the
+two 5-day gaps measured above; the other (2022-04-13) is legitimate holidays.
+
+⚠ **And it corrects my own first report of this run**, which said "zero failures" — it was 652
+ingested, 1 holiday, **1 failed**. The script's report file said so and I read the console summary
+instead. Corrected in all four documents.
+
+## §9.6 · ⭐ A false claim found in the earlier run's own report
+
+`docs/analysis/ohlcv-backfill-2026-09-07.md` carries an update dated 2026-09-08:
+
+> *"a subsequent run extended coverage past this recovery snapshot all the way to the archive
+> floor. Live `ohlcv_1d` now spans **2019-10-01 → 2026-09-04** — 1,093 trading days … **The full
+> ~7-year Q5 target is met**."*
+
+⛔ **It was not met, and the report contains its own refutation.** A 2019-10 → 2026-09 span is
+~1,730 sessions; the same sentence reports **1,093**. The 637-session shortfall — the 922-day hole
+— is visible in the two numbers printed side by side, and it stood unexamined for nine days while
+the hole was reasoned about as a property of the archive.
+
+⭐⭐ **That is precisely the defect Claude found in PART 1 of this document a week later** (M1: a
+span quoted without a reconciling session count), and it had already happened once, in the report
+of the run that created the gap. ⇒ **the "every count carries its range" rule adopted in §8.9 must
+also mean: a span and a count that disagree is an alarm, not a pair of facts.**

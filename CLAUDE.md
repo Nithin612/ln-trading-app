@@ -917,14 +917,28 @@ else.
   ⛔⛔ **`ohlcv_1d` HAS A 922-DAY HOLE, 2020-12-23 → 2023-07-03 — 1,097 sessions, not the ~1,730 a
   2019-10 → 2026-09 span implies, and 33.2% of round 6's 16,428 panels were scored on a 300-bar
   window straddling it** (EMA200/ATR/ADX/pivots across a 2.5-year discontinuity).
-  ⭐⭐ **STILL FILLABLE — MEASURED 2026-09-18 (round 7, from Kimi's question):** NSE serves
-  `sec_bhavdata_full_15062021.csv` (HTTP 200, 233,986 B) and `..._15032022.csv` (HTTP 200,
-  246,024 B) **today**, same header schema, same URL template as `bhavcopy_service.py:45`.
-  ⚠ The 2021–23 back-fill was DROPPED in round 8 on a **breadth** argument ("the lever is
-  TURNOVER") — **but it was never judged on regime coverage or holdout feasibility, and both are
-  now binding**: the retained block is a benign-regime sample (overnight-gap exposure **1.5–1.7×
-  higher** in the pre-hole block containing COVID) and every research verdict is scoped to it.
-  **Re-decide, do not re-drop.** 1,101 → ~1,714 sessions (+56%). It explains
+  ✅✅ **HOLE FILLED 2026-09-17 — `scripts/backfill_ohlcv_history.py --start 2020-12-24 --end
+  2023-07-02`, 654 sessions (652 ingested · 1 holiday · **1 FAILED, 2022-08-08 — NSE served an
+  XLSX workbook at the `.csv` URL with HTTP 200**). `ohlcv_1d` is now 1,723 sessions / 3,158,638 bars,
+  2019-10-01 → 2026-09-17, LARGEST GAP 5 DAYS.** Every year complete (~248 sessions). ⭐ The 307
+  pre-2021 sessions were an **interrupted earlier run**, not an archive boundary. Ran with
+  `historical=True` ⇒ **+20 inactive historical names created, active set untouched (2,299)** —
+  survivorship comes from ingesting the files, not from reconstruction.
+  ⭐⭐ **What it bought: a ZERO-DRIFT REGIME the archive did not contain.** Equal-weight PIT-cohort
+  tape: COVID block **+38.1%/yr** · 2021 **+34.7%** · **2022 −0.1%/yr, 42.7% down-days, 246
+  sessions** · old sample 2023-07→ **+13.9%**. ⇒ every prior verdict was measured at +13.9% to
+  +38.1% annualised; **2022 is the falsification sample that was missing**, and **2021-01 → 2023-07
+  (620 sessions) is a genuinely UNTOUCHED holdout** — no study or reviewer has ever seen it.
+  ⚠ It did **not** buy a bear market (2021 is a strong bull); the only crash regime is still COVID.
+  ⛔ **The retained 3.2-year block was the MILDEST of the three** — full-archive overnight-gap
+  exposure is **1.15× / 1.25× / 1.77×** the old sample's (long / short / ≤−5% tails) ⇒ **every risk
+  number sourced from it is a benign-regime number.**
+  ⚠ **Owed:** four study scripts still hardcode `_CLEAN_SINCE = 2023-07-03` (`tp_geometry_study`,
+  `squeeze_study`, `confirmation_base_rate`, `rvol_factor_study`) — once the data boundary, now an
+  **undeclared truncation discarding 622 sessions**; `nse_holidays` has **no 2021-22 coverage**;
+  regenerating the walk-forward goldens would now produce different fixtures; and prices remain
+  **CA-UNADJUSTED**, so the CA screen is now MORE load-bearing. Full record: PART 9 of
+  `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md`. It explains
   `_CLEAN_SINCE = 2023-07-03` — **not a CA-clean choice, just the first date of the contiguous modern
   block** — and it **KILLS the un-truncation plan item**: real yield n ≈ 2,662 (bar-50 walk) or
   **exactly 0** (300-bar walk), not 4,300. The blocker was never the CA source but **615 missing

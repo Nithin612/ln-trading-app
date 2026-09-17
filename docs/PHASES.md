@@ -10,6 +10,30 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
+## ▶ STATE AT A GLANCE (updated 2026-09-17) — THE 922-DAY HOLE IS FILLED — read this first
+
+**▶▶ 2026-09-17 — ✅✅ `ohlcv_1d` IS NOW 1,723 SESSIONS / 3,158,638 BARS, 2019-10-01 → 2026-09-17,
+LARGEST GAP 5 DAYS.** Backfilled 2020-12-24 → 2023-07-02 from the NSE bhavcopy archive (654
+sessions, ~30 min; 652 ingested, 1 holiday, **1 FAILED — 2022-08-08, where NSE served an XLSX
+workbook at the `.csv` URL with HTTP 200**). **+622 sessions, +1,063,351 bars.** Every year complete
+(~248 sessions). ⭐ The 307 pre-2021 sessions were an **interrupted earlier run**, not a boundary.
+⭐ `historical=True` ⇒ **+20 inactive historical names; active set UNTOUCHED at 2,299** (the
+`is_active` trigger is BEFORE UPDATE; these are INSERTs) — survivorship falls out of ingesting the
+files rather than being reconstructed.
+⭐⭐ **IT BOUGHT A ZERO-DRIFT REGIME THE ARCHIVE DID NOT CONTAIN.** PIT-cohort equal-weight tape:
+COVID **+38.1%/yr** · 2021 **+34.7%** · **2022 −0.1%/yr with 42.7% down-days (246 sessions)** ·
+old sample **+13.9%**. ⇒ every prior verdict was measured at +13.9%…+38.1% annualised; **2022 is
+the falsification sample that was missing**, and **2021-01 → 2023-07 (620 sessions) is a genuinely
+UNTOUCHED holdout** — no study or reviewer has ever seen it.
+⛔ **The retained 3.2-year block was the MILDEST of the three:** full-archive gap exposure is
+**1.15× / 1.25× / 1.77×** the old sample's (long / short / ≤−5%) ⇒ **risk numbers sourced from it
+are benign-regime numbers.** ⚠ It did NOT buy a bear market (2021 is a strong bull).
+⚠ **OWED:** `_CLEAN_SINCE = 2023-07-03` in 4 study scripts is now an **undeclared truncation
+discarding 622 sessions** · `nse_holidays` has no 2021-22 rows · regenerating walk-forward goldens
+would now differ · prices remain **CA-UNADJUSTED**, so the CA screen is MORE load-bearing.
+✅ The gap guard self-heals (`observed_session_index` reads live, no cache).
+Full record: PART 9 of `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md`. ⛔ **NOTHING PUSHED.**
+
 ## ▶ STATE AT A GLANCE (updated 2026-09-18) — round-7 panel adjudicated — read this first
 
 **▶▶ 2026-09-18 — ⭐⭐⭐ THE 922-DAY HOLE IS FILLABLE.** NSE serves `sec_bhavdata_full` for 2021 and
