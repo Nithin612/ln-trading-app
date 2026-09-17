@@ -7,6 +7,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### U8 — the index registry: 3 of 166 → 27, and the limit that remains (2026-09-17)
+
+`indices` held **3 rows** (NIFTY50, BANKNIFTY, FINNIFTY) against **166 indices** in the free,
+no-auth NSE daily file the VIX recorder already downloads. So `benchmark.py` could only ever
+return NIFTY50 and every "sector" comparison was against the broad market — the overlay was
+**unevaluable rather than untested**.
+
+- **Registered 24 more** (16 sector + 8 size) by migration `c3d4e5f6a7b8`, then backfilled:
+  **791 sessions each, 2023-07-03 → 2026-09-16, 21,357 index bars**, `india_vix_daily` 791.
+  Every U8 acceptance number is met (≥500 for NIFTY 50, ≥200 per sector index, ≥500 VIX), and
+  both overlays now return a real verdict instead of failing open — `market_regime` reads 200
+  closes + VIX 13.17.
+- ⭐ **The plan's step 2 was already done.** It asks to "widen the ingester to store all
+  registered indices, not just the three" — but `index_ohlcv_service` is already
+  registry-driven (it matches the CSV's "Index Name" against `indices.name`). U8 turned out to
+  be **one migration and a backfill, no code**.
+- ⚠ **Every name was verified against the live file, and one would have failed silently.** The
+  plan's prose says "Healthcare"; the real name is **`Nifty Healthcare Index`**. `Index.name`
+  IS the join key, so a near-miss registers an index that simply never ingests, with no error
+  anywhere. Pinned by test.
+- ⛔ **~139 of the 166 were deliberately NOT registered** — G-Sec, bond, futures and strategy
+  indices. Comparing an equity against `Nifty 10 yr Benchmark G-Sec` is a category error, and
+  registering them would multiply the daily ingest for data nothing reads. Pinned by test.
+
+⛔⛔ **THE HONEST LIMIT: this did NOT make sector-RS sector-relative.** `benchmark_symbol_for`
+picks on two MEMBERSHIP FLAGS (`is_banknifty`, `is_finnifty`) and otherwise returns NIFTY50 —
+so for every name outside those two families, "relative strength" is still measured against the
+broad market exactly as before, and **the bars for the other 14 sector indices are ingested
+daily and read by nothing**. Closing that is U8 step 4, which needs **U7's sector map**, and
+only **500 of 3,395** stocks carry a sector today. A test class exists specifically so nobody
+reads "sector indices registered" as "sector-RS works".
+
+⛔ **DATA ONLY — NOT a licence to flip.** §9/4 is explicit and two gates promoted on arguments
+were refuted within weeks: `sector_rs_gate_mode` and `market_regime_gate_mode` stay `shadow`.
+Data availability is not evidence.
+
+⚠ **A V6 lesson repeated itself here:** `conftest.clean_tables` truncates `indices`, so the
+migration-seeded rows are absent in tests — the same "a data seed is invisible to anything that
+empties the table afterwards" phenomenon the starvation alarm found in `strategy_profiles`. The
+tests therefore assert the migration's DECLARED list (loaded by path) and seed their own rows
+for behaviour.
+
+- 7 new tests; 88 green across the index/benchmark/starvation suites.
+
 ### V5 / A2 tier 3 — the stock-detail eligibility panel (2026-09-17)
 
 ⭐ **It answers "why do I never see a signal for this stock?"** — and there are THREE

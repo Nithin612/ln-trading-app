@@ -1938,8 +1938,18 @@ a fact that contradicts a decision below.
    trading sessions**, four missing and unnoticed; the report is where every other alarm
    is READ, so those sessions ran unwatched. Checked from the ARTIFACTS on disk (no new
    counter — §A8), in the BEAT not the report (a report that did not run cannot say so).
-5. **U8** — populate the index registry from the CSV we already download (165 indices, only 3
-   registered) → unblocks sector-RS.
+5. ✅ **U8 — DONE 2026-09-17.** Registry **3 → 27** (migration `c3d4e5f6a7b8`), backfilled to
+   **791 sessions each, 2023-07-03 → 2026-09-16, 21,357 bars**; every acceptance number met and
+   `market_regime` reads 200 closes + VIX. ⭐ **The plan's step 2 was already done** — the
+   ingester is registry-driven, so this was one migration and a backfill, no code. ⚠ One name
+   would have failed SILENTLY: the real name is `Nifty Healthcare Index`, not "Healthcare", and
+   `Index.name` is the join key. ⛔ **~139 G-Sec/bond/futures indices deliberately NOT
+   registered.**
+   ⛔⛔ **BUT IT DID NOT UNBLOCK SECTOR-RS.** `benchmark_symbol_for` picks on `is_banknifty` /
+   `is_finnifty` and otherwise returns NIFTY50, so 14 of the 16 sector indices are ingested
+   daily and **read by nothing**. That is U8 step 4, which needs **U7's sector map** — only 500
+   of 3,395 stocks carry a sector. A test class pins this so nobody reads "registered" as
+   "works". ⛔ Both overlays stay `shadow`: data availability is not evidence (§9/4).
 
 **⚠ USER'S CALL, do not decide these unilaterally:**
 - **push** (the branch is well ahead of `main`; push/merge are the user's — W4).
