@@ -7,6 +7,44 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### 1h added to `backfill_intraday.py` — and the two producers disagree by one bar (2026-09-17)
+
+`ohlcv_1h` had no history before 2026-09-15 because **nothing this project owned would fetch
+it**: `gap_fill.detect_and_fill_gaps` fills FORWARD from the last existing candle and **skips a
+stock with no data at all** ("let the tick consumer populate from here"), so it can heal a gap
+but never BOOTSTRAP an empty timeframe — and the backfill script's `TF` map was 5m/15m only.
+Kite has the data; we simply never asked for it.
+
+- **`1h` added to `TF`** (`60minute`, the interval `gap_fill` already uses in production so the
+  backfill and the live repair path cannot disagree about what they request). `--timeframe 1h`.
+- ⚠ `--timeframe both` stopped being true at three timeframes ⇒ **`all`**, with `both` kept as
+  an accepted alias so an existing command line or runbook does not break.
+- `build_arg_parser` extracted from `main` so the CLI contract is testable.
+
+⛔⛔ **THE FINDING, verified against the live API and permanent: the two producers of
+`ohlcv_1h` write different bar counts for the same session.**
+
+| producer | bars | last bar |
+|---|---|---|
+| Kite `60minute` (backfill) | **6** | 14:15 IST |
+| the live worker (ticks) | **7** | **15:15 IST** |
+
+The 375-minute session leaves a final **15-minute stub** at 15:15. The worker mints it from
+ticks; Kite's aggregation does not emit it. ⇒ **a backfilled session is missing the last 15
+minutes of the day, and no option can recover it at that resolution.** It is a property of the
+source, not of the filter — `in_session_window`'s `[09:15, 15:30)` would happily keep a 15:15
+bar, which a test now pins.
+
+⚠ **`bars_per_session` is 6, not 7**, and that choice is load-bearing: the QA manifest counts a
+session `partial` when it holds FEWER than this value, so 6 is the honest floor — a Kite session
+is complete at 6 and a live session's extra stub still reads complete. **7 would flag every
+backfilled session as short forever**, a permanent false alarm in the one artifact whose job is
+to say which history is trustworthy.
+
+- 5 new tests, including a canary asserting every timeframe's budget equals `375 // bar_minutes`
+  so a future addition cannot quietly get its arithmetic wrong. 50 green across the backfill
+  suites. ⚠ **Not run yet** — backfilling 1h is a data decision (~2,300 names × 3 years).
+
 ### The FII/DII hole — a feed at 16.7% that read GREEN on every alarm we own (2026-09-17)
 
 Investigated at the user's request after `catchup_eod` reported 11 missing sessions. The hole

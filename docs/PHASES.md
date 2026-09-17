@@ -1780,9 +1780,15 @@ DID start. And it is not true that there is *no* backfill path: `--gap-fill` fet
 reason:** `gap_fill.detect_and_fill_gaps` fills FORWARD from the last existing candle and
 **skips any stock with no data at all** ("let the tick consumer populate from here"), so it
 cannot BOOTSTRAP an empty timeframe — and `backfill_intraday.py`'s `TF` map is 5m/15m only.
-⇒ **1h history before 2026-09-15 is unrecoverable with current tooling, not because Kite lacks
-it.** The fix, if 1h depth is ever wanted, is to add `1h` to `backfill_intraday.py` (or seed one
-bar per stock so gap-fill can chain from it) — NOT to run `--gap-fill` and expect history.
+⇒ 1h history before 2026-09-15 was unrecoverable with the tooling we had, not because Kite
+lacks it. ✅ **FIXED 2026-09-17: `1h` added to `backfill_intraday.py`** (`--timeframe 1h`).
+⛔⛔ **But the two producers of `ohlcv_1h` disagree by one bar per session, permanently.**
+Verified against the live Kite API and the worker's own output: **Kite `60minute` returns 6
+bars (09:15 … 14:15 IST); the live worker mints 7 (09:15 … 15:15).** The 375-minute session
+leaves a final 15-minute stub at 15:15 that Kite's aggregation does not emit — so **a
+backfilled session is missing the last 15 minutes of the day and nothing can recover it at
+that resolution.** `bars_per_session` is therefore **6**, the honest floor: 7 would flag every
+backfilled session as short forever.
 ✅ **Forward capture IS RUNNING** (corrected 2026-09-17): the earlier "ready but NOT RUNNING …
 start it tomorrow" is stale — all four intraday tables carry today's bars (`ohlcv_5m` 12.6M,
 `ohlcv_15m` 4.2M, `ohlcv_1m` 1.8M, `ohlcv_1h` 48k). ⚠ It remains a supervised ritual needing a

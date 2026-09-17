@@ -260,3 +260,76 @@ class TestResumePointQuery:
             )
         await db.commit()
         assert await _last_stored(db, Ohlcv5m, stock.id, until) == date(2024, 7, 10)
+
+
+class TestHourlyTimeframe:
+    """1h added to the backfill 2026-09-17.
+
+    ⭐ **Why it was missing at all.** `gap_fill.detect_and_fill_gaps` fills FORWARD from
+    the last existing candle and SKIPS a stock with no data ("let the tick consumer
+    populate from here"), so it can heal a gap but can never BOOTSTRAP an empty timeframe.
+    With `TF` covering only 5m/15m, nothing this project owned would fetch 1h history —
+    not because Kite lacks it.
+    """
+
+    def test_the_map_carries_1h(self) -> None:
+        from scripts.backfill_intraday import TF
+
+        assert "1h" in TF
+        # The interval string gap_fill already uses in production for this timeframe, so
+        # the backfill and the live repair path cannot disagree about what they request.
+        assert TF["1h"]["interval"] == "60minute"
+
+    def test_the_hourly_bar_budget_is_six_not_seven(self) -> None:
+        """⛔⛔ THE FINDING, and it is permanent. The two producers of `ohlcv_1h` disagree
+        by one bar per session — verified against the live Kite API and the worker's own
+        output on 2026-09-17:
+
+            Kite `60minute` → 6 bars, 09:15 … 14:15 IST
+            the live worker → 7 bars, 09:15 … **15:15** IST
+
+        The 375-minute session leaves a final 15-minute stub at 15:15. The worker mints it
+        from ticks; Kite's aggregation does not emit it, so a BACKFILLED session is missing
+        the last 15 minutes of the day and no option can recover it.
+
+        `bars_per_session` is the count BELOW which the manifest calls a session
+        `partial`, so 6 is the honest floor: a Kite session is complete at 6 and a live
+        session's extra stub still reads complete. **7 would flag every backfilled session
+        as short forever** — a permanent false alarm in the one artifact whose job is to
+        say which history is trustworthy."""
+        from scripts.backfill_intraday import TF
+
+        assert TF["1h"]["bars_per_session"] == 6
+
+    def test_every_timeframe_budget_matches_its_session_arithmetic(self) -> None:
+        """A canary over the whole map: 375 minutes of session, divided by the bar size,
+        is what each budget must equal (hourly floors, for the reason above)."""
+        from scripts.backfill_intraday import TF
+
+        minutes = {"5m": 5, "15m": 15, "1h": 60}
+        for tf, cfg in TF.items():
+            assert int(cfg["bars_per_session"]) == 375 // minutes[tf], tf
+
+    def test_the_session_filter_would_keep_a_1515_bar(self) -> None:
+        """⚠ The filter is not what drops the stub — `[09:15, 15:30)` admits a 15:15 bar.
+        It is absent because Kite never sends it, which is why this is a SOURCE property
+        and not something to fix here."""
+        from datetime import datetime as _dt
+
+        from scripts.backfill_intraday import IST, in_session_window
+
+        assert in_session_window(_dt(2026, 9, 17, 15, 15, tzinfo=IST)) is True
+        assert in_session_window(_dt(2026, 9, 17, 15, 30, tzinfo=IST)) is False
+
+    def test_all_selects_every_timeframe_and_both_still_works(self) -> None:
+        """`--timeframe both` stopped being true at three timeframes. "all" replaces it;
+        "both" stays an accepted alias so an existing command line or runbook keeps
+        working rather than failing on an unknown choice."""
+        from scripts.backfill_intraday import TF, build_arg_parser
+
+        ap = build_arg_parser()
+        for value in ("all", "both"):
+            args = ap.parse_args(["--timeframe", value])
+            selected = list(TF) if args.timeframe in {"all", "both"} else [args.timeframe]
+            assert selected == list(TF)
+        assert ap.parse_args([]).timeframe == "all"

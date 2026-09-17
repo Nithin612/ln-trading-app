@@ -1,9 +1,9 @@
-"""Kite 5m/15m historical backfill + session-completeness QA manifest
+"""Kite 5m/15m/1h historical backfill + session-completeness QA manifest
 (Phase 2 track T — prerequisite for slice 8c intraday goldens).
 
 Universe: active, non-CA-quarantined Nifty50 + F&O stocks. Candles flow
 through the shared ThrottledKite client (~3 req/s), in ≤60-day chunks,
-into ohlcv_5m / ohlcv_15m with `is_complete=true`. Idempotent: composite
+into ohlcv_5m / ohlcv_15m / ohlcv_1h with `is_complete=true`. Idempotent: composite
 PK (time, stock_id) + ON CONFLICT DO NOTHING — history is NEVER replaced
 (re-runs only fill holes); reruns resume from each stock's last stored
 bar unless --full.
@@ -21,8 +21,9 @@ not guaranteed (plan risk #6) — the manifest records what each stock
 actually has; 8c pins goldens only on admitted stocks.
 
 Usage:
-  uv run python scripts/backfill_intraday.py                     # both tfs, resume
+  uv run python scripts/backfill_intraday.py                     # all tfs, resume
   uv run python scripts/backfill_intraday.py --timeframe 15m
+  uv run python scripts/backfill_intraday.py --timeframe 1h      # 1h has NO history
   uv run python scripts/backfill_intraday.py --since 2023-07-03 --full
   uv run python scripts/backfill_intraday.py --manifest-only     # recompute QA only
 """
@@ -47,7 +48,7 @@ from app.broker.kite_rest import KiteException, ThrottledKite, TokenException  #
 from app.db.session import AsyncSessionFactory  # noqa: E402
 from app.models.broker import BrokerToken, KiteInstrument  # noqa: E402
 from app.models.market_calendar import NseHoliday  # noqa: E402
-from app.models.market_data import Ohlcv5m, Ohlcv15m  # noqa: E402
+from app.models.market_data import Ohlcv1h, Ohlcv5m, Ohlcv15m  # noqa: E402
 from app.models.stock import Stock  # noqa: E402
 from sqlalchemy import func, select, text  # noqa: E402
 from sqlalchemy.dialects.postgresql import insert as pg_insert  # noqa: E402
@@ -64,6 +65,33 @@ SESSION_CLOSE = time(15, 30)  # bar START times must be < close
 TF = {
     "5m": {"model": Ohlcv5m, "interval": "5minute", "bars_per_session": 75},
     "15m": {"model": Ohlcv15m, "interval": "15minute", "bars_per_session": 25},
+    # ⭐ 1h added 2026-09-17. Until then this map was 5m/15m only, and that was the whole
+    # reason `ohlcv_1h` had no history: `gap_fill.detect_and_fill_gaps` fills FORWARD from
+    # the last existing candle and SKIPS a stock with no data at all ("let the tick
+    # consumer populate from here"), so it can heal a gap but can never BOOTSTRAP an empty
+    # timeframe. Nothing we owned would fetch 1h history — not because Kite lacks it.
+    #
+    # ⛔⛔ **THE TWO PRODUCERS OF `ohlcv_1h` DISAGREE BY ONE BAR, AND THIS IS PERMANENT.**
+    # Both align to the 09:15 open, but they end differently — verified against the live
+    # API and against the worker's own output on 2026-09-17:
+    #
+    #   Kite `60minute`  → **6** bars, 09:15 … 14:15 IST (the 14:15 bar covers 14:15–15:15)
+    #   the live worker  → **7** bars, 09:15 … **15:15** IST
+    #
+    # The session is 375 minutes, so hourly buckets from 09:15 leave a FINAL 15-MINUTE
+    # stub at 15:15. The worker mints it from ticks; Kite's aggregation simply does not
+    # emit it. ⇒ **a backfilled session is missing the last 15 minutes of the day, and no
+    # option here can recover it** — it is not in the source at that resolution.
+    #
+    # ⚠ **`bars_per_session` is therefore 6, not 7.** The manifest counts a session
+    # `partial` when it holds FEWER than this, so 6 is the honest floor: a Kite session is
+    # complete at 6, and a live session's extra stub reads as complete too. Writing 7
+    # would flag EVERY backfilled session as short forever — a permanent false alarm in
+    # the one artifact whose job is to say which history is trustworthy.
+    #
+    # ⚠ `60minute` is the interval `gap_fill._TF_TO_KITE_INTERVAL` already uses in
+    # production, so the backfill and the live repair path request the same thing.
+    "1h": {"model": Ohlcv1h, "interval": "60minute", "bars_per_session": 6},
 }
 CHUNK_DAYS = 60
 INSERT_BATCH = 1000
@@ -378,9 +406,13 @@ async def _run_backfill(
     return 0
 
 
-async def main() -> int:
+def build_arg_parser() -> argparse.ArgumentParser:
+    """Extracted from `main` so the CLI contract is testable — the timeframe choices in
+    particular, which changed when 1h was added."""
     ap = argparse.ArgumentParser(description=__doc__)
-    ap.add_argument("--timeframe", choices=[*TF, "both"], default="both")
+    # ⚠ "all" replaces "both", which stopped being true when 1h was added. "both" is kept
+    # as an accepted alias so an existing command line (or a runbook) does not break.
+    ap.add_argument("--timeframe", choices=[*TF, "all", "both"], default="all")
     ap.add_argument("--since", type=date.fromisoformat, default=date(2023, 7, 3))
     ap.add_argument(
         "--until", type=date.fromisoformat,
@@ -390,8 +422,12 @@ async def main() -> int:
     ap.add_argument("--full", action="store_true", help="ignore resume points, refetch all")
     ap.add_argument("--manifest-only", action="store_true", help="skip fetching, QA only")
     ap.add_argument("--limit", type=int, default=0, help="first N symbols (smoke runs)")
-    args = ap.parse_args()
-    timeframes = list(TF) if args.timeframe == "both" else [args.timeframe]
+    return ap
+
+
+async def main() -> int:
+    args = build_arg_parser().parse_args()
+    timeframes = list(TF) if args.timeframe in {"all", "both"} else [args.timeframe]
     yesterday = datetime.now(IST).date() - timedelta(days=1)
     if args.until > yesterday:
         # Intra-session Kite bars are FORMING; storing them is_complete
