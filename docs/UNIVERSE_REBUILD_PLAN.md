@@ -10,6 +10,13 @@ no migration run. Every number in PARTS I–V is a `SELECT` taken on **2026-09-1
 the dev database `trading_platform`; every number in **PART VI is a `SELECT` taken on
 2026-09-13** against the same database (re-measured, not carried forward).
 
+> ⭐⭐ **THE QUEUE STATE CONTINUES IN `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` (2026-09-17).**
+> This document is accurate as history through §78 (round-5 adjudication, 2026-09-14) and is
+> **behind the code by nine commits**: §77's queue lists V4–V8, U8 and A10 as open and **all of
+> them shipped 2026-09-15 → 09-17.** The consolidated doc carries the measured state of every
+> open item, the round-6 questions, and two W1 corrections to this plan — most importantly that
+> **U6's acceptance criterion is already met by D3 without the schema change.**
+
 ---
 
 ## §0 · How to review this

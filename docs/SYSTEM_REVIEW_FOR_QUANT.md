@@ -19,6 +19,16 @@ figures isolate.
 **Not canonical.** Project status lives in the top block of `docs/PHASES.md`; this is a
 standalone explanation written against the code and the data on the date above.
 
+> ⛔ **DATA-PLANE CORRECTION, 2026-09-17 (W1).** **Every one of the seven rows in §2's table has
+> moved** — the universe outage was repaired (active stocks **1,322 → 2,299**, Nifty-50
+> constituents **5 → 50**), index history and VIX were restored (**21,357 index bars across 27
+> indices · VIX 791 sessions**), and intraday bars were **backfilled to 2023-07-03** for ~210
+> liquid names (`ohlcv_5m` 12.6M rows · `ohlcv_15m` 4.2M). ⇒ **§13 Tier-3 items #9 and #10 are
+> DONE**, and every opening-range / VWAP / intraday-timing hypothesis this document calls
+> blocked is now testable on a 210-name cohort. **Nothing here about the scorer, the gate, the
+> levels or the verdicts in §11.3 is affected** — the frozen engine was not touched. Measured
+> state and what is left: `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md`.
+
 ---
 
 ## 0. Executive summary — the five things that matter

@@ -10,6 +10,35 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
+## ▶ STATE AT A GLANCE (updated 2026-09-17) — the two review threads joined — read this first
+
+**▶▶ 2026-09-17 — ⭐⭐ `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` IS THE ONE DOC THAT SAYS WHAT IS
+LEFT.** `UNIVERSE_REBUILD_PLAN.md` (infrastructure, 5 rounds) and `SYSTEM_REVIEW_FOR_QUANT.md`
+(strategy, 10 panel rounds) answer different halves of one question; neither alone is a queue.
+The consolidated doc carries the measured state of every table and process, DONE-with-the-number,
+PENDING-with-its-state, the solutions on offer and nine round-6 questions — backend and frontend.
+⛔ **The universe plan is nine commits behind its own §77 queue** (V4–V8, U8 and A10 all shipped
+09-15 → 09-17) and **`SYSTEM_REVIEW` §2 is stale in ALL SEVEN rows**; both now carry a W1 banner.
+⭐ **U6 — "the one schema change", the item that plan was least sure about — is already satisfied
+by D3 without the column** (`bhavcopy_service` no longer filters `is_active`, `resolve_universe`
+still does, and `test_ohlcv_history_backfill` pins it). **Proposed for closure.**
+⛔⛔ **THREE LIVE DEFECTS the survey surfaced, none fixed:** (1) **`strategy_profiles` = 0 at
+head** — its seed lives in a migration alembic believes applied, so it **cannot re-run**, and the
+four call sites that read it have produced nothing for ten days with a green suite; (2) **the
+append-only ledger has NO production caller** (`ledger_entries` 0 rows; `services/ledger.py`
+imported only by its own test) — the panel's "highest-priority item on nobody's tier list", built
+and wired to nothing, and **V6's wiring lint is frontend-only so it cannot see it**;
+(3) **`categories`/`stock_categories` are empty-and-consumed and are NOT in the starvation
+registry**, which covers three tables. ⭐ **The generalisable one: a migration that seeds
+reference data is invisible to every check we own once it is marked applied.**
+⚠ **Measured 09-17:** active stocks **2,299** · `ohlcv_5m` **12.6M rows / 796 sessions back to
+2023-07-03** (~210 names before 09-15, 2,299 after) · `ohlcv_15m` **4.2M** · `ohlcv_1h` **3
+sessions, backfill path shipped but NOT RUN** · `index_ohlcv_1d` **21,357 / 27 indices** · VIX
+**791** · `cas_daily` **716 / 5 sessions, accruing** · `fii_dii_daily` **10 rows of ~790,
+unrecoverable by source** · positions **4 open**. **Every gate mode unchanged — the data
+restoration flipped nothing** (§9/4).
+⛔ **NOTHING PUSHED — 209 commits ahead of `origin/main`.**
+
 ## ▶ STATE AT A GLANCE (updated 2026-09-14) — overnight build — read this block first
 
 **▶▶ 2026-09-14 — ✅ QUEUE ITEM 1 DONE: U4′, THE COVERAGE-AWARE FEED ALARM.**
@@ -1714,6 +1743,14 @@ which is what Phase-6 expectancy calibration is for.
 > single-gate consolidation** (test-first, equivalence-pinned) — it closes the
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
+
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-17.**
+
+**▶▶ ⭐⭐ READ `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` FIRST.** It supersedes the per-item
+queue below as the answer to "what is left": PART 3 is every open item with its state measured
+2026-09-17, PART 4 is the proposed order (ledger wiring · `strategy_profiles` re-seed · the
+starvation registry · directional entry zone · the U5 runbook section), PART 5 is the round-6
+question set. The blocks below remain the record of how each item got there.
 
 **▶ CONTINUE HERE (next session, any account) — updated 2026-09-14 (V1+V2).**
 

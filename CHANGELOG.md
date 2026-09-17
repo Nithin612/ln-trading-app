@@ -7,6 +7,48 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Consolidated state doc — the two review threads joined, and two W1 corrections (2026-09-17)
+
+`docs/UNIVERSE_REBUILD_PLAN.md` (infrastructure, 5 rounds) and `docs/SYSTEM_REVIEW_FOR_QUANT.md`
+(strategy, 10 panel rounds) answer different halves of one question and **neither alone says what
+is left**. `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` joins them: the measured state of every
+table and process today, what is DONE with the number that proves it and the reviewer who
+converged on it, what is PENDING with its state, the solutions on offer, and nine round-6
+questions for the panel — backend and frontend both.
+
+⛔ **Two W1 corrections, both found by measuring rather than reading:**
+
+- **`SYSTEM_REVIEW_FOR_QUANT.md` §2 is stale in all seven rows.** Active stocks **1,322 →
+  2,299**, Nifty-50 constituents active **5 → 50**, `index_ohlcv_1d` **48 → 21,357** across
+  **27** indices, `india_vix_daily` **16 → 791**, `ohlcv_5m/15m` **empty → 12.6M / 4.2M rows back
+  to 2023-07-03**, `cas_daily` **43 → 716**. ⇒ its §13 **Tier-3 #9 and #10 are DONE**, and every
+  opening-range / VWAP hypothesis it calls blocked is testable on a ~210-name cohort. Nothing
+  about the scorer or the §11.3 verdicts is affected.
+- ⭐ **U6 (the `is_active` split — "the one schema change", and the item the plan was least sure
+  about) is already satisfied by D3 without the column.** Its stated acceptance criterion —
+  *flipping every `is_active` to false must not reduce bar ingestion* — holds today:
+  `bhavcopy_service` no longer filters the flag, `resolve_universe` still does, and
+  `tests/test_ohlcv_history_backfill.py` pins an inactive stock being ingested. Proposed for
+  closure rather than continued carriage.
+
+⛔ **Three live defects the survey surfaced, none of them new code, none fixed here:**
+
+- **`strategy_profiles` is empty at head** and the four production call sites that read it have
+  therefore been unable to produce anything for ten days. The seed lives in a migration alembic
+  believes is applied, so it **cannot re-run**. The class matters more than the row: *a migration
+  that seeds reference data is invisible to every check we own once it is marked applied.*
+- **The append-only trade ledger has no production caller** — `ledger_entries` is 0 rows and
+  `app/services/ledger.py` is imported by its own test and nothing else. The external panel
+  called this the highest-priority engineering item on nobody's tier list, and it is built,
+  migrated, tested and wired to nothing. ⚠ V6's wiring lint is frontend-only and structurally
+  cannot see it.
+- **`categories` / `stock_categories` are empty and consumed**, and are **not** in the starvation
+  registry — which today covers `kite_instruments`, `stocks` and `strategy_profiles` only. The
+  alarm built for this defect class does not cover the two tables its own adjudication named.
+
+Both source documents now carry a pointer banner (W1). Nothing was written to the database, no
+gate mode changed, the frozen engine untouched.
+
 ### 1h added to `backfill_intraday.py` — and the two producers disagree by one bar (2026-09-17)
 
 `ohlcv_1h` had no history before 2026-09-15 because **nothing this project owned would fetch
