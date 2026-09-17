@@ -1770,11 +1770,23 @@ intraday history and `backfill_intraday.py` already existed, so the HISTORY was 
 an hour. Depth lands on **2023-07-03**, the same clean block as `ohlcv_1d`. ⭐ Sequencing
 mattered: the script's universe is `is_active AND (is_nifty50 OR is_fno)`, so running it AFTER
 D2′b fetched the right 210 names.
-⛔ **`ohlcv_1h` is STILL 0 and has NO backfill path** (the script covers 5m/15m only) — hourly
-accrues ONLY from the live worker, so its 09-07→now gap is **permanently unrecoverable**.
-⚠ **Forward capture is ready but NOT RUNNING:** preflight passes with **2,291 instruments**
-(baseline ratcheted 1,178 → 2,291), but `make live-worker` is a supervised ritual needing a
-FRESH KITE TOKEN each morning. **Start it tomorrow, 09:15 IST.**
+⛔ ~~`ohlcv_1h` is STILL 0 and has NO backfill path (the script covers 5m/15m only) — hourly
+accrues ONLY from the live worker, so its 09-07→now gap is **permanently unrecoverable**.~~
+**CORRECTED 2026-09-17 (W1) — two of those three claims were wrong.** Measured:
+`ohlcv_1h` holds **48,065 rows / 2,308 stocks / 3 sessions, 2026-09-15 → 2026-09-17** — it
+started accruing the moment the worker came up, so it is not 0 and the forward capture below
+DID start. And it is not true that there is *no* backfill path: `--gap-fill` fetches
+**5m/15m/1h**. ⭐ **But the effect the line described is real, for a different and more useful
+reason:** `gap_fill.detect_and_fill_gaps` fills FORWARD from the last existing candle and
+**skips any stock with no data at all** ("let the tick consumer populate from here"), so it
+cannot BOOTSTRAP an empty timeframe — and `backfill_intraday.py`'s `TF` map is 5m/15m only.
+⇒ **1h history before 2026-09-15 is unrecoverable with current tooling, not because Kite lacks
+it.** The fix, if 1h depth is ever wanted, is to add `1h` to `backfill_intraday.py` (or seed one
+bar per stock so gap-fill can chain from it) — NOT to run `--gap-fill` and expect history.
+✅ **Forward capture IS RUNNING** (corrected 2026-09-17): the earlier "ready but NOT RUNNING …
+start it tomorrow" is stale — all four intraday tables carry today's bars (`ohlcv_5m` 12.6M,
+`ohlcv_15m` 4.2M, `ohlcv_1m` 1.8M, `ohlcv_1h` 48k). ⚠ It remains a supervised ritual needing a
+FRESH KITE TOKEN each morning.
 
 **✅ INDEX + VIX BACKFILLED 2026-09-14: NIFTY50 · BANKNIFTY · FINNIFTY · INDIA VIX all at
 789 sessions, 2023-07-03 → 2026-09-11** (789 ok / 46 skipped, one NSE CSV per session feeding
