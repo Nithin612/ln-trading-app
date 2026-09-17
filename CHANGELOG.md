@@ -7,6 +7,64 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Round-9 panel — the backfill's VALUES are validated, and seven more of my numbers were wrong (2026-09-17)
+
+PART 11. Six responses; two did independent arithmetic on PARTS 9–10 and between them found seven
+errors, **all mine**. Third consecutive round where the panel's highest-value output was a defect in
+my measurements rather than in the system.
+
+⭐⭐⭐ **M57 — the backfill is now VALUE-validated, not just count-validated.** Kimi observed that
+every check in §9.1–9.3 was a count, and that count-level validation is insufficient for a source
+that demonstrably serves wrong file types. Method: the bhavcopy publishes `PREV_CLOSE` — a column
+**we never ingest** — on the *following* session's file. Compared our stored close for session N−1
+against it on three 2021–22 sessions: **4,974 of 4,974 match exactly** (100.00%, 1bp tolerance).
+⚠ No corporate-action boundary fell in the sample, so the check's CA-detection arm is untested.
+
+⭐⭐ **M55 — 313 sessions are in neither the holdout nor the test block.** The blocks now tile
+exactly (313 + 617 + 797 = 1,727), which makes visible that **the only crash regime in the archive
+is unsealed and unused** while item 5 is specified on the 797-session post-hole block. The window is
+now an explicit queue decision: 797 or 1,110.
+
+⛔ **M54 — the holdout is 617 sessions, not 620.** 248 + 247 + 122. It was an estimate in a quantity
+about to be pre-registered.
+
+⛔ **M60 — item 4 is BLOCKED: its falsifier is denominated in R and three R definitions are live.**
+In the M5 repro the engine books +4.211%, which is **+1R** entry-referenced, **+4R**
+signal-referenced, and **5R** as the swing from an intended −1R (M51's `gap ÷ stop`). A bias of
+0.04R under one definition is 0.2R under another, against a 0.05R threshold. Define R once, in code,
+before item 4 runs.
+
+⛔ **M59 — "the ratio widens with breadth" is wrong; it is U-shaped.** Measured across 1/2/3/4/5/10/25
+positions: **2.88 → 2.39 → 2.53 → 2.67 → 2.82 → 3.54 → 5.71**. The minimum is at two positions, and
+the error sits in the 3–4 position range S2 identified as viable, where the advantage is ~2.5×.
+
+⛔ **M61/M56 — four staleness defects**: §9.1's per-year table summed to 1,723 against an archive of
+1,727 (the four sessions the same document recovered); "622 sessions" should be **626**; the gap
+label named 2022-08-05 as the failed session when the failure is **2022-08-08**; and PART 1's signal
+row read 48/22 against a same-day 50/23.
+
+✅ **Two challenged claims held.** M53: the 657-vs-654 weekday discrepancy is my own `--limit 3`
+smoke run, already complete when the full run started — **not** a second instance of the enumerator
+defect, though the report did print 654 against a 657-weekday range without reconciling. M58: the
+479 unaccounted name-days are a `lead()` boundary artifact, reproduced exactly (404,903 vs 404,424)
+— two internal seams × ~240 names, **not missing data**.
+
+⭐⭐ **A standing rule, from Claude, replacing two of mine:** *a predicate that encodes an external
+authority's behaviour must be a CACHE of that authority's answers, not a RULE you evaluate.* Test:
+**if the authority changed its mind tomorrow, would this code find out?** That covers the cohort rule
+(M31/M52), the calendar rule (M43), and predicts `EQ_LISTED`, the F&O flags and `nse_holidays`.
+
+⭐ **And from Kimi, the sharpest new finding: "pre-registration" rests on local, unpushed, mutable git
+timestamps.** E2's null is citable *because* it was pre-registered in a commit — and with nothing
+pushed that reduces to my word. The push is re-scoped from disaster recovery to **evidentiary
+integrity**. Also from Kimi: gross alpha is **−0.0218%**, so the book loses before any cost ⇒ limit
+orders (R-6) are reclassified as loss-reduction, not edge-creation.
+
+Queue: item 4 blocked on the R definition · item 5 must state its window and gains two pre-registered
+arms (per-direction IC, and an interpretation bar of ~0.050 derived from the published interval) ·
+the holdout seal becomes a whitelist · five new items (bhavcopy A10 hardening, a CA adjust-or-drop
+policy, spread/impact measurement, index+VIX for 2021–22, and a project-level kill criterion).
+
 ### fix(data): NSE holds weekend sessions and the enumerator could not reach them — 1,723 → 1,727 (2026-09-17)
 
 Round-8 panel (PART 10). An external reviewer derived from three published session counts

@@ -10,6 +10,31 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
+## ▶ STATE AT A GLANCE (updated 2026-09-17) — round 9: the backfill's VALUES are validated — read this first
+
+**▶▶ 2026-09-17 — ⭐⭐⭐ THE BACKFILL IS VALUE-VALIDATED (M57).** Every earlier check was a *count*.
+The bhavcopy publishes `PREV_CLOSE` — a column **we never ingest** — on the following session's file.
+Our stored close for session N−1 matches it on **4,974 of 4,974** name-days across three 2021–22
+sessions (**100.00%**). ⚠ No CA boundary fell in the sample, so that arm is untested.
+⭐⭐ **M55: the blocks now tile exactly (313 + 617 + 797 = 1,727)** — which makes visible that **the
+only crash regime (313 sessions) is in NEITHER the holdout nor the test block**, unsealed and unused.
+Item 5's window is now an explicit decision: **797 or 1,110**.
+⛔ **M54: the holdout is 617 sessions, not 620** — an estimate in a quantity about to be pre-registered.
+⛔ **M60: item 4 is BLOCKED — its falsifier is in R and THREE R definitions are live** (+1R
+entry-referenced / +4R signal-referenced / 5R as the swing). Define R once, in code, first.
+⛔ **M59: "the ratio widens with breadth" is WRONG — it is U-shaped** (2.88 → **2.39** → 2.53 → 2.67 →
+2.82 → 3.54 → 5.71); the minimum is at two positions, inside the 3–4 range S2 called viable.
+⛔ **M61/M56: four staleness defects** — per-year table summed to 1,723 vs 1,727 · "622" should be
+**626** · the gap label named the wrong date · PART 1's signal row was stale within the same day.
+✅ **Two challenged claims held:** the 657-vs-654 weekday gap is my own smoke run (M53), and the 479
+unaccounted name-days are a `lead()` boundary artifact reproduced exactly (M58).
+⭐⭐ **STANDING RULE (Claude): a predicate encoding an external authority's behaviour must be a CACHE
+of its answers, not a RULE you evaluate** — *if the authority changed its mind tomorrow, would this
+code find out?* Covers M31/M52 and M43; predicts `EQ_LISTED`, the F&O flags, `nse_holidays`.
+⭐ **Kimi: "pre-registration" rests on local, unpushed, mutable git timestamps** ⇒ the push is
+**evidentiary**, not just DR. And **gross alpha is −0.0218%** ⇒ limit orders reduce loss, not create edge.
+⛔ **NOTHING PUSHED.**
+
 ## ▶ STATE AT A GLANCE (updated 2026-09-17) — weekend sessions recovered; three of my own measurements refuted — read this first
 
 **▶▶ 2026-09-17 — ✅ `ohlcv_1d` IS NOW 1,727 SESSIONS / 3,166,300 BARS.** After the 922-day fill
