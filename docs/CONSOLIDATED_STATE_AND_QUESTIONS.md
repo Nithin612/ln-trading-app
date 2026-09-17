@@ -55,18 +55,18 @@ One table. Everything else in this document refers back to it.
 | …`is_nifty50` active | 50 (of which 5 active) | **50 active** | ✅ repaired |
 | …`is_fno` active | 212 | **210 active** | ✅ |
 | …`ca_flagged_at` | — | **7** (5 of them active) | ⚠ has a clearing path now |
-| `ohlcv_1d` | 2,080,305 bars → 2026-09-09 | **2,095,287 bars · 1,100 sessions · 2019-10-01 → 2026-09-16** | ✅ ingesting |
+| `ohlcv_1d` | 2,080,305 bars → 2026-09-09 | **2,095,287 bars · 1,101 sessions · 2019-10-01 → 2026-09-17** ⛔ **with a 922-day hole: 2020-12-23 → 2023-07-03. 2021 and 2022 do not exist** (307 sessions pre-2021 + 794 from 2023-07-03) | ✅ ingesting, ⛔ not contiguous — §7.10/3 |
 | `ohlcv_5m` | **empty** | **12,625,648 rows · 796 sessions · 2023-07-03 → 2026-09-17** | ✅ **backfilled** |
 | `ohlcv_15m` | **empty** | **4,206,475 rows · 796 sessions** | ✅ **backfilled** |
 | `ohlcv_1h` | **empty** | **48,065 rows · 3 sessions · 2026-09-15 → 09-17** | ⚠ live-only; backfill path exists, **not run** |
 | …intraday breadth | — | **~210 names/session before 09-15; 2,299 from 09-15** | ⚠ the history is a 210-name cohort, not the universe |
-| `index_ohlcv_1d` | 48 rows | **21,357 rows · 27 indices · 791 sessions** | ✅ **U8** |
+| `index_ohlcv_1d` | 48 rows | **21,384 rows · 27 indices · 792 sessions, 2023-07-03 → 2026-09-17** | ✅ **U8** — ⚠ 3.2 years, not 7 (§7.10/4) |
 | `indices` registered | 3 | **27** (of 166 in the source CSV; 139 deliberately excluded) | ✅ |
-| `india_vix_daily` | 16 | **791** | ✅ |
+| `india_vix_daily` | 16 | **792, 2023-07-03 → 2026-09-17** | ✅ — ⚠ same 3.2-year scope |
 | `cas_daily` | 43 rows / 1 session | **716 rows / 5 sessions · 2026-09-10 → 09-17** | ⚠ accruing again, cannot be back-filled |
 | `fii_dii_daily` | — | **10 rows / 5 sessions of ~790** | ⛔ **unrecoverable by source** |
 | `signals` | 30 | **48 · 22 active · 0 shadow** | — |
-| `positions` | **0** | **4, all open, all opened 2026-09-16** | ⚠ the trading record still starts from zero |
+| `positions` | **0** | **4, all open, opened 2026-09-16 — ⛔⛔ ALL FOUR ARE `SHORT`** (M13) | ⛔ a cash-delivery account cannot hold an overnight short — §7.11/1 |
 | `orders` / `signal_outcomes` | 0 / 0 | **4 / 45** | — |
 | `ledger_entries` | — | **0 — and no production writer exists** `[code]` | ⛔ **see §3.2** |
 | `strategy_profiles` | — | **0** | ⛔ **style engines structurally dead** |
@@ -110,7 +110,7 @@ settled it, and **(c)** there is a number.
 | 6 | **The rule's INPUTS are snapshotted, not hashed (§73)** | **Five of six sources independently**, against my own written spec | `kite_instruments` is upserted in place ("57595 upserted, 0 stale swept") ⇒ yesterday's state is already gone. Now `universe_rule_inputs`: raw gzipped CSV + parsed sets, **recorded BEFORE the decision** |
 | 7 | **The collapse rail is two-sided (§74)** | Claude and Kimi converged in one round | growth past `live_universe_max_count` (3,000) makes `universe_guard` refuse the **whole** subscription ⇒ every open position loses its feed at once. Headroom **2,291 of 3,000** |
 | 8 | **The download refuses a 200 OK that is not the file (A10)** | Queued as "correct by accident of `raise_for_status`" | measured: **4 of 7** failure bodies parsed to an empty set and reported success |
-| 9 | **Index + VIX restored (U8)** | §64/2 flagged the CSV already carried them | `indices` **3 → 27**, `index_ohlcv_1d` **21,357 bars**, VIX **791 sessions**; `market_regime` returns a real verdict (200 closes + VIX 13.17) |
+| 9 | **Index + VIX restored (U8)** | §64/2 flagged the CSV already carried them | `indices` **3 → 27**, `index_ohlcv_1d` **21,357 bars**, VIX **792 sessions, all 2023-07-03 → 2026-09-17**; `load_market_regime_context` returns a populated context (200 closes + VIX 13.17) — ⚠ *the function returned a number*, not a validated verdict (§7.10/5) |
 | 10 | **Intraday history restored** | "accrues only in real time" was imprecise — Kite serves deep intraday history | `ohlcv_5m` **12.6M rows**, `ohlcv_15m` **4.2M**, both **2023-07-03 → today**, the same clean block as `ohlcv_1d` |
 | 11 | **CAS accrual restarted** | §13/Q5 — the only item losing data permanently every day it waits | `cas_daily` **43 → 716 rows / 5 sessions** |
 
@@ -216,7 +216,7 @@ Ordered by **what it blocks**, not by size. Every row carries the state measured
 
 | # | Lever | State 09-17 | What changed since 09-10 |
 |---|---|---|---|
-| R-1 | **Restore trend structure to the scorer** (Tier-1 #1) | **NOT RUN** | The method is settled — the read-only injection that refuted RVOL, no frozen edit needed to get the answer. ⚠ Guarded prior: injection can **dilute** through the confidence normalisation. This is the only item on the list that is a **defect** (a weight-20 factor unreachable by construction) rather than a hypothesis |
+| R-1 | **Retune the trend factor's parameters** (Tier-1 #1) | **NOT RUN, RECLASSIFIED 2026-09-17** | ⛔ **NOT a defect — M9 refutes "unreachable by construction": it fires (+0.70) at the shipped `lookback=20, swing_n=5`.** True statement is M10: **5 of 19,100 panels = 0.026%**. ⇒ a **parameter proposal** that must clear `t ≈ 3.6`. Method unchanged (read-only injection); guarded prior: injection can **dilute** through the confidence normalisation |
 | R-2 | **Minervini as a universe filter** (Tier-1 #2) | **NOT RUN** | 0 of 91 entries pass ⇒ disjoint from our selection, so it cannot be tested on this book. Needs a universe-level regeneration |
 | R-3 | **12-month price momentum** (Tier-1 #3) | **NOT RUN** | The single untested thread from the reading study. ⚠ It surfaced as the *control that killed* the overhead-supply effect, so the evidence for it is weaker than it looks |
 | R-4 | **CAS overnight reversal to ≥30 sessions** (Tier-1 #4) | **accruing: 5 of 30** `[measured]` | ✅ Capture restarted. ~5 weeks of wall-clock left. Best odds on the list — and it is a **different strategy**, not a fix to this one |
@@ -280,9 +280,8 @@ last two rounds measured the marginal value of review breadth as **4 of 37** and
 
 ## 4.3 The two research moves I would actually make
 
-8. ⭐⭐ **Run R-1 (trend-structure injection) before anything else in Tier 1.** It is the only
-   item that is a *defect* rather than a *hypothesis*: a weight-20 factor described in the spec
-   as "the macro context" cannot fire on the timeframe it trades, the swing engine therefore
+8. ⭐⭐ **Run R-1 (trend-structure injection) — RECLASSIFIED.** ⛔ **CORRECTED 2026-09-17 (§7.10/1): it is NOT a defect.** M9 shows it fires at the shipped parameters; M10 measures **0.026%** of real panels. It is a parameter proposal at the `t ≈ 3.6` bar. The observation that motivated it survives — a weight-20 factor described in the spec
+   as "the macro context" effectively never fires on the timeframe it trades, the swing engine therefore
    carries no trend input, and this is independently corroborated twice (Minervini 0/91; beta
    +0.92, alpha ≈ 0). It costs one read-only corpus pass, needs no frozen edit and no sign-off
    to get the **answer**. ⚠ Only shipping it needs a spec decision — which is §5/Q-3 below.
@@ -361,11 +360,11 @@ own preference.
 
 ## 5.3 Research — four questions, two of them carried forward unanswered
 
-**Q-6 [the one that matters most]** — *R-1 and `SYSTEM_REVIEW` §14/2, still unanswered.* The
-weight-20 `DOW_TREND` factor cannot fire on the daily timeframe by construction
-(`lookback=20`, `swing_n=5` admits one pivot per side; the function needs two highs **and**
-two lows). **Is restoring it a bug fix — restore the specified intent — or a new hypothesis
-that must clear t ≈ 3.6?** ⭐ The governance answer changes the required evidence by an order
+**Q-6 [ANSWERED BY MEASUREMENT 2026-09-17 — my premise was false]** — I asked whether restoring
+`DOW_TREND` was a bug fix or a new hypothesis, on the stated ground that it *cannot* fire by
+construction. ⛔ **M9 refutes that: it fires (+0.70) at `lookback=20, swing_n=5`**; M10 measures
+**0.026%** of 19,100 real panels. ⇒ **the fork collapses — the code implements the spec
+correctly, so changing the parameters is a NEW HYPOTHESIS at `t ≈ 3.6`.** ⭐ The governance answer changes the required evidence by an order
 of magnitude, and it is the *only* place in the programme where that question has teeth,
 because it is the only item that is a defect rather than a proposal.
 
@@ -391,9 +390,10 @@ correct next move to keep searching for edge inside this framework, or to treat 
 built — the honest execution model, the deflated-Sharpe bar, the outcome recorder, the
 overlap-corrected statistics, and now a repaired universe with a versioned rule — as
 **evaluation infrastructure** and search for the edge elsewhere? ⚠ Answer it against this
-number: **at ₹1 lakh, round-trip friction is 22–62 bps plus spread**, the flat ₹15.34 DP charge
-alone is **61.6 bps on a ₹3,900 position**, and cost is the only effect in the programme
-measured at |t| > 5.
+number: **at ₹1 lakh, round-trip friction is 22–62 bps plus spread**, **total** round-trip charges are
+**61.6 bps on a ₹3,900 position** (the flat ₹15.34 DP charge is **39.3** of them — corrected in
+§7.10/2), the floor is **~22 bps at any size**, and cost is the only effect measured at |t| > 5 —
+⚠ which §7.8/Q3 correctly notes is partly an artifact of its near-zero variance.
 
 ---
 
@@ -405,3 +405,633 @@ measured at |t| > 5.
 - It does not change any status. `docs/PHASES.md`'s top block is canonical.
 - It does not run anything. Every number here is read; nothing was written to the database, no
   gate mode was changed, and the frozen engine was not touched.
+
+---
+
+# PART 7 — THE ROUND-6 PANEL, ANSWERED ONE BY ONE (2026-09-17)
+
+Eight responses came back: **ChatGPT · Gemini · Perplexity · DeepSeek · Grok · Nemotron 3.5
+lightning · Claude · Kimi K3.** Each is adjudicated separately below, deliberately **not**
+merged into a consensus table — three of the most valuable points in this round were made by
+exactly one source, and a merge would have averaged them away.
+
+## §7.0 · How I judged them, and the rule I broke last time
+
+Every verdict below is settled by a query, a code read, or an execution — never by which
+reviewers agreed. That matters because **this round refuted two claims that every source
+accepted, and both of them were mine.** Reviewer unanimity measured my document's persuasiveness,
+not its correctness.
+
+⭐ **I tested my own load-bearing claims first, and two failed.** That is the single most
+useful thing in this part; a review round that only audits the reviewers has the burden of proof
+backwards.
+
+## §7.1 · The measurement round — everything settled today
+
+Each row is one query, code read, or execution. Sections §7.2–§7.9 cite these by ID.
+
+| ID | Question | Result `[measured 2026-09-17]` |
+|---|---|---|
+| **M1** | Does `ohlcv_1d` really hold 1,100 sessions over 2019-10→2026-09? | **1,101 distinct sessions** — and the years present are 2019, 2020, **2023, 2024, 2025, 2026**. ⛔ **2021 and 2022 do not exist.** Largest gap: **2020-12-23 → 2023-07-03 = 922 days**. 307 sessions before 2021 + 794 from 2023-07-03. |
+| **M2** | What period do the "restored" index and VIX histories actually cover? | `index_ohlcv_1d` **2023-07-03 → 2026-09-17, 792 sessions, 21,384 rows**; `india_vix_daily` **2023-07-03 → 2026-09-17, 792 rows**. **3.2 years, not 7.** |
+| **M3** | Is the flat ₹15.34 DP charge 61.6 bps on a ₹3,900 position? | **No. 39.3 bps.** The **total** round trip on ₹3,900 is **₹24.01 = 61.6 bps**. Measured through `fees.roundtrip_charges`: ₹3,900 → 61.6 bps · ₹38,965 → 26.2 · ₹1,00,000 → 23.8 · ₹10,00,000 → **22.4**. DP alone reaches 61.6 bps at a **₹2,490** position. |
+| **M4** | Is STT in the cost model? | **Yes** — ₹3.90 per leg on ₹3,900 (0.1% delivery, both legs), alongside stamp duty, exchange txn, SEBI, GST and DP. Full breakdown printed. |
+| **M5** | Does `_simulate_trade` book a gap-through-stop as a win? | **Yes, and ONLY at the entry bar.** Executed: signal close 100 / stop 99 / next open 95 ⇒ entry 95, exit **99**, `hit_sl=True`, **+4.211%**. Short mirror **+3.810%**. |
+| **M6** | Does it mishandle gaps generally? | **No — the controls pass.** A gap through the stop on a *later* bar exits at the **open** (−5.000%), and an ordinary intrabar stop exits at the stop (−1.000%). The defect is strictly the **fill bar**. |
+| **M7** | How often is a trade exposed to M5? | Overnight gap distribution, 183,556 stock-days, top-250 liquid, 2023-07-03→now: gap ≤ **−0.65%** (p10 stop) **9.25%** · ≤ **−2%** **2.08%** · ≤ **−5%** (median stop) **0.34%**. Mean gap **+0.1835%**. |
+| **M8** | Is "live is immune" true, and why? | **True, by an explicit rejection.** `paper_broker.place_paper_order` computes the fill, then calls `eligibility.through_stop_reason(side, price=fill_price, stop_loss)` and **raises `PaperOrderError`**. Tests exist: `tests/test_restrictions.py:224-244`, `tests/test_eligibility_preview.py:245,341`. |
+| **M9** | Can `DOW_TREND` fire on the daily timeframe? | ⛔⛔ **YES. The "impossible by construction" claim is REFUTED.** A constructed 20-bar daily window with pivots at window indices 5/14 (highs) and 6/13 (lows) returns **+0.70 "Confirmed uptrend"**; the mirror returns **−0.70**. |
+| **M10** | Then how often does it fire on real bars? | **5 of 19,100 panels = 0.026%** (2 positive, 3 negative) — 200 liquid names, 2023-07-03→now, through the frozen function. Independently reproduces the prior 3-of-4,511 rarity on a 4× larger sample. |
+| **M11** | Does the live funnel still end at 0? | **No — 15.** Today: `3,395 known → 2,299 in universe → 2,291 priced → 2,108 admitted → 15 live signals`; breadth median 2,251. 183 names refused before scoring. |
+| **M12** | Is the engine long-only? | **No.** `signals`: **BUY 32 / SELL 18**; swing 40 / positional 10; 23 active / 27 expired. |
+| **M13** | What are the four open positions? | ⛔⛔ **All four are `SHORT`**, `mode='paper'`, each carrying a `signal_id`, opened 2026-09-16: 207@₹138.24 · 33@₹855.55 · 72@₹423.55 · 143@₹225.35. |
+| **M14** | What is the 210-name intraday cohort? | **Exactly 210 names, 210 of 210 are `is_fno`, 50 are `is_nifty50`.** The cohort *is* the F&O universe. |
+| **M15** | Is the archive survivorship-pruned? | **No, not at bar level.** **1,081 inactive stocks carry bars**, and **389 names have no bar since 2025-01-01** — dead names are retained. |
+| **M16** | Can we answer "was X in Nifty-50 on date D"? | **No.** `index_constituents`: **89 rows, 3 indices, 0 with `weight_pct`, every `added_on` = 2026-09-07**. |
+| **M17** | Does the E2 IC study filter corporate actions? | ⛔ **NO.** `scripts/e2_score_ic.py` skips panels for *window holes* (`skipped_gap`) but carries **no abs(move) > 25% CA screen** — unlike `swing_dependence_probe.py`, which has `CA_JUMP = 0.25` and reports its drop count. |
+| **M18** | Does a subscription-ceiling trip kill held names too? | **Yes.** `live_worker` bootstrap: `check_and_record_universe(...)` returning a refusal ⇒ `return EXIT_NO_UNIVERSE` — the worker **refuses to start**, so U17's held-name union never gets subscribed. |
+| **M19** | Does the starvation registry cover the named tables? | **No** — it lists `kite_instruments`, `stocks`, `strategy_profiles` only. `categories`/`stock_categories` (**0/0, consumed**) and `ledger_entries` (**0**) are absent. |
+| **M20** | Does the trade ledger have a production caller? | **No.** Precise grep for `from app.services.ledger import` / `from app.services import ledger` / `import app.services.ledger` across `app/`, `scripts/`, `tests/` returns exactly one hit: `tests/test_ledger.py:17`. No call site for `record_entry`/`amend_entry`/`chain` anywhere in `app/` or `scripts/`. |
+
+⭐ **M9 + M10 together are the most consequential result of this round**, and §7.10 records what
+they cost.
+
+---
+
+## §7.2 · ChatGPT — the most complete taxonomy, and the one statistical point nobody else made
+
+**✅ AGREED, settled by measurement**
+
+| Their finding | Verdict |
+|---|---|
+| A2 reference-data seeding is not lifecycle-safe | **CONFIRMED** — `strategy_profiles` 0 at head; the seed migration cannot re-run |
+| A3 ledger is architecturally incomplete | **CONFIRMED — M20.** One importer, and it is the test |
+| A4 backend wiring verification is weaker than frontend | **CONFIRMED** — the lint is frontend-only by construction |
+| A5 starvation monitoring does not cover all consumed state | **CONFIRMED — M19** |
+| A6 recovery architecture is single-box | **CONFIRMED** — local path, 209 unpushed commits |
+| A7 a universe-size guard becomes a systemic outage | **CONFIRMED — M18**, and worse than stated: the worker **refuses to start**, so U17's held-name union is never subscribed at all |
+| BKT1 stop-gap fill contaminates research | **CONFIRMED — M5**, with M6/M7 scoping it |
+| BKT3 costs may overwhelm the signal | **CONFIRMED — M3**, 61.6 bps round trip at ₹3,900 falling to 22.4 at ₹10L |
+| D1 FII/DII incomplete + missing rendered as neutral | **CONFIRMED** |
+| D5 1h internally inconsistent | **CONFIRMED** — 6 bars (Kite) vs 7 (worker) |
+| D7 a 200 OK is not the file | **CONFIRMED** — 4 of 7 failure bodies parsed to empty and reported success |
+
+⭐ **Q7 — "near-zero t is not equivalence" — is the best statistical point in the round, and it
+is right.** E1's positional-vs-swing verdict rests on `excess −0.1909 (t −0.29)`, which is an
+**accepted null**, not a demonstrated equivalence. No other source said this so precisely.
+**ADOPTED:** E1 is relabelled *not separable at this n*, and any future equivalence claim ships
+a TOST with a pre-declared margin.
+
+⭐ **Q4 — the t ≈ 3.6 bar's universality is not established.** Correct. The negative control was
+best-of-**20**; the programme has run far more than 20 hypotheses. **ADOPTED as an open item**
+(see §7.11/Q-B).
+
+**⛔ NOT AGREED, or narrower than claimed**
+
+- **BKT1's framing is too broad.** "gap-through-stop" is handled **correctly** on every bar
+  except the entry bar (**M6**: later-bar gap exits at the open, −5.000%). The defect is
+  *entry-bar-only*, and its blast radius is therefore the overnight gap distribution, not the
+  intraday one — **M7**: 0.34% of trades at the median 5% stop, 9.25% at the p10 0.65% stop.
+  Your "Priority 1, highest" ranking survives this; the *description* does not.
+- **BKT6 "no-repaint evidence incomplete"** — agreed in substance, but the framing ("universe
+  inputs snapshotted ≠ every feature") understates it: the snapshots are **2 days deep**, so the
+  correct statement is that no-repaint is established for **nothing historical at all**, not that
+  it is partial.
+- **Q2/Q8 "no complete multiplicity-adjusted family" and "no final untouched holdout"** —
+  agreed, and both were already true; but note the **922-day hole (M1)** makes a clean holdout
+  *period* much harder than you assume. The only contiguous modern block is 2023-07-03 → today.
+
+**⚠ NEEDS PROOF — I could not settle these**
+
+- **Q1's "predefine the live estimand and run to power"** — cannot be scoped until §7.11/Q-A
+  (what the intended capital is) is answered, because position size sets both n and cost.
+- **BKT4 "honest execution model asserted more strongly than demonstrated"** — fair, and I cannot
+  refute it: there is **no live-vs-modelled fill calibration** anywhere. Sample today is 4 orders.
+
+**✋ NOT ADOPTING, with the reason**
+
+- **The 21-question round-2 brief as specified.** Roughly half of it (Q2 dependency map, Q5
+  time-travel replay, Q15 full experiment registry, Q17 holdout identification) is a multi-week
+  research-infrastructure programme, and this project has one operator working evenings. §A8's
+  scale rule applies: *if we find ourselves designing new metrics for it, stop.* I have answered
+  the subset that changes a decision and left the rest named.
+- **"Repair `DOW_TREND` before inventing another gate" (Priority 5)** — see **M9/M10**: the
+  premise you were given was wrong, and the item is now a *parameter* question, not a repair.
+
+**❓ QUESTIONS BACK TO CHATGPT**
+
+1. Given **M7** — exposure 0.34% at the median stop, 9.25% at the p10 stop — and that the
+   affected trades book roughly +1R instead of −1R, what is the *threshold* prevalence at which
+   you would consider the 1,975-trade headline invalidated rather than merely adjusted? Name the
+   number before I re-run it.
+2. Your Q7 equivalence point applies to E1. Does it also apply to **E2 3b**, where I already
+   report INCONCLUSIVE — or is reporting the interval sufficient there?
+3. **M1**: the corpus has no 2021 and no 2022. Does your "final untouched holdout" recommendation
+   survive a sample whose only contiguous block is 3.2 years, or does it become an argument for
+   not making the claim at all?
+
+---
+
+## §7.3 · Gemini — correct on every item, and every item was already in the document
+
+**✅ AGREED** — all nine findings reproduce: ledger unwired (**M20**), IC below break-even, 1h
+producer disagreement, gap-through-stop (**M5**), `KITE_TRADABLE` single-source, symmetric entry
+zone, abstention-free denominator, DP charge crushing small positions (**M3**), local-only backups.
+
+**⛔ NOT AGREED — one factual problem, stated plainly because it is checkable**
+
+Your Priority-2 SQL is **not runnable against this schema.** It selects `so.symbol`,
+`so.forward_5d_return`, `so.signal_score` from `signal_outcomes` and joins `sec`/`nix` tables.
+Measured columns of `signal_outcomes`: `signal_id, stock_id, direction, classification, timeframe,
+validity_until, status, entry_touched_at, entry_touch_price, sl_touched_at, sl_touch_price,
+tp_touched_at, tp_touch_price, resolved_at, created_at, updated_at, mfe_price, mfe_at, mfe_r,
+mae_price, mae_at, mae_r, excursion_computed_at`. There is no symbol column, no forward-return
+column, no score column, and no `sec`/`nix` relations. The query was written against an imagined
+schema.
+
+⭐ **But the DECISION RULE inside it is the most useful thing you sent, and I am adopting it
+verbatim:** *"If `sector_ic` does not meaningfully clear `nifty_ic`, drop U7 sector backfilling
+entirely instead of spending effort populating the remaining 2,895 names."* That converts an open
+queue item into a falsifiable test with a pre-declared kill condition, which is exactly the shape
+this programme has been short of. **U7 is now gated on that test** (§7.11).
+
+**⚠ NEEDS PROOF** — your Q-8 ORB/VWAP proposal is runnable (**M14** confirms the cohort exists),
+but it needs a pre-registered estimand first; see the question below.
+
+**✋ NOT ADOPTING** — nothing else, because nothing else was new. Said without complaint: a short
+response that reproduces the document faithfully is a useful *control* on whether the document is
+readable, and it passed.
+
+**❓ QUESTIONS BACK TO GEMINI**
+
+1. Will you re-issue the sector query against the real schema above? The relation you need is
+   `signal_outcomes` joined to `signals` (for the score) and to `index_ohlcv_1d` (for the
+   benchmark) — and note **M2**: index history only starts 2023-07-03, so the test window is 792
+   sessions, not seven years.
+2. Your ORB/VWAP proposal asks for "expectancy (bps per trade) and trade frequency". Against
+   **M3**, what net bps would make you call it viable rather than interesting?
+
+---
+
+## §7.4 · Perplexity — the most complete false-edge inventory, and one genuinely new mechanism
+
+**✅ AGREED, settled by measurement** — 1.3 reference data (`strategy_profiles`), 1.4 ledger
+(**M20**), 1.5 wiring lint, 1.6 total feed loss (**M18**), 1.7 no DR ordering, 3.2/3.3 FII/DII
+and its false neutral, 3.4 sector coverage, 3.5 point-in-time membership (**M16**), 3.6 upsert-
+in-place, 4.1/4.2 the fill defect (**M5**, scoped by **M6/M7**), 4.3/4.4 cost magnitude and its
+non-linearity in size (**M3** — measured 22.4 → 61.6 bps across the size range), 5.1 single-source
+universe, 6.1 entry zone, 6.5 caps off.
+
+⭐ **8.9 — "entry timing and price staleness" as a FALSE-EDGE source — is new and nobody else
+made it.** You connected V2's three-deep price fallback (live tick → last 1m close → previous
+daily close) to *research validity*, not just display honesty. That is the right connection:
+if a signal's decision price can silently be yesterday's close, then the modelled entry and the
+executable entry are different objects. **ADOPTED** — see the question below, because I cannot
+yet tell you how often the third rung wins.
+
+⭐ **1.1 — "the document is not canonical" as a governance risk.** Conceded. Six reviewers have
+no other view of this system, so for them it is canonical whatever its header says.
+
+**⛔ NOT AGREED, with the measurement**
+
+- **5.2 / 8.1 survivorship.** *"Using current membership flags or a current curated stock list in
+  historical tests can exclude delisted, suspended, merged securities."* **Refuted at the bar
+  level — M15: 1,081 inactive stocks carry bars and 389 names have had no bar since 2025-01-01.**
+  Dead names are retained in the archive. What is *not* retained is **point-in-time index
+  membership** (M16) and point-in-time listing status. So the survivorship exposure is real but
+  narrow: it bites any study that conditions on `is_nifty50`/`is_fno`, not the price archive.
+- **8.4 "bar-boundary and timestamp look-ahead"** — the quote you attach (`t ≈ −10 to −13`) is the
+  *fill-cost* term, which is not evidence for a timestamp defect. The no-look-ahead rule (compute
+  on candle N, valid from N+1) is enforced in the frozen engine and pinned by parity fixtures.
+  If you want to attack it, attack the **`is_complete`** boundary, not the cost t.
+- **2.1's implied remedy ("re-run the IC on an independently reconstructed dataset")** — there is
+  no independent dataset to reconstruct it from. **M1**: 2021 and 2022 do not exist in this
+  database, and the bhavcopy archive is the same source.
+
+**⚠ NEEDS PROOF** — 4.5 (fill specification) and 4.8 (backtest/live engine equivalence) are both
+fair and both unanswerable today. **M8** proves the two engines *diverge by design* on exactly one
+case; it does not establish they agree everywhere else.
+
+**✋ NOT ADOPTING**
+
+- **Priority 2, "create a reproducible point-in-time dataset", as a prerequisite to any new edge
+  claim.** Directionally right, but as a gate it is unsatisfiable here: point-in-time membership
+  before 2026-09-07 **cannot be reconstructed** — the rows were all created that night (M16).
+  Adopting it as a precondition would mean never making another claim. I am adopting the weaker,
+  achievable version: *label* every study that conditions on membership as membership-repainted.
+
+**❓ QUESTIONS BACK TO PERPLEXITY**
+
+1. Your 8.9: to price that mechanism I need to know how often the **third** fallback rung wins.
+   If it turns out the daily-close rung is used on, say, <1% of decisions, does 8.9 stay a
+   false-edge source or become a rendering issue?
+2. Given **M15/M16** — bars retained, membership not — do you still rank survivorship at #2, or
+   does it drop below the CA contamination in **M17**?
+
+---
+
+## §7.5 · DeepSeek — the most operationally usable format, and it chose its five correctly
+
+**✅ AGREED, settled by measurement** — A1 (seed migration), A2 (**M20**), A3 (frontend-only lint),
+A4 (**M19**), A5 (local backups, no DR ordering), A6 (**M5**), A8 (LTP painted `--color-bull`
+regardless of direction), A9 (209 unpushed); D1/D2 FII/DII; D3 (1h); D4 (**M14** — exactly 210,
+all F&O); D5 sector; D6 categories; D9 (rule inputs 2 days); S1 single-source; S3 (**M16**);
+S5 (held-name feed loss); S7 (U6 closable); B3, B4, E1–E7.
+
+⭐ **Your P0 list of five is the best-chosen subset any source proposed**, and four of the five are
+now answered: #1 ledger (**M20**), #2 `strategy_profiles`, #3 `_simulate_trade` (**M5/M6/M7**),
+#5 FII/DII. Only #4 changed its answer — see below.
+
+**⛔ NOT AGREED — and it is your #4, which is also the one I got wrong**
+
+*"Q4. Can `DOW_TREND` ever fire on the daily timeframe? … expected from the doc: 0/487."*
+
+**Answer: YES, it can — M9.** A constructed 20-bar daily window with two swing highs at window
+indices 5 and 14 and two swing lows at 6 and 13 returns **+0.70, "Confirmed uptrend"**. The
+mechanism my document gave you — *"any two pivots differ by ≤9 < 11 so their windows overlap"* —
+is **wrong**: pivots 9 apart do not sit inside each other's ±5 windows, so both can be strict
+maxima. What is true is **M10**: it fires on **5 of 19,100 real panels (0.026%)**.
+
+Also narrower than you have it: **A6/B3** — the gap defect is entry-bar-only (**M6**).
+
+**⚠ NEEDS PROOF** — Q2 in your list ("why did no check catch it") is answered mechanically (a
+migration alembic believes applied), but the *class* question — how many other seeded tables are
+in this state — I have not enumerated.
+
+**✋ NOT ADOPTING**
+
+- **L12 "decide universe curation with an independent source."** There is no second free source
+  with materially different failure modes for NSE cash equity; `KITE_TRADABLE` was supposed to be
+  it and excludes one name. Adopting this would queue an item with no supplier. The achievable
+  version is Claude's **S2** (§7.8): derive the universe size from cost arithmetic instead of from
+  source agreement.
+
+**❓ QUESTIONS BACK TO DEEPSEEK**
+
+1. Given **M9/M10** — reachable but 0.026% — does your L4 (*"run R-1 trend-structure injection
+   before any other Tier-1 hypothesis"*) still rank first? It is no longer a defect repair; it is a
+   proposal to change a spec parameter, which under this project's rules needs `t ≈ 3.6`.
+2. Your Q7 asked for per-session distinct counts on `ohlcv_5m`. Answered: **~209–210 before
+   2026-09-15, 2,299 after**, and **M14** shows the cohort is exactly the F&O list. Does that make
+   the intraday work more attractive (a clean, definable population) or less (a population we
+   cannot trade on delivery)?
+
+---
+
+## §7.6 · Grok — the most independent reading, and the only one that attacked the live book
+
+**✅ AGREED, settled by measurement** — A1 ledger (**M20**), A5 single-box, A6 collapse rail
+(**M18**), A8 starvation registry (**M19**), D1/D5 FII-DII and CA sparsity, D3 the 1h producers,
+D6 point-in-time membership (**M16**), BT1 the fill defect (**M5**), U1 single-source universe,
+EX1 the entry zone, EX5 caps off.
+
+⭐ **F10 is the sharpest thing anyone wrote about the live book, and the measurement makes it
+worse than you stated.** You wrote: *"Four positions on 09-16 is not a sample; it is a narrative."*
+**M13: all four positions are `SHORT`.** On a cash-delivery account — the account this system is
+being built for, and the constraint behind the documented "57% of generator output is
+untradeable" — an overnight short **cannot be held at all**. So the entire current live book sits
+in the one direction the intended account cannot take. Neither my document nor any reviewer could
+have seen that; it took a query. **This is the single most actionable finding of the round.**
+
+⭐ **F11 — importing Minervini is a NEW strategy, and it will look like edge in a bull tape**
+(*"the 91 are simply long-only momentum"*). Correct, unmeasurable here, and it reframes R-2 from
+"a filter we haven't tried" to "a different strategy needing its own null". **ADOPTED into R-2's
+description.**
+
+⭐ **C6 — conceded in full.** *"`market_regime` 'returns a real verdict (200 closes + VIX 13.17)'
+is 'the function returned a number', not 'the verdict is the specified regime'."* That is exactly
+what it was, and I wrote it as validation. Corrected in §7.10.
+
+⭐ **C5 answered rather than conceded — M8.** "Live is immune" now has its mechanism:
+`place_paper_order` computes the fill, calls `eligibility.through_stop_reason`, and **raises**.
+Tests at `tests/test_restrictions.py:224-244`. It is not an assertion from order type.
+
+**⛔ NOT AGREED, with the measurement**
+
+- **E1 / "the machine that would express an edge is not the machine that is running" / "the live
+  funnel produced 0 candidates".** **Refuted today — M11: `3,395 → 2,299 → 2,291 → 2,108 → 15`.**
+  You reasoned correctly from the number in my document; the number was one day old. The system
+  is generating signals. ⚠ But your *conclusion* survives in a different form via M13: it is
+  generating them, and the ones acted on were all shorts.
+- **H7 — "restoring Dow on daily is restoring an impossible intent, i.e. a timeframe change".**
+  **Refuted — M9.** It is reachable at `lookback=20, swing_n=5`; it fires on 0.026% of real panels
+  (**M10**). Your governance conclusion (*"must clear t ≈ 3.6"*) nonetheless **strengthens**: a
+  parameter change to a reachable factor is unambiguously a new hypothesis.
+- **H2 — "if tape is just long-beta, the strategy IS a beta bet".** Partly refuted: **M12** shows
+  the generator is **not** long-only (BUY 32 / SELL 18). The book that can be *traded on delivery*
+  is long-only, which is a different statement and the one that should be made.
+- **Q-CC-21 "is the engine long-only?"** — answered: no (**M12**), and `_simulate_trade` branches
+  on `direction == "BUY"` with a mirrored short path, so the 1,975-trade corpus blends both.
+
+**⚠ NEEDS PROOF**
+
+- **C1 — "E2 numbers without n, IC flavour, residual definition or cost treatment in this
+  document".** Fair. Partially answerable now: the script is `scripts/e2_score_ic.py`; `HORIZON = 5`
+  is pre-registered in a comment marked ⛔; the break-even `0.255%` is the explicit round-trip
+  charge stack; the IC is computed on the **absolute** score because the gate is a magnitude
+  threshold. What I could **not** confirm and now consider a defect is **M17** (no CA filter) —
+  which is Kimi's finding, not yours, but it lands in your C1's gap.
+- **Q-CC-20 `entry_diversity`'s incremental effect** — not measured. It is the only ACTIVE gate and
+  nobody has tabled what it drops.
+
+**✋ NOT ADOPTING**
+
+- **"Stop generating candidates from this confluence scorer" as an immediate instruction (your #1).**
+  Directionally I think you are right and §7.11 moves toward it — but it is the user's decision,
+  not a reviewer's and not mine, and it is exactly the kind of large irreversible call this
+  project's rules reserve. Recorded as the standing recommendation, not executed.
+- **The full 25-item Q-CC brief.** I answered the six you named as the smallest useful subset,
+  plus five others. The rest are named in §7.11 rather than run.
+
+**❓ QUESTIONS BACK TO GROK**
+
+1. **M13 — all four open positions are shorts on a cash-delivery account.** Is the right response
+   (a) close them and treat it as a plumbing rehearsal finding, (b) leave them and record the book
+   as untradeable-by-construction, or (c) add a restriction that refuses overnight shorts outright?
+   My lean is (c) plus (a), because a restriction is the only one of the three that cannot recur.
+2. Your F10 says four positions is a narrative. With **M12** (BUY 32 / SELL 18 minted) and M13
+   (4 of 4 acted-on are shorts), is the selection mechanism you'd suspect the *scorer* or the
+   *operator*? I can measure the first; I cannot measure the second.
+3. You proposed the `FALSIFIER:` field per answer. I have adopted it for §7.11. Is a falsifier
+   that names a *threshold* (e.g. "prevalence > 3% invalidates") strictly better than one that
+   names a *direction*, in your view?
+
+---
+
+## §7.7 · Nemotron 3.5 lightning — no findings were produced
+
+Stated factually, because the user asked for an assessment of each response.
+
+**What arrived is planning text, not an analysis.** It restates the prompt, enumerates section
+headings it intends to fill, lists quotes it might use, and then repeats one paragraph — the
+"claims made without sufficient support" enumeration — approximately ten times with no variation,
+ending mid-sentence at *"…based on the document content."*
+
+**Findings produced: 0. Verdicts: 0. Tests proposed: 0. Quotes verified: 0.** There is nothing to
+agree or disagree with, and nothing to adopt. The one substantive line — *"we need to be careful:
+The document includes many items"* — is a note to itself.
+
+⚠ **This is worth recording rather than discarding**, for one reason: it is the control case for
+§7.0's rule. Seven responses agreed on the ledger, `strategy_profiles` and the fill defect. If
+agreement were evidence, this eighth response's silence would be evidence too. It is not — it is
+an output failure, and the correct treatment is to exclude it rather than to read consensus into
+the remaining seven.
+
+**❓ QUESTION BACK:** none. If it is re-run, the single most useful thing it could return is the
+one thing no other source attempted — an independent recomputation of a number in PART 1.
+
+---
+
+## §7.8 · Claude — the only response that did arithmetic on my numbers, and it found three errors
+
+This response checked three figures before writing anything else. **All three checks were correct
+and all three found a defect in my document.** No other source did this.
+
+**✅ AGREED — CONFIRMED BY MEASUREMENT, all three**
+
+| Their check | Verdict |
+|---|---|
+| *"1,100 sessions is wrong for the stated date range… ~1,713 NSE sessions"* | **CONFIRMED — M1.** 1,101 actual; the missing ~613 are the **922-day hole, 2020-12-23 → 2023-07-03**. Your estimate was accurate to about one session. ⚠ The *cause* is not a new defect — the hole is long documented — but **my document gave the span without the hole**, which is a real reporting defect and yours to claim. |
+| *"791 sessions is exactly right for the intraday range… neither row states a date range"* | **CONFIRMED EXACTLY — M2.** `index_ohlcv_1d` and `india_vix_daily` both run **2023-07-03 → 2026-09-17, 792 sessions**. Your inference from an unstated range was right. |
+| *"₹15.34 on ₹3,900 is 39.3 bps, not 61.6… implies either a ₹24.02 charge or a ₹2,490 position"* | **CONFIRMED, and both alternatives are exactly right — M3.** DP alone = **39.3 bps**; the **total** round trip on ₹3,900 = **₹24.01 = 61.6 bps**; and DP alone reaches 61.6 bps at a **₹2,490** position. You reverse-engineered the correct figure to the paisa from the discrepancy alone. |
+
+⭐⭐ **S2 is the best strategic reframe anyone offered, and it is now measured.** You wrote:
+*"solve for the position size at which round-trip friction falls under a chosen fraction of the
+target edge, divide capital by it… that number — probably 3 to 6 — is how many names the selector
+needs to produce."* Measured at ₹1,00,000 capital `[measured]`:
+
+| concurrent positions | notional each | round-trip charges | bps |
+|---:|---:|---:|---:|
+| 1 | ₹1,00,000 | ₹237.58 | **23.8** |
+| 2 | ₹50,000 | ₹126.46 | 25.3 |
+| 3 | ₹33,000 | ₹88.69 | 26.9 |
+| **4** | **₹25,000** | ₹70.91 | **28.4** |
+| 5 | ₹20,000 | ₹59.78 | 29.9 |
+| 10 | ₹10,000 | ₹37.56 | 37.6 |
+| 25 | ₹4,000 | ₹24.22 | **60.5** |
+
+⇒ **the percentage floor is ~22 bps and breadth costs ~6 bps per extra position up to 4, then
+accelerates.** Going from 4 concurrent positions to 25 costs **32 bps of round-trip friction** —
+which is larger than most effects the programme has measured. **Your "3 to 6" was right.** This
+converts U-4 (universe curation, "never decided") from a taxonomy question into an arithmetic one,
+and it is adopted as such in §7.11.
+
+⭐ **Q1 — publish MDE beside every null and relabel underpowered ones.** ADOPTED. Several §2.4
+verdicts should read UNDERPOWERED rather than REFUTED, and the document applied that distinction
+to E2 3b while not applying it symmetrically elsewhere. That asymmetry is exactly your point.
+
+⭐ **Q3 — |t| favours deterministic quantities.** ADOPTED, and **M3 demonstrates it**: the cost
+term is a near-deterministic function of notional, so its standard error is tiny by construction
+and |t| > 5 is arithmetic, not evidence of dominance. Effects will be reported in **bps with a CI**
+beside the t from here.
+
+⭐ **A3 (gate config unversioned), P2 (mark verdicts whose data is gone), H6 (no stated economic
+mechanism), S3 (label the four positions).** All conceded; S3 is answered and sharpened by **M13**.
+
+**⛔ NOT AGREED**
+
+- **Q6/H7's premise** — you accepted *"lookback=20, swing_n=5 … needs two highs AND two lows …
+  cannot fire"* and built a governance fork on it. **M9 refutes the premise** (it fires, +0.70) and
+  **M10** replaces it with 0.026%. My document handed you the bad premise; your reasoning on top of
+  it was sound, and your conclusion survives — *more* strongly, since a parameter change to a
+  reachable factor is unambiguously a new hypothesis.
+- **D6's inference from bar counts** (*"daily history is thinner per session than the present…
+  each step is an ingestion event"*) — measured: names/session by year run 1,479 (2019) · 1,494
+  (2020) · 1,752 (2023) · 1,877 (2024) · 2,136 (2025) · 2,453 (2026). It is a **step at the hole
+  and a drift after it**, consistent with genuine listings growth plus the D2′b repair, not a
+  series of ingestion events. Your remedy (cohort-stable statistics) stands regardless.
+
+**⚠ NEEDS PROOF** — Q6's reviewer-independence test (seed a false premise and measure catch rate).
+I cannot run it; it needs the user to seed the next round. ⭐ Noting one data point in its favour:
+**this round, six of eight sources repeated a false premise I supplied** (the Dow "impossible by
+construction" claim) and **none caught it** — consistent with your prior that panel independence is
+lower than "five of six" implies.
+
+**❓ QUESTIONS BACK TO CLAUDE**
+
+1. Your S2 table above has a floor of ~22 bps that no position size can beat, because it is
+   percentage-based (STT 0.1% × 2 legs dominates). If a strategy's gross edge must clear ~24 bps
+   round trip at its *best* configuration of one position, does that end the daily-swing question
+   at ₹1 lakh outright — or is your view that it merely fixes the concentration?
+2. **M7** bounds the fill defect's exposure at 0.34% (median stop) to 9.25% (p10 stop). Your
+   Priority 2 says fix and re-run. At which of those two ends would you still call the re-run
+   mandatory before citing the 1,975-trade headline?
+3. You flagged that PART 1 rows lack date ranges. **M2** shows why that mattered. Should every
+   count in a state table carry a range as a *rule*, or only those whose range is not obvious?
+
+---
+
+## §7.9 · Kimi K3 — attacked the null instead of the claims, and found a real defect
+
+Kimi was the only source to aim at the programme's **negative** result rather than its positive
+ones, on the grounds that a null built on a contaminated sample is not a null.
+
+⭐⭐ **H2 is CONFIRMED IN CODE, and it is the most valuable single finding from any reviewer this
+round.** You wrote: *"Pre-registration guards against specification searching; it does not guard
+against a contaminated sample. The document proves a CA-clean window was false for two other
+studies but never states whether E2's IC sample excluded CA-affected names."*
+
+**M17: it does not.** `scripts/e2_score_ic.py` skips panels for **window holes** (the 922-day gap)
+and carries **no corporate-action screen** — while the sibling `swing_dependence_probe.py` defines
+`CA_JUMP = 0.25` and prints its drop count. With 49 unadjusted corporate actions in the top-250
+liquid universe, 35 of them ≥40% halvings `[cited]`, a 5-day forward return window straddling one
+of those contributes a ±40–80% observation to the return series the IC is computed against.
+
+⚠ **Direction unknown, and I will not guess it.** CA noise plausibly *widens* the estimate's
+interval, in which case a filtered re-run could make the null **stronger**, not weaker. It could
+also move the point estimate if contaminated names correlate with score. **E2 is now
+RE-RUN-REQUIRED before citing**, and it joins R-8's two studies rather than sitting above them.
+
+⭐ **Your "apply the document's own convention against it" catch is correct and I concede it.**
+*"beta +0.92, alpha ≈ 0 — untagged, no source, no sample; yet it is the single most
+decision-relevant number."* It is untagged in my document, and it is load-bearing in two places.
+Tagged `[cited]` in §7.10, with its provenance named.
+
+⭐ **A7 — the freeze converts a correctness defect into permanent contamination, and the freeze was
+argued for strategy changes, not measurement fixes.** This is the sharpest governance point of the
+round. The freeze exists so the scorer cannot drift without sign-off and a parity-fixture
+regeneration; `_simulate_trade` is a **measurement instrument**, not a scoring rule, and nothing in
+the freeze's rationale covers it. **ADOPTED** as the argument for the one exception in §7.11.
+
+⭐ **"No portfolio-level evaluation anywhere"** — conceded, and it is a real hole: every statistic
+in the programme is per-signal or per-trade. There is no equity curve, no portfolio Sharpe, no
+drawdown of the book as actually constructed. Claude's S2 arithmetic above is the first thing in
+this document that is portfolio-level at all.
+
+**✅ ALSO AGREED** — Finding 0 (only one document was attached; second-hand verdicts cannot be
+verified from the packet — correct and fairly stated), A1–A6, Q1–Q4, D1–D7, B1, B3, S1–S5, E1–E5.
+
+**⛔ NOT AGREED, with the measurement**
+
+- **B2 — "'Live is immune' is asserted with zero supporting evidence… no such test is cited."**
+  **Answered — M8.** The mechanism is an explicit pre-fill rejection in `place_paper_order`, and
+  tests exist at `tests/test_restrictions.py:224-244` and `tests/test_eligibility_preview.py:245,341`.
+  Your scepticism was correctly placed — the document gave you three words — but the code does not
+  share the document's weakness.
+- **D4's standard, applied to the 1h claim** (*"the claim is asserted, not demonstrated, here"*) —
+  correct about the document; the measurement exists in the commit that shipped it (Kite
+  `60minute` returns 6 bars, the worker mints 7, verified against the live API). The defect is that
+  I carried the conclusion without its evidence.
+- **B3's framing that the cohort is "already liquid" names** — precise version, **M14**: the cohort
+  is **exactly the 210 `is_fno` names**, 50 of which are Nifty-50. It is not a liquidity screen that
+  happened to select them; it is a membership list.
+
+**⚠ NEEDS PROOF** — your Q4 (*"is there a registry of every study run, or only pre-registered
+ones?"*). There is no such registry. That is the honest answer and it feeds ChatGPT's Q4 and
+Claude's Q1 directly: without it, the t ≈ 3.6 bar's trial count is unknown.
+
+**✋ NOT ADOPTING**
+
+- **"Answer Q-9 with the capital number on the table" as a gate on everything else.** Adopting the
+  reasoning, not the sequencing: Claude's S2 arithmetic (above) answers most of the capital
+  question already, and the remaining items (ledger, seed, CA re-runs) are worth doing whatever
+  that answer is.
+
+**❓ QUESTIONS BACK TO KIMI**
+
+1. **M17 confirms your H2.** Before I re-run E2 with a `|move| > 25%` screen: do you want the
+   filter applied to the **forward return window only**, to the **scoring window only**, or to
+   both? They answer different questions and I would rather pre-register your choice than pick
+   after seeing the result.
+2. Given **M15** (1,081 inactive names carry bars; 389 have no bar since 2025) — does your
+   survivorship concern reduce to the membership flags alone (**M16**), or do you see a second
+   channel I have not measured?
+3. You called for portfolio-level evaluation. With **M13** (the only live book is four shorts an
+   equity-delivery account cannot hold), is a portfolio evaluation of *this* book meaningful at
+   all, or does it have to wait for a book that could exist?
+
+---
+
+## §7.10 · ⛔⛔ WHAT THIS ROUND COST ME — five corrections to my own document
+
+Every one of these was in PART 0–6 above and is corrected in place. Four were found by a
+reviewer; **the fifth I found by testing my own claim, and it is the worst of them.**
+
+**1. ⛔⛔ "The weight-20 `DOW_TREND` factor is unreachable by construction" — WRONG, and it
+propagated to six of eight reviewers.**
+**M9**: it fires, +0.70, on a constructed daily panel at the shipped parameters. The stated
+mechanism — *"any two pivots differ by ≤9 < 11 so their windows overlap"* — is simply false:
+pivots 9 apart do not lie inside each other's ±5 windows. The prior synthetic probe that
+"returned 0.0" had placed its pivots **outside the admissible index range [5, 14]** — the same
+mistake I made twice today before getting it right. ⭐ **The true statement is empirical, not
+mathematical: 5 of 19,100 real panels = 0.026% (M10).** The conclusion — the swing engine
+carries effectively no trend-structure input — **stands**. The reason it stands changed
+completely, and with it the governance answer: R-1 is a **parameter proposal requiring t ≈ 3.6**,
+not a defect repair that could ship on correctness grounds.
+⚠ **This claim also sits in `CLAUDE.md` and `docs/SYSTEM_REVIEW_FOR_QUANT.md` §4.2 and in the
+`dow-trend-dead-on-daily` memory.** All are corrected. **A claim asserted as structural, never
+executed, survived in four documents for seven days and was repeated back to me by six
+reviewers as established fact.**
+
+**2. ⛔ "The flat ₹15.34 DP charge alone is 61.6 bps on a ₹3,900 position" — WRONG (Claude).**
+**M3**: DP alone is **39.3 bps**; **₹24.01 total = 61.6 bps**. `CLAUDE.md` states it correctly
+("100 × ₹39 pays 61.6 bps of **round-trip charges**"); I mis-attributed the total to one
+component while condensing. The strategic point is unchanged and now better supported by the
+breadth table in §7.8.
+
+**3. ⛔ PART 1 gave `ohlcv_1d` as "1,100 sessions · 2019-10-01 → 2026-09-16" and omitted the
+922-day hole (Claude).** **M1**: 2021 and 2022 do not exist. A reader computes ~1,713 sessions
+from that span and is misled by ~613. The hole is long documented elsewhere; **omitting it from
+a state table addressed to reviewers with no other view of the system is the defect.**
+
+**4. ⛔ PART 1 gave `index_ohlcv_1d` and `india_vix_daily` as row counts with no date range
+(Claude).** **M2**: both are **2023-07-03 → 2026-09-17**. "Restored" is true for 3.2 years, not
+for the seven the daily table's span implies. Every market-regime and sector-RS evaluation is
+therefore scoped to the post-gap block.
+
+**5. ⛔ "`market_regime` returns a real verdict (200 closes + VIX 13.17)" was written as
+validation (Grok).** It is not. It is *the function returned a number*. Corrected to say so.
+
+⭐ **And one correction to the reviewers that is really a correction to me:** seven of eight
+responses lead with the trade ledger, `strategy_profiles` and the fill defect — the three things
+my own document already flagged. **Agreement concentrated exactly where I had pre-labelled the
+answer.** The findings that changed anything (Kimi's M17, Claude's M1–M3, Grok's C6) all came
+from attacking something the document asserted rather than something it flagged.
+
+---
+
+## §7.11 · THE REVISED QUEUE — with a falsifier per item (Grok's format)
+
+Reordered by what this round settled. Items marked ⓘ changed position because of a measurement.
+
+| # | Item | Why now | FALSIFIER — what would reverse it |
+|---|---|---|---|
+| **1** | ⓘ **Decide the four SHORT positions (M13)** | The only live book is in a direction a cash-delivery account cannot hold overnight | If delivery shorts *are* representable in the intended account, this is a non-issue and the restriction is wrong |
+| **2** | **Wire the ledger (M20)** + a backend wiring lint | Unchanged: the record that survives the next loss | A reconstruction drill that succeeds from `positions`+`orders` alone would make it optional |
+| **3** | **Re-seed `strategy_profiles` via an idempotent script** | 0 rows at head; four consumers dead | Finding the four consumers degrade safely to "no style engines" rather than silently |
+| **4** | ⓘ **Re-run E2 with a CA screen (M17, Kimi)** | The programme's central null has no corporate-action filter | If the filtered IC's 90% interval still excludes break-even, the null hardens and this closes |
+| **5** | **Re-run D5 + D1 with the CA screen (R-8)** | Both closures cite a CA-clean window that does not exist | If both signs and both t's hold, they become citable and stay closed |
+| **6** | ⓘ **Fix `_simulate_trade`'s entry-bar gap and quantify (M5/M6/M7)** | Scoped now: entry-bar only, exposure 0.34%→9.25% by stop width. **Kimi's A7 is the governance argument** — the freeze covers the *scorer*, not the *measurement instrument* | Prevalence in the actual 1,975-trade corpus below ~1% **and** no sign change in D1/D5 ⇒ adjust the headline, do not re-open the closures |
+| **7** | ⓘ **Answer the capital/breadth question from §7.8's table** | 23.8 bps at 1 position → 60.5 at 25; the floor is ~22 bps and cannot be beaten | A gross edge estimate that clears ~24 bps at *any* configuration keeps the strategy class alive |
+| **8** | **Add `categories`, `stock_categories`, `ledger_entries` to the starvation registry (M19)** | The alarm misses the tables its own adjudication named | — |
+| **9** | **Make the entry zone directional** | Correctness, not P&L | — |
+| **10** | ⓘ **U7 sector map — GATED on Gemini's test** | Run sector-relative vs NIFTY50 separation on the 500 classified names first | ⭐ **Pre-declared kill: if sector-relative does not clear NIFTY50, DROP U7** rather than backfill 2,895 names |
+| **11** | **U5 runbook DR ordering; off-box backup; push** | One machine, one disk, 209 commits | — |
+| **12** | ⓘ **R-1 trend injection — RECLASSIFIED** | No longer a defect repair (M9). A parameter proposal at `t ≈ 3.6` | A read-only injection returning paired ΔR at abs(t) ≥ 3.6 would promote it; anything less closes it |
+
+**Not doing, with the reason** — a ninth gate · flipping `market_regime`/`sector_rs` on restored
+data · the backward CA pass on 1,768 names · a UI cockpit · the 1h backfill before a
+producer-of-record is named · **and not starting cycle 2**, which now has a new blocker: item 1.
+
+---
+
+## §7.12 · What the round returned, measured against the bar I set for it
+
+My pre-registered rule was ChatGPT's and my own: **a point counts if it changes a decision AND is
+settleable by a query.**
+
+**Points that changed a decision: 7.**
+Kimi's M17 (E2 has no CA filter) · Claude's M1, M2, M3 (three arithmetic defects) · Grok's C6
+(validation overclaim) and F10→M13 (the short book) · Gemini's U7 kill-rule · ChatGPT's Q7
+(equivalence ≠ small t) · plus **my own M9/M10**, which is not a reviewer point but was produced
+by the discipline the round imposed.
+
+**Compare:** §13f measured review breadth at 4-of-37 and §78 at 4-of-29. This round is the highest
+yield so far — and the reason is visible: **five of the seven came from a reviewer recomputing or
+interrogating a number I asserted, rather than proposing new work.** The three responses that
+mostly restated the document (Gemini, most of Perplexity, most of DeepSeek) contributed one
+adoptable item between them, and the response that produced nothing (Nemotron) is the control
+showing that agreement counts are not evidence.
+
+⭐ **The rule for round 7, if there is one: send reviewers the numbers and ask them to recompute,
+not the plan and ask them to critique.** Every high-yield point this round came from the former.

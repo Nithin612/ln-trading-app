@@ -3879,8 +3879,11 @@ declared weight sums to 325 and cannot all fire.**
 
 **(2)** ⛔ **Three factors NEVER score on 487 panels: `DOW_TREND` (weight 20 — the heaviest),
 `MARUBOZU` (15) and `FII_DII_FLOW` (5) — 40 of 325 declared weight points, 12.3%, structurally
-dead.** `DOW_TREND` reconfirms the standing finding (it cannot score by construction on a 20-bar
-lookback with `swing_n=5`); `FII_DII_FLOW` is dead because `fii_dii_daily` holds **4 rows**.
+dead.** `DOW_TREND` reconfirms the standing finding (⛔ **CORRECTED 2026-09-17: "cannot score by
+construction" is WITHDRAWN — refuted by execution; a constructed 20-bar panel returns +0.70 at
+`swing_n=5`. The true statement is empirical: 0.026% of 19,100 real panels. See
+`docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` §7.10/1**); `FII_DII_FLOW` is dead because
+`fii_dii_daily` holds **4 rows**.
 
 **(3)** ⭐⭐ **Kimi C2's warning is CONFIRMED and its consequence is smaller than feared.** The
 shipped composite *is* irreproducible historically — but only because of `FII_DII_FLOW`, **which

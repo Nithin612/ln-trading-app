@@ -45,8 +45,9 @@ standalone explanation written against the code and the data on the date above.
    the factors that scored*. A signal that reads "76% confidence" is typically three
    indicators agreeing, not eleven. **The heaviest factor in the specification —
    Dow trend structure, weight 20, described as "the macro context" — scores on
-   3 of 4,511 daily windows (0.07%).** Its parameters make it mathematically
-   unreachable on the daily timeframe (§4.2). The swing engine therefore carries no
+   3 of 4,511 daily windows (0.07%).** Its parameters make it vanishingly rare —
+   0.026% of panels, re-measured 2026-09-17 — on the daily timeframe (§4.2). ⛔ An earlier claim
+   that it is *mathematically unreachable* was refuted by execution and is withdrawn. The swing engine therefore carries no
    trend-structure input at all.
 
 3. **There is no confirmation stage.** The entry price is literally the previous
@@ -287,18 +288,31 @@ p50 = **30**, p90 = 55, mean 30.9.
 
 **Confidence, pre-gate:** p50 = 40, p90 = 62.
 
-### 4.2 ⚠ The Dow-trend factor cannot fire on the daily timeframe
+### 4.2 ⚠ The Dow-trend factor effectively never fires on the daily timeframe
 
-This is a finding, not a restatement. `run_all_factors` calls
-`dow_trend_factor(candles, lookback=20, swing_n=5)` for every non-intraday
-timeframe. Inside that function:
+> ⛔⛔ **MECHANISM CORRECTED 2026-09-17.** This section previously read *"cannot fire …
+> mathematically unreachable"*. **That is refuted by execution:** a constructed 20-bar daily
+> panel with swing highs at window indices 5/14 and swing lows at 6/13 returns
+> **`+0.70 "Confirmed uptrend"`** at the shipped `lookback=20, swing_n=5`. The bullet below
+> claiming the pivot windows must overlap is **false** — indices 9 apart do not lie inside each
+> other's ±5 windows. What survives is the *measurement*: **3 of 4,511 panels (0.07%)** in the
+> original probe, and **5 of 19,100 (0.026%)** on a re-measurement of 200 liquid names on
+> 2026-09-17. ⇒ the factor is **reachable and vanishingly rare**, so changing its parameters is a
+> NEW HYPOTHESIS at `t ≈ 3.6`, not a defect repair.
+> Full adjudication: `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` §7.10/1 (M9, M10).
+
+`run_all_factors` calls `dow_trend_factor(candles, lookback=20, swing_n=5)` for every
+non-intraday timeframe. Inside that function:
 
 - the window is the **last 20 bars**;
 - a swing high at pivot width `n=5` must be the maximum of an 11-bar window, so it
   can only sit at index 5…14 — ten candidate positions;
-- any two of those indices differ by at most 9, which is **less than 11**, so their
-  pivot windows overlap and both can be the maximum only on an exact float tie;
-- the function requires **two swing highs AND two swing lows** before it will score.
+- ⛔ ~~any two of those indices differ by at most 9, which is **less than 11**, so their
+  pivot windows overlap and both can be the maximum only on an exact float tie~~ — **WRONG,
+  see the correction above**: two pivots more than 5 apart are both admissible;
+- the function requires **two swing highs AND two swing lows** before it will score, all four
+  inside indices 5…14 — a tight geometric requirement, which is why it is rare rather than
+  impossible.
 
 Therefore at most one high and one low can be found, and the factor returns
 `0.0 — "Not enough swing points"` on essentially every daily window. Two independent

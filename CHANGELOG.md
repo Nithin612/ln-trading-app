@@ -7,6 +7,55 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Round-6 panel adjudicated — it refuted two of my own claims and four of my numbers (2026-09-17)
+
+`docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` PART 7. Eight responses (ChatGPT · Gemini · Perplexity ·
+DeepSeek · Grok · Nemotron 3.5 lightning · Claude · Kimi K3), adjudicated **one at a time, not
+merged** — three of the round's best points were made by exactly one source. Twenty measurements
+(M1–M20) settle the checkable claims; every verdict cites one.
+
+⛔⛔ **`DOW_TREND` "unreachable by construction" is WITHDRAWN — refuted by EXECUTION.** A
+constructed 20-bar daily panel with swing highs at window indices 5/14 and lows at 6/13 returns
+**`+0.70 "Confirmed uptrend"`** at the shipped `lookback=20, swing_n=5`. The stated mechanism
+(*"any two pivots differ by ≤9 < 11 so their windows overlap"*) is false — pivots >5 apart are
+both admissible — and the old synthetic proof had placed its pivots outside the admissible index
+range. The measurement survives and was re-taken: **5 of 19,100 real panels = 0.026%**. ⇒ retuning
+the factor is a **NEW HYPOTHESIS at t ≈ 3.6**, not a bug fix. Corrected in four places
+(`CLAUDE.md`, `SYSTEM_REVIEW_FOR_QUANT.md` §4.2 + exec summary, the consolidated doc, memory).
+⚠ **Six of eight reviewers repeated the false premise back as established fact; none tested it.**
+
+⛔ **`scripts/e2_score_ic.py` carries NO corporate-action filter** (Kimi's H2, confirmed in code).
+It skips panels for window holes but has no `|move| > 25%` screen, unlike `swing_dependence_probe.py`
+(`CA_JUMP = 0.25`). With 49 known unadjusted CAs in the top-250 liquid universe, the programme's
+central null is computed on contaminated forward returns. **Direction unknown — E2 is
+re-run-required before citing.**
+
+⛔⛔ **All four open positions are `SHORT`** — a direction a cash-delivery account cannot hold
+overnight. No reviewer could see this; it took a query.
+
+⛔ **Three figures recomputed by Claude, all wrong, all corrected in place:** the flat ₹15.34 DP
+charge is **39.3 bps** on a ₹3,900 position, not 61.6 — **61.6 bps is the TOTAL round trip
+(₹24.01)**; `index_ohlcv_1d` and `india_vix_daily` run **2023-07-03 → 2026-09-17 (792 sessions)**,
+3.2 years not 7; and PART 1 gave `ohlcv_1d`'s span without its **922-day hole (2020-12-23 →
+2023-07-03 — 2021 and 2022 do not exist)**.
+
+⭐ **Measured settlements that narrow or refute reviewer claims:** the gap-through-stop defect is
+**entry-bar ONLY** (a later-bar gap exits at the open, −5.000%; an ordinary stop at the stop,
+−1.000%), with exposure **0.34%** at the median 5% stop and **9.25%** at the p10 0.65% stop ·
+**"live is immune" is TRUE** via an explicit `through_stop_reason` rejection in `place_paper_order`,
+with tests · the funnel is **15, not 0** · the engine is **not long-only** (BUY 32 / SELL 18) · the
+intraday cohort is **exactly the 210 `is_fno` names** · the archive is **not survivorship-pruned**
+(1,081 inactive names carry bars) though point-in-time membership does not exist · **STT is in the
+cost model**.
+
+⭐ **Claude's breadth-vs-cost arithmetic, now measured:** at ₹1 lakh, round-trip charges run
+**23.8 bps at 1 position → 28.4 at 4 → 60.5 at 25**, against a **~22 bps floor no position size can
+beat**. Universe curation becomes an arithmetic question rather than a taxonomy one.
+
+⭐ **Process:** the round returned **7 decision-changing points** against 4-of-37 and 4-of-29 in
+earlier rounds. Five of the seven came from a reviewer **recomputing a number** rather than
+proposing work — so the rule for any round 7 is *send the numbers and ask for a recomputation.*
+
 ### Consolidated state doc — the two review threads joined, and two W1 corrections (2026-09-17)
 
 `docs/UNIVERSE_REBUILD_PLAN.md` (infrastructure, 5 rounds) and `docs/SYSTEM_REVIEW_FOR_QUANT.md`

@@ -460,16 +460,23 @@ else.
   ⚠ **"The rest of Phase 6 / 6.8" has no unbuilt slices** — both are GATE PASSED + CLOSED; what is
   left is the gated research track R2/F1 (**R1 dropped 09-08**) plus three forward-evidence loops
   (regime **decided**, momentum ×1.5 **stalled** at 3 minted / 0 resolved, pair df-vs-adf accruing).
-- **⚠ THE WEIGHT-20 `DOW_TREND` FACTOR IS UNREACHABLE ON THE DAILY TIMEFRAME (2026-09-10).** Measured
-  by `backend/scripts/engine_selectivity_probe.py` (read-only, rerunnable) over **4,511 daily panels**:
-  the spec's heaviest factor — "the macro context", weight 20 — scores on **3 of 4,511 windows (0.07%)**
-  and **cannot score by construction**. `run_all_factors` calls `dow_trend_factor(lookback=20,
-  swing_n=5)`; in a 20-bar window an n=5 pivot can only sit at index 5…14, any two differ by ≤9 < 11 so
-  their windows overlap and both can be the max only on an exact tie — yet the function needs **two**
-  highs AND **two** lows. A synthetic HH+HL staircase returns `0.0 — "Not enough swing points"`. ⇒ **the
+- **⚠ THE WEIGHT-20 `DOW_TREND` FACTOR EFFECTIVELY NEVER FIRES ON THE DAILY TIMEFRAME (2026-09-10;
+  ⛔⛔ MECHANISM CORRECTED 2026-09-17).** Measured by `backend/scripts/engine_selectivity_probe.py`
+  (read-only, rerunnable) over **4,511 daily panels**: the spec's heaviest factor — "the macro
+  context", weight 20 — scores on **3 of 4,511 windows (0.07%)**; re-measured 2026-09-17 through the
+  frozen function on 200 liquid names, **5 of 19,100 panels = 0.026%**.
+  ⛔⛔ **"Cannot score by construction" was WRONG and is WITHDRAWN.** The stated mechanism — *"in a
+  20-bar window an n=5 pivot sits at index 5…14, any two differ by ≤9 < 11 so their windows overlap"*
+  — is false: pivots 9 apart do **not** lie inside each other's ±5 windows, so both can be strict
+  maxima. **Executed 2026-09-17: a constructed 20-bar daily panel with swing highs at window indices
+  5/14 and lows at 6/13 returns `+0.70 "Confirmed uptrend"`** (mirror `−0.70`). The earlier synthetic
+  staircase that "returned 0.0" had placed its pivots OUTSIDE the admissible index range — a probe
+  defect, not a property of the code. ⇒ **it is reachable and vanishingly rare, which makes a
+  parameter change a NEW HYPOTHESIS at `t ≈ 3.6`, not a bug fix.** ⇒ **the
   tradeable swing engine carries NO trend-structure input**, and the absence is SILENT because the
   confidence denominator counts only scoring factors. Corroborated by **Minervini 0/91** and the closed
-  book's **beta +0.92 / alpha +0.0010**. ⚠ **SPEC defect, not an implementation bug** (§2.4 specifies
+  book's **beta +0.92 / alpha +0.0010** `[cited — engine_selectivity_probe, 2026-09-10]`.
+  ⚠ **A SPEC PARAMETER choice, not an implementation bug** (§2.4 specifies
   both parameters) — `SIGNAL_ENGINE.md` is hook-protected, **nothing was changed**. Act on it with the
   **read-only injection test that refuted RVOL** (no frozen edit, no sign-off needed); prior is guarded
   — an injected graded factor can DILUTE through the normalisation. Full write-up +

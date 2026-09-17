@@ -10,6 +10,33 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
+## ▶ STATE AT A GLANCE (updated 2026-09-17) — round-6 panel adjudicated — read this first
+
+**▶▶ 2026-09-17 — ⭐⭐ EIGHT EXTERNAL REVIEWS ADJUDICATED IN `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md`
+PART 7, one at a time. The round refuted TWO of my own claims and FOUR of my numbers.**
+⛔⛔ **`DOW_TREND` "unreachable by construction" is WITHDRAWN — refuted by EXECUTION:** a constructed
+20-bar daily panel (highs at window idx 5/14, lows at 6/13) returns **+0.70** at the shipped
+`lookback=20, swing_n=5`. The measurement survives, re-taken: **5 of 19,100 panels = 0.026%**.
+⇒ **retuning it is a NEW HYPOTHESIS at t ≈ 3.6, not a bug fix.** ⚠ The false claim sat in four
+documents for seven days and **six of eight reviewers repeated it back as fact — none tested it.**
+⛔ **`scripts/e2_score_ic.py` has NO corporate-action filter** (Kimi) ⇒ the programme's central null
+is computed on a tape with 49 known unadjusted CAs. **E2 is RE-RUN-REQUIRED before citing**; direction
+unknown.
+⛔⛔ **ALL FOUR OPEN POSITIONS ARE `SHORT`** — a direction a cash-delivery account cannot hold
+overnight. No reviewer could see it; it took a query. **This is now the first item in the queue.**
+⛔ **Three numbers recomputed by a reviewer, all wrong:** DP charge is **39.3 bps** not 61.6 (**61.6
+is the TOTAL round trip, ₹24.01**); index/VIX are **2023-07-03 → 2026-09-17, 792 sessions — 3.2 years
+not 7**; and `ohlcv_1d`'s span hid its **922-day hole (2021 and 2022 do not exist)**.
+⭐ **Narrowed by measurement:** the gap-through-stop defect is **entry-bar ONLY** (later-bar gaps exit
+at the open), exposure **0.34%** at the median stop → **9.25%** at the p10 stop · **"live is immune"
+is TRUE** via an explicit `through_stop_reason` rejection, with tests · the funnel is **15, not 0** ·
+the engine is **not long-only** (BUY 32/SELL 18) · the intraday cohort is **exactly the 210 `is_fno`
+names** · the archive is **not survivorship-pruned** (1,081 inactive names carry bars).
+⭐ **Cost arithmetic at ₹1 lakh: 23.8 bps at 1 position → 28.4 at 4 → 60.5 at 25, floor ~22 bps.**
+⭐ **Process rule: send reviewers the NUMBERS to recompute, not the plan to critique** — 5 of the 7
+decision-changing points came from recomputation.
+⛔ **NOTHING PUSHED.**
+
 ## ▶ STATE AT A GLANCE (updated 2026-09-17) — the two review threads joined — read this first
 
 **▶▶ 2026-09-17 — ⭐⭐ `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` IS THE ONE DOC THAT SAYS WHAT IS
