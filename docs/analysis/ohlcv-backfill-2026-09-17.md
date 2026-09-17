@@ -1,19 +1,19 @@
 # `ohlcv_1d` history backfill (2026-09-17)
 
-Requested **2022-08-08 → 2022-08-08**; 1 weekdays fetched this run.
+Requested **2026-02-01 → 2026-02-01**; 1 candidate days fetched this run.
 
 | outcome | days |
 |---|--:|
-| ingested | 0 |
+| ingested | 1 |
 | holiday / not published (404) | 0 |
-| failed | 1 |
+| failed | 0 |
 
-**0 bars inserted this run.**
+**2,411 bars inserted this run.**
 
 ## `ohlcv_1d` now
 
-- **2019-10-01 → 2026-09-17** — 1,723 trading days
-- 3,158,638 bars across 3,402 distinct names
+- **2019-10-01 → 2026-09-17** — 1,727 trading days
+- 3,166,300 bars across 3,402 distinct names
 - 1,116 inactive stocks (delisted/historical names carrying the point-in-time
   universe — see `_ensure_historical_stocks`)
 
@@ -27,5 +27,3 @@ Requested **2022-08-08 → 2022-08-08**; 1 weekdays fetched this run.
 - **Symbol churn is unresolved** — a renamed company appears as two unrelated
   symbols. Check `LIKE 'sym-%'` before concluding a symbol vanished.
 - **No recorded number changed.** This adds historical bars only.
-
-First failure: `2022-08-08: Error: new-line character seen in unquoted field - do you need to open the file with newline=''?`

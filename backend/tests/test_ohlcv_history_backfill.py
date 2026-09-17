@@ -13,8 +13,11 @@ reconstructing a **survivor-only** universe:
 
 from __future__ import annotations
 
-from datetime import UTC, date, datetime
+import importlib.util as _ilu
+import sys as _sys
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path as _Path
 
 from app.models.stock import Stock
 from app.services import bhavcopy_service as bs
@@ -22,6 +25,20 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.helpers import make_stock
+
+
+def _load_backfill_module():  # noqa: D103 — scripts/ is not an importable package
+    path = _Path(__file__).resolve().parents[1] / "scripts" / "backfill_ohlcv_history.py"
+    spec = _ilu.spec_from_file_location("backfill_ohlcv_history", path)
+    assert spec and spec.loader
+    mod = _ilu.module_from_spec(spec)
+    _sys.modules["backfill_ohlcv_history"] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
+
+bhf = _load_backfill_module()
+
 
 _DAY = date(2020, 3, 23)  # the COVID low — a date only the backfill can reach
 
@@ -237,3 +254,43 @@ class TestBatching:
             db, [_row("KNOWNCO"), _row("UNKNOWNCO")], historical=False
         )
         assert (inserted, skipped) == (1, 1)
+
+
+class TestSaturdaySessionsAreReachable:
+    """⛔ REGRESSION (2026-09-17). `_weekdays` enumerated Mon-Fri, so NSE's Saturday
+    special sessions — budget days and DR-site tests, on which the market genuinely
+    trades — were structurally unreachable: the request was never made.
+
+    Measured when this was found: `ohlcv_1d` was missing **3 of 6** special sessions
+    (2024-03-02, 2025-02-01, 2026-02-01) while `ohlcv_5m` held 4,242-15,600 rows on the
+    same dates. All three serve from the archive today.
+
+    ⚠ The canary is the SATURDAY, not the count: enumerating Mon-Sat is only correct
+    because a non-session 404s, which is the same path a weekday holiday takes.
+    """
+
+    def test_a_known_saturday_session_is_enumerated(self) -> None:
+        """2025-02-01 was a real NSE session (Union Budget). On the old code this
+        returned an empty list and the date could never be fetched."""
+        sat = date(2025, 2, 1)
+        assert sat.weekday() == 5, "fixture date must be a Saturday"
+        assert bhf._candidate_days(sat, sat) == [sat]
+
+    def test_sunday_is_enumerated_because_nse_has_traded_on_one(self) -> None:
+        """⛔⛔ The first version of this fix excluded Sunday on the stated ground that
+        'NSE has never held one'. **2026-02-01 is a Sunday on which NSE traded** (Budget
+        day) — `ohlcv_5m` holds 15,675 rows for it and the archive serves the bhavcopy.
+        Excluding Sunday reproduced the defect being fixed, one weekday over."""
+        sun = date(2026, 2, 1)
+        assert sun.weekday() == 6, "fixture date must be a Sunday"
+        assert bhf._candidate_days(sun, sun) == [sun]
+
+    def test_the_enumerator_asserts_nothing_about_which_days_are_sessions(self) -> None:
+        """⭐ THE CONTRACT: offer every calendar day and let the archive's 404 decide.
+        Any weekday filter is a claim about a calendar this code does not own, and both
+        such claims made here have been wrong."""
+        mon = date(2025, 1, 27)
+        assert mon.weekday() == 0
+        got = bhf._candidate_days(mon, mon + timedelta(days=6))
+        assert len(got) == 7
+        assert {d.weekday() for d in got} == set(range(7))

@@ -7,6 +7,73 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### fix(data): NSE holds weekend sessions and the enumerator could not reach them — 1,723 → 1,727 (2026-09-17)
+
+Round-8 panel (PART 10). An external reviewer derived from three published session counts
+(792/794/796) and "exactly 6 dates differ" that **`ohlcv_1d` must be missing 3 of them — without
+seeing the data.** Confirmed exactly (M39): missing 2024-03-02, 2025-02-01, 2026-02-01, and all
+three are **real sessions** — `ohlcv_5m` holds 4,242 / 15,600 / 15,675 rows on them.
+
+⛔ **Root cause (M40): `_weekdays()` filtered `d.weekday() < 5`.** NSE's Saturday special sessions
+(budget days, DR-site tests) were **structurally unreachable — the request was never made**, so the
+404-handling the function relies on never ran. NSE serves all of them.
+
+⛔⛔ **And the same filter is live and system-wide (M41): every Celery beat is
+`day_of_week="1-5"`**, so a weekend session is invisible to EOD ingestion, nightly generation and
+every health probe as they run. That is a scheduling change on a running system: **queued, not
+taken** (new queue item 13).
+
+⛔⛔ **THEN THE FIX REPRODUCED THE DEFECT, ONE WEEKDAY OVER (M43).** Correcting the enumerator I
+asserted *"Sunday stays excluded: NSE has never held one"* — **and pinned it in a test**.
+**2026-02-01 is a Sunday on which NSE traded** (Budget day); our own `ohlcv_5m` already held 15,675
+rows for it. ⭐ The enumerator now **asserts nothing about which days are sessions**: it offers every
+calendar day and lets the archive's 404 decide — the only construction that cannot be wrong about a
+calendar this code does not own. The test was inverted to pin the Sunday session.
+
+**Recovered: 2020-02-01 (+1,461) · 2024-03-02 (+1,783) · 2025-02-01 (+2,007) · 2026-02-01
+(+2,411).** `ohlcv_1d` is now **1,727 sessions / 3,166,300 bars**. 16 tests green.
+
+⚠ One known hole remains: **2022-08-08**, where NSE serves an XLSX workbook at the `.csv` URL.
+
+### Round-8 panel — three of my own measurements refuted, one falsifier revised again (2026-09-17)
+
+⛔⛔ **M52 — I reintroduced the look-ahead I had just removed, one row later in the same table.**
+M32's cohort was ranked on 2020-01 → 2023-07 and applied to 2019-10 → 2020-12 — a window that
+overlaps *and post-dates* the measurement. Redone with strictly-prior expanding cohorts, and **the
+conclusion survives on better ground**: 2021 **+35.5%/yr** · **2022 −3.7%/yr with 43.5% down-days**
+· 2023-07→now **+12.8%/yr**; long-side gap exposure **2022 14.36% vs 8.58% retained = 1.67×**.
+⚠ The COVID block is **not point-in-time computable** — the archive starts 2019-10-01.
+
+⛔⛔ **M47/M48 — my "1 in 60" short-book inference is WITHDRAWN.** A reviewer derived the denominator
+error arithmetically (4 acted-on + 14 higher-confidence = 18 > 15 live). The four positions came
+from the **2026-09-15 cohort of 12** (3 BUY / 9 SELL), not all 50 signals. **P(4 of 4 SELL) = 1 in
+3.9 — unremarkable.** M49: among **five signals tied at confidence 76 the operator took two and
+skipped three**, and skipped both higher-scoring BUYs — so it is not rank and not cleanly direction
+either. Item 1's remedy stands; its narrative does not.
+
+⭐ **M51 — the gap-defect falsifier is revised a third time.** Per-event bias is
+`gap ÷ stop_distance`, not a flat 2R (which is the special case gap = 2 × stop). The repro books
+**5R**; at the p10 0.65% stop a 2% gap is **3.08R**. My 1% → Grok's 2R → Kimi's ratio.
+
+⭐ **M50 — "6.3× lower" was the asymptotic ratio; at ₹1 lakh it is 2.88×.** And a result nobody
+predicted: **intraday is flat at 10.6 bps regardless of breadth** (percentage brokerage, no fixed
+charge), while delivery rises 23.8 → 60.5 bps. **The advantage widens with breadth: 2.88× at one
+position, 5.71× at twenty-five** — delivery's entire breadth penalty is the flat DP charge.
+
+✅ **Two reviewer statistics refuted by the code — and one refutation is of my own error.** E2's SE
+**is** Fama–MacBeth by construction (per-session IC, then mean ± sd/√n_sessions), so same-date
+dependence is absorbed (M45). And the IC is on the **signed** score, marked `← PRE-REGISTERED`;
+the absolute score appears only in the `E[z-selected]` constant (M46). **I mis-described my own
+script to a reviewer in round 7 and the reviewer built a finding on it.**
+
+⭐ **A sealing rule is now pre-registered for the restored data** (§10.10): 2021-01 → 2023-07 is the
+**regime holdout**; the CA-screened E2 re-run happens on the 794-session post-hole block and is
+committed **before** the holdout is opened; opening it is a one-way door. ⚠ Recorded honestly: only
+descriptive regime statistics have touched it — no scorer, signal, parameter or model.
+
+Also fixed: §2.4's preamble (it still claimed the data restoration changed none of the verdicts —
+now false twice over), and nine wrong dates.
+
 ### The 922-day hole is filled — 1,101 → 1,723 sessions, and the archive gains a zero-drift year (2026-09-17)
 
 Ran `scripts/backfill_ohlcv_history.py --start 2020-12-24 --end 2023-07-02 --sleep 1.0` on the
@@ -54,7 +121,7 @@ produce different fixtures (committed goldens and the test DB are untouched); an
 CA-UNADJUSTED over a span with far more splits and bonuses, so the CA screen is now more
 load-bearing, not less. ✅ The gap guard self-heals — `observed_session_index` reads live.
 
-### Round-7 panel adjudicated — the 922-day hole is fillable, and six things I decided were never done (2026-09-18)
+### Round-7 panel adjudicated — the 922-day hole is fillable, and six things I decided were never done (2026-09-17)
 
 `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` PART 8. Seven responses (ChatGPT · Gemini · DeepSeek ·
 Grok · Nemotron 3.5 lightning · Claude · Kimi K3), adjudicated one at a time. Eighteen new
@@ -2492,7 +2559,7 @@ it is the whole verdict on the closing-auction escape.
 **The plan now has kill lines with dates** (the biggest gap in the previous version): CA adjustment
 moves **above** the ledger because it invalidates every downstream test; three Week-0 items added
 (offered-set snapshot, daily fee reconciliation, cost-feasibility table); the four Week-2 tests
-become nine, all pre-registered; and six numbered kill/decision lines dated 2026-09-18 → 2026-10-16
+become nine, all pre-registered; and six numbered kill/decision lines dated 2026-09-17 → 2026-10-16
 close the programme, the class, the null question and the unit question rather than deferring them.
 **Nothing was built and no behaviour changed.**
 ### External quant panel adjudicated (2026-09-10) — ⭐ cycle 2 cannot test expectancy; the null was never written down

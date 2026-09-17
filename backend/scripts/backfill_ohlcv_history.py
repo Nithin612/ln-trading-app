@@ -150,14 +150,42 @@ async def _already_done(start: date, end: date, min_rows: int | None = None) -> 
         return {r.d for r in rows if int(r.n) >= threshold}
 
 
-def _weekdays(start: date, end: date) -> list[date]:
-    """Every Mon-Fri in the range. Holidays are not enumerated — the archive answers 404
-    for them, which is indistinguishable from a holiday and handled the same way."""
+def _candidate_days(start: date, end: date) -> list[date]:
+    """**Every calendar day** in the range. Holidays are not enumerated — the archive answers 404
+    for them, which is indistinguishable from a holiday and handled the same way.
+
+    ⛔ **SATURDAY IS INCLUDED SINCE 2026-09-17, AND THAT IS A BUG FIX.** This enumerated
+    Mon-Fri, so NSE's Saturday special sessions — budget days and disaster-recovery-site
+    tests, on which the market genuinely trades — were **structurally unreachable**: the
+    request was never made, so the 404-handling this docstring relies on never got a chance
+    to run. Measured 2026-09-17: `ohlcv_1d` was missing **3 of the 6 special sessions**
+    (2024-03-02, 2025-02-01, 2026-02-01) while `ohlcv_5m` held 4,242-15,600 rows on the same
+    dates — our own tick worker recorded a session the daily archive does not have. All three
+    serve today (HTTP 200, ~1,783 / 2,007 / 2,411 EQ rows).
+
+    ⛔⛔ **AND SUNDAY IS INCLUDED TOO, BECAUSE THE FIRST VERSION OF THIS FIX ASSERTED
+    "NSE has never held a Sunday session" AND THE DATABASE REFUTED IT WITHIN THE HOUR.**
+    2026-02-01 is a **Sunday** on which NSE traded (Budget day): our own `ohlcv_5m` holds
+    **15,675 rows** for it and the archive serves the bhavcopy (HTTP 200, ~2,411 EQ rows).
+    Excluding Sunday reproduced the exact defect being fixed, one weekday over.
+    ⭐ **So the enumerator now asserts NOTHING about which days are sessions.** It offers every
+    calendar day and lets the 404 decide — the only construction that cannot be wrong about a
+    calendar it does not own. The cost is ~52 extra 404s a year on a run that is already
+    404-tolerant; the alternative is being wrong again the next time an exchange does something
+    unusual.
+    ⚠ **The same defect is live and NOT fixed here** — every Celery beat is
+    `day_of_week="1-5"`, so a Saturday session is invisible to EOD ingestion, nightly
+    generation and the health probes as they run. That is a scheduling change on a system
+    the user operates; it is queued, not taken unilaterally.
+
+    Found by an external reviewer who derived "`ohlcv_1d` is missing 3 sessions" from three
+    published session counts (792/794/796) and the fact that exactly 6 dates differed —
+    without seeing the data.
+    """
     out: list[date] = []
     d = start
     while d <= end:
-        if d.weekday() < 5:
-            out.append(d)
+        out.append(d)  # every calendar day; the archive's 404 is the only session authority
         d += timedelta(days=1)
     return out
 
@@ -232,12 +260,12 @@ async def _run(args: argparse.Namespace) -> int:
         return 1
 
     done = await _already_done(start, end, args.min_rows)
-    todo = [d for d in _weekdays(start, end) if d not in done]
+    todo = [d for d in _candidate_days(start, end) if d not in done]
     if args.limit:
         todo = todo[: args.limit]
 
     print(
-        f"range {start} → {end}: {len(todo)} weekdays to fetch "
+        f"range {start} → {end}: {len(todo)} candidate days to fetch "
         f"({len(done)} already complete)",
         flush=True,
     )
@@ -270,7 +298,7 @@ async def _run(args: argparse.Namespace) -> int:
     lines = [
         f"# `ohlcv_1d` history backfill ({now.date()})",
         "",
-        f"Requested **{start} → {end}**; {len(todo)} weekdays fetched this run.",
+        f"Requested **{start} → {end}**; {len(todo)} candidate days fetched this run.",
         "",
         "| outcome | days |",
         "|---|--:|",

@@ -23,11 +23,11 @@ sound?" and "does the machine have an edge?" — and neither one alone tells you
 - `[cited]` — taken from a dated report or commit; the date is given because the data behind
   several of them no longer exists (dev DB destroyed 2026-09-07).
 - ⚠ A claim with no tag is an opinion. There should be very few.
-- ⭐ **RULE, adopted 2026-09-18 (Claude): every count over time carries its range.** `min → max`,
+- ⭐ **RULE, adopted 2026-09-17 (Claude): every count over time carries its range.** `min → max`,
   a distinct-session count, and a gap flag when the largest gap exceeds five sessions. Stated
   mechanically rather than "where the range is non-obvious", because M2 was invisible precisely
   because the range looked obvious.
-- ⭐ **RULE, adopted 2026-09-18 (Kimi SEL-3): every cohort carries its construction date**, and no
+- ⭐ **RULE, adopted 2026-09-17 (Kimi SEL-3): every cohort carries its construction date**, and no
   cohort may be ranked on data inside its own measurement window. M31 is why.
 
 ---
@@ -61,7 +61,7 @@ One table. Everything else in this document refers back to it.
 | …`is_nifty50` active | 50 (of which 5 active) | **50 active** | ✅ repaired |
 | …`is_fno` active | 212 | **210 active** | ✅ |
 | …`ca_flagged_at` | — | **7** (5 of them active) | ⚠ has a clearing path now |
-| `ohlcv_1d` | 2,080,305 bars → 2026-09-09 | ✅ **3,158,638 bars · 1,723 sessions · 2019-10-01 → 2026-09-17 · largest gap 5 days** | ⭐⭐ **HOLE FILLED 2026-09-17 (PART 9).** Was 1,101 sessions with a 922-day hole; +622 sessions, +1,063,351 bars. **Every year now complete (~248 sessions).** |
+| `ohlcv_1d` | 2,080,305 bars → 2026-09-09 | ✅ **3,166,300 bars · 1,727 sessions · 2019-10-01 → 2026-09-17** | ⭐⭐ **HOLE FILLED + SPECIAL SESSIONS RECOVERED 2026-09-17 (PARTS 9–10).** 1,101 → 1,723 (the 922-day hole) → **1,727** (3 Saturday + **1 Sunday** NSE sessions the enumerator could not reach — M39–M43). ⚠ One known hole remains: **2022-08-08**, where NSE serves an XLSX at the `.csv` URL |
 | `ohlcv_5m` | **empty** | **12,625,648 rows · 796 sessions · 2023-07-03 → 2026-09-17** | ✅ **backfilled** |
 | `ohlcv_15m` | **empty** | **4,206,475 rows · 796 sessions** | ✅ **backfilled** |
 | `ohlcv_1h` | **empty** | **48,065 rows · 3 sessions · 2026-09-15 → 09-17** | ⚠ live-only; backfill path exists, **not run** |
@@ -152,7 +152,7 @@ case the panel exists to explain** (a quarantined stock read "CA quarantine ⊘ 
 standing lesson is unchanged and now has four instances: *the tests asserted what was
 INTENDED, not what the code did.*
 
-## 2.4 Research — verdicts as they stand, with their standing marked (revised 2026-09-18)
+## 2.4 Research — verdicts as they stand, with their standing marked (revised 2026-09-17)
 
 ⚠ **This section previously read "settled and should not be re-litigated" while §7.11 marked E2
 re-run-required (M24). Both cannot be binding.** Each row now carries its own standing: **CLOSED**
@@ -160,8 +160,11 @@ re-run-required (M24). Both cannot be binding.** Each row now carries its own st
 equivalence — ChatGPT Q7, adopted). Nothing here is re-opened by argument; several are re-opened
 by a measurement named in §8.10.
 
-These are `SYSTEM_REVIEW` §11.3 plus the B-queue. **Nothing in the data restoration changes
-any of them** — they are statements about the scorer, which was not touched.
+These are `SYSTEM_REVIEW` §11.3 plus the B-queue. ⛔ **CORRECTED 2026-09-17 (Claude Q14): the
+previous preamble said "nothing in the data restoration changes any of them". That is now false
+twice over** — PART 9 added **626 sessions and a zero-drift year**, and M52 shows the retained
+block was the mildest available. ⇒ **every row below is a statement about the scorer AS MEASURED
+ON THE 794-SESSION POST-HOLE BLOCK**, and none has been re-run on the restored archive.
 
 | Verdict | Number |
 |---|---|
@@ -172,7 +175,7 @@ any of them** — they are statements about the scorer, which was not touched.
 | **Exit geometry is not the lever** (D5) | no constant-R:R target 1.0–3.0R beats the frozen absolute-% target on 1,152 signals; every paired ΔR negative, abs(t) ≤ 0.65 |
 | **The queued generation lever is refuted** (D1/RVOL) | injecting a graded RVOL factor: **−0.291R at t = −2.91** |
 | **Stop-width is a denominator artifact** | closed three times; swing **R −0.386 → raw% −0.262 → excess vs matched basket +0.069** |
-| ⚠ **UNDERPOWERED — positional vs swing (E1)** | **R −0.4879 → raw% −0.7870 → excess −0.1909 (t −0.29)**. ⛔ **Relabelled 2026-09-18 (ChatGPT Q7): t = −0.29 is an ACCEPTED NULL, not a demonstrated equivalence.** "Identical shape" is withdrawn; an equivalence claim needs a TOST with a pre-declared margin |
+| ⚠ **UNDERPOWERED — positional vs swing (E1)** | **R −0.4879 → raw% −0.7870 → excess −0.1909 (t −0.29)**. ⛔ **Relabelled 2026-09-17 (ChatGPT Q7): t = −0.29 is an ACCEPTED NULL, not a demonstrated equivalence.** "Identical shape" is withdrawn; an equivalence claim needs a TOST with a pre-declared margin |
 | **Hold-period breadth lever: resolved against** (B7) | MFE over abs(MAE) **0.83 / 1.12**, hazard curve **flat** 0.559 → 0.489 over days 0–5 |
 | **88% of the BUY book's gross loss is tape, not alpha** | raw −0.1877% = tape −0.1659% + alpha −0.0218% |
 | ⚠ **CORRECTED — three factors effectively never score** | `DOW_TREND` (weight **20**), `MARUBOZU`, `FII_DII_FLOW`. ⛔ **"0 of 487 panels" is withdrawn twice over:** M9 refuted its mechanism, and at M10's measured **0.026%** the expected count in 487 panels is **0.127** — the sample could never distinguish "never" from "rare". Standing figure: **5 of 19,100 (M10)** |
@@ -229,7 +232,7 @@ Ordered by **what it blocks**, not by size. Every row carries the state measured
 | # | Lever | State 09-17 | What changed since 09-10 |
 |---|---|---|---|
 | R-1 | **Retune the trend factor's parameters** (Tier-1 #1) | **NOT RUN, RECLASSIFIED 2026-09-17** | ⛔ **NOT a defect — M9 refutes "unreachable by construction": it fires (+0.70) at the shipped `lookback=20, swing_n=5`.** True statement is M10: **5 of 19,100 panels = 0.026%**. ⇒ a **parameter proposal** that must clear `t ≈ 3.6`. Method unchanged (read-only injection); guarded prior: injection can **dilute** through the confidence normalisation |
-| R-2 | **Minervini as a DIFFERENT STRATEGY, not a filter** (Tier-1 #2) | **NOT RUN, REFRAMED 2026-09-18** | ⭐ **Grok F11, adopted:** importing it is a new strategy needing its own null — and it **will look like edge in a bull tape**, which is all we have (M32). Test it against a matched basket, never against this book. 0 of 91 entries pass ⇒ disjoint from our selection. Needs a universe-level regeneration |
+| R-2 | **Minervini as a DIFFERENT STRATEGY, not a filter** (Tier-1 #2) | **NOT RUN, REFRAMED 2026-09-17** | ⭐ **Grok F11, adopted:** importing it is a new strategy needing its own null — and it **will look like edge in a bull tape**, which is all we have (M32). Test it against a matched basket, never against this book. 0 of 91 entries pass ⇒ disjoint from our selection. Needs a universe-level regeneration |
 | R-3 | **12-month price momentum** (Tier-1 #3) | **NOT RUN** | The single untested thread from the reading study. ⚠ It surfaced as the *control that killed* the overhead-supply effect, so the evidence for it is weaker than it looks |
 | R-4 | **CAS overnight reversal to ≥30 sessions** (Tier-1 #4) | **accruing: 5 of 30** `[measured]` | ✅ Capture restarted. ~5 weeks of wall-clock left. Best odds on the list — and it is a **different strategy**, not a fix to this one |
 | R-5 | **Opening-range / VWAP / intraday timing** | ⭐ **NEWLY TESTABLE** | `SYSTEM_REVIEW` §13 Tier-3 #9 calls these blocked. They are not: **3 years of 5m/15m bars exist for ~210 liquid names** `[measured]`. ⚠ The history is a **210-name cohort**, so any result generalises to F&O/Nifty-50 names only |
@@ -497,7 +500,7 @@ a TOST with a pre-declared margin.
 
 ⭐ **Q4 — the t ≈ 3.6 bar's universality is not established.** Correct. The negative control was
 best-of-**20**; the programme has run far more than 20 hypotheses. **ADOPTED as an open item** — now
-**§8.10 row Q-B** (it was a null pointer until 2026-09-18; M21).
+**§8.10 row Q-B** (it was a null pointer until 2026-09-17; M21).
 
 **⛔ NOT AGREED, or narrower than claimed**
 
@@ -517,7 +520,7 @@ best-of-**20**; the programme has run far more than 20 hypotheses. **ADOPTED as 
 **⚠ NEEDS PROOF — I could not settle these**
 
 - **Q1's "predefine the live estimand and run to power"** — cannot be scoped until **§8.10 row Q-A**
-  (the intended capital and account type) is answered — a null pointer until 2026-09-18 (M21), because position size sets both n and cost.
+  (the intended capital and account type) is answered — a null pointer until 2026-09-17 (M21), because position size sets both n and cost.
 - **BKT4 "honest execution model asserted more strongly than demonstrated"** — fair, and I cannot
   refute it: there is **no live-vs-modelled fill calibration** anywhere. Sample today is 4 orders.
 
@@ -1051,7 +1054,7 @@ not the plan and ask them to critique.** Every high-yield point this round came 
 
 ---
 
-# PART 8 — THE ROUND-7 PANEL, ANSWERED ONE BY ONE (2026-09-18)
+# PART 8 — THE ROUND-7 PANEL, ANSWERED ONE BY ONE (2026-09-17)
 
 Seven responses: **ChatGPT · Gemini · DeepSeek · Grok · Nemotron 3.5 lightning · Claude · Kimi K3.**
 (Perplexity did not respond this round.) Adjudicated separately again, for the same reason as
@@ -1075,7 +1078,7 @@ applies** (M36). I would have shipped a false correction of a false correction.
 
 ## §8.1 · The round-7 measurement round
 
-| ID | Question | Result `[measured 2026-09-18]` |
+| ID | Question | Result `[measured 2026-09-17]` |
 |---|---|---|
 | **M21** | Do `§7.11/Q-A` and `Q-B` exist? | ⛔ **No.** They appear only as forward references at lines 487 and 506. §7.11 is a 12-row numbered table. **Two adoptions point at null addresses.** |
 | **M22** | Does §2.4 still carry the refuted "0 of 487"? | ⛔ **Yes**, line 166, uncorrected. ⭐ And M10 makes it worse than stale: at **0.026%** the expected count in 487 panels is **0.127** — so "0 of 487" was **never evidence** of "never scores". It is what a working factor produces. |
@@ -1531,6 +1534,13 @@ point-in-time construction M31 forced on us, so this number does not repeat that
 
 **Equal-weight daily return of the PIT cohort — "the tape":**
 
+⛔ **SUPERSEDED BY M52 (Claude A12).** The cohort below was ranked on 2019-10 → 2020-10 and applied
+to blocks *including* that window, so the COVID row is hindsight-constructed. The strictly-prior
+re-run is **M52**: 2021 **+35.5%/yr** · **2022 −3.7%/yr, 43.5% down-days** · 2023-07→now
+**+12.8%/yr**; long-side gap exposure **2022 14.36% vs 8.58% retained = 1.67×**. ⚠ The COVID block
+is **not PIT-computable** — the archive starts 2019-10-01. The conclusion survives; this table does
+not.
+
 | block | sessions | mean/day | sd | down-days | worst day | annualised |
 |---|--:|--:|--:|--:|--:|--:|
 | 2019-10 → 2021-01 (COVID) | 311 | **+0.1303%** | 1.702 | 38.3% | **−12.61%** | **+38.1%** |
@@ -1648,3 +1658,329 @@ the hole was reasoned about as a property of the archive.
 span quoted without a reconciling session count), and it had already happened once, in the report
 of the run that created the gap. ⇒ **the "every count carries its range" rule adopted in §8.9 must
 also mean: a span and a count that disagree is an alarm, not a pair of facts.**
+
+---
+
+# PART 10 — THE ROUND-8 PANEL (2026-09-17)
+
+Seven responses: **ChatGPT · Gemini · DeepSeek · Grok · Nemotron 3.5 lightning · Claude · Kimi K3.**
+
+⚠ **A timing problem that shapes everything below: these were written against the document as it
+stood BEFORE the backfill.** Three of them (ChatGPT P5, Claude S12, Grok's holdout protocol) argue
+*do not ingest 2021–22 until the holdout is sealed*. The user instructed the backfill and it ran.
+§10.10 deals with that squarely rather than around it.
+
+## §10.1 · The round-8 measurement round
+
+| ID | Question | Result `[measured 2026-09-17]` |
+|---|---|---|
+| **M39** | Claude's D11 — is `ohlcv_1d` missing 3 of the 6 special sessions? | ⭐⭐ **YES, exactly.** Missing **2024-03-02, 2025-02-01, 2026-02-01** — and these are **real sessions**: `ohlcv_5m` holds **4,242 / 15,600 / 15,675** rows on them. **He derived this from three published session counts (792/794/796) and "exactly 6 dates", without seeing the data.** My round-7 "explainable, benign" verdict was wrong. |
+| **M40** | Root cause? | ⛔ **`_weekdays()` filtered `d.weekday() < 5`** — Mon–Fri. NSE's Saturday special sessions were **structurally unreachable: the request was never made**, so the 404-handling the function relies on never ran. NSE serves all three (**1,783 / 2,007 / 2,411** EQ rows). |
+| **M41** | Is the defect only in the backfill? | ⛔⛔ **No — it is live and system-wide.** Every Celery beat is `day_of_week="1-5"`, so a Saturday session is invisible to EOD ingestion, nightly generation and every health probe **as they run**. |
+| **M42** | Fixed? | ✅ Enumerator corrected, **3 regression tests**, 16 green. Re-run over the full span recovered **2020-02-01 (+1,461)**, **2024-03-02 (+1,783)**, **2025-02-01 (+2,007)** — including a Saturday that was not in the original six. |
+| **M43** | ⛔⛔ And then my own fix was wrong. | **2026-02-01 is a SUNDAY on which NSE traded** (Budget day): `ohlcv_5m` holds **15,675 rows**, the archive serves it. My fix asserted *"Sunday stays excluded: NSE has never held one"* **and pinned it in a test** — reproducing the defect being fixed, one weekday over. The enumerator now **asserts nothing**: every calendar day is offered and the 404 decides. **+2,411 bars.** |
+| **M44** | Archive now | **1,727 sessions · 3,166,300 bars · 2019-10-01 → 2026-09-17.** (1,101 before any of this.) |
+| **M45** | Kimi A2.2 — is E2's SE blind to cross-sectional dependence? | ✅ **REFUTED by construction.** `e2_score_ic.py` computes `_spearman` **per session** (`for v in by_day.values()`), collects into `ics`, then `_mean_se(ics)` = mean ± sd/√n_sessions. **That is Fama–MacBeth** — each date contributes one observation, so same-date dependence is fully absorbed. Kimi even named the correct remedy; the code already does it. |
+| **M46** | Kimi A2.3 — is the IC on the absolute score, hiding a signed relationship? | ✅ **REFUTED — and the error that produced it is MINE.** The IC loop runs on `key="score"`, labelled **"signed normalized_score ← PRE-REGISTERED"**. The *absolute* score appears only in the `E[z-selected]` constant, with a comment explaining why. **My round-7 answer to Grok mis-described my own script**, and Kimi built a finding on my error. |
+| **M47** | Claude Q18 — do M33 and M34 share a population? | ⛔ **No, and he derived it from 4 + 14 = 18 > 15.** M33 ranked **all 50 signals**; the four positions came from the **2026-09-15 cohort of 12** (3 BUY / 9 SELL). Only **2** signals that day scored above the best acted-on — **both BUY**. |
+| **M48** | The corrected probability | ⛔⛔ **P(4 of 4 SELL, given the 09-15 cohort) = 0.2545 = 1 in 3.9 — unremarkable.** My round-7 "1 in 60 / 1 in 75" used the wrong population. **The inference is WITHDRAWN.** |
+| **M49** | So what did the operator do? | Within the 12: skipped **both** higher-scoring BUYs (78, 77); took 4 SELLs but **not the top 4** — among **five tied at 76 took two, skipped three**; among two at 75 took one; among two at 74 took one. ⇒ **not rank, not strictly direction.** Arbitrary-among-ties survives, on a population of **12, not 50**. |
+| **M50** | Claude BT12 — is "6.3× lower" the right number at ₹1 lakh? | ⛔ **No — 2.88×** (he predicted 2.90×). 6.3× is the asymptotic ratio. ⭐ **And a result neither of us predicted: intraday is FLAT at 10.6 bps from 2 positions onward** (percentage brokerage below the ₹20 cap, no fixed charge), while delivery rises 23.8 → 60.5. **The ratio widens with breadth: 2.88× at 1 position, 5.71× at 25.** |
+| **M51** | Kimi A2.7 — is the gap bias 2R? | ✅ **CONFIRMED. bias = gap ÷ stop_distance**; Grok's 2R is the special case gap = 2 × stop. The M5 repro (gap 5%, stop 1%) is **5R**, not 2R. At the p10 0.65% stop, a 2% gap is **3.08R** and a 5% gap is **7.69R**. |
+| **M52** | Claude A12 — did M32 reintroduce the look-ahead M31 removed? | ⛔ **YES.** M32 ranked on 2020-01 → 2023-07 and applied it to 2019-10 → 2020-12 — a window that **overlaps and post-dates** the measurement. ⭐ **Redone with strictly-prior expanding cohorts, and the conclusion survives on better ground:** 2021 **+35.5%/yr**, **2022 −3.7%/yr with 43.5% down-days**, 2023-07→now **+12.8%/yr**; long-side gap exposure **2022 14.36% vs retained 8.58% = 1.67×**. ⚠ The COVID block is **not PIT-computable** — the archive starts 2019-10-01, so there is no prior data to rank on. |
+
+---
+
+## §10.2 · ChatGPT — right about the sequence, and it caught a date error
+
+**✅ AGREED** — its re-ordering (account correctness → simulator → clean E2 → D5/D1/B7 → data →
+economics) matches where the queue already moved, and its **P4 (point-in-time cohort helper as an
+executable API, not a documentation rule)** is the correct escalation of Kimi's SEL-3. **M52 is the
+proof**: I adopted the rule in writing and violated it in the next row of the same table.
+
+⭐ **The date error is real and now fixed.** Nine instances of `2026-09-18` in a document whose
+convention is that every measurement carries its date. Corrected across four files.
+
+⭐ **Q6 — "the 3.2-year sample is a benign-regime sample" is stronger than the supplied evidence.**
+Conceded and now repaired: M32's support was hindsight-constructed (M52). The claim survives on
+2022 with a strictly-prior cohort, and I have added the down-day and drift figures it asked for.
+
+**⛔ NOT AGREED**
+
+- **"P5 — backfill, but re-decide rather than automatically doing it."** Overtaken: the user
+  instructed it. ⚠ Your *reason* was sound and is answered in §10.10.
+- **Q1's "do not use the 1% threshold"** — already replaced by Grok's R-based identity in round 7,
+  and now superseded again by **M51**: the bias is `gap ÷ stop`, so even Grok's 2R is a special
+  case. Your instinct was right twice over; the instrument is now on its third revision.
+
+**❓ QUESTIONS BACK TO CHATGPT**
+
+1. **M50**: intraday's cost advantage is **2.88× at one position and 5.71× at twenty-five**,
+   because intraday has no fixed charge. Delivery's cost argument pushes toward concentration;
+   intraday's removes the penalty for breadth entirely. Does that change your P6 ("establish actual
+   portfolio economics") from one question into two — *how much capital* and *which product* —
+   answered in that order?
+2. Your A4 proposes CI-checking that every ADOPTED item has a code/doc change or a `BLOCKED`
+   status. **M52 shows a rule can be adopted and violated in the same document by its author.**
+   Would your CI check have caught that, or does it only catch un-actioned adoptions rather than
+   mis-applied ones?
+
+---
+
+## §10.3 · Gemini — a third faithful restatement, and the pattern is now the finding
+
+**✅ AGREED** — every quote is accurate; the 14 sections reproduce the document correctly.
+
+**⛔ NOT AGREED — nothing, for the third round running.** Every item restates a finding already in
+the document, including several of my own corrections quoted back as discoveries (its §12 items are
+§7.10/5 and §7.10/1 verbatim). **Findings not already in the document: 0**, across rounds 6, 7 and 8.
+
+⚠ **Stated without complaint, because it is informative:** three rounds of faithful restatement is
+evidence the document is *readable and internally consistent* — a real property, and one no other
+source tests. But it is not review, and I will stop asking this source for findings and start
+asking it for the one thing it demonstrably does well: **checking whether the document says what I
+think it says.**
+
+**❓ QUESTION BACK TO GEMINI** — the U7 kill-rule you supplied in round 6 is still the only reviewer
+artifact from any round that converted an open item into a falsifiable test, and it still has **no
+threshold** (Grok flagged this: "a kill-rule without a threshold cannot kill"). One number, please:
+what sector-vs-NIFTY50 IC separation would you accept as a pass, on 792 sessions and ~500 names?
+
+---
+
+## §10.4 · DeepSeek — the index is now complete, and that is its ceiling
+
+**✅ AGREED** — A1–A10, Q1–Q12, D1–D15, B1–B10, S1–S10, E1–E7, H1–H12, F1–F15, L1–L14 are accurate
+and correctly keyed to the M-numbers. As a navigable index of a 1,600-line document it is the best
+of the seven and it improved this round (it now keys to M-IDs rather than prose).
+
+**⛔ NOT AGREED — the request list is now entirely retrospective.** All twenty items ask me to
+re-show measurements already in the document with their queries attached. Round 6's list named five
+things I had not measured; round 8's names zero. ⭐ Its one live item remains **"show the account
+type configuration"** — which is Q-A, is not in the database, and is the user's to state.
+
+**❓ QUESTION BACK TO DEEPSEEK** — you asked in round 7 whether I would add a *"whose data
+constructed this, and was that construction point-in-time?"* column. **M52 says yes and proves why:
+I violated my own new cohort rule one row after adopting it.** Would you put that column on the
+M-table (per measurement) or on the queue (per item)? I lean M-table, because the defect is always
+in the measurement, never in the intention.
+
+---
+
+## §10.5 · Grok — the 2R identity it supplied is superseded by a sharper one
+
+**✅ AGREED** — its answers to my three round-7 questions are all adopted: clickability logged as
+**fields on the ledger write** rather than a third writer; per-direction reporting for the gap
+bias; and Q-8 hardened rather than softened until Q-A is answered.
+
+⭐ **Its holdout protocol (E2 on the 794 first, *then* fill, then 2021–22 as holdout, no retune) is
+the right sequence and I ran the fill first.** §10.10.
+
+⭐ **"Limit orders cannot go under a statutory floor"** stands and is reinforced: **M50** shows the
+floor is a *product* property, and no execution technique moves it.
+
+**⛔ NOT AGREED, with the measurement**
+
+- **The `exposure × 2R` identity you supplied — which I adopted into the queue — is a special
+  case.** **M51**: bias = `gap ÷ stop_distance`, and 2R holds only when the gap is exactly twice
+  the stop. The M5 repro is **5R**. Your instrument was a large improvement on my unjustified 1%
+  and is still not the right one; the threshold must be computed from the **joint** distribution of
+  gap depth and stop width, which is what item 4 already asks for and then does not use.
+- **Your reading of M33 ("the operator took 4 mid-ranked and skipped every better-scored one")**
+  inherits my denominator error. **M47/M48**: the pool was **12**, not 50; 4-of-4 SELL is **1 in
+  3.9**. Your "clickability" hypothesis survives — **M49** shows two of five signals *tied at 76*
+  were taken — but the evidence for it is much weaker than either of us stated.
+
+**❓ QUESTIONS BACK TO GROK**
+
+1. **M49**: among five signals tied at confidence 76, two were taken. There is no rank information
+   in a tie, so *something* broke the tie. Is a ledger-attached `surface` + `displayed_rank` still
+   sufficient, or does a tie mean you also need the **sort key's tiebreaker** (which today is
+   `id`, i.e. mint order) recorded?
+2. **M50**: at one position intraday is 2.88× cheaper; at twenty-five it is 5.71×. Your Q-8 ruling
+   was "hard until Q-A". Does the *shape* of that curve change the ruling — since delivery makes
+   concentration mandatory and intraday makes it optional?
+
+---
+
+## §10.6 · Nemotron 3.5 lightning — third consecutive output failure
+
+Round 6 produced planning text; round 7 produced tables and then broke mid-output; round 8 is
+planning text again — a restatement of the prompt, a list of sections it intends to fill, an
+inventory of quotes it might use, and an internal note (*"Actually, this is going to be extremely
+long. Let me think about how to approach this efficiently"*), terminating mid-sentence inside the
+architectural section.
+
+**Findings produced: 0. Verdicts: 0. Tests proposed: 0.** Nothing to agree or disagree with.
+
+⚠ Three attempts, three failures of the same kind, is now a measurement rather than an accident:
+**this source cannot complete a task of this length.** Recorded so it is not re-tried a fourth time
+expecting a different result, and so its silence is never counted as agreement.
+
+---
+
+## §10.7 · Claude — three independent recomputations, all three landed, and one inverted my conclusion
+
+⭐⭐ **D11 is the most impressive single deduction of any round.** From three published session
+counts (792 / 794 / 796) and the statement that exactly 6 dates differed, it derived that
+**`ohlcv_1d` must be missing 3 of them** — without the data. **M39 confirms it exactly**, and
+**M40/M41** found the cause: a Mon–Fri enumerator, and the same filter on every Celery beat. My
+round-7 verdict that the discrepancy was "benign" was wrong, and this defect is now fixed, tested
+and back-filled (M42).
+
+⭐⭐ **A12 is confirmed and it is the sharpest methodological catch so far: M32 reintroduced the
+look-ahead M31 had just removed, one row later in the same table.** The ranking window
+(2020-01 → 2023-07) overlapped *and post-dated* the block it was applied to (2019-10 → 2020-12).
+**M52** redoes it with strictly-prior expanding cohorts — and the conclusion **survives on better
+ground**: 2022 is **−3.7%/yr with 43.5% down-days**, and its long-side gap exposure is **1.67×**
+the retained sample's. ⚠ Its other half is also right: the COVID block is **not PIT-computable at
+all**, because the archive starts 2019-10-01.
+
+⭐⭐ **Q18's denominator catch (4 + 14 = 18 > 15) inverts one of my conclusions.** **M47/M48**: the
+population was the 09-15 cohort of 12, not all 50 signals, and P(4-of-4 SELL) is **1 in 3.9** —
+unremarkable. **My "1 in 60" and the inference built on it are withdrawn.**
+
+⭐ **BT12 confirmed at 2.88%** (predicted 2.90×), with **M50**'s addition that intraday is flat in
+breadth.
+
+⭐ **Q14 (§2.4's preamble still says "nothing in the data restoration changes any of them")** —
+conceded and now false in a second way: the restoration this round added 626 sessions and a
+zero-drift year. Rewritten to scope the table explicitly.
+
+**⛔ NOT AGREED**
+
+- **M28's component list "sums to 22.39, not 22.22".** The components were each rounded to 2 dp;
+  summed unrounded they give **22.225**, matching M27's fit exactly, and the DP term belongs to the
+  fixed ₹15.34, not the linear coefficient. The presentation was sloppy; the number was not.
+- **"M29's benign verdict"** — you are right that it was wrong, but note the failure was *mine*,
+  not the instrument's: the four-table join **did** surface the six dates. I stopped at "special
+  sessions" instead of asking which table lacked them.
+
+**❓ QUESTIONS BACK TO CLAUDE**
+
+1. **M43 is the finding I most want your read on.** Fixing D11 I asserted *"Sunday stays excluded:
+   NSE has never held one"* and pinned it in a test — and 2026-02-01 is a Sunday session already
+   sitting in our own `ohlcv_5m`. **I reproduced the exact defect I was fixing, one weekday over,
+   inside the fix.** The enumerator now asserts nothing and lets the 404 decide. Is
+   "assert nothing about a calendar you do not own" the general form, or is there a stronger rule —
+   something like *a filter over a domain owned by an external authority is always a bug*?
+2. Your adjective rule ("liquid", "top-250", "active" are unverified claims standing in for dated
+   rules) predicts M52. **It did not predict M43**, where the suspect word was a *weekday name*.
+   Does the rule extend to calendar predicates, or is that a second class?
+3. **M50**: does intraday being flat in breadth while delivery is not change your S2 conclusion —
+   which said the cost floor "fixes the concentration" — into something stronger, i.e. that the
+   product choice *determines whether breadth is available at all*?
+
+---
+
+## §10.8 · Kimi K3 — one confirmed, two refuted, and one of the refutations is of my own error
+
+⭐⭐ **A2.7 is CONFIRMED and it is the round's best quantitative correction.** The per-event bias is
+`gap ÷ stop_distance`, not a flat 2R; the M5 repro books **5R**. At the p10 stop a 2% gap is
+**3.08R**. ⇒ **the 0.05R invalidation threshold trips earlier than the adopted identity implies**,
+and item 4's falsifier is now on its third revision (my 1% → Grok's 2R → your ratio).
+
+⭐ **The epistemic preamble is fair and correct:** everything here is self-attested by one operator,
+and M52 is this round's proof that the operator's own measurements carry the defects they hunt.
+
+**⛔ NOT AGREED, with the code**
+
+- **A2.2 — "stride fixes time overlap; it does nothing for same-date cross-sectional dependence".**
+  **REFUTED — M45.** The script computes the IC **per session** and then takes mean ± sd/√n over
+  sessions. That *is* the Fama–MacBeth estimator you recommend; each date contributes exactly one
+  observation, so same-date dependence is absorbed by construction.
+- **A2.3 — "the IC is on the absolute score, so a signed relationship is invisible".**
+  **REFUTED — M46, and the error is mine.** The IC runs on the **signed** score, labelled
+  `← PRE-REGISTERED`; the absolute score appears only in `E[z|selected]`. **I mis-described my own
+  script in a round-7 answer and you built a finding on it.** The finding is void; the underlying
+  concern — that nobody had stated the estimand precisely — was legitimate and is now answered.
+
+**⚠ NEEDS PROOF** — A4.7 (the 1,975-trade corpus's construction is unspecified) is correct and
+unanswered. Given M16 and M37, your prior (membership-repainted and CA-contaminated until shown
+otherwise) is the right default.
+
+**❓ QUESTIONS BACK TO KIMI**
+
+1. **M51 makes your formula the falsifier.** To use it I need the **joint** distribution of gap
+   depth and stop width in the 1,975-trade corpus, not the marginals. Is `E[gap/stop | gap > stop]`
+   the right summary, or would you want the full bivariate because the tail is where it bites?
+2. Two of your three new statistical points were refuted by the code, and **one of them only
+   because I had described my own script wrongly to a reviewer**. Does that change your view on the
+   packet problem — i.e. is the fix "attach the scripts", or is it that any claim I make *about*
+   the code should be quoted from it rather than paraphrased?
+
+---
+
+## §10.9 · ⛔⛔ WHAT ROUND 8 COST ME
+
+**1. ⛔⛔ I reproduced the defect I was fixing, inside the fix (M43).** Correcting a Mon–Fri filter,
+I asserted *"Sunday stays excluded: NSE has never held one"* — and pinned it in a **test**.
+2026-02-01 is a Sunday NSE session whose bars were **already in our own `ohlcv_5m`**. ⭐ The general
+form now in the code: **a filter over a calendar owned by an external authority is a claim you
+cannot verify — offer every day and let the 404 decide.**
+
+**2. ⛔⛔ M32 reintroduced the look-ahead M31 removed, one row later (M52, Claude A12).** The
+cohort rule was adopted in §8.9 and violated in §8.1 of the same document.
+
+**3. ⛔⛔ My "1 in 60" short-book inference is WITHDRAWN (M47/M48, Claude Q18).** Wrong population;
+the correct figure is **1 in 3.9**.
+
+**4. ⛔ I mis-described my own script to a reviewer (M46)** — said the IC was on the absolute score
+when it is on the signed score — and a reviewer built a finding on it.
+
+**5. ⛔ "Benign" was the wrong verdict on M29 (M39).** The join surfaced the six dates; I stopped
+one question short of asking which table lacked them.
+
+**6. ⛔ Nine wrong dates (ChatGPT)**, in a document whose central convention is that every
+measurement carries its date.
+
+⭐ **The pattern across rounds 6–8 is now stable and worth stating plainly: the reviewers'
+highest-value output is not finding defects in the system — it is finding defects in my
+measurements of the system.** Every round, the largest correction has been to my own work.
+
+## §10.10 · The holdout, and a sequencing criticism that landed after the action
+
+Claude's S12, Grok's protocol and ChatGPT's P5 all say: **decide and seal the holdout before
+ingesting.** The user instructed the backfill; it ran; then I measured 2021–22.
+
+**What was actually done to the new data:** descriptive regime statistics only — mean daily return,
+down-day share, overnight-gap tail frequencies (§9.2, M52). **No scorer, no signal, no strategy,
+no parameter, and no model has touched 2021–22.**
+
+⚠ **What that costs, stated honestly:** I now know 2022 was a down year with fatter gaps, and I
+used that to argue the backfill was worthwhile. A later "discovery" that something works in 2022
+would be mildly contaminated by my having chosen to highlight it. That is real, and it is smaller
+than a strategy evaluation would have been.
+
+⇒ **SEALING RULE, pre-registered now, before any strategy evaluation touches it:**
+
+1. **2021-01-01 → 2023-07-02 (620 sessions) is the REGIME HOLDOUT.** No scorer run, no gate
+   evaluation, no parameter fit, no study may read it until a result on the 794-session post-hole
+   block has been **committed first**.
+2. **E2's CA-screened re-run happens on the 794 block and is committed before the holdout is
+   opened** — Grok's protocol, adopted late but intact.
+3. **Opening the holdout is a one-way door**: it is read once, for a pre-registered question, with
+   no retune afterwards.
+4. **Descriptive statistics already taken are recorded** (§9.2, M52) so nobody later mistakes the
+   holdout for pristine.
+
+## §10.11 · Queue changes from round 8
+
+| # | Change | Why |
+|---|---|---|
+| **4** | ⓘ **Falsifier revised a third time**: bias = `gap ÷ stop_distance` (M51), computed from the **joint** distribution of gap depth and stop width, **per direction**. Report `E[gap/stop]` conditional on gap > stop, alongside the marginals | My 1% → Grok's 2R → Kimi's ratio |
+| **5** | ⓘ **Must complete and be committed BEFORE the holdout is opened** (§10.10) | Grok's protocol |
+| **7** | ✅ **DONE** — and extended: 3 Saturday + 1 Sunday special sessions recovered (M42/M43) | |
+| **NEW 13** | **Change the Celery beats from `day_of_week="1-5"`** so a Saturday/Sunday session is ingested live | **M41** — the backfill is fixed; the live path is not. ⚠ A scheduling change on a running system: the user's call |
+| **NEW 14** | **A point-in-time cohort helper** — `liquid_as_of(date)` that refuses an `as_of` inside its own measurement window | **M52**. ChatGPT P4, Kimi, Grok all converged; and a prose rule demonstrably failed within one document |
+| **Q-C** | ⓘ **Widened** to every concession in PARTS 7–8, not just the six round-6 adoptions, and **given a falsifier**: the same greps that produced M26 return zero | Claude A13/A14 |
+
+## §10.12 · What round 8 returned
+
+**Decision-changing points: 6.** Claude's D11 (a live ingestion defect, derived from arithmetic),
+A12/Q18 (two of my measurements refuted), BT12 · Kimi's A2.7 (the falsifier, again) · ChatGPT's
+date catch and Q6 · plus **M43**, which is mine and is the one I would keep if I could keep only one.
+
+⚠ **Three of the six are corrections to my own measurements, and a fourth (M43) is a defect I
+introduced while fixing a defect.** The system's defect rate is not what these rounds are measuring
+any more.

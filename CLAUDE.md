@@ -933,6 +933,15 @@ else.
   ⛔ **The retained 3.2-year block was the MILDEST of the three** — full-archive overnight-gap
   exposure is **1.15× / 1.25× / 1.77×** the old sample's (long / short / ≤−5% tails) ⇒ **every risk
   number sourced from it is a benign-regime number.**
+  ⛔⛔ **AND NSE HOLDS WEEKEND SESSIONS THE ENUMERATOR COULD NOT REACH (2026-09-17, round 8).**
+  `_weekdays()` filtered `weekday() < 5`, so Saturday budget/DR-site sessions were **structurally
+  unreachable — the request was never made**. Recovered 2020-02-01, 2024-03-02, 2025-02-01 and
+  ⭐ **2026-02-01, a SUNDAY on which NSE traded** — which my own fix had excluded by asserting
+  "NSE has never held one" **and pinning it in a test**, while our `ohlcv_5m` already held 15,675
+  rows for it. ⭐ **The enumerator now asserts NOTHING about which days are sessions: offer every
+  calendar day, let the archive's 404 decide.** `ohlcv_1d` = **1,727 sessions / 3,166,300 bars**.
+  ⛔ **THE SAME FILTER IS STILL LIVE — every Celery beat is `day_of_week="1-5"`**, so a weekend
+  session is invisible to EOD ingest, nightly generation and every health probe. Queued, not taken.
   ⚠ **Owed:** four study scripts still hardcode `_CLEAN_SINCE = 2023-07-03` (`tp_geometry_study`,
   `squeeze_study`, `confirmation_base_rate`, `rvol_factor_study`) — once the data boundary, now an
   **undeclared truncation discarding 622 sessions**; `nse_holidays` has **no 2021-22 coverage**;

@@ -10,6 +10,33 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
+## ▶ STATE AT A GLANCE (updated 2026-09-17) — weekend sessions recovered; three of my own measurements refuted — read this first
+
+**▶▶ 2026-09-17 — ✅ `ohlcv_1d` IS NOW 1,727 SESSIONS / 3,166,300 BARS.** After the 922-day fill
+(1,101 → 1,723), a reviewer derived **from three session counts alone** that the daily table must be
+missing 3 special sessions. ⛔ **Confirmed: `_weekdays()` filtered `weekday() < 5`, so NSE's
+Saturday sessions were structurally unreachable** — the request was never made. ⛔⛔ **The same
+filter is live: every Celery beat is `day_of_week="1-5"`** ⇒ a weekend session is invisible to EOD
+ingest, nightly generation and every health probe. **Queued (item 13), not taken — it is a
+scheduling change on a running system.**
+⛔⛔ **THEN MY FIX REPRODUCED THE DEFECT: I asserted "Sunday stays excluded — NSE has never held
+one" AND PINNED IT IN A TEST. 2026-02-01 is a Sunday NSE session already sitting in our own
+`ohlcv_5m` (15,675 rows).** ⭐ The enumerator now **asserts nothing** — every calendar day is
+offered and the 404 decides. Recovered 2020-02-01, 2024-03-02, 2025-02-01, 2026-02-01.
+⛔⛔ **M52: I reintroduced the look-ahead I had just removed, one row later.** Redone with
+strictly-prior cohorts, the conclusion survives on better ground: **2022 = −3.7%/yr, 43.5%
+down-days, long-side gap exposure 1.67× the retained sample.** ⚠ The COVID block is NOT
+PIT-computable.
+⛔⛔ **M47/M48: the "1 in 60 all-short book" inference is WITHDRAWN** — wrong population. The four
+came from a 12-signal cohort that was 75% SELL ⇒ **1 in 3.9**. Among **five signals tied at 76 the
+operator took two**, and skipped both higher BUYs.
+⭐ **The gap falsifier is revised a third time: bias = `gap ÷ stop_distance`** (the repro is 5R, not
+2R). ⭐ **Intraday is FLAT at 10.6 bps in breadth while delivery rises 23.8 → 60.5** ⇒ the product
+advantage widens 2.88× → 5.71×.
+⭐ **Holdout sealed by pre-registration:** 2021-01 → 2023-07 is the regime holdout; E2's CA re-run
+happens on the 794 block and is committed first; opening it is a one-way door.
+⛔ **NOTHING PUSHED.**
+
 ## ▶ STATE AT A GLANCE (updated 2026-09-17) — THE 922-DAY HOLE IS FILLED — read this first
 
 **▶▶ 2026-09-17 — ✅✅ `ohlcv_1d` IS NOW 1,723 SESSIONS / 3,158,638 BARS, 2019-10-01 → 2026-09-17,
@@ -34,9 +61,9 @@ would now differ · prices remain **CA-UNADJUSTED**, so the CA screen is MORE lo
 ✅ The gap guard self-heals (`observed_session_index` reads live, no cache).
 Full record: PART 9 of `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md`. ⛔ **NOTHING PUSHED.**
 
-## ▶ STATE AT A GLANCE (updated 2026-09-18) — round-7 panel adjudicated — read this first
+## ▶ STATE AT A GLANCE (updated 2026-09-17) — round-7 panel adjudicated — read this first
 
-**▶▶ 2026-09-18 — ⭐⭐⭐ THE 922-DAY HOLE IS FILLABLE.** NSE serves `sec_bhavdata_full` for 2021 and
+**▶▶ 2026-09-17 — ⭐⭐⭐ THE 922-DAY HOLE IS FILLABLE.** NSE serves `sec_bhavdata_full` for 2021 and
 2022 **today** (HTTP 200, 233,986 B / 246,024 B, correct schema, same URL the ingester uses).
 **1,101 → ~1,714 sessions (+56%).** ⚠ The back-fill was consciously DROPPED in round 8 on a
 *breadth* argument — **it was never judged on regime coverage or holdout feasibility, and both are
@@ -840,7 +867,7 @@ TIMING, random-name = SELECTION — the two halves of the original question) · 
 **ABOVE** the ledger · the removal-rule **guard rail** (removal may delete behaviour or restore the
 spec default, **never select between two live variants** — else "remove the EMA20 stop" back-doors
 flat-5% on t=−1.41).
-⭐ **6 DATED KILL LINES (2026-09-18 → 2026-10-16)** now close the programme / the class / the null /
+⭐ **6 DATED KILL LINES (2026-09-17 → 2026-10-16)** now close the programme / the class / the null /
 the unit question instead of deferring them — the biggest gap in the previous plan.
 **NOTHING BUILT, no behaviour changed.** Round 3 questions are in §14.
 
@@ -2762,7 +2789,7 @@ survive trimming the tail** and the partition must not be a proxy for something 
 
 | item | mode | stands at | trigger to re-check | current verdict |
 |---|---|---|---|---|
-| **⭐ KILL LINE 1 — cost feasibility** | — | not built | **2026-09-18** | Fill the min-gross-edge table (position size × holding period × stop width) at the real cost stack for swing / positional / index-ETF / CAS. **Any class needing > +0.30R/trade is struck without further research.** |
+| **⭐ KILL LINE 1 — cost feasibility** | — | not built | **2026-09-17** | Fill the min-gross-edge table (position size × holding period × stop width) at the real cost stack for swing / positional / index-ETF / CAS. **Any class needing > +0.30R/trade is struck without further research.** |
 | **⭐ KILL LINE 2 — regime mixture** | — | never run | **2026-09-25** | One `GROUP BY` calendar year. If the sign flips by regime, **every aggregate in both review docs is a mixture** and must be re-reported per regime before being cited. |
 | **⭐ KILL LINE 3 — THE PROGRAMME LINE** | — | not run on adjusted data | **2026-10-09** | Composite-score + all-15-factor IC on the **CA-adjusted** panel (h = 1/3/5/10/20, day-block bootstrap + trial-count deflation) **and** a re-run of `factor_sweep`. If nothing has a 90% interval excluding zero at any horizon ⇒ **the daily-bar TA selection programme is CLOSED PERMANENTLY.** Record the **t**, not the pass/fail. |
 | **⭐ KILL LINE 4 — the class line** | — | not run | **2026-10-09** | Pre-registered reachable-band cap sweep (floor 2%, cap ∈ {8,12,16,none}), cost-bearing, adjusted data. If no cell shows gross **> +0.15R** *and* net **> 0** with an interval excluding zero ⇒ **the swing class is deleted.** |
