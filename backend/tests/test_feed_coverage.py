@@ -450,9 +450,11 @@ class TestBeatTask:
         feeds = result["feeds"]
         assert isinstance(feeds, dict)
         assert feeds["ohlcv_1d"] == {"names": 20, "baseline": 40, "shortfall_pct": 50.0}
-        assert len(sent) == 1
-        pushed = sent[0]
-        assert getattr(pushed, "event", None) == "feed_coverage"
+        # ⚠ Assert THIS alarm, not the notification COUNT. The beat carries three checks
+        # of the same family (breadth · segments · session completeness) and an empty test
+        # database legitimately trips the others, so counting made the test brittle to any
+        # future addition rather than to a regression in what it is about.
+        pushed = next(n for n in sent if getattr(n, "event", None) == "feed_coverage")
         assert "50.0% below" in pushed.render()  # type: ignore[attr-defined]
 
     async def test_a_healthy_feed_reports_ok_and_pushes_nothing(
@@ -469,11 +471,13 @@ class TestBeatTask:
         monkeypatch.setattr("app.services.notifier.notify", sent.append)
         result = await _coverage_alert_payload(db)
 
-        assert result["status"] == "ok"
-        assert sent == []
+        # ⚠ The COVERAGE verdict is what this test is about. The empty test DB has no
+        # session history for the single-row feeds, so the completeness check fires — a
+        # true statement about the fixture, and not this test's subject.
         feeds = result["feeds"]
         assert isinstance(feeds, dict)
         assert feeds["ohlcv_1d"]["shortfall_pct"] == 0.0
+        assert not [n for n in sent if getattr(n, "event", None) == "feed_coverage"]
 
 
 class TestProbeNeverRaises:

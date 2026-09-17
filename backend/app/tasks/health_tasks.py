@@ -122,6 +122,8 @@ async def _coverage_alert_payload(db: AsyncSession) -> dict[str, object]:
     from app.services.feed_health import check_feed_coverage as read_coverage
     from app.services.feed_health import (
         check_segment_coverage,
+        check_session_completeness,
+        completeness_to_notification,
         coverage_to_notification,
         segments_to_notification,
     )
@@ -133,6 +135,10 @@ async def _coverage_alert_payload(db: AsyncSession) -> dict[str, object]:
     # missing blue chip need different first moves, and a reader who gets one message for
     # both learns to skim it.
     segments = await check_segment_coverage(db)
+    # The third question, on the same beat: same family, same remedy owner. A
+    # separate notification because 'current but nearly empty' sends you somewhere
+    # different from 'today's file was thin'.
+    sessions = await check_session_completeness(db)
     measured = {
         r.table: {"names": r.names, "baseline": r.baseline, "shortfall_pct": r.shortfall_pct}
         for r in rows
@@ -141,12 +147,20 @@ async def _coverage_alert_payload(db: AsyncSession) -> dict[str, object]:
         r.name: {"expected": r.expected, "priced": r.priced, "absent": list(r.absent)}
         for r in segments
     }
-    alerts = [n for n in (coverage_to_notification(rows), segments_to_notification(segments))
-              if n is not None]
+    alerts = [
+        n
+        for n in (
+            coverage_to_notification(rows),
+            segments_to_notification(segments),
+            completeness_to_notification(sessions),
+        )
+        if n is not None
+    ]
     for n in alerts:
         notify(n)
     if not alerts:
-        return {"status": "ok", "feeds": measured, "segments": seg_measured}
+        return {"status": "ok", "feeds": measured, "segments": seg_measured,
+                "sessions": {r.table: r.completeness_pct for r in sessions}}
     # ⚠ `level` stays in the payload. Adding the segment check turned one notification into
     # a list and the first cut dropped this field — the existing beat test caught it, which
     # is the argument for asserting the payload SHAPE and not just the status string.
@@ -155,6 +169,7 @@ async def _coverage_alert_payload(db: AsyncSession) -> dict[str, object]:
         "level": max(n.level.value for n in alerts),
         "feeds": measured,
         "segments": seg_measured,
+        "sessions": {r.table: r.completeness_pct for r in sessions},
     }
 
 

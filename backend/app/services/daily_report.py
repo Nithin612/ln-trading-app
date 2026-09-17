@@ -61,12 +61,15 @@ from app.services.feed_health import (
     FeedCoverage,
     FeedStatus,
     SegmentCoverage,
+    SessionCompleteness,
     check_feed_coverage,
     check_feed_staleness,
     check_segment_coverage,
+    check_session_completeness,
     render_feed_coverage,
     render_feed_health,
     render_segment_coverage,
+    render_session_completeness,
 )
 from app.services.liquidity import load_median_traded_values_safe
 from app.services.profit_lock_shadow import ShadowComparison, compare_position
@@ -296,6 +299,10 @@ class DailyReport:
     # positions), how many printed. A different question from the archive-wide one
     # above, which cannot see under its own threshold.
     segment_coverage: list[SegmentCoverage] = field(default_factory=list)
+    # The third question: a feed can be CURRENT and hold almost nothing. Neither
+    # recency nor breadth can see that, which is how fii_dii_daily sat at 5 of ~790
+    # sessions while every alarm read green.
+    session_completeness: list[SessionCompleteness] = field(default_factory=list)
     # §77 — is the universe rule still running, and were its inputs captured?
     universe_health: UniverseHealth | None = None
     # Q-R6 — did the report itself run on the recent sessions? A back-look only:
@@ -585,6 +592,7 @@ async def build_daily_report(
     report.feed_health = await check_feed_staleness(db, now=now)
     report.feed_coverage = await check_feed_coverage(db)
     report.segment_coverage = await check_segment_coverage(db)
+    report.session_completeness = await check_session_completeness(db, now=now)
     report.universe_health = await read_universe_health(db, now=now)
     report.report_health = await read_report_health(db, now=now)
     report.starvation = await check_starvation(db)
@@ -800,6 +808,7 @@ def render_markdown(r: DailyReport) -> str:  # noqa: C901 — linear section bui
     # U4″ — segment completeness, directly beneath archive breadth: same family,
     # finer grain, and it fires on cases the one above is structurally blind to.
     out.extend(render_segment_coverage(r.segment_coverage))
+    out.extend(render_session_completeness(r.session_completeness))
 
     # §77 — universe-rule staleness, beside the feed alarms because it answers the
     # same class of question: a frozen `is_active` has no symptom of its own, and it

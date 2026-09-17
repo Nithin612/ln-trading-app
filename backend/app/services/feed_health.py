@@ -719,3 +719,205 @@ def render_segment_coverage(rows: list[SegmentCoverage]) -> list[str]:
             # as "checked and fine". Holding no positions is the normal version of this.
             out += [f"> ⚠ **{r.name}**: no members — nothing to check.", ""]
     return out
+
+
+# ── SESSION COMPLETENESS ─────────────────────────────────────────────────────────
+#
+# ⛔⛔ THE GAP THAT MOTIVATED THIS, AND IT WAS A HOLE BETWEEN MY OWN INSTRUMENTS.
+# Measured 2026-09-17: `fii_dii_daily` holds **5 sessions of roughly 790** — 40 of the
+# last 45 trading days have no row at all — and it reads **GREEN on every alarm this
+# project owns**:
+#
+#   · 6.8.6 staleness  — latest row IS today's, so "current" is TRUE and it says so;
+#   · U4′ coverage     — excluded by design, the feed has no name dimension to count;
+#   · U4″ segments     — not applicable, there is no membership;
+#   · V6 starvation    — excluded on the grounds that "feed_health owns this table".
+#
+# Each exclusion was individually correct and the union left a blind spot. ⭐ **The
+# missing question is neither recency nor breadth: it is HOW MANY OF THE SESSIONS WE
+# SHOULD HAVE, DO WE HAVE.** A feed can be perfectly current and hold almost nothing,
+# which is precisely the shape of a capture-as-you-go source whose worker was down.
+#
+# ⚠ THIS IS FOR FEEDS WITH ONE ROW PER SESSION AND NO NAME DIMENSION. `ohlcv_1d` and
+# `fo_bhavcopy` answer the same question through breadth (U4′) and must not be counted
+# twice; a second alarm for one fact is how a reader learns that two alarms mean one
+# problem.
+
+#: Trading days looked back. Long enough to expose a sustained capture outage, short
+#: enough that a hole nobody intends to backfill stops shouting forever.
+COMPLETENESS_LOOKBACK_SESSIONS = 30
+#: Sessions that may be absent before it alarms. NOT zero: a capture-as-you-go feed
+#: legitimately misses the odd day (a worker restart, a late publication), and an alarm
+#: that fires on one is an alarm nobody reads.
+COMPLETENESS_MAX_ABSENT = 3
+
+
+@dataclass(frozen=True)
+class SessionCompleteness:
+    """Of the trading sessions we should hold a row for, how many do we?"""
+
+    name: str
+    table: str
+    expected: int  # trading sessions in the window
+    present: int  # …that have at least one row
+    missing: tuple[date, ...]  # the absent sessions, oldest first
+    max_absent: int
+    #: ⚠ Whether a gap can still be repaired. A capture-as-you-go source (the NSE FII/DII
+    #: endpoint serves ONLY the latest day — re-verified 2026-09-17) cannot be
+    #: back-filled, so its gap is permanent and the remedy is "start capturing", never
+    #: "run the backfill". Reporting those identically would send a reader to a script
+    #: that cannot help.
+    backfillable: bool
+
+    @property
+    def absent_count(self) -> int:
+        return len(self.missing)
+
+    @property
+    def is_measurable(self) -> bool:
+        return self.expected > 0
+
+    @property
+    def completeness_pct(self) -> float | None:
+        if not self.is_measurable:
+            return None
+        return round(self.present / self.expected * 100.0, 1)
+
+    @property
+    def is_incomplete(self) -> bool:
+        return self.is_measurable and self.absent_count > self.max_absent
+
+
+#: (label, table, date column, backfillable). One row per session, no name dimension.
+_SESSION_FEEDS: tuple[tuple[str, str, str, bool], ...] = (
+    (
+        "FII/DII flows",
+        "fii_dii_daily",
+        "trade_date",
+        # ⛔ NOT backfillable. `fetch_fii_dii_data`'s own docstring records it and this
+        # was re-verified on 2026-09-17: the endpoint returned exactly 2 records for
+        # exactly one day. A session the worker misses is gone from this source forever.
+        False,
+    ),
+    ("India VIX", "india_vix_daily", "trade_date", True),
+)
+
+
+async def check_session_completeness(
+    db: AsyncSession,
+    *,
+    lookback: int = COMPLETENESS_LOOKBACK_SESSIONS,
+    max_absent: int = COMPLETENESS_MAX_ABSENT,
+    now: datetime | None = None,
+) -> list[SessionCompleteness]:
+    """How many of the recent trading sessions each single-row feed actually holds.
+
+    Read-only, and NEVER raises — a health probe that can take down its own report has
+    inverted its purpose."""
+    now_ist = (now or datetime.now(UTC)).astimezone(_IST)
+    out: list[SessionCompleteness] = []
+    for label, table, column, backfillable in _SESSION_FEEDS:
+        try:
+            async with db.begin_nested():
+                expected_day = await expected_latest_trading_day(db, now_ist)
+                # The trading calendar owns which days SHOULD exist — counting rows
+                # against calendar days would read every weekend as an outage.
+                sessions = await trading_days_between(
+                    db, expected_day - timedelta(days=lookback * 2 + 15), expected_day
+                )
+                window = sessions[-lookback:]
+                have = {
+                    r[0]
+                    for r in (
+                        await db.execute(
+                            text(f"SELECT DISTINCT {column} FROM {table}")  # noqa: S608
+                        )
+                    ).all()
+                }
+        except Exception:  # noqa: BLE001 — a health probe must not raise into its report
+            log.exception("session-completeness probe failed for %s", table)
+            out.append(SessionCompleteness(label, table, 0, 0, (), max_absent, backfillable))
+            continue
+
+        missing = tuple(d for d in window if d not in have)
+        sc = SessionCompleteness(
+            name=label,
+            table=table,
+            expected=len(window),
+            present=len(window) - len(missing),
+            missing=missing,
+            max_absent=max_absent,
+            backfillable=backfillable,
+        )
+        if sc.is_incomplete:
+            log.warning(
+                "SESSION GAP: %s (%s) holds %d of the last %d sessions — %d missing%s",
+                label, table, sc.present, sc.expected, sc.absent_count,
+                "" if backfillable else " (NOT backfillable — capture-as-you-go source)",
+            )
+        out.append(sc)
+    return out
+
+
+def completeness_to_notification(rows: list[SessionCompleteness]) -> Notification | None:
+    from app.services.notifier import Level, Notification
+
+    gaps = [r for r in rows if r.is_incomplete]
+    if not gaps:
+        return None
+    lines: list[str] = []
+    for r in gaps:
+        lines.append(
+            f"{r.name} ({r.table}): {r.present}/{r.expected} recent sessions "
+            f"({r.completeness_pct}%) — {r.absent_count} missing"
+        )
+        lines.append(
+            "    REMEDY: run the backfill for the missing dates"
+            if r.backfillable
+            else "    ⛔ NOT backfillable — the source serves only the latest day, so "
+            "these sessions are gone. The remedy is to keep the worker up, not to re-run."
+        )
+    lines.append(
+        "a feed can be perfectly CURRENT and still hold almost nothing — recency and "
+        "breadth alarms both read this as healthy"
+    )
+    return Notification(
+        event="session_gap",
+        level=Level.ERROR,
+        title=f"SESSION GAP — {gaps[0].name} holds {gaps[0].completeness_pct}% of recent sessions",
+        lines=lines,
+    )
+
+
+def render_session_completeness(rows: list[SessionCompleteness]) -> list[str]:
+    if not rows:
+        return []
+    gaps = [r for r in rows if r.is_incomplete]
+    measurable = [r for r in rows if r.is_measurable]
+    out: list[str] = []
+    if gaps:
+        out += [
+            "> ## ⚠️ SESSION GAP (live — as of report generation)",
+            ">",
+            "> A feed is **current but nearly empty** — it holds a row for today and for "
+            "few of the sessions before it. Recency and breadth alarms both read this as "
+            "healthy, which is exactly how it went unnoticed.",
+            ">",
+        ]
+        for r in gaps:
+            out.append(
+                f"> - **{r.name}** (`{r.table}`): **{r.present}/{r.expected}** recent "
+                f"sessions ({r.completeness_pct}%) — **{r.absent_count}** missing."
+            )
+            out.append(
+                ">   REMEDY: back-fill the missing dates."
+                if r.backfillable
+                else ">   ⛔ **NOT back-fillable** — the source serves only the latest "
+                "day, so these sessions are gone for good. The remedy is keeping the "
+                "worker up, not re-running anything."
+            )
+        out.append("")
+    elif measurable:
+        summary = " · ".join(f"{r.name} {r.present}/{r.expected}" for r in measurable)
+        out += [f"> ✅ **Session history complete**: {summary}.", ""]
+    return out

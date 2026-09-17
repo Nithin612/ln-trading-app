@@ -7,6 +7,61 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### The FII/DII hole — a feed at 16.7% that read GREEN on every alarm we own (2026-09-17)
+
+Investigated at the user's request after `catchup_eod` reported 11 missing sessions. The hole
+is **much larger than that** and the cause is **not a bug**.
+
+- ⛔ **Measured: `fii_dii_daily` holds 5 sessions of roughly 790** — **40 of the last 45
+  trading days have no row at all.** The catch-up's "11" was only what fell inside its 21-day
+  lookback window.
+- ⛔ **It is unrecoverable, and that is a property of the source.** `fetch_fii_dii_data`'s own
+  docstring records it and this was **re-verified live on 2026-09-17**: the NSE endpoint
+  returned exactly **2 records for exactly one day**. Flows are capture-as-you-go — a session
+  the worker misses is gone from that source forever. No backfill can help.
+
+⭐⭐ **THE REAL FINDING, AND IT IS A HOLE BETWEEN MY OWN INSTRUMENTS.** A feed holding 5 of 790
+sessions reads **GREEN on every alarm this project owns**:
+
+| alarm | verdict | why |
+|---|---|---|
+| 6.8.6 staleness | ✅ current | the latest row IS today's — true, and useless here |
+| U4′ coverage | not checked | excluded by design: no name dimension to count |
+| U4″ segments | n/a | there is no membership |
+| V6 starvation | not checked | excluded: "feed_health owns this table" |
+
+**Each exclusion was individually correct. Their union was a blind spot** — and I built three
+of those four in the last two days.
+
+- ⭐ **The missing question is neither recency nor breadth: HOW MANY OF THE SESSIONS WE SHOULD
+  HAVE, DO WE HAVE.** New `check_session_completeness` answers it for single-row-per-session
+  feeds, on the existing 13:40 UTC beat and in the daily report. Live: **FII/DII 5/30 (16.7%)
+  ⛔, India VIX 30/30 ✅** — so it fires on the real gap and stays quiet on the healthy feed.
+- ⚠ **The remedy travels with the verdict, and it differs by source.** A capture-as-you-go feed
+  is marked `backfillable=False` and says *"these sessions are gone for good — the remedy is
+  keeping the worker up"*, because sending a reader to a backfill script that cannot help is
+  worse than saying nothing.
+- ⚠ Tolerance is **3 sessions, not zero**: a capture-as-you-go feed legitimately misses the odd
+  day, and an alarm that fires on one is an alarm nobody reads.
+
+**⚠ Two consequences recorded, NOT fixed — both need a decision:**
+
+1. **`get_market_flow_5d` returns `Decimal("0")` when no rows exist**, so "we captured nothing"
+   is reported as "net institutional flow was exactly zero". That is the undefined-vs-zero
+   conflation `app/core/ratios.py` exists to prevent (H6: *UNDEFINED is `None`, NEVER `0.0`*).
+   With 40 of 45 sessions absent it has been returning a confident `(0, 0)` throughout.
+2. ⛔ **The fix is blocked by the engine freeze.** The consumer is
+   `app/analysis/structure/institutional.py`, which is FROZEN, and it turns `(0, 0)` into
+   `score = 0.0` with the explanation *"FII/DII flows neutral"* — **a positive claim about the
+   market made from no data.** Damage is contained because a 0.0 score is excluded from the
+   confidence denominator (which is why `FII_DII_FLOW` is one of the three factors measured as
+   never scoring), so this is a REPORTING lie rather than a scoring one. Changing it needs
+   sign-off + an §8 regression.
+
+- 7 new tests. ⚠ The acceptance test asserts BOTH silences on one fixture, and the beat's
+  existing tests were changed to assert THEIR OWN alarm rather than the notification COUNT —
+  counting made them brittle to any future addition rather than to a regression.
+
 ### U8 — the index registry: 3 of 166 → 27, and the limit that remains (2026-09-17)
 
 `indices` held **3 rows** (NIFTY50, BANKNIFTY, FINNIFTY) against **166 indices** in the free,
