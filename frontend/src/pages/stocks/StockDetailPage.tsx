@@ -1,6 +1,8 @@
 import { useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
+
+import { EligibilityPanel } from '@/features/stocks/EligibilityPanel'
 import { ArrowLeft, TrendingUp } from 'lucide-react'
 import {
   ComposedChart, Line, Bar, XAxis, YAxis, ResponsiveContainer,
@@ -192,6 +194,15 @@ export function StockDetailPage() {
           {stock.is_fno && <Badge className="badge-fno">F&amp;O</Badge>}
         </div>
       </div>
+
+      {/*
+        V5 / A2 tier 3 — the eligibility verdict, directly under the header because it
+        answers the first question a user has about a quiet stock: why do I never see a
+        signal for this one? Three independent reasons exist and only one was ever
+        visible anywhere. Placed AFTER the name, so the reader knows what they are being
+        told about before they are told it.
+      */}
+      {stock.eligibility && <EligibilityPanel eligibility={stock.eligibility} />}
 
       {/* Tabs */}
       <Tabs defaultValue="chart">

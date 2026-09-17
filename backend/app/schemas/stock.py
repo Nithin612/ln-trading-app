@@ -77,3 +77,41 @@ class StockSearchResponse(BaseModel):
     hits: list[ResolvedStockOut]
     #: Set when the query matched a FORMER ticker — "AEROPLANE (formerly AMIRCHAND)".
     matched_former_symbol: str | None = None
+
+
+class DataCoverageOut(BaseModel):
+    """V5 — whether the scan can even LOOK at this name."""
+
+    daily_bars: int
+    min_bars_to_score: int
+    enough_history: bool
+    #: How many more sessions it needs before the scan will score it at all.
+    shortfall: int
+    latest_bar: date | None = None
+
+
+class StockEligibilityOut(BaseModel):
+    """V5 / A2 tier 3 — why this stock does or does not produce signals.
+
+    ⚠ The backend verdict is AUTHORITATIVE (§28: never let the frontend derive universe
+    state). Every field here is computed by the same `stock_resolve` code the search
+    surface uses, so the two cannot drift.
+    """
+
+    in_universe: bool
+    ca_quarantined: bool
+    #: BOTH of the above — what `resolve_universe` actually requires.
+    suggestible: bool
+    exclusion_reasons: list[str] = []
+    reason_as_of: date | None = None
+    coverage: DataCoverageOut
+    #: True only when the name is suggestible AND has enough history to be scored. The
+    #: honest answer to "should I expect signals for this stock?".
+    scannable: bool
+
+
+class StockDetailOut(StockRead):
+    """The existing detail payload plus its eligibility verdict. A SUBCLASS so the list
+    endpoint's `StockRead` is untouched — a list has no business paying for a bar count."""
+
+    eligibility: StockEligibilityOut | None = None

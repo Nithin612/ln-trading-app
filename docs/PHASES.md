@@ -1922,7 +1922,14 @@ a fact that contradicts a decision below.
    exclusions nothing else could — **5 of 7 CA-quarantined names are ACTIVE**, so they look
    tradeable everywhere while being dropped from every suggestion. Reasons are justified
    from §73's RECORDED inputs and carry their date; A7 former-ticker resolution ships
-   correct-but-inert (0 renames on record). Remaining: V5 stock-detail eligibility panel.
+   correct-but-inert (0 renames on record). ✅ **V5 DONE 2026-09-17** — the stock-detail eligibility panel: THREE independent reasons a
+   stock is silent, of which only one was visible. ⭐ The new one is **data coverage** — a
+   thin name is never SCORED, not declined (V1 measured 184 of 2,286 dying there).
+   ⛔ ui-reviewer FAILed it (13 findings): a **quarantined stock rendered as "⊘ no"**
+   (backwards, in the exact case the panel exists for; my test asserted the prose, not the
+   row), a link at **2.88:1 in the default theme**, and money tokens used for a capability.
+   ⛔ It also caught V4 shipping **no error branch** — a network failure rendered as a
+   definitive claim about the master list. **⇒ §62 V3–V8 COMPLETE.** Next: U8.
    ✅ **V8 DONE 2026-09-15 — both halves.** A10: the fetch was NOT "correct by accident" —
    measured, **four of seven failure bodies parsed to empty and reported success** (empty,
    whitespace, HTML interstitial, header-only); the parser's schema guard fires only when

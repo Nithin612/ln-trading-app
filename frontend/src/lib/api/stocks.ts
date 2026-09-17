@@ -1,5 +1,33 @@
 import { api } from './client'
 
+export interface DataCoverage {
+  daily_bars: number
+  min_bars_to_score: number
+  enough_history: boolean
+  /** How many more sessions before the scan will score it at all. */
+  shortfall: number
+  latest_bar: string | null
+}
+
+/**
+ * V5 — why this stock does or does not produce signals. THREE independent reasons exist
+ * and only the first was ever visible: the universe rule did not admit it · the CA
+ * detector quarantined it (which drops it from suggestions even when tradeable) · or it
+ * has too few bars, in which case the scan never scores it rather than scoring and
+ * declining.
+ */
+export interface StockEligibility {
+  in_universe: boolean
+  ca_quarantined: boolean
+  /** BOTH of the above — what the suggestion universe actually requires. */
+  suggestible: boolean
+  exclusion_reasons: string[]
+  reason_as_of: string | null
+  coverage: DataCoverage
+  /** suggestible AND enough history. The honest answer to "should I expect signals?". */
+  scannable: boolean
+}
+
 export interface Stock {
   id: number
   symbol: string
@@ -19,6 +47,8 @@ export interface Stock {
   listed_on: string | null
   created_at: string
   updated_at: string
+  /** V5 — present on the DETAIL payload only; the list deliberately omits it. */
+  eligibility?: StockEligibility | null
 }
 
 export interface StockListResponse {

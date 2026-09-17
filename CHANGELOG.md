@@ -7,6 +7,65 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### V5 / A2 tier 3 — the stock-detail eligibility panel (2026-09-17)
+
+⭐ **It answers "why do I never see a signal for this stock?"** — and there are THREE
+independent reasons, of which only the first was visible anywhere:
+
+  1. the universe rule did not admit it;
+  2. the CA detector quarantined it — which drops it from every suggestion **even when the
+     name is perfectly tradeable** (measured: 5 of the 7 quarantined names are ACTIVE);
+  3. it has too few daily bars, so `signal_service` **never scores it** rather than scoring
+     it and declining. V1 measured **184 of 2,286 priced names** dying there, with the whole
+     drop attributed to the confluence gate.
+
+- ⚠ **Not a new endpoint.** Round 5 narrowed Gemini's "Refusal Inspector" to exactly this:
+  the verdict belongs on the page that already exists, and it comes from the backend (§28 —
+  never let the frontend derive universe state). `resolve_one` is now the SINGLE
+  implementation behind both V4's search and this panel, so the two cannot drift; V4's 13
+  tests passing unchanged is the evidence the refactor was behaviour-preserving.
+- ⚠ `StockDetailOut` SUBCLASSES `StockRead`, so the list endpoint keeps its shape — a list
+  has no business paying for a per-row bar count.
+- ⭐ Side-effect worth recording: `3IINFOTECH` now reports *"not listed in the EQ series on
+  NSE"* rather than the generic exclusion — **`universe_rule_inputs` has data**, so §73's
+  input snapshots are recording in production and V4's honest-degradation path is no longer
+  the active branch.
+
+**⛔ ui-reviewer FAILed it with 13 findings. The two that mattered:**
+
+- ⛔⛔ **A state rendered BACKWARDS in the exact case the panel exists to explain.** `Row`
+  took one label for its true branch and hardcoded `⊘ no` for the false one — so a
+  **quarantined** stock rendered *"CA quarantine ⊘ no"*, which reads as **not quarantined**.
+  Only the amber tint hinted otherwise, and colour is never the carrier. **My test missed it
+  because it asserted the prose below the rows, not the row**; it now asserts the row.
+- **A link at 2.88:1 in slate — the DEFAULT theme.** `--color-accent` on `--color-surface-2`,
+  a new pair not on the recorded-debt list. The underline now carries "link" instead.
+- ⛔ **And the blunt one I got wrong on purpose-built tokens:** `--color-bull` /
+  `--color-profit-bg` means **money gained** (§5.1 scopes it to `value >= 0`). "This stock is
+  scanned" is a *capability*, not a gain — and painted green directly beneath a live LTP that
+  is also green, it tells a trader the stock is UP. Also 3.32:1 in daybreak. Now
+  `--color-text` on the tint with the semantic colour on the border only, which fixes the
+  contrast and the semantics in one edit.
+- Also fixed: the bar count carried its threshold but no **as-of**, so *"38 more needed"*
+  quietly asserted 38 more sessions **will arrive** — false for a frozen or delisted name
+  (`latest_bar` was in the payload, rendered nowhere) · the CA link was gated by
+  **substring-matching backend prose** while the authoritative boolean was in scope, and
+  pointed at an admin-only route shown to everyone · missing focus rings · a raw ISO date ·
+  mixed `formatInt` usage.
+
+**⛔ And it found the worst defect in V4, which I had committed an hour earlier:**
+`AbsenceAnswer` destructured `useQuery` without `isError`, so a **network failure fell
+through to the terminal answer** — the user was told *"not in the tradeable universe, and not
+anywhere else in the master list either"*, a definitive claim from a request that never
+completed, **in the one component whose entire purpose is answering absence honestly**. Now
+an alert with a retry, pinned by a test. Its loading state also branched on `isPending`,
+which TanStack v5 keeps true forever when `enabled: false`.
+
+- 10 backend + 9 frontend tests; 48 backend and 490 frontend green; ruff/mypy/eslint/tsc clean.
+- ⚠ **Out of scope, recorded:** `StockDetailPage` itself is not compliant — raw `<button>`×2,
+  27 raw table elements, `toFixed`, `toLocaleString`, `--color-text-muted` in 17 places
+  (3.52 slate / 2.34 daybreak), and an LTP painted `--color-bull` regardless of direction.
+
 ### V4 / A2 + A7 — search answers ABSENCE (2026-09-15)
 
 ⭐ **§45/S2: an absence is not askable.** Everywhere else, a name the universe rule excluded

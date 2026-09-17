@@ -6,13 +6,20 @@ from app.core.deps import get_current_user, get_db
 from app.models.stock import Stock
 from app.models.user import User
 from app.schemas.stock import (
+    DataCoverageOut,
     ResolvedStockOut,
+    StockDetailOut,
+    StockEligibilityOut,
     StockListParams,
     StockListResponse,
-    StockRead,
     StockSearchResponse,
 )
-from app.services.stock_resolve import resolve_former_symbol, resolve_search
+from app.services.stock_resolve import (
+    load_coverage,
+    resolve_former_symbol,
+    resolve_one,
+    resolve_search,
+)
 from app.services.stock_service import get_stock, list_stocks
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
@@ -109,13 +116,48 @@ async def search_stocks_endpoint(
     )
 
 
-@router.get("/{stock_id}", response_model=StockRead)
+@router.get("/{stock_id}", response_model=StockDetailOut)
 async def get_stock_endpoint(
     stock_id: int,
     db: AsyncSession = Depends(get_db),
     _: User = Depends(get_current_user),
-) -> StockRead:
+) -> StockDetailOut:
+    """V5 / A2 tier 3 — the detail payload now carries WHY this stock does or does not
+    produce signals.
+
+    ⭐ Three independent reasons a name can be silent, and only the first was ever
+    visible anywhere: the universe rule did not admit it · the CA detector quarantined it
+    (which excludes it from suggestions **even when tradeable**) · or it simply has too
+    few daily bars, in which case the scan never scores it at all rather than scoring it
+    and declining.
+
+    ⚠ Deliberately NOT a new endpoint (the round-5 ruling narrowed Gemini's "Refusal
+    Inspector" to exactly this): the verdict belongs on the page that already exists, and
+    it is computed by the same `stock_resolve` code search uses so the two cannot drift.
+    """
     stock = await get_stock(db, stock_id)
     if stock is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Stock not found")
-    return StockRead.model_validate(stock)
+
+    resolved = await resolve_one(db, stock)
+    coverage = await load_coverage(db, stock.id)
+    out = StockDetailOut.model_validate(stock)
+    out.eligibility = StockEligibilityOut(
+        in_universe=resolved.in_universe,
+        ca_quarantined=resolved.ca_quarantined,
+        suggestible=resolved.suggestible,
+        exclusion_reasons=list(resolved.exclusion_reasons),
+        reason_as_of=resolved.reason_as_of,
+        coverage=DataCoverageOut(
+            daily_bars=coverage.daily_bars,
+            min_bars_to_score=coverage.min_bars_to_score,
+            enough_history=coverage.enough_history,
+            shortfall=coverage.shortfall,
+            latest_bar=coverage.latest_bar,
+        ),
+        # ⚠ BOTH conditions. A name can be perfectly eligible and still never scored for
+        # want of history — that is the case V1 measured at 184 names and nothing could
+        # explain per-stock.
+        scannable=resolved.suggestible and coverage.enough_history,
+    )
+    return out

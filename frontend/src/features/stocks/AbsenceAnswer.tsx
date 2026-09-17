@@ -1,6 +1,8 @@
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 
+import { Button } from '@/components/ui/button'
+import { SkeletonTable } from '@/components/ui/skeleton'
 import { stocksApi } from '@/lib/api/stocks'
 import { useAuthStore } from '@/store/authStore'
 
@@ -17,18 +19,45 @@ import { useAuthStore } from '@/store/authStore'
  */
 export function AbsenceAnswer({ query }: { query: string }) {
   const token = useAuthStore((s) => s.accessToken) ?? ''
-  const { data, isPending } = useQuery({
+  const { data, isError, isFetching, refetch } = useQuery({
     queryKey: ['stock-absence', query],
     queryFn: () => stocksApi.search(query, token),
     enabled: Boolean(token && query.trim()),
     staleTime: 30_000,
   })
 
-  if (isPending) {
+  /*
+    ⚠ `isFetching`, not `isPending`. With `enabled: false` — no token, or a blank query —
+    TanStack v5 keeps `isPending` true FOREVER, so a loading state branched on it becomes
+    the permanent render in that case (ui-reviewer #7).
+  */
+  if (isFetching) {
     return (
-      <p className="py-6 text-center text-sm text-(--color-text-secondary)">
-        Checking whether “{query}” exists outside the tradeable universe…
-      </p>
+      <div className="py-6" aria-busy="true">
+        <SkeletonTable rows={2} cols={1} />
+      </div>
+    )
+  }
+
+  /*
+    ⛔⛔ THE ERROR BRANCH, and its absence was the worst defect in this component. Without
+    it a failed request fell through to the terminal answer below, so a NETWORK ERROR
+    rendered as a definitive claim about the master list — verbatim: "not in the tradeable
+    universe, and not anywhere else in the master list either". In the one component whose
+    entire purpose is answering absence honestly (ui-reviewer #6). A24: "not assessable"
+    is a legitimate rendering and beats a plausible-looking default.
+  */
+  if (isError) {
+    return (
+      <div role="alert" className="py-6 text-center text-sm">
+        <p className="text-(--color-text)">
+          Couldn’t check the master list — so this says nothing about whether “{query}”
+          exists.
+        </p>
+        <Button variant="outline" size="sm" className="mt-2" onClick={() => void refetch()}>
+          Retry
+        </Button>
+      </div>
     )
   }
 
@@ -64,7 +93,7 @@ export function AbsenceAnswer({ query }: { query: string }) {
           <li key={h.stock_id} className="border-l-2 border-(--color-border-strong) pl-3">
             <Link
               to={`/stocks/${h.stock_id}`}
-              className="font-mono font-bold text-(--color-accent) hover:text-(--color-accent-hover)"
+              className="font-mono font-bold text-(--color-accent) hover:text-(--color-accent-hover) focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-(--color-accent) focus-visible:ring-offset-2 focus-visible:ring-offset-(--color-bg)"
             >
               {h.symbol}
             </Link>

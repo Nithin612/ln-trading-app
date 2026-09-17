@@ -50,6 +50,21 @@ describe('AbsenceAnswer', () => {
     expect(screen.getByText(/not listed in the EQ series/i)).toBeInTheDocument()
   })
 
+  it('a FAILED lookup never renders as a fact about the master list', async () => {
+    // ⛔⛔ The worst defect in this component, and it shipped in V4. `useQuery` was
+    // destructured without `isError`, so a network failure fell through to the terminal
+    // answer and the user was told, verbatim: "not in the tradeable universe, and not
+    // anywhere else in the master list either" — a definitive claim, from a request that
+    // never completed, in the one component whose whole purpose is answering absence
+    // honestly (ui-reviewer #6). A24: "not assessable" beats a plausible default.
+    vi.spyOn(stocksApi.stocksApi, 'search').mockRejectedValue(new Error('offline'))
+    wrap(<AbsenceAnswer query="RELIANCE" />)
+    await waitFor(() => screen.getByRole('alert'))
+    expect(screen.getByText(/says nothing about whether/i)).toBeInTheDocument()
+    expect(screen.queryByText(/not anywhere else in the master list/i)).not.toBeInTheDocument()
+    expect(screen.getByRole('button', { name: /retry/i })).toBeInTheDocument()
+  })
+
   it('distinguishes "excluded" from "no such company"', async () => {
     // ⚠ The two answers are genuinely different and the old empty state conflated them.
     // Here the whole master was searched — not just the tradeable subset — and there is

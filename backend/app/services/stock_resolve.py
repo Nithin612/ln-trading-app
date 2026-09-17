@@ -36,13 +36,15 @@ term only when the recorded inputs can justify it. It never guesses.
 from __future__ import annotations
 
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from datetime import date
 
-from sqlalchemy import select
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.stock import Stock, SymbolHistory
+from app.services.signal_service import MIN_CANDLES_TO_SCORE
 from app.services.universe_materialiser import load_recorded_inputs
 from app.services.universe_rule import REASON_OK, evaluate
 
@@ -79,6 +81,50 @@ class ResolvedStock:
         """What `universe_service.resolve_universe` actually requires — BOTH conditions.
         Search is the only surface that can explain the difference."""
         return self.in_universe and not self.ca_quarantined
+
+
+@dataclass(frozen=True)
+class DataCoverage:
+    """V5 — whether the scan can even LOOK at this name.
+
+    ⭐ The per-stock form of the funnel's `admitted_to_scoring` rung, and it answers a
+    question nothing else can: *why does this stock never produce a signal?*
+    `signal_service` refuses any name with fewer than `MIN_CANDLES_TO_SCORE` completed
+    daily candles **before scoring**, so a thin name is not rejected by the confluence
+    gate — it is never examined at all. Measured by V1 on 2026-09-14: **184 of 2,286
+    priced names die here, unseen**, and the whole drop was being attributed to the gate.
+    """
+
+    daily_bars: int
+    min_bars_to_score: int
+    latest_bar: date | None
+
+    @property
+    def enough_history(self) -> bool:
+        return self.daily_bars >= self.min_bars_to_score
+
+    @property
+    def shortfall(self) -> int:
+        return max(0, self.min_bars_to_score - self.daily_bars)
+
+
+async def load_coverage(db: AsyncSession, stock_id: int) -> DataCoverage:
+    """One stock's bar count and newest session. ⚠ Deliberately NOT called per row on a
+    list — a count per row is N queries for a question a list is not asking."""
+    row = (
+        await db.execute(
+            text(
+                "SELECT count(*) AS n, max((time AT TIME ZONE 'UTC')::date) AS latest"
+                " FROM ohlcv_1d WHERE stock_id = :sid"
+            ),
+            {"sid": stock_id},
+        )
+    ).one()
+    return DataCoverage(
+        daily_bars=int(row.n or 0),
+        min_bars_to_score=MIN_CANDLES_TO_SCORE,
+        latest_bar=row.latest,
+    )
 
 
 @dataclass
@@ -129,6 +175,41 @@ async def _rule_reason(db: AsyncSession, symbol: str) -> tuple[str | None, date 
     return None, None
 
 
+async def resolve_one(
+    db: AsyncSession, stock: Stock, *, former_symbols: Sequence[str] = ()
+) -> ResolvedStock:
+    """One stock's eligibility verdict — the SINGLE implementation behind both V4's search
+    and V5's stock-detail panel, so the two surfaces cannot disagree about why a name is
+    unusable (W2)."""
+    reasons: list[str] = []
+    as_of: date | None = None
+    if not stock.is_active:
+        rule_text, as_of = await _rule_reason(db, stock.symbol)
+        reasons.append(
+            f"Not in the tradeable universe — {rule_text}."
+            if rule_text
+            else "Not in the tradeable universe."
+        )
+    if stock.ca_flagged_at is not None:
+        # ⚠ Named separately and always, even for an already-excluded name: the two have
+        # different remedies (re-admit vs review the price history), and a reader shown
+        # only the first would chase the wrong one.
+        reasons.append(
+            "Quarantined by the corporate-action detector, so it is excluded from "
+            "suggestions even when tradeable — review it under CA Quarantine."
+        )
+    return ResolvedStock(
+        stock_id=stock.id,
+        symbol=stock.symbol,
+        company_name=stock.company_name,
+        in_universe=bool(stock.is_active),
+        ca_quarantined=stock.ca_flagged_at is not None,
+        exclusion_reasons=tuple(reasons),
+        former_symbols=tuple(former_symbols),
+        reason_as_of=as_of,
+    )
+
+
 async def resolve_search(
     db: AsyncSession, query: str, *, stocks: list[Stock]
 ) -> SearchResolution:
@@ -139,38 +220,8 @@ async def resolve_search(
     `stock_service.list_stocks` (W2)."""
     res = SearchResolution(query=query.strip())
     formers = await _former_symbols(db, [s.id for s in stocks])
-
     for s in stocks:
-        reasons: list[str] = []
-        rule_text: str | None = None
-        as_of: date | None = None
-        if not s.is_active:
-            rule_text, as_of = await _rule_reason(db, s.symbol)
-            reasons.append(
-                f"Not in the tradeable universe — {rule_text}."
-                if rule_text
-                else "Not in the tradeable universe."
-            )
-        if s.ca_flagged_at is not None:
-            # ⚠ Named separately and always, even for an already-excluded name: the two
-            # have different remedies (re-admit vs review the price history), and a
-            # reader shown only the first would chase the wrong one.
-            reasons.append(
-                "Quarantined by the corporate-action detector, so it is excluded from "
-                "suggestions even when tradeable — review it under CA Quarantine."
-            )
-        res.hits.append(
-            ResolvedStock(
-                stock_id=s.id,
-                symbol=s.symbol,
-                company_name=s.company_name,
-                in_universe=bool(s.is_active),
-                ca_quarantined=s.ca_flagged_at is not None,
-                exclusion_reasons=tuple(reasons),
-                former_symbols=tuple(formers.get(s.id, ())),
-                reason_as_of=as_of,
-            )
-        )
+        res.hits.append(await resolve_one(db, s, former_symbols=formers.get(s.id, ())))
 
     # Usable names first; the rest stay VISIBLE with their reason rather than vanishing.
     res.hits.sort(key=lambda h: (not h.suggestible, h.symbol))

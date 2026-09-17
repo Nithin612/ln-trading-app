@@ -207,6 +207,10 @@ export function StocksPage() {
   const offset = (page - 1) * pageSize
 
   const showCol = (col: ColKey) => visibleCols.has(col)
+  // ⚠ VISIBLE columns, not defined ones — `DEFAULT_VISIBLE` omits `isin`, so
+  // `COLUMNS.length` over-counted by one. Browsers clamp it, so it rendered fine and
+  // the value was simply wrong (ui-reviewer #12). Declared AFTER `showCol` it uses.
+  const visibleColCount = COLUMNS.filter((c) => showCol(c.key)).length
   const rowPy = density === 'comfortable' ? 'py-2.5' : undefined
 
   return (
@@ -416,21 +420,21 @@ export function StocksPage() {
           <TableBody>
             {isLoading && (
               <TableRow>
-                <TableCell colSpan={COLUMNS.length} className="p-0">
+                <TableCell colSpan={visibleColCount} className="p-0">
                   <SkeletonTable rows={8} cols={6} />
                 </TableCell>
               </TableRow>
             )}
             {isError && (
               <TableRow>
-                <TableCell colSpan={COLUMNS.length} className="text-center py-8 text-(--color-error)">
+                <TableCell colSpan={visibleColCount} className="text-center py-8 text-(--color-error)">
                   Failed to load stocks.
                 </TableCell>
               </TableRow>
             )}
             {!isLoading && !isError && data?.items.length === 0 && (
               <TableRow>
-                <TableCell colSpan={COLUMNS.length} className="p-0">
+                <TableCell colSpan={visibleColCount} className="p-0">
                   {/*
                     V4 / A2 — when the user SEARCHED and got nothing, answer the absence
                     instead of shrugging at it. "No stocks found" cannot distinguish "no
