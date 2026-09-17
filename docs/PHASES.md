@@ -10,6 +10,32 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
+## ▶ STATE AT A GLANCE (updated 2026-09-18) — round-7 panel adjudicated — read this first
+
+**▶▶ 2026-09-18 — ⭐⭐⭐ THE 922-DAY HOLE IS FILLABLE.** NSE serves `sec_bhavdata_full` for 2021 and
+2022 **today** (HTTP 200, 233,986 B / 246,024 B, correct schema, same URL the ingester uses).
+**1,101 → ~1,714 sessions (+56%).** ⚠ The back-fill was consciously DROPPED in round 8 on a
+*breadth* argument — **it was never judged on regime coverage or holdout feasibility, and both are
+now binding.** Re-decide, do not re-drop. Came from a reviewer *question*, not a critique.
+⛔⛔ **MY OWN M7 COHORT WAS LOOK-AHEAD** — ranked on 2026 liquidity, applied to 2023-2026; PIT
+figures are 8.51%/16.82% not 9.25%/19.83%. New rule: **every cohort carries its construction date.**
+⛔⛔ **SIX DECIDED-BUT-UNDONE ITEMS**, all now applied: 2 of 8 round-6 adoptions had reached the
+queue · `§7.11/Q-A`/`Q-B` were cited and never existed · §2.4 still carried the refuted "0 of 487"
+(and at 0.026% its expected count was **0.127** — never evidence) and still said "do not
+re-litigate" while E2 was marked re-run-required · `beta +0.92` still untagged · 3 queue rows had
+no falsifier. **This is `strategy_profiles` inside the document that diagnoses it.**
+⭐⭐ **The cost floor is STATUTORY and PRODUCT-SPECIFIC:** `₹15.34 + 22.225 bps`; **delivery 22.22
+bps of which STT is 20.00 (90%)**; **intraday 3.52 bps — 6.3× lower.** Limit orders cannot go under
+it. F&O not modelled.
+⭐⭐ **The live book explained: only 4 of 15 live signals are CNC-holdable** (11 SELL/4 BUY); the
+four acted-on rank **76/76/75/74** and **all 14 better-scored signals were skipped**; **no
+restriction anywhere refuses a short** (13 entries, none directional).
+⭐ Short-side gap exposure is **2.1×** the long side at tight stops; the pre-hole block carries
+**1.5–1.7×** the post-hole exposure ⇒ the 3.2-year window is a benign-regime sample; the four-table
+session mismatch is **six special sessions**, not corruption; ✅ **E2's interval method is CORRECT**
+(`stride=5` ⇒ non-overlapping).
+⛔ **NOTHING PUSHED.**
+
 ## ▶ STATE AT A GLANCE (updated 2026-09-17) — round-6 panel adjudicated — read this first
 
 **▶▶ 2026-09-17 — ⭐⭐ EIGHT EXTERNAL REVIEWS ADJUDICATED IN `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md`

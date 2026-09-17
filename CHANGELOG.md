@@ -7,6 +7,61 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Round-7 panel adjudicated — the 922-day hole is fillable, and six things I decided were never done (2026-09-18)
+
+`docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` PART 8. Seven responses (ChatGPT · Gemini · DeepSeek ·
+Grok · Nemotron 3.5 lightning · Claude · Kimi K3), adjudicated one at a time. Eighteen new
+measurements (M21–M38). **Most of the strongest points this round were aimed at the document
+rather than the system, and six of them were true.**
+
+⭐⭐⭐ **M38 — THE 922-DAY HOLE IS NOT PERMANENT.** One probe each: NSE serves
+`sec_bhavdata_full_15062021.csv` (HTTP 200, 233,986 B) and `..._15032022.csv` (HTTP 200,
+246,024 B) **today**, same header schema, same URL template the ingestion service already uses.
+1,101 → ~1,714 sessions (+56%). ⚠ My first write-up overclaimed that nobody had considered it —
+corrected in place: the back-fill was **consciously dropped in round 8** on a *breadth* argument
+("the lever is TURNOVER"). What the measurement establishes is that the option is still open and
+**was never judged on the two grounds that are now binding** — regime coverage and holdout
+feasibility. Queue item 7. From Kimi's question, not from any critique.
+
+⛔⛔ **M31 — MY OWN COHORT WAS LOOK-AHEAD (Kimi SEL-3).** M7's "top-250 liquid" was ranked on
+`time >= '2026-01-01'` and applied to 2023-2026. Re-run point-in-time, exposure falls 9.248% →
+8.508% (long tail) and 19.830% → 16.822% (short). **Eight reviewers over two rounds read that
+query's description; the one who caught it had not seen the query.** New standing rule: every
+cohort carries its construction date, and none may be ranked inside its own measurement window.
+
+⛔⛔ **SIX DECIDED-BUT-UNDONE ITEMS (M21–M26), all now applied.** Two of eight round-6 ADOPTIONS
+had reached the queue; `§7.11/Q-A` and `Q-B` were cited twice and never existed; §2.4 still
+carried the refuted "0 of 487" row and still read "should not be re-litigated" while §7.11 marked
+E2 re-run-required; `beta +0.92` was still untagged at line 286; three queue rows had empty
+falsifiers. ⭐ **This is `strategy_profiles` — marked applied, never ran — inside the document that
+diagnoses it.** And at M10's 0.026%, the expected count in 487 panels is **0.127**: "0 of 487" was
+never evidence of "never scores" even before its mechanism was refuted.
+
+⭐⭐ **M28 — the cost floor is statutory and product-specific.** `charges = ₹15.34 + 22.225 bps ×
+notional`, residual ≤ ₹0.01 on 11 points. **Delivery floor 22.22 bps, of which STT (0.1% × 2
+legs) is 20.00 = 90.0%. Intraday floor is 3.52 bps — 6.3× lower.** ⇒ limit orders cannot go under
+the floor (Grok E4), and the *product* choice is worth more than any effect the programme has
+measured. ⚠ F&O is not modelled at all.
+
+⭐⭐ **M33/M34/M35 — the live book, explained.** Only **4 of 15** live signals are CNC-holdable
+(11 SELL / 4 BUY). The four acted-on positions rank **76/76/75/74** in confidence and **all 14
+higher-confidence signals were skipped**, five of them SELLs at 80–90. Mean confidence SELL 77.7 >
+BUY 74.6. **No restriction anywhere refuses a short** — 13 registry entries, none directional.
+⇒ neither "the scorer picked" nor "the operator took the top": a third mechanism is implicated.
+
+⭐ **Also measured:** the gap defect's short-side exposure is **2.1× the long side at tight stops**
+(19.83% vs 9.25%) and equal at the median stop · the pre-hole block carries **1.5–1.7×** the gap
+exposure of the post-hole block, so the 3.2-year window is a benign-regime sample · the four-table
+session-count discrepancy is **six special sessions** (Saturday budget/DR-site, Muhurat), not
+corruption · `ohlcv_1d` is **not** back-adjusted anywhere, so drop-the-window is the only CA policy
+· and ✅ **E2's naive interval is CORRECT** — `--stride` defaults to `HORIZON`=5, so the forward
+windows do not overlap (Kimi's STAT-8 refuted; I was one step from publishing the false correction).
+
+Queue reordered: the simulator fix moves **above** the D5/D1 re-runs (re-running trade-level
+studies on an unfixed engine guarantees a third pass), B7 joins that re-run set, the prevalence
+falsifier is restated in **R** via Grok's `exposure × 2R` identity, and the two null-pointer rows
+now exist.
+
 ### Round-6 panel adjudicated — it refuted two of my own claims and four of my numbers (2026-09-17)
 
 `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` PART 7. Eight responses (ChatGPT · Gemini · Perplexity ·

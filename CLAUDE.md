@@ -916,7 +916,15 @@ else.
   in expectation.** All four reviewers led with this and it had been an unrun plan item since round 1.
   ⛔⛔ **`ohlcv_1d` HAS A 922-DAY HOLE, 2020-12-23 → 2023-07-03 — 1,097 sessions, not the ~1,730 a
   2019-10 → 2026-09 span implies, and 33.2% of round 6's 16,428 panels were scored on a 300-bar
-  window straddling it** (EMA200/ATR/ADX/pivots across a 2.5-year discontinuity). It explains
+  window straddling it** (EMA200/ATR/ADX/pivots across a 2.5-year discontinuity).
+  ⭐⭐ **STILL FILLABLE — MEASURED 2026-09-18 (round 7, from Kimi's question):** NSE serves
+  `sec_bhavdata_full_15062021.csv` (HTTP 200, 233,986 B) and `..._15032022.csv` (HTTP 200,
+  246,024 B) **today**, same header schema, same URL template as `bhavcopy_service.py:45`.
+  ⚠ The 2021–23 back-fill was DROPPED in round 8 on a **breadth** argument ("the lever is
+  TURNOVER") — **but it was never judged on regime coverage or holdout feasibility, and both are
+  now binding**: the retained block is a benign-regime sample (overnight-gap exposure **1.5–1.7×
+  higher** in the pre-hole block containing COVID) and every research verdict is scoped to it.
+  **Re-decide, do not re-drop.** 1,101 → ~1,714 sessions (+56%). It explains
   `_CLEAN_SINCE = 2023-07-03` — **not a CA-clean choice, just the first date of the contiguous modern
   block** — and it **KILLS the un-truncation plan item**: real yield n ≈ 2,662 (bar-50 walk) or
   **exactly 0** (300-bar walk), not 4,300. The blocker was never the CA source but **615 missing
