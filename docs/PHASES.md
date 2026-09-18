@@ -1892,6 +1892,14 @@ automatically. ⚠ Three existing order-ratchet tests updated, none weakened —
 `test_short_above_its_stop_is_blocked` now uses `classification="intraday"` **on purpose**, or it
 would have passed for the wrong reason and stopped testing through-stop on shorts.
 
+⛔⛔ **TIER A IS NOT COMPLETE — it has TEN rows and 5 are built** (corrected 2026-09-19, after I
+reported it complete off a checkbox I had written myself). **Built: 4 · 2 · 3 · 14 · 15.**
+**Half: 12** — pushed, but `git log --format='%G?' fe5d508` returns **N** and the branch has **0
+signed commits**, so the sign half (which is the half M72 was about) is outstanding and needs a
+signing key from the user. **Not started: 6** (needs nothing) · **11/11b** (the 617- and
+313-session seals — no artifact and no script exists) · **5** (needs item 21) · **13** (needs the
+user).
+
 ⚠ **NEXT, needing nothing from the user:** item **6** (re-run D5/D1/B7 through item 4's delete
 treatment — but M85 already measured the shift at +0.005R at the median, so expect hygiene rather
 than a changed verdict) · the persistent signal queue + a per-signal idempotency guard (**confirmed
@@ -1901,10 +1909,19 @@ absent** — only a risk-budget check exists, so two clicks with budget remainin
 
 ---
 
-**▶ PREVIOUS (2026-09-18, Tier A BUILT).**
+**▶ PREVIOUS (2026-09-18, five of Tier A's ten built — the heading below was wrong, see the correction).**
 
-**✅✅ TIER A IS BUILT AND PUSHED** — the branch is on GitHub at last (see below). Five items,
-57 new tests, every one mutation-verified:
+**⛔⛔ CORRECTED 2026-09-19 — THIS HEADING WAS FALSE. TIER A HAS **TEN** ROWS, NOT FIVE.**
+The original Tier A (items **4 · 2 · 3 · 14 · 5 · 6 · 13 · 15 · 12 · 11/11b**) was silently
+redefined by this block to mean the five that had been built, and a later session then read the
+block back as *verification* — a **W1 violation by the author of the checkbox**, same shape as
+§12.12 dropping rows in the round it consolidated them. **Real state: 5 built · 1 half · 4 not
+started.** ⚠ **Item 12 is "push AND SIGN"** — `git log --format='%G?' fe5d508` still returns **N**
+and the branch carries **0 signed commits**, so E2 stays *operator-attested*. Not started:
+**6** (needs nothing) · **11/11b** (the seals — no artifact, no script) · **5** (needs item 21) ·
+**13** (needs the user).
+
+**✅ THE FIVE THAT ARE BUILT AND PUSHED** — 57 new tests, every one mutation-verified:
 - **14** `app/services/pit_cohort.py` — PIT liquidity cohort, DYNAMIC estimand, 180d pinned
 - **4** `app/backtest/entry_gap.py` — finds trades live would have refused; frozen engine untouched
 - **3** `scripts/seed_strategy_profiles.py` — idempotent re-seed + seed-migration census ratchet
