@@ -552,6 +552,13 @@ async def main(n_stocks: int, stride: int, clean_only: bool = False,
                 "R": R, "Rw": clamp_ratio_f(R, WINSOR_R), "w": w_pct,
                 "ret_pct": float(rec.pnl_pct), "conf": res.confidence_pct,
                 "dir": res.direction, "qty": qty, "entry_px": rec.entry_price,
+                # ⭐ QUEUE ITEM 6: the STOP, exposed so a consumer can apply item 4's delete
+                # treatment. `w` cannot serve — it is computed from `rec.entry_price`, the
+                # FILL, so a fill that gapped THROUGH its stop still reports a positive
+                # risk distance and the defect is invisible in it (M64). This probe has no
+                # through-stop exclusion while the positional probe and the live path do,
+                # which is why the two corpora never measured the same population.
+                "stop_px": rec.stop_loss,
                 "straddle": straddles,
                 "atr_pct": (a / rec.entry_price * 100) if a and a == a and rec.entry_price else float("nan"),
                 "rvol": (float(df["volume"].iloc[i]) / vmean) if vmean and vmean == vmean and vmean > 0 else float("nan"),
@@ -577,7 +584,7 @@ async def main(n_stocks: int, stride: int, clean_only: bool = False,
         import csv
         cols = ["sym", "entry", "exit", "T", "dir", "w", "R", "Rw", "ret_pct", "ret_atr",
                 "bench", "excess", "cash", "conf", "er", "straddle", "atr_pct", "rvol",
-                "log_close", "entry_px", "qty", "wsum", "nsc", "wsc", "top"]
+                "log_close", "entry_px", "stop_px", "qty", "wsum", "nsc", "wsc", "top"]
         with open(dump, "w", newline="") as fh:
             wtr = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
             wtr.writeheader()

@@ -40,6 +40,7 @@ import argparse
 import asyncio
 import statistics
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -113,12 +114,23 @@ def _r(row: Row) -> float:
     return row.pnl_pct / _risk_pct(row.entry, row.stop)
 
 
-def _run(frames: dict[str, pd.DataFrame]) -> dict[tuple[str, pd.Timestamp], Row]:
+def _run(
+    frames: dict[str, pd.DataFrame],
+    *,
+    keep: Callable[[TradeRecord], bool] | None = None,
+    records: dict[tuple[str, pd.Timestamp], TradeRecord] | None = None,
+) -> dict[tuple[str, pd.Timestamp], Row]:
+    """⭐ `keep` / `records` added for queue item 6 (the delete treatment). Default `None`
+    reproduces the published D1 run exactly."""
     engine = BacktestEngine(BacktestConfig())
     out: dict[tuple[str, pd.Timestamp], Row] = {}
     for stock, candles in frames.items():
         pos = {ts: i for i, ts in enumerate(candles.index)}
         for t in engine.run_single_stock(stock, candles):
+            if keep is not None and not keep(t):
+                continue
+            if records is not None:
+                records[(stock, t.entry_date)] = t
             fill_idx = pos[t.entry_date]  # entry is candle N+1; decision bar is N = fill_idx-1
             rvol = _rvol(candles.iloc[:fill_idx])  # RVOL as-of the decision bar
             row = _row(t, rvol)

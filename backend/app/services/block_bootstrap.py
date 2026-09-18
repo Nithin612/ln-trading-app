@@ -74,6 +74,7 @@ import random
 import statistics
 from collections.abc import Sequence
 from dataclasses import dataclass
+from typing import Any
 
 #: Resamples per run. 2000 puts the Monte-Carlo error on a 5th percentile well below the
 #: sampling error it is measuring, and costs milliseconds at our n.
@@ -283,3 +284,100 @@ def newey_west_t(series: Sequence[float], *, lag: int) -> float | None:
         # than emit a t from a negative variance.
         return None
     return mean / math.sqrt(var / n)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Queue item 6 — CLUSTERED inference, for dependence that is not serial.
+#
+# ⭐⭐ Why these live here and not in a new module: this file already owns
+# "dependence-corrected inference" (`newey_west_t`), and the whole point of item 6 is
+# that **the three studies have three DIFFERENT dependence structures and therefore need
+# three different estimators** — D1 is per-date (a market-wide regressor), D5 is
+# paired-by-signal, B7 is overlapping-per-trade. The queue says, in as many words, *not*
+# "apply Newey-West". Newey-West corrects SERIAL correlation along one axis; it is the
+# wrong instrument for "many trades share one day", where the dependence is a grouping,
+# not a lag.
+#
+# ⛔ The failure these prevent is documented and expensive: RVOL's `t = +3.67` was an
+# IID-SE artifact that collapsed to +0.98 once clustered by date, because 185 trades sat
+# on 92 dates and the regressor was market-wide daily. The point estimate was fine. The
+# standard error was off by 6×.
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def intraclass_correlation(
+    values: Sequence[float], groups: Sequence[Any]
+) -> tuple[float, float, int]:
+    """One-way random-effects ICC, the average cluster size, and the cluster count.
+
+    Returns `(icc, m0, n_groups)`. `m0` is the *effective* average cluster size for
+    unbalanced groups — `(n - Σm²/n) / (G-1)` — not the plain mean, because using the plain
+    mean on unbalanced clusters understates the design effect.
+
+    ⚠ ICC is clamped at 0 below. A negative sample ICC means the between-group variance
+    estimate came out under the within-group one, which is noise, not evidence of negative
+    dependence — and letting it through would produce a design effect < 1, i.e. a claim
+    that clustering BOUGHT precision.
+    """
+    n = len(values)
+    if n != len(groups):
+        raise ValueError(f"{n} values against {len(groups)} group labels")
+    by: dict[Any, list[float]] = {}
+    for v, g in zip(values, groups, strict=True):
+        by.setdefault(g, []).append(v)
+    n_groups = len(by)
+    if n_groups < 2 or n <= n_groups:
+        return 0.0, float(n) / max(n_groups, 1), n_groups
+
+    grand = sum(values) / n
+    ss_between = sum(len(vs) * (sum(vs) / len(vs) - grand) ** 2 for vs in by.values())
+    ss_within = sum(sum((v - sum(vs) / len(vs)) ** 2 for v in vs) for vs in by.values())
+    ms_between = ss_between / (n_groups - 1)
+    ms_within = ss_within / (n - n_groups)
+
+    m0 = (n - sum(len(vs) ** 2 for vs in by.values()) / n) / (n_groups - 1)
+    denom = ms_between + (m0 - 1) * ms_within
+    icc = 0.0 if denom <= 0 else (ms_between - ms_within) / denom
+    return max(icc, 0.0), m0, n_groups
+
+
+def design_effect(values: Sequence[float], groups: Sequence[Any]) -> float:
+    """`1 + (m0 - 1)·ICC` — the factor by which the naive VARIANCE is understated.
+
+    Divide the nominal n by this to get an effective n; multiply the naive SE by its square
+    root to get the approximate corrected SE. Reported alongside the exact cluster-robust SE
+    because the two disagreeing is itself informative (it means a few large clusters dominate).
+    """
+    icc, m0, _ = intraclass_correlation(values, groups)
+    return 1.0 + (m0 - 1.0) * icc
+
+
+def cluster_robust_mean_t(
+    values: Sequence[float], groups: Sequence[Any], *, null: float = 0.0
+) -> tuple[float, float, float, int] | None:
+    """Mean, cluster-robust SE, t, and cluster count — for a simple mean.
+
+    The sandwich for a mean reduces to summing the within-cluster deviations FIRST and then
+    taking the variance across clusters, which is exactly what makes it robust to any
+    within-cluster correlation structure (it never has to be modelled).
+
+    Small-G correction `G/(G-1)` applied. ⚠ With very few clusters this is anti-conservative
+    whatever the correction — the number of CLUSTERS, not observations, is the sample size
+    here, so it is returned for the caller to report rather than hidden.
+    """
+    n = len(values)
+    if n < 2:
+        return None
+    mean = sum(values) / n
+    by: dict[Any, float] = {}
+    for v, g in zip(values, groups, strict=True):
+        by[g] = by.get(g, 0.0) + (v - mean)
+    n_groups = len(by)
+    if n_groups < 2:
+        return None
+    meat = sum(s * s for s in by.values())
+    var = (n_groups / (n_groups - 1)) * meat / (n * n)
+    if var <= 0:
+        return mean, 0.0, 0.0, n_groups
+    se = var**0.5
+    return mean, se, (mean - null) / se, n_groups

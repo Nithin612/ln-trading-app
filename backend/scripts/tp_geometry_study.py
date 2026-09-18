@@ -50,6 +50,7 @@ import asyncio
 import statistics
 import sys
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
@@ -193,14 +194,35 @@ def _f(x: float, p: int = 3) -> str:
     return f"{x:+.{p}f}"
 
 
-def _collect(frames: dict[str, pd.DataFrame]) -> dict[str, dict[tuple[str, pd.Timestamp], Row]]:
-    """Factors ONCE per stock (baseline run), then cheap exit-only re-sim per candidate."""
+def _collect(
+    frames: dict[str, pd.DataFrame],
+    *,
+    keep: Callable[[TradeRecord], bool] | None = None,
+    records: dict[tuple[str, pd.Timestamp], TradeRecord] | None = None,
+) -> dict[str, dict[tuple[str, pd.Timestamp], Row]]:
+    """Factors ONCE per stock (baseline run), then cheap exit-only re-sim per candidate.
+
+    ⭐ `keep` (queue item 6) filters at the TradeRecord, which is where item 4's delete
+    treatment lives. Default `None` = the original behaviour exactly, so the published D5 run
+    still reproduces. ⭐⭐ **Filtering on the BASELINE record is sufficient for every variant**:
+    `is_unfillable` reads only `entry_price` and `stop_loss`, and each variant is an exit-only
+    re-sim off the same fill candle and the same stop — only the target moves. So a key is
+    unfillable for all variants or for none, and filtering once cannot desynchronise the pairing.
+
+    `records` is an optional sink for the baseline TradeRecords, so a caller can compute the
+    delete treatment itself rather than this function imposing a definition of R (M60: three
+    are live).
+    """
     engine = BacktestEngine(BacktestConfig())  # tp_rule=None → frozen canon
     variants: dict[str, dict[tuple[str, pd.Timestamp], Row]] = {n: {} for n in _ALL_NAMES}
     for stock, candles in frames.items():
         pos = {ts: i for i, ts in enumerate(candles.index)}  # O(1) fill-index recovery
         for t in engine.run_single_stock(stock, candles):
             key = (stock, t.entry_date)
+            if keep is not None and not keep(t):
+                continue
+            if records is not None:
+                records[key] = t
             base_row = _row(t)
             if base_row is None:
                 continue
