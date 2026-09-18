@@ -7,6 +7,53 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### The entry problem, measured — the premise was wrong (2026-09-18)
+
+`backend/scripts/signed_displacement_study.py`, PART 14 of the consolidated doc. The user lost
+₹5,054 on four shorts and attributed it to the Buy button market-ordering at CTP instead of the
+signal's entry. Eight AI reviews (this author's first) designed execution architecture for it —
+protected limits, stop orders, ARM buttons, an `entry_mode` taxonomy, an order FSM. **Nobody
+measured the premise first.**
+
+⛔⛔ **M92 — displacement was 4.4% of the loss.** Counterfactual on the four closed positions, same
+quantity and same exit but filled at the signal's own entry: displacement −₹221 (4.4%), charges
+−₹333 (6.6%), **the signals being wrong −₹4,501 (89.1%)**. One of the four was filled *favourably*
+by 45.8 bps. The worst displacement was 58 bps — ₹1.31 on a ₹226 stock, not the "₹4" the discussion
+assumed. The orders' own fill audit shows `half_spread_bps` of 0.36–2.22 against 27–58 bps of
+displacement, so the mechanism was signal staleness, not spread. ⚠ n=4 over two days: this refutes
+the specific story, not the book in general.
+
+⭐⭐ **M93 — the signed-displacement study refutes the adverse-momentum hypothesis.** The live
+sample is n=4 (the 2026-09-02 audit's 99 trades died with the dev DB on 09-07), so the question was
+answered structurally: the engine's entry is the prior close and the backtest fill is the next
+bar's open, so displacement has the same geometry as the overnight gap. Measured on a strictly-PIT
+annual top-250 cohort with |gap| > 25% dropped, forward return taken from the fill:
+
+- **h=1: gaps revert, monotonically.** gap < −2% → **+0.650%** (t +14.3); gap > +2% → **−0.616%**
+  (t −17.7), across ~405k observations.
+- **h=5 (the swing horizon): the medians still revert** (down-gaps +0.21 to +0.44, up-gaps −0.01
+  to −0.13) while the means do not — heavy right skew.
+
+The hypothesis under test was that you get a better price *because the market is moving against
+you*, so a one-sided limit would systematically select losers. It is false: a down-gap (the
+favourable fill for a BUY) is followed by a bounce, an up-gap (favourable for a SELL) by a fade.
+**A favourable fill is followed by movement that helps, in both directions** ⇒ if a band is ever
+built it should be **one-sided**, and stop orders and `entry_mode` are unnecessary because the
+engine has no trigger semantics to support them.
+
+⚠ Limits: unconditional (all name-days, not signal days); small (±0.1–0.4% median over five days
+against a 22 bps floor); and mean/median diverge at h=5 but not h=1.
+
+⛔ **A claim in the document is withdrawn.** §2143 and R-6 said "the book loses before any cost";
+`CLAUDE.md:874` said the opposite and is right — **t = −0.07 on n=82 is absence of evidence for any
+α, not evidence of loss** (MDE ≈ ±0.93%/trade). The stronger version was quoted to six reviewers
+and repeated back by them. Corrected in §2.4.
+
+Also: the four untradeable overnight shorts were closed through the production path
+(−₹5,054.37 realised, ₹332.69 charges), which produced the ledger's first four real
+`position_lifecycle` rows — item 2 validated in life, not only in tests.
+
+
 ### Queue item 2 — wire the append-only ledger, and the backend built-not-wired lint (2026-09-18)
 
 `backend/app/broker/ledger_wiring.py` + two call sites in `paper_broker` + 8 wiring tests + 6 lint

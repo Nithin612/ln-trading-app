@@ -2140,7 +2140,7 @@ nothing pushed, that reduces to my word. **This is the strongest argument yet fo
 reframes item 12 from disaster-recovery to **evidentiary integrity**.
 
 ⭐ **2.7 — the "88% tape, not alpha" framing is contradicted by its own decomposition.** Gross alpha
-is **−0.0218%**, so the book loses *before any cost*. ⇒ **cost reduction (R-6, limit orders) cannot
+is **−0.0218%** ⛔ **at t = −0.07 on n=82, which is ABSENCE OF EVIDENCE for any α, not evidence of loss** (MDE ≈ ±0.93%/trade — restated 2026-09-18, §14.3; this line said "the book loses before any cost" and `CLAUDE.md:874` contradicted it). ⇒ **cost reduction (R-6, limit orders) cannot
 rescue it; it can only reduce the loss.** Adopted, and R-6 is reclassified.
 
 ⭐ **2.5 (per-direction IC), 3.2 (dividend contamination below the 25% screen), 4.3 (no spread/impact
@@ -2730,3 +2730,73 @@ treatment) → **21** (one contract note) → **5** (the re-run) → **6** → *
 **In parallel, needing nothing:** 2, 3, 27 (the LTP colour bug), 15, 22, 10, 7–9, 16, 18, 23.
 
 ⛔ **No round 12.** The next artifact from this programme is a commit.
+
+---
+
+# PART 14 — THE ENTRY PROBLEM, MEASURED (2026-09-18)
+
+The user reported losing ₹5,054 on four shorts because the Buy button market-orders at CTP
+instead of the signal's entry, and asked eight AIs for a fix. All eight (this document's author
+first) designed execution architecture — protected limits, stop orders, ARM buttons, an
+`entry_mode` taxonomy, an order FSM. **Nobody measured the premise.**
+
+## §14.1 · M92 — how much of the loss was actually displacement?
+
+Counterfactual on the four closed positions: same quantity, same exit, filled **at the signal's
+own entry price** instead of the market.
+
+| symbol | signal entry | actual fill | displacement | cost of displacement |
+|---|--:|--:|--:|--:|
+| BANKINDIA | 137.61 | 138.24 | **+45.8 bps (favourable)** | **+₹130** |
+| BELRISE | 226.66 | 225.35 | −57.8 bps | −₹187 |
+| CGPOWER | 858.00 | 855.55 | −28.6 bps | −₹81 |
+| HARSHA | 424.70 | 423.55 | −27.1 bps | −₹83 |
+
+⛔⛔ **Of −₹5,054: displacement −₹221 (4.4%) · charges −₹333 (6.6%) · THE SIGNALS BEING WRONG
+−₹4,501 (89.1%).** One of the four was filled *favourably*. The worst displacement was 58 bps —
+₹1.31 on a ₹226 stock, not the "₹4 far from entry" the whole discussion assumed.
+
+⭐ **And the fills' own audit answers which mechanism it was:** `half_spread_bps` 0.36–2.22 against
+displacement of 27–58 bps ⇒ **signal staleness, not spread.** The eight-way architecture addressed
+**4.4%** of the problem. ⚠ n=4, two days — this refutes the specific story, not the general book.
+
+## §14.2 · M93 — the signed-displacement study (`scripts/signed_displacement_study.py`)
+
+⛔ **The live sample for this is n=4** — the 2026-09-02 audit's 99 trades died with the dev DB on
+09-07. So the question was answered structurally: the engine's entry IS the prior close
+(`signal_service.py:246`) and the backtest fill IS the next bar's open (`engine.py:212`), so
+displacement has the same geometry as the overnight gap. Strictly-PIT annual top-250 cohort,
+|gap| > 25% dropped, forward measured **from the fill**.
+
+⚠ **A trap avoided:** `actual_R ≡ signal_R + displacement_R` is an identity, so regressing one on
+the other guarantees a slope. The question is whether displacement predicts what happens **next**.
+
+| gap bucket | h=1 forward | t | h=5 mean | **h=5 median** |
+|---|--:|--:|--:|--:|
+| < −2% | **+0.650%** | +14.3 | −0.052 | **+0.205** |
+| −2 to −1% | +0.133 | +6.4 | +0.577 | **+0.442** |
+| −0.5 to 0% | −0.127 | −17.5 | +0.037 | −0.033 |
+| +1 to +2% | −0.217 | −14.7 | +0.359 | **−0.083** |
+| > +2% | **−0.616%** | −17.7 | +0.610 | **−0.130** |
+
+⭐⭐ **Claude's adverse-momentum hypothesis is REFUTED.** Its claim was that you get the better
+price *because the market is moving against you*, so a one-sided limit selects losers. Measured:
+gaps **revert**. A down-gap — the favourable fill for a BUY — is followed by a bounce; an up-gap —
+the favourable fill for a SELL — by a fade. **In both directions a favourable fill is followed by
+movement that helps.** ⇒ **if a band is ever built, make it ONE-SIDED**, not two-sided.
+
+⚠ **Three limits.** (1) **Unconditional** — all name-days, not signal days; selection could change
+it, and the conditional version needs a full scoring walk. (2) **Small** — ±0.1–0.4% median over
+five days against a 22 bps floor. (3) ⭐ **mean and median diverge at h=5 and not at h=1**
+(up-gaps: mean +0.610, median −0.130) — heavy right skew, a few winners carrying the mean.
+
+## §14.3 · What this changes
+
+✅ **Settled:** one-sided, not two-sided, if the band is ever built. Stop orders and `entry_mode`
+are unnecessary — the engine has no trigger semantics to support them.
+⛔ **Not promoted:** displacement is 4.4% of the measured loss. **Signal quality is 89%**, and that
+is item 5, still blocked on item 21.
+⛔ **A claim in this document is withdrawn:** §2143 and R-6 say "the book loses before any cost".
+`CLAUDE.md:874` says the opposite and is right — **t = −0.07 on n=82 is absence of evidence for any
+α, not evidence of loss (MDE ≈ ±0.93%/trade)**. The stronger version was quoted to six reviewers
+and repeated back. Corrected in §2.4.
