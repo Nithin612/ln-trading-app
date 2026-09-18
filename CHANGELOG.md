@@ -7,6 +7,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Queue item 4 — find the backtest trades live would have refused (2026-09-18)
+
+`backend/app/backtest/entry_gap.py` + `backend/tests/test_entry_gap.py` (13 tests). Second Tier-A
+item. `_simulate_trade` fills at the open of bar N+1; when that open has already gapped through the
+stop it fills there anyway and then "stops out" at a level now on the profitable side of the fill —
+M5's repro books +4.211% on a stopped trade. Live is immune by explicit rejection (M8).
+
+⭐⭐ The reason a finder is needed at all is M64: D1, D5 and the positional probe all divide by the
+FILL-referenced risk, and the fill IS the gap open, so the ratio is `(stop − fill)/|fill − stop|` =
+**+1.0000 exactly, at every gap size**. A test calls the frozen engine at gaps of 2%, 5%, 10% and
+20% and pins all four at +1.0000R. A contaminated trade is arithmetically indistinguishable from a
+genuine +1R winner, so it cannot be found by scanning R — only by asking whether the fill was
+already through the stop.
+
+- `is_unfillable` delegates to `restrictions.through_stop_reason`, the same predicate
+  `place_paper_order` calls, so "what the backtest kept" and "what live would accept" cannot drift
+  apart (W2 — the predicate is not re-derived here).
+- `partition` splits a corpus; `apply_delete_treatment` recomputes a mean with the refused trades
+  removed and reports the shift, which must come out negative because every removed trade
+  contributed exactly +1.000R.
+- It deliberately does not compute R itself — three definitions are live (M60) and picking one here
+  would silently impose it on every caller. The caller passes whatever it averages.
+- Mismatched lengths raise instead of letting `zip` truncate a corpus in silence.
+
+⚠ **`app/backtest/engine.py` is FROZEN and is NOT touched.** Repairing the simulator would change
+every walk-forward golden and the Rust parity oracle, and needs sign-off plus an §8 regression.
+This module gives every study the delete treatment today at no such cost; the frozen repair remains
+a separate, explicit decision.
+
+Mutation-tested both ways: a finder that always says "fillable" and one that flags everything each
+kill multiple tests. Expected magnitude is already measured (M85): +0.0282R at the 2% order-path
+floor, +0.0052R at the median 5% stop, so the 0.05R falsifier can only fire below a 2% stop.
+
 ### Queue item 14 — the point-in-time liquidity cohort, as an instrument that refuses (2026-09-18)
 
 `backend/app/services/pit_cohort.py` + `backend/tests/test_pit_cohort.py` (6 tests). The first
