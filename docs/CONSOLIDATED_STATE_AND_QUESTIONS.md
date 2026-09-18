@@ -2666,7 +2666,7 @@ as commits.
 | # | Item | Note |
 |---|---|---|
 | **Q-A** | **Account type + capital** | ⛔ Blocks 1, 24, and every cost conclusion. ⚠ **The live book's gross is ₹1,19,569 = 1.196× a ₹1 lakh book** (M89/F12) — whatever the answer, the current book already exceeds it |
-| **1** | The four SHORT positions + a directional/settlement restriction | ⛔ On Q-A. If CNC: close + `always_on` overnight-SELL restriction. If MIS: the restriction is the wrong patch |
+| **1** | The four SHORT positions + a directional/settlement restriction | ✅ **DONE 2026-09-19.** Positions closed 09-18; the restriction shipped as `GATE_SETTLEMENT` in `restrictions.py` + `tests/test_settlement_restriction.py` (13 tests). ⛔⛔ **Measured first: the registry declared FOURTEEN gates and referenced a settlement product in NONE of them** — zero occurrences of CNC/MIS/delivery/settlement; `product_for_classification` existed with all four call sites in `paper_broker`/`profit_lock_shadow`, i.e. **the product was resolved to BILL a trade and never to REFUSE one.** ⭐⭐ Q-A's *"flexible for both"* is why it is a **settlement** rule, not a short ban: it asks the fee model (W5, never restating the mapping) and refuses only on `delivery`, so **swing/positional → refused, scalp/intraday (MIS) → permitted** and funding MIS needs no code change. ⭐ `always_on` — and the distinction from the reverted R:R floor is the point: R:R's premise was an empirical claim about the tape, this one is a settlement fact (a sale must be delivered), so it joins U11/V3 rather than the moded gates. **Falsifier recorded: a delivery short filling for real (SLB, an unmodelled product) re-scopes the rule; there is no knob.** ⭐ `requires=frozenset()` ⇒ it lands on the display path automatically and can never read `unassessed`. **Live: all 13 active SELL signals now `⊘ blocked` — BANKINDIA, BELRISE, CGPOWER, HARSHA among them — and 0 of 11 BUYs affected; no frontend change.** ⭐ Mutation-tested both ways: collapsing the product check to a blanket ban is killed by the three flexibility tests and nothing else |
 | **13** | Celery beats off `day_of_week="1-5"` | ⛔ A scheduling change on a running system — your call |
 | **21** | Reconcile `fees.py` to one real contract note | ⛔ Needs one actual note. ⭐ **This is item 5's ONLY cost blocker** (BT22) |
 
@@ -2728,6 +2728,8 @@ it is the only sequence that decides whether the scorer lives:
 treatment) → **21** (one contract note) → **5** (the re-run) → **6** → **19 fires or does not.**
 
 **In parallel, needing nothing:** 2, 3, 27 (the LTP colour bug), 15, 22, 10, 7–9, 16, 18, 23.
+
+⚠ **Item 1 no longer belongs in the blocked table** (Q-A answered it; built 2026-09-19). Q-A still blocks 24; items 13 and 21 still need you, and **21 is the only thing between here and item 5 — the 89% of the loss.**
 
 ⛔ **No round 12.** The next artifact from this programme is a commit.
 

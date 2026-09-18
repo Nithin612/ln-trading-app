@@ -285,6 +285,12 @@ class TestTheDisplayPathCannotReachFabricatedThresholds:
             # Had it stayed uncovered, the most important new block in PART XXI would have
             # rendered as `unassessed` — enabled-but-marked — on all five Buy surfaces.
             restrictions.GATE_UNIVERSE,
+            # Item 1: reachable ON PURPOSE, and it must be. It needs no context at all
+            # (classification and side are on the row), so the list judges a delivery
+            # short exactly as the order path does. Had it been uncovered, the 13 live
+            # SELL signals would have rendered `unassessed` — enabled-but-marked — which
+            # is the configuration that let four unsettleable shorts be clicked.
+            restrictions.GATE_SETTLEMENT,
             restrictions.GATE_REGIME,
             restrictions.GATE_ENTRY_QUALITY,
             restrictions.GATE_RR,
@@ -412,8 +418,12 @@ class TestCompositionInvariants:
         # ⚠ U11 put the quarantine check first — it runs and passes (this signal is not
         # withdrawn), then offmarket blocks. Nothing AFTER the blocker is judged, which
         # is the invariant this test exists for.
+        # ⚠ Item 1 inserted `settlement` between them: this ctx is a BUY, so it runs and
+        # passes. (`universe_membership` needs CTX_IN_UNIVERSE, which this ctx does not
+        # carry, so it is skipped and reported in `unassessed` rather than judged.)
         assert [j.gate for j in out.judgements] == [
             restrictions.GATE_QUARANTINE,
+            restrictions.GATE_SETTLEMENT,
             restrictions.GATE_OFFMARKET,
         ]
 

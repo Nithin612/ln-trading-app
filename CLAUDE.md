@@ -424,13 +424,36 @@ else.
   pass/fail.** ⚠ H8 as specified in the findings doc was insufficient (it asked only "does the bar
   reject noise", which a bar that rejects everything passes trivially); the power arm is the half
   that made the verdict readable. Report: `docs/analysis/dsr-negative-control-2026-09-04.md`.
+- **⭐ A DELIVERY (CNC) PRODUCT CANNOT CARRY A SHORT — `GATE_SETTLEMENT`, shipped 2026-09-19 (queue
+  item 1).** ⛔⛔ **Measured before building: `restrictions.py` declared FOURTEEN gates and referenced
+  a settlement product in NONE of them** (zero occurrences of CNC/MIS/delivery/settlement).
+  `fees.product_for_classification` existed with all four call sites inside `paper_broker.py` and
+  `profit_lock_shadow.py` ⇒ **the system resolved the product in order to BILL a trade and nowhere in
+  order to REFUSE one**, which is how four SELL signals opened four unsettleable shorts on 2026-09-18
+  (−₹5,054; M92 attributes only 4.4% of that to execution and **89.1% to the signals being wrong**).
+  ⭐⭐ **It is a SETTLEMENT rule, not a short ban, and that is what makes the account "flexible for
+  both" (user, Q-A):** the gate ASKS `product_for_classification` (W5 — the mapping is read, never
+  restated) and refuses only when the answer is `delivery`, so **swing/positional → refused;
+  scalp/intraday → MIS → permitted**. Funding intraday capital needs no code change. Mutation testing
+  confirms the three flexibility tests are exactly what kills a "simplification" to a blanket ban.
+  ⭐ **`always_on`, joining U11's quarantine and V3's universe membership rather than the moded
+  gates** — and the contrast with the reverted R:R≥1 floor is the whole justification: R:R was
+  promoted on an "identity" whose premise was an empirical claim about the tape and died in a week,
+  whereas *a sale must be delivered* is a settlement fact. A `settlement_gate_mode = off` would
+  silently re-admit a trade the exchange will not settle, so there is no knob. ⚠ **Falsifier in the
+  docstring:** a delivery short that ever fills for real (SLB, a product this mapping does not model)
+  re-scopes the rule — it is never switched off. ⭐ `requires=frozenset()` ⇒ zero new context, so
+  `eligibility.preview` (which passes `side=signal.direction`) judges it exactly as the order path
+  does and it can never render `unassessed`. **Live: all 13 active SELL signals now `⊘ blocked`, 0 of
+  11 BUYs affected, no frontend change.**
 - **⛔ GATING IS CLOSED AS A PROGRAMME (2026-09-04) — the leak is upstream, now demonstrated.**
   Eight shadow gates over three months, two promotions both refuted (regime, R:R), and the best
   surviving candidate — **`sl_atr`, which passes all three readiness guards** — sits at **t ≈ 0.41
   against a 3.6 hurdle, short by ~9×**. **`sl_atr` is DECIDED: NO; its 20-trade trigger is
   WITHDRAWN** (the count was never the constraint). No partition of these trades will clear the bar
   because the trades carry no edge to partition. **Selection has been optimised; what GENERATES the
-  candidates has not.** The only ACTIVE order-path gate remains `entry_diversity`, which enforces a
+  candidates has not.** ⚠ **CORRECTED 2026-09-19:** the only ACTIVE order-path gate *selecting on
+  measured edge* remains `entry_diversity`, which enforces a
   stated hard rule rather than a measured edge — that is why it is exempt from this.
 - **✅ BUCKETS A AND B ARE COMPLETE (2026-09-06) — the next build is Phase 7.1–7.4**, queued on
   branch **`feature/pre-cycle2-hardening`** (approved, cut from `feature/phase6-overlay-walkforward-retune`

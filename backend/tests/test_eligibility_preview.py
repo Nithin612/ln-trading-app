@@ -269,9 +269,14 @@ class TestThroughStopPreview:
         assert v.reason is not None and "through this signal's stop loss" in v.reason
 
     def test_short_above_its_stop_is_blocked(self) -> None:
+        """⚠ `classification="intraday"` since queue item 1, and it is load-bearing, not
+        incidental: the settlement rule refuses ANY delivery short before `through_stop`
+        is ever reached, so a `swing` SELL here would pass for the wrong reason and stop
+        testing through-stop on shorts at all. An MIS short is settleable, so this still
+        exercises the rule it names."""
         v = eligibility.preview(
-            _signal(direction="SELL", entry_price="100.0000", stop_loss="104.0000",
-                    take_profit="88.0000"),
+            _signal(direction="SELL", classification="intraday", entry_price="100.0000",
+                    stop_loss="104.0000", take_profit="88.0000"),
             market_price=Decimal("110"),
             modes=_modes(),
             **_THRESHOLDS,  # type: ignore[arg-type]

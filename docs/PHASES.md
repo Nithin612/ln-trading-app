@@ -1873,7 +1873,35 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-09-18 (Tier A BUILT).**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-19 (item 1 BUILT).**
+
+**✅ QUEUE ITEM 1 IS BUILT — a delivery (CNC) product can no longer carry a short.**
+`GATE_SETTLEMENT` in `app/signals/restrictions.py` + `tests/test_settlement_restriction.py` (13
+tests, mutation-verified both ways). ⛔⛔ **Measured before building: the registry declared FOURTEEN
+gates and referenced a settlement product in NONE of them** — `product_for_classification` existed
+and every one of its four call sites was a CHARGING site, so **the product was resolved to BILL a
+trade and nowhere to REFUSE one.** ⭐⭐ Q-A's *"flexible for both"* is why it is a SETTLEMENT rule
+and not a short ban: it asks the fee model (W5) and refuses only on `delivery`, so **swing/positional
+→ refused, scalp/intraday (MIS) → permitted** — funding MIS needs no code change, and the three
+flexibility tests are precisely what mutation-kills a "simplification" to a blanket ban. ⭐
+`always_on`, joining U11/V3 rather than the moded gates: unlike the reverted R:R floor, whose premise
+was an empirical claim about the tape, this premise is a settlement fact. **Live effect: all 13
+active SELL signals now `⊘ blocked` (BANKINDIA, BELRISE, CGPOWER, HARSHA among them); 0 of 11 BUYs
+touched; no frontend change**, because `requires=frozenset()` puts it on the display path
+automatically. ⚠ Three existing order-ratchet tests updated, none weakened —
+`test_short_above_its_stop_is_blocked` now uses `classification="intraday"` **on purpose**, or it
+would have passed for the wrong reason and stopped testing through-stop on shorts.
+
+⚠ **NEXT, needing nothing from the user:** item **6** (re-run D5/D1/B7 through item 4's delete
+treatment — but M85 already measured the shift at +0.005R at the median, so expect hygiene rather
+than a changed verdict) · the persistent signal queue + a per-signal idempotency guard (**confirmed
+absent** — only a risk-budget check exists, so two clicks with budget remaining add twice) · item
+**27** (the LTP paints green on a falling price) · item **10** (directional entry zone).
+⛔ **Item 5 — the 89% of the ₹5,054 — is still waiting on ONE contract note (item 21).**
+
+---
+
+**▶ PREVIOUS (2026-09-18, Tier A BUILT).**
 
 **✅✅ TIER A IS BUILT AND PUSHED** — the branch is on GitHub at last (see below). Five items,
 57 new tests, every one mutation-verified:
@@ -1890,8 +1918,8 @@ passed because the error message echoes its input; and the wiring lint was satis
 in the module it was judging. **A green test proves nothing until it has been seen to fail.**
 
 ⚠ **STILL NEEDS THE USER:**
-1. **Q-A** — account type + capital (blocks item 1; the live book's gross is ₹1,19,569 = 1.196× a
-   ₹1 lakh book)
+1. ✅ **Q-A ANSWERED** (CNC now on ~₹1 lakh swing/positional, MIS later with separate capital,
+   "flexible for both") ⇒ **item 1 built 2026-09-19.** Q-A still conditions item 24's cap wording
 2. **Run the re-seed against dev** — `uv run python scripts/seed_strategy_profiles.py`. Dry run
    confirms **all 10 profiles missing**; it is additive, `ON CONFLICT DO NOTHING`, and revives four
    dead consumers. CLAUDE.md says ask before writing live data, so it has NOT been run.

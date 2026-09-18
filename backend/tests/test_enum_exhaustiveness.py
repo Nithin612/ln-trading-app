@@ -118,6 +118,11 @@ class TestRegistryIsDeterministic:
             # user as "the ADX regime is transitional" would be answering a question they
             # did not ask. Only a recorded human withdrawal outranks it.
             "universe_membership",
+            # Item 1: THIRD. Whether the account can SETTLE the trade outranks every
+            # question about whether the setup is good — a delivery short is not a worse
+            # trade, it is not a trade. Below universe membership because "this name is
+            # not tradeable at all" is the broader statement.
+            "settlement",
             "offmarket",
             "regime_gate",
             "circuit_gate",

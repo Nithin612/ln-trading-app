@@ -7,6 +7,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Queue item 1 — a delivery (CNC) product cannot carry a short (2026-09-19)
+
+`app/signals/restrictions.py` (+ `tests/test_settlement_restriction.py`, 13 tests). The rule whose
+absence cost ₹5,054 on 2026-09-18, and the first half of item 1 that the user's Q-A answer unblocked
+after five review rounds.
+
+⛔⛔ **Measured before building: `restrictions.py` declared FOURTEEN gates and not one of them
+referenced a settlement product** — zero occurrences of CNC / MIS / delivery / settlement in the
+whole file. `fees.product_for_classification` did exist, and all four of its call sites were in
+`paper_broker.py` and `profit_lock_shadow.py`. **The system resolved the product in order to BILL a
+trade and nowhere in order to REFUSE one**, so four SELL signals on a cash-delivery account opened
+four short positions that could never have settled.
+
+⭐⭐ **It is a settlement rule, not a short ban — which is what satisfies "flexible for both".** The
+gate asks `product_for_classification` (W5: the mapping is read, never restated) and refuses the
+short only when the answer is `delivery`: **swing/positional → delivery → refused; scalp/intraday →
+intraday (MIS) → permitted.** When intraday capital is funded and those classifications become
+tradeable, the same rule admits them with no code change.
+`test_an_intraday_short_is_permitted_which_is_the_whole_flexibility_requirement` guards that half,
+and **mutation-testing confirms it is the test that kills a "simplification" to a blanket ban** —
+collapsing the product check fails exactly those three tests and nothing else.
+
+⭐ **`always_on`, and the distinction from the refuted R:R floor matters.** R:R≥1 was promoted on an
+"identity needs no evidence" argument and reverted within a week because its premise (*a nearer
+target is easier to hit*) was an empirical claim about the tape. This premise is a settlement fact —
+on the NSE cash market a sale must be delivered — putting it in the same class as U11's recorded
+withdrawal and V3's universe membership. A `settlement_gate_mode = off` would silently re-admit a
+trade the exchange will not settle, so there is no knob. ⚠ Falsifier recorded in the docstring: if a
+delivery short ever fills for real (SLB, or a product this mapping does not model), the rule is
+re-scoped, not switched off.
+
+⭐ **Zero new context, so it lands on both paths and can never read `unassessed`.** Classification
+and side are already in hand (`requires=frozenset()`), so `eligibility.preview` — which passes
+`side=signal.direction` — judges it exactly as the order path does. **Measured against the live
+book: all 13 active SELL signals now render `⊘ blocked`, including BANKINDIA, BELRISE, CGPOWER and
+HARSHA (the four that lost the ₹5,054, since re-minted); none of the 11 BUY signals is affected.**
+No frontend change.
+
+⚠ Three existing tests were updated rather than weakened. `test_short_above_its_stop_is_blocked` now
+uses `classification="intraday"` **on purpose**: a `swing` SELL would block on settlement before
+`through_stop` ran, so it would have passed for the wrong reason and stopped testing through-stop on
+shorts at all.
+
+
 ### The entry problem, measured — the premise was wrong (2026-09-18)
 
 `backend/scripts/signed_displacement_study.py`, PART 14 of the consolidated doc. The user lost

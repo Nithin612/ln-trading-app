@@ -67,6 +67,11 @@ from app.signals import (
     sector_rs,
 )
 
+# ⭐ The single owner of classification → settlement product (W5). Imported rather than
+# restated so the restriction and the charge model can never disagree about what CNC is.
+# `app.trading.fees` has NO app imports, so this direction cannot cycle.
+from app.trading.fees import product_for_classification
+
 if TYPE_CHECKING:  # types only — keeps this module free of service-layer imports at runtime
     from app.broker.circuit_bands import CircuitBand
     from app.services.benchmark import MarketRegimeContext, RsContext
@@ -89,6 +94,7 @@ GATE_THROUGH_STOP = "through_stop"
 GATE_OFFMARKET = "offmarket"
 GATE_QUARANTINE = "signal_quarantine"
 GATE_UNIVERSE = "universe_membership"
+GATE_SETTLEMENT = "settlement"
 
 # ── Context keys ──────────────────────────────────────────────────────────────
 # What a restriction may require. Named constants because `requires` is compared against
@@ -552,6 +558,61 @@ def _judge_through_stop(ctx: RestrictionContext, cfg: RestrictionConfig) -> Judg
     )
 
 
+def _judge_settlement(ctx: RestrictionContext, cfg: RestrictionConfig) -> Judgement:
+    """Item 1 — a DELIVERY product cannot carry a short position.
+
+    ⛔⛔ **The rule whose absence cost ₹5,054 on 2026-09-18.** Four SELL signals were
+    clicked, four short positions opened, and nothing anywhere refused them: measured the
+    same day, `restrictions.py` declared fourteen gates and **not one of them referenced a
+    settlement product** — `product_for_classification` existed but every one of its call
+    sites was a CHARGING site in `paper_broker` / `profit_lock_shadow`. The system resolved
+    the product in order to bill the trade and nowhere in order to refuse it.
+
+    ⭐ **Why `always_on`, and why that is NOT the refuted R:R argument.** The R:R≥1 floor
+    was promoted on an "identity needs no evidence" claim and reverted in a week, because
+    its premise (*a nearer target is harder to reach*) was an empirical claim about the
+    tape wearing an identity's clothes. This premise is not about the tape at all: on the
+    NSE cash market, settling a sale requires delivering shares, so a CNC position cannot
+    be short overnight. It is a settlement fact, in the same class as U11's recorded
+    withdrawal and V3's universe membership — and giving it a mode would create a
+    `settlement_gate_mode = off` that silently re-admits a trade the exchange will not
+    settle.
+
+    ⭐⭐ **It reads the product; it does not restate the mapping** (W5). The authority is
+    `fees.product_for_classification`, already the single owner of classification →
+    settlement. That is what makes this rule satisfy the user's "flexible for both"
+    requirement with no second code path: **swing/positional → delivery → a short is
+    refused; scalp/intraday → intraday (MIS) → a short is permitted.** When intraday
+    capital is funded and those classifications become tradeable, the same rule admits
+    them, because the product changed, not the rule.
+
+    ⚠ **SCOPE — it judges opening a short, never closing a long.** `place_paper_order`
+    opens a position or averages into one; exits run through `close_position`, which does
+    not consult the registry. A SELL reaching here is therefore always a new or increased
+    SHORT.
+
+    ⚠ **Falsifier.** If a delivery short ever fills against a real broker — SLB, or a
+    product this mapping does not model — the premise is wrong and this rule must be
+    re-scoped rather than switched off. There is no knob to switch.
+    """
+    if ctx.side != "SELL":
+        return Judgement(gate=GATE_SETTLEMENT, mode="active", blocked=False)
+
+    product = product_for_classification(str(ctx.signal.classification))
+    if product != "delivery":
+        return Judgement(gate=GATE_SETTLEMENT, mode="active", blocked=False)
+
+    return Judgement(
+        gate=GATE_SETTLEMENT,
+        mode="active",
+        blocked=True,
+        reason=(
+            f"a {ctx.signal.classification} signal settles as delivery (CNC), which cannot "
+            f"hold a short overnight — shorting needs an intraday (MIS) product"
+        ),
+    )
+
+
 #: THE canonical order. Both paths walk this list, so they cannot disagree about which
 #: gates exist or which reason a user sees first. Selection gates precede execution
 #: checks; the broker's own rejections come last, as they do in reality.
@@ -568,6 +629,12 @@ REGISTRY: tuple[Restriction, ...] = (
     Restriction(
         GATE_UNIVERSE, frozenset({CTX_IN_UNIVERSE}), EnforcedBy.OVERLAY, _judge_universe,
         always_on=True,
+    ),
+    # ITEM 1 THIRD: whether this ACCOUNT can settle the trade at all outranks every
+    # question about whether the setup is good. A delivery short is not a worse trade, it
+    # is not a trade — so its reason must be the one the user sees.
+    Restriction(
+        GATE_SETTLEMENT, frozenset(), EnforcedBy.OVERLAY, _judge_settlement, always_on=True
     ),
     # offmarket requires NOTHING: the ABSENCE of a price is precisely its trigger, so a
     # missing one is an answer rather than a gap.
