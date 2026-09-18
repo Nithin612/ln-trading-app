@@ -2693,7 +2693,7 @@ as commits.
 | **8** | The five-field manifest | ⭐ **Widened (ChatGPT 11): + configuration snapshot + dependency lock.** A study fails closed when one is missing |
 | **9** | Experiment registry (Q-B) | The t ≈ 3.6 bar's trial count is unknown |
 | **10** | Directional entry zone | Loss-reduction, not edge |
-| **15** | A10 treatment for `bhavcopy_service` | Guards the daily path; 2022-08-08 stays a hole |
+| **15** | A10 treatment for `bhavcopy_service` | ✅ **BUILT 2026-09-18** — `_assert_plausible_bhavcopy` (magic bytes · HTML · SYMBOL+SERIES header · line floor 1,000) + 11 tests, mirroring `universe_materialiser._assert_plausible_equity_l`. ⭐⭐ **M91 measured why BOTH checks are needed: 2022-08-08 still returns HTTP 200 with `PK\x03\x04` and 233,582 bytes containing 858 NEWLINE BYTES — a line floor alone would have passed it.** Real files carry 2,059 / 2,628 / 3,484 lines. ⭐ A corrupt source is now `status="failed"`, never "holiday": `download_bhavcopy` raises `BhavcopySourceError`, `ingest_bhavcopy_date` converts it (so `eod_catchup`, which aborts on any non-`HTTPError`, does not forfeit the run) and the backfill counts it as **failed**, not holiday. 2022-08-08 stays a hole — deliberately (W2, no XLSX parser) |
 | **16** | CA policy — the external NSE source (D3's free `/api/` path) | ⭐ No longer blocks item 5; runs in parallel |
 | **17** | Measure spread and impact | Falsifier: median half-spread on the tradability-screened subset < 5 bps ⇒ not binding |
 | **18** | Index/VIX for 2021–22 | Integrity ingest, whitelist-class |

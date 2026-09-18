@@ -7,6 +7,39 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Queue item 15 — A10 guard on the bhavcopy downloader (2026-09-18)
+
+`_assert_plausible_bhavcopy` in `backend/app/services/bhavcopy_service.py` + 11 tests. Fourth
+Tier-A item. The downloader checked the status code and an HTML content-type and nothing else, so
+a 200 OK carrying the wrong file read as a successful fetch.
+
+⭐⭐ **M91 — measured, and it decides the design: the 2022-08-08 URL still answers HTTP 200 with
+233,582 bytes whose first four are `PK\x03\x04`, a ZIP, and that body contains 858 newline
+bytes.** Real files carry 2,059 (2021-06-15), 2,628 (2024-03-01) and 3,484 (2026-09-17) lines. So
+**a row-count floor would not have caught the actual failure** — any floor low enough to be safe
+for real files sits far above 858. The magic-byte check and the line floor catch different
+failures and neither subsumes the other; a test asserts that relationship so the day it stops
+holding, one of them can be removed.
+
+The guard mirrors `universe_materialiser._assert_plausible_equity_l` (A10) in shape, with
+per-source thresholds: empty body, binary magic (ZIP/XLS/PDF/gzip), HTML interstitial, a header
+that must name SYMBOL and SERIES, and the line floor.
+
+⭐ **A corrupt source is now a FAILURE, never a holiday.** `download_bhavcopy` raises
+`BhavcopySourceError`; `ingest_bhavcopy_date` converts it to `status="failed"` rather than letting
+it propagate, because `eod_catchup` catches only `httpx.HTTPError` and lets everything else abort
+the whole run — one bad date must not forfeit the rest. `backfill_ohlcv_history` counts it as
+failed instead of folding it into the holiday tally. Previously an HTML block also returned None
+and filed itself as "holiday or weekend"; that now raises too.
+
+⚠ Mutation testing found the tests twice before the tests found anything. Removing the magic-byte
+check first killed only one of four binary cases — the others were being caught by the schema
+assertion, so they asserted a failure without asserting the mechanism they are named for. Adding
+`match` fixed three; the PDF case still survived, because the schema error **echoes the offending
+first line back**, so `match="PDF"` was satisfied by `got b'%PDF...'` from the wrong code path.
+Matching the classification phrase kills all four. An error message that quotes its input can
+validate a test against a failure it did not cause.
+
 ### Queue item 3 — idempotent re-seed of `strategy_profiles`, and a census of every seeding migration (2026-09-18)
 
 `backend/scripts/seed_strategy_profiles.py` + `backend/tests/test_seed_migrations.py` (9 tests).

@@ -238,6 +238,14 @@ async def _fetch_all(todo: list[date], sleep: float) -> RunStats:
                     f"({res.rows_skipped} skipped)",
                     flush=True,
                 )
+            elif res.status == "failed":
+                # ⛔ A 200 OK carrying something that is not a bhavcopy (item 15). Counted as a
+                # FAILURE, never as a holiday — conflating the two is how 2022-08-08 would have
+                # become a silent hole rather than a recorded one.
+                st.failed += 1
+                if st.first_err is None:
+                    st.first_err = f"{d}: {res.message}"
+                print(f"  [{i}/{len(todo)}] {d} FAILED {res.message}", flush=True)
             else:
                 st.holiday += 1
                 print(f"  [{i}/{len(todo)}] {d} — {res.message}", flush=True)

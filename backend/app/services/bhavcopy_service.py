@@ -46,6 +46,79 @@ _BHAV_URL_PATTERN = (
 )
 
 
+#: Real files, measured 2026-09-18: 2,059 lines (2021-06-15) · 2,628 (2024-03-01) · 3,484
+#: (2026-09-17). A floor of 1,000 sits ~2x below the smallest real value.
+MIN_BHAVCOPY_LINES = 1000
+
+#: ⛔ Bodies that are not text at all, served with HTTP 200 at a `.csv` URL.
+#: `PK\x03\x04` is not hypothetical: it is what NSE served for **2022-08-08**, the one
+#: session the 2021-22 backfill could not ingest.
+_BINARY_MAGIC: dict[bytes, str] = {
+    b"PK\x03\x04": "a ZIP/XLSX workbook",
+    b"\xd0\xcf\x11\xe0": "a legacy XLS workbook",
+    b"%PDF": "a PDF",
+    b"\x1f\x8b": "a gzip stream",
+}
+
+
+class BhavcopySourceError(RuntimeError):
+    """NSE answered 200 with something that is not the bhavcopy we asked for.
+
+    ⚠ Deliberately distinct from "not published" (a 404 on a holiday). Collapsing the two is
+    the defect: a corrupt source reported as a holiday is a silent hole in the archive.
+    """
+
+
+def _assert_plausible_bhavcopy(raw: bytes, trade_date: date) -> None:
+    """A10, applied to the bhavcopy — refuse a 200 OK that is not the file we asked for.
+
+    ⛔⛔ **The magic-byte check is the one that matters, and a row-count floor would NOT have
+    caught the real failure.** Measured 2026-09-18: 2022-08-08 returns HTTP 200, 233,582 bytes,
+    first four bytes `PK\\x03\\x04` — a ZIP — and because ZIP payloads contain 0x0A bytes it
+    counts **858 "lines"**. Any plausible line floor passes it. The two checks catch different
+    failures and neither subsumes the other.
+
+    ⚠ **This RAISES rather than returning None**, because `download_bhavcopy`'s None means
+    "not published — holiday or weekend". §9.5's finding was that a ZIP whose bytes happened to
+    parse as degenerate CSV would have ingested zero rows and reported success; the 2022-08-08
+    failure was caught by accident, not by design.
+
+    Mirrors `universe_materialiser._assert_plausible_equity_l` (A10) — same shape, per-source
+    thresholds, deliberately not shared: the failure modes differ and the floors are measured
+    against different files.
+    """
+    if not raw.strip():
+        raise BhavcopySourceError(f"{trade_date}: EMPTY body with status 200")
+
+    head = raw[:512]
+    for magic, what in _BINARY_MAGIC.items():
+        if head.startswith(magic):
+            raise BhavcopySourceError(
+                f"{trade_date}: served {what} at a .csv URL with status 200 "
+                f"(first bytes {head[:4]!r}). This is the 2022-08-08 failure."
+            )
+
+    if head.lstrip().lower().startswith((b"<!doctype", b"<html")):
+        raise BhavcopySourceError(
+            f"{trade_date}: returned HTML with status 200 — an interstitial or error page, "
+            "not the CSV. Refusing to read it as an empty session."
+        )
+
+    first_line = raw.split(b"\n", 1)[0].upper()
+    if b"SYMBOL" not in first_line or b"SERIES" not in first_line:
+        raise BhavcopySourceError(
+            f"{trade_date}: header does not name SYMBOL and SERIES — got {first_line[:120]!r}. "
+            "The schema changed, or this is not a bhavcopy."
+        )
+
+    lines = raw.count(b"\n")
+    if lines < MIN_BHAVCOPY_LINES:
+        raise BhavcopySourceError(
+            f"{trade_date}: only {lines} line(s), below the {MIN_BHAVCOPY_LINES} floor — real "
+            "files carry 2,059-3,484. A truncated feed must never read as a thin session."
+        )
+
+
 @dataclass
 class BhavRow:
     """Parsed and validated row from the bhavcopy CSV."""
@@ -179,9 +252,14 @@ async def download_bhavcopy(
 
     content_type = resp.headers.get("content-type", "")
     if "text/html" in content_type:
-        log.info("Bhavcopy returned HTML (likely blocked) for %s", trade_date)
-        return None
+        # ⚠ Raises now, where it used to return None. An HTML body means we were blocked or
+        # redirected — a FAILURE. Returning None filed it as "holiday or weekend", which is the
+        # same conflation `_assert_plausible_bhavcopy` exists to stop.
+        raise BhavcopySourceError(
+            f"{trade_date}: content-type {content_type!r} — HTML, not the CSV (likely blocked)"
+        )
 
+    _assert_plausible_bhavcopy(resp.content, trade_date)
     return resp.text
 
 
@@ -343,7 +421,20 @@ async def ingest_bhavcopy_date(
     `historical=True` uses backfill semantics — see `upsert_bhavcopy_rows`.
     """
     if csv_text is None:
-        csv_text = await download_bhavcopy(trade_date, client=client)
+        try:
+            csv_text = await download_bhavcopy(trade_date, client=client)
+        except BhavcopySourceError as exc:
+            # ⭐ Reported as a distinct FAILURE, not raised. `eod_catchup` catches only
+            # `httpx.HTTPError` and lets everything else abort the whole run, so one corrupt
+            # date must not forfeit the rest — but it must also never read as a holiday.
+            log.warning("Bhavcopy source invalid for %s: %s", trade_date, exc)
+            return IngestionResult(
+                status="failed",
+                date=trade_date,
+                rows_inserted=0,
+                rows_skipped=0,
+                message=f"source invalid: {exc}",
+            )
 
     if csv_text is None:
         return IngestionResult(
