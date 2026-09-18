@@ -1873,6 +1873,31 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-18 (Tier A BUILT).**
+
+**✅✅ TIER A IS BUILT AND PUSHED** — the branch is on GitHub at last (see below). Five items,
+57 new tests, every one mutation-verified:
+- **14** `app/services/pit_cohort.py` — PIT liquidity cohort, DYNAMIC estimand, 180d pinned
+- **4** `app/backtest/entry_gap.py` — finds trades live would have refused; frozen engine untouched
+- **3** `scripts/seed_strategy_profiles.py` — idempotent re-seed + seed-migration census ratchet
+- **15** `_assert_plausible_bhavcopy` — magic bytes + schema + line floor on the downloader
+- **2** `app/broker/ledger_wiring.py` — the ledger's first production caller + a backend wiring lint
+
+⛔ **THREE TESTS I WROTE THIS SESSION WERE VACUOUS AND MUTATION TESTING CAUGHT ALL THREE.** The M62
+canary passed under a re-introduced look-ahead (median ranking ignores a minority of future bars);
+the bhavcopy binary cases were caught by the schema check, not the magic bytes, and one still
+passed because the error message echoes its input; and the wiring lint was satisfied by a COMMENT
+in the module it was judging. **A green test proves nothing until it has been seen to fail.**
+
+⚠ **STILL NEEDS THE USER:**
+1. **Q-A** — account type + capital (blocks item 1; the live book's gross is ₹1,19,569 = 1.196× a
+   ₹1 lakh book)
+2. **Run the re-seed against dev** — `uv run python scripts/seed_strategy_profiles.py`. Dry run
+   confirms **all 10 profiles missing**; it is additive, `ON CONFLICT DO NOTHING`, and revives four
+   dead consumers. CLAUDE.md says ask before writing live data, so it has NOT been run.
+3. **Item 13** — Celery beats off `day_of_week="1-5"` is a scheduling change on a running system
+4. **Item 21** — one real contract note; it is item 5's ONLY cost blocker
+
 **▶ CONTINUE HERE (next session, any account) — updated 2026-09-18 (round 11).**
 
 **▶▶ ⭐⭐ THE QUEUE IS `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` §13.8 — 30 items, complete.**
