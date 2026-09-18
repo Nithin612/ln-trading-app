@@ -22,7 +22,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.analysis.risk import compute_quantity
-from app.broker import tick_schedule
+from app.broker import ledger_wiring, tick_schedule
 from app.broker.depth import Depth, get_live_depth
 from app.core.config import settings
 from app.models.signal import Signal
@@ -756,6 +756,14 @@ async def place_paper_order(  # noqa: C901 — one linear transaction: resolve p
         db.add(position)
 
     await db.flush()
+
+    # ⭐ Queue item 2 — the ledger's only production caller, in the fill's OWN transaction.
+    # Fails CLOSED, deliberately against the overlay pattern: an overlay that fails open
+    # declines to interfere, but a ledger that fails open lets money move unrecorded, which is
+    # the failure `ledger_entries` exists to prevent. Needs `position.id`, hence after flush.
+    await ledger_wiring.record_fill(
+        db, order=order, position=position, signal_id=signal.id
+    )
     return order, position
 
 
@@ -863,6 +871,10 @@ async def close_position(
     position.closed_at = now
 
     await db.flush()
+
+    # ⭐ Queue item 2 — same chain_id as the fill, derived from the position id, so entry and
+    # exit reconstruct as one trade without a schema change. Same transaction, fails closed.
+    await ledger_wiring.record_close(db, order=order, position=position, reason=reason)
     return order, position
 
 

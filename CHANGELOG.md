@@ -7,6 +7,47 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Queue item 2 — wire the append-only ledger, and the backend built-not-wired lint (2026-09-18)
+
+`backend/app/broker/ledger_wiring.py` + two call sites in `paper_broker` + 8 wiring tests + 6 lint
+tests. Fifth Tier-A item, and the last buildable one. `ledger_entries` held 0 rows because
+`app/services/ledger.py` was imported by `tests/test_ledger.py` only — the one artifact designed to
+survive a database loss had no production caller.
+
+`record_fill` writes an `execution` row on every fill, `record_close` a `position_lifecycle` row on
+every close, and the two share a `chain_id` derived as `uuid5(ns, "position:{id}")` so entry and
+exit reconstruct as one trade without a schema change.
+
+⭐ **Fails CLOSED, in the fill's own transaction** — deliberately against the house pattern where
+order-path overlays fail open in a savepoint. An overlay failing open declines to interfere; a
+ledger failing open lets money move unrecorded, which is the failure the table exists to prevent.
+Paper-only, so a refused order costs nothing; flagged for revisit at Phase 7.
+
+⛔⛔ **bug-hunter found 7 confirmed defects in this change and all are fixed.** The worst by far:
+`LedgerError` subclassed `ValueError`, and both order callers catch `(PaperOrderError, ValueError)`,
+append a REJECTED event and then **commit** — so a failed ledger write would have committed the
+fill, returned 422 to the user, and left a real open position with no ledger row. Fail-closed
+defeated by a base class, and unreachable today only because every argument at the call sites is a
+constant. Also fixed: `as_of` used the UTC date on a column documented as the MARKET date, filing
+anything between 00:00 and 05:30 IST onto the previous session (reachable via
+`manual_close_position`, which has no market-hours guard); `realized_pnl` was recorded unrounded
+while the column is `Numeric(14,2)`, so the ledger could never reconcile with the book on an
+averaged position — and the test could not catch it, because it compared the payload with the same
+in-memory object rather than a refreshed one; `data_version` was `live-feed:{date}`, changing every
+day, which duplicates the `as_of` axis and by the ledger's own §16.1 rule makes no two live fills
+from different days combinable. Two further costs are now documented rather than discovered later:
+the position monitor commits once per scan, so one failing close discards every close in that beat,
+and `current_commit()` shells out to git on the event loop once per process.
+
+⭐⭐ **The lint was satisfied by a comment.** `test_backend_wiring.py` searched for the text
+`record(` and matched `` `record()` refuses a blank one `` inside `ledger_wiring.py` — so deleting
+both real call sites would have left the item-2 regression green. It went through three wrong
+matchers, each failing in the same direction (reporting a debt as paid): `\bname\b` matched the
+words "correct" and "chain" in prose, `\bname\s*\(` still matched because prose writes "the option
+chain (CE+PE legs)", and `\bname\(` matched the comment. It now collects `ast.Call` nodes, so
+comments and docstrings cannot vote, and carries a canary that rewrites the call sites away in
+memory and asserts the lint notices. That is the third vacuous test caught in this session.
+
 ### Queue item 15 — A10 guard on the bhavcopy downloader (2026-09-18)
 
 `_assert_plausible_bhavcopy` in `backend/app/services/bhavcopy_service.py` + 11 tests. Fourth

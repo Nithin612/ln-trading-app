@@ -58,8 +58,20 @@ def current_commit() -> str:
     return out.stdout.strip()[:40] if out.returncode == 0 else UNKNOWN
 
 
-class LedgerError(ValueError):
-    """A write that would have violated an invariant of the ledger."""
+class LedgerError(Exception):
+    """A write that would have violated an invariant of the ledger.
+
+    ⛔⛔ **Deliberately NOT a `ValueError`, and that is load-bearing** (bug-hunter, 2026-09-18).
+    `api/v1/trading.place_order` and `paper_adapter.submit` both catch
+    `(PaperOrderError, ValueError)`, record a REJECTED order event and then **`await
+    db.commit()`** — treating it as the broker refusing the order. As a `ValueError` this class
+    defeated the ledger's entire fail-closed contract: the Order and Position were already added
+    and flushed, so the commit would land a real open position, return 422 to the user, and leave
+    **no ledger row** — the precise inverse of the guarantee. Validation here runs before any DB
+    operation, so the session is clean at that moment, which is exactly what makes it commit
+    cleanly. Unreachable today (every argument at the call sites is a constant) and a trap for the
+    next `node_type` or a payload-derived `experiment_id`.
+    """
 
 
 async def record(
