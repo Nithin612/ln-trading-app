@@ -7,6 +7,35 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Queue item 3 — idempotent re-seed of `strategy_profiles`, and a census of every seeding migration (2026-09-18)
+
+`backend/scripts/seed_strategy_profiles.py` + `backend/tests/test_seed_migrations.py` (9 tests).
+Third Tier-A item. `strategy_profiles` has held 0 rows at head since the 2026-09-07 rebuild: the
+schema came back with alembic already marking the seed migration applied, so the seed never re-ran
+and cannot — `alembic upgrade` is a no-op on a revision it thinks is done. Four consumers have been
+structurally unable to produce anything since, with a green suite throughout.
+
+⭐⭐ **TEN profiles, not eight — two migrations seed this table and only one was ever named.**
+`o1p2q3r4s5t6` carries the 8 v1 profiles; `d2e3f4a5b6c7` carries `retune_base` and
+`retune_momentum_x15`. Restoring only the Phase-2 eight would have left the momentum-retune shadow
+arm dead — one of the three forward-evidence loops `docs/PHASES.md` still lists as open, which
+cannot resolve anything while its profiles do not exist.
+
+⭐ **Census measured: 4 of 46 migrations write rows.** `indices` (27 rows) and `ca_flag_events`
+(7) are populated — the index registry survived because its migration is HEAD and ran *after* the
+rebuild. Only `strategy_profiles` is empty. `test_no_unregistered_seed_bearing_migration` is a
+ratchet: a new migration containing an INSERT fails the suite until `SEED_BEARING` records what
+re-seeds it after a rebuild. That is the check whose absence let this sit invisible for eleven days.
+
+The script loads each migration **by path** and reuses that migration's own `SEEDS` and `_INSERT`
+statement, appending `ON CONFLICT (key, version) DO NOTHING`. Nothing about a profile is restated
+(W2), and the migrations keep their no-app-imports rule because the dependency runs the other way.
+An existing row is never modified — a test edits a seeded profile and asserts the re-seed leaves it
+alone, because reference data is restored, not restated.
+
+⏳ Dry run against dev confirms all ten missing. The write itself is not run here: CLAUDE.md
+requires asking before anything writes to live data.
+
 ### Queue item 4 — find the backtest trades live would have refused (2026-09-18)
 
 `backend/app/backtest/entry_gap.py` + `backend/tests/test_entry_gap.py` (13 tests). Second Tier-A

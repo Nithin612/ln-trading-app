@@ -2688,7 +2688,7 @@ as commits.
 | # | Item | Note |
 |---|---|---|
 | **2** | Wire the ledger + a backend wiring lint | The one artifact that survives the next DB loss |
-| **3** | Re-seed `strategy_profiles` idempotently + census every seed-bearing migration | Four consumers dead since 09-07 |
+| **3** | Re-seed `strategy_profiles` idempotently + census every seed-bearing migration | ✅ **BUILT 2026-09-18** — `scripts/seed_strategy_profiles.py` + 9 tests. ⭐⭐ **TEN profiles, not eight: TWO migrations seed this table** and only `o1p2q3r4s5t6` was ever named. `d2e3f4a5b6c7` seeds `retune_base` + `retune_momentum_x15` — **restoring only the eight would have left the momentum-retune shadow arm dead**, a forward-evidence loop PHASES still lists as open. ⭐ **Census measured: 4 of 46 migrations seed rows.** `indices` (27) and `ca_flag_events` (7) are populated; only `strategy_profiles` is empty. `tests/test_seed_migrations.py` is a **ratchet** — a new seeding migration fails the suite until `SEED_BEARING` records what re-seeds it. The script loads each migration **by path** and reuses its own `SEEDS` and `_INSERT` (W2 — nothing restated), adding `ON CONFLICT DO NOTHING`. ⏳ **Dry run on dev confirms all 10 missing; the write itself awaits the user** (CLAUDE.md: ask before writing live data) |
 | **7** | Ledger `surface` + client `displayed_rank` | Selection is otherwise unattributable |
 | **8** | The five-field manifest | ⭐ **Widened (ChatGPT 11): + configuration snapshot + dependency lock.** A study fails closed when one is missing |
 | **9** | Experiment registry (Q-B) | The t ≈ 3.6 bar's trial count is unknown |
