@@ -126,11 +126,10 @@ def _verdict(name: str, t_before: float, t_after: float, m_before: float, m_afte
 
 # ── D5 ───────────────────────────────────────────────────────────────────────
 
-def run_d5(max_stocks: int, min_rows: int) -> list[str]:
+def run_d5(frames: dict[str, Any]) -> list[str]:
     import tp_geometry_study as d5
 
-    frames = asyncio.run(d5._load_frames("liquid", min_rows, max_stocks))
-    print(f"D5: {len(frames)} stocks loaded", flush=True)
+    print(f"D5: {len(frames)} stocks", flush=True)
 
     records: dict[tuple[str, pd.Timestamp], Any] = {}
     variants = d5._collect(frames, records=records)
@@ -199,14 +198,24 @@ def run_d5(max_stocks: int, min_rows: int) -> list[str]:
 
 # ── D1 ───────────────────────────────────────────────────────────────────────
 
-def run_d1(max_stocks: int, min_rows: int) -> list[str]:
+def run_d1(frames: dict[str, Any]) -> list[str]:
+    """⛔⛔ The statistic here was WRONG in the first draft and the smoke run caught it.
+
+    I computed a PAIRED contrast on keys present in both runs. It came back **exactly
+    +0.0000**, and that is structural rather than lucky: for a key in both books the trade
+    is identical — same entry, stop and target — because RVOL changes only whether a signal
+    clears the 70% gate, never the levels once it does. A paired-on-shared contrast for this
+    intervention is degenerate BY CONSTRUCTION and can only ever report zero.
+
+    D1's real statistics are the published two: **§1** RVOL buckets on baseline signals (the
+    design-free test — if RVOL carries no outcome information here, no factor design can
+    extract any) and **§2** the four COHORT means, where the headline `−0.291R` lives in the
+    set RVOL newly admitted (A∖B).
+    """
     import rvol_factor_study as d1
-    import tp_geometry_study as d5
     from app.backtest import engine as engine_mod
 
-    frames = asyncio.run(d5._load_frames("liquid", min_rows, max_stocks))
-    print(f"D1: {len(frames)} stocks loaded", flush=True)
-
+    print(f"D1: {len(frames)} stocks", flush=True)
     rec_b: dict[tuple[str, pd.Timestamp], Any] = {}
     baseline = d1._run(frames, records=rec_b)
     print(f"D1: baseline {len(baseline)} signals", flush=True)
@@ -220,45 +229,86 @@ def run_d1(max_stocks: int, min_rows: int) -> list[str]:
         engine_mod.__dict__["run_all_factors"] = orig
     print(f"D1: augmented {len(augmented)} signals", flush=True)
 
-    # Same restriction as D5 — the published D1 headline is swing+positional.
-    shared = sorted(
-        (
-            k
-            for k in set(baseline) & set(augmented)
-            if baseline[k].classification in d1._TARGET_CLASSES
-        ),
-        key=lambda k: (k[1], k[0]),
-    )
-    lines = ["## D1 — RVOL as a graded factor (`rvol_factor_study`)", ""]
-    r_base = [d1._r(baseline[k]) for k in shared]
-    lines += characterise(r_base, [k[1] for k in shared], "D1 baseline R (shared keys)")
+    def keys_of(book: dict[Any, Any], subset: set[Any]) -> list[Any]:
+        return sorted(
+            (k for k in subset if book[k].classification in d1._TARGET_CLASSES),
+            key=lambda k: (k[1], k[0]),
+        )
 
-    refused = [k for k in shared if is_unfillable(rec_b[k])]
+    b_keys, a_keys = set(baseline), set(augmented)
+    added, dropped, shared = a_keys - b_keys, b_keys - a_keys, a_keys & b_keys
+
+    lines = ["## D1 — RVOL as a graded factor (`rvol_factor_study`)", ""]
+    kb = keys_of(baseline, b_keys)
+    lines += characterise([d1._r(baseline[k]) for k in kb], [k[1] for k in kb], "D1 baseline R")
+
+    n_ref = sum(1 for k in kb if is_unfillable(rec_b[k]))
     lines += [
-        f"**Delete treatment:** {len(refused)} of {len(shared)} shared signals "
-        f"({100 * len(refused) / max(len(shared), 1):.3f}%) refused by the live predicate.",
+        f"**Delete treatment on the baseline book:** {n_ref} of {len(kb)} "
+        f"({100 * n_ref / max(len(kb), 1):.3f}%) refused by the live predicate.",
         "",
-        "| cohort | n | mean ΔR (augmented − baseline) | t iid | t clustered | sessions |",
+        "⚠ Adding a factor is NOT additive — the scorer normalises by the weight of SCORING "
+        f"factors — so the books are not nested: **added {len(added)}** (a weak signal lifted "
+        f"over 70), **dropped {len(dropped)}** (a strong one diluted under it), shared "
+        f"{len(shared)}.",
+        "",
+        "### §2 — the four cohorts (the published headline is *RVOL added*)",
+        "",
+        "| set | n | mean R | t iid | t clustered | sessions |",
         "|---|--:|--:|--:|--:|--:|",
     ]
-    d_all = [d1._r(augmented[k]) - d1._r(baseline[k]) for k in shared]
-    line_b, m_b, t_b = _stat_block(d_all, [k[1] for k in shared], "all shared")
-    kept = [k for k in shared if not is_unfillable(rec_b[k])]
-    d_keep = [d1._r(augmented[k]) - d1._r(baseline[k]) for k in kept]
-    line_a, m_a, t_a = _stat_block(d_keep, [k[1] for k in kept], "delete-treated")
-    lines += [line_b, line_a, ""]
+
+    head: dict[str, tuple[float, float]] = {}
+    for label, book, subset, recs in (
+        ("baseline book B", baseline, b_keys, rec_b),
+        ("augmented book A", augmented, a_keys, rec_a),
+        ("RVOL added (A∖B)", augmented, added, rec_a),
+        ("RVOL dropped (B∖A)", baseline, dropped, rec_b),
+    ):
+        ks = keys_of(book, subset)
+        if not ks:
+            lines.append(f"| {label} | 0 | — | — | — | — |")
+            continue
+        vals = [d1._r(book[k]) for k in ks]
+        line, m, t = _stat_block(vals, [k[1] for k in ks], label)
+        lines.append(line)
+        kept = [k for k in ks if not is_unfillable(recs[k])]
+        vk = [d1._r(book[k]) for k in kept]
+        line2, m2, t2 = _stat_block(vk, [k[1] for k in kept], f"{label} — delete-treated")
+        lines.append(line2)
+        head[label] = (m, t)
+        head[label + "|after"] = (m2, t2)
+
     lines += [
-        f"⚠ Adding a factor is not purely additive — the scorer normalises by the weight of "
-        f"SCORING factors — so the two runs are not nested: "
-        f"{len(set(augmented) - set(baseline))} signals were newly admitted and "
-        f"{len(set(baseline) - set(augmented))} dropped below the 70% gate. The paired "
-        f"contrast above is on the {len(shared)} shared keys only.",
         "",
-        "**F9 falsifier:**",
+        "### §1 — does RVOL-at-entry predict outcome at all? (baseline, design-free)",
         "",
-        f"- {_verdict('D1 injection ΔR', t_b, t_a, m_b, m_a)}",
+        "⭐ The decisive half: if RVOL carries no outcome information among signals we already "
+        "mint, no factor design can extract edge from it.",
         "",
+        "| RVOL bucket | n | mean R | t iid | t clustered | sessions |",
+        "|---|--:|--:|--:|--:|--:|",
     ]
+    kept_b = [k for k in kb if not is_unfillable(rec_b[k])]
+    for label, lo, hi in (("<1.0x", 0.0, 1.0), ("1.0-1.5x", 1.0, 1.5),
+                          ("1.5-2.0x", 1.5, 2.0), (">=2.0x", 2.0, 1e9)):
+        ks = [k for k in kept_b if lo <= baseline[k].rvol < hi]
+        if len(ks) < 3:
+            lines.append(f"| {label} | {len(ks)} | — | — | — | — |")
+            continue
+        line, _m, _t = _stat_block(
+            [d1._r(baseline[k]) for k in ks], [k[1] for k in ks], label
+        )
+        lines.append(line)
+
+    lines += ["", "**F9 falsifier** (on the published headline, the *added* set):", ""]
+    if "RVOL added (A∖B)" in head:
+        mb, tb = head["RVOL added (A∖B)"]
+        ma, ta = head["RVOL added (A∖B)|after"]
+        lines.append(f"- {_verdict('D1 RVOL-added mean R', tb, ta, mb, ma)}")
+    else:
+        lines.append("- ⛔ the added set is empty on this cohort — not assessable")
+    lines.append("")
     return lines
 
 
@@ -288,16 +338,50 @@ def main() -> None:
         "treatment and the SE, and remain contaminated by the cohort.**",
         "",
     ]
-    if args.study in ("d5", "both"):
-        lines += run_d5(args.max_stocks if args.max_stocks is not None else 250, args.min_rows)
-    if args.study in ("d1", "both"):
-        lines += run_d1(args.max_stocks if args.max_stocks is not None else 150, args.min_rows)
-
-    text = "\n".join(lines) + "\n"
-    print("\n" + text)
     dest = Path(args.out) if args.out else OUT / f"item6-rerun-{today}.md"
     dest.parent.mkdir(parents=True, exist_ok=True)
-    dest.write_text(text)
+
+    def flush() -> None:
+        """⛔ Write after EVERY study. The first version of this script wrote once at the
+        end, so a crash in D1 threw away 1h48m of completed D5 work. A long job that
+        reports nothing until it finishes has no partial-failure mode, only total loss."""
+        dest.write_text("\n".join(lines) + "\n")
+
+    # ⛔⛔ ONE `asyncio.run` FOR EVERY DB TOUCH, and this is not style.
+    # `AsyncSessionFactory`'s pool binds its connections to the loop that created them, so a
+    # SECOND `asyncio.run` — which builds a NEW loop — fails with "Future attached to a
+    # different loop" the moment it reuses a pooled connection. That is exactly how the
+    # 1h48m run died, at D1's frame load, after D5 had already finished.
+    d5_n = args.max_stocks if args.max_stocks is not None else 250
+    d1_n = args.max_stocks if args.max_stocks is not None else 150
+
+    async def _load_all() -> tuple[dict[str, Any], dict[str, Any]]:
+        import tp_geometry_study as d5
+
+        f5 = (
+            await d5._load_frames("liquid", args.min_rows, d5_n)
+            if args.study in ("d5", "both")
+            else {}
+        )
+        f1 = (
+            await d5._load_frames("liquid", args.min_rows, d1_n)
+            if args.study in ("d1", "both")
+            else {}
+        )
+        return f5, f1
+
+    frames_d5, frames_d1 = asyncio.run(_load_all())
+    print(f"frames loaded — D5 {len(frames_d5)} · D1 {len(frames_d1)}", flush=True)
+
+    if args.study in ("d5", "both"):
+        lines += run_d5(frames_d5)
+        flush()
+        print(f"→ D5 section written to {dest}", flush=True)
+    if args.study in ("d1", "both"):
+        lines += run_d1(frames_d1)
+        flush()
+
+    print("\n" + "\n".join(lines))
     print(f"→ {dest}")
 
 

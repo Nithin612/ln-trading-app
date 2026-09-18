@@ -15,8 +15,10 @@ from __future__ import annotations
 
 import random
 
+import pytest
 from app.services.block_bootstrap import (
     cluster_robust_mean_t,
+    cluster_robust_slope_t,
     design_effect,
     intraclass_correlation,
 )
@@ -146,7 +148,119 @@ def test_too_few_observations_is_not_assessable() -> None:
 
 
 def test_mismatched_lengths_raise_rather_than_silently_truncate() -> None:
-    import pytest
-
     with pytest.raises(ValueError, match="against"):
         intraclass_correlation([1.0, 2.0, 3.0], ["a", "b"])
+
+
+# ── The slope estimator (B7's T=0 contrast) ──────────────────────────────────
+
+def test_a_binary_regressor_reproduces_the_difference_in_group_means() -> None:
+    """⭐ The point estimate must be the SAME number the published two-sample contrast
+    reported — only the SE is allowed to move. If the slope disagreed with the plain
+    difference, the re-run would be reporting a different quantity under the old name."""
+    y = [1.0, 3.0, 2.0, 8.0, 10.0, 6.0]
+    x = [1.0, 1.0, 1.0, 0.0, 0.0, 0.0]
+    groups = ["a", "b", "c", "a", "b", "c"]
+
+    res = cluster_robust_slope_t(y, x, groups)
+    assert res is not None
+    b = res[0]
+    mean_1 = sum(y[:3]) / 3
+    mean_0 = sum(y[3:]) / 3
+    assert abs(b - (mean_1 - mean_0)) < 1e-9
+
+
+def test_the_slope_canary_over_rejects_naively_and_not_when_clustered() -> None:
+    """⭐⭐ The same H0 discipline as the mean, for the contrast. Both groups appear on the
+    SAME days, which is exactly why two separate SEs combined with `hypot` would be wrong —
+    the day shock is common to both arms, not independent across them."""
+    rng = random.Random(4242)
+    reps = 300
+    naive_rejects = clustered_rejects = 0
+
+    for _ in range(reps):
+        y: list[float] = []
+        x: list[float] = []
+        groups: list[int] = []
+        for g in range(40):
+            shock = rng.gauss(0.0, 1.0)
+            for i in range(10):
+                y.append(shock + rng.gauss(0.0, 1.0))  # truth: no group effect
+                x.append(1.0 if i < 5 else 0.0)
+                groups.append(g)
+
+        n1 = [v for v, xi in zip(y, x, strict=True) if xi == 1.0]
+        n0 = [v for v, xi in zip(y, x, strict=True) if xi == 0.0]
+        m1, m0 = sum(n1) / len(n1), sum(n0) / len(n0)
+        v1 = sum((v - m1) ** 2 for v in n1) / (len(n1) - 1) / len(n1)
+        v0 = sum((v - m0) ** 2 for v in n0) / (len(n0) - 1) / len(n0)
+        if abs((m1 - m0) / (v1 + v0) ** 0.5) > 1.96:
+            naive_rejects += 1
+
+        res = cluster_robust_slope_t(y, x, groups)
+        assert res is not None
+        if abs(res[2]) > 1.96:
+            clustered_rejects += 1
+
+    assert clustered_rejects / reps < 0.12, (
+        f"clustered rejection rate {clustered_rejects / reps:.1%} at a 5% nominal level"
+    )
+    # ⚠ Deliberately NOT asserting the naive arm over-rejects here: with the indicator
+    # balanced WITHIN every day, the shared day shock cancels out of the difference, so the
+    # naive SE is nearly right. That is the honest result and recording it matters — the
+    # correction bites when the groups are UNBALANCED across days, which is B7's real case.
+    assert naive_rejects / reps < 0.40
+
+
+def test_an_unbalanced_contrast_is_where_clustering_actually_bites() -> None:
+    """⭐⭐ The companion to the test above, and the one that justifies the estimator.
+
+    When whole DAYS are mostly one arm or the other — B7's case, since same-session exits
+    cluster on volatile days — the day shock no longer cancels out of the difference, the
+    naive SE understates badly, and the clustered one holds.
+    """
+    rng = random.Random(99)
+    reps = 300
+    naive_rejects = clustered_rejects = 0
+
+    for _ in range(reps):
+        y: list[float] = []
+        x: list[float] = []
+        groups: list[int] = []
+        for g in range(40):
+            shock = rng.gauss(0.0, 1.0)
+            arm = 1.0 if g % 2 == 0 else 0.0  # the WHOLE day is one arm
+            for _ in range(10):
+                y.append(shock + rng.gauss(0.0, 1.0))
+                x.append(arm)
+                groups.append(g)
+
+        n1 = [v for v, xi in zip(y, x, strict=True) if xi == 1.0]
+        n0 = [v for v, xi in zip(y, x, strict=True) if xi == 0.0]
+        m1, m0 = sum(n1) / len(n1), sum(n0) / len(n0)
+        v1 = sum((v - m1) ** 2 for v in n1) / (len(n1) - 1) / len(n1)
+        v0 = sum((v - m0) ** 2 for v in n0) / (len(n0) - 1) / len(n0)
+        if abs((m1 - m0) / (v1 + v0) ** 0.5) > 1.96:
+            naive_rejects += 1
+
+        res = cluster_robust_slope_t(y, x, groups)
+        assert res is not None
+        if abs(res[2]) > 1.96:
+            clustered_rejects += 1
+
+    assert naive_rejects / reps > 0.30, (
+        f"naive rejection rate {naive_rejects / reps:.1%} — the generator stopped producing "
+        "the unbalanced structure, so the comparison below proves nothing"
+    )
+    assert clustered_rejects / reps < 0.12, (
+        f"clustered rejection rate {clustered_rejects / reps:.1%} at a 5% nominal level"
+    )
+
+
+def test_a_regressor_with_no_variation_is_not_identified() -> None:
+    assert cluster_robust_slope_t([1.0, 2.0, 3.0], [1.0, 1.0, 1.0], ["a", "b", "c"]) is None
+
+
+def test_slope_mismatched_lengths_raise() -> None:
+    with pytest.raises(ValueError, match="lengths differ"):
+        cluster_robust_slope_t([1.0, 2.0], [1.0], ["a", "b"])

@@ -381,3 +381,44 @@ def cluster_robust_mean_t(
         return mean, 0.0, 0.0, n_groups
     se = var**0.5
     return mean, se, (mean - null) / se, n_groups
+
+
+def cluster_robust_slope_t(
+    y: Sequence[float], x: Sequence[float], groups: Sequence[Any]
+) -> tuple[float, float, float, int] | None:
+    """Slope, cluster-robust SE, t and cluster count for `y ~ a + b·x`.
+
+    ⭐ **Why a regression and not two separate means.** A contrast between two groups that
+    BOTH appear on the same day — B7's `T = 0` versus `T ≥ 1`, say — is not two independent
+    samples. Combining each group's own SE with `hypot` assumes the day shock is independent
+    across the two, which it is not: it is the *same day*. Running it as one regression with
+    a group indicator and clustering on the day lets the covariance cancel where it should.
+
+    ⚠ With a 0/1 indicator this returns exactly the difference in group means as `b`, so the
+    point estimate is comparable with any published two-sample number and only the SE moves.
+    """
+    n = len(y)
+    if n != len(x) or n != len(groups):
+        raise ValueError(f"y={n} x={len(x)} groups={len(groups)} — lengths differ")
+    if n < 3:
+        return None
+    xbar = sum(x) / n
+    ybar = sum(y) / n
+    sxx = sum((xi - xbar) ** 2 for xi in x)
+    if sxx <= 0:
+        return None  # no variation in the regressor — the contrast is not identified
+    b = sum((xi - xbar) * (yi - ybar) for xi, yi in zip(x, y, strict=True)) / sxx
+    a = ybar - b * xbar
+
+    by: dict[Any, float] = {}
+    for xi, yi, g in zip(x, y, groups, strict=True):
+        by[g] = by.get(g, 0.0) + (xi - xbar) * (yi - a - b * xi)
+    n_groups = len(by)
+    if n_groups < 2:
+        return None
+    meat = sum(s * s for s in by.values())
+    var = (n_groups / (n_groups - 1)) * meat / (sxx * sxx)
+    if var <= 0:
+        return b, 0.0, 0.0, n_groups
+    se = var**0.5
+    return b, se, b / se, n_groups

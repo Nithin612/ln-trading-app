@@ -74,12 +74,21 @@ def _mean_se(v: list[float]) -> tuple[int, float, float]:
     return n, statistics.mean(v), statistics.stdev(v) / math.sqrt(n)
 
 
-async def main(csv_path: str, n_stocks: int) -> None:
-    trades = _load(csv_path)
-    frames = await load_frames(n_stocks)
-    print(f"trades {len(trades)}   frames {len(frames)}")
+def walk_excursions(
+    trades: list[dict[str, Any]], frames: dict[str, Any]
+) -> tuple[list[dict[str, Any]], int]:
+    """Each trade's own bars → MFE/MAE in R, and the day each barrier was first touched.
 
-    # ── walk each trade's own bars and record the excursion path ──────────────────
+    ⭐ Extracted from `main` for queue item 6, unchanged, so the re-run can walk the SAME
+    excursions under the delete treatment instead of reimplementing this (W2). Returns
+    `(records, unmatched)`.
+
+    ⚠ `w` is `t["w"]`, which the probe computes from `rec.entry_price` — the FILL. So MFE and
+    MAE are FILL-referenced like every other R in this codebase (M64), and a trade whose fill
+    already gapped through its stop is normalised by a risk distance that the live engine
+    would never have accepted. That is exactly the population item 4's delete treatment
+    removes, and why B7 is in item 6's scope at all.
+    """
     recs: list[dict[str, Any]] = []
     missing = 0
     for t in trades:
@@ -119,6 +128,15 @@ async def main(csv_path: str, n_stocks: int) -> None:
             "mfe_atr": (mfe * t["w"] / t["atr_pct"]) if t["atr_pct"] == t["atr_pct"]
             and t["atr_pct"] else float("nan"),
         })
+    return recs, missing
+
+
+async def main(csv_path: str, n_stocks: int) -> None:
+    trades = _load(csv_path)
+    frames = await load_frames(n_stocks)
+    print(f"trades {len(trades)}   frames {len(frames)}")
+
+    recs, missing = walk_excursions(trades, frames)
     print(f"excursion paths walked {len(recs)}   (unmatched: {missing})")
     if len(recs) < 20:
         print("too few — aborting")
