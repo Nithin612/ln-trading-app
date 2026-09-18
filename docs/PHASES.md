@@ -1873,7 +1873,29 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-09-18.**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-18 (round 11).**
+
+**▶▶ ⭐⭐ THE QUEUE IS `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` §13.8 — 30 items, complete.**
+⛔ §12.12 is superseded: it dropped rows in the round it consolidated them (Holdout-2, the runbook
+DR ordering, the off-box backup, Q-C, and all of PART 3 including a money-correctness LTP colour
+bug). §13.8 carries a completeness rule so it cannot shrink silently again.
+
+**⛔ NO ROUND 12. The next artifact from this programme is a commit.** Six of six reviewers and the
+document's own rule agree. **BUILD ORDER:**
+- **From the user, one sentence:** **Q-A** (account type + capital — the live book's gross is
+  ₹1,19,569 = 1.196× a ₹1 lakh book) and **the push** (W4 reserves it).
+- **The chain that decides whether the scorer lives:** **12** (push + SIGN — item 5 is the first run
+  that can be attested, and only if the push precedes it) → **14** (`liquid_as_of`, **dynamic**
+  estimand, 180-day window pinned, no caller override) → **4** (delete treatment) → **21** (one
+  contract note — item 5's ONLY cost blocker; tax does NOT move break-even) → **5** (E2 on 797, PIT
+  cohort, three named CAs excluded by dated list) → **6** → **19 fires or does not**.
+- **In parallel, needing nothing:** 2, 3, 27 (the LTP colour bug), 15, 22, 10, 7–9, 16, 18, 23.
+
+⭐ **M85 answered item 4's magnitude without a re-run:** contamination is +0.1231R at a 0.65% stop,
+**+0.0282R at the 2% order-path floor**, +0.0052R at the median 5% ⇒ **the 0.05R falsifier can only
+fire below a 2% stop, which the notional cap already refuses.**
+
+
 
 **▶▶ ⭐⭐ READ `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` FIRST — and read §12.12, which is now
 THE ONE CURRENT QUEUE.** Round 10 (PART 12) collapsed the four patch-sets (§7.11, §8.10, §10.11,

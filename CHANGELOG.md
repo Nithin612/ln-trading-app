@@ -7,6 +7,63 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Round-11 panel — the queue lost rows it had just consolidated, and item 4's magnitude is now measured (2026-09-18)
+
+PART 13. Six responses; **all six say stop reviewing and build**, which is §12.12's own rule. This
+round therefore ships with a probe. ⛔ Gemini and Nemotron were stale for the **third consecutive
+round** (Gemini proposes filling the 922-day hole, done 09-17; Nemotron restates §12.12 back
+verbatim): 0 new points between them.
+
+⭐⭐ **M85 — THE PROBE: item 4's contamination is a measured function of stop width.** Because every
+affected trade books exactly +1.000R (M64), the delete treatment's shift is arithmetic, and the rate
+is just the archive's gap exposure at that width. On 405,426 name-days: p10 0.65% stop → 10.068%
+affected → **+0.1231R**; order-path floor 2% → 2.499% → **+0.0282R**; median 5% → 0.470% →
+**+0.0052R**; 8% cap → 0.191% → +0.0021R. ⇒ **item 4's 0.05R falsifier can only fire below a 2%
+stop — which the notional cap already refuses.** Item 4 is reclassified a correctness fix, with a
+stated expectation the re-run must match, except for D1/D5/B7 whose corpora include that cohort.
+
+⛔⛔ **Ten corrections to the document, and one is a verdict I got backwards.** §12.3 recorded
+"Q28 CONFIRMED"; measured, corr(lines, corrections) = **−0.837** — proportionality predicts
+5 → 3.5 → 2.6 → 1.6, observed **5 → 7 → 6 → 8** while volume fell 3.1×, so the defect count is
+flat-to-rising and the yield is **not** a volume artifact. The case for building is stronger than
+I stated it.
+
+⛔⛔ **§12.12 — the "one table, current" queue — dropped rows in the same round it consolidated
+them.** Measured on that section: *Holdout-2* 0 · *runbook* 0 · *off-box* 0 · *Q-C* 0 ·
+*provenance* 0 · *LTP* 0 · *palette* 0. The 313-session crash block was DECIDED in §12.7 and never
+written down; §8.10's "U5 runbook DR ordering; off-box backup; push" kept only "Push"; PART 3 was
+never folded in, so a money-correctness frontend bug (a falling price rendered green) had no row.
+§13.8 rebuilds it with a completeness rule and 30 numbered items.
+
+⭐⭐ **Three unblockings.** (1) **Tax does not move break-even** (Claude BT22) — it is levied on
+profit, which is zero at break-even; item 5's only cost blocker is the contract-note reconciliation.
+(2) **Item 5 no longer waits on a full CA ingest** (Grok) — exclude the three named corporate
+actions by dated list, which is a cache of the authority's answers rather than a `|move|` threshold.
+(3) **The push moves above item 5** (Claude H27) — item 5 is the first run that can be attested, and
+only if the push precedes it.
+
+⭐ **Two estimand decisions taken.** `liquid_as_of` is pre-registered **dynamic** — eligibility
+rebuilt per measurement date, not one cohort fixed at study start (ChatGPT 1.2) — with a 180-day
+window pinned in the signature. And item 6 now says **characterise the dependence, then choose the
+estimator**, not "apply Newey-West" (ChatGPT 2.3).
+
+⭐ **Item 19 gained its third branch** (Claude Q30): the band **[0.0121, 0.0499]** on the point
+estimate triggered neither the kill nor the resurrection rule, and it is two half-widths wide.
+A straddle is now a second null: the scorer retires and the holdout is not opened to break the tie.
+"Retired" is defined for the first time.
+
+Three of Kimi's findings were **refuted by measurement**: the intraday figures reconcile at four
+decimal places (8.2440 / 23.7580 / 2.8819 — only the reconstruction from rounded halves fails); all
+20 backfill-created names do have bars; and the 2022-08 gap really is 5 days, because 2022-08-09 was
+Muharram. Its §9.2 tiling finding was confirmed and fully reconciled: 9 = 5 per-block return-lag
+sessions + the 4 weekend sessions recovered afterwards.
+
+Also corrected in place: §9.3's exposure table replaced (not cross-referenced) with the estimator
+named; the commit count restated 209/210 → **215**; M31's two percentages were on different bases;
+break-even 0.0310's parameters (`E[z|sel]` 2.267, implied σ_cs **3.63%**) carried for the first time;
+and "matched basket" renamed in the one place it was still a forward instruction.
+
+
 ### Round-10 panel — E2's cohort is 34% look-ahead, and item 4 is unblocked by arithmetic (2026-09-18)
 
 PART 12. Seven responses adjudicated one by one (M62–M84). **Two arrived against stale copies of the

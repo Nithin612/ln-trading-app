@@ -634,6 +634,37 @@ else.
   — TimescaleDB hypertables need `timescaledb_pre_restore()`/`post_restore()`) — details in
   `RUNBOOK.md` §9. **Ask before anything that writes to, truncates or migrates live data.**
 
+- **⛔⛔ CONSOLIDATED-DOC ROUND 11 (2026-09-18) — THE QUEUE LOST ROWS IT HAD JUST CONSOLIDATED;
+  ITEM 4's MAGNITUDE IS MEASURED; ⛔ NO ROUND 12.** PART 13 of `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md`.
+  Six responses, **all six say build**; Gemini and Nemotron stale for the **third** round running (0
+  points between them). **THE QUEUE IS NOW §13.8 — 30 items with a completeness rule.**
+  ⭐⭐ **M85, the probe: item 4's contamination is a function of stop width.** Every affected trade
+  books exactly +1.000R (M64), so the delete shift is arithmetic and the rate is the archive's gap
+  exposure: p10 0.65% → **+0.1231R** · **2% order-path floor → +0.0282R** · median 5% → +0.0052R ·
+  8% → +0.0021R ⇒ **the 0.05R falsifier can only fire below a 2% stop, which the notional cap
+  already refuses.** Item 4 = correctness fix, with a stated expectation the re-run must match.
+  ⛔⛔ **Ten corrections, one a verdict I had backwards:** §12.3's "Q28 CONFIRMED" is **WITHDRAWN** —
+  corr(lines, corrections) = **−0.837**, observed 5 → 7 → 6 → 8 while volume fell 3.1× ⇒ the defect
+  count is flat-to-rising and the yield is **not** a volume artifact.
+  ⛔⛔ **§12.12 dropped Holdout-2 (decided in §12.7), the runbook-DR and off-box-backup rows, Q-C,
+  and all of PART 3** — including `StockDetailPage` painting a FALLING price green, a money-correctness
+  bug with no queue row. Measured: those terms appear **0 times** in §12.12.
+  ⭐⭐ **THREE UNBLOCKINGS: tax does NOT move break-even** (levied on profit, zero at break-even ⇒
+  item 5's only cost blocker is item 21, the contract note) · **item 5 no longer waits on a full CA
+  ingest** (exclude the three named CAs by dated list — a cache of the authority's answers, not a
+  `|move|` threshold, which is 62.5% false-positive) · **the push moves ABOVE item 5** (it is the
+  first run that can be attested, and only if the push precedes it).
+  ⭐ **Estimands pinned: `liquid_as_of` is DYNAMIC** (eligibility rebuilt per measurement date, not
+  one cohort fixed at study start), 180-day window in the signature with no caller override; and
+  item 6 **characterises the dependence before choosing the estimator**, not "apply Newey-West".
+  ⭐ **Item 19 gained its third branch:** the band **[0.0121, 0.0499]** triggered neither rule and is
+  two half-widths wide — a straddle is now a second null, the scorer retires, the holdout is NOT
+  opened to break the tie. "Retired" defined. ⭐ **break-even 0.0310's parameters finally stated:
+  `E[z|sel]` 2.267 ⇒ implied σ_cs 3.63%.**
+  ⚠ Three Kimi findings **refuted by measurement**: intraday reconciles at 4 dp (8.2440 / 23.7580 /
+  **2.8819** — only reconstruction from rounded halves fails); all 20 backfill-created names have
+  bars; the 2022-08 gap IS 5 days (**2022-08-09 was Muharram**).
+
 - **⛔⛔ CONSOLIDATED-DOC ROUND 10 (2026-09-18) — THE CENTRAL NULL'S COHORT IS 34% LOOK-AHEAD, AND
   ITEM 4 IS UNBLOCKED BY ARITHMETIC.** Seven reviews adjudicated one by one in PART 12 of
   `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` (M62–M84); **two arrived against stale copies** (Gemini

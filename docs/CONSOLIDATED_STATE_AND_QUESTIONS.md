@@ -5,7 +5,7 @@ infrastructure thread) and `docs/SYSTEM_REVIEW_FOR_QUANT.md` (1,088 lines, the s
 strategy review) — plus their companions `POSITIONAL_REVIEW_FOR_QUANT.md`,
 `quant-panel-adjudication-2026-09-10.md` and `BUILD_QUEUE.md` where they carry the verdict.
 
-**Written:** 2026-09-17 · branch `feature/pre-cycle2-hardening` · **209 commits ahead of
+**Written:** 2026-09-17 · branch `feature/pre-cycle2-hardening` · **215 commits ahead of
 `origin/main`, nothing pushed** `[measured]`.
 
 **Audience:** the next session, and the external reviewers (ChatGPT · Claude · Gemini ·
@@ -168,7 +168,7 @@ ON THE 794-SESSION POST-HOLE BLOCK**, and none has been re-run on the restored a
 
 | Verdict | Number |
 |---|---|
-| ⚠ **RE-RUN-REQUIRED — "the ranker is dead" (E2)** | IC h=5d **−0.0070, 90% [−0.0259, +0.0119]** vs break-even **0.0310**; `confidence_pct` flatter still (**+0.0024**). ⛔ **Do not cite: M17 — no corporate-action screen.** ✅ Its interval method is sound (M36: non-overlapping `stride=5`). ⛔⛔ **AND A SECOND REASON, M62 (2026-09-18): the cohort is `load_frames`' top-250 ranked on `now() - 180 days` — 34.4% of the cross-section was selected on post-window liquidity, and 29.2% of the names that traded in 2021–22 cannot enter it at all.** The pre-registration named the survivorship half (*"drawn by today's liquidity … recorded, not solved"*) and this document never carried it. **Break-even derivation, also never carried until now: `E[excess|selected] ≈ IC · σ_cs · E[z|sel]` against 25.5 bps** (M63) |
+| ⚠ **RE-RUN-REQUIRED — "the ranker is dead" (E2)** | IC h=5d **−0.0070, 90% [−0.0259, +0.0119]** vs break-even **0.0310**; `confidence_pct` flatter still (**+0.0024**). ⛔ **Do not cite: M17 — no corporate-action screen.** ✅ Its interval method is sound (M36: non-overlapping `stride=5`). ⛔⛔ **AND A SECOND REASON, M62 (2026-09-18): the cohort is `load_frames`' top-250 ranked on `now() - 180 days` — 34.4% of the cross-section was selected on post-window liquidity, and 29.2% of the names that traded in 2021–22 cannot enter it at all.** The pre-registration named the survivorship half (*"drawn by today's liquidity … recorded, not solved"*) and this document never carried it. **Break-even derivation, carried from the pre-registration (M63): `E[excess|selected] ≈ IC · σ_cs · E[z|sel]` against 25.5 bps** — ⭐ **and its PARAMETERS, which appeared nowhere until round 11 (Kimi F11): `E[z|sel] = 2.267` (identical across both published σ rows, so it is pinned), and break-even 0.0310 therefore implies `σ_cs = 3.63%`.** The one number the programme-kill decision turns on now states its inputs |
 | **The ≥70% gate is unproven in BOTH directions** (E2 3b) | point estimate −0.3150% but the upper bound **+0.388%** clears break-even ⇒ INCONCLUSIVE, deliberately not rounded to null |
 | **Gating is closed as a programme** | 8 shadow gates, 2 promotions both refuted, best survivor `sl_atr` at **t = 0.41 vs a 3.6 hurdle** |
 | **The promotion bar is t ≈ 3.6 and is FLAT IN n** | validated by negative control: 1.10% of best-of-20 zero-edge selections clear; 80% power at a true per-trade Sharpe 0.52 |
@@ -190,7 +190,7 @@ Ordered by **what it blocks**, not by size. Every row carries the state measured
 
 | # | Item | State today | What is actually being asked |
 |---|---|---|---|
-| U-1 | **The push** | **209 commits ahead of `origin/main`**, no upstream configured `[measured]` | W4 reserves push to the user. Everything in PART 2 exists on one local branch on one machine |
+| U-1 | **The push** | **215 commits ahead of `origin/main`** (⛔ restated 2026-09-18 — read 209 here and 210 in §8.10 simultaneously, Kimi F2), no upstream configured `[measured]` | W4 reserves push to the user. Everything in PART 2 exists on one local branch on one machine |
 | U-2 | **The palette AA defect** | 8 token pairs / 16 theme instances recorded; **plus two NOT covered by the ratchet** — `--color-accent` on `--color-surface-2` at **2.88 in slate (the default theme)** and `--color-text-muted` at **3.52 slate / 2.34 daybreak** `[code]` | Changing red/green moves **every P&L figure in five themes**. The one-line fixes are measured and ready: dark `--color-loss`/`--color-bear` red-500 → **red-400 `#f87171`** (clears all: 5.84 / 5.38 / 5.68 / 6.66); daybreak `--color-bear` → `#b91c1c`; daybreak green needs a darker value |
 | U-3 | **Backfill `ohlcv_1h`** | 3 sessions `[measured]`; the path shipped 09-17 but was **not run** | ~2,300 names × 3 years of REST pulls at ~3 req/s. ⚠ And see §3.4/D-6 — the two producers of this table **disagree by one bar per session, permanently** |
 | U-4 | **Universe curation (§8/§13 Q3)** | the rule is `EQ_LISTED ∧ KITE_TRADABLE` ⇒ 2,291 names | Never decided. ⭐ And §75 corrected the evidence for it: **`KITE_TRADABLE` excludes exactly ONE name** ⇒ it is ~99.96% a single-source rule, so "two sources agree" measures consistency, not correctness |
@@ -232,7 +232,7 @@ Ordered by **what it blocks**, not by size. Every row carries the state measured
 | # | Lever | State 09-17 | What changed since 09-10 |
 |---|---|---|---|
 | R-1 | **Retune the trend factor's parameters** (Tier-1 #1) | **NOT RUN, RECLASSIFIED 2026-09-17** | ⛔ **NOT a defect — M9 refutes "unreachable by construction": it fires (+0.70) at the shipped `lookback=20, swing_n=5`.** True statement is M10: **5 of 19,100 panels = 0.026%**. ⇒ a **parameter proposal** that must clear `t ≈ 3.6`. Method unchanged (read-only injection); guarded prior: injection can **dilute** through the confidence normalisation |
-| R-2 | **Minervini as a DIFFERENT STRATEGY, not a filter** (Tier-1 #2) | **NOT RUN, REFRAMED 2026-09-17** | ⭐ **Grok F11, adopted:** importing it is a new strategy needing its own null — and it **will look like edge in a bull tape**, which is all we have (M32). Test it against a matched basket, never against this book. 0 of 91 entries pass ⇒ disjoint from our selection. Needs a universe-level regeneration |
+| R-2 | **Minervini as a DIFFERENT STRATEGY, not a filter** (Tier-1 #2) | **NOT RUN, REFRAMED 2026-09-17** | ⭐ **Grok F11, adopted:** importing it is a new strategy needing its own null — and it **will look like edge in a bull tape**, which is all we have (M32). Test it against a **time-paired cohort basket** (⛔ renamed 2026-09-18, round 11 — this said "a matched basket" and it is matched on nothing; §12.10/6 claimed the rename was complete and missed this one, which is the only instance that is a FORWARD INSTRUCTION), never against this book. 0 of 91 entries pass ⇒ disjoint from our selection. Needs a universe-level regeneration |
 | R-3 | **12-month price momentum** (Tier-1 #3) | **NOT RUN** | The single untested thread from the reading study. ⚠ It surfaced as the *control that killed* the overhead-supply effect, so the evidence for it is weaker than it looks |
 | R-4 | **CAS overnight reversal to ≥30 sessions** (Tier-1 #4) | **accruing: 5 of 30** `[measured]` | ✅ Capture restarted. ~5 weeks of wall-clock left. Best odds on the list — and it is a **different strategy**, not a fix to this one |
 | R-5 | **Opening-range / VWAP / intraday timing** | ⭐ **NEWLY TESTABLE** | `SYSTEM_REVIEW` §13 Tier-3 #9 calls these blocked. They are not: **3 years of 5m/15m bars exist for ~210 liquid names** `[measured]`. ⚠ The history is a **210-name cohort**, so any result generalises to F&O/Nifty-50 names only |
@@ -1090,7 +1090,7 @@ applies** (M36). I would have shipped a false correction of a false correction.
 | **M28** | What is the floor made of, and is it product-specific? | ⭐⭐ **Delivery floor 22.22 bps, of which STT (0.1% × 2 legs) is 20.00 = 90.0%** (stamp 1.50, exchange 0.60, GST 0.12, SEBI 0.02, DP 0.15 at ₹10L). **Intraday floor is 3.52 bps — 6.3× lower.** At ₹1L: delivery **23.8** vs intraday **8.2** bps. ⚠ **F&O is not modelled at all** (`fees.py:10` — "F&O charges are Phase 4"). |
 | **M29** | Four tables, one window, four session counts — why? | `ohlcv_1d` 794 · `5m` 796 · index 792 · VIX 792. **6 dates are not in all four**, and all six are **special sessions**: Saturday budget/DR-site sessions (2024-01-20, 2024-03-02, 2024-05-18, 2025-02-01, 2026-02-01) and **Muhurat 2024-11-01** (index+VIX+daily, no 5m). Explainable — and a study that inner-joins to the index table silently drops them. |
 | **M30** | The gap tail for **shorts** (the stop is *above* entry) | ⭐ **Short-side exposure is 2.1× the long side at the tight stop**: gap ≥ +0.65% = **19.83%** vs ≤ −0.65% = **9.25%**; ≥ +2% = 3.28% vs 2.08%; ≥ +5% = 0.331% vs 0.343% (**equal at the median stop**). |
-| **M31** | Was my M7 cohort point-in-time? | ⛔ **No — it was ranked on 2026 liquidity and applied to 2023-2026.** Re-run with a cohort ranked **only on pre-window data** (2020-01 → 2023-07): long tail **9.248% → 8.508%**, short tail **19.830% → 16.822%**. **My M7 overstated exposure by 8% and 18% relative.** |
+| **M31** | Was my M7 cohort point-in-time? | ⛔ **No — it was ranked on 2026 liquidity and applied to 2023-2026.** Re-run with a cohort ranked **only on pre-window data** (2020-01 → 2023-07): long tail **9.248% → 8.508%**, short tail **19.830% → 16.822%**. **My M7 overstated exposure by 8% and 18% relative — ⚠ **restated 2026-09-18 (Kimi F3): those two figures use DIFFERENT BASES.** Long tail 8.0% of the old value; short tail 17.9% of the *corrected* value (15.2% of the old). On one base consistently: **8.0% and 15.2%** of the old.** |
 | **M32** | Is the post-hole block representative? | ⛔ **No.** Same PIT cohort on the **pre-hole block (2019-10 → 2020-12, includes COVID)**: long tail **12.63%**, short tail **28.67%** — **~1.5–1.7× the post-hole figures.** The 3.2-year window is a benign-regime sample. |
 | **M33** | Did the operator take the top of the ranking? | ⛔⛔ **No.** The four acted-on signals rank **76, 76, 75, 74** in confidence. **All 14 higher-confidence signals (78–90) were NOT acted on**, including five SELLs at 80–90. Mean confidence **SELL 77.7 > BUY 74.6**. |
 | **M34** | Of the funnel's live signals, how many can a delivery account hold? | ⛔⛔ **4 of 15.** The live book is **11 SELL / 4 BUY**. **The real tradeable last rung is 4, not 15** — 73% of the live list is untradeable overnight on CNC. |
@@ -1570,12 +1570,26 @@ form of untouched a holdout can have.
 
 **Overnight-gap exposure, same PIT cohort, by block** — the input to queue item 4's falsifier:
 
+⛔ **REPLACED IN PLACE 2026-09-18 by M69** (Claude A27: the old rows were superseded by
+cross-reference while this section still said "the input to queue item 4's falsifier").
+**Estimator, named: strictly-PIT annual top-250 cohort — year Y ranks on calendar year Y−1 only —
+with a GLOBAL `lag()` so no per-block seam artifact can arise. 1,727 sessions.**
+
 | block | n | long stop-side ≤−0.65% | ≤−5% | short stop-side ≥+0.65% | ≥+5% |
 |---|--:|--:|--:|--:|--:|
-| **FULL archive** | 403,979 | **9.84%** | **0.469%** | **21.20%** | 0.332% |
-| COVID block | 77,277 | 12.45% | **1.470%** | 28.73% | 0.863% |
-| restored 2021-23 | 147,824 | 10.03% | 0.193% | 22.38% | 0.222% |
-| old sample 2023-07→ | 178,399 | **8.57%** | **0.265%** | **16.97%** | 0.193% |
+| **WHOLE archive** | **405,426** | **10.07%** | **0.470%** | **21.76%** | 0.322% |
+| COVID block (2019-10→2020-12) | 61,959 | 13.94% | **1.625%** | 31.91% | 0.884% |
+| holdout 2021-01→2023-07-02 | 149,811 | 10.20% | 0.216% | 22.79% | 0.204% |
+| test 2023-07-03→ | 193,656 | **8.72%** | **0.297%** | **17.70%** | 0.233% |
+
+✅ **Blocks tile exactly (difference 0)** ⇒ M58's 479 confirmed as a seam artifact by an independent
+construction. ⚠ The COVID row excludes 2019-Q4, which has no prior year to rank on.
+⭐ **And a cohort effect nobody asked about: on ALL names with a prior close** (3,162,898 name-days)
+the whole-archive tails are **13.15% / 34.49%** — so the top-250 cohort **understates the live
+2,291-name universe's exposure by 1.31× long and 1.59× short.**
+
+⛔ Superseded rows, kept so the change is auditable: FULL 403,979 / 9.84% / 0.469% / 21.20% ·
+COVID 77,277 / 12.45% / 1.470% · restored 147,824 / 10.03% / 0.193% · old sample 178,399 / 8.57%.
 
 ⛔ **The retained sample was the mildest of the three on every measure.** Against the full archive
 it understates the long stop-side tail by **1.15×**, the short by **1.25×**, and the extreme
@@ -2257,7 +2271,7 @@ the M59 curve. M53's explanation is accepted and the second-instance hypothesis 
 | **Q25** — 5c pre-registers one bar for three arms whose bars differ | ✅ **Taken, and it is the right order of operations.** The bar is `break-even + 1.645·SE`, and SE depends on the window and the split. **Register the FORMULA, not the number.** |
 | **Q26** — item 8's falsifier needs a positive gross edge; the only estimate is −2.18 bps | ✅ **Taken.** Item 8 is now explicitly **downstream of items 4, 5, 6**. |
 | **Q27** — dividend contamination is directional and sits where the analysis is most sensitive | ⓘ **Half-confirmed, and M66 makes it worse than stated.** The screen touches **0.068%** of name-days while **76.24%** sit in the untouched 0.5–25% band. But the ex-date count needs a CA source we do not have — see §12.7. |
-| **Q28** — the panel's yield tracks document growth, not defect rate | ✅ **CONFIRMED with M79's number** — 0.79 → 1.60 → 1.83 → **3.98** self-corrections per 100 lines. ⭐ **And round 10 breaks it**: M62 is a defect in a script, found because one reviewer asked *"show me the population query"* rather than *"recompute the table"*. **That question shape is the finding.** |
+| **Q28** — the panel's yield tracks document growth, not defect rate | ⛔⛔ **WITHDRAWN 2026-09-18 (round 11, Claude Q29): M79 REFUTES this, it does not confirm it.** corr(lines, corrections) = **−0.837**; proportionality predicts 5 → 3.5 → 2.6 → 1.6, observed **5 → 7 → 6 → 8** while volume fell 3.1× ⇒ the absolute defect count is flat-to-rising and the yield is NOT a volume artifact. Superseded statement follows. ~~CONFIRMED with M79's number~~ — 0.79 → 1.60 → 1.83 → **3.98** self-corrections per 100 lines. ⭐ **And round 10 breaks it**: M62 is a defect in a script, found because one reviewer asked *"show me the population query"* rather than *"recompute the table"*. **That question shape is the finding.** |
 | **D19** — §9.3 is stale and feeds item 4 | ✅ **Taken; recomputed as M69.** ⚠ My re-run is **not** the same estimator (annual PIT cohort, global `lag()`), so the +924 Claude computed is against M58, not against M69. |
 | **D20** — M57 validated `close`; the gap analysis uses `open` | ⭐⭐ **The best request of the round, and it passed: M65, all five fields, 4,981/4,981.** Cheaper than M57 and it covers everything. |
 | **D21** — re-run M57 at a CA boundary | ⛔ **Test design refuted by M66.** The premise ("if `PREV_CLOSE` is adjusted and our close is not") is false — both are unadjusted. |
@@ -2507,3 +2521,212 @@ programme's central null.**
 ⛔ **No round 11 unless a probe runs with it.** M79 is the evidence: four rounds of recomputation,
 yield converging on my own arithmetic. The one question that paid this round was aimed at a
 function, not a table.
+
+---
+
+# PART 13 — THE ROUND-11 PANEL (2026-09-18), AND THE ANSWER: BUILD
+
+## §13.1 · The round in one line
+
+**Six responses. All six say the same thing: stop reviewing, work the queue.** §12.12's own rule
+said it first. This round therefore ships **with a probe (M85)** and is the last adjudication until
+code lands. ⚠ Two responses were stale again — **Gemini for the third consecutive round** (it
+proposes filling the 922-day hole, done 2026-09-17) and **Nemotron for the third** (it restates
+§12.12 back verbatim and asks which row to start on). Both: **0 new points.**
+
+⭐⭐ **The round's yield was almost entirely defects in THIS DOCUMENT, and one of them is a verdict
+I got backwards.** Ten corrections, listed in §13.7. That is the density finding arriving on
+schedule, and it is the argument for building rather than the argument against it.
+
+## §13.2 · ⭐⭐ THE PROBE — M85: item 4's contamination is a function of stop width
+
+Claude's BT23 said the affected trades are findable without re-deriving the fill bar. Generalised:
+because **every affected trade books exactly +1.000R (M64)**, the shift the delete treatment
+produces is arithmetic — `f · (1 − μ_clean)/(1 − f)` — and `f` is just the archive's gap exposure
+at that stop width. Measured on 405,426 name-days, strictly-PIT annual top-250, 1,727 sessions:
+
+| stop width `w` | P(entry-bar gap through) | bias on mean R | vs item 4's 0.05R bar |
+|---|--:|--:|---|
+| p10 **0.65%** | **10.068%** | **+0.1231** | ⛔ **2.5× OVER** |
+| order-path floor **2%** | 2.499% | +0.0282 | under |
+| 3% | 1.314% | +0.0146 | under |
+| median **5%** | 0.470% | +0.0052 | under |
+| swing cap **8%** | 0.191% | +0.0021 | under |
+
+⭐⭐⭐ **THE ANSWER: item 4's falsifier cannot fire on the book the order path will take.** The
+contamination clears 0.05R **only below a 2% stop** — and the notional cap is already a 2%
+minimum-stop-width rule in disguise. At the order-path floor it is **+0.028R**; at the median stop
+**+0.005R**, 10× under.
+
+⇒ **Item 4 is reclassified: a CORRECTNESS fix, not a headline-moving one** — *except* for D1, D5,
+B7 and the 1,975-trade corpus, which all include the sub-2% cohort the order path refuses. That is
+now a stated, measured expectation the re-run must match, not an open question.
+⚠ Long side only. The short tail is ~2× larger at every width, but a cash-delivery book cannot hold
+one. ⚠ `μ_clean = −0.10` is the corpus's own order of magnitude; the ranking is insensitive to it.
+⭐ **Grok predicted this curve** (≈0.0026R at the median, ≈0.085R at p10) — right shape, ~2× low.
+
+## §13.3 · Claude — adjudicated
+
+Recomputed PART 12 independently before answering, for the second round running.
+
+| point | verdict |
+|---|---|
+| **Q29** — M79 *refutes* Q28, it does not confirm it | ⛔⛔ **CORRECT, AND MY §12.3 VERDICT IS WITHDRAWN.** Measured: corr(lines, corrections) = **−0.837**. Proportionality predicts 5 → 3.5 → 2.6 → 1.6; observed **5 → 7 → 6 → 8** while volume fell 3.1×. **The absolute defect count is flat-to-rising as output shrinks** ⇒ the yield is not a volume artifact, and the case for stopping is stronger than I stated it. |
+| **A25** — Holdout-2 was decided in §12.7 and never reached §12.12 | ⛔⛔ **CONFIRMED: zero mentions of 313 or Holdout-2 in §12.12** — in the round that published the one-table queue to prevent exactly this. |
+| **A26** — "renamed wherever it appears" is false | ⛔ **CONFIRMED.** Line 235 (R-2) still reads *"Test it against a matched basket"* — and it is a **forward instruction for an unrun test**, the one place the stale label can still produce a wrong study. |
+| **A27** — §9.3 superseded by cross-reference, not replaced | ⛔ **CONFIRMED**, and it still says "the input to queue item 4's falsifier". Replaced in place this round. |
+| **Q30** — the decision rule has an undefined middle | ⛔⛔ **CONFIRMED and it is exactly two half-widths wide.** Item 19 fires when the point estimate < **0.0121**; 5c resurrects at ≥ **0.0499**. The band **[0.0121, 0.0499]** triggers neither, and it is the modal outcome of a repaired re-run. Third branch written in §13.8. |
+| **Q31** — `liquid_as_of` turns a hidden lookback into a free parameter | ✅ **Taken.** 180 days is pinned in the signature with no caller override. |
+| **BT22** — tax does not move break-even | ⭐⭐ **CORRECT, and it fixes my own item 20.** Break-even is where profit is zero; tax is levied on profit; at break-even tax is zero. Tax raises every **target**, not the hurdle. ⇒ **item 5's cost dependency is item 21 alone**, one fewer blocker than §12.12 implied. |
+| **BT23** — a free detector exists | ⭐⭐ **Taken and generalised into M85** (§13.2), which answers the magnitude question with no re-run at all. |
+| **H27** — the push must precede item 5 | ⭐ **CORRECT and adopted.** Item 5 is the next pre-registered run and the first that *can* be attested. Pushed below item 5, it inherits E2's operator-attested status permanently. **Item 12 moves above item 5.** |
+| M77 recomputation (26.83 / 29.90 / 31.43 / 60.58) | ⓘ Both right. Claude divides ₹1L exactly; I size integer shares at ₹500. Immaterial, and the 30 bps crossing is unchanged. |
+| M70 arithmetic: 3,166,300 − 3,162,898 = **3,402** = one dropped bar per name | ⭐ A neat independent confirmation of M69's `lag()` construction — 3,402 is exactly the distinct-name count. |
+
+## §13.4 · ChatGPT — adjudicated
+
+| point | verdict |
+|---|---|
+| **1.2** — a cohort fixed at study start and a cohort rebuilt per measurement date are **different estimands** | ⭐⭐ **CORRECT, and §12.12 item 14 did not say which.** E2's stated question — *does the score rank forward returns among eligible names on each date* — is the **dynamic** one. Pre-registered in §13.8. This is the sharpest point in the reply. |
+| **2.3** — "use Newey-West" is too simplistic; characterise the dependence first | ✅ **CORRECT, and I over-specified.** D1's dependence is per-date (a market-wide regressor), D5's is paired-by-signal, B7's is per-trade with overlapping windows. Item 6 now says *choose the estimator after inspecting the structure*, not "apply Newey-West". |
+| **3.1** — M65 validates ingestion fidelity, not source truth | ✅ **Taken.** The wording is now "our stored bars match the vendor's own file", not "independently published". An independent second vendor remains untested. |
+| **7.3** — parameterise tax, do not add a flat bps | ✅ **Taken** (and see BT22 — it does not enter break-even at all). |
+| **7.2** — the 3-position cap is conditional on ₹1L | ✅ **Taken**; item 24 now carries the condition. |
+| **1.3 / 11** — configuration is a fourth provenance dimension | ✅ Folded into items 8 and 22. |
+
+## §13.5 · Grok — adjudicated
+
+| point | verdict |
+|---|---|
+| **Do not block item 5 on a full CA ingest** — exclude the 3 named events by dated list; item 16 proceeds in parallel | ⭐⭐ **ADOPTED.** A three-row dated exclusion **is** a cache of the authority's answers, which is exactly what the standing law asks for; a `\|move\|` threshold is not. **Item 5 is no longer blocked on item 16.** |
+| **"A null is conservative" is FALSE for look-ahead** | ⭐⭐ **CORRECT and sharper than my `[ASSUMED]` tag.** Names that *became* liquid by 2026 were a growth cohort in 2023, so the filter can **manufacture** IC. The current null is not conservative — it is **uninterpretable**. Restated. |
+| The stop-width contamination curve | ⭐ **Predicted and measured** — see §13.2. |
+| Slice ordering (14 → 4 → 2 → 3 → 15) | ✅ Adopted, with item 12 hoisted per H27. |
+
+## §13.6 · DeepSeek · Gemini · Kimi · Nemotron — adjudicated
+
+**DeepSeek.** A faithful restatement of PART 12 in table form, plus a correct execution answer and a
+sensible order. Its one mischaracterisation: §12.3's note about M69's estimator is called "Claude's
+own recomputation drifting from the archive" — it is not drift, the two are different estimators and
+the document says so. **New points: 0; correct call: yes, build.**
+
+**Gemini.** ⛔ **Round-8/9 vintage for the third consecutive round.** Its work queue proposes
+"Fetch missing 2020–2023 daily bhavcopy CSVs" (done 2026-09-17, 654 sessions) and "Fill Daily
+Archive Hole (M38)" as step 4 of 5. **0 new points.** ⛔ **Its U7 kill threshold has now been owed
+five rounds**; Grok's stands by forfeit.
+
+**Kimi.** The most productive reply after Claude's, and **three of its findings are refuted by
+measurement** — which is the right outcome to report:
+
+| # | claim | verdict |
+|---|---|---|
+| **F1** | §12.12 does not subsume what it declares history | ⛔⛔ **CONFIRMED in all three parts.** Measured on §12.12: *runbook* 0 · *off-box* 0 · *Q-C* 0 · *provenance* 0 · *MDE* 0 · *FII* 0 · *LTP* 0 · *palette* 0. §8.10's item 12 was **"U5 runbook DR ordering; off-box backup; push"**; §12.12 kept only "Push". **The one-table queue is not one table.** Rebuilt in §13.8. |
+| **F2** | The commit count is carried three ways | ⛔ **CONFIRMED: 209** (header, U-1, §7.11) · **210** (§8.10) · **215** (§12.6), all live. |
+| **F3** | M31's "8% and 18%" use different bases | ⛔ **CONFIRMED.** Long tail 8.0% of the OLD base; short tail 17.9% of the NEW base (15.2% on the old). |
+| **F4** | {8.2, 2.88, 2.90} cannot all be right | ⛔ **REFUTED (M88).** Measured to four places: intraday **8.2440** bps, delivery **23.7580**, ratio **2.8819**. Both published figures round correctly; only the *reconstruction from rounded components* fails. ⭐ Real lesson kept: **publish a ratio or its components at reproducing precision, never rounded halves of both.** |
+| **F5** | 20 names created, only 15 gained bars | ⛔ **REFUTED (M86): 20 created, 20 with bars.** The +15 was measured before the weekend recovery added the rest. |
+| **F6** | §9.2's block table no longer tiles | ✅ **CONFIRMED and fully reconciled (M89):** 311+247+246+121+793 = **1,718**, nine short of 1,727 — **5 sessions lost to the per-block return lag (one per block, a return series over N sessions has N−1 returns) + the 4 weekend sessions recovered after §9.2 was written.** Not missing data; a stale table with a structural artifact inside it. |
+| **F8** | "largest gap 5 days ×2" — one of them is 4 | ⛔ **REFUTED (M87).** The sessions run **2022-08-05 → 2022-08-10**: 08-08 is the XLSX failure and **08-09 was Muharram**. The gap is 5 days. "×2" is correct. |
+| **F9** | Item 4's falsifier names a t but not its SE | ✅ **Taken** — named in §13.8. |
+| **F10 / F11** | The kill criterion fires on current numbers; "retired" is undefined; break-even 0.0310's σ_cs is unstated | ✅ **Both taken.** Measured: with `E[z\|sel] = 2.267`, **0.0310 implies σ_cs = 3.63%** — a number that appears nowhere. Now carried. "Retired" is defined in §13.8. |
+| **F12** | The four shorts' gross | ✅ **Measured: ₹1,19,569 = 1.196× a ₹1 lakh book.** Belongs in Q-A's answer. |
+
+**Nemotron.** ⛔ Reproduces §12.12 back verbatim and asks which row to start on. **0 new points, third
+consecutive round.** Its one substantive line — that the queue is the deliverable, not a new round —
+is correct and is the document's own.
+
+## §13.7 · ⛔ What round 11 cost me — ten corrections
+
+1. ⛔⛔ **§12.3's Q28 verdict is WITHDRAWN.** I wrote "✅ CONFIRMED"; the data refutes the
+   hypothesis (r = −0.837) and the true reading is worse for the document.
+2. ⛔⛔ **§12.12 lost Holdout-2** — decided in §12.7, never written into the queue.
+3. ⛔⛔ **§12.12 lost the runbook-DR and off-box-backup rows** that §8.10 item 12 carried.
+4. ⛔⛔ **§12.12 never folded in PART 3** — B-4, B-12, F-1 (the LTP painted bull regardless of
+   direction, a money-correctness bug), F-2, F-3, F-4, U-2 have no row. **A22 was half-fixed.**
+5. ⛔ **Q-C vanished**, and §12.4 then pointed at it — *"still queued"* with no row to queue it in.
+6. ⛔ **Item 20's "raises every break-even" is wrong** (BT22). Tax raises targets, not the hurdle.
+7. ⛔ **§9.3 was superseded by cross-reference, not replaced in place.**
+8. ⛔ **"Renamed wherever it appears" was false** — the surviving instance is a forward instruction.
+9. ⛔ **The commit count is carried three ways** (209 / 210 / 215).
+10. ⛔ **M31's two percentages use different bases**; **break-even 0.0310's σ_cs (3.63%) is stated
+    nowhere**; **item 4's falsifier names a t without its SE**; **item 14 never said which estimand.**
+
+⭐ **The pattern, stated plainly: eight of ten are maintenance defects in a 313-line section written
+in one sitting, and six are the SAME class the section was written to close.** A document this size
+cannot be kept true by writing more of it. §13.8 is the last queue revision; after it, changes land
+as commits.
+
+## §13.8 · ⭐⭐ THE QUEUE — complete this time. PARTS 3 and 7–12 are history.
+
+⚠ **Completeness rule, so this cannot silently shrink again: every row that ever appeared in §7.11,
+§8.10, §10.11, §11.9, §12.12 or PART 3 appears below or is explicitly marked DROPPED with a reason.**
+
+### Blocked on the user — one sentence unblocks four rows
+
+| # | Item | Note |
+|---|---|---|
+| **Q-A** | **Account type + capital** | ⛔ Blocks 1, 24, and every cost conclusion. ⚠ **The live book's gross is ₹1,19,569 = 1.196× a ₹1 lakh book** (M89/F12) — whatever the answer, the current book already exceeds it |
+| **1** | The four SHORT positions + a directional/settlement restriction | ⛔ On Q-A. If CNC: close + `always_on` overnight-SELL restriction. If MIS: the restriction is the wrong patch |
+| **13** | Celery beats off `day_of_week="1-5"` | ⛔ A scheduling change on a running system — your call |
+| **21** | Reconcile `fees.py` to one real contract note | ⛔ Needs one actual note. ⭐ **This is item 5's ONLY cost blocker** (BT22) |
+
+### The chain that decides whether the scorer lives
+
+| # | Item | State |
+|---|---|---|
+| **12** | **Push** | ⭐ **MOVED ABOVE ITEM 5 (H27).** `fe5d508` is unsigned and stays operator-attested; item 5 is the first run that *can* be attested, and only if the push precedes it. **Sign the pre-registration commit** |
+| **14** | `liquid_as_of(date)` | ⭐⭐ Precondition of 5. **Estimand pre-registered (ChatGPT 1.2): DYNAMIC — eligibility rebuilt for every measurement date from information strictly before it**, not one cohort fixed at study start. **180-day trailing window pinned in the signature, no caller override** (Q31). Must raise if `as_of` falls inside its own measurement window |
+| **4** | `_simulate_trade`'s entry-bar gap | ✅ Delete treatment. **Falsifier, SE named (F9): any D1/D5/B7 headline that changes sign, or crosses \|t\| = 1.96 *under the same estimator the re-run uses*, is invalid.** ⭐ **Expected magnitude is now measured (M85): +0.028R at a 2% stop, +0.005R at the median — it can only clear 0.05R below a 2% stop** |
+| **5** | Re-run E2 | Needs **14** and **21**. ⭐ **No longer blocked on 16 (Grok):** exclude the three named corporate actions by dated list — IRCTC 1:5, BAJAJFINSV 1:1 bonus + 1:5, PEL demerger. Window **797, DECIDED**. Arms 5b (per-direction) and 5c (bar as the formula `break-even + 1.645·SE`, per arm) |
+| **6** | Re-run D5 + D1 + B7 | After 4. ⚠ **Characterise the dependence first, then choose the estimator** (ChatGPT 2.3) — D1 is per-date, D5 paired-by-signal, B7 overlapping-per-trade. Not "apply Newey-West" |
+| **19** | Project kill criterion | ⭐ **THIRD BRANCH WRITTEN (Q30).** Point estimate **< 0.0121** ⇒ retire. **≥ 0.0499** ⇒ resurrection candidate. **In between ⇒ a second null: item 19 fires, the scorer is retired, and the holdout is NOT opened to break the tie.** ⭐ **"Retired" means: the scorer stops being a candidate, `entry_diversity` stays as the one hard rule, the 617- and 313-session blocks are preserved unopened for a successor generator, and the harness stays** |
+| **11** | Holdout seal — **617 sessions**, whitelist = row/session counts + integrity checks | Opens once, after item 5 on 797, **only** on the ≥0.0499 branch |
+| **11b** | ⭐ **NEW — Holdout-2 seal: 313 sessions (2019-10-01 → 2020-12-31)**, same whitelist | ⛔ **The row §12.7 decided and §12.12 lost (A25).** The only crash regime in the archive. ⚠ No `liquid_as_of` inside it — there is no prior ranking window |
+
+### Ready now — no decision, no research risk
+
+| # | Item | Note |
+|---|---|---|
+| **2** | Wire the ledger + a backend wiring lint | The one artifact that survives the next DB loss |
+| **3** | Re-seed `strategy_profiles` idempotently + census every seed-bearing migration | Four consumers dead since 09-07 |
+| **7** | Ledger `surface` + client `displayed_rank` | Selection is otherwise unattributable |
+| **8** | The five-field manifest | ⭐ **Widened (ChatGPT 11): + configuration snapshot + dependency lock.** A study fails closed when one is missing |
+| **9** | Experiment registry (Q-B) | The t ≈ 3.6 bar's trial count is unknown |
+| **10** | Directional entry zone | Loss-reduction, not edge |
+| **15** | A10 treatment for `bhavcopy_service` | Guards the daily path; 2022-08-08 stays a hole |
+| **16** | CA policy — the external NSE source (D3's free `/api/` path) | ⭐ No longer blocks item 5; runs in parallel |
+| **17** | Measure spread and impact | Falsifier: median half-spread on the tradability-screened subset < 5 bps ⇒ not binding |
+| **18** | Index/VIX for 2021–22 | Integrity ingest, whitelist-class |
+| **20** | Tax in the cost model | ⛔ **CORRECTED (BT22): raises every TARGET, not the break-even.** Parameterise by product and holding period; do not add a flat bps |
+| **22** | Version the gate configuration | No table exists; a past signal cannot be attributed to a config |
+| **23** | The three standing concessions, enumerated | Portfolio-level evaluation · `entry_diversity`'s incremental effect · live-vs-modelled fill calibration |
+| **24** | Position-count cap | ⓘ **Conditional wording (ChatGPT 7.2): at ₹1 lakh under the current modelled costs, 3 positions keeps delivery friction below 30 bps** (29.89 at 5, 31.52 at 6). Not a universal cap |
+
+### Restored from §8.10 and PART 3 — dropped by the last consolidation (F1)
+
+| # | Item | Note |
+|---|---|---|
+| **25** | **U5 — the disaster-recovery ordering section in `RUNBOOK.md`** | ⛔ Carried by §8.10 item 12, lost in §12.12. The composition that caused 09-07 is still undocumented |
+| **26** | **Off-box backup** | ⛔ Same row, same loss. Backups run to a **local** path |
+| **27** | **F-1 — `StockDetailPage` paints the LTP `--color-bull` regardless of direction** | ⛔ A falling price renders green. **Money-correctness, not a style nit**, and it had no queue row |
+| **28** | **B-4 — the FII/DII consumer states "flows neutral" from zero rows** | A positive claim from absent data |
+| **29** | **Q-C's three unclosed adoptions** | **MDE beside every null · effects in bps with a CI beside the t · the price-provenance rung counter.** §12.4 called the last "still queued" with nothing to queue it in |
+| **30** | **B-12 · F-2 · F-3 · F-4 · U-2** | Freshness assertion · CreateUserModal · unwired API functions · exclusion reasons as-of · the palette (yours) |
+
+**DROPPED, with reasons:** the 1h backfill (two producers disagree permanently) · a ninth gate
+(gating closed as a programme) · the XLSX parser for 2022-08-08 (W2) · regenerating goldens from the
+current dev DB · a 1,110-session E2 (decided: 797) · **round 12.**
+
+## §13.9 · The answer to "shall we work on the agreed items"
+
+**Yes.** Six of six reviewers, and the document's own rule. The order, with the chain first because
+it is the only sequence that decides whether the scorer lives:
+
+**You:** one sentence — **Q-A** (account type + capital), and **the push** (W4 reserves it).
+
+**Then, in order:** **12** (push + sign) → **14** (`liquid_as_of`, dynamic estimand) → **4** (delete
+treatment) → **21** (one contract note) → **5** (the re-run) → **6** → **19 fires or does not.**
+
+**In parallel, needing nothing:** 2, 3, 27 (the LTP colour bug), 15, 22, 10, 7–9, 16, 18, 23.
+
+⛔ **No round 12.** The next artifact from this programme is a commit.
