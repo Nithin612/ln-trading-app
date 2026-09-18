@@ -32,6 +32,9 @@
       "Bash(docker volume prune:*)"
     ]
   },
+  "worktree": {
+    "bgIsolation": "none"
+  },
   "hooks": {
     "PreToolUse": [
       {

@@ -7,6 +7,41 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Queue item 14 — the point-in-time liquidity cohort, as an instrument that refuses (2026-09-18)
+
+`backend/app/services/pit_cohort.py` + `backend/tests/test_pit_cohort.py` (6 tests). The first
+Tier-A item built. Closes the defect M62 found in the programme's central null: `load_frames`
+ranks the top 250 by median `close*volume` over `now() - interval '180 days'` and every consumer —
+`e2_score_ic.py` included — applies that cohort to historical panels, so 34.4% of E2's
+cross-section was selected on post-window liquidity and 29.2% of the names that traded in 2021-22
+could never enter it.
+
+- `liquid_as_of(db, as_of, *, n=250)` ranks on `[as_of - 180d, as_of)`, half-open, so a bar printed
+  on `as_of` cannot influence the cohort that scores it. Because the window ENDS at `as_of` rather
+  than at today, a name that was liquid then and is delisted now is admitted — which is the
+  survivorship half of the same defect.
+- `liquid_over(db, sessions)` is the pre-registered **dynamic** estimand (ChatGPT 1.2): eligibility
+  rebuilt per measurement date, not one cohort fixed at study start. Rebuild cadence is monthly,
+  which is coarseness and never look-ahead; the strictly-prior invariant is asserted on each
+  rebuild rather than documented, because documenting it is what failed for four rounds.
+- The 180-day lookback is a module constant and deliberately absent from the signature (Claude
+  Q31), asserted by a test that introspects the signature.
+- Degenerate cases raise rather than return: `PitViolationError` when a cohort's as-of is not
+  strictly before its use, `InsufficientHistoryError` when the window is too thin. An empty cohort
+  yields an empty cross-section, whose correlation is NaN, which a study averages away in silence.
+
+⭐⭐ **The M62 canary was vacuous when first written, and mutation testing caught it.** With the
+ranking window widened 400 days past `as_of` — literally reintroducing the defect — all six tests
+still passed, because ranking is by MEDIAN and the planted post-`as_of` bars were a minority (60 of
+230) that left the median untouched. The fixture now has the future run outnumber the past one
+(200 > 170), and the canary fails with `the cohort ranked on post-as-of liquidity — this is M62`.
+Both mutations are recorded in the test's comments so the next author cannot re-weaken it. This is
+the third instance of "the tests asserted what was INTENDED, not what the code did".
+
+Also: `.claude/settings.json` gains `"worktree": {"bgIsolation": "none"}`, so background sessions
+work in the main checkout as CLAUDE.md's hard rule requires instead of being forced into a worktree.
+
+
 ### Round-11 panel — the queue lost rows it had just consolidated, and item 4's magnitude is now measured (2026-09-18)
 
 PART 13. Six responses; **all six say stop reviewing and build**, which is §12.12's own rule. This
