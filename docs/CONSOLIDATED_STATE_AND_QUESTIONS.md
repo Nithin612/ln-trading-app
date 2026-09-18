@@ -168,13 +168,13 @@ ON THE 794-SESSION POST-HOLE BLOCK**, and none has been re-run on the restored a
 
 | Verdict | Number |
 |---|---|
-| ⚠ **RE-RUN-REQUIRED — "the ranker is dead" (E2)** | IC h=5d **−0.0070, 90% [−0.0259, +0.0119]** vs break-even **0.0310**; `confidence_pct` flatter still (**+0.0024**). ⛔ **Do not cite: M17 — no corporate-action screen.** ✅ Its interval method is sound (M36: non-overlapping `stride=5`), so the CA gap is the *only* reason |
+| ⚠ **RE-RUN-REQUIRED — "the ranker is dead" (E2)** | IC h=5d **−0.0070, 90% [−0.0259, +0.0119]** vs break-even **0.0310**; `confidence_pct` flatter still (**+0.0024**). ⛔ **Do not cite: M17 — no corporate-action screen.** ✅ Its interval method is sound (M36: non-overlapping `stride=5`). ⛔⛔ **AND A SECOND REASON, M62 (2026-09-18): the cohort is `load_frames`' top-250 ranked on `now() - 180 days` — 34.4% of the cross-section was selected on post-window liquidity, and 29.2% of the names that traded in 2021–22 cannot enter it at all.** The pre-registration named the survivorship half (*"drawn by today's liquidity … recorded, not solved"*) and this document never carried it. **Break-even derivation, also never carried until now: `E[excess|selected] ≈ IC · σ_cs · E[z|sel]` against 25.5 bps** (M63) |
 | **The ≥70% gate is unproven in BOTH directions** (E2 3b) | point estimate −0.3150% but the upper bound **+0.388%** clears break-even ⇒ INCONCLUSIVE, deliberately not rounded to null |
 | **Gating is closed as a programme** | 8 shadow gates, 2 promotions both refuted, best survivor `sl_atr` at **t = 0.41 vs a 3.6 hurdle** |
 | **The promotion bar is t ≈ 3.6 and is FLAT IN n** | validated by negative control: 1.10% of best-of-20 zero-edge selections clear; 80% power at a true per-trade Sharpe 0.52 |
 | **Exit geometry is not the lever** (D5) | no constant-R:R target 1.0–3.0R beats the frozen absolute-% target on 1,152 signals; every paired ΔR negative, abs(t) ≤ 0.65 |
 | **The queued generation lever is refuted** (D1/RVOL) | injecting a graded RVOL factor: **−0.291R at t = −2.91** |
-| **Stop-width is a denominator artifact** | closed three times; swing **R −0.386 → raw% −0.262 → excess vs matched basket +0.069** |
+| **Stop-width is a denominator artifact** | closed three times; swing **R −0.386 → raw% −0.262 → excess vs the cohort basket paired in time +0.069** (⛔ renamed 2026-09-18: "matched" was a misnomer — `basket_series` is an equal-weight mean of the same `load_frames` cohort over each trade's own window, **matched on nothing**) |
 | ⚠ **UNDERPOWERED — positional vs swing (E1)** | **R −0.4879 → raw% −0.7870 → excess −0.1909 (t −0.29)**. ⛔ **Relabelled 2026-09-17 (ChatGPT Q7): t = −0.29 is an ACCEPTED NULL, not a demonstrated equivalence.** "Identical shape" is withdrawn; an equivalence claim needs a TOST with a pre-declared margin |
 | **Hold-period breadth lever: resolved against** (B7) | MFE over abs(MAE) **0.83 / 1.12**, hazard curve **flat** 0.559 → 0.489 over days 0–5 |
 | **88% of the BUY book's gross loss is tape, not alpha** | raw −0.1877% = tape −0.1659% + alpha −0.0218% |
@@ -1583,12 +1583,12 @@ it understates the long stop-side tail by **1.15×**, the short by **1.25×**, a
 and any risk number sourced from the 3.2-year block is a benign-regime number.
 
 ⚠ **What it did NOT buy, stated so nobody claims it later:** the restored block is *also* a rising
-tape overall (2021 at +34.7%). The archive gained **one flat year and 620 sessions**, not a bear
+tape overall (2021 at +34.7%). The archive gained **one flat year and 626 sessions** (⛔ restated 2026-09-18 — this line said **620**, a second instance of the staleness M61 corrected at "622" one paragraph later), not a bear
 market. The only crash regime remains COVID, which was already there.
 
 ## §9.4 · Consequences that are now owed
 
-1. ⛔ **Four study scripts hardcode `_CLEAN_SINCE = 2023-07-03`** — `tp_geometry_study.py`,
+1. ⛔ **FIVE study scripts hardcode `_CLEAN_SINCE = 2023-07-03`** (⛔ restated 2026-09-18, M71 — this line said *four*; `confirmation_base_rate.py` was missed) — `tp_geometry_study.py`,
    `squeeze_study.py`, `confirmation_base_rate.py`, `rvol_factor_study.py`. That constant *was*
    the data boundary; it is now an **undeclared deliberate truncation** discarding **626** sessions (1,727 − 1,101; the figure was
    622 before the weekend recovery — M61).
@@ -1690,7 +1690,7 @@ stood BEFORE the backfill.** Three of them (ChatGPT P5, Claude S12, Grok's holdo
 | **M48** | The corrected probability | ⛔⛔ **P(4 of 4 SELL, given the 09-15 cohort) = 0.2545 = 1 in 3.9 — unremarkable.** My round-7 "1 in 60 / 1 in 75" used the wrong population. **The inference is WITHDRAWN.** |
 | **M49** | So what did the operator do? | Within the 12: skipped **both** higher-scoring BUYs (78, 77); took 4 SELLs but **not the top 4** — among **five tied at 76 took two, skipped three**; among two at 75 took one; among two at 74 took one. ⇒ **not rank, not strictly direction.** Arbitrary-among-ties survives, on a population of **12, not 50**. |
 | **M50** | Claude BT12 — is "6.3× lower" the right number at ₹1 lakh? | ⛔ **No — 2.88×** (he predicted 2.90×). 6.3× is the asymptotic ratio. ⭐ **And a result neither of us predicted: intraday is FLAT at 10.6 bps from 2 positions onward** (percentage brokerage below the ₹20 cap, no fixed charge), while delivery rises 23.8 → 60.5. ⛔ **CORRECTED (M59): the ratio is U-SHAPED, not widening — 2.88 → 2.39 → 2.53 → 2.67 → 2.82 → 3.54 → 5.71.** The minimum is at **two** positions, and at the 3–4 names S2 called viable the advantage is ~2.5×, not 5.71× |
-| **M51** | Kimi A2.7 — is the gap bias 2R? | ✅ **CONFIRMED. bias = gap ÷ stop_distance**; Grok's 2R is the special case gap = 2 × stop. The M5 repro (gap 5%, stop 1%) is **5R**, not 2R. At the p10 0.65% stop, a 2% gap is **3.08R** and a 5% gap is **7.69R**. |
+| **M51** | Kimi A2.7 — is the gap bias 2R? | ⛔⛔ **WITHDRAWN 2026-09-18 by M64 — this is the bias in NO unit any study computed.** D1/D5/positional all divide by the **fill**-referenced risk and the fill *is* the gap open, so an affected trade books **exactly +1.0000R at every gap size**. Below is the superseded statement. ~~CONFIRMED. bias = gap ÷ stop_distance~~; Grok's 2R is the special case gap = 2 × stop. The M5 repro (gap 5%, stop 1%) is **5R**, not 2R. At the p10 0.65% stop, a 2% gap is **3.08R** and a 5% gap is **7.69R**. |
 | **M52** | Claude A12 — did M32 reintroduce the look-ahead M31 removed? | ⛔ **YES.** M32 ranked on 2020-01 → 2023-07 and applied it to 2019-10 → 2020-12 — a window that **overlaps and post-dates** the measurement. ⭐ **Redone with strictly-prior expanding cohorts, and the conclusion survives on better ground:** 2021 **+35.5%/yr**, **2022 −3.7%/yr with 43.5% down-days**, 2023-07→now **+12.8%/yr**; long-side gap exposure **2022 14.36% vs retained 8.58% = 1.67×**. ⚠ The COVID block is **not PIT-computable** — the archive starts 2019-10-01, so there is no prior data to rank on. |
 
 ---
@@ -2009,7 +2009,7 @@ was a defect in my measurements rather than in the system.
 | **M54** | The holdout's exact size, before sealing | ⛔ **617 sessions, not 620.** 2021 = **248** · 2022 = **247** · 2023-01→07-03 = **122**. My 620 was an estimate in a quantity about to be pre-registered. |
 | **M55** | Claude Q20 — what is in neither the holdout nor the test block? | **313 sessions** (2019-10-01 → 2020-12-31). Blocks tile exactly: **313 + 617 + 797 = 1,727** ✅. ⇒ **the only crash regime in the archive is in neither block — unsealed and unused**, while item 5 is specified on the 797-session post-hole block. |
 | **M56** | Kimi 9.5 — PART 1 says 48 signals / 22 active; M12 says 50 / 23 | ⛔ **50 / 23 is current.** PART 1's row was measured earlier the same day and never restamped — the exact defect the "every count carries its range" rule exists to catch, in the table that adopted it. |
-| **M57** | ⭐⭐ Kimi 3.8 — the backfill was validated by **counts**, never by **values**. Are the 1.06M bars right? | ⭐⭐ **VALIDATED: 4,974 of 4,974 stored closes match exactly (100.00%, 1bp tolerance).** Method: the bhavcopy publishes `PREV_CLOSE`, a column **we never ingest**, on the *following* session's file. Compared our stored close for session N−1 against it for 2021-06-16 (1,533), 2022-03-16 (1,648), 2022-11-10 (1,793). ⚠ **Zero mismatches also means the sample contained no CA ex-date boundaries, so this check's CA-detection capability is untested.** |
+| **M57** | ⭐⭐ Kimi 3.8 — the backfill was validated by **counts**, never by **values**. Are the 1.06M bars right? | ⭐⭐ **VALIDATED: 4,974 of 4,974 stored closes match exactly (100.00%, 1bp tolerance).** Method: the bhavcopy publishes `PREV_CLOSE`, a column **we never ingest**, on the *following* session's file. Compared our stored close for session N−1 against it for 2021-06-16 (1,533), 2022-03-16 (1,648), 2022-11-10 (1,793). ⛔⛔ **RESTATED 2026-09-18 by M66: this check is not merely untested for corporate actions, it is INCAPABLE of seeing one.** `PREV_CLOSE` is the same unadjusted series — measured on 8 boundary events incl. IRCTC −77.9%, BAJAJFINSV −89.6%, PEL −44.8%, it matched our stored close on **8 of 8**. ✅ **Superseded as the validation of record by M65**, which compares all five fields against the SAME day's own file: **4,981 of 4,981 name-days, 100.00%, 0 rows absent** — including `open`, the field the entire gap analysis is built on. |
 | **M58** | Claude D15 — the three blocks sum to 479 less than the archive | ✅ **A `lead()` boundary artifact, reproduced exactly.** Re-run: full archive 404,903 vs blocks 77,527 + 147,824 + 179,073 = 404,424 — **difference 479 again**. Each block's `lead()` cannot see across its own boundary, so the last session of each loses its gap observation: 2 internal seams × ~240 names. **Not missing data.** |
 | **M59** | Claude BT16 — is M50's ratio monotonic in breadth? | ⛔ **No — it is U-shaped with a minimum at 2 positions.** Measured: **2.88 → 2.39 → 2.53 → 2.67 → 2.82 → 3.54 → 5.71** at 1/2/3/4/5/10/25. **My "the ratio widens with breadth" is wrong**, and it is wrong in the range S2 identified as viable: at 3–4 positions the advantage is ~2.5×, near the minimum. |
 | **M60** | Claude Q21 — how many R definitions are live? | ⛔ **Three.** In the M5 repro the engine books (99−95)/95 = **+4.211%**. Referenced to the **actual entry** (abs(95−99)) that is **+1R**; to the **signal-referenced stop distance** (100−99 = 1) it is **+4R**; and M51's `gap ÷ stop` = **5R** is the *swing* from an intended −1R, not the booked value. **Item 4's falsifier is stated in R and R is not defined.** |
@@ -2194,3 +2194,316 @@ passes today because the number looks reasonable and the unit is undefined.
 | **NEW 19** | **A project-level kill criterion** (Kimi 10.1) | Every item has a falsifier; the programme has none |
 | **R-6** | ⓘ **Reclassified**: limit orders reduce loss, they do not create edge (Kimi 2.7) | Gross alpha is **−0.0218%** — negative before any cost |
 | **12** | ⓘ **Re-scoped**: the push is **evidentiary**, not just disaster recovery (Kimi 7.6) | "Pre-registered in a commit" is worth only the operator's word while nothing is pushed |
+
+---
+
+# PART 12 — THE ROUND-10 PANEL (2026-09-18)
+
+## §12.1 · What arrived, and what was stale
+
+Seven responses. **Five are current. Two were written against an older copy of this document and
+must be read as such** — that is not a criticism of the reviewer, it is a fact about which artifact
+they were given, and it changes what their findings are worth.
+
+| source | standing | new, decision-changing |
+|---|--:|---|
+| **Claude** | current; recomputed PART 11 independently — **7 checks, all reproduce** (M58 with a noted total drift) | **5** (A22, A23, D20, Q28, H23) |
+| **Kimi** | current | **3** (E2's panel construction, the cost model fitted to itself, tax) |
+| **Grok** | current | **2** (delete-first unblocks item 4; PREV_CLOSE is the same unadjusted series) |
+| **ChatGPT** | current | 1 (softened-wording table) |
+| **DeepSeek** | current; high-fidelity restatement | 1 (the 0.5%–25% band request) |
+| **Gemini** | ⛔ **round-8 vintage** — asks whether to backfill before re-running E2; the backfill ran 2026-09-17 | 1 (the 30 bps position cap — and it reproduces) |
+| **Nemotron** | ⛔ **round-6/7 vintage** — quotes `ohlcv_1d` at 1,101 sessions and restates M33, **withdrawn by M47/M48** | 0 |
+
+⚠ Kimi's and Nemotron's replies each arrived **twice** in the paste (Nemotron's truncated both
+times). Treated as one each.
+
+## §12.2 · What I measured before answering anybody
+
+| # | Question | Result |
+|---|---|---|
+| **M62** | Kimi 2.4 — what universe does `e2_score_ic.py` score, and as of when? | ⛔⛔ **`load_frames` ranks the top 250 by median `close*volume` over `now() - 180 days`** — i.e. **2026-03 → 2026-09** — and applies it to panels from 2023-07-03. A PIT cohort as of 2023-07-03 shares **164 of 250 (65.6%)**; as of 2021-01-01, **135 (54.0%)**. **61 of the 250 (24.4%) have no bar before 2021-01-01.** |
+| **M63** | Kimi 2.3 — where is break-even IC = 0.0310 derived? | ✅ **It is derived, in the pre-registration**: `E[excess\|selected] ≈ IC · σ_cs · E[z\|sel]` against 25.5 bps, with a σ_cs table (5% → 0.0225, 7% → 0.0161). ⛔ **It appears nowhere in THIS document** — Kimi is right about the artifact they were given. |
+| **M64** | Grok Q-CC-37 / Claude q8 — which R do the closed studies compute? | ⭐⭐ **All of them compute FILL-referenced R.** `tp_geometry_study:155`, `rvol_factor_study:99`, `positional_probe:167` all divide by `abs(entry_price − stop)/entry_price`, and `_simulate_trade:212` sets `entry_price = fill_candle["open"]`. **Executed: the entry-bar gap books exactly +1.0000R at every gap size** — 2%, 5%, 10%, 20% ⇒ +1.0000, +1.0000, +1.0000, +1.0000. |
+| **M65** | Claude D20 — validate `open`, not just `close` | ✅ **All five fields, 4,981 name-days, 100.00%.** 2021-06-15 (1,539) · 2022-03-15 (1,648) · 2022-11-09 (1,794); open/high/low/close/volume each matched the same day's own bhavcopy; **0 rows absent from the file**. |
+| **M66** | Claude D21 vs Grok D1 — is `PREV_CLOSE` CA-adjusted? | ⛔ **Grok is right.** 8 boundary events incl. IRCTC −77.9%, BAJAJFINSV −89.6%, PEL −44.8%: **`PREV_CLOSE` matched our unadjusted stored close on all 8.** It is the same unadjusted series ⇒ **M57's check is not "untested" for CAs, it is structurally INCAPABLE of seeing one.** |
+| **M67** | Claude H25 — is the special-session class closed? | ✅ **Yes, by a second instrument.** Over the overlapping window: **1** date in `ohlcv_5m` not in `ohlcv_1d` (**2026-09-18 — today**, mid-session) and **1** the other way (**2024-11-01 Muhurat**, already documented in M29). |
+| **M68** | Claude A24 — smoke-run provenance | ⛔ **Refuted.** **7 of the 20** backfill-created historical names have bars on 2021-06-14/15/16, and the distinct-symbol counts sit exactly on the local trend: 1541 · 1540 · 1540 · **1540 · 1539 · 1538** · 1485. No deficit. |
+| **M69** | Claude D19 — §9.3 on the 1,727-session archive | See §12.3. PIT top-250: whole archive **405,426** name-days, long ≤−0.65% **10.07%**, ≤−5% **0.470%**, short ≥+0.65% **21.76%**. **Blocks tile exactly (difference 0)** under a global `lag()` ⇒ M58's 479 confirmed as a seam artifact by an independent construction. |
+| **M70** | Claude Q27 / Kimi 3.2 / DeepSeek 16 — the move distribution | Of 3,162,898 name-days: **>5% = 6.78%**, >10% = 1.12%, **>25% = 0.068%**, and **76.24% fall in the 0.5–25% band the screen never touches**. |
+| **M71** | Claude q9 — `_CLEAN_SINCE` consumers | ⛔ **FIVE, not four** (§9.4 said four): `tp_geometry_study` · `squeeze_study` · `confirmation_base_rate` · `overhead_supply_study` · `entry_confirmation_study`. |
+| **M72** | Claude H23 / q7 — is the E2 pre-registration commit signed? | ⛔ **No.** `git log --format=%G?` on `fe5d508` returns **`N`** — no signature, no third-party timestamp. |
+| **M73** | Kimi — is tax anywhere? | ⛔ **Nowhere.** No hit for STCG / capital gains / `tax` in `app/`, `scripts/`, or this document. |
+| **M74** | Kimi 4.2 — has `fees.py` been reconciled to a contract note? | ⛔ **No.** One aspiration line in the 09-10 adjudication ("Reconcile the fee model to contract notes, daily"). M27 fitted a line to `fees.py`'s **own output**. |
+| **M76** | Claude D22 — `nse_holidays` as a cache | ⓘ **Half-refuted, and the correct statement is sharper.** A36 `calendar_health.py` alarms on the **forward** horizon (`coverage_end`) via a daily beat. There is **no backward floor**. And `market_calendar.py:166` already records the table is **wrong**, not merely absent, for 2019–20: **7 rows against ≥17 holidays**. |
+| **M77** | Gemini — cap positions to keep friction under 30 bps | ✅ **Confirmed, boundary located.** Delivery bps at ₹1L: 1→**23.76**, 2→25.29, 3→26.88, 4→28.36, 5→**29.89**, 6→**31.52**, 25→**60.55**. **Crosses 30 bps between 5 and 6.** 1→25 = **+36.79 bps** (Gemini said 36.7). |
+| **M78** | Claude A23 — are the three standing concessions in any queue section? | ⛔ **Zero, zero, zero.** *portfolio* · *entry_diversity* · *modelled/calibration* appear **0 times** across §7.11, §8.10, §10.11, §11.9. |
+| **M79** | Claude Q28 — yield vs document growth | Lines written / corrections to my own numbers: round 6 **630 / 5**, round 7 **437 / 7**, round 8 **328 / 6**, round 9 **201 / 8** ⇒ **0.79 → 1.60 → 1.83 → 3.98 self-corrections per 100 lines.** |
+| **M80** | Kimi 1.4 — is gate configuration versioned? | ⛔ **No table exists** matching `%config%`/`%setting%`/`%gate%`. A past signal cannot be attributed to a configuration. |
+| **M81** | Kimi q8 — overlap correction in the closed studies? | ⛔ **None.** Neither `tp_geometry_study` (D5), `rvol_factor_study` (D1) nor `b7_hazard` imports `newey_west_t` or `block_bootstrap`. |
+| **M83** | Kimi 3.6 — historical-name completeness | 0 orphan `stock_id`s. **2,107 distinct names traded in 2021–22; 1,492 (70.8%) are active today** ⇒ **615 (29.2%) cannot enter E2's cohort at all.** |
+| **M84** | Nemotron E5's proposed test | ⛔ **Unrunnable.** `signal_outcomes` has neither `acted_on` nor `confidence`. |
+
+## §12.3 · Claude — adjudicated
+
+**Recomputation.** 6 of 6 arithmetic checks reproduce exactly, including the three-block tile and
+the M59 curve. M53's explanation is accepted and the second-instance hypothesis correctly withdrawn.
+
+| point | verdict |
+|---|---|
+| **A22** — no single current queue; it is a base table plus three patch sets | ✅ **Taken.** ~24 items across four sections. §12.12 publishes **one table**; the delta sections become history. |
+| **A23** — three concessions in no queue section | ⛔⛔ **CONFIRMED by M78: 0, 0, 0.** Q-C was widened to "every concession in PARTS 7–8" and its falsifier never enumerated them. Now enumerated. |
+| **A24** — smoke-run provenance unchecked | ⛔ **REFUTED by M68.** 7 of 20 historical names have bars on those dates; symbol counts sit on the local trend. A well-posed question with a clean negative answer. |
+| **Q25** — 5c pre-registers one bar for three arms whose bars differ | ✅ **Taken, and it is the right order of operations.** The bar is `break-even + 1.645·SE`, and SE depends on the window and the split. **Register the FORMULA, not the number.** |
+| **Q26** — item 8's falsifier needs a positive gross edge; the only estimate is −2.18 bps | ✅ **Taken.** Item 8 is now explicitly **downstream of items 4, 5, 6**. |
+| **Q27** — dividend contamination is directional and sits where the analysis is most sensitive | ⓘ **Half-confirmed, and M66 makes it worse than stated.** The screen touches **0.068%** of name-days while **76.24%** sit in the untouched 0.5–25% band. But the ex-date count needs a CA source we do not have — see §12.7. |
+| **Q28** — the panel's yield tracks document growth, not defect rate | ✅ **CONFIRMED with M79's number** — 0.79 → 1.60 → 1.83 → **3.98** self-corrections per 100 lines. ⭐ **And round 10 breaks it**: M62 is a defect in a script, found because one reviewer asked *"show me the population query"* rather than *"recompute the table"*. **That question shape is the finding.** |
+| **D19** — §9.3 is stale and feeds item 4 | ✅ **Taken; recomputed as M69.** ⚠ My re-run is **not** the same estimator (annual PIT cohort, global `lag()`), so the +924 Claude computed is against M58, not against M69. |
+| **D20** — M57 validated `close`; the gap analysis uses `open` | ⭐⭐ **The best request of the round, and it passed: M65, all five fields, 4,981/4,981.** Cheaper than M57 and it covers everything. |
+| **D21** — re-run M57 at a CA boundary | ⛔ **Test design refuted by M66.** The premise ("if `PREV_CLOSE` is adjusted and our close is not") is false — both are unadjusted. |
+| **D22** — `nse_holidays` is a cache with no as-of | ⓘ **Sharpened by M76:** it has a **forward** horizon alarm (A36) and **no backward floor**, and is measured **wrong** for 2019–20 (7 rows vs ≥17 holidays). |
+| **BT19** — item 4's block has no owner or definition of done | ✅ **Taken and RESOLVED** — see §12.7/M64. |
+| **BT20** — §9.3's restored row reads holdout data under the old blacklist | ✅ **CONFIRMED, and I did it again this round**: M66's CA census queried 2021-01→2023-07. Recorded, per §10.10, as a permitted integrity read. |
+| **BT21** — NEW 17 has no falsifier | ✅ **Taken**, with Claude's own threshold: *median half-spread on the tradability-screened subset below 5 bps ⇒ spread is not binding.* |
+| **S17** — 797 is a default nobody chose | ✅ **Taken and DECIDED this round** (§12.7). And M71 says the constant is in **five** scripts. |
+| **S18** — the cohorts in current use are still unrederived | ⭐⭐ **CONFIRMED far beyond what was claimed — M62.** |
+| **EX15 / EX16** | ✅ Both taken. Execution items are loss-reduction; stated once in §12.12. |
+| **H23** — pushing secures the NEXT pre-registration, not E2's | ⛔⛔ **CONFIRMED by M72: `fe5d508` is UNSIGNED.** E2's null is **operator-attested** and will remain so. Label changed. |
+| **H25** — are the four recovered sessions the whole class? | ✅ **CONFIRMED CLOSED by M67**, via a second instrument. |
+| **H26** — the holdout has no opening condition | ✅ **Taken; the condition is written in §12.12.** |
+
+## §12.4 · ChatGPT — adjudicated
+
+Correctly identifies that the research machine is now the dominant risk, and its five-field
+manifest remains the single most reusable proposal any reviewer has made. Specifics:
+
+- ✅ **The softened-wording table is adopted almost entirely** — it is the cheapest correctness
+  work available. "Ranker is dead" → **"not supported on the current measured block; CA-clean **and
+  PIT-cohort** re-run required"** (M62 adds the second clause ChatGPT could not know about);
+  "holdout untouched" → **"strategy-blind, descriptively-seen"**; "backfill validated" → now
+  **"all five fields validated on 4,981 name-days; CA boundaries structurally unseeable (M66)"**.
+- ✅ **E1's TOST** — accepted; an accepted null is not equivalence.
+- ⛔ **"Define CA policy: `CA_POLICY = DROP | ADJUST`"** — taken, but M66 shows the choice is not
+  binary in the way stated: **a drop rule keyed on `|move|` is not a CA detector.** See §12.7.
+- ⓘ **"Push establishes the pre-registration boundary"** — **M72 refutes the retrospective half**
+  exactly as Claude's H23 did. It establishes future ones.
+- ✅ **Entry-price provenance by rung** — still unmeasured, still queued; ChatGPT is right that it
+  is a research-validity question and not only a UI one.
+- ⛔ **"Do not turn on `market_regime` or `sector_rs` merely because the data exists"** — agreed,
+  and note the data does **not** exist: index/VIX remain a 792-session object (NEW 18).
+
+## §12.5 · Gemini — adjudicated (round-8 vintage)
+
+Its framing question — *"should the full bhavcopy backfill be executed before re-running the
+CA-filtered E2?"* — **was executed on 2026-09-17**, before this reply was written. Its M38/M13/M34/
+M17/M28 restatements are correct but superseded. Its "1,714 sessions" is now **1,727**.
+
+⭐ **What survives, and it is its best contribution in five rounds:** *"moving from 1 to 25 positions
+dilutes net expectancy by 36.7 bps in friction alone. Position count should be capped at 3–5 to keep
+friction under 30 bps."* **M77 reproduces both numbers**: +36.79 bps, and the 30 bps line falls
+**between 5 and 6 positions**. ⭐ It independently supports a decision already taken on unrelated
+grounds — D4's **max-concurrent-position cap of 3** (26.88 bps), built 2026-09-08 for concentration
+reasons. Cost and risk agree.
+
+⛔ **The U7 kill threshold Gemini has owed for four rounds did not arrive again.** Grok's candidate
+becomes the default by forfeit (§12.7).
+
+## §12.6 · DeepSeek — adjudicated
+
+The most faithful restatement yet — A1–A10, Q1–Q12, D1–D11, B1–B10, S1–S10, E1–E7, H1–H14, F1–F16
+with verbatim quotes, each falsifiable and each with a test. **Its accuracy is high and its novelty
+is near zero**: I can find no row that is not already in PARTS 7–11. Two exceptions and one error:
+
+- ✅ **Request 16 — the `|move|` distribution 0.5%–25%** — run as **M70**, and it is the sharpest
+  number behind the CA-policy decision: **76.24% of name-days sit in the band the screen never
+  touches, and the screen itself fires on 0.068%.**
+- ✅ **Request 20 — a programme falsifier** — answered in §12.12 (NEW 19).
+- ⛔ **Q10 is a misreading.** *"The '88% tape, not alpha' framing is contradicted by its own
+  decomposition."* It is not contradicted — it **is** the decomposition: raw −0.1877% = tape
+  −0.1659% + alpha −0.0218%. Both statements are true simultaneously; 88% of the loss is tape **and**
+  alpha is negative. No contradiction exists.
+- ⚠ "209 commits ahead" is stale — **215**.
+
+## §12.7 · Grok — adjudicated
+
+The round's most decision-dense reply, and **it wins both of its head-to-head disagreements.**
+
+**⭐⭐ 1. The 313-session block: Grok (Holdout-2) vs Claude (test set). GROK WINS, and the
+adjudication is arithmetic, not taste.**
+Claude's strongest argument is variance reduction where the bar is tightest: 797 → 1,110 sessions
+takes the half-width **0.0189 → 0.0160**. Grok's is that mixing a crash regime into a re-run changes
+the estimand and destroys comparability with −0.0070.
+Measured: the interval improves by **0.0029**. The move required to reach the resurrection bar is
+**0.050 − (−0.0070) = 0.0570**. The 313 sessions buy **5.1% of the required move — 19.6× short.**
+⇒ **They cannot change the decision, and they are the only crash regime we will ever have.**
+**DECIDED: 313 = Holdout-2, sealed. Item 5 runs on 797.**
+⚠ Grok's constraint is adopted with it: no `liquid_as_of` inside 2019-10→2020-12 — there is no
+prior ranking window.
+
+**⭐⭐ 2. "Unblock item 4 without waiting on a theology of R" — RIGHT, and M64 makes it stronger
+than Grok claimed.** Grok's point is that the **delete** treatment needs no R. M64 shows the
+**magnitude** arm needs none either: because D1/D5/positional all divide by the **fill**-referenced
+risk, and the fill *is* the gap open, **every affected trade books exactly +1.0000R regardless of
+gap size**. So:
+- the per-trade contamination is a **constant, +1.000R**, not a distribution;
+- ⛔ **my M51 is WITHDRAWN as stated.** "bias = gap ÷ stop_distance … the M5 repro is 5R" is the
+  gap expressed in *planned-risk* units — **it is the bias in no unit any study computed**;
+- ⛔ affected trades are **invisible in the R distribution** — they look exactly like genuine +1R
+  winners. They can only be found by re-deriving `open` vs `stop` at the fill bar;
+- ⚠ and when the gap lands *exactly* on the stop, fill-referenced R is **undefined** (÷0) and every
+  study's `risk_pct <= 0` guard silently **drops the row**.
+⇒ **Item 4 is UNBLOCKED.** Falsifier, in the studies' own published unit: *delete the affected
+trades; if any D1/D5/B7 headline changes sign or crosses |t| = 1.96, that headline is invalid.*
+
+**3. Which R to canonicalise.** Grok says three names, never mixed; Claude says signal-referenced
+with chase reported separately. ⭐ **M64 decides it for Claude's side on evidence, not argument:**
+fill-referenced R returned **+1.0000 at every gap size** — the metric is blind to the defect *by
+construction*. A reported R must be able to show the failure it is reporting on.
+⇒ **`R_signal = |signal_price − planned_stop|` is canonical for REPORTING**, fixed at mint;
+`R_entry` is retained as the realised-economics figure; **chase is its own term**, never absorbed
+into a denominator; **never mixed inside one threshold**.
+
+**4. Grok's D1 — "`PREV_CLOSE` is the same vendor's unadjusted series."** ⭐ **CONFIRMED by M66 on
+8 of 8 boundaries.** This is the correct reading and Claude's D21 rests on the opposite premise.
+
+**5. ⭐ The CA screen is not a CA detector — a new finding that falls out of M66.** Of the 8
+flagged `|move| > 25%` events, **3 are corporate actions** (IRCTC 1:5 split · BAJAJFINSV 1:1 bonus
++ 1:5 split · PEL demerger) and **5 are genuine price moves** (ZEEL ×2 on the Sony/Invesco news,
+IDEA on the telecom relief package, ADANIENT ×2 on Hindenburg) `[cited — classified by hand from
+public corporate-action records; we ingest no CA table]`. ⇒ **a drop-the-window rule at 25% would
+delete the single most informative week in the block and keep every dividend.** Grok's "drop at 25%
+and declare it; don't invent 0.5% without an ex-date table" is directionally right, but the
+measurement says the rule is **62.5% false-positive on this sample**. **NEW 16 is rescoped: the CA
+policy needs the external source D3 already found** (the free NSE `/api/` path), not a threshold.
+
+**6. U7's kill threshold** — adopted by forfeit: *sector-relative IC 90% CI entirely above the
+NIFTY50 IC on 792 sessions / ~500 names, else drop U7.*
+
+**7. Grok's C3, C6** — both already applied. Its "no round 11 unless a probe runs with it" is the
+same rule §13f set in round 8 and is restated in §12.12.
+
+## §12.8 · Kimi — adjudicated
+
+**⭐⭐⭐ Its 2.4 is the finding of the round, and the answer is worse than the question.**
+*"E2's panel construction is never stated — the same defect class the document burned on twice."*
+**M62: `load_frames` ranks on `now() - 180 days` and the run is applied to 2023-07-03 onward.**
+- **86 of 250 names (34.4%)** entered E2's cross-section on liquidity information from **after**
+  the measurement window;
+- extended to the holdout it would be **46%**, and **61 names (24.4%) have no bar before 2021**;
+- **615 of the 2,107 names that actually traded in 2021–22 (29.2%) are structurally ineligible**,
+  because the filter requires >100 bars in the **last 180 days**.
+
+⚠ **But Kimi's charge must be split, because the pre-registration is better than the document.**
+`E2-PREREGISTRATION-2026-09-12.md` line 36 **does** fix the eligible universe (≥300 prior bars,
+close > ₹1, span guard) and line 38 **names the bias**: *"⛔ This inherits the known 0a.3
+survivorship bias — the name set is drawn by today's liquidity — and that bias is not fixed by this
+test. It is recorded, not solved."* ⇒
+- ⛔ **REFUTED against the pre-registration** — it is stated, and the script matches it exactly;
+- ⛔⛔ **CONFIRMED against THIS document and against CLAUDE.md, MEMORY.md and PHASES.md**, which
+  all carry **"THE RANKER IS DEAD"** with **none** of that caveat. That is a W1 doc-sync failure and
+  it is mine;
+- ⛔ **and the pre-registration named only SURVIVORSHIP, not LOOK-AHEAD.** They are different
+  defects. Its direction argument — *"it should if anything help the scorer, so a null is
+  conservative"* — is plausible for survivorship and **unmeasured for look-ahead liquidity
+  selection**, where names that *became* liquid by 2026 were a growth cohort in 2023. That sentence
+  is now tagged `[ASSUMED]`.
+
+| other | verdict |
+|---|---|
+| **2.3** — break-even 0.0310 has no published derivation | ⛔ **REFUTED (M63)** — it is derived in the pre-registration, and **✅ CONFIRMED for this document**, which never carried the formula. Now carried. |
+| **4.2** — the cost model was only ever fitted to itself | ⭐ **CONFIRMED (M74), and conceded.** M27 regressed `fees.py` against **`fees.py`**. That validates arithmetic, not accuracy, and the 22.22 bps floor is the programme's most decision-load-bearing number. **NEW 21.** |
+| **Missing — taxation** | ⭐⭐ **CONFIRMED (M73): STCG appears NOWHERE.** It cannot rescue a negative gross edge, but it raises the hurdle a positive one must clear and it is absent from every break-even in the programme. **NEW 20.** |
+| **1.4** — gate config unversioned | ✅ **CONFIRMED (M80)** — no config/setting/gate table exists. Conceded in round 6, never queued; **now queued (NEW 22)**. |
+| **q8** — overlap handling in the closed studies | ⛔ **CONFIRMED (M81): none of D5, D1 or B7 applies `newey_west_t`.** ⚠ **Consequence Kimi did not draw: D1 was DECLINED on `t = −2.91` with a naive SE.** Under the correction the 09-10 methods audit mandates, that refutation is weaker than published — **R1/RVOL is "not refuted", not "refuted"**, until item 6 re-runs it. |
+| **6.4** — the matched basket's construction is undocumented | ⛔ **REFUTED in code** — `swing_dependence_probe.basket_series` is an **equal-weight mean of the same `load_frames` cohort over each trade's own window**, and its docstring says it inherits that cohort's bias. ⚠ "Matched" is a misnomer; it is *paired in time*, not matched on characteristics. Renamed in §12.10. |
+| **7.5** — the gating closure depends on the contaminated E2 | ✅ **Taken.** "The trades carry no edge to partition" inherits every defect E2 has. Recorded as a dependency. |
+| **3.6** — historical-name completeness asserted, not checked | ⓘ **Partly measured (M83):** 0 orphans, and 20 names created by the backfill. The external cross-check against NSE delisting circulars remains undone. |
+| **1.1–1.3, 2.1, 2.5–2.9, 3.x, 5.x, 7.x** | Faithful restatements of PARTS 7–11. |
+| **Meta — "the next reviewer should be an independent recomputation of the M-table"** | ⭐ **Agreed, with one amendment M79 supports: recomputation is what rounds 6–9 already were.** The round-10 yield came from *"show me the population query"*. **That is the question shape to repeat.** |
+
+## §12.9 · Nemotron — adjudicated (round-6/7 vintage)
+
+Working from an old copy, and it shows in ways that matter:
+
+- ⛔ **Q3/H1 quote `ohlcv_1d` at "1,101 distinct sessions … 2021 and 2022 do not exist."** The hole
+  was filled 2026-09-17; the archive is **1,727 sessions**.
+- ⛔ **D1 "attempt the backfill"** and **Finding 28 "fill the 922-day data hole"** — done.
+- ⛔⛔ **E5 restates M33** — *"all 14 higher-confidence signals were NOT acted on"* — **withdrawn in
+  round 8 by M47/M48**: the population was 12, not 50, and P(4 of 4 SELL) = 0.2545 = **1 in 3.9**.
+  Re-citing a withdrawn claim as current is the one failure mode a reviewer of a versioned document
+  must avoid.
+- ⛔ **Its proposed test is unrunnable (M84)**: `signal_outcomes` has neither `acted_on` nor
+  `confidence`.
+- ⚠ Its B-5 quote gives the sector map as **both** "500 of 3,397" and "500 of 3,395" in one reply.
+- ⚠ Its Q6 asks to "re-run D5 using actual stop distances from entry rather than fixed percentage" —
+  **M64 shows D5 already divides by the actual fill-referenced distance.**
+- ✅ Correct and current: A1–A5 (empty `strategy_profiles`, unwired ledger, starved categories, the
+  FII/DII false neutral, the sector map), B2 (live immune by explicit rejection), S5 (the
+  universe-size guard as a systemic outage).
+
+**Net: 0 decision-changing points.** Both stale replies produced findings the current document had
+already recorded, which is the expected outcome and the reason vintage is now tracked in §12.1.
+
+## §12.10 · ⛔ What round 10 cost me — corrections to my own document
+
+1. ⛔⛔ **E2's cohort caveat never left the pre-registration.** Four documents carry "THE RANKER IS
+   DEAD"; the pre-registration carries "the name set is drawn by today's liquidity … recorded, not
+   solved". **W1 failure, mine.** Fixed in all four.
+2. ⛔⛔ **M51 WITHDRAWN.** "bias = gap ÷ stop_distance … the M5 repro is 5R" is the bias in **no
+   unit any study computed**. In the studies' own unit it is **exactly +1.000R, always** (M64).
+3. ⛔ **§9.4 said four scripts hardcode `_CLEAN_SINCE`. There are five** (M71).
+4. ⛔ **§9.3 still says the archive gained "620 sessions".** It gained **626** — the same defect M61
+   corrected at "622" one paragraph later, in a second instance I did not look for.
+5. ⛔ **M57's CA caveat was too weak.** I wrote "this check's CA-detection capability is untested".
+   M66 shows it is **incapable** — `PREV_CLOSE` is the same unadjusted series, on 8 of 8 boundaries.
+6. ⛔ **"Matched basket" is a misnomer** — it is an equal-weight cohort basket **paired in time**,
+   matched on nothing. Renamed wherever it appears.
+7. ⛔ **The break-even formula was never carried into this document** from the pre-registration
+   (M63), so a reader of this document alone could not check the one number the E2 verdict turns on.
+8. ⚠ **I read the holdout again** (M66's CA census, 2021-01→2023-07). Permitted as an integrity read
+   under §10.10's whitelist, and recorded here rather than left implicit — BT20's warning, live.
+
+## §12.11 · Two standing rules earned this round
+
+⭐⭐ **A metric may not be blind to the failure it is meant to report.** Fill-referenced R returns
+**+1.0000 for every gap size** — the quantity that should have screamed is mathematically incapable
+of varying. Test, before adopting any metric: *construct the failure it is supposed to catch and
+check the number MOVES.*
+
+⭐⭐ **Ask for the population query, not the recomputation.** M79 measures four rounds of
+recomputation converging on my own arithmetic (0.79 → 3.98 self-corrections per 100 lines) while
+system-defect yield fell to zero. The round that broke the trend asked *"what universe does this
+script score, and as of when?"* — **one question against one function, and it reopened the
+programme's central null.**
+
+## §12.12 · ⭐ THE QUEUE — one table, current (A22). §7.11, §8.10, §10.11 and §11.9 are now history.
+
+| # | Item | State |
+|---|---|---|
+| **1** | Decide the four SHORT positions + ship a directional/settlement restriction | ⛔ **Blocked on Q-A** (account type — the user's to state) |
+| **2** | Wire the ledger + a backend wiring lint | Ready |
+| **3** | Re-seed `strategy_profiles` idempotently + census every seed-bearing migration | Ready |
+| **4** | Fix `_simulate_trade`'s entry-bar gap | ✅ **UNBLOCKED (M64).** Delete treatment; falsifier: *any D1/D5/B7 headline that changes sign or crosses \|t\|=1.96 is invalid.* Affected rows are invisible in the R distribution — find them by `open` vs `stop` at the fill bar |
+| **5** | Re-run E2 | ⛔ **Now needs THREE repairs, not one**: CA policy (16) · **PIT cohort (14) — M62** · window = **797, DECIDED**. Arms 5b (per-direction) and 5c (bar as a **formula**, `break-even + 1.645·SE`, per arm) pre-registered |
+| **6** | Re-run D5 + D1 + B7 after item 4 | ⚠ **and with the overlap correction (M81)** — D1's `t = −2.91` is naive |
+| **7–9** | Ledger `surface`/`displayed_rank`; the five-field manifest; experiment registry (Q-B) | Ready |
+| **10** | Directional entry zone | Ready — **loss-reduction, not edge (EX16)** |
+| **11** | Holdout seal: **617 sessions**, whitelist = row/session counts + integrity checks | ✅ **Opening condition, written (H26): the holdout opens once, after item 5 returns on 797, and only if item 5 clears 5c's bar** |
+| **12** | Push | ⓘ **Evidentiary for FUTURE pre-registrations only — `fe5d508` is UNSIGNED (M72).** E2's label is now *"pre-registered, operator-attested"* |
+| **13** | Celery beats off `day_of_week="1-5"` | Ready |
+| **14** | **PIT cohort helper `liquid_as_of(date)`** | ⭐⭐ **PROMOTED to a precondition of item 5** (M62) |
+| **15** | A10 treatment for `bhavcopy_service` | Ready |
+| **16** | CA policy | ⭐ **RESCOPED (M66): a `\|move\|` threshold is not a CA detector — 62.5% false-positive on the measured sample.** Needs D3's external NSE source |
+| **17** | Measure spread and impact | Falsifier (Claude BT21): *median half-spread on the tradability-screened subset < 5 bps ⇒ not binding* |
+| **18** | Index/VIX for 2021–22 | Ready — integrity ingest, whitelist-class |
+| **19** | Project-level kill criterion | **Written**: *if item 5 on 797, CA-screened and PIT-cohorted, returns a 90% upper bound below break-even, this daily-swing scorer is retired. The crash block is not spent trying to save it.* |
+| **20** | ⭐ **NEW — put tax in the cost model** (Kimi) | **M73: absent everywhere.** Raises every break-even |
+| **21** | ⭐ **NEW — reconcile `fees.py` to one real contract note** (Kimi 4.2) | **M74: never done.** The 22.22 bps floor is the programme's most load-bearing number and is self-fitted |
+| **22** | ⭐ **NEW — version the gate configuration** (Kimi 1.4) | **M80: no table exists**; conceded round 6, never queued |
+| **23** | ⭐ **NEW — enumerate the three standing concessions** (Claude A23) | **M78: 0/0/0.** Portfolio-level evaluation · `entry_diversity`'s incremental effect · live-vs-modelled fill calibration |
+| **24** | Position-count cap | ⓘ **D4's cap of 3 independently supported by cost (M77)**: 30 bps falls between 5 and 6 |
+| **Q-A** | Account type + capital | ⛔ **The user's. Blocks item 1 and every cost conclusion** |
+
+⛔ **No round 11 unless a probe runs with it.** M79 is the evidence: four rounds of recomputation,
+yield converging on my own arithmetic. The one question that paid this round was aimed at a
+function, not a table.

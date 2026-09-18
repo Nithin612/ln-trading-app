@@ -634,6 +634,51 @@ else.
   — TimescaleDB hypertables need `timescaledb_pre_restore()`/`post_restore()`) — details in
   `RUNBOOK.md` §9. **Ask before anything that writes to, truncates or migrates live data.**
 
+- **⛔⛔ CONSOLIDATED-DOC ROUND 10 (2026-09-18) — THE CENTRAL NULL'S COHORT IS 34% LOOK-AHEAD, AND
+  ITEM 4 IS UNBLOCKED BY ARITHMETIC.** Seven reviews adjudicated one by one in PART 12 of
+  `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` (M62–M84); **two arrived against stale copies** (Gemini
+  round-8, Nemotron round-6/7 — the latter re-cites M33, withdrawn in round 8) and produced **0**
+  decision-changing points between them.
+  ⭐⭐⭐ **M62 — `swing_dependence_probe.load_frames` ranks the top 250 on `now() - interval '180
+  days'`**, and `e2_score_ic.py`, `b7_hazard.py` and the swing probe all import it. A PIT cohort as
+  of 2023-07-03 shares **164/250 (65.6%)** ⇒ **34.4% of E2's cross-section was selected on
+  post-window liquidity**; as of 2021-01-01 it is 54%; **615 of the 2,107 names that traded in
+  2021–22 (29.2%) cannot enter the cohort at all** (it needs >100 bars in the **last** 180 days).
+  ⚠ **The pre-registration DID name the survivorship half** (*"the name set is drawn by today's
+  liquidity … recorded, not solved"*) **and no downstream document carried it** — a W1 failure, now
+  fixed in four places. It named survivorship, **not look-ahead**; its "a null is conservative"
+  direction argument is `[ASSUMED]`. ⇒ **item 14 (`liquid_as_of`) is now a PRECONDITION of item 5.**
+  ⭐⭐ **M64 — every closed R study divides by the FILL-referenced risk** (`tp_geometry_study:155`,
+  `rvol_factor_study:99`, `positional_probe:167`; `_simulate_trade:212` sets `entry_price =
+  fill_candle["open"]`). Executed: the entry-bar gap books **exactly +1.0000R at 2%, 5%, 10% and 20%
+  gaps** — the metric is **blind to the defect by construction**, and affected trades are
+  indistinguishable from genuine +1R winners. ⇒ ⛔ **M51 WITHDRAWN** ("bias = gap ÷ stop") — that is
+  the bias in **no unit any study computed**; ✅ **item 4 needs no new R and is UNBLOCKED.**
+  ⭐ **CANON: `R_signal` for reporting, `R_entry` for realised economics, chase as its own term,
+  never mixed in one threshold.**
+  ⭐⭐ **M65 — the backfill is now validated on ALL FIVE fields**: 4,981 name-days against the SAME
+  day's own bhavcopy, **100.00%**, 0 rows absent — including `open`, which the whole gap analysis
+  rests on. ⛔ **M66 — `PREV_CLOSE` is the SAME unadjusted series** (8 of 8 CA boundaries matched),
+  so M57 was not "untested" for CAs, it was **incapable**. ⭐ **And the CA screen is not a CA
+  detector**: of 8 flagged `|move| > 25%` events, **3 are corporate actions and 5 are real moves**
+  (ZEEL ×2, IDEA, ADANIENT ×2) ⇒ a drop-the-window rule deletes the most informative week in the
+  block and keeps every dividend; **76.24% of name-days sit in the untouched 0.5–25% band** (M70).
+  ⭐ **313 DECIDED = Holdout-2, sealed; item 5 runs on 797** — adding it moves the interval 0.0029
+  against a required 0.0570, **19.6× short**. ⭐ **M77 confirms Gemini to the decimal**: delivery
+  friction crosses **30 bps between 5 and 6 positions** (29.89 → 31.52), +36.79 bps from 1 to 25 —
+  independently supporting D4's already-built cap of 3.
+  ⛔ **NEW, all measured absent: tax/STCG anywhere (M73) · any reconciliation of `fees.py` to a real
+  contract note (M74 — M27 regressed `fees.py` against itself) · any gate-config history table (M80)
+  · any overlap correction in D5/D1/B7 (M81 — so D1's `t = −2.91` refutation is weaker than
+  published) · the three standing concessions in any queue section (M78: 0/0/0).**
+  ⛔ **`fe5d508` is UNSIGNED (M72)** ⇒ E2 is **"pre-registered, operator-attested"**; the push
+  secures FUTURE pre-registrations only.
+  ⭐⭐ **TWO RULES EARNED: (1) a metric may not be blind to the failure it reports** — construct the
+  failure and check the number MOVES; **(2) ask for the population query, not the recomputation** —
+  M79 measures rounds 6→9 at **0.79 → 1.60 → 1.83 → 3.98 self-corrections per 100 lines written**
+  with system-defect yield at zero, and the one question that paid this round was aimed at a
+  function. ⛔ **No round 11 unless a probe runs with it.**
+
 - **✅ THE FEED ALARM NOW ASSERTS COVERAGE, NOT JUST RECENCY (U4′, 2026-09-14).** 6.8.6 asserts
   `max(time)` and read ✅ straight through the 09-07 outage. `feed_health.py` gained a coverage
   half — distinct names on a feed's latest session vs the median over the trailing **30**
@@ -726,7 +771,7 @@ else.
   **3a unconditional IC h=5d = −0.0070, 90% [−0.0259, +0.0119] ⇒ NULL** (upper bound below the
   MEASURED break-even 0.0310). **The scorer carries no cross-sectional information; `confidence_pct`
   is flatter still.** ⚠ **3b INCONCLUSIVE, not rounded to null** (−0.3150%, upper bound +0.388% >
-  +0.255%) ⇒ ⭐ **THE RANKER IS DEAD, THE GATE IS UNPROVEN BOTH WAYS.**
+  +0.255%) ⇒ ⭐ **THE RANKER IS DEAD** — ⛔⛔ **QUALIFIED 2026-09-18 (M62): E2's cohort is `load_frames`' top-250 ranked on `now() - 180 days`, so 34.4% of the cross-section was selected on post-window liquidity and 29.2% of the names that traded in 2021–22 cannot enter it. The pre-registration named the survivorship half and no downstream document carried it. Read as "NOT SUPPORTED on the current measured block; CA-clean AND PIT-cohort re-run required".** THE GATE IS UNPROVEN BOTH WAYS.
   ⭐ **Retired: `sd(IC_t)` 0.10 → 0.1126 · `E[z|selected]` 2.268 → 1.8506** ⇒ break-even IC figures
   rise ~23%. ⭐⭐ **B7: MFE/|MAE| 0.83/1.12 (no geometry repair) and the hazard curve is FLAT** ⇒
   **the hold-period breadth lever is RESOLVED AGAINST IT.** T=0 contrast t = −4.16 but it is the

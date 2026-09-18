@@ -7,6 +7,70 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Round-10 panel — E2's cohort is 34% look-ahead, and item 4 is unblocked by arithmetic (2026-09-18)
+
+PART 12. Seven responses adjudicated one by one (M62–M84). **Two arrived against stale copies of the
+document** — Gemini's is round-8 vintage (it asks whether to run a backfill that ran on 09-17) and
+Nemotron's is round-6/7 vintage (it re-cites M33, withdrawn in round 8 by M47/M48, and proposes a
+test against columns `signal_outcomes` does not have). Between them: **0 decision-changing points.**
+
+⭐⭐⭐ **M62 — the programme's central null is measured on a look-ahead cohort.**
+`swing_dependence_probe.load_frames` ranks the top 250 names by median `close*volume` over
+`now() - interval '180 days'`, and `e2_score_ic.py` imports it. Measured: a point-in-time cohort as
+of 2023-07-03 shares **164 of 250 (65.6%)** with the shipped one ⇒ **34.4% of E2's cross-section was
+selected using liquidity information from after the measurement window**; as of 2021-01-01 the
+overlap is 54.0%; **61 of the 250 (24.4%) have no bar before 2021**; and because the filter demands
+>100 bars in the **last** 180 days, **615 of the 2,107 names that actually traded in 2021–22 (29.2%)
+are structurally ineligible.** ⚠ The E2 pre-registration *did* name the survivorship half — *"the
+name set is drawn by today's liquidity … recorded, not solved"* — and **no downstream document
+carried it**; it did not name the look-ahead half at all. Corrected in four documents.
+
+⭐⭐ **M64 — item 4 is UNBLOCKED, and M51 is withdrawn.** Every closed R study divides by the
+**fill**-referenced risk (`tp_geometry_study:155`, `rvol_factor_study:99`, `positional_probe:167`),
+and `_simulate_trade:212` sets `entry_price = fill_candle["open"]`. Executed against the frozen
+engine: an entry-bar gap through the stop books **exactly +1.0000R at 2%, 5%, 10% and 20% gaps.**
+The bias is a constant, not a distribution; affected trades are indistinguishable from genuine +1R
+winners in the R distribution; and when the gap lands exactly on the stop the ratio is undefined and
+every study's guard silently drops the row. ⛔ "bias = gap ÷ stop_distance" (M51) is the bias in no
+unit any study computed. Canon adopted: **`R_signal` for reporting, `R_entry` for realised
+economics, chase as its own term, never mixed inside one threshold.**
+
+⭐⭐ **M65/M66 — the backfill is validated on all five fields, and `PREV_CLOSE` cannot see a CA.**
+All of open/high/low/close/volume matched the **same day's own** bhavcopy on **4,981 of 4,981**
+name-days across three sessions, 0 rows absent — including `open`, which the entire gap analysis
+rests on. Separately, on 8 corporate-action boundaries (IRCTC −77.9%, BAJAJFINSV −89.6%, PEL −44.8%
+among them) `PREV_CLOSE` matched our **unadjusted** stored close **8 of 8** ⇒ M57 was not "untested"
+for corporate actions, it was **incapable**. ⭐ And of those 8 flagged `|move| > 25%` events only
+**3 are corporate actions** — the other 5 are real moves (ZEEL ×2, IDEA, ADANIENT ×2) ⇒ a
+drop-the-window rule at 25% is **62.5% false-positive** on this sample and would delete the most
+informative week in the block while keeping every dividend.
+
+⭐ **313 DECIDED** = Holdout-2, sealed; item 5 runs on **797**. Adding the crash block moves the
+interval 0.0189 → 0.0160, a gain of **0.0029** against the **0.0570** the point estimate must travel
+to reach the resurrection bar — **19.6× short**, so it cannot change the decision.
+
+⭐ **M77** reproduces Gemini's only quantitative claim exactly: delivery friction crosses 30 bps
+**between 5 and 6 positions** (29.89 → 31.52) and rises 36.79 bps from 1 to 25 — independently
+supporting D4's already-built max-concurrent-position cap of 3.
+
+⛔ **Measured absent:** tax/STCG anywhere (M73) · any reconciliation of `fees.py` to a real contract
+note (M74 — M27 regressed `fees.py` against its own output) · any gate-configuration history (M80) ·
+any overlap correction in D5/D1/B7 (M81, so D1's `t = −2.91` refutation is weaker than published) ·
+the three standing concessions in any queue section (M78: 0/0/0). ⛔ `fe5d508` is **unsigned** (M72)
+⇒ E2 is "pre-registered, **operator-attested**".
+
+⭐⭐ **Two standing rules earned.** (1) **A metric may not be blind to the failure it reports** —
+construct the failure and check the number moves. (2) **Ask for the population query, not the
+recomputation** — M79 measures rounds 6→9 at 0.79 → 1.60 → 1.83 → **3.98** self-corrections per 100
+lines written with system-defect yield at zero; the one question that paid this round was aimed at a
+function, not a table. **No round 11 unless a probe runs with it.**
+
+Also corrected in place: §9.4 said four scripts hardcode `_CLEAN_SINCE`, there are **five** (M71);
+§9.3 said the archive gained "620 sessions", it gained **626**; "matched basket" renamed (it is an
+equal-weight cohort basket **paired in time**, matched on nothing); the break-even IC formula
+carried into the document from the pre-registration for the first time.
+
+
 ### Round-9 panel — the backfill's VALUES are validated, and seven more of my numbers were wrong (2026-09-17)
 
 PART 11. Six responses; two did independent arithmetic on PARTS 9–10 and between them found seven

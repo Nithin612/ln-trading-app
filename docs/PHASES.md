@@ -219,7 +219,7 @@ carries no measurable cross-sectional information, and `confidence_pct` — what
 is flatter still (+0.0024).**
 ⚠ **3b is INCONCLUSIVE, reported as such, NOT rounded to null:** point estimate −0.3150% (passers
 UNDERPERFORM matched non-passers) but the upper bound +0.388% clears the +0.255% break-even.
-⇒ ⭐ **THE RANKER IS DEAD; THE GATE IS UNPROVEN IN BOTH DIRECTIONS.** The clean-closure branch
+⇒ ⭐ **THE RANKER IS DEAD** — ⛔⛔ **QUALIFIED 2026-09-18 (M62): E2's cohort is `load_frames`' top-250 ranked on `now() - 180 days`, so 34.4% of the cross-section was selected on post-window liquidity and 29.2% of the names that traded in 2021–22 cannot enter it. The pre-registration named the survivorship half and no downstream document carried it. Read as "NOT SUPPORTED on the current measured block; CA-clean AND PIT-cohort re-run required".** THE GATE IS UNPROVEN BOTH WAYS. The clean-closure branch
 does not fire cleanly, and filling that gap with a prior is what the pre-registration forbids.
 ⭐ **Two assumed constants RETIRED: `sd(IC_t)` 0.10 → 0.1126; `E[z|selected]` 2.268 → 1.8506**
 (a normal-tail approximation applied to a hard gate on a bounded score) ⇒ every break-even-IC
@@ -1873,13 +1873,28 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-09-17.**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-18.**
 
-**▶▶ ⭐⭐ READ `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` FIRST.** It supersedes the per-item
-queue below as the answer to "what is left": PART 3 is every open item with its state measured
-2026-09-17, PART 4 is the proposed order (ledger wiring · `strategy_profiles` re-seed · the
-starvation registry · directional entry zone · the U5 runbook section), PART 5 is the round-6
-question set. The blocks below remain the record of how each item got there.
+**▶▶ ⭐⭐ READ `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md` FIRST — and read §12.12, which is now
+THE ONE CURRENT QUEUE.** Round 10 (PART 12) collapsed the four patch-sets (§7.11, §8.10, §10.11,
+§11.9) into a single 24-row table; those sections are history. PART 3 remains the measured state.
+
+**⛔⛔ TWO THINGS CHANGED THAT AFFECT WHAT YOU MAY CITE:**
+1. **E2's null is no longer citable as "the ranker is dead".** M62: its cohort ranks on
+   `now() - interval '180 days'`, so **34.4% of the cross-section was selected on post-window
+   liquidity** and **29.2% of the names that traded in 2021–22 cannot enter it**. Read it as
+   *"not supported on the current measured block; CA-clean AND PIT-cohort re-run required"*.
+   ⇒ **item 14 (`liquid_as_of`) is a PRECONDITION of item 5**, and item 5's window is **DECIDED: 797**
+   (the 313 crash sessions are **Holdout-2, sealed**).
+2. ✅ **Item 4 is UNBLOCKED** — M64 shows every closed study divides by the **fill**-referenced risk,
+   so an entry-bar gap books **exactly +1.0000R at every gap size**. No new R is needed; the delete
+   treatment is arithmetic. ⛔ M51 is withdrawn.
+
+**Next, in order:** items 2 (wire the ledger) · 3 (re-seed `strategy_profiles`) · 4 (the simulator
+gap, delete treatment) · then 14 → 16 → 5. Item 1 and Q-A remain **the user's to state**
+(account type + capital). ⛔ **No round 11 unless a probe runs with it** (§12.11).
+
+The blocks below remain the record of how each item got there.
 
 **▶ CONTINUE HERE (next session, any account) — updated 2026-09-14 (V1+V2).**
 
