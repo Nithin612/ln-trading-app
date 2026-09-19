@@ -7,6 +7,40 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### ⛔⛔ Item 5 — E2 re-run on a point-in-time cohort; item 19's retire branch fires (2026-09-19)
+
+`e2_score_ic.py --pit`, 31,378 panels over 156 sessions of the test block, against the
+pre-registration committed at `fe5d508` before the code.
+
+**3a — the estimand the pre-registration says the decision reads:** IC **−0.0055**, SE 0.0084,
+t −0.65, 90% **[−0.0192, +0.0083]** ⇒ **NULL**, against a break-even of **0.0313**. The upper
+bound is 3.8× below it.
+
+⭐⭐ **The look-ahead was real and did not drive the conclusion.** M62 measured the cohort as
+34.4% look-ahead-selected; item 6 then showed it was not even reproducible. Repairing it
+per-session with `liquid_as_of` leaves the verdict unchanged and the interval **tighter**
+(width 0.0378 → 0.0275).
+
+⭐ **A prediction made before the run, and held:** 3a is a Spearman *rank* correlation, so a
+split-induced −90% only moves a name to last place and the magnitude never enters. Tested
+inline — dropping every CA-tainted row moves the IC by **+0.0001**.
+
+⭐ **Three assumed constants measured on a clean cohort:** `sd(IC_t)` 0.10 → **0.1046**;
+`E[z|selected]` 2.268 → **1.8758**; σ_cs **4.340%**.
+
+**⇒ §13.8 item 19's pre-registered criterion (`< 0.0121 ⇒ retire`) fires at −0.0055**, on the
+first branch rather than the ambiguous middle. The holdouts stay **sealed** — they open only at
+≥0.0499.
+
+⚠ **The ≥70% gate is NOT decided.** 3b is inconclusive and reported-not-decided: it is a mean
+contrast and so not CA-robust the way 3a is, and the test block's liquid pool holds **225** CA
+candidates (the three the queue names are all in holdout-1). It needs item 16.
+
+⛔ Also measured: **item 21 was never a blocker** — E2 hardcodes 25.5 bps and does not read
+`fees.py`; costs would have to fall below the **22.22 bps statutory floor** to change the
+verdict.
+
+
 ### Tier A completed to the limit of what needs no user input (2026-09-19)
 
 **Items 11 / 11b — both holdout blocks sealed.** `scripts/holdout_seal.py` + 9 tests. Per-session

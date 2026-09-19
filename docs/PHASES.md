@@ -1873,7 +1873,44 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-09-19 (TIER A: 7 of 10 done, overnight).**
+**▶ CONTINUE HERE — updated 2026-09-19 (⛔⛔ ITEM 19's RETIRE BRANCH HAS FIRED).**
+
+**⛔⛔ THE CENTRAL QUESTION IS ANSWERED, ON A CLEAN COHORT.** Item 5 ran 3a against the
+pre-registration at `fe5d508`: **IC −0.0055, SE 0.0084, t −0.65, 90% [−0.0192, +0.0083] ⇒ NULL**
+against a break-even of **0.0313** — the upper bound is **3.8× below** it. §13.8 item 19's
+pre-registered criterion is *"< 0.0121 ⇒ retire"*; the point estimate is **−0.0055**, so the
+**RETIRE branch fires on the first branch**, not the ambiguous middle. Pre-defined meaning: the
+scorer stops being a candidate · `entry_diversity` stays as the one hard rule · **the 617- and
+313-session blocks are preserved UNOPENED** for a successor generator · the harness stays.
+⭐ **The holdouts stay sealed** — they open only at ≥0.0499, which did not fire.
+
+⭐⭐ **AND THE LOOK-AHEAD DID NOT DRIVE IT.** M62 found the cohort 34.4% look-ahead-selected and
+item 6 found it wasn't even reproducible; repairing it per-session with `liquid_as_of` leaves the
+verdict **unchanged and the interval TIGHTER** (width 0.0378 → **0.0275**). ⭐ The CA-robustness
+prediction held exactly — 3a is a Spearman RANK correlation, so dropping every CA-tainted row
+moves the IC by **+0.0001**.
+
+⚠ **WHAT IS *NOT* DECIDED: the ≥70% GATE.** 3b is **INCONCLUSIVE and reported-not-decided** — it
+is a MEAN contrast and therefore not CA-robust the way 3a is, and the test block's liquid pool
+holds **225** CA candidates (the three the queue names are all in **holdout-1**). Resolving 3b
+needs **item 16**, a real CA source.
+
+⭐ **Constants measured on a clean cohort, superseding the assumed ones:** `sd(IC_t)` **0.1046**
+(assumed 0.10 — essentially on it) · `E[z|sel]` **1.8758** (assumed 2.268) · σ_cs **4.340%**.
+
+**TIER A IS COMPLETE** — 8 of 10 built; **12** skipped by the user (signing proves *who*, not
+*when*; the push already secured the timing) and **13** recommended deferred to Phase 7 (the
+scoped fix is a no-op — `is_market_session` refuses weekends independently of the beats).
+
+⛔ **NEXT:** the decision is the user's to accept. If accepted, the open problem is a SUCCESSOR
+GENERATOR, and the sealed blocks are the reason one can still be tested honestly. Tier B tranche
+1 (**27** falling price renders green · **28** FII/DII neutral from zero rows · **23** the three
+concessions) needs nothing from anyone. Plan:
+`docs/analysis/tier-b-plan-and-blockers-2026-09-19.md`.
+
+---
+
+**▶ PREVIOUS (2026-09-19, TIER A: 7 of 10).**
 
 **✅ TIER A IS AS COMPLETE AS IT CAN BE WITHOUT THE USER — 7 of 10 built, 1 half, 2 blocked.**
 Built overnight 2026-09-19: **11 / 11b** (both holdout seals) and **6** (D5 + D1 + B7 re-run),
