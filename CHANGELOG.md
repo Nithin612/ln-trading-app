@@ -7,6 +7,30 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Tier B tranche 2 — attributability, and two claims corrected (2026-09-19)
+
+**22 — the gate configuration is versioned.** Measured first: of 57 tables the only one
+matching `%config%`/`%gate%` was `alembic_version`, and `signals` had no column referencing a
+config — so **no signal could be attributed to the configuration that produced it**, while two
+gates had already been promoted and reverted. ⭐⭐ The snapshot records **which rules exist**,
+not only their modes: a modes-only version cannot show that a rule *did not exist yet*, and two
+rules have been added since minting began. Append-only, deduped by content hash, Decimals as
+strings. ⚠ Attribution is by time rather than a foreign key, and `version_as_of` returns `None`
+before the history begins rather than today's config.
+
+**24 — the position cap of 3 is conditional, and the reason is not risk.** Ladder re-measured
+(1→23.76, 3→26.61, 5→29.89, 6→31.21 bps, crossing 30 between 5 and 6). ⭐ The driver is the
+**flat ₹15.34 DP charge per delivery sell** — splitting capital multiplies a fixed cost, so the
+cap limits how often that fee is paid and concentration control is the side-effect. Tested, not
+asserted: stripping the flat component flattens the ladder to under 1 bps.
+
+**20 — capital-gains tax, which does NOT move break-even.** Tax is levied on profit, so at
+break-even it is zero; what it moves is every **target**. ⭐⭐ The Budget-2024 change
+(2024-07-23) sits **inside** the test block, so both regimes are in the window and a
+single-rate model would be wrong for roughly its first year. Intraday returns `SLAB_UNKNOWN`
+rather than a guessed rate.
+
+
 ### Tier B tranche 1 — three claims the system was making from nothing (2026-09-19)
 
 **27 — a falling price rendered GREEN.** `StockDetailPage` painted the live price
