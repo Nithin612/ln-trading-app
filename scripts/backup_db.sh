@@ -35,6 +35,22 @@ CONTAINER="${PG_CONTAINER:-tp_postgres}"
 PGUSER="${PGUSER:-tpuser}"
 KEEP="${KEEP:-3}"
 
+# ── ITEM 26: the OFF-BOX copy ────────────────────────────────────────────────
+# ⛔⛔ Measured 2026-09-19: BACKUP_ROOT is on /dev/nvme0n1p5 — THE SAME PARTITION AS THE
+# DATABASE. The existing backup survives exactly one failure mode, the logical wipe that
+# actually happened on 2026-09-07, and none of the others: a disk failure, a filesystem
+# corruption or an `rm -rf` on that partition takes the database and every backup together.
+#
+# ⭐ Set OFFBOX_DEST to a path on another device (a mounted NAS, an external disk). It is
+# CHECKED, not trusted — `offbox_check.sh` refuses a destination on the same filesystem and
+# warns on one sharing a physical disk, because "not really off-box" is otherwise invisible.
+#
+# ⚠ UNSET is reported LOUDLY on every run rather than passing quietly. A backup system whose
+# gap you cannot see is the state this project was already in once.
+OFFBOX_DEST="${OFFBOX_DEST:-}"
+OFFBOX_KEEP="${OFFBOX_KEEP:-7}"
+REQUIRE_OFFBOX="${REQUIRE_OFFBOX:-0}"
+
 # database name -> directory under BACKUP_ROOT
 declare -A DATABASES=(
   ["trading_platform"]="dev"
@@ -124,3 +140,50 @@ if [[ "$failures" -gt 0 ]]; then
 fi
 
 log "all backups OK (retaining $KEEP per database)"
+
+# ── ITEM 26 — the off-box copy, after every dump has been verified ───────────
+# ⭐ Runs LAST and on verified files only, for the same reason pruning does: copying a dump
+# that failed its integrity check off-box would propagate a corrupt archive and, worse, make
+# the off-box copy look current.
+offbox_script="$(dirname "$0")/offbox_check.sh"
+
+if [[ -z "$OFFBOX_DEST" ]]; then
+  log "⚠ NO OFF-BOX COPY: OFFBOX_DEST is unset. Backups live on $(df --output=source "$BACKUP_ROOT" 2>/dev/null | tail -1 | tr -d ' '), the same device as the database — a disk failure loses both."
+  [[ "$REQUIRE_OFFBOX" == "1" ]] && { log "FATAL: REQUIRE_OFFBOX=1 and no destination set"; exit 1; }
+  exit 0
+fi
+
+if [[ -x "$offbox_script" ]]; then
+  verdict="$("$offbox_script" "$BACKUP_ROOT" "$OFFBOX_DEST" 2>&1)"; rc=$?
+  log "off-box check: $verdict"
+  case "$rc" in
+    4) log "FATAL: OFFBOX_DEST is on the same filesystem as the backups — refusing to pretend"; exit 1 ;;
+    2) log "FATAL: OFFBOX_DEST unusable"; exit 1 ;;
+    3) log "⚠ proceeding, but this survives filesystem corruption only — not a disk failure" ;;
+  esac
+else
+  log "⚠ offbox_check.sh not found beside this script — copying WITHOUT verifying the destination"
+fi
+
+copied=0
+for db in "${!DATABASES[@]}"; do
+  sub="${DATABASES[$db]}"
+  mkdir -p "${OFFBOX_DEST}/${sub}"
+  newest="$(ls -1t "${BACKUP_ROOT}/${sub}"/*.dump 2>/dev/null | head -1 || true)"
+  [[ -n "$newest" ]] || { log "  off-box: nothing to copy for $db"; continue; }
+  if cp -p "$newest" "${OFFBOX_DEST}/${sub}/$(basename "$newest").part" \
+     && mv "${OFFBOX_DEST}/${sub}/$(basename "$newest").part" "${OFFBOX_DEST}/${sub}/$(basename "$newest")"; then
+    # ⭐ Written to `.part` and renamed: a copy interrupted mid-flight must not be mistaken
+    # for a complete backup by whatever reads this directory next.
+    copied=$((copied + 1))
+    log "  off-box: $(basename "$newest") -> ${OFFBOX_DEST}/${sub}/"
+  else
+    log "FAIL: off-box copy of $(basename "$newest") failed"
+    exit 1
+  fi
+  mapfile -t oldoff < <(ls -1t "${OFFBOX_DEST}/${sub}"/*.dump 2>/dev/null | tail -n +$((OFFBOX_KEEP + 1)))
+  for f in "${oldoff[@]:-}"; do
+    [[ -n "$f" ]] && rm -f "$f" && log "  off-box pruned $(basename "$f")"
+  done
+done
+log "off-box copies written: $copied (retaining $OFFBOX_KEEP per database)"

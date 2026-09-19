@@ -386,5 +386,95 @@ means a restore brings back the record, not the in-flight session state.
 
 ---
 
+## 9b. Disaster recovery — the ORDER, and the composition that caused it (item 25)
+
+§9 tells you how to restore **one** database. This section is for the other case: the data is
+gone and you are deciding what to do first. **The order is the content.** Getting the steps
+right in the wrong sequence is how a recoverable incident becomes an unrecoverable one.
+
+### What actually happened on 2026-09-07 — three reasonable things composing
+
+The runbook has said "a pytest run was pointed at the wrong database" since that day. That is
+true and it is not the lesson, because nobody sets out to do it. **Three separate, individually
+defensible decisions combined:**
+
+1. `conftest.py` used `os.environ.setdefault` for `DATABASE_URL` — so a URL supplied on the
+   command line was taken **as given**, which is exactly what `setdefault` is for.
+2. The suite has an **autouse** fixture that `TRUNCATE`s every table before each test — correct
+   for an isolated test database, and the only way to get deterministic tests.
+3. A human passed `DATABASE_URL` to `pytest` to make a script work.
+
+⭐ **No single one of those is a bug.** The composition destroyed 138 paper positions, every
+signal and outcome, 1,664 `cas_daily` rows, orders, watchlists, journal, saved screens and
+holdings. ⇒ **When you review a change, ask what it composes with — the defects that have cost
+real data here were never local.**
+
+⛔ The guard that now exists (`conftest` refuses any database not named `*_test`) closes this
+exact composition. It does not close the class.
+
+### The order, when data is lost
+
+**0 · STOP EVERY WRITER — before anything else, before even assessing.**
+```
+# worker (Celery beat + tasks), live-worker, backend
+pkill -f 'celery -A app.celery_app'      ;  pkill -f 'live_worker'
+# and stop the backend so the API cannot write
+```
+⛔ **This is step zero for a reason.** Every minute the worker runs against a damaged database
+it writes *new* rows into it — which (a) makes "what was lost" unanswerable and (b) can make a
+restore-and-merge impossible, because you can no longer tell restored rows from ones written
+after the damage. On 09-07 the writers were still up.
+
+**1 · Do NOT run `make backup` "to be safe".** Retention is 3. Three panicked runs against a
+damaged database evict every good dump. The backup script prunes only after a verified dump,
+which protects you from a *failed* run — not from three *successful* dumps of bad data.
+
+**2 · Assess before touching anything.** Row counts against what you expect:
+```
+make backup-list      # what is retained, and how old
+docker exec tp_postgres psql -U tpuser -d trading_platform \
+  -c "SELECT relname, n_live_tup FROM pg_stat_user_tables ORDER BY n_live_tup DESC LIMIT 20;"
+```
+
+**3 · Restore into a NEW database, never over the live one** (§9's recipe). If the restore is
+bad you still have the damaged original, which is strictly more information than nothing.
+
+**4 · Verify before swapping** — `make backup-verify` logic: a real restore, then compare
+counts. TimescaleDB needs `timescaledb_pre_restore()`/`post_restore()` around it or the
+hypertable chunks come back empty **with no error**.
+
+**5 · Swap, then restart writers** — in the reverse of the order they depend on each other
+(§3): database → migrate → backend → worker → live-worker.
+
+**6 · Re-accrue what cannot be restored.** See below, and start it the same day.
+
+### ⛔ What a restore does NOT bring back
+
+| lost | why | what to do |
+|---|---|---|
+| **`cas_daily`** (closing-auction capture) | real-time only, 15:15–15:33 IST. **A missed window cannot be back-filled, ever** | restart `make worker` immediately; every day it is down is a session gone permanently |
+| Redis (`ltp:`, `depth:`, `circuit:`) | TTL'd cache by design | rebuilt by the live worker; nothing to do |
+| anything since the last dump | retention is 3 dumps, weekdays only | ⚠ a Friday-evening loss restores to **Friday 11:00** |
+| **tick-level intraday** not yet aggregated | — | gap-fill on live-worker restart covers the session |
+
+### ⚠ The gap that is still open
+
+**Backups live on the same physical partition as the database** — measured 2026-09-19:
+`/dev/nvme0n1p5` for both, 972 MB of dumps sitting on the disk they protect. They survive the
+failure that actually happened (a logical wipe) and **not** a disk failure, a filesystem
+corruption, or an `rm -rf` on that partition.
+
+`scripts/offbox_check.sh` exists to make that visible rather than assumed, and
+`scripts/backup_db.sh` will copy to `OFFBOX_DEST` and **refuse a destination on the same
+filesystem**:
+```
+OFFBOX_DEST=/mnt/somewhere-else make backup     # checked, not trusted
+./scripts/offbox_check.sh /home/nithin/code/back_ups/trading_platform /mnt/somewhere-else
+```
+⛔ **`OFFBOX_DEST` is unset today**, and every run says so in the log. Until it is set, the
+honest statement is that this machine has one copy of the data in two places on one disk.
+
+---
+
 *Soak-specific details (recording, replay goldens): `docs/RUNBOOK-soak.md`.
 Engine-parity shadow week: `backend/scripts/shadow_day.sh` → `shadow_week.log`.*
