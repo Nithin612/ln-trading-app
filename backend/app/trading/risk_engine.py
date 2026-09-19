@@ -378,6 +378,16 @@ def position_count_reason(*, held: OpenHeat, is_new_position: bool) -> str | Non
     and is exempt — this is a *concentration* rail, not a per-name size rail (the notional
     cap already bounds that). Always measurable, so unlike the heat cap it has no
     fail-closed branch. `max_concurrent_positions <= 0` disables it.
+
+    ⛔⛔ **ITEM 24 — the default of 3 is CONDITIONAL, not a universal cap.** Measured
+    2026-09-19 on ₹1 lakh split N ways (₹500 delivery name, round trip): 3 positions cost
+    **26.61 bps** and the stack crosses **30 bps between 5 and 6** (29.89 → 31.21).
+    ⭐ **The driver is not risk.** The DP charge is a FLAT ₹15.34 per delivery sell, so
+    splitting capital multiplies a fixed cost — the cap limits how many times that fee is
+    paid, and concentration control is the side-effect rather than the justification.
+    ⚠ At larger capital the ladder shifts down and 3 is no longer the right number; and the
+    whole ladder inherits standing concession 3 — the charge model has never been reconciled
+    against a real contract note (item 21).
     """
     cap = get_settings().max_concurrent_positions
     if cap <= 0 or not is_new_position:

@@ -495,7 +495,7 @@ class Settings(BaseSettings):
     heat_cap_mode: Literal["off", "shadow", "active"] = "off"
     heat_cap_pct: float = 6.0
 
-    # ── Portfolio position-count cap (D4, 2026-09-08) ──────────────────────────
+    # ── Portfolio position-count cap (D4, 2026-09-08 · wording corrected item 24) ─
     # Max CONCURRENT open positions. At cycle-2 scale (₹1L, the live 1–2 book) a heat
     # PERCENTAGE barely binds — 2 positions at 2% risk ≈ 4% heat, under the 6% cap — so a
     # COUNT is the concentration rail that actually bites and directly enforces the design
@@ -503,6 +503,23 @@ class Settings(BaseSettings):
     # deflated-Sharpe bar. Adding to an EXISTING position opens no new slot and is exempt.
     # `off` during the cycle-1 sampler (which runs ~25 concurrent BY DESIGN); flips to
     # `active` at the CYCLE-2 RESET alongside the heat cap. 0 or negative = disabled.
+    #
+    # ⛔⛔ ITEM 24 — 3 IS NOT A UNIVERSAL NUMBER. It is CONDITIONAL on ₹1 lakh AND on the
+    # current modelled cost stack. Measured 2026-09-19 with `fees.roundtrip_charges`,
+    # ₹1L split N ways on a ₹500 delivery name, round trip:
+    #
+    #     1 pos  23.76 bps   |   5 pos  29.89 bps
+    #     2 pos  25.29 bps   |   6 pos  31.21 bps  <- crosses 30 bps HERE
+    #     3 pos  26.61 bps   |   7 pos  32.52 bps
+    #     4 pos  28.36 bps   |   8 pos  34.50 bps
+    #
+    # ⭐ AND THE MECHANISM IS NOT ABOUT RISK. Friction climbs with the count because the
+    # DP charge is a FLAT ₹15.34 PER DELIVERY SELL, so splitting capital multiplies a fixed
+    # cost. The cap is a rail against paying that fee N times — concentration is the
+    # SIDE-EFFECT, not the reason. Presenting it as a risk limit overstates what was shown.
+    # ⚠ Therefore: at larger capital the whole ladder shifts down and 3 stops being the
+    # right number; and the ladder inherits standing concession 3 — the fill/charge model
+    # has never been reconciled against a real contract note (item 21).
     position_count_cap_mode: Literal["off", "shadow", "active"] = "off"
     max_concurrent_positions: int = 3
 
