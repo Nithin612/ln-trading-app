@@ -3,7 +3,7 @@ import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 
 import { EligibilityPanel } from '@/features/stocks/EligibilityPanel'
-import { ArrowLeft, TrendingUp } from 'lucide-react'
+import { ArrowLeft, Minus, TrendingDown, TrendingUp, Wifi } from 'lucide-react'
 import {
   ComposedChart, Line, Bar, XAxis, YAxis, ResponsiveContainer,
   Tooltip as ReTooltip, ReferenceLine, CartesianGrid,
@@ -21,7 +21,7 @@ import { EmptyState } from '@/components/ui/empty-state'
 import { TagPicker } from '@/features/categories/TagPicker'
 import { CandlestickChart, type OhlcvBar } from '@/components/charts/CandlestickChart'
 import { useLiveQuotes } from '@/hooks/useLiveQuotes'
-import { formatINR, formatInt } from '@/lib/format'
+import { formatINR, formatInt, formatPct } from '@/lib/format'
 import { SeasonalityPanel } from './SeasonalityPanel'
 
 function DetailRow({ label, value }: { label: string; value: React.ReactNode }) {
@@ -123,6 +123,46 @@ export function StockDetailPage() {
   }))
 
   const closes = useMemo(() => chartBars.map((b) => b.close), [chartBars])
+
+  /**
+   * ⛔ ITEM 27 — this page painted the LTP `--color-bull` unconditionally, so a FALLING
+   * price rendered green. Money-correctness, not a style nit: the colour was a claim about
+   * direction that was never computed.
+   *
+   * ⚠ The live feed cannot fix it on its own — `LtpQuote` is `{symbol, ltp, ts}` and carries
+   * NO reference price. So the basis is the last COMPLETED daily close, which is also the
+   * convention a day-change is quoted against. Today's own bar is excluded: comparing the
+   * LTP against a bar the LTP is itself still forming would make the change collapse toward
+   * zero through the session.
+   *
+   * ⭐ THREE states, not two. When there is no usable reference the answer is "not
+   * assessable" (A24) — rendered neutral, never defaulted to green, which is the exact
+   * failure being fixed.
+   */
+  const refClose = useMemo(() => {
+    const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Kolkata' })
+    for (let i = chartBars.length - 1; i >= 0; i -= 1) {
+      if (chartBars[i].time < today && Number.isFinite(chartBars[i].close)) {
+        return chartBars[i].close
+      }
+    }
+    return undefined
+  }, [chartBars])
+
+  const ltpMove = useMemo(() => {
+    if (!ltp || refClose === undefined || refClose <= 0) return undefined
+    const pct = ((ltp.ltp - refClose) / refClose) * 100
+    return { pct, dir: pct > 0 ? 'up' : pct < 0 ? 'down' : 'flat' } as const
+  }, [ltp, refClose])
+
+  const ltpColor =
+    ltpMove === undefined
+      ? 'var(--color-neutral)'
+      : ltpMove.dir === 'up'
+        ? 'var(--color-bull)'
+        : ltpMove.dir === 'down'
+          ? 'var(--color-bear)'
+          : 'var(--color-neutral)'
   const ema20 = useMemo(() => calcEMA(closes, 20), [closes])
   const ema50 = useMemo(() => calcEMA(closes, 50), [closes])
   const ema200 = useMemo(() => calcEMA(closes, 200), [closes])
@@ -174,13 +214,53 @@ export function StockDetailPage() {
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-bold font-mono text-(--color-accent)">{stock.symbol}</h1>
               {ltp && (
-                <span className="text-lg font-semibold font-mono" style={{ color: 'var(--color-bull)' }}>
+                <span
+                  className="text-lg font-semibold font-mono"
+                  style={{ color: ltpColor }}
+                  title={
+                    refClose === undefined
+                      ? 'No completed prior close to compare against — direction not assessable'
+                      : `vs previous close ₹${formatINR(refClose)}`
+                  }
+                >
                   ₹{formatINR(ltp.ltp)}
                 </span>
               )}
+              {/* ⭐ Direction is GLYPH + COLOUR, never colour alone (.claude/rules/ui.md), and
+                  the BASIS is rendered beside it so the colour is checkable rather than
+                  asserted (A24). `—` when there is no reference: "not assessable" is a
+                  legitimate rendering and beats a plausible-looking default. */}
               {ltp && (
-                <span className="flex items-center gap-1 text-xs" style={{ color: 'var(--color-bull)' }}>
-                  <TrendingUp size={12} /> Live
+                <span
+                  className="flex items-center gap-1 text-xs font-mono tabular-nums"
+                  style={{ color: ltpColor }}
+                >
+                  {ltpMove === undefined ? (
+                    <>
+                      <Minus size={12} aria-hidden /> <span>— vs prev close</span>
+                    </>
+                  ) : (
+                    <>
+                      {ltpMove.dir === 'up' ? (
+                        <TrendingUp size={12} aria-hidden />
+                      ) : ltpMove.dir === 'down' ? (
+                        <TrendingDown size={12} aria-hidden />
+                      ) : (
+                        <Minus size={12} aria-hidden />
+                      )}
+                      <span>{formatPct(ltpMove.pct, { signed: true })} vs prev close</span>
+                    </>
+                  )}
+                </span>
+              )}
+              {/* ⚠ Liveness is NOT direction. This used to be a green TrendingUp, which read
+                  as "the price is up" on a feed indicator. Neutral token, neutral glyph. */}
+              {ltp && (
+                <span
+                  className="flex items-center gap-1 text-xs"
+                  style={{ color: 'var(--color-text-muted)' }}
+                >
+                  <Wifi size={12} aria-hidden /> Live
                 </span>
               )}
             </div>
