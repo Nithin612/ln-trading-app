@@ -106,7 +106,44 @@ carrying positions over one, or run the monitor manually that day.
 
 **What I need from you: nothing.** This is a recommendation to defer, not a question.
 
-### Item 12 — the sign half (≈ 2 minutes, and it reuses the key you already made)
+### Item 12 — ⛔ **CORRECTED AGAIN: low value, and NOT a gate on item 5**
+
+⛔⛔ **Two errors in my own advice, both caught by the user asking "why, and won't it affect
+my other repos".**
+
+**(1) The commands I gave used `--global`, which would have been wrong on this machine.**
+The setup here is deliberately inverted: **global is the WORK identity** (`bm_nithin` /
+`…@schnellenergy.com`) and **this repo overrides locally** to the personal one (`Nithin`,
+`git@github.com:Nithin612/…`) — the same per-repo pattern used for the SSH remote.
+`git config --global commit.gpgsign true` would have signed every commit in
+`~/code/antz/vehicle_telemetry` and `~/code/learning/*` with the PERSONAL key, showing
+"Unverified" on the work remote and attaching a personal identity to work commits. **If done
+at all, it must be `--local`.**
+
+**(2) The argument for signing does not survive examination.** A pre-registration claim is
+about **WHEN** — *this prediction existed before I ran the test*. **Signing proves WHO, not
+WHEN**: a signed commit carrying a back-dated `--date` is still back-dated. What actually
+defends the timing is that `fe5d508` is **already on `origin/feature/pre-cycle2-hardening`**,
+so re-dating it now would require a force-push, which leaves traces. **The push — the half
+already done — bought the property that matters; signing buys authorship, which nobody
+disputes.**
+
+⇒ **RECOMMENDATION: optional. Skip it, or do it `--local` for tidiness. It gates nothing,
+and item 5 must NOT wait for it.** ⚠ This supersedes the H27 sequencing note that put item 12
+above item 5 — that ruling was made when the PUSH was the missing half, and the push is done.
+
+<details><summary>If you want it anyway — LOCAL only</summary>
+
+```
+cd /home/nithin/code/agent/Claude/trading-platform
+git config --local gpg.format ssh
+git config --local user.signingkey ~/.ssh/id_ed25519.pub
+git config --local commit.gpgsign true
+```
+then add that same public key on GitHub a second time, key type **Signing Key**.
+</details>
+
+### (superseded) the original framing
 
 The row was never "push", it was **push and sign**. The push is done. `git log
 --format='%G?' fe5d508` still returns **N**, and the branch carries **zero** signed commits,
@@ -177,13 +214,12 @@ and each has a measurement behind it. Ordered by **value ÷ cost**, not by numbe
 
 **You, and only one of these is urgent:**
 
-1. ⭐ **Item 12 — sign, 2 minutes. Do this FIRST and before item 5 runs.** It is the only one
-   of the three that is time-sensitive: once item 5 runs unsigned, that run is permanently
-   operator-attested and signing afterwards cannot fix it. The queue's own H27 ruling puts
-   item 12 above item 5 for exactly this reason.
+1. **Item 12 — optional, and `--local` if at all.** ⛔ Corrected: signing proves WHO, not
+   WHEN, and the push already secured the timing. It gates nothing. **Do not let item 5 wait
+   for it.**
 2. **Item 21 — send when convenient.** Measured NOT to be a blocker (above). Worth having for
    `fees.py` correctness, which prices every P&L number in the system.
 3. **Item 13 — nothing to decide. Recommended: defer to Phase 7.**
 
-**Me, needing nothing:** item **5** (now unblocked — waits only on your signature, not on the
-contract note), then Tier B 27 → 28 → 23 → 22 → 24 → 20 → 18 → 16.
+**Me, needing nothing:** item **5** (fully unblocked — not on the contract note, not on the
+signature), then Tier B 27 → 28 → 23 → 22 → 24 → 20 → 18 → 16.
