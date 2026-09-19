@@ -471,6 +471,30 @@ filesystem**:
 OFFBOX_DEST=/mnt/somewhere-else make backup     # checked, not trusted
 ./scripts/offbox_check.sh /home/nithin/code/back_ups/trading_platform /mnt/somewhere-else
 ```
+### ⭐ `make backup-critical` — the slice that actually needs to leave this disk
+
+The full backup is 4.4 GB and ~99% of it is **re-fetchable**: price bars from the bhavcopy
+archive, F&O rows, the stock master, the Kite instrument dump. Slow to rebuild, not lost.
+
+```
+make backup-critical        # ~11 MB, verified, with a plain-text manifest
+make backup-critical-list   # what is retained (30 kept, they are tiny)
+```
+
+⭐ **The exclusion list is inverted on purpose.** Everything is critical BY DEFAULT and each
+exclusion must name the public source it can be recovered from — so a table added later is
+protected automatically instead of silently missed. `tests/test_backup_critical.py` fails if
+`cas_daily`, `positions`, `orders`, `signals`, `ledger_entries` or `users` are ever excluded.
+
+⚠ **It is a COMPANION to the full backup, not a replacement.** Measured: restoring it into an
+empty database produces 16 ignored errors, all foreign keys pointing at excluded tables
+(15 → `stocks`, 1 → `strategy_profiles`). The data lands; the constraints cannot. **Restore
+order: the public tables first, then this.**
+
+⚠ 11 MB rather than the few hundred KB first estimated, because the ten `forensic_*` tables
+hold **771,585 rows** — they report `n_live_tup = 0` only because they were never analyzed.
+11 MB still fits in an email.
+
 ⛔ **`OFFBOX_DEST` is unset today**, and every run says so in the log. Until it is set, the
 honest statement is that this machine has one copy of the data in two places on one disk.
 

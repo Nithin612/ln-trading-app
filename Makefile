@@ -237,6 +237,14 @@ walkforward:  ## Walk-forward golden harness (§8 drift gate; skips cleanly with
 .PHONY: check
 check: lint typecheck engine-lint engine-test test parity walkforward replay  ## Full CI gate (python + rust + frontend)
 
+.PHONY: backup-critical
+backup-critical:  ## Dump ONLY the irreplaceable tables (~11MB) — small enough to put off-box
+	@./scripts/backup_critical.sh
+
+.PHONY: backup-critical-list
+backup-critical-list:  ## Show which critical dumps are retained
+	@./scripts/backup_critical.sh --list
+
 .PHONY: backup
 backup:  ## Back up both databases now (dev + test), keeping the 3 most recent each
 	@./scripts/backup_db.sh
