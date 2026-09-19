@@ -20,6 +20,7 @@ from app.models.signal import Signal
 from app.models.stock import Stock
 from app.services import market_calendar
 from app.services.fii_dii_service import FlowWindow, correct_absent_flow_explanation
+from app.services.gate_config_history import record_current
 from app.signals import regime as regime_mod
 from app.signals.classifier import classify_signal
 from app.signals.expiry import compute_validity_until
@@ -344,6 +345,12 @@ async def run_nightly_signal_generation(
     flows = await get_market_flow_5d(db, as_of)
     fii_net_5d, dii_net_5d = flows
 
+    # ⭐ ITEM 22: record the tradability configuration if it has changed since the last run.
+    # Idempotent by content hash, so this writes only on an actual change and the table is the
+    # history of changes rather than a log of runs. Two gates have already been promoted and
+    # reverted with no record but CHANGELOG prose and process-restart times.
+    await record_current(db)
+
     generated: list[Signal] = []
     for stock in stocks:
         block_net_cr = await get_stock_block_deal_net_cr(db, stock.id, as_of)
@@ -430,6 +437,12 @@ async def run_live_signal_generation(
     as_of = datetime.now(tz=UTC).astimezone(ZoneInfo("Asia/Kolkata")).date()
     flows = await get_market_flow_5d(db, as_of)
     fii_net_5d, dii_net_5d = flows
+
+    # ⭐ ITEM 22: record the tradability configuration if it has changed since the last run.
+    # Idempotent by content hash, so this writes only on an actual change and the table is the
+    # history of changes rather than a log of runs. Two gates have already been promoted and
+    # reverted with no record but CHANGELOG prose and process-restart times.
+    await record_current(db)
     block_net_cr = await get_stock_block_deal_net_cr(db, stock_id, as_of)
 
     score = score_signal(

@@ -2,6 +2,7 @@ from app.models.broker import BrokerToken, KiteInstrument
 from app.models.category import Category, StockCategory
 from app.models.corporate_action import CorporateAction, PositionCorporateAction
 from app.models.fo_data import FoBhavcopy, IndiaVixDaily, OptionChainSnapshot
+from app.models.gate_config import GateConfigVersion
 from app.models.journal import JournalEntry
 from app.models.ledger import LedgerEntry
 from app.models.market_calendar import NseHoliday
@@ -31,6 +32,7 @@ from app.models.user import User, UserSession
 from app.models.watchlist import Watchlist, WatchlistItem
 
 __all__ = [
+    "GateConfigVersion",
     "LedgerEntry",
     "User",
     "UserSession",
