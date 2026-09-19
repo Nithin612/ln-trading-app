@@ -1873,6 +1873,19 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
+**▶ CONTINUE HERE — updated 2026-09-19 (Tier B tranches 1+2 DONE; item 16 in progress).**
+
+⏰ **REVIEW-CALENDAR ENTRY — RAISE THIS UNPROMPTED (user ruling 2026-09-19).**
+**Item 18 (index/VIX 2021–22) is DEFERRED, and must be put back to the user WHEN ITEM 5's 3b
+IS REACHED.** Reason for the deferral: its stated justification — *"the market-regime overlay
+is unevaluable across the holdout-1 era"* — **is a use the seal forbids**, because evaluating
+an overlay on a holdout is selecting on it. The item predates the seal. ⭐ The enabling bugfix
+(the `weekday() < 5` filter that made NSE weekend sessions unreachable) IS already shipped, so
+the backfill is ready whenever the decision goes the other way: **1,371 calendar days ≈ 23 min,
+insert-only, idempotent**, and the archive is confirmed to serve 2020–2022.
+
+---
+
 **▶ CONTINUE HERE — updated 2026-09-19 (Tier B tranche 1 DONE; item 19's retire branch has fired).**
 
 **✅ TIER B TRANCHE 1 COMPLETE — 27 · 28 · 23.**
