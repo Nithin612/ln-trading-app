@@ -7,6 +7,32 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Tier B tranche 1 — three claims the system was making from nothing (2026-09-19)
+
+**27 — a falling price rendered GREEN.** `StockDetailPage` painted the live price
+`--color-bull` unconditionally. ⚠ The live feed could not fix it: `LtpQuote` is
+`{symbol, ltp, ts}` with no reference price, so the basis is the last **completed** daily close
+(today's own bar excluded, or the change collapses toward zero through the session). Three
+states — up / down / **not assessable** — with direction as **glyph + colour** and the basis
+rendered beside it, so a reader can check the colour rather than trust it. The green
+`TrendingUp` next to *Live* went too: liveness is not direction. 6 tests, mutation-verified.
+
+**28 — "FII/DII flows neutral", said from an empty table.** Measured first: **30 of 52 signals**
+carried that string while `fii_dii_daily` held **14 rows**. ⭐ The frozen engine is not the bug
+and was not touched — it is handed `Decimal("0")` and correctly describes zero. The lie is
+manufactured in `get_market_flow_5d`, which resolved a missing row to zero. Now returns a
+`FlowWindow` with `sessions_with_data`, **still unpacking as a 2-tuple** so all six call sites
+are unchanged. Relabels only the exact frozen default, and only on a genuinely empty window —
+a measured zero keeps the frozen wording, because then it is true. ⚠ Doc correction:
+`FII_DII_FLOW` is recorded as never scoring; that is true of the empty-table backtest and false
+live, where it scores −0.2 on 22 of 52.
+
+**23 — the three standing concessions, enumerated** after M78 measured them at 0/0/0 across
+every queue section. Each with what it costs, measured, and what would close it. ⭐ Measured
+while writing it: `entry_diversity` refuses **7 of 52** live signals (13.5%), and the
+single-factor-dominance half of that gate has fired **zero** times.
+
+
 ### ⛔⛔ Item 5 — E2 re-run on a point-in-time cohort; item 19's retire branch fires (2026-09-19)
 
 `e2_score_ic.py --pit`, 31,378 panels over 156 sessions of the test block, against the

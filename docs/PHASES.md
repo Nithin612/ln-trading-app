@@ -1873,7 +1873,32 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE — updated 2026-09-19 (⛔⛔ ITEM 19's RETIRE BRANCH HAS FIRED).**
+**▶ CONTINUE HERE — updated 2026-09-19 (Tier B tranche 1 DONE; item 19's retire branch has fired).**
+
+**✅ TIER B TRANCHE 1 COMPLETE — 27 · 28 · 23.**
+- **27** — `StockDetailPage` painted the LTP green regardless of direction. Fixed with THREE
+  states (up / down / **not assessable**), glyph + colour, and the **basis rendered** so the
+  colour is checkable. ⚠ The live feed could not supply it: `LtpQuote` carries no reference
+  price, so the basis is the last COMPLETED daily close. 6 tests, mutation-verified.
+- **28** — 30 of 52 signals claimed *"FII/DII flows neutral"* while `fii_dii_daily` held **14
+  rows**. ⭐ **The frozen engine was NOT the bug and was NOT touched** — the lie is
+  manufactured in `get_market_flow_5d`, which resolved a missing row to zero. Now a
+  `FlowWindow` carrying `sessions_with_data`, still unpacking as a 2-tuple so all six call
+  sites are untouched. ⚠ **Doc correction:** `FII_DII_FLOW` is recorded as a factor that
+  "never scores" — true of the empty-table BACKTEST, **false live** (−0.2 on 22 of 52).
+- **23** — the three concessions enumerated after M78 found them at 0/0/0.
+  ⭐ **Measured while writing it: `entry_diversity` refuses 7 of 52 live signals (13.5%), and
+  the single-factor-dominance half of that gate has fired ZERO times.**
+
+⛔ **NEXT, needing nothing:** Tier B tranche 2 — **22** (no gate-config table exists, so no past
+signal can be attributed to the config that produced it, and two gates have already been
+reverted) · **24** (conditional wording; the cap is built) · **20** (tax raises TARGETS, not
+break-even). Then tranche 3: **18**, **16**. Plan:
+`docs/analysis/tier-b-plan-and-blockers-2026-09-19.md`.
+
+---
+
+**▶ PREVIOUS — item 19's retire branch (2026-09-19).**
 
 **⛔⛔ THE CENTRAL QUESTION IS ANSWERED, ON A CLEAN COHORT.** Item 5 ran 3a against the
 pre-registration at `fe5d508`: **IC −0.0055, SE 0.0084, t −0.65, 90% [−0.0192, +0.0083] ⇒ NULL**
