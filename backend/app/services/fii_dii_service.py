@@ -17,6 +17,7 @@ ON CONFLICT DO NOTHING makes all inserts idempotent.
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterator
 from dataclasses import dataclass
 from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
@@ -365,9 +366,57 @@ async def upsert_bulk_deals(
 # ── §2.7 flow rollups for signal generation (Phase 2 slice 3) ────────────────
 
 
-async def get_market_flow_5d(db: AsyncSession, as_of: date) -> tuple[Decimal, Decimal]:
-    """(fii_net_5d, dii_net_5d): cumulative net CASH-segment flow in ₹ crore
-    over the last 5 NSE trading days ending at `as_of`.
+@dataclass(frozen=True)
+class FlowWindow:
+    """The 5-day flow rollup, WITH the coverage that produced it.
+
+    ⛔⛔ **Queue item 28 — why coverage had to become part of the return type.** This function
+    used to return a bare `(fii, dii)` and resolve a missing row to `Decimal("0")`, with a
+    comment in `signal_service` recording the choice as *"empty tables → zeros, identical to
+    the pre-wiring behaviour"*. That collapses **absent** into **a measurement of zero**, and
+    the frozen §2.7 factor then faithfully reports `"FII/DII flows neutral"` — a positive claim
+    about institutional flows, made from no data. Measured on the live book: **30 of 52 signals
+    carry that string** while `fii_dii_daily` holds 14 rows in total.
+
+    ⭐ The frozen factor is NOT the bug. It is told zero and it correctly describes zero. The
+    lie is manufactured HERE, at the boundary that turns an absence into a number — which is
+    also why the fix needs no engine change and no sign-off.
+
+    ⚠ It still unpacks as a 2-tuple (`fii, dii = await get_market_flow_5d(...)`) so that every
+    existing caller keeps working unchanged. That is deliberate: the alternative was migrating
+    six call sites in one commit for a display-string fix, and a caller that does not care
+    about coverage should not be forced to think about it. A caller that DOES care asks
+    `.is_absent`, and a NEW caller cannot silently lose the distinction the way a bare tuple
+    let them.
+    """
+
+    fii: Decimal
+    dii: Decimal
+    sessions_expected: int
+    sessions_with_data: int
+
+    @property
+    def is_absent(self) -> bool:
+        """No session in the window had any cash-segment row at all.
+
+        ⚠ Distinct from `fii == dii == 0`, which is a legitimate — if unlikely — MEASUREMENT.
+        Telling those two apart is the entire point of this class.
+        """
+        return self.sessions_with_data == 0
+
+    @property
+    def is_partial(self) -> bool:
+        """Some sessions are missing, so the 5-day aggregate is not a 5-day aggregate."""
+        return 0 < self.sessions_with_data < self.sessions_expected
+
+    def __iter__(self) -> Iterator[Decimal]:
+        yield self.fii
+        yield self.dii
+
+
+async def get_market_flow_5d(db: AsyncSession, as_of: date) -> FlowWindow:
+    """Cumulative net CASH-segment flow in ₹ crore over the last 5 NSE trading days
+    ending at `as_of`, plus how many of those days actually had data.
 
     SIGNAL_ENGINE.md §2.7 measures "last 5 trading days, aggregated" — the
     cash segment is the institutional-conviction measure (futures/options
@@ -388,8 +437,51 @@ async def get_market_flow_5d(db: AsyncSession, as_of: date) -> tuple[Decimal, De
             {"days": days},
         )
     ).all()
+    covered = (
+        await db.execute(
+            text(
+                "SELECT count(DISTINCT trade_date) FROM fii_dii_daily"
+                " WHERE trade_date = ANY(:days) AND segment = 'cash'"
+            ),
+            {"days": days},
+        )
+    ).scalar_one()
     nets = {r.investor_type: Decimal(r.net) for r in rows}
-    return nets.get("FII", Decimal("0")), nets.get("DII", Decimal("0"))
+    return FlowWindow(
+        fii=nets.get("FII", Decimal("0")),
+        dii=nets.get("DII", Decimal("0")),
+        sessions_expected=len(days),
+        sessions_with_data=int(covered or 0),
+    )
+
+
+#: What the §2.7 factor says when it is handed zeros. Matched EXACTLY rather than by
+#: substring: the frozen module owns this string, and a loose match would rewrite a real
+#: explanation that merely mentioned the word.
+FROZEN_NEUTRAL_EXPLANATION = "FII/DII flows neutral"
+
+#: ...and what it should say when the zeros were an absence rather than a measurement.
+ABSENT_EXPLANATION = "no FII/DII flow data for this window — not assessable"
+
+
+def correct_absent_flow_explanation(
+    factor_scores: dict[str, dict[str, object]], flows: FlowWindow
+) -> dict[str, dict[str, object]]:
+    """Relabel the §2.7 factor when its zeros came from an empty table.
+
+    ⭐ Applied OUTSIDE the frozen engine, on the dict about to be persisted. `app/analysis/`
+    is frozen bugfix-only and its signature takes a `Decimal`, which has no way to express
+    "absent" — so the correction belongs at the boundary that knows, which is here.
+
+    ⚠ Only rewrites the exact neutral default, and only when the window is genuinely empty.
+    A real measured zero keeps the frozen wording, because that one is true.
+    """
+    if not flows.is_absent:
+        return factor_scores
+    entry = factor_scores.get("FII_DII_FLOW")
+    if entry and entry.get("explanation") == FROZEN_NEUTRAL_EXPLANATION:
+        entry["explanation"] = ABSENT_EXPLANATION
+    return factor_scores
 
 
 async def get_stock_block_deal_net_cr(db: AsyncSession, stock_id: int, as_of: date) -> Decimal:

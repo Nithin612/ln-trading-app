@@ -19,6 +19,7 @@ from app.models.market_data import OhlcvDaily
 from app.models.signal import Signal
 from app.models.stock import Stock
 from app.services import market_calendar
+from app.services.fii_dii_service import FlowWindow, correct_absent_flow_explanation
 from app.signals import regime as regime_mod
 from app.signals.classifier import classify_signal
 from app.signals.expiry import compute_validity_until
@@ -214,6 +215,7 @@ async def generate_signal_for_stock(
     dii_net_5d: Decimal = Decimal("0"),
     stock_block_deal_net_cr: Decimal = Decimal("0"),
     min_confidence: int | None = None,
+    flows: FlowWindow | None = None,
 ) -> Signal | None:
     """Run the full pipeline for one stock and return a Signal ORM object, or None.
 
@@ -286,6 +288,12 @@ async def generate_signal_for_stock(
         }
         for f in result.factors
     }
+    # ⛔ ITEM 28: the frozen §2.7 factor says "FII/DII flows neutral" whenever it is handed
+    # zeros, and it cannot tell a measured zero from an empty table — its signature takes a
+    # Decimal. The boundary that KNOWS is `FlowWindow`, so the relabel happens here, on the
+    # dict about to be persisted, and the frozen engine is not touched.
+    if flows is not None:
+        factor_scores = correct_absent_flow_explanation(factor_scores, flows)
 
     signal = Signal(
         stock_id=stock.id,
@@ -333,7 +341,8 @@ async def run_nightly_signal_generation(
     # run; per-stock block-deal net inside the loop. Empty tables → zeros,
     # identical to the pre-wiring behavior.
     as_of = datetime.now(tz=UTC).astimezone(ZoneInfo("Asia/Kolkata")).date()
-    fii_net_5d, dii_net_5d = await get_market_flow_5d(db, as_of)
+    flows = await get_market_flow_5d(db, as_of)
+    fii_net_5d, dii_net_5d = flows
 
     generated: list[Signal] = []
     for stock in stocks:
@@ -344,6 +353,7 @@ async def run_nightly_signal_generation(
             capital,
             risk_pct,
             timeframe,
+            flows=flows,
             fii_net_5d=fii_net_5d,
             dii_net_5d=dii_net_5d,
             stock_block_deal_net_cr=block_net_cr,
@@ -418,7 +428,8 @@ async def run_live_signal_generation(
     )
 
     as_of = datetime.now(tz=UTC).astimezone(ZoneInfo("Asia/Kolkata")).date()
-    fii_net_5d, dii_net_5d = await get_market_flow_5d(db, as_of)
+    flows = await get_market_flow_5d(db, as_of)
+    fii_net_5d, dii_net_5d = flows
     block_net_cr = await get_stock_block_deal_net_cr(db, stock_id, as_of)
 
     score = score_signal(
@@ -469,6 +480,8 @@ async def run_live_signal_generation(
         f.name: {"weight": f.weight, "score": round(f.score, 4), "explanation": f.explanation}
         for f in score.factors
     }
+    if flows is not None:  # ITEM 28 — see the note at the other factor_scores site
+        factor_scores = correct_absent_flow_explanation(factor_scores, flows)
 
     signal = Signal(
         stock_id=stock_id,
