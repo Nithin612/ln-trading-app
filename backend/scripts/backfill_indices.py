@@ -32,18 +32,33 @@ from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
 
 async def _run(db: AsyncSession, from_date: date, to_date: date, delay: float) -> int:
-    """Weekday sessions in [from_date, to_date]; one CSV download each, fed to BOTH the
-    index-OHLC and VIX ingesters (half the requests of two backfills). Weekends are
-    skipped for free (never downloaded); holidays come back as an unavailable CSV and are
-    skipped. Idempotent per row."""
+    """EVERY calendar day in [from_date, to_date]; one CSV download each, fed to BOTH the
+    index-OHLC and VIX ingesters (half the requests of two backfills). Holidays and
+    non-sessions come back as an unavailable CSV and are skipped. Idempotent per row.
+
+    ⛔⛔ **The `weekday() < 5` filter was REMOVED 2026-09-19 (item 18).** It is the same defect
+    `backfill_ohlcv_history` already had fixed, surviving here in the sibling script: NSE holds
+    weekend sessions — eight of them are in our own `ohlcv_1d`, including **two Sundays** — and
+    a weekday filter makes them **structurally unreachable, because the request is never made**.
+    Verified against the live archive the day this was fixed: `ind_close_all_02032024.csv`
+    (Saturday 2024-03-02) returns **110 lines**, and this enumerator would never have asked
+    for it.
+
+    ⭐ **The enumerator now asserts NOTHING about which days are sessions: offer every calendar
+    day and let the archive's 404 decide.** A filter over a calendar you do not own is an
+    unverifiable claim — and the last time that claim was pinned in a test, the test was wrong.
+
+    ⚠ The cost is real and bounded: ~2/7 more requests over the range, each a cheap miss.
+    Paying it is strictly better than silently never asking.
+    """
     sessions = [
         from_date + timedelta(days=i)
         for i in range((to_date - from_date).days + 1)
-        if (from_date + timedelta(days=i)).weekday() < 5
     ]
     total = len(sessions)
     print(
-        f"Backfilling indices + VIX over {total} weekday sessions {from_date} → {to_date}",
+        f"Backfilling indices + VIX over {total} calendar days {from_date} → {to_date} "
+        f"(non-sessions return an unavailable CSV and are skipped)",
         flush=True,
     )
 
