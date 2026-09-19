@@ -330,12 +330,17 @@ def main() -> None:
         "trades the live engine refuses and every study silently counted as +1.000R (M64). "
         "(2) inference is cluster-robust by entry session instead of iid.",
         "",
-        "⛔ **What did NOT change, deliberately: the cohort.** Both studies still draw it the "
-        "way they published it — `_load_frames` ranks liquidity across the WHOLE window and "
-        "filters on today's `is_active`, so it is look-ahead-selected and survivorship-"
-        "filtered. Changing it in the same pass would confound the answer to the question "
-        "item 6 actually asks. **These numbers are therefore corrected for the delete "
-        "treatment and the SE, and remain contaminated by the cohort.**",
+        "⛔⛔ **THE COHORT COULD NOT BE HELD FIXED, AND THAT IS THE BIGGEST FINDING HERE.** "
+        "`_load_frames` has no cohort — it has a QUERY (`WHERE s.is_active ... ORDER BY mdv "
+        "LIMIT 250`) whose ANSWER moves. `stocks.is_active` was 1,322 when D5/D1 published "
+        "on 2026-09-08; D2′b repaired the universe on 09-14 and it is 2,292 today, so the "
+        "same call returns a different population. **Do not compare any number here against "
+        "its published counterpart.** ⭐ A cohort defined by a live query against MUTABLE "
+        "STATE is not a cohort, it is a timestamp — pin the name list, do not re-derive it "
+        "(`liquid_as_of`, item 14, is the primitive; neither study uses it yet). ⚠ The "
+        "cohort also remains look-ahead-selected (liquidity ranked across the whole window, "
+        "`is_active` is today's flag); repairing that in the same pass would make the "
+        "delete-treatment answer unreadable.",
         "",
     ]
     dest = Path(args.out) if args.out else OUT / f"item6-rerun-{today}.md"
