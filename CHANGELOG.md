@@ -7,6 +7,51 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Tier A completed to the limit of what needs no user input (2026-09-19)
+
+**Items 11 / 11b — both holdout blocks sealed.** `scripts/holdout_seal.py` + 9 tests. Per-session
+and per-block digests, a written whitelist of what may be computed while sealed, and a `--write`
+that REFUSES to overwrite a drifted seal (re-sealing would erase the evidence of the event the
+seal exists to catch). ⛔ It found a quoted fact to be wrong: `313 + 617 + 797 = 1,727` — the test
+block is **798**. The holdouts are closed intervals and immutable; the test block gains a row every
+session, so **797 was a timestamp, not a design property**. Blocks are now pinned by DATE RANGE
+with counts as outputs. Verified: the three partition the archive exactly, 1,728 of 1,728.
+
+**Item 6 — D5, D1 and B7 all re-run** under item 4's delete treatment with dependence-appropriate
+inference. 4h03m walk plus an 18min probe. Reports: `item6-rerun-2026-09-18.md`,
+`item6-b7-2026-09-19.md`.
+
+⭐⭐ **The biggest finding is reproducibility, not the treatment.** `_load_frames` has no cohort —
+it has a query whose answer moves. `stocks.is_active` was 1,322 when D5/D1 published (09-08) and is
+2,292 after D2′b (09-14), so the corpus went **1,152 → 3,267 signals with nothing in the study
+changed**, and the published `|t| ≤ 0.65` / `−0.026R` cannot be rebuilt. ⇒ **a cohort defined by a
+live query against mutable state is a timestamp, not a cohort — pin the name list, never re-derive
+it.**
+
+⭐⭐ **M64 demonstrated on real data for the first time.** B7 refused 4 of 350 — HFCL, MUTHOOTFIN,
+TCS, WIPRO — every fill on the wrong side of its own stop, every one a same-session exit, every one
+booking **exactly +1.0000R**, all with stop widths below the 2% notional-cap floor. ⛔ The standing
+caveat *"T=0 is the tight-stop cohort the order path refuses"* is half wrong: refusing them makes
+the contrast STRONGER (−0.664 → −0.824, t −4.73 → −6.61).
+
+⭐ **D5 and D1 refused 0 of 3,267 and 0 of 2,029 — verified rather than assumed** (the predicate
+fires on a constructed record; real minimum fill-to-stop margin +0.12%, median exactly +5.000%) ⇒ a
+genuine no-op on wide-stop daily corpora.
+
+**F9: every headline survives both corrections** — no sign change, no |t| = 1.96 crossing.
+
+**New estimators** in `block_bootstrap.py` — `intraclass_correlation`, `design_effect`,
+`cluster_robust_mean_t`, `cluster_robust_slope_t` (13 tests). Dependence was characterised BEFORE
+the estimator was chosen, as the queue required: it is a GROUPING, not a lag, so Newey-West would
+have been the wrong instrument. Validated against a null that first REPRODUCES the failure — naive
+rejects 36.7% at a nominal 5%, clustered 5.0%, design effect 5.47x.
+
+⚠ Two harness defects caught by smoke runs before they reached a published number: a repeated
+`asyncio.run` that killed a 1h48m run after D5 had finished (output now flushes per study), and a
+D1 statistic that was degenerate by construction — a paired contrast returning exactly +0.0000,
+because RVOL changes only whether a signal passes the gate, never its levels once it does.
+
+
 ### Queue item 1 — a delivery (CNC) product cannot carry a short (2026-09-19)
 
 `app/signals/restrictions.py` (+ `tests/test_settlement_restriction.py`, 13 tests). The rule whose

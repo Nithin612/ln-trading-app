@@ -1873,7 +1873,46 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE (next session, any account) — updated 2026-09-19 (item 1 BUILT).**
+**▶ CONTINUE HERE (next session, any account) — updated 2026-09-19 (TIER A: 7 of 10 done, overnight).**
+
+**✅ TIER A IS AS COMPLETE AS IT CAN BE WITHOUT THE USER — 7 of 10 built, 1 half, 2 blocked.**
+Built overnight 2026-09-19: **11 / 11b** (both holdout seals) and **6** (D5 + D1 + B7 re-run),
+on top of 4 · 2 · 3 · 14 · 15. **Half: 12** — pushed, but `git log --format='%G?' fe5d508`
+returns **N** and the branch has 0 signed commits, so the SIGN half is outstanding and needs a
+key from the user. **Blocked on the user: 5** (needs item 21, one contract note) and **13**
+(weekend beats — a scheduling change on a running system).
+
+⭐⭐ **THE NIGHT'S BIGGEST FINDING, and it is not what item 6 went looking for: the published
+D5/D1/B7 cohorts CANNOT BE REBUILT.** `_load_frames` has no cohort, it has a QUERY whose answer
+moves — `WHERE s.is_active ... ORDER BY mdv LIMIT 250`. `is_active` was **1,322** when those
+studies published on 09-08 and is **2,292** after D2′b repaired the universe on 09-14, so the
+corpus went **1,152 → 3,267 signals with nothing in the study changed.** ⇒ **a cohort defined
+by a live query against mutable state is a timestamp, not a cohort — pin the name list
+(`liquid_as_of`), never re-derive it.** Same family as the `313+617+797` block counts (the test
+block is now **798**) and `kite_instruments` upserted in place.
+
+⭐⭐ **M64 HAS ITS FIRST REAL-DATA DEMONSTRATION.** B7's delete treatment refused **4 of 350**
+— HFCL · MUTHOOTFIN · TCS · WIPRO — **every fill on the wrong side of its own stop, every one a
+same-session exit, every one booking EXACTLY +1.0000R**, all with stop widths (0.13–0.97%) below
+the 2% notional-cap floor. ⛔ And the standing caveat *"T=0 is the tight-stop cohort the order
+path refuses"* is **half wrong**: refusing them makes the contrast STRONGER (−0.664 → −0.824,
+t −4.73 → −6.61). ⭐ D5 and D1 refused **0 of 3,267** and **0 of 2,029** — verified, not assumed
+(min fill-to-stop margin **+0.12%**, median **+5.000%**) ⇒ the delete treatment is a genuine
+no-op on wide-stop daily corpora. **F9: every headline survives both corrections.**
+
+⚠ **Dependence was characterised BEFORE choosing an estimator, as the queue required.** It is a
+GROUPING, not a lag ⇒ cluster-robust by session; design effects **1.24x / 1.42x / 1.09x**, far
+from the 6x that killed RVOL's t = +3.67. New estimators live in `block_bootstrap.py`, validated
+against a null that first REPRODUCES the failure (naive rejects **36.7%** at a nominal 5%,
+clustered **5.0%**).
+
+⛔ **NEXT, needing nothing from the user:** Tier B tranche 1 — **27** (a falling price renders
+green) · **28** (FII/DII claims "neutral" from zero rows) · **23** (the three concessions).
+Plan + what is needed from the user: `docs/analysis/tier-b-plan-and-blockers-2026-09-19.md`.
+
+---
+
+**▶ PREVIOUS (2026-09-19, item 1 BUILT).**
 
 **✅ QUEUE ITEM 1 IS BUILT — a delivery (CNC) product can no longer carry a short.**
 `GATE_SETTLEMENT` in `app/signals/restrictions.py` + `tests/test_settlement_restriction.py` (13

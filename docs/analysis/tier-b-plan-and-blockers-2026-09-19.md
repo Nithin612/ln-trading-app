@@ -6,7 +6,7 @@ need from you** (items 21, 13 and 12's unfinished half), and **the Tier B plan**
 ⛔ **First, the correction that prompted this.** Tier A has **ten** rows, not five. A
 previous session wrote *"TIER A IS BUILT — five items"* into `PHASES.md`, which redefined
 the term to mean whatever had been finished, and a later session read that sentence back as
-verification. State as of this document: **7 built, 1 half, 2 blocked on the user.**
+verification. State as of this document: **7 of 10 built, 1 half (item 12's sign), 2 blocked on the user (5 and 13).** Everything not needing you is done.
 
 | # | Item | State |
 |---|---|---|
@@ -16,7 +16,7 @@ verification. State as of this document: **7 built, 1 half, 2 blocked on the use
 | 14 | `liquid_as_of` PIT cohort | ✅ built |
 | 15 | bhavcopy A10 guard | ✅ built |
 | 11 / 11b | **the two holdout seals** | ✅ **built 2026-09-19** |
-| 6 | **re-run D5 + D1 + B7** | ⏳ **running as this was written** — harness built and smoke-verified; the full walk is the long pole. Status settled in its own report, not here |
+| 6 | **re-run D5 + D1 + B7** | ✅ **DONE 2026-09-19** — all three re-run; every headline survives. Biggest finding: the published cohorts are **not reproducible** (`is_active` moved 1,322 → 2,292 under them) |
 | 12 | push **and sign** | ⚠ **half** — pushed; `fe5d508` still returns `N` |
 | 5 | re-run E2 | ⛔ needs item 21 |
 | 13 | Celery beats off `day_of_week="1-5"` | ⛔ your call |
