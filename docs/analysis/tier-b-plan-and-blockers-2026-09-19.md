@@ -25,10 +25,27 @@ verification. State as of this document: **7 of 10 built, 1 half (item 12's sign
 
 ## PART 1 — What I need from you
 
-### Item 21 — one real contract note ⭐ *this is the one that matters*
+### Item 21 — one real contract note ⛔ **CORRECTED: it is NOT a blocker**
 
-It is the **only** thing between here and item 5, and item 5 is the question the whole
-programme turns on. M74: `fees.py` has never been reconciled against a real note — M27
+⛔⛔ **I called this "the only thing between here and item 5". Measured 2026-09-19, that is
+WRONG.** `e2_score_ic.py` does not read `fees.py` at all — it **hardcodes 25.5 bps**. So a
+contract note can only reach item 5 through that single number, and the arithmetic settles it:
+
+| | bps |
+|---|--:|
+| modelled delivery round trip (₹1L) | 23.76 |
+| — of which **STT alone**, statutory | **20.00** (84%) |
+| **statutory floor** (DP charge zeroed entirely) | **22.22** |
+| needed to flip E2's verdict (upper bound 0.0119 vs break-even 0.0310) | **9.79** |
+
+The only non-statutory line in the whole stack is the ₹15.34 DP charge. **Zero it completely
+— the most extreme error a contract note could possibly correct — and costs are still 22.22
+bps, which is 2.27× the 9.79 bps needed to change the answer.** ⇒ **item 5 is unblocked.**
+
+⚠ Still worth sending eventually: `fees.py` has never been checked against reality (M74 — M27
+regressed it against its own output), and it prices every P&L number in the system, not just
+E2's break-even. That is correctness hygiene, not a gate. ⭐ Also noted: the script's hardcoded
+25.5 bps is 7% ABOVE the modelled 23.76 — conservative, which is the safe direction. M74: `fees.py` has never been reconciled against a real note — M27
 regressed it **against its own output**, which tests arithmetic and not correctness.
 
 **What to send:** one Zerodha contract note (the PDF, or the trade-wise charge breakdown
@@ -46,10 +63,24 @@ identifies the account. It stays local — never leaves this machine (project ru
 
 ### Item 13 — a yes/no on weekend beats
 
-**The fact:** all **22** Celery beats are `day_of_week="1-5"`. NSE held 4 weekend sessions
-in our archive, one of them a **Sunday** (2026-02-01). On such a day nothing ingests,
-nothing generates, and no health probe runs — the outage is invisible because the detector
-is asleep too.
+⛔⛔ **CORRECTED 2026-09-19 — my earlier split recommendation was a trap, and the fact base
+was wrong too.**
+
+**There are 8 weekend sessions in the archive, not 4** (the docs still say 4): 2019-10-27
+**Sun**, 2020-02-01, 2020-11-14, 2024-01-20, 2024-03-02, 2024-05-18, 2025-02-01, 2026-02-01
+**Sun**. That is 0.46% of 1,728 sessions, ≈1.1/year.
+
+⛔ **Flipping the 22 beats would change NOTHING.** `market_hours.is_market_session` returns
+False on any weekend independently (`if now_ist.weekday() > 4: return False`), and
+`position_monitor` — the only thing in the system that closes a position on a stop — checks
+it. You would ship the change, believe weekend monitoring worked, and still be unguarded.
+**A fix that looks done and isn't is worse than no fix.**
+
+⛔ **And the real fix is not a scheduling change.** The weekday assumption sits in **seven**
+places, the worst being inside **`is_trading_day` itself** — the function whose entire job is
+answering that question returns False for a weekend *before* it consults the holiday table.
+`nse_holidays` is a table of days NOT traded; there is no table of days traded, so the
+calendar **structurally cannot express "this Saturday is a session"**.
 
 **My recommendation, split by risk rather than all-or-nothing:**
 
@@ -60,8 +91,20 @@ is asleep too.
 | `nightly-signal-generation` · `mint-pair-signals` · `nightly-profile-suggestions` · the two intraday ones | **leave at `1-5`** | these MINT things. Weekend signals on a session nobody expects is a behaviour change, not a repair |
 | `monitor-positions` · `capture-cas-window` · `record-option-chains` · `refresh-circuit-bands` · `sweep-expired-signals` | **leave at `1-5`** | live-session machinery; a weekend session is rare enough that I would rather you opt in deliberately |
 
-**What I need:** "yes, do the ingest + health half" — or a different split. I have not
-touched it: it is a scheduling change on a system that is running.
+**RECOMMENDATION: do not do item 13 now. Defer it to Phase 7.**
+
+The exposure today is **zero real money**. Data is already safe — the backfill enumerator
+offers every calendar day and lets the archive's 404 decide, which is exactly how all 8 of
+those sessions were found. The only remaining gap is live position monitoring on an
+announced session roughly once a year — and **you are paper trading**, so an unwatched paper
+stop costs nothing. It becomes real the day live trading starts, which is precisely when the
+session-calendar work belongs (it gates the SL monitor, so it is money-path and deserves the
+care Phase 7 gives it).
+
+**Until then, handle it by hand:** weekend sessions are announced weeks ahead. Either avoid
+carrying positions over one, or run the monitor manually that day.
+
+**What I need from you: nothing.** This is a recommendation to defer, not a question.
 
 ### Item 12 — the sign half (≈ 2 minutes, and it reuses the key you already made)
 
@@ -132,8 +175,15 @@ and each has a measurement behind it. Ordered by **value ÷ cost**, not by numbe
 
 ## Suggested order
 
-**You:** the contract note (21) · the weekend-beats yes/no (13) · the signing key (12).
+**You, and only one of these is urgent:**
 
-**Me, needing nothing:** 27 → 28 → 23 → 22 → 24 → 20 → 18 → 16.
+1. ⭐ **Item 12 — sign, 2 minutes. Do this FIRST and before item 5 runs.** It is the only one
+   of the three that is time-sensitive: once item 5 runs unsigned, that run is permanently
+   operator-attested and signing afterwards cannot fix it. The queue's own H27 ruling puts
+   item 12 above item 5 for exactly this reason.
+2. **Item 21 — send when convenient.** Measured NOT to be a blocker (above). Worth having for
+   `fees.py` correctness, which prices every P&L number in the system.
+3. **Item 13 — nothing to decide. Recommended: defer to Phase 7.**
 
-**Then, the moment 21 lands:** item 5, and item 19 fires or does not.
+**Me, needing nothing:** item **5** (now unblocked — waits only on your signature, not on the
+contract note), then Tier B 27 → 28 → 23 → 22 → 24 → 20 → 18 → 16.
