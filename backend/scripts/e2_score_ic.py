@@ -47,7 +47,6 @@ import sys
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
-from typing import Any
 
 import pandas as pd
 
@@ -61,7 +60,9 @@ from app.services.market_calendar import (  # noqa: E402
     observed_session_index,
     window_has_holes,
 )
+from app.services.pit_cohort import liquid_over  # noqa: E402
 from factor_sweep import _spearman  # noqa: E402  (W2: one implementation)
+from sqlalchemy import text  # noqa: E402
 from swing_dependence_probe import load_frames  # noqa: E402
 
 WINDOW = 300
@@ -82,6 +83,12 @@ class Row:
     fwd20: float
     logpx: float
     vol20: float
+    #: ⭐ ITEM 5: a corporate action lands inside this panel's FORWARD window, so its
+    #: `fwd` is a split artifact rather than a return. Marked, never silently dropped —
+    #: the 25% screen is a candidate generator measured at 62.5% false-positive (M70),
+    #: so the honest treatment is to report the statistic BOTH ways and let the
+    #: difference be the evidence.
+    ca_tainted: bool = False
 
 
 def _fwd(closes: pd.Series, i: int, h: int) -> float:
@@ -121,12 +128,51 @@ def _band(mean: float, se: float, breakeven: float) -> str:
     return "INCONCLUSIVE"
 
 
-async def main(n_stocks: int, stride: int, dump: str | None) -> None:
-    frames = await load_frames(n_stocks)
+#: |open / prev_close - 1| above this marks a CORPORATE-ACTION CANDIDATE. ⚠ A candidate,
+#: never a detection: M70 measured this screen at 62.5% false-positive (5 of 8 flagged events
+#: were genuine moves — ZEEL x2, IDEA, ADANIENT x2). It is used here only to TAG rows so the
+#: statistic can be reported both ways.
+CA_GAP = 0.25
+
+#: The test block. Holdout-1 (2021-01-01 - 2023-07-02) and holdout-2 (2019-10-01 -
+#: 2020-12-31) are SEALED — see `scripts/holdout_seal.py`.
+TEST_BLOCK_START = date(2023, 7, 3)
+
+
+async def main(
+    n_stocks: int, stride: int, dump: str | None, *, pit: bool = False
+) -> None:
     async with AsyncSessionFactory() as db:
         sessions = await observed_session_index(db)
+        grid = [d for d in sorted(sessions) if d >= TEST_BLOCK_START][::stride]
+
+        cohort_by_day: dict[date, set[str]] | None = None
+        if pit:
+            # ⭐⭐ ITEM 5: the DYNAMIC point-in-time cohort, rebuilt per measurement date from
+            # a window that closed strictly before it. This replaces `load_frames`' ranking on
+            # `now() - interval '180 days'` — M62's look-ahead, which item 6 additionally
+            # showed is not reproducible because it re-derives against `is_active`, and
+            # `is_active` moved 1,322 -> 2,292 under the published runs.
+            cohorts = await liquid_over(db, grid, n=n_stocks)
+            ids = sorted({i for v in cohorts.values() for i in v})
+            sym_of = dict(
+                (await db.execute(
+                    text("SELECT id, symbol FROM stocks WHERE id = ANY(:i)"), {"i": ids}
+                )).all()
+            )
+            cohort_by_day = {
+                d: {sym_of[i] for i in v if i in sym_of} for d, v in cohorts.items()
+            }
+            missing = len(grid) - len(cohort_by_day)
+            print(f"PIT cohort: {len(ids)} distinct names over {len(cohort_by_day)} of "
+                  f"{len(grid)} grid sessions ({missing} had no prior window)")
+            frames = await load_frames(n_stocks, stock_ids=ids)
+        else:
+            frames = await load_frames(n_stocks)
+
     print(f"names {len(frames)}   observed sessions {len(sessions):,}   "
-          f"horizon {HORIZON}d (pre-registered)   stride {stride}")
+          f"horizon {HORIZON}d (pre-registered)   stride {stride}   "
+          f"cohort {'PIT (item 14)' if pit else 'load_frames (LOOK-AHEAD, M62)'}")
 
     # ⭐ A CROSS-SECTIONAL IC REQUIRES EVERY NAME SCORED ON THE SAME SESSION.
     # The obvious loop — walk each name from its own bar 300 by `stride` — samples a
@@ -134,15 +180,31 @@ async def main(n_stocks: int, stride: int, dump: str | None) -> None:
     # two names and the IC is noise by construction. (Caught by the smoke run, which
     # reported a median cross-section of 1.) So the decision dates come from the market's
     # own calendar, and each name is looked up ON those dates.
-    grid = sorted(sessions)[::stride]
-    print(f"decision sessions on the global grid: {len(grid):,}")
+    print(f"decision sessions on the test-block grid: {len(grid):,} "
+          f"(from {TEST_BLOCK_START}; holdouts are sealed)")
 
     rows: list[Row] = []
     skipped_gap = 0
+    skipped_cohort = 0
+    ca_fwd = ca_window = 0
     for sym, df in frames.items():
         closes = df["close"]
+        opens = df["open"]
         pos = {d.date(): k for k, d in enumerate(df.index)}
+        # ⭐ CA candidates for THIS name, as bar indices. Computed from the frame rather than
+        # re-queried, and from `open` against the PREVIOUS close — a close-to-close screen
+        # misses every one of them, which is how a first pass found zero.
+        ca_idx = {
+            k for k in range(1, len(df))
+            if float(closes.iloc[k - 1]) > 0
+            and abs(float(opens.iloc[k]) / float(closes.iloc[k - 1]) - 1.0) > CA_GAP
+        }
         for day in grid:
+            if cohort_by_day is not None:
+                members = cohort_by_day.get(day)
+                if members is None or sym not in members:
+                    skipped_cohort += 1
+                    continue
             i = pos.get(day)
             if i is None or i < WINDOW or i >= len(df) - SECONDARY - 1:
                 continue
@@ -165,6 +227,15 @@ async def main(n_stocks: int, stride: int, dump: str | None) -> None:
             fwd = _fwd(closes, i, HORIZON)
             if fwd != fwd:
                 continue
+            # A CA inside the FORWARD window makes `fwd` a split artifact, not a return.
+            tainted = any((i + d) in ca_idx for d in range(1, HORIZON + 1))
+            if tainted:
+                ca_fwd += 1
+            # ...and one inside the 300-bar SCORING window corrupts the indicators that
+            # produced the score. Counted separately: it is a different defect, and the
+            # pre-registered estimand is about the forward return.
+            if any(k in ca_idx for k in range(i - WINDOW + 1, i + 1)):
+                ca_window += 1
             rows.append(Row(
                 day=day, sym=sym,
                 score=float(res.normalized_score), conf=int(res.confidence_pct),
@@ -172,9 +243,14 @@ async def main(n_stocks: int, stride: int, dump: str | None) -> None:
                 fwd=fwd, fwd20=_fwd(closes, i, SECONDARY),
                 logpx=math.log(float(closes.iloc[i])),
                 vol20=_realised_vol(closes, i),
+                ca_tainted=tainted,
             ))
 
-    print(f"panels scored {len(rows):,}   (skipped for window holes: {skipped_gap:,})")
+    print(f"panels scored {len(rows):,}   (window holes {skipped_gap:,}"
+          f"{f' · outside the PIT cohort {skipped_cohort:,}' if cohort_by_day else ''})")
+    print(f"CA candidates: {ca_fwd:,} panels have one in their {HORIZON}d FORWARD window "
+          f"({100*ca_fwd/max(len(rows),1):.3f}%) · {ca_window:,} in their {WINDOW}-bar "
+          f"SCORING window — tagged, not dropped (M70: the screen is 62.5% false-positive)")
     if len(rows) < 100:
         print("too few panels — aborting")
         return
@@ -278,11 +354,42 @@ def _report(by_day: dict[date, list[Row]], rows: list[Row]) -> None:
             if key == "score" and h == "fwd":
                 print(f"      ⭐ sd(IC_t) MEASURED {sd_ic:.4f} vs the ASSUMED 0.10 "
                       f"(n={n} sessions)")
+                # ⭐⭐ THE CA ROBUSTNESS CHECK, inline rather than as a separate run.
+                # 3a is a SPEARMAN RANK correlation, so a split-induced -90% only moves a
+                # name to last place on its session — the magnitude never enters. The claim
+                # that this is bounded and small is therefore TESTABLE, and this is the test:
+                # recompute with every CA-tainted row removed and show what the IC does.
+                clean_ics = []
+                for v in by_day.values():
+                    vv = [r for r in v if not r.ca_tainted]
+                    if len(vv) < 5:
+                        continue
+                    pair = [(r.score, r.fwd) for r in vv if r.fwd == r.fwd]
+                    if len(pair) < 5:
+                        continue
+                    icc = _spearman([q[0] for q in pair], [q[1] for q in pair])
+                    if icc is not None:
+                        clean_ics.append(icc)
+                if len(clean_ics) >= 5:
+                    cn, cm, cse = _mean_se(clean_ics)
+                    print(f"      ⭐ CA-ROBUSTNESS: dropping CA-tainted rows gives "
+                          f"IC {cm:+.4f}  SE {cse:.4f}  t {cm/cse if cse else float('nan'):+.2f}"
+                          f"  90% [{cm-1.645*cse:+.4f}, {cm+1.645*cse:+.4f}]  (n={cn})")
+                    print(f"        => the IC moves {cm-m:+.4f}; a rank statistic should "
+                          f"barely notice, and if it does NOT barely notice, that is the "
+                          f"finding")
 
     # ── 3b ────────────────────────────────────────────────────────────────────────
     print("\n" + "=" * 100)
     print("3. ⭐⭐ 3b — MATCHED-TAIL CONTRAST (the pre-registered estimand)")
     print("=" * 100)
+    n_ca = sum(1 for r in rows if r.ca_tainted)
+    print("  ⛔⛔ REPORTED, NOT DECIDED ON. 3b is a MEAN forward-return contrast, so one")
+    print(f"     split-induced -89.8% moves the mean by roughly 0.9/n. {n_ca:,} of "
+          f"{len(rows):,} rows carry a CA candidate in their forward window. Unlike 3a,")
+    print("     which is rank-based, this estimand is NOT robust to that, and the honest")
+    print("     resolution is item 16 (a CA source), not a 25% screen measured at 62.5%")
+    print("     false-positive. The numbers below are descriptive.")
     diffs: list[float] = []
     matched = 0
     for v in by_day.values():
@@ -303,7 +410,7 @@ def _report(by_day: dict[date, list[Row]], rows: list[Row]) -> None:
         print(f"  matched pairs {matched:,}")
         print(f"  ⭐ passer MINUS matched non-passer, {HORIZON}d: {m:+.4f}%  SE {se:.4f}  "
               f"t {m/se if se else float('nan'):+6.2f}  90% [{lo:+.4f}, {hi:+.4f}]")
-        print(f"     break-even needs > +0.255% (the explicit round-trip charge stack)")
+        print("     break-even needs > +0.255% (the explicit round-trip charge stack)")
         print(f"     VERDICT: {'POSITIVE' if lo > 0.255 else ('NULL' if hi < 0.255 and lo < 0 < hi else 'INCONCLUSIVE')}")
     else:
         print("  too few matched pairs")
@@ -335,5 +442,8 @@ if __name__ == "__main__":
     ap.add_argument("--stride", type=int, default=HORIZON,
                     help="sample every Nth session; default = horizon (non-overlapping)")
     ap.add_argument("--dump", default=None, help="write the panel to this CSV")
+    ap.add_argument("--pit", action="store_true",
+                    help="ITEM 5: build the cohort per session from app.services.pit_cohort "
+                         "instead of load_frames' look-ahead ranking (M62)")
     a = ap.parse_args()
-    asyncio.run(main(a.stocks, a.stride, a.dump))
+    asyncio.run(main(a.stocks, a.stride, a.dump, pit=a.pit))

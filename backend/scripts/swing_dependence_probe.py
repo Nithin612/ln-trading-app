@@ -78,9 +78,16 @@ CAPITAL, RISK_PCT = Decimal("100000"), Decimal("2.0")
 CA_JUMP = 0.25
 
 
-async def load_frames(n_stocks: int) -> dict[str, pd.DataFrame]:
+async def load_frames(
+    n_stocks: int, *, stock_ids: list[int] | None = None
+) -> dict[str, pd.DataFrame]:
+    """⚠ `stock_ids` (queue item 5) bypasses the ranking entirely and loads exactly the names
+    given. The default ranking is the M62 defect — `now() - interval '180 days'` is a
+    LOOK-AHEAD cohort, and item 6 measured that it is not even reproducible, since it
+    re-derives against `is_active` which moves. A caller that has built a point-in-time
+    cohort (`app.services.pit_cohort`) passes it here instead."""
     async with AsyncSessionFactory() as db:
-        ids = [r[0] for r in (await db.execute(text(
+        ids = stock_ids if stock_ids is not None else [r[0] for r in (await db.execute(text(
             """SELECT stock_id FROM ohlcv_1d WHERE time > now() - interval '180 days'
                GROUP BY stock_id HAVING count(*) > 100
                ORDER BY percentile_cont(0.5) WITHIN GROUP (ORDER BY close*volume) DESC
