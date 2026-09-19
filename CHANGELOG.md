@@ -7,6 +7,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Tier B tranche 3 — corporate actions from the authority (2026-09-19)
+
+**16 — corporate actions are now a cache of NSE's answers, not a rule we evaluate.** The
+`corporate_actions` table already existed with the right shape and **zero rows**; its only
+writer was the admin-verified manual path, so what was missing was the fetch. ⭐⭐ Two
+conventions that silently corrupt an adjustment, both mutation-pinned: **NSE publishes the
+bonus ratio while the model stores the total** (`Bonus 3:1` = three new per one held ⇒ 1:4),
+and **a face-value split moves opposite to the share count** (₹10→₹1 ⇒ ten times the shares).
+⚠ The ratio is published as prose rather than a field, so a parse is unavoidable — the raw
+subject is stored verbatim on every row and anything unparsed is **reported**, never dropped.
+Live-verified for Jan 2024: 9 parsed, 34 unsupported and visible, and NESTLEIND 2024-01-05 →
+split 1:10, which independently confirms the event the 25% gap screen flagged. **This is what
+item 5's 3b needs.**
+
+**18 — deferred by the user with a trigger at item 5's 3b.** Its stated justification did not
+survive the seals: *"the market-regime overlay is unevaluable across the holdout-1 era"* is a
+use the seal forbids. ⭐ The enabling bugfix shipped anyway — `backfill_indices` filtered
+`weekday() < 5`, making NSE weekend sessions structurally unreachable, the same defect
+`backfill_ohlcv_history` had already fixed. Verified live: Saturday 2024-03-02 returns 110
+lines.
+
+
 ### Tier B tranche 2 — attributability, and two claims corrected (2026-09-19)
 
 **22 — the gate configuration is versioned.** Measured first: of 57 tables the only one
