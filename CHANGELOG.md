@@ -7,6 +7,79 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### ⭐⭐ THE SUCCESSOR PROGRAMME OPENS — item 17: spread is NOT the binding constraint (2026-09-20)
+
+The scorer retired the same day, leaving the successor generator as the open problem and
+**nothing on the critical path**. The direction taken is the **intraday / MIS product class**
+rather than another daily-swing feature, and item 17 is its falsifier: if crossing the spread
+costs too much, intraday is arithmetically closed before any generator is designed.
+
+**Verdict: BRANCH A — not binding.** Abdi-Ranaldo median half-spread **1.74 bps**, 90%
+cluster-bootstrap interval **[1.58, 1.93]** over **6,748 name-windows / 37 windows / median 185
+names**, on a PIT cohort across the 797-session test block. The pre-registered tree is read on
+the bound unfavourable to proceeding — **1.93 against a 5 bps boundary**. Implied intraday
+round-trip hurdle **14.1–15.0 bps** versus delivery's ~34.
+
+Reports: `docs/analysis/item17-spread-impact-preregistration-2026-09-20.md` (+ amendment 1),
+`docs/analysis/item17-spread-impact-2026-09-20.md`, dump
+`docs/analysis/item17-name-windows-2026-09-20.csv`.
+
+⭐ **The pre-registration was committed before the measurement code existed** (`6a4af12` →
+`0813d33` → the study), and the estimand, cohort and full decision tree were fixed in it.
+
+⭐⭐ **Validating the instrument first changed the design twice, before any real row was read.**
+
+- ⛔ **Corwin-Schultz is DISQUALIFIED from the branch decision.** Its zero-spread null is linear
+  in volatility — **4.33 bps of pure artifact at 30 bps/bar, 11.44 at 80** — so the artifact
+  alone spans branch A and branch B. **Pooling cannot fix it: a bias is not noise.** Kept as a
+  corroborating upper bound only, and the disqualification is asserted by a test.
+- ⛔ **A single-session Abdi-Ranaldo estimate is knife-edge.** Under a true zero spread ~half of
+  windows clamp, so the cohort median sits exactly on the clamp boundary and flips with the
+  seed — **my first characterisation of its null was luck of the seed.** The unit is now a
+  **name-month** (21 sessions), the window Abdi & Ranaldo themselves use.
+- ⛔ Two mechanisms stated backwards and corrected by running them: **a session gap makes
+  Corwin-Schultz clamp to ZERO (understate), not inflate**, and **AR's mean is volatility-biased
+  while its median is not** — so the study reports the median with the zero-clamp share beside
+  it as an independent read.
+
+⭐ **A physical check that needs no order book:** converted through B3's dated tick schedule the
+estimate is **2.43 ticks** of half-spread — a ~5-tick-wide book, clear of both the exchange's
+minimum increment and the estimator's resolution.
+
+⭐⭐ **Second pass — the apparent decline in spreads is an ARTIFACT.** The headline falls
+2.19 → 1.60 bps across mid-2024, which looked like NSE's sub-₹225 tick change. The price-band
+**control refutes that**: it appears in the ₹225+ band too, whose tick never moved. **On
+non-clamped windows that band is FLAT (5.25 → 5.46 ticks)** — the whole decline is the clamp
+share rising 18.4% → 30.7%. The mechanism is arithmetic: the median price rose ₹1,140 → ₹1,316
+against a fixed ₹0.05 tick, so the same book in ticks is fewer bps, and fewer bps at the same
+volatility is a worse signal-to-noise ratio for the estimator. **Falling bps and a rising clamp
+share are the same fact seen twice.**
+
+⭐ **The tick change is real but UNPINS more than it narrows:** 64.8% of sub-₹225 windows sat at
+or under 0.75 ticks before it — a book on the exchange floor, the signature of the tick itself
+being the binding constraint — against 15.0% after, while the rupee half-spread moved only
+₹0.0296 → ₹0.0263 (−11%).
+
+⚠ **Limits, carried:** this is an ESTIMATE, not an observation. `half_spread_bps` is computed at
+fill time and **persisted nowhere** — verified absent from `orders.broker_payload`,
+`positions.charges` and `order_events.payload` — so **M92's own spread evidence is not
+reproducible from the database today**. Item 17b (forward top-of-book capture) is the only path
+to a durable series, and it accrues in real time only. And this measures **cost, not edge**: a
+favourable branch means the arithmetic does not forbid an intraday generator, not that one
+exists.
+
+### Fixed
+
+- **`make typecheck` was red at the start of the session** (7 errors, none from this work).
+  Five fixed: item 28's `FlowWindow` left two call sites in `app/profiles/pipeline.py` and
+  `app/broker/provisional.py` still declaring `tuple[Decimal, Decimal]` — the runtime unpacking
+  works by design, the annotations did not follow — and `scripts/backfill_corporate_actions.py`
+  carried a `type: ignore[union-attr]` naming a code that did not apply, which hid a real
+  "object is not iterable". Narrowed with an `isinstance` guard instead of a broader silence.
+  ⚠ Two remain in `scripts/e2_score_ic.py`, which was already modified and uncommitted before
+  this session and is deliberately untouched.
+
+
 ### ⛔⛔ THE DAILY-SWING SCORER IS RETIRED — item 19 accepted (2026-09-20)
 
 Record: `docs/analysis/RETIREMENT-2026-09-20.md`.

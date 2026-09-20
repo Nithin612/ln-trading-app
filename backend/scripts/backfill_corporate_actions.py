@@ -70,7 +70,12 @@ async def run(start: date, end: date, dry: bool, delay: float) -> int:
             for k in totals:
                 v = out.get(k, 0)
                 totals[k] += v if isinstance(v, int) else 0
-            conflicts += [str(c) for c in out.get("conflict_rows", [])]  # type: ignore[union-attr]
+            conflict_rows = out.get("conflict_rows", [])
+            # Mirrors the isinstance guard two lines up: the dict is heterogeneous, so
+            # narrow rather than silence — the previous ``type: ignore`` named a code that
+            # did not apply and hid a real "object is not iterable".
+            if isinstance(conflict_rows, list):
+                conflicts += [str(c) for c in conflict_rows]
             print(f"[{i}] {a}→{b}  parsed {out['parsed']:>3}  inserted {out['inserted']:>3}  "
                   f"unsupported {out['unsupported']:>3}", flush=True)
         await asyncio.sleep(delay)

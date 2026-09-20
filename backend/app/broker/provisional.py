@@ -82,12 +82,16 @@ import time as time_mod
 from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, time
 from decimal import Decimal
-from typing import Any
+from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import select, text
 
 from app.core.config import settings
+
+if TYPE_CHECKING:  # annotations only — the runtime import stays lazy below,
+    # which is what keeps the fii_dii_service <-> provisional cycle broken.
+    from app.services.fii_dii_service import FlowWindow
 
 log = logging.getLogger(__name__)
 
@@ -603,7 +607,7 @@ def _window_fingerprint(window: Any) -> tuple[int, Any, float]:
 @dataclass
 class _Cache:
     universes: dict[int, tuple[float, set[int]]] = field(default_factory=dict)
-    flows: tuple[float, tuple[Decimal, Decimal]] | None = None
+    flows: tuple[float, FlowWindow] | None = None
     block_net: dict[int, tuple[float, Decimal]] = field(default_factory=dict)
     # One slot per (stock, scoring-params), holding the input fingerprint its
     # answer came from. A hit means the frozen scorer would be handed
@@ -634,7 +638,7 @@ async def _universe_for(db: Any, profile: Any, cache: _Cache, now_mono: float) -
 
 async def _flows_for(
     db: Any, as_of: date, cache: _Cache, now_mono: float
-) -> tuple[Decimal, Decimal]:
+) -> FlowWindow:
     from app.services.fii_dii_service import get_market_flow_5d
 
     if cache.flows is not None and now_mono - cache.flows[0] < _FLOWS_TTL_S:
@@ -667,7 +671,7 @@ async def score_pair(
     forming_by_tf: dict[tuple[int, int], dict[str, Any]],
     agg_5m: dict[int, dict[str, Any]],
     session_day: date,
-    flows: tuple[Decimal, Decimal],
+    flows: FlowWindow,
     block_net: Decimal,
     cache: _Cache | None = None,
     windows: dict[tuple[int, str], Any] | None = None,

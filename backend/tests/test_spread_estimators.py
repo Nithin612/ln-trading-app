@@ -42,7 +42,9 @@ _SUBSTEPS = 12
 _REPLICATIONS = 60
 
 
-def _simulate_session(*, half_spread_bps: float, sigma_bar_bps: float, rng: random.Random) -> list[Bar]:
+def _simulate_session(
+    *, half_spread_bps: float, sigma_bar_bps: float, rng: random.Random
+) -> list[Bar]:
     """One session of bars from an efficient price that trades at bid or ask.
 
     This is the data-generating process both estimators assume: a diffusion observed

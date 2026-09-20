@@ -36,7 +36,11 @@ from app.profiles import session_context as sctx
 from app.profiles.setups import SetupContext, evaluate_conditions
 from app.schemas.profile import RUNNABLE_PROFILE_STATUSES, signal_status_for
 from app.services import market_calendar
-from app.services.fii_dii_service import get_market_flow_5d, get_stock_block_deal_net_cr
+from app.services.fii_dii_service import (
+    FlowWindow,
+    get_market_flow_5d,
+    get_stock_block_deal_net_cr,
+)
 from app.services.signal_service import score_signal
 from app.services.universe_service import resolve_universe
 from app.signals import regime as regime_mod
@@ -316,7 +320,7 @@ async def _process_stock(
     profile: StrategyProfile,
     stock_id: int,
     symbol: str,
-    flows: tuple[Decimal, Decimal],
+    flows: FlowWindow,
     as_of: date,
     capital: Decimal,
     risk_pct: Decimal,
