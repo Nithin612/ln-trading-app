@@ -157,3 +157,69 @@ it means the arithmetic does not forbid one. The generator, and its own pre-regi
 come after — and nothing in this document licenses skipping that step.
 
 ⛔ **No money-path change, no frozen-engine change, read-only throughout.**
+
+---
+
+# AMENDMENT 1 — 2026-09-20, after instrument validation, BEFORE any real data
+
+⭐ **Recorded as an amendment rather than folded into §3, because changing an instrument
+after pre-registering it is exactly the move that destroys a pre-registration's value.**
+What makes this one legitimate is the ordering and the provision: §3 already said *"if an
+estimator fails either check, its numbers are not reported as spread"*, and the validation
+ran against synthetic data only. **No `ohlcv_5m` row had been read when these changes were
+made.** The commits are in order: pre-registration `6a4af12`, then the validated
+estimators `0813d33`, then the study.
+
+## A1.1 — ⛔⛔ Corwin-Schultz is DISQUALIFIED from the branch decision
+
+Its zero-spread null is **linear in volatility**, measured on synthetic zero-spread series:
+
+| σ per bar | 10 bps | 30 bps | 80 bps |
+|---|--:|--:|--:|
+| CS reads | 1.55 | **4.33** | **11.44** |
+| AR reads | 0.00 | 0.00 | 0.00–0.28 |
+
+**The branch boundary is 5 bps, and CS's artifact alone spans branch A and branch B.**
+⛔ **Pooling does not fix it — a bias is not noise**, and that contrast is asserted by a
+test. ⇒ CS is reported as a **corroborating upper bound only**. A CS reading above AR is
+the expected behaviour and is **not** the "disagreement" §5 warns about; genuine
+disagreement would be CS reading *below* AR.
+
+⚠ **§5's clause "branch C requires BOTH estimators" is therefore VOID and is withdrawn.**
+It was written assuming two comparable instruments. It is replaced by: **branch C requires
+AR's interval upper bound ≥ 15 bps**, with CS reported beside it.
+
+## A1.2 — the estimate is pooled over 21 sessions, not per name-day
+
+A single-session AR estimate is **knife-edge**: under a true zero spread ~half of windows
+clamp to zero, so the cohort median sits exactly on the clamp boundary and flips between
+0 and ~5 bps with nothing but the random seed. ⭐ **My first characterisation of AR's null
+was luck of the seed, and re-running it with a different one is what exposed this.**
+
+Pooling fixes it. At the hardest volatility (80 bps/bar), recovery of a planted **5 bps**
+half-spread runs **3.58 (1 session) → 4.24 (5) → 5.07 (21) → 4.86 (63)**, and a planted
+10 bps goes from 35.3% of windows clamping to 2.5% at 21 sessions. **21 sessions ≈ one
+trading month, which is also the window Abdi & Ranaldo apply the estimator over.**
+
+⇒ the unit of observation is a **name-month**, and the API takes a sequence of sessions so
+that pairing across a session boundary is unexpressible rather than merely discouraged.
+
+## A1.3 — two mechanisms I had stated backwards, corrected by running them
+
+- ⛔ **A session gap makes Corwin-Schultz clamp to ZERO, not inflate.** The combined range
+  explodes, α goes sharply negative, and the estimate **understates**. That is the more
+  dangerous direction: a stock with no measurable spread looks cheap to trade.
+- ⛔ **AR's MEAN is volatility-biased while its median is not** (under a zero spread the
+  mean reaches 6.08 bps at σ=80 while the median stays at 0). ⇒ **the study reports the
+  median**, with the **zero-clamp share** beside it as an independent read — ~50% under a
+  true zero, ~0% once a real spread is present — precisely because it does not share the
+  median's failure mode.
+
+## A1.4 — a persistence gap found while checking for ground truth
+
+§2 claimed no historical spread exists. That was checked against three further surfaces
+before the run: `orders.broker_payload`, `positions.charges`, and `order_events.payload`.
+⛔ **`half_spread_bps` appears in none of them.** It is computed at fill time and
+discarded. ⇒ **M92's own half-spread evidence (0.36–2.22 bps on the four 2026-09-18 fills)
+is not reproducible from the database today**, and item 17b is the only path to a durable
+series.
