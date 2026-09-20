@@ -261,11 +261,19 @@ def _verdict(upper_bps: float) -> tuple[str, str]:
 def _tick_reading(tick_median: float) -> str:
     """State what the tick check licenses — and, if it reads under half a tick, say so
     rather than quoting the bps figure as though it were precise."""
+    if tick_median >= 1.0:
+        return (
+            f"✅✅ **The strongest available outcome: {tick_median:.2f} ticks means a book about "
+            f"{2 * tick_median:.1f} ticks wide.** That is comfortably clear of BOTH floors — the "
+            "exchange's minimum increment (0.50 as a half-spread) and the estimator's own "
+            "resolution — so this is a real multi-tick spread being measured, not an artifact "
+            "and not a clamp."
+        )
     if tick_median >= 0.40:
         return (
-            f"✅ **Consistent with a one-tick market.** {tick_median:.2f} ticks is what a book "
-            "quoted at the minimum increment looks like, which is the expected state for a "
-            "top-liquidity cohort. The bps estimate is physically plausible."
+            f"✅ **A one-tick market.** {tick_median:.2f} ticks is a book quoted at the minimum "
+            "increment, which is the tightest a real market can be. The estimate is physically "
+            "plausible but sits ON the exchange floor, so it cannot be read as precise."
         )
     return (
         f"⚠ **{tick_median:.2f} ticks is BELOW half a tick, which no real book can be.** The "
@@ -275,6 +283,42 @@ def _tick_reading(tick_median: float) -> str:
         "clear a threshold it would otherwise fail — but the hurdle should be quoted with the "
         "one-tick floor substituted instead."
     )
+
+
+def _band_table(results: list[WindowResult]) -> str:
+    """⭐ The CONTROL for the tick-change story.
+
+    NSE's ~mid-2024 change moved only names below Rs 225 to a Rs 0.01 grid. If the fall in
+    measured spread is that change, it must appear in the CHEAP band and NOT in the
+    expensive one. If it appears in both, the tick change is not the explanation — a
+    partition that is really a proxy for something else is a failure mode this project has
+    already been burned by.
+    """
+    cut = date(2024, 6, 1)
+    rows = ["| price band | period | name-windows | AR median | sigma/bar | clamp share |",
+            "|---|---|--:|--:|--:|--:|"]
+    bands: tuple[tuple[str, Callable[[NameWindow], bool]], ...] = (
+        ("below Rs 225 (tick DID change)", lambda n: n.median_price < 225.0),
+        ("Rs 225+ (tick UNCHANGED)", lambda n: n.median_price >= 225.0),
+    )
+    for band_label, keep in bands:
+        for period_label, chosen in (
+            ("before 2024-06", [w for w in results if w.last_session < cut]),
+            ("from 2024-06", [w for w in results if w.last_session >= cut]),
+        ):
+            vals = [
+                n for w in chosen for n in w.names if keep(n) and n.ar_half_bps is not None
+            ]
+            if not vals:
+                continue
+            ars = [n.ar_half_bps for n in vals if n.ar_half_bps is not None]
+            sig = [n.sigma_bar_bps for n in vals if not math.isnan(n.sigma_bar_bps)]
+            clamp = sum(1 for v in ars if v <= 1e-12) / len(ars)
+            rows.append(
+                f"| {band_label} | {period_label} | {len(vals):,} | {statistics.median(ars):.2f} "
+                f"| {statistics.median(sig):.1f} | {clamp*100:.1f}% |"
+            )
+    return "\n".join(rows)
 
 
 def _period_table(results: list[WindowResult]) -> str:
@@ -312,6 +356,12 @@ async def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--windows", type=int, default=0, help="limit windows (0 = all)")
     ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument(
+        "--dump",
+        type=Path,
+        default=None,
+        help="write every name-window row as CSV, so re-slicing costs no second pass",
+    )
     args = ap.parse_args()
 
     logging.basicConfig(level=logging.INFO, format="%(message)s")
@@ -346,6 +396,25 @@ async def main() -> int:
     if not results:
         log.error("no windows measured")
         return 1
+
+    if args.dump:
+        args.dump.parent.mkdir(parents=True, exist_ok=True)
+        with args.dump.open("w") as fh:
+            fh.write(
+                "window,first_session,last_session,stock_id,sessions,bars,degenerate_bars,"
+                "sigma_bar_bps,ar_half_bps,cs_half_bps,median_price,tick,adv_value\n"
+            )
+            for w in results:
+                for n in w.names:
+                    fh.write(
+                        f"{w.index},{w.first_session},{w.last_session},{n.stock_id},"
+                        f"{n.sessions},{n.bars},{n.degenerate_bars},{n.sigma_bar_bps:.4f},"
+                        f"{'' if n.ar_half_bps is None else f'{n.ar_half_bps:.6f}'},"
+                        f"{'' if n.cs_half_bps is None else f'{n.cs_half_bps:.6f}'},"
+                        f"{n.median_price:.4f},{n.tick},"
+                        f"{'' if n.adv_value is None else n.adv_value}\n"
+                    )
+        log.info("dumped: %s", args.dump)
 
     report = _render(results)
     print(report)
@@ -442,6 +511,10 @@ def _render(results: list[WindowResult]) -> str:
         "here is reported per window so a clamped window is never read as a measurement.",
         "",
         _period_table(results),
+        "",
+        "### The control: did the tick change actually cause it?",
+        "",
+        _band_table(results),
         "",
         "## Per-window detail",
         "",
