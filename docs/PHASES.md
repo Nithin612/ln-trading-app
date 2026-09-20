@@ -10,7 +10,34 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-09-17) — round 9: the backfill's VALUES are validated — read this first
+## ▶ STATE AT A GLANCE (updated 2026-09-20) — ⛔⛔ THE SCORER IS RETIRED. Read this first.
+
+**Item 19's kill criterion fired on both pre-registered estimands, and the user ACCEPTED the
+retirement on 2026-09-20.** Record: `docs/analysis/RETIREMENT-2026-09-20.md`.
+
+| estimand | result | 90% CI | break-even | verdict |
+|---|--:|---|--:|---|
+| **3a** — unconditional IC, h=5d | **−0.0055** | [−0.0192, **+0.0083**] | 0.0313 | NULL |
+| **3b** — matched-tail contrast | **−0.0885%** | [−0.3384, **+0.1614**] | +0.255% | NULL |
+
+31,378 panels · 156 sessions · 403 names · point-in-time cohort · corporate actions dropped by
+the **authority**, not the 25% screen. ⭐ The criterion was **published to GitHub 12.4 h before
+the measurement reached it**, on GitHub's own clock.
+
+**STOPS:** nightly generation on the frozen engine as a tradeable strategy · the ≥70% gate ·
+any further tuning of this scorer.
+**CONTINUES** (never was about this scorer): the ledger · both **sealed** holdouts ·
+`liquid_as_of` · the authority CA set · the cluster-robust estimators · the delete treatment ·
+the settlement restriction · the backup/off-box machinery · `entry_diversity`.
+⛔ **BOTH HOLDOUTS STAY SHUT** — they open only on the ≥0.0499 branch, which did not fire.
+
+⚠ **Scope:** a verdict on ONE generator, on the test block, at h=5d. **Not** evidence that no
+generator can work. **The open problem is a successor generator; the apparatus to test one
+honestly is finished.**
+
+---
+
+## ▶ (historical) STATE AT A GLANCE (updated 2026-09-17) — round 9: the backfill's VALUES are validated
 
 **▶▶ 2026-09-17 — ⭐⭐⭐ THE BACKFILL IS VALUE-VALIDATED (M57).** Every earlier check was a *count*.
 The bhavcopy publishes `PREV_CLOSE` — a column **we never ingest** — on the following session's file.
@@ -1873,7 +1900,34 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE — updated 2026-09-19 (Tier B tranches 1+2 DONE; item 16 in progress).**
+**▶ CONTINUE HERE — updated 2026-09-20 (RETIREMENT ACCEPTED. Provenance closed. Nothing queued.)**
+
+⛔⛔ **Do not start another apparatus item.** Tier A is complete, Tier B tranches 1–3 are
+complete, and item 19 is accepted. **Provenance work has a completion condition, which is what
+makes it comfortable to keep standing in. Generator design does not, and it is the actual
+bottleneck.**
+
+**What is genuinely left, and none of it is on the critical path:**
+- **21** — reconcile `fees.py` to one real contract note. ⭐ Zerodha's **published charges
+  breakdown gets most of the way with no trading at all.** Cheap; do it for the successor.
+- **13** — weekend Celery beats. **Recommended: defer to Phase 7** (the scoped fix is a no-op —
+  `is_market_session` refuses weekends independently of the beats).
+- **18** — index/VIX 2021–22. **Deferred with a trigger that has now PASSED**: 3b was reached
+  and the holdout did not open, so its justification is further away than when it was deferred.
+- **7 · 8 · 9** — ledger `surface`, the five-field manifest, the experiment registry. These are
+  the **successor's** apparatus. Build them when there is a successor to test, not before.
+- **17 · 29 · 30** — spread/impact measurement, Q-C's three, the small UI rows.
+
+⭐ **CARRY FORWARD for any successor: write break-even as an INTERVAL, not a point**, and
+require the IC upper bound to clear the TOP of it. A point estimate invites *"but that input
+might be wrong"* exactly when the result is unwelcome; an interval answers it in advance.
+⛔ **And do not inherit the 22.22 bps statutory floor** — that is a DELIVERY round trip (STT at
+10 bps a side is most of it). **Intraday STT is sell-side only at 2.5 bps** and the floor
+collapses. Recompute it.
+
+---
+
+**▶ PREVIOUS (2026-09-19, Tier B tranches 1+2).**
 
 ⏰ **REVIEW-CALENDAR ENTRY — RAISE THIS UNPROMPTED (user ruling 2026-09-19).**
 **Item 18 (index/VIX 2021–22) is DEFERRED, and must be put back to the user WHEN ITEM 5's 3b

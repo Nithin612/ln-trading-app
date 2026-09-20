@@ -424,6 +424,24 @@ else.
   pass/fail.** ⚠ H8 as specified in the findings doc was insufficient (it asked only "does the bar
   reject noise", which a bar that rejects everything passes trivially); the power arm is the half
   that made the verdict readable. Report: `docs/analysis/dsr-negative-control-2026-09-04.md`.
+- **⛔⛔ THE DAILY-SWING SCORER IS RETIRED — item 19 fired and was ACCEPTED 2026-09-20.**
+  Record: `docs/analysis/RETIREMENT-2026-09-20.md`. Both pre-registered estimands returned NULL
+  on a **point-in-time cohort** with corporate actions dropped by the **authority** (31,378
+  panels / 156 sessions / 403 names): **3a IC −0.0055, 90% [−0.0192, +0.0083] vs break-even
+  0.0313** · **3b −0.0885%, 90% [−0.3384, +0.1614] vs +0.255%**. Both the original wording and
+  the Q30 first branch fire. ⭐ **The criterion was published to GitHub 12.4 h before the
+  measurement reached it, on GitHub's own clock** — third-party attested, not self-timestamped.
+  ⭐⭐ **3a is cost-proof OUTRIGHT** (negative point estimate; costs drive break-even toward
+  zero but never below it), so nothing rides on the cost model for it. ⇒ **STOPS:** nightly
+  generation as a tradeable strategy · the ≥70% gate · further tuning. **CONTINUES:** the
+  ledger · both **SEALED** holdouts · `liquid_as_of` · the authority CA set · the
+  cluster-robust estimators · the delete treatment · the settlement restriction · the backup
+  machinery · `entry_diversity`. ⛔ **BOTH HOLDOUTS STAY SHUT** (they open only at ≥0.0499).
+  ⚠ **Scope: ONE generator, the test block, h=5d — NOT evidence that no generator can work.**
+  ⭐ **CARRY FORWARD: write break-even as an INTERVAL, not a point**, and require the upper
+  bound to clear its top. ⛔ **Do not inherit the 22.22 bps floor** — that is DELIVERY; intraday
+  STT is sell-side only at 2.5 bps and it collapses. **The open problem is a successor
+  generator; the apparatus to test one is finished.**
 - **⭐ A DELIVERY (CNC) PRODUCT CANNOT CARRY A SHORT — `GATE_SETTLEMENT`, shipped 2026-09-19 (queue
   item 1).** ⛔⛔ **Measured before building: `restrictions.py` declared FOURTEEN gates and referenced
   a settlement product in NONE of them** (zero occurrences of CNC/MIS/delivery/settlement).

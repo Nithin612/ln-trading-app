@@ -7,6 +7,60 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### ⛔⛔ THE DAILY-SWING SCORER IS RETIRED — item 19 accepted (2026-09-20)
+
+Record: `docs/analysis/RETIREMENT-2026-09-20.md`.
+
+Both pre-registered estimands returned NULL on a point-in-time cohort with corporate actions
+dropped by the **authority** rather than the 25% screen — 31,378 panels, 156 sessions, 403
+names:
+
+| estimand | result | 90% CI | break-even |
+|---|--:|---|--:|
+| **3a** — unconditional IC, h=5d | **−0.0055** | [−0.0192, **+0.0083**] | 0.0313 |
+| **3b** — matched-tail contrast | **−0.0885%** | [−0.3384, **+0.1614**] | +0.255% |
+
+Both the original wording (*90% upper bound below break-even*) and the Q30 first branch
+(*point estimate < 0.0121*) fire. ⭐ **The criterion was published to GitHub 12.4 h before the
+measurement reached it, on GitHub's own clock** — the ordering is attested by a third party,
+not by a timestamp we control. ⭐⭐ **3a is cost-proof outright**: the point estimate is
+negative, and costs drive break-even toward zero but never below it, so no cost error of any
+magnitude can flip it.
+
+**Stops:** nightly generation as a tradeable strategy, the ≥70% gate, further tuning.
+**Continues:** the ledger, both **sealed** holdouts, `liquid_as_of`, the authority CA set, the
+cluster-robust estimators, the delete treatment, the settlement restriction, the backup
+machinery, `entry_diversity`. ⛔ **Both holdouts stay shut** — they open only on the ≥0.0499
+branch, which did not fire.
+
+⚠ The break-even assumption is logged as a **separate, dated** open question, deliberately
+after the decision, as an input to a successor's design. Carry forward: **write break-even as
+an interval, not a point**, and require the IC upper bound to clear the top of it. And **do not
+inherit the 22.22 bps floor** — that is a *delivery* round trip; intraday STT is sell-side only
+at 2.5 bps and the floor collapses.
+
+### Items 26 + 25 — the backups were on the same disk as the database (2026-09-20)
+
+**Measured:** `df` put the backups and the database both on `/dev/nvme0n1p5`. The existing
+backup survived the one failure mode that had already happened and none of the others.
+
+- **26** — `scripts/offbox_check.sh`, **graded not pass/fail**: `SAME_FS` refuses, `SAME_DISK`
+  warns (survives filesystem corruption, not disk failure), `OFFBOX` passes. Wired into
+  `backup_db.sh`, which now refuses a same-filesystem destination and **says so loudly when
+  `OFFBOX_DEST` is unset**.
+- **`make backup-critical`** — the irreplaceable slice, ~11 MB against a 4,359 MB database,
+  because ~99% is re-fetchable from public archives. ⭐ The exclusion list is **inverted on
+  purpose**: everything is critical by default and each exclusion must name the public source
+  it can be recovered from, so a new table is protected automatically. ⚠ A **companion** to the
+  full backup, not a replacement — restoring it alone yields 16 ignored errors, all foreign
+  keys pointing at excluded tables.
+- **25** — RUNBOOK §9b. ⭐ The **composition** is written down at last: three individually
+  correct decisions combined (`os.environ.setdefault`, an autouse `TRUNCATE` fixture, a human
+  passing `DATABASE_URL`). **No single one is a bug.** Step 0 is **stop every writer**; step 1
+  is **do not run `make backup` "to be safe"** — retention is 3, so three panicked successful
+  dumps evict every good one.
+
+
 ### Tier B tranche 3 — corporate actions from the authority (2026-09-19)
 
 **16 — corporate actions are now a cache of NSE's answers, not a rule we evaluate.** The
