@@ -46,15 +46,34 @@ on any timestamp we control:
 
 Ancestry verified locally: `c117969` is an ancestor of `3a0d73c`, `8e7e4fa` of `94a11de`.
 
-⚠ **This evidence had a 90-day clock and no longer does.** GitHub's Events API retains events
-for roughly 90 days, so by March this query would have returned nothing. The raw response is
-therefore committed at `docs/analysis/provenance/github-events-raw-2026-09-20.json` — and
-because *that commit* is itself pushed to GitHub with its own push event, the evidence is now
-part of immutable history rather than a lookup that expires.
+⚠ **The raw response is committed** at `docs/analysis/provenance/github-events-raw-2026-09-20.json`,
+because GitHub's Events API retains only ~90 days and this query returns nothing by March.
 
-⭐ If a stronger artifact is ever wanted, a **GitHub release or tag on `c117969`** carries a
-`created_at` on GitHub's clock and is retained indefinitely. Not created here: it is a visible
-repository artifact and that is the user's call.
+⛔⛔ **But be precise about what that capture is worth, because the first draft of this
+paragraph overstated it.** Committing the JSON preserves the **content** and destroys the
+**independence** — the property that made it evidence. *GitHub's clock said X* becomes *this
+repository asserts that GitHub's clock said X*, and the part that made it checkable by someone
+else is exactly the part that expires. A skeptic in March cannot distinguish a genuine capture
+from a fabricated one.
+
+⇒ **So the honest question is what this defends against:**
+
+| adversary | is it closed? |
+|---|---|
+| **future-us**, half-remembering the ordering and wondering whether the third branch really came first | ✅ **comfortably.** The failure mode there is *forgetting*, and a dated artifact you can open settles forgetting completely. |
+| **a skeptical outsider** | ⛔ **no**, and no artifact we control closes it. |
+
+⛔ **And a release would not close it either** — releases can be deleted and recreated with a
+fresh `created_at`. **Tags are worse**: a lightweight tag carries no timestamp at all, and an
+annotated tag's *tagger date is client-supplied*, which is the same defect as `--date`.
+⇒ **Recommendation: skip the release.** It puts a visible marker on the repository and buys
+close to nothing over what is already held.
+
+⭐ **The only thing that would survive an outside skeptic is an external archive running its
+own clock** — e.g. Software Heritage's *Save Code Now*, which records its own ingestion time
+against the full history including `c117969` and does not decay. The repository is public, so
+this is available. **Not done here**: the adversary this record actually faces is future-us,
+and that one is already closed.
 
 ### ⚠ The one gap, named rather than glossed
 
@@ -137,6 +156,19 @@ take its numbers as cleaner than they are:
 ⇒ A successor can have a **verified charge model** early and will carry an **unverified fill
 model** until it actually trades. Any pre-deployment cost figure it quotes is therefore part
 measured and part modelled, and should say which is which.
+
+### ⭐⭐ CARRY FORWARD — write break-even as an INTERVAL, not a point
+
+`0.0313` was written as a point estimate. It turned out to be a **partly-modelled number with a
+measured floor beneath it** — statutory charges that are published law, plus a fill model that
+has never met a real fill.
+
+⇒ **For the successor: express break-even as an interval, and require the IC upper bound to
+clear the TOP of it.** Conservative on both sides — a conservative estimand against a
+conservative cost. It costs nothing once `fees.py` is reconciled, and it **shuts the one door
+through which a soft input could reach a hard verdict**: a point estimate invites the argument
+*"but the cost number might be too high"* exactly when the result is unwelcome, and an interval
+answers it in advance.
 
 ⇒ The break-even question is **worth answering for the successor** and **cannot change this
 decision**. Both things are true, and recording them together is the point.
