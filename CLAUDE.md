@@ -424,6 +424,43 @@ else.
   pass/fail.** ⚠ H8 as specified in the findings doc was insufficient (it asked only "does the bar
   reject noise", which a bar that rejects everything passes trivially); the power arm is the half
   that made the verdict readable. Report: `docs/analysis/dsr-negative-control-2026-09-04.md`.
+- **⭐⭐ THE SUCCESSOR PROGRAMME IS OPEN, AND ITS FIRST FALSIFIER CLEARED — item 17, 2026-09-20.**
+  The retirement left **nothing on the critical path**; the direction chosen (user, same day) is
+  the **intraday / MIS product class**, not another daily-swing feature. **Item 17 asked whether
+  crossing the spread closes that thesis before a generator is even designed. It does not.**
+  **BRANCH A: Abdi-Ranaldo median half-spread 1.74 bps, 90% CI [1.58, 1.93]** on **6,748
+  name-windows / 37 windows / median 185 names** over the **797-session test block** (both sealed
+  holdouts shut), against a pre-registered **5 bps** boundary read on the unfavourable bound.
+  **Implied intraday round-trip hurdle 14.1–15.0 bps vs delivery's ~34.** ⭐ **The pre-registration
+  was committed BEFORE the measurement code existed** (`6a4af12` → `0813d33` → the study).
+  ⭐⭐ **VALIDATING THE INSTRUMENT FIRST CHANGED THE DESIGN TWICE BEFORE A REAL ROW WAS READ:**
+  ⛔ **Corwin-Schultz is DISQUALIFIED from the branch decision** — its zero-spread null is LINEAR
+  IN VOLATILITY (**4.33 bps of artifact at 30 bps/bar, 11.44 at 80**), spanning branch A and B on
+  its own, and **pooling cannot fix it because a bias is not noise**; ⛔ **a one-session
+  Abdi-Ranaldo estimate is knife-edge** (~half of windows clamp under a true zero, so the median
+  sits ON the clamp boundary — **my first characterisation of its null was luck of the seed**) ⇒
+  the unit is a **name-MONTH** (21 sessions). ⛔ Two mechanisms stated backwards and corrected by
+  RUNNING them: **a session gap makes CS clamp to ZERO (understate), not inflate**, and **AR's
+  mean is volatility-biased while its median is not.** ⭐ **A physical check needing no order
+  book:** through B3's dated tick schedule the estimate is **2.43 ticks** — a ~5-tick book, clear
+  of both the exchange minimum and the estimator's resolution. ⭐⭐ **SECOND PASS: the apparent
+  2.19 → 1.60 bps fall across mid-2024 is an ARTIFACT.** It looked like NSE's sub-₹225 tick
+  change; the **price-band CONTROL refutes that** (it appears in the ₹225+ band too, whose tick
+  never moved) and **on non-clamped windows that band is FLAT, 5.25 → 5.46 ticks** — the decline
+  is the clamp share rising **18.4% → 30.7%**, because the median price rose **₹1,140 → ₹1,316**
+  against a fixed ₹0.05 tick, so the same book in ticks is fewer bps and fewer bps at the same
+  volatility is worse signal-to-noise. **Falling bps and a rising clamp share are the same fact
+  seen twice.** ⭐ The tick change **UNPINS more than it narrows** (64.8% → 15.0% of sub-₹225
+  windows at/under 0.75 ticks; rupee half-spread only −11%). ⚠ **It is an ESTIMATE:**
+  ⛔ **`half_spread_bps` is computed at fill time and persisted NOWHERE** (verified absent from
+  `orders.broker_payload` · `positions.charges` · `order_events.payload`), so **M92's own spread
+  evidence is not reproducible from the DB**. **Item 17b (forward top-of-book capture) is the only
+  durable path and accrues in REAL TIME ONLY — NOT BUILT** (a live-path change; extend
+  `live_worker._ffi_batch`'s existing depth fold, never a second path — W2). ⚠ **Cost, not edge:**
+  branch A means the arithmetic does not forbid an intraday generator, not that one exists — and
+  **the generator's own pre-registered estimand is the next decision, and it is the user's.**
+  ⛔ **Do not inherit the 22.22 bps statutory floor** — that is DELIVERY; measured intraday
+  round-trip charges are **10.60 bps at ₹20k, 8.24 at ₹1L**.
 - **⛔⛔ THE DAILY-SWING SCORER IS RETIRED — item 19 fired and was ACCEPTED 2026-09-20.**
   Record: `docs/analysis/RETIREMENT-2026-09-20.md`. Both pre-registered estimands returned NULL
   on a **point-in-time cohort** with corporate actions dropped by the **authority** (31,378

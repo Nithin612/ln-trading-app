@@ -10,6 +10,74 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
+## ▶ STATE AT A GLANCE (updated 2026-09-20) — ⭐⭐ THE SUCCESSOR PROGRAMME IS OPEN. Read this, then the retirement block below.
+
+**The scorer retired earlier today and left NOTHING on the critical path.** The open problem is a
+**successor generator**. The direction taken — user decision, 2026-09-20 — is the **intraday / MIS
+product class**, not another daily-swing feature, and **item 17 is its falsifier**: if crossing the
+spread costs too much, intraday is arithmetically closed before a generator is even designed.
+
+**✅ ITEM 17 ANSWERED — BRANCH A, spread is NOT binding.**
+
+| quantity | value |
+|---|--:|
+| AR median half-spread | **1.74 bps**, 90% CI **[1.58, 1.93]** |
+| pre-registered boundary | 5 bps (read on the unfavourable bound, **1.93**) |
+| sample | **6,748 name-windows · 37 windows · median 185 names** |
+| implied intraday round-trip hurdle | **14.1–15.0 bps** (delivery ≈ 34) |
+
+Window = the **797-session test block**; ⭐ **both sealed holdouts stay shut.** Reports:
+`docs/analysis/item17-spread-impact-preregistration-2026-09-20.md` (+ amendment 1) ·
+`item17-spread-impact-2026-09-20.md` · dump `item17-name-windows-2026-09-20.csv`.
+
+⭐ **The pre-registration was committed BEFORE the measurement code existed** (`6a4af12` →
+`0813d33` → the study), estimand, cohort and decision tree fixed in it.
+
+⭐⭐ **VALIDATING THE INSTRUMENT FIRST CHANGED THE DESIGN TWICE, BEFORE A SINGLE REAL ROW WAS READ
+— which is the entire argument for that ordering.** ⛔ **Corwin-Schultz is DISQUALIFIED from the
+branch decision**: its zero-spread null is LINEAR IN VOLATILITY (**4.33 bps of pure artifact at
+30 bps/bar, 11.44 at 80**), so the artifact alone spans branch A and branch B, and ⛔ **pooling
+cannot fix it — a bias is not noise.** ⛔ **A single-session Abdi-Ranaldo estimate is knife-edge**
+(under a true zero spread ~half of windows clamp, so the median sits ON the clamp boundary and
+flips with the seed — **my first characterisation of its null was luck of the seed**); the unit is
+now a **name-MONTH**. ⛔ Two mechanisms I had stated backwards, both corrected by RUNNING them:
+**a session gap makes CS clamp to ZERO (understate), not inflate**, and **AR's mean is
+volatility-biased while its median is not.**
+
+⭐ **A physical check that needs no order book:** through B3's dated tick schedule the estimate is
+**2.43 ticks** of half-spread — a ~5-tick-wide book, clear of both the exchange minimum and the
+estimator's own resolution.
+
+⭐⭐ **SECOND PASS — THE APPARENT FALL IN SPREADS IS AN ARTIFACT.** The headline drops 2.19 → 1.60
+bps across mid-2024, which looked like NSE's sub-₹225 tick change. **The price-band CONTROL
+refutes that** — it appears in the ₹225+ band too, whose tick never moved — and **on non-clamped
+windows that band is FLAT (5.25 → 5.46 ticks)**. The whole decline is the clamp share rising
+**18.4% → 30.7%**, and the mechanism is arithmetic: the median price rose **₹1,140 → ₹1,316**
+against a fixed ₹0.05 tick, so the same book in ticks is fewer bps, and fewer bps at the same
+volatility is worse signal-to-noise for the estimator. **Falling bps and a rising clamp share are
+the same fact seen twice.** ⭐ The tick change is real but **UNPINS more than it narrows**: 64.8%
+of sub-₹225 windows sat at or under 0.75 ticks before it (a book ON the exchange floor — the
+signature of the tick itself binding) vs **15.0%** after, while the rupee half-spread moved only
+**₹0.0296 → ₹0.0263 (−11%)**.
+
+⚠ **CARRIED LIMITS.** This is an **ESTIMATE, not an observation** — and ⛔ **`half_spread_bps` is
+computed at fill time and PERSISTED NOWHERE** (verified absent from `orders.broker_payload`,
+`positions.charges`, `order_events.payload`), so **M92's own spread evidence is not reproducible
+from the DB today**. **Item 17b (forward top-of-book capture) is the only path to a durable
+series, and it accrues in REAL TIME ONLY** — every market day `live_worker` is down is lost.
+⚠ **It measures COST, not EDGE:** branch A means the arithmetic does not forbid an intraday
+generator, **not** that one exists.
+
+⚠ **`make typecheck` was RED at session start** (7 errors, none from this work); 5 closed —
+item 28's `FlowWindow` left two call sites declaring `tuple[Decimal, Decimal]`, and
+`backfill_corporate_actions.py` carried a `type: ignore` naming a code that did not apply, which
+hid a real "object is not iterable". **2 remain in `scripts/e2_score_ic.py`, uncommitted before
+this session and deliberately untouched.**
+
+⛔ **NOTHING PUSHED.**
+
+---
+
 ## ▶ STATE AT A GLANCE (updated 2026-09-20) — ⛔⛔ THE SCORER IS RETIRED. Read this first.
 
 **Item 19's kill criterion fired on both pre-registered estimands, and the user ACCEPTED the
@@ -1899,6 +1967,51 @@ which is what Phase-6 expectancy calibration is for.
 > single-gate consolidation** (test-first, equivalence-pinned) — it closes the
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
+
+**▶ CONTINUE HERE — updated 2026-09-20 (SUCCESSOR PROGRAMME OPEN. Item 17 answered: BRANCH A.)**
+
+⭐ **Supersedes the "nothing queued" block below, which was written before the direction was
+chosen.** That block's advice still stands on its own terms — *do not start another apparatus
+item; generator design is the actual bottleneck* — and this is that bottleneck being worked.
+
+**DONE 2026-09-20 (7 commits, nothing pushed):** the item-17 pre-registration (`6a4af12`,
+committed before any measurement code) · validated estimators (`0813d33`) · amendment 1
+(`9b1f916`) · the study (`d87a62d`) · the result + second-pass slicer (`a3d966a`) · typecheck
+repairs (`2cd8d4d`). **Verdict: spread is NOT the binding constraint on an intraday strategy.**
+
+**⭐⭐ THE NEXT DECISION IS THE GENERATOR'S OWN ESTIMAND, AND IT IS THE USER'S.** Item 17 cleared
+the cost objection; it says nothing about edge. Before any intraday generator is built, write
+down what it predicts, on what horizon, and what result kills it — *the scorer died because that
+was finally done, and it must be done first this time, not retrofitted.*
+
+**⛔ TIME-SENSITIVE, AND NOTHING ELSE ON THIS LIST IS.** Two series accrue in REAL TIME ONLY and
+cannot be back-filled. Every market day the processes are down is a day lost permanently:
+
+- **Item 17b — forward top-of-book capture.** ⛔ `half_spread_bps` is computed at fill time and
+  **persisted nowhere** (verified: `orders.broker_payload`, `positions.charges`,
+  `order_events.payload`). It is the arm that would **validate 17a against a real book**, and
+  17a's headline is an estimate until it exists. Needs `live_worker` up on market days.
+  ⚠ **NOT BUILT** — it is a live-path change (a new table + a sampled writer off the existing
+  `depth:{stock_id}` fold in `live_worker._ffi_batch`) and wants its own approval + bug-hunter
+  review. ⚠ **Do not build a second depth path** (W2): extend the fold that exists.
+- **CAS accrual** — `cas_daily` is at **926 rows / 6 sessions** (measured 2026-09-20), against
+  the **≥30-session** trigger for re-running the Stage-2 overnight-reversal result. Needs
+  `make worker` up across **15:15–15:33 IST**. ~24 more trading days.
+
+**Cheap and unblocked, for whatever the successor turns out to be:** item 21 (reconcile `fees.py`
+to one real contract note — Zerodha's published breakdown gets most of the way with no trading) ·
+items 7 · 8 · 9 (ledger `surface`, the five-field manifest, the experiment registry — **these are
+the successor's apparatus**, and the moment there IS a successor they stop being optional).
+
+⚠ **Two errors remain in `make typecheck`**, both in `scripts/e2_score_ic.py`, which was already
+modified and uncommitted before this session. **Not this session's work to commit** — decide
+whether that WIP is wanted.
+
+⛔ **Do not inherit the 22.22 bps statutory floor for intraday.** That is a DELIVERY round trip
+(STT at 10 bps a side is most of it). Intraday STT is sell-side only at 2.5 bps. Measured here:
+intraday round-trip charges are **10.60 bps** at ₹20k, **8.24** at ₹1L.
+
+---
 
 **▶ CONTINUE HERE — updated 2026-09-20 (RETIREMENT ACCEPTED. Provenance closed. Nothing queued.)**
 
