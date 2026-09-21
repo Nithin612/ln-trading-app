@@ -112,7 +112,8 @@ validated. Before the real measurement:
 - ⛔ **No live query defines the cohort** (the M62 / item-6 lesson: a cohort from a live query
   against mutable state is a timestamp, not a cohort).
 - **Pairs are formed within a session only** — never across the overnight boundary.
-- **Corporate actions** excluded via the authority cache (`nse_corporate_actions`), not a % screen.
+- **Corporate actions** excluded via the authority cache — the table is `corporate_actions`
+  (`nse_corporate_actions` is the *service* module, not the table) — not a % screen.
 
 ---
 
@@ -223,3 +224,80 @@ before the run: `orders.broker_payload`, `positions.charges`, and `order_events.
 discarded. ⇒ **M92's own half-spread evidence (0.36–2.22 bps on the four 2026-09-18 fills)
 is not reproducible from the database today**, and item 17b is the only path to a durable
 series.
+
+
+---
+
+# AMENDMENT 2 — 2026-09-21, after quant-verifier review. **The verdict did not move; a secondary analysis was wrong.**
+
+⭐ **Recorded rather than quietly patched, because the correction is worth more than the
+result it corrects.** The review (PASS-WITH-NOTES) independently reproduced the headline —
+pooled 1.74 bps, clamp share 28.6%, tick median 2.43, and the bootstrap interval
+[1.58, 1.93] **exactly** — and re-derived the Corwin-Schultz and Abdi-Ranaldo formulas from
+the papers with **max |module − paper| = 0.0**. **Branch A survived every alternative
+estimate it computed** (1.74 · 2.28 · 2.20 · bias-corrected ~1.85-1.9 · q80 ≈ 2.8-3.2), all
+far below the 5 bps boundary.
+
+## A2.1 — ⛔⛔ The "the drift is an ARTIFACT" claim was produced by conditioning on the outcome
+
+The second pass compared the **median of the NON-CLAMPED subset** across two periods whose
+clamp shares differ (18.4% vs 30.7%). A clamped window reports 0.00, so that statistic is
+the unconditional quantile `clamp + 0.5(1 − clamp)` — **q59.2 before against q65.3 after**.
+Reading the later period at a deeper truncation *by construction* manufactured the "flat"
+result. Verified independently before acting on the review:
+
+| comparison | Rs 225+ band (tick unchanged) | change |
+|---|--:|--:|
+| median of non-clamped (**the defect**) | 5.25 → 5.46 | **+4.1%** |
+| equal-depth truncation (30.7%) | 6.45 → 5.46 | **−15.3%** |
+| ⭐ **paired panel, all windows (n=142)** | — | **−10.7%** |
+| paired panel, non-clamped only (n=150) | — | **+15.3%** |
+
+⭐⭐ **The last two rows disagree in SIGN on the same names.** ⇒ **RESTATED: most of the
+2.19 → 1.60 bps fall is mechanical (rising price level against a fixed ₹0.05 tick, plus the
+clamping that follows from it), but roughly one tenth to one sixth is a GENUINE narrowing.**
+
+⭐ **THE RULE EARNED: never compare two censored distributions at different censoring
+depths. Truncate both at the deeper one, or pair by name.** Conditioning on "the estimator
+produced a number" conditions on the outcome, because it is the small spreads that fail to
+produce one.
+
+⚠ **And "mechanical" is not "artifact" — the word was wrong too.** A trader pays bps; with
+the price level up against a fixed grid, the proportional cost of crossing genuinely fell,
+whatever the book did in ticks.
+
+## A2.2 — three more numbers restated
+
+- **Pinned share** (sub-₹225 at/under 0.75 ticks): the published **64.8% → 15.0%** was
+  computed on the non-clamped subset, yet a clamped window is 0.00 ticks and therefore
+  *definitionally inside that numerator*. On **all** rows it is **72.4% → 46.9%**.
+- **Rupee half-spread** on the cheap band at equal truncation depth: **₹0.0343 → ₹0.0263
+  (−23%)**, not the −11% the censored comparison gave.
+- **The bracket** mixed two dimensions at once (all-period/all-rows against
+  recent/non-clamped). On ONE population it is **[1.74, 2.28] bps**, hurdle **14.1–15.2 bps**.
+
+## A2.3 — how the instrument is now reported
+
+- ⛔ **The CS null must be quoted at the cohort's OWN volatility.** It was quoted at 30 and
+  80 bps/bar while the cohort measures ~17.9, where the null is **smaller** — so a reader
+  comparing the measured 3.28 against 4.33 would conclude CS reads *below* its null, the
+  opposite of the truth. The study now calibrates at the measured sigma, and a test pins it.
+- ⚠ **The clamp share is not a statement about the median.** A *homogeneous* cohort at the
+  measured level would clamp far less than the observed 28.6%; the excess is cross-sectional
+  heterogeneity — names genuinely tighter than the estimator resolves.
+- ⚠ **AR's median carries a small downward bias at this level, and it is NOT in the
+  bootstrap interval**, which is a sampling interval only.
+
+## A2.4 — ⛔ the population was misdescribed, and §4 had promised otherwise
+
+§4 said *"the intersection size is an OUTPUT, reported per session, never assumed"*. It was
+computed and logged but **never rendered**, so the attrition was invisible in the artifact.
+It matters: the PIT cohort asks for 250 names and ~166–193 survive, because **`ohlcv_5m`
+holds only ~200–210 distinct names for the entire block**. ⇒ **the binding selector is 5m
+capture coverage, not the PIT screen, and this is a fixed ~205-name capture set rather than
+a point-in-time cohort.** Now rendered and stated.
+
+Two further declarations added: the in-window activity filters (`MIN_SESSIONS_PER_NAME`,
+`MIN_BARS_PER_SESSION` — near-inert here but undeclared), the in-window corporate-action
+exclusion (conservative but not strictly PIT), and the fact that **777 sessions are measured,
+not the block's 797** (whole windows only).

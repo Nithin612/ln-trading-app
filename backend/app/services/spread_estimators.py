@@ -30,11 +30,15 @@ High, and Low Prices.* Review of Financial Studies 30(12), 4437-4480.
 from __future__ import annotations
 
 import math
+import random
 from collections.abc import Sequence
 from dataclasses import dataclass
 
 __all__ = [
     "MIN_SESSIONS_FOR_STABILITY",
+    "NullCalibration",
+    "calibrate",
+    "simulate_session",
     "Bar",
     "abdi_ranaldo",
     "abdi_ranaldo_sessions",
@@ -197,3 +201,104 @@ def abdi_ranaldo_sessions(sessions: Sequence[Sequence[Bar]]) -> float | None:
     for session in sessions:
         products.extend(_ar_products(session))
     return _from_products(products)
+
+
+# --------------------------------------------------------------------------- calibration
+#
+# ⭐ **Why a synthetic generator lives in the library and not only in the tests.** These
+# estimators cannot be read without knowing what they report on a series with NO spread,
+# and that null depends on volatility — sharply, for Corwin-Schultz. A study that quotes a
+# measured spread without quoting the null at ITS OWN cohort volatility invites the reader
+# to compare a number against the wrong baseline. So the calibration is part of using the
+# instrument, and the test and the study share ONE generator rather than each keeping a
+# copy (W2).
+#
+# ⚠ The generator IS the estimators' own assumed model — a diffusion observed through a
+# bid-ask bounce. It validates the arithmetic and calibrates the null; it says nothing
+# about robustness to real microstructure. Only item 17b can do that.
+
+_DEFAULT_BARS = 75  # a 9:15-15:30 session in 5-minute bars
+_DEFAULT_SUBSTEPS = 12
+
+
+def simulate_session(
+    *,
+    half_spread_bps: float,
+    sigma_bar_bps: float,
+    rng: random.Random,
+    bars: int = _DEFAULT_BARS,
+    substeps: int = _DEFAULT_SUBSTEPS,
+    start_price: float = 500.0,
+) -> list[Bar]:
+    """One session of bars from an efficient price that prints at bid or ask.
+
+    The high prints at the ask, the low at the bid and the close on a random side, so the
+    planted spread is a property of the OBSERVED bars and nothing tells the estimator what
+    it is.
+    """
+    price = start_price
+    half = half_spread_bps / 10_000.0
+    step_sigma = (sigma_bar_bps / 10_000.0) / math.sqrt(substeps)
+    out: list[Bar] = []
+    for _ in range(bars):
+        high = low = price
+        for _ in range(substeps):
+            price *= math.exp(rng.gauss(0.0, step_sigma))
+            high = max(high, price)
+            low = min(low, price)
+        side = 1.0 if rng.random() < 0.5 else -1.0
+        out.append(
+            Bar(high=high * (1.0 + half), low=low * (1.0 - half), close=price * (1.0 + side * half))
+        )
+    return out
+
+
+@dataclass(frozen=True, slots=True)
+class NullCalibration:
+    """What each estimator reports at a given volatility when the truth is known."""
+
+    sigma_bar_bps: float
+    planted_half_bps: float
+    cs_median_bps: float
+    ar_median_bps: float
+    ar_clamp_share: float
+
+
+def calibrate(
+    *,
+    sigma_bar_bps: float,
+    planted_half_bps: float = 0.0,
+    sessions: int = MIN_SESSIONS_FOR_STABILITY,
+    replications: int = 300,
+    seed: int = 20260920,
+) -> NullCalibration:
+    """Run both estimators against a KNOWN planted half-spread at this volatility.
+
+    Deterministic for a given seed. With ``planted_half_bps=0`` this is the zero-spread
+    null — the number a measured reading must be compared against.
+    """
+    cs: list[float] = []
+    ar: list[float] = []
+    for i in range(replications):
+        rng = random.Random(seed + i * 13)
+        panel = [
+            simulate_session(
+                half_spread_bps=planted_half_bps, sigma_bar_bps=sigma_bar_bps, rng=rng
+            )
+            for _ in range(sessions)
+        ]
+        c = corwin_schultz_sessions(panel)
+        a = abdi_ranaldo_sessions(panel)
+        if c is not None:
+            cs.append(proportional_to_half_spread_bps(c))
+        if a is not None:
+            ar.append(proportional_to_half_spread_bps(a))
+    cs.sort()
+    ar.sort()
+    return NullCalibration(
+        sigma_bar_bps=sigma_bar_bps,
+        planted_half_bps=planted_half_bps,
+        cs_median_bps=cs[len(cs) // 2],
+        ar_median_bps=ar[len(ar) // 2],
+        ar_clamp_share=sum(1 for v in ar if v <= 1e-12) / len(ar),
+    )

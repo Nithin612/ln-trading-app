@@ -20,7 +20,6 @@ the whole argument for doing it first.**
 
 from __future__ import annotations
 
-import math
 import random
 import statistics
 
@@ -30,10 +29,12 @@ from app.services.spread_estimators import (
     Bar,
     abdi_ranaldo,
     abdi_ranaldo_sessions,
+    calibrate,
     corwin_schultz,
     corwin_schultz_pair,
     corwin_schultz_sessions,
     proportional_to_half_spread_bps,
+    simulate_session,
 )
 
 # Deterministic throughout: every draw is seeded, so a failure reproduces exactly.
@@ -45,28 +46,15 @@ _REPLICATIONS = 60
 def _simulate_session(
     *, half_spread_bps: float, sigma_bar_bps: float, rng: random.Random
 ) -> list[Bar]:
-    """One session of bars from an efficient price that trades at bid or ask.
-
-    This is the data-generating process both estimators assume: a diffusion observed
-    through a bid-ask bounce. The high prints at the ask, the low at the bid, the close on
-    a random side — so the planted spread is a property of the OBSERVED bars and nothing
-    tells the estimator what it is.
-    """
-    price = 500.0
-    half = half_spread_bps / 10_000.0
-    step_sigma = (sigma_bar_bps / 10_000.0) / math.sqrt(_SUBSTEPS)
-    bars: list[Bar] = []
-    for _ in range(_BARS_PER_SESSION):
-        high = low = price
-        for _ in range(_SUBSTEPS):
-            price *= math.exp(rng.gauss(0.0, step_sigma))
-            high = max(high, price)
-            low = min(low, price)
-        side = 1.0 if rng.random() < 0.5 else -1.0
-        bars.append(
-            Bar(high=high * (1.0 + half), low=low * (1.0 - half), close=price * (1.0 + side * half))
-        )
-    return bars
+    """Delegates to the library generator — the study calibrates its null with the SAME
+    code these tests validate against, so the two can never drift apart (W2)."""
+    return simulate_session(
+        half_spread_bps=half_spread_bps,
+        sigma_bar_bps=sigma_bar_bps,
+        rng=rng,
+        bars=_BARS_PER_SESSION,
+        substeps=_SUBSTEPS,
+    )
 
 
 def _cohort(estimator, *, half_spread_bps: float, sigma_bar_bps: float) -> list[float]:
@@ -249,3 +237,30 @@ def test_negative_estimates_clamp_to_zero_as_the_paper_specifies() -> None:
 
 def test_proportional_converts_to_half_spread_bps() -> None:
     assert proportional_to_half_spread_bps(0.001) == pytest.approx(5.0)
+
+
+# ------------------------------------------------- calibration at the cohort's own sigma
+
+
+def test_corwin_schultz_null_at_the_measured_cohort_volatility_is_material() -> None:
+    """⛔ The reading defect this pins: the report first quoted CS's null at 30 and 80
+    bps/bar while the cohort's measured volatility is ~18, where the null is SMALLER. A
+    reader comparing a measured 3.28 against 4.33 would conclude CS reads below its own
+    null — the opposite of the truth. The study now calibrates at the measured sigma; this
+    asserts that number is materially positive there, so the comparison is never skipped."""
+    null = calibrate(sigma_bar_bps=18.0, replications=120)
+    assert 1.5 < null.cs_median_bps < 4.0, null.cs_median_bps
+    assert null.ar_median_bps == pytest.approx(0.0, abs=0.5)
+
+
+def test_calibrate_is_deterministic_and_moves_with_the_planted_spread() -> None:
+    """A calibration that did not move with its own input would make every null it reports
+    meaningless (M64)."""
+    a = calibrate(sigma_bar_bps=18.0, replications=80)
+    b = calibrate(sigma_bar_bps=18.0, replications=80)
+    assert a == b
+
+    planted = calibrate(sigma_bar_bps=18.0, planted_half_bps=5.0, replications=80)
+    assert planted.ar_median_bps > a.ar_median_bps + 3.0
+    assert planted.cs_median_bps > a.cs_median_bps
+    assert planted.ar_clamp_share < a.ar_clamp_share

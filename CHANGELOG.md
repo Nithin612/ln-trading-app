@@ -46,19 +46,51 @@ Reports: `docs/analysis/item17-spread-impact-preregistration-2026-09-20.md` (+ a
 estimate is **2.43 ticks** of half-spread — a ~5-tick-wide book, clear of both the exchange's
 minimum increment and the estimator's resolution.
 
-⭐⭐ **Second pass — the apparent decline in spreads is an ARTIFACT.** The headline falls
-2.19 → 1.60 bps across mid-2024, which looked like NSE's sub-₹225 tick change. The price-band
-**control refutes that**: it appears in the ₹225+ band too, whose tick never moved. **On
-non-clamped windows that band is FLAT (5.25 → 5.46 ticks)** — the whole decline is the clamp
-share rising 18.4% → 30.7%. The mechanism is arithmetic: the median price rose ₹1,140 → ₹1,316
-against a fixed ₹0.05 tick, so the same book in ticks is fewer bps, and fewer bps at the same
-volatility is a worse signal-to-noise ratio for the estimator. **Falling bps and a rising clamp
-share are the same fact seen twice.**
+⭐⭐ **Second pass — most of the fall is mechanical, but ~10–15% of it is REAL.** ⛔⛔ **The
+first version of this section concluded the opposite and was wrong; the correction is the more
+useful finding.** It compared the median of the **non-clamped** subset across two periods whose
+clamp shares differ (18.4% vs 30.7%) — and since a clamped window reports 0.00, that statistic
+is the unconditional quantile `clamp + 0.5(1−clamp)`, i.e. **q59.2 before against q65.3 after**.
+Reading the later period at a deeper truncation *by construction* manufactured a "flat" result.
 
-⭐ **The tick change is real but UNPINS more than it narrows:** 64.8% of sub-₹225 windows sat at
-or under 0.75 ticks before it — a book on the exchange floor, the signature of the tick itself
-being the binding constraint — against 15.0% after, while the rupee half-spread moved only
-₹0.0296 → ₹0.0263 (−11%).
+| comparison (₹225+ band, tick unchanged) | before → after | change |
+|---|--:|--:|
+| median of non-clamped (**the defect**) | 5.25 → 5.46 | **+4.1%** |
+| equal-depth truncation (30.7%) | 6.45 → 5.46 | **−15.3%** |
+| ⭐ **paired panel, all windows (n=142)** | — | **−10.7%** |
+| paired panel, non-clamped only (n=150) | — | **+15.3%** |
+
+⭐⭐ **The last two rows disagree in SIGN on the same names** — the cleanest possible
+demonstration that the selection, not the market, produced the original answer. ⭐ **THE RULE:
+never compare two censored distributions at different censoring depths — truncate both at the
+deeper one, or pair by name.** Conditioning on "the estimator produced a number" conditions on
+the outcome, because it is the small spreads that fail to produce one. ⚠ **And "mechanical" is
+not "artifact":** a trader pays bps, so with the price level up against a fixed ₹0.05 grid the
+proportional cost of crossing genuinely fell, whatever the book did in ticks.
+
+⭐ **The tick change UNPINS the cheap band**: measured over **all** rows (a clamped window is
+0.00 ticks and so is definitionally inside that numerator), the share at or under 0.75 ticks
+went **72.4% → 46.9%** — the published 64.8% → 15.0% was the same conditioning defect. At equal
+truncation depth the rupee half-spread went **₹0.0343 → ₹0.0263 (−23%)**, twice the censored
+figure.
+
+⚠ **Population, restated:** the PIT top-250 is **not** the binding selector — `ohlcv_5m` holds
+only ~200–210 distinct names for the whole block, so this is a **fixed ~205-name capture set,
+not a point-in-time cohort**, and **777 sessions are measured, not the block's 797** (whole
+windows only). The pre-registration had promised the intersection as a rendered output; it was
+computed, logged and never shown. Now rendered, along with the previously undeclared in-window
+activity filters.
+
+⚠ **The CS null is now calibrated at the cohort's OWN volatility (~17.9 bps/bar, null ≈ 2.55),
+not at 30/80** — quoting the far-volatility null invited the reader to conclude CS reads *below*
+its own null, the opposite of the truth. The clamp share is likewise **not** a statement about
+the median: a homogeneous cohort at this level would clamp far less than 28.6%, so the excess is
+cross-sectional heterogeneity.
+
+⭐ **Bracketed on ONE population the half-spread is [1.74, 2.28] bps and the hurdle 14.1–15.2
+bps** (the earlier 1.74–2.20 mixed two dimensions). **Branch A is unaffected** — the review
+independently reproduced the headline, the bootstrap interval and both formulas (max |module −
+paper| = 0.0), and every alternative estimate it computed sits far below the 5 bps boundary.
 
 ⚠ **Limits, carried:** this is an ESTIMATE, not an observation. `half_spread_bps` is computed at
 fill time and **persisted nowhere** — verified absent from `orders.broker_payload`,

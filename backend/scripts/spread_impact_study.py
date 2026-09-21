@@ -49,6 +49,7 @@ from app.services.spread_estimators import (  # noqa: E402
     MIN_SESSIONS_FOR_STABILITY,
     Bar,
     abdi_ranaldo_sessions,
+    calibrate,
     corwin_schultz_sessions,
     proportional_to_half_spread_bps,
 )
@@ -355,7 +356,28 @@ def _intraday_charges_bps(price: Decimal = Decimal("500")) -> float:
 async def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--windows", type=int, default=0, help="limit windows (0 = all)")
+    ap.add_argument(
+        "--end",
+        type=date.fromisoformat,
+        default=None,
+        help=(
+            "last session to include (YYYY-MM-DD). ⛔ Defaults to the last session STRICTLY "
+            "BEFORE today, never today's partial one. Pass it explicitly to reproduce a "
+            "previous run exactly — ohlcv_5m grows, so an unpinned run measures a different "
+            "sample each day."
+        ),
+    )
     ap.add_argument("--out", type=Path, default=None)
+    ap.add_argument(
+        "--from-dump",
+        type=Path,
+        default=None,
+        help=(
+            "re-render the report from a previous --dump instead of re-scanning the bars. "
+            "⭐ Everything the renderer needs is in the dump, so a wording or presentation "
+            "fix costs seconds rather than a 25-minute pass (round 9's artifact pattern)."
+        ),
+    )
     ap.add_argument(
         "--dump",
         type=Path,
@@ -367,9 +389,40 @@ async def main() -> int:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     logging.getLogger("sqlalchemy.engine").setLevel(logging.ERROR)
 
+    repo_root = Path(__file__).resolve().parents[2]
+    results: list[WindowResult] = []
+    if args.from_dump:
+        results = _results_from_dump(args.from_dump)
+        log.info(
+            "re-rendered from %s: %d windows, %d name-windows",
+            args.from_dump, len(results), sum(len(w.names) for w in results),
+        )
+        report = _render(results)
+        print(report)
+        out = args.out or repo_root / "docs/analysis/item17-spread-impact-2026-09-20.md"
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(report)
+        log.info("written: %s", out)
+        return 0
+
     async with AsyncSessionFactory() as db:
         sessions = await _sessions_available(db)
-        log.info("ohlcv_5m: %d sessions, %s .. %s", len(sessions), sessions[0], sessions[-1])
+        # ⛔⛔ **A study whose window comes from a live query over a growing table is a
+        # timestamp, not a cohort** — the lesson item 6 drew from `_load_frames`, reproduced
+        # here on the first re-run: the dev DB gained 2026-09-21 between two passes and the
+        # sample silently went 797 -> 798 sessions, 37 -> 38 windows, AR 1.74 -> 1.73. The
+        # end is therefore pinned, and today's own partial session is never included.
+        cutoff = args.end or (date.today() - timedelta(days=1))
+        dropped = [d for d in sessions if d > cutoff]
+        sessions = [d for d in sessions if d <= cutoff]
+        if not sessions:
+            log.error("no sessions at or before %s", cutoff)
+            return 1
+        log.info(
+            "ohlcv_5m: %d sessions, %s .. %s  (end pinned at %s%s)",
+            len(sessions), sessions[0], sessions[-1], cutoff,
+            f", {len(dropped)} later session(s) excluded" if dropped else "",
+        )
 
         blocks = [
             sessions[i : i + MIN_SESSIONS_FOR_STABILITY]
@@ -380,7 +433,7 @@ async def main() -> int:
             blocks = blocks[: args.windows]
         log.info("measuring %d windows of %d sessions", len(blocks), MIN_SESSIONS_FOR_STABILITY)
 
-        results: list[WindowResult] = []
+        results = []
         for i, block in enumerate(blocks):
             result = await _load_window(db, block, i)
             if result is None:
@@ -401,13 +454,15 @@ async def main() -> int:
         args.dump.parent.mkdir(parents=True, exist_ok=True)
         with args.dump.open("w") as fh:
             fh.write(
-                "window,first_session,last_session,stock_id,sessions,bars,degenerate_bars,"
+                "window,first_session,last_session,cohort_requested,cohort_measured,"
+                "stock_id,sessions,bars,degenerate_bars,"
                 "sigma_bar_bps,ar_half_bps,cs_half_bps,median_price,tick,adv_value\n"
             )
             for w in results:
                 for n in w.names:
                     fh.write(
-                        f"{w.index},{w.first_session},{w.last_session},{n.stock_id},"
+                        f"{w.index},{w.first_session},{w.last_session},"
+                        f"{w.cohort_requested},{w.cohort_measured},{n.stock_id},"
                         f"{n.sessions},{n.bars},{n.degenerate_bars},{n.sigma_bar_bps:.4f},"
                         f"{'' if n.ar_half_bps is None else f'{n.ar_half_bps:.6f}'},"
                         f"{'' if n.cs_half_bps is None else f'{n.cs_half_bps:.6f}'},"
@@ -420,12 +475,56 @@ async def main() -> int:
     print(report)
     # ⚠ Resolve from the file, never the cwd: the first run was launched from backend/
     # and lost its whole report to a FileNotFoundError after the 25-minute pass.
-    repo_root = Path(__file__).resolve().parents[2]
     out = args.out or repo_root / "docs/analysis/item17-spread-impact-2026-09-20.md"
     out.parent.mkdir(parents=True, exist_ok=True)
     out.write_text(report)
     log.info("written: %s", out)
     return 0
+
+
+def _results_from_dump(path: Path) -> list[WindowResult]:
+    """Reconstruct the rendered structures from a dump — no DB, no re-scoring.
+
+    ⚠ Round-trips only what the dump carries. It carries everything ``_render`` reads,
+    which is why the dump was widened to include the requested cohort size.
+    """
+    import csv
+
+    by_window: dict[int, list[NameWindow]] = defaultdict(list)
+    meta: dict[int, tuple[date, date, int]] = {}
+    with path.open() as fh:
+        for raw in csv.DictReader(fh):
+            idx = int(raw["window"])
+            meta[idx] = (
+                date.fromisoformat(raw["first_session"]),
+                date.fromisoformat(raw["last_session"]),
+                int(raw["cohort_requested"]),
+            )
+            by_window[idx].append(
+                NameWindow(
+                    stock_id=int(raw["stock_id"]),
+                    sessions=int(raw["sessions"]),
+                    bars=int(raw["bars"]),
+                    degenerate_bars=int(raw["degenerate_bars"]),
+                    sigma_bar_bps=float(raw["sigma_bar_bps"]),
+                    ar_half_bps=float(raw["ar_half_bps"]) if raw["ar_half_bps"] else None,
+                    cs_half_bps=float(raw["cs_half_bps"]) if raw["cs_half_bps"] else None,
+                    adv_value=Decimal(raw["adv_value"]) if raw["adv_value"] else None,
+                    median_price=float(raw["median_price"]),
+                    tick=float(raw["tick"]),
+                )
+            )
+    return [
+        WindowResult(
+            index=i,
+            first_session=meta[i][0],
+            last_session=meta[i][1],
+            cohort_requested=meta[i][2],
+            cohort_measured=len(by_window[i]),
+            names=by_window[i],
+        )
+        for i in sorted(by_window)
+    ]
 
 
 def _render(results: list[WindowResult]) -> str:
@@ -437,12 +536,18 @@ def _render(results: list[WindowResult]) -> str:
     ar_vals = [n.ar_half_bps for n in every if n.ar_half_bps is not None]
     zero_share = sum(1 for v in ar_vals if v <= 1e-12) / len(ar_vals)
     sigmas = [n.sigma_bar_bps for n in every if not math.isnan(n.sigma_bar_bps)]
+    sigma_median = statistics.median(sigmas)
     degenerate = sum(n.degenerate_bars for n in every) / max(1, sum(n.bars for n in every))
 
     median_cohort = statistics.median([w.cohort_measured for w in results])
+    median_requested = statistics.median([w.cohort_requested for w in results])
+    cal_null = calibrate(sigma_bar_bps=sigma_median, replications=200)
+    cal_at = calibrate(sigma_bar_bps=sigma_median, planted_half_bps=ar_point, replications=200)
     ticks = [n.ar_half_ticks for n in every if n.ar_half_ticks is not None]
     tick_median = statistics.median(ticks) if ticks else float("nan")
     price_median = statistics.median([n.median_price for n in every])
+    bars_per_session = statistics.median([n.bars / n.sessions for n in every])
+    thin_share = sum(1 for n in every if n.sessions < MIN_SESSIONS_FOR_STABILITY) / len(every)
     charges = _intraday_charges_bps()
     impacts = []
     for n in every:
@@ -469,13 +574,15 @@ def _render(results: list[WindowResult]) -> str:
         "",
         "| quantity | value |",
         "|---|--:|",
+        f"| block measured | {results[0].first_session} .. {results[-1].last_session} |",
         f"| name-windows measured | {len(every):,} |",
         f"| measurement windows | {len(results)} of {MIN_SESSIONS_FOR_STABILITY}-session blocks |",
-        f"| median cohort per window | {median_cohort:.0f} names |",
+        f"| PIT cohort requested (median/window) | {median_requested:.0f} names |",
+        f"| **measured after intersecting 5m capture** | **{median_cohort:.0f} names** |",
         f"| **AR median half-spread** | **{ar_point:.2f} bps** [{ar_lo:.2f}, {ar_hi:.2f}] |",
         f"| AR zero-clamp share | {zero_share*100:.1f}% |",
         f"| CS median half-spread (biased UP) | {cs_point:.2f} bps [{cs_lo:.2f}, {cs_hi:.2f}] |",
-        f"| median per-bar volatility | {statistics.median(sigmas):.1f} bps |",
+        f"| median per-bar volatility | {sigma_median:.1f} bps |",
         f"| degenerate (no-range) bars | {degenerate*100:.1f}% |",
         f"| **AR half-spread in TICKS** | **{tick_median:.2f}** (one-tick market = 0.50) |",
         f"| median name price | Rs {price_median:,.0f} |",
@@ -483,15 +590,42 @@ def _render(results: list[WindowResult]) -> str:
         f"| median participation impact @ Rs {ORDER_VALUE:,} | {impact_med:.2f} bps |",
         f"| **implied intraday hurdle** | **{hurdle:.2f} bps** (upper bound {hurdle_hi:.2f}) |",
         "",
-        "## How to read the two estimators",
+        "## ⚠ Which population this describes",
         "",
-        "⛔ **Corwin-Schultz is a corroborating UPPER BOUND, not a measurement.** Its",
-        "zero-spread null is linear in volatility (4.33 bps of artifact at 30 bps/bar, 11.44 at",
-        "80), which is why the branch decision is taken on Abdi-Ranaldo alone — as",
-        "pre-registered. A CS reading above AR is expected and is not disagreement.",
+        "The PIT top-250 cohort is **not** the binding selector: it asks for",
+        f"{median_requested:.0f} names and only **{median_cohort:.0f}** survive intersecting with",
+        "the names that have 5-minute bars. **`ohlcv_5m` holds roughly 200-210 distinct names for",
+        "the whole block** (the 2,000+ figure appears only from 2026-09, after the last measured",
+        "window), so **this is a fixed ~205-name capture set, not a point-in-time cohort**, and",
+        "every figure below describes that set. ⚠ A thinner name is a different question and this",
+        "study does not answer it.",
         "",
-        f"⭐ **The zero-clamp share ({zero_share*100:.1f}%) is the independent read.** Validation",
-        "put it near 50% when the true spread is zero and near 0% once a real spread is present.",
+        "## How to read the two estimators, at THIS cohort's volatility",
+        "",
+        "⛔ **Corwin-Schultz is a corroborating upper bound, not a measurement** — its zero-spread",
+        "null is linear in volatility. ⚠ **Quoting that null at a volatility the cohort does not",
+        "have would invite the wrong comparison**, so it is calibrated here at the measured",
+        f"{sigma_median:.1f} bps/bar:",
+        "",
+        f"| at sigma = {sigma_median:.1f} bps/bar | Corwin-Schultz | Abdi-Ranaldo | AR clamp |",
+        "|---|--:|--:|--:|",
+        f"| planted ZERO spread (the null) | {cal_null.cs_median_bps:.2f} | "
+        f"{cal_null.ar_median_bps:.2f} | {cal_null.ar_clamp_share*100:.1f}% |",
+        f"| planted at the measured {ar_point:.2f} bps | {cal_at.cs_median_bps:.2f} | "
+        f"{cal_at.ar_median_bps:.2f} | {cal_at.ar_clamp_share*100:.1f}% |",
+        f"| **MEASURED on real bars** | **{cs_point:.2f}** | **{ar_point:.2f}** | "
+        f"**{zero_share*100:.1f}%** |",
+        "",
+        f"⭐ **CS reads {cs_point:.2f} against a null of "
+        f"{cal_null.cs_median_bps:.2f}** — above it,",
+        "so it corroborates a small positive spread rather than contradicting AR.",
+        "",
+        "⚠ **The clamp share is NOT a statement about the median.** A HOMOGENEOUS cohort at",
+        f"{ar_point:.2f} bps would clamp {cal_at.ar_clamp_share*100:.1f}%; the measured",
+        f"{zero_share*100:.1f}% can only come from cross-sectional heterogeneity — names genuinely",
+        "tighter than the estimator resolves. ⚠ **AR's median carries a small DOWNWARD bias here**",
+        f"({ar_point:.2f} planted reads {cal_at.ar_median_bps:.2f}), and that bias is **not** in",
+        "the bootstrap interval, which is a sampling interval only.",
         "",
         "## ⭐ Does the estimate agree with the exchange's own tick grid?",
         "",
@@ -538,7 +672,25 @@ def _render(results: list[WindowResult]) -> str:
         "⚠ **An estimate, not an observation.** No historical order book exists; item 17b",
         "(forward top-of-book capture) is what would validate this against a real book.",
         "⚠ **One cohort, one size.** Every bps figure is at the stated order value on the",
-        "PIT-liquid cohort; a thinner name or a larger order is a different question.",
+        "~205-name 5m capture set described above; a thinner name or a larger order is a",
+        "different question.",
+        "",
+        "⚠ **Declared filters, none of them in the pre-registration.** A name needs "
+        f"{MIN_SESSIONS_PER_NAME} sessions in the window and {MIN_BARS_PER_SESSION} bars in a",
+        "session to be counted, and both condition on activity INSIDE the measurement window,",
+        "which correlates with spread. Measured attrition here: the median name-window has",
+        f"{bars_per_session:.1f} bars per usable session and {thin_share*100:.1f}% of",
+        "name-windows fall below the full window length — near-inert on this cohort, but",
+        "declared rather than discovered later.",
+        "",
+        "⚠ **Corporate actions are excluded on ex-dates INSIDE the window**, which is future",
+        "information relative to the window start. Conservative (it removes names rather",
+        "than adding them) but not strictly point-in-time.",
+        "",
+        f"⚠ **{len(results) * MIN_SESSIONS_FOR_STABILITY} sessions are measured**, in whole",
+        "21-session windows only; the block's final partial window is dropped. ⛔ The end is",
+        "PINNED (`--end`) because `ohlcv_5m` grows: an unpinned re-run measures a different",
+        "sample, which is exactly item 6's `_load_frames` defect.",
         "⚠ **Cost, not edge.** A favourable branch means the arithmetic does not forbid an",
         "intraday generator. It does not mean one exists.",
         "",

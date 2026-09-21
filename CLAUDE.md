@@ -443,15 +443,31 @@ else.
   RUNNING them: **a session gap makes CS clamp to ZERO (understate), not inflate**, and **AR's
   mean is volatility-biased while its median is not.** ⭐ **A physical check needing no order
   book:** through B3's dated tick schedule the estimate is **2.43 ticks** — a ~5-tick book, clear
-  of both the exchange minimum and the estimator's resolution. ⭐⭐ **SECOND PASS: the apparent
-  2.19 → 1.60 bps fall across mid-2024 is an ARTIFACT.** It looked like NSE's sub-₹225 tick
-  change; the **price-band CONTROL refutes that** (it appears in the ₹225+ band too, whose tick
-  never moved) and **on non-clamped windows that band is FLAT, 5.25 → 5.46 ticks** — the decline
-  is the clamp share rising **18.4% → 30.7%**, because the median price rose **₹1,140 → ₹1,316**
-  against a fixed ₹0.05 tick, so the same book in ticks is fewer bps and fewer bps at the same
-  volatility is worse signal-to-noise. **Falling bps and a rising clamp share are the same fact
-  seen twice.** ⭐ The tick change **UNPINS more than it narrows** (64.8% → 15.0% of sub-₹225
-  windows at/under 0.75 ticks; rupee half-spread only −11%). ⚠ **It is an ESTIMATE:**
+  of both the exchange minimum and the estimator's resolution. ⭐⭐ **SECOND PASS — MOST OF THE FALL IS
+  MECHANICAL, BUT ~10–15% IS REAL, AND MY FIRST VERSION HAD IT BACKWARDS** (corrected after
+  quant-verifier review, 2026-09-21). It compared the median of the **non-clamped** subset across
+  periods whose clamp shares differ (18.4% vs 30.7%); a clamped window reports 0.00, so that
+  statistic is the unconditional quantile `clamp + 0.5(1−clamp)` — **q59.2 vs q65.3** — and
+  reading the later period at a deeper truncation manufactured "flat" BY CONSTRUCTION. ₹225+ band
+  (tick unchanged): **median-of-non-clamped +4.1%** (the defect) · **equal-depth −15.3%** ·
+  ⭐ **paired panel over the 142 names in both periods −10.7%** · paired non-clamped-only
+  **+15.3%**. ⭐⭐ **The last two disagree in SIGN on the same names.**
+  ⭐ **RULE EARNED: never compare two censored distributions at different censoring depths —
+  truncate both at the deeper one, or pair by name.** Conditioning on "the estimator produced a
+  number" conditions on the OUTCOME, because it is the small spreads that fail to produce one.
+  ⚠ **"Mechanical" ≠ "artifact"**: a trader pays bps, so with the price level up against a fixed
+  ₹0.05 grid the proportional cost genuinely fell. ⭐ The tick change **UNPINS** the cheap band —
+  on **all** rows the share at/under 0.75 ticks went **72.4% → 46.9%** (the published 64.8% →
+  15.0% was the same defect) and at equal depth the rupee half-spread went **₹0.0343 → ₹0.0263
+  (−23%)**. ⚠ **POPULATION RESTATED: the PIT top-250 is NOT the binding selector** — `ohlcv_5m`
+  holds only ~200–210 distinct names for the whole block ⇒ a **fixed ~205-name capture set, not a
+  point-in-time cohort**; **777 sessions measured, not 797**. ⚠ **The CS null must be calibrated
+  at the cohort's OWN σ** (17.9 ⇒ ≈2.55, not the 4.33/11.44 at σ 30/80) or a reader concludes CS
+  reads BELOW its null. ⭐ On ONE population the bracket is **[1.74, 2.28] bps, hurdle 14.1–15.2**.
+  ⛔⛔ **AND THE STUDY REPRODUCED ITEM 6's OWN DEFECT: its window came from a live query over a
+  GROWING table**, so a re-run the next day silently measured 798 sessions / 38 windows instead of
+  797 / 37. **`--end` is now mandatory-by-default (last session strictly before today) and the
+  resolved block is printed in the report** — pin the range, never re-derive it ⚠ **It is an ESTIMATE:**
   ⛔ **`half_spread_bps` is computed at fill time and persisted NOWHERE** (verified absent from
   `orders.broker_payload` · `positions.charges` · `order_events.payload`), so **M92's own spread
   evidence is not reproducible from the DB**. **Item 17b (forward top-of-book capture) is the only

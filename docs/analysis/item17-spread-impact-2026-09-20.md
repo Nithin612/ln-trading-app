@@ -13,9 +13,11 @@ unfavourable to proceeding, so **1.93 bps** is the number the tree reads.
 
 | quantity | value |
 |---|--:|
+| block measured | 2023-07-03 .. 2026-08-20 |
 | name-windows measured | 6,748 |
 | measurement windows | 37 of 21-session blocks |
-| median cohort per window | 185 names |
+| PIT cohort requested (median/window) | 249 names |
+| **measured after intersecting 5m capture** | **185 names** |
 | **AR median half-spread** | **1.74 bps** [1.58, 1.93] |
 | AR zero-clamp share | 28.6% |
 | CS median half-spread (biased UP) | 3.28 bps [3.12, 3.43] |
@@ -27,15 +29,38 @@ unfavourable to proceeding, so **1.93 bps** is the number the tree reads.
 | median participation impact @ Rs 20,000 | 0.00 bps |
 | **implied intraday hurdle** | **14.09 bps** (upper bound 14.47) |
 
-## How to read the two estimators
+## ⚠ Which population this describes
 
-⛔ **Corwin-Schultz is a corroborating UPPER BOUND, not a measurement.** Its
-zero-spread null is linear in volatility (4.33 bps of artifact at 30 bps/bar, 11.44 at
-80), which is why the branch decision is taken on Abdi-Ranaldo alone — as
-pre-registered. A CS reading above AR is expected and is not disagreement.
+The PIT top-250 cohort is **not** the binding selector: it asks for
+249 names and only **185** survive intersecting with
+the names that have 5-minute bars. **`ohlcv_5m` holds roughly 200-210 distinct names for
+the whole block** (the 2,000+ figure appears only from 2026-09, after the last measured
+window), so **this is a fixed ~205-name capture set, not a point-in-time cohort**, and
+every figure below describes that set. ⚠ A thinner name is a different question and this
+study does not answer it.
 
-⭐ **The zero-clamp share (28.6%) is the independent read.** Validation
-put it near 50% when the true spread is zero and near 0% once a real spread is present.
+## How to read the two estimators, at THIS cohort's volatility
+
+⛔ **Corwin-Schultz is a corroborating upper bound, not a measurement** — its zero-spread
+null is linear in volatility. ⚠ **Quoting that null at a volatility the cohort does not
+have would invite the wrong comparison**, so it is calibrated here at the measured
+17.9 bps/bar:
+
+| at sigma = 17.9 bps/bar | Corwin-Schultz | Abdi-Ranaldo | AR clamp |
+|---|--:|--:|--:|
+| planted ZERO spread (the null) | 2.55 | 0.00 | 57.0% |
+| planted at the measured 1.74 bps | 3.42 | 1.68 | 11.5% |
+| **MEASURED on real bars** | **3.28** | **1.74** | **28.6%** |
+
+⭐ **CS reads 3.28 against a null of 2.55** — above it,
+so it corroborates a small positive spread rather than contradicting AR.
+
+⚠ **The clamp share is NOT a statement about the median.** A HOMOGENEOUS cohort at
+1.74 bps would clamp 11.5%; the measured
+28.6% can only come from cross-sectional heterogeneity — names genuinely
+tighter than the estimator resolves. ⚠ **AR's median carries a small DOWNWARD bias here**
+(1.74 planted reads 1.68), and that bias is **not** in
+the bootstrap interval, which is a sampling interval only.
 
 ## ⭐ Does the estimate agree with the exchange's own tick grid?
 
@@ -114,55 +139,82 @@ here is reported per window so a clamped window is never read as a measurement.
 ⚠ **An estimate, not an observation.** No historical order book exists; item 17b
 (forward top-of-book capture) is what would validate this against a real book.
 ⚠ **One cohort, one size.** Every bps figure is at the stated order value on the
-PIT-liquid cohort; a thinner name or a larger order is a different question.
+~205-name 5m capture set described above; a thinner name or a larger order is a
+different question.
+
+⚠ **Declared filters, none of them in the pre-registration.** A name needs 15 sessions in the window and 20 bars in a
+session to be counted, and both condition on activity INSIDE the measurement window,
+which correlates with spread. Measured attrition here: the median name-window has
+75.0 bars per usable session and 3.0% of
+name-windows fall below the full window length — near-inert on this cohort, but
+declared rather than discovered later.
+
+⚠ **Corporate actions are excluded on ex-dates INSIDE the window**, which is future
+information relative to the window start. Conservative (it removes names rather
+than adding them) but not strictly point-in-time.
+
+⚠ **777 sessions are measured**, in whole
+21-session windows only; the block's final partial window is dropped. ⛔ The end is
+PINNED (`--end`) because `ohlcv_5m` grows: an unpinned re-run measures a different
+sample, which is exactly item 6's `_load_frames` defect.
 ⚠ **Cost, not edge.** A favourable branch means the arithmetic does not forbid an
 intraday generator. It does not mean one exists.
 
 ---
 
-## ⭐⭐ Second pass — the drift is an ARTIFACT, and the tick change is
-smaller than it looks
+## ⭐⭐ Second pass — most of the fall is mechanical, but ~10-15% of it is REAL
 
-The headline median falls 2.19 -> 1.60 bps across mid-2024. Sliced on the dump, with
-the clamped windows separated from the rest, it resolves completely.
+⛔⛔ **This section's first version concluded the opposite, and the correction is the
+more useful finding.** It compared the median of the NON-CLAMPED subset across two
+periods whose clamp shares differ (18.4% vs 30.7%). A clamped window reports 0.00, so
+that statistic is the unconditional quantile `clamp + 0.5(1-clamp)` — **q59.2 before
+against q65.3 after.** Reading the later period at a higher quantile *by construction*
+manufactured a flat result. ⭐ **Conditioning on 'the estimator produced a number'
+conditions on the OUTCOME, because it is the small spreads that fail to produce one.**
 
-| band | period | n | ticks (ALL) | n live | **ticks (NOT clamped)** | clamp |
-|---|---|--:|--:|--:|--:|--:|
-| below Rs 225 | before 2024-06 | 359 | 0.51 | 281 | **0.59** | 21.7% |
-| below Rs 225 | from 2024-06 | 766 | 1.08 | 479 | **2.51** | 37.5% |
-| Rs 225+ | before 2024-06 | 1,300 | 4.03 | 1,061 | **5.25** | 18.4% |
-| Rs 225+ | from 2024-06 | 4,323 | 2.85 | 2,997 | **5.46** | 30.7% |
+### The Rs 225+ band, whose tick never changed
 
-### ⛔ Finding 1 — the cohort-wide decline is the CLAMP, not the market
+| comparison | before -> after | change |
+|---|--:|--:|
+| median of non-clamped (⛔ **the defect**) | 5.25 -> 5.46 | **+4.1%** |
+| equal-depth truncation (30.7%) | 6.45 -> 5.46 | **-15.3%** |
+| ⭐ **paired panel, all windows** (n=142 names) | — | **-10.7%** |
+| paired panel, non-clamped only (n=150) | — | +15.3% |
 
-On the Rs 225+ band, whose tick **never changed**, the half-spread
-in ticks is **flat on non-clamped windows: 5.25 -> 5.46**, while the
-all-windows median falls. The difference is entirely the clamp share rising
-18.4% -> 30.7%.
+⭐ **The last two rows disagree in SIGN on the same names.** That is the cleanest
+possible demonstration that the selection, not the market, produced the original answer.
 
-⭐ **And the mechanism is arithmetic, not mysterious.** The median price rose
-Rs 1,140 -> Rs 1,316 against a FIXED Rs 0.05 tick, so the same book in
-ticks is a smaller spread in bps. A smaller spread at the same volatility is a worse
-signal-to-noise ratio for the estimator, so more windows fall under its resolution and
-clamp. **Falling bps and a rising clamp share are the same fact seen twice.**
+### What actually happened
 
-### ⭐ Finding 2 — the tick change UNPINNED the cheap band more than it narrowed it
+⭐ **Most of the 2.19 -> 1.60 bps fall is mechanical, and one tenth to one sixth is a
+genuine narrowing.** The median price rose against a FIXED Rs 0.05 tick, so the same book
+in ticks is fewer bps; and fewer bps at the same volatility is worse signal-to-noise for
+the estimator, so more windows clamp — which then drags the naive median further. Those
+two mechanisms are most of it. **But paired by name the book genuinely narrowed
+10.7% in ticks**, and that part is real.
 
-Before the change **64.8%** of sub-Rs 225 windows sat at or under
-0.75 ticks — a book pinned on the exchange's minimum increment, which is the
-signature of **the tick size itself being the binding constraint**. After, only
-**15.0%** are.
+⚠ **'Mechanical' is NOT the same as 'artifact', and the earlier wording was wrong on
+this too.** A trader pays bps. With the price level up against a fixed grid, the
+proportional cost of crossing genuinely fell, whatever the book did in ticks.
 
-⚠ **But the narrowing is far smaller than the bps figures suggest.** In rupees the
-median half-spread went **Rs 0.0296 -> Rs 0.0263** (-11%), not the
-~50% the clamped medians imply.
+### The sub-Rs 225 band and the tick change
+
+⭐ **The tick change UNPINNED the cheap band.** Measured over **all** rows — a clamped
+window is 0.00 ticks and so is definitionally inside this numerator — the share at or
+under 0.75 ticks went **72.4% -> 46.9%**. Before the
+change a large majority sat on the exchange's minimum increment, which is the signature
+of **the tick size itself being the binding constraint**.
+
+⚠ At equal truncation depth (37.5%) the rupee half-spread went
+**Rs 0.0343 -> Rs 0.0263** (-23%) — a real
+narrowing, and about twice what the censored comparison reported.
 
 ### What this does to the headline
 
-⚠ **The pooled 1.74 bps is a LOWER bound** — clamped windows report 0.00 and drag
-it down. On non-clamped windows the recent-period median is **2.20 bps**.
-⭐ **The true typical half-spread is bracketed at 1.74-2.20 bps, and the branch verdict does not move**: both ends are far below
-the pre-registered 5 bps boundary, and the implied hurdle spans 14.1-15.0 bps.
+⚠ **The pooled 1.74 bps is a LOWER bound** — clamped windows report 0.00 and
+drag it down. On the SAME population without them it is **2.28 bps**.
+⭐ **Bracketing one population across that single choice gives
+[1.74, 2.28] bps, an implied hurdle of 14.1-15.2 bps.** Both ends are far below
+the pre-registered 5 bps boundary: **the branch verdict does not move.**
 
-⛔ **Neither bound is a measurement of a real book.** Item 17b is
-what would settle it.
+⛔ **Neither bound is a measurement of a real book.** Item 17b is what would settle it.
