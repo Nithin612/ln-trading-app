@@ -561,8 +561,10 @@ def _render(results: list[WindowResult]) -> str:
     lines = [
         "# Item 17 — spread and impact on the intraday cohort, measured",
         "",
-        "**Run 2026-09-20** against the pre-registration committed at `6a4af12`, before this",
-        "script existed. Read-only; both sealed holdouts untouched.",
+        "**First run 2026-09-20; corrected and re-rendered 2026-09-21** after quant-verifier",
+        "review — see AMENDMENT 2 in the pre-registration, which was committed at `6a4af12`",
+        "*before* this script existed. The verdict did not move; a secondary analysis did.",
+        "Read-only; both sealed holdouts untouched.",
         "",
         "## Verdict",
         "",
