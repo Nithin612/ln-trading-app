@@ -87,6 +87,13 @@ here is reported per window so a clamped window is never read as a measurement.
 
 ### The control: did the tick change actually cause it?
 
+⛔⛔ **Read the SECOND PASS at the end of this document before drawing a conclusion
+from the two tables below.** Both are medians over CENSORED distributions whose
+censoring depths differ (the clamp-share column), so comparing them across periods
+compares different quantiles. The first version of this analysis did exactly that and
+reached the wrong answer. The tables are kept because the raw cells are facts; the
+comparison is made properly below.
+
 | price band | period | name-windows | AR median | sigma/bar | clamp share |
 |---|---|--:|--:|--:|--:|
 | below Rs 225 (tick DID change) | before 2024-06 | 359 | 2.66 | 21.8 | 21.7% |
