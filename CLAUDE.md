@@ -424,6 +424,34 @@ else.
   pass/fail.** ⚠ H8 as specified in the findings doc was insufficient (it asked only "does the bar
   reject noise", which a bar that rejects everything passes trivially); the power arm is the half
   that made the verdict readable. Report: `docs/analysis/dsr-negative-control-2026-09-04.md`.
+- **⭐⭐ THE CLUSTERED-SE SWEEP (Q1) IS DONE — THE RETIREMENT IS SAFE, 2026-09-24.** M93 showed an
+  iid SE over session-clustered observations inflating a t **8.6×** and reversing a conclusion, so
+  the repo was swept for the same defect class (`docs/analysis/clustered-se-sweep-2026-09-23.md`).
+  ⭐⭐ **THE TRIAGE RULE: a positive within-cluster correlation inflates the iid t ⇒ the correction
+  can only move a result TOWARD THE NULL ⇒ every conclusion already reported as a NULL survives
+  automatically**, and only *significant* findings are at risk — that cut a ~30-script sweep to a
+  handful. ✅ **`e2_score_ic.py`, which the whole retirement rests on, is CLEAN**: `--stride`
+  defaults to `HORIZON` (5) so consecutive IC observations use **disjoint** forward windows and
+  `stdev/√n` is right. ⛔ **`signed_displacement_study.py` is the one confirmed defect** (already
+  refuted); it now carries a supersession banner and is **otherwise unchanged**, so the audit has
+  something to reproduce against — the point estimates were always fine, only the inference was
+  wrong. ✅ **`entry_confirmation_study.py` SURVIVES**: its key already carried the date, so it now
+  prints the clustered t **beside** the iid one, and **|t| moves ≤ 0.2 in every cell** on 3,266
+  signals. ✅ D5/D1/B7 are covered by `item6_rerun`/`item6_b7`; `factor_sweep`, `cas_stage2`,
+  `regime_study`, `swing_dependence_probe`, `confirmation_base_rate`, `squeeze_study`,
+  `overhead_supply_study`, `positional_probe`, `round9_cells` are cluster-aware or publish nulls.
+  ⭐⭐ **THE EXCEPTION THE REPORT WROTE DOWN FIRED ON THE NEXT MEASUREMENT** — it warned a *negative*
+  within-cluster correlation would make the clustered t LARGER ("an assumption, not a theorem") and
+  three cells did exactly that (3d stop **−12.25 → −12.39**). ⇒ **Clustering is a CORRECTION, not a
+  penalty — do not call it "deflation."** ⭐ **The size of the change is a property of the DESIGN: a
+  PAIRED estimand buys the immunity, because when both legs share the day the day cancels in the
+  difference. Prefer a paired estimand wherever the question allows one — it is worth more than any
+  SE correction applied afterwards.** ⚠ **A re-run on a grown corpus is not a re-test of the
+  published number**: this one mints **3,266** signals against ~1,975 (922-day backfill + the
+  1,322 → 2,292 universe repair), so magnitudes are NOT comparable and only the clustering verdict
+  transfers. ⚠ On that larger corpus the whole-book confirmation effect is a **NULL** (|t| ≤ 1.27),
+  so *"significantly worse at 3d/5d"* does not reproduce at that strength — **the rule does not beat
+  entering at the open, and its fill cost is strongly negative and robust.**
 - **⭐⭐ THE SUCCESSOR PROGRAMME IS OPEN, AND ITS FIRST FALSIFIER CLEARED — item 17, 2026-09-20.**
   The retirement left **nothing on the critical path**; the direction chosen (user, same day) is
   the **intraday / MIS product class**, not another daily-swing feature. **Item 17 asked whether

@@ -7,6 +7,51 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### ⭐⭐ Q1 — the clustered-SE sweep: the retirement is safe, and one defect confirmed (2026-09-23/24)
+
+After M93 — where `stddev/sqrt(count)` over stock-days that cluster by session inflated a t
+**8.6×** and reversed a conclusion — swept the repo for the same defect class. Report:
+`docs/analysis/clustered-se-sweep-2026-09-23.md`.
+
+⭐⭐ **The triage rule that made it tractable:** a positive within-cluster correlation inflates the
+iid t, so correcting it can only move a result **toward the null** ⇒ **any conclusion already
+reported as a null survives automatically**, and only *significant* findings are at risk.
+
+✅ **The most important result in the project is CLEAN.** The scorer's retirement rests on
+`e2_score_ic.py`, whose `--stride` defaults to `HORIZON` (5), so consecutive IC observations use
+**disjoint** forward windows and `stdev/√n` is the correct SE. Nothing to correct — and it is a
+null in any case.
+
+⛔ **One confirmed defect:** `signed_displacement_study.py` (M93), already audited and refuted. It
+now carries a supersession banner naming the corrected numbers and is **otherwise unchanged** — the
+point estimates reproduce exactly, so the file stays as something the audit can be reproduced
+against. Only the inference was wrong.
+
+✅ **`entry_confirmation_study.py` SURVIVES.** Its key already carried the date, so it now prints
+the session-clustered t **beside** the iid one rather than replacing it. Measured on 3,266 baseline
+signals: **|t| moves by ≤ 0.2 in every cell** (stop 1d −12.11 → −11.89; stop+cap+samebar 5d −15.43
+→ −15.33). The fill-cost finding is not an artifact of treating signals as independent.
+
+⭐⭐ **And the exception the report wrote down fired on the very next measurement.** It warned that
+a *negative* within-cluster correlation would make the clustered t **larger**, calling that "an
+assumption, not a theorem" — and in three cells it is exactly that (3d stop −12.25 → **−12.39**).
+⇒ **Clustering is a CORRECTION, not a penalty. Stop calling it "deflation."** The size of the
+change is a property of the design, and a **paired** estimand is what buys the immunity: when both
+legs share the day, the day cancels in the difference.
+
+⚠ **Two honest qualifications.** The re-run mints **3,266** signals against the ~1,975 behind the
+published figures (the 922-day backfill plus the 1,322 → 2,292 universe repair), so magnitudes are
+**not** comparable — only the clustering verdict transfers. And on this larger corpus the
+whole-book confirmation effect is a **null** (every variant |t| ≤ 1.27), so the published
+*"significantly worse at 3d/5d"* does not reproduce at that strength; the correct current statement
+is that the rule does not beat entering at the open and its fill cost is strongly negative.
+
+✅ **Covered by existing re-runs:** D5, D1, B7 (`item6_rerun.py` / `item6_b7.py` are cluster-robust
+and are the published numbers). ✅ **Already clean:** `factor_sweep` (non-overlapping + day-block
+bootstrap), `cas_stage2_study`, `regime_study`, `swing_dependence_probe`, `confirmation_base_rate`,
+`squeeze_study`, `overhead_supply_study`, `positional_probe` (nulls), `round9_cells`.
+
+
 ### ⭐⭐ THE SUCCESSOR PROGRAMME OPENS — item 17: spread is NOT the binding constraint (2026-09-20)
 
 The scorer retired the same day, leaving the successor generator as the open problem and

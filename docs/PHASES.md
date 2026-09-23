@@ -10,6 +10,44 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
+## ▶ STATE AT A GLANCE (updated 2026-09-24) — ⭐⭐ Q1 SWEEP DONE: THE RETIREMENT IS SAFE.
+
+**M93 showed that an iid SE over clustered observations inflated a t by 8.6× and reversed a
+conclusion. Q1 swept the repo for the same defect class.** Report:
+`docs/analysis/clustered-se-sweep-2026-09-23.md`.
+
+⭐⭐ **THE TRIAGE RULE:** a positive within-cluster correlation inflates the iid t ⇒ correcting it
+can only move a result **toward the null** ⇒ **every conclusion already reported as a NULL survives
+automatically**, and only *significant* findings are at risk. That cut a ~30-script sweep to a
+handful of files.
+
+| script | verdict |
+|---|---|
+| **`e2_score_ic.py` — THE RETIREMENT** | ✅ **CLEAN** — `--stride` defaults to `HORIZON` (5) ⇒ **disjoint** forward windows; nothing to correct |
+| `signed_displacement_study.py` (M93) | ⛔ **DEFECTIVE** — refuted; now carries a supersession banner, file otherwise unchanged |
+| `entry_confirmation_study.py` | ✅ **SURVIVES** — **\|t\| moves ≤ 0.2** on 3,266 signals |
+| D5 · D1 · B7 | ✅ covered — `item6_rerun` / `item6_b7` are cluster-robust and ARE the published numbers |
+| `factor_sweep` · `cas_stage2` · `regime_study` · `swing_dependence_probe` · `confirmation_base_rate` · `squeeze_study` · `overhead_supply_study` · `positional_probe` · `round9_cells` | ✅ cluster-aware, or publishing nulls |
+
+⭐⭐ **THE EXCEPTION THE REPORT WROTE DOWN FIRED ON THE VERY NEXT MEASUREMENT.** It warned that a
+*negative* within-cluster correlation would make the clustered t **LARGER** — "an assumption, not a
+theorem" — and in three cells it is exactly that (3d stop **−12.25 → −12.39**). ⇒ **Clustering is a
+CORRECTION, not a penalty — stop calling it "deflation."** The size of the change is a property of
+the DESIGN: a **paired** estimand buys the immunity, because when both legs share the day the day
+cancels in the difference. **Prefer a paired estimand wherever the question allows one — it is
+worth more than any SE correction applied afterwards.**
+
+⚠ **Two qualifications.** The re-run mints **3,266** signals against the ~1,975 behind the published
+figures (922-day backfill + the 1,322 → 2,292 universe repair) ⇒ magnitudes are **not** comparable,
+only the clustering verdict transfers. And on this larger corpus the whole-book confirmation effect
+is a **NULL** (every variant |t| ≤ 1.27), so *"significantly worse at 3d/5d"* does not reproduce at
+that strength — **the correct statement is that the rule does not beat entering at the open, and
+its fill cost is strongly negative and robust.**
+
+⛔ **NOTHING PUSHED.**
+
+---
+
 ## ▶ STATE AT A GLANCE (updated 2026-09-20) — ⭐⭐ THE SUCCESSOR PROGRAMME IS OPEN. Read this, then the retirement block below.
 
 **The scorer retired earlier today and left NOTHING on the critical path.** The open problem is a
