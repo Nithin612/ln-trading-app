@@ -79,7 +79,7 @@ corrected numbers. **It is otherwise unchanged** — the point estimates reprodu
 (+0.6505%), so the file is kept as something the audit can be reproduced against. Only the
 inference was wrong.
 
-## 3. ⚠ The live gap — `entry_confirmation_study.py`
+## 3. ✅ RESOLVED — `entry_confirmation_study.py` survives
 
 `_mean_t` divides by `sqrt(n)` over signals, and line 560 uses it for the **paired ΔR** that the
 reading study's headline rests on. Signals cluster by mint date.
