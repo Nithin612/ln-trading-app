@@ -1,5 +1,20 @@
 """SIGNED-DISPLACEMENT STUDY (Claude's point 2), run structurally.
 
+⛔⛔ **SUPERSEDED — DO NOT CITE THE `se` COLUMN OR ANY t DERIVED FROM IT.**
+`stddev(fwd_pct)/sqrt(count(*))` treats stock-days as INDEPENDENT. Gap days cluster by session
+almost by construction: one index-wide morning produced **243 simultaneous gaps**. Corrected
+with a session-clustered SE, the headline arm falls from **t +14.33 to +1.66 (8.6x)** and stops
+being significant; pooled goes +22.52 -> +3.33, below this project's t = 3.6 bar. And on the
+cohort and period we can actually trade the effect is **+0.174%/session, t +2.06**, against a
+required **0.444%** — so the candidate is REFUTED.
+
+⇒ Read `docs/analysis/m93-audit-2026-09-21.md` and run `scripts/m93_cluster_audit.py`, which
+rebuilds this exact event set and prints the iid t beside the clustered one.
+
+⚠ The POINT ESTIMATES here are fine (+0.6505% reproduces exactly); only the inference is wrong.
+The file is kept unchanged so the audit has something to reproduce against.
+
+
 The live book is n=4 — the 99-trade audit died with the dev DB on 2026-09-07. But the geometry
 is reproducible from prices alone: the engine's signal entry IS the prior close
 (`signal_service.py:246`) and the backtest fill IS the next bar's open

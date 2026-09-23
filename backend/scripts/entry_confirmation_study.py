@@ -286,6 +286,25 @@ def _confirm_fill(
     return None
 
 
+def _clustered_t(xs: list[float], dates: list[object]) -> tuple[float, int] | None:
+    """Session-clustered t beside the iid one — the defect M93 cost us 8.6x for.
+
+    ⛔⛔ **Why this exists.** `_mean_t` divides by `sqrt(n)` over SIGNALS, and signals cluster
+    by date: a market-wide move mints dozens on the same morning, and they then share that
+    day's outcome. `signed_displacement_study.py` made exactly this assumption and its
+    headline t fell from **+14.33 to +1.66** when the clustering was accounted for
+    (`docs/analysis/m93-audit-2026-09-21.md`).
+
+    ⚠ The paired design here already cancels most of the common market move — ΔR is the SAME
+    signal under two entry rules — so the deflation should be far smaller than M93's. That is
+    a prediction, and printing both t's is what tests it rather than asserting it.
+    """
+    from app.services.block_bootstrap import cluster_robust_mean_t
+
+    res = cluster_robust_mean_t(xs, dates)
+    return (res[2], res[3]) if res else None
+
+
 def _mean_t(xs: list[float]) -> tuple[float, float, float, int]:
     n = len(xs)
     if n == 0:
@@ -541,9 +560,10 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
     )
     a(
         "\n_All four columns are winsorized R._\n"
-        "\n| entry rule | n_int | baseline R on int | variant R on int | paired dR | t(dR) |"
+        "\n| entry rule | n_int | baseline R on int | variant R on int | paired dR "
+        "| t(dR) iid | **t(dR) CLUSTERED** | dates |"
     )
-    a("|---|---|---|---|---|---|")
+    a("|---|---|---|---|---|---|---|---|")
     for w in windows:
         for label, pretty in (
             (f"stop_w{w}", f"stop, {w}d"),
@@ -554,15 +574,28 @@ def _report(  # noqa: C901 - a linear report builder; splitting it would only sc
             if not keys:
                 a(f"| {pretty} | 0 | - | - | - | - |")
                 continue
-            b = [base[k].wr for k in keys]
-            v = [variants[label][k].wr for k in keys]
-            d = [variants[label][k].wr - base[k].wr for k in keys]
+            ks = sorted(keys)
+            b = [base[k].wr for k in ks]
+            v = [variants[label][k].wr for k in ks]
+            d = [variants[label][k].wr - base[k].wr for k in ks]
             dm, _, dt, _ = _mean_t(d)
+            clus = _clustered_t(d, [k[1] for k in ks])
+            ct = f"{clus[0]:+.2f}" if clus else "-"
+            ng = f"{clus[1]:,}" if clus else "-"
             a(
-                f"| {pretty} | {len(keys)} | {statistics.mean(b):+.3f} | "
-                f"{statistics.mean(v):+.3f} | {dm:+.3f} | {dt:+.2f} |"
+                f"| {pretty} | {len(ks)} | {statistics.mean(b):+.3f} | "
+                f"{statistics.mean(v):+.3f} | {dm:+.3f} | {dt:+.2f} | {ct} | {ng} |"
             )
 
+    a(
+        "\n⛔ **Read the CLUSTERED column, not the iid one.** Signals cluster by date — a "
+        "market-wide move mints dozens on one morning — and `sqrt(n)` over signals treats "
+        "them as independent. `signed_displacement_study.py` made that assumption and its "
+        "headline t fell from +14.33 to +1.66 when corrected "
+        "(`docs/analysis/m93-audit-2026-09-21.md`). ⚠ The paired design here cancels most of "
+        "the common market move, so the deflation is expected to be much smaller — the two "
+        "columns are printed together so that expectation is tested rather than assumed.\n"
+    )
     a("\n### 2b. Is the fill cost real, or is it target truncation? (sensitivity)\n")
     a(
         "The variants above keep the FROZEN target, anchored to the planned entry, while the "
