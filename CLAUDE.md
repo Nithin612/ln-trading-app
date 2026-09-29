@@ -434,8 +434,9 @@ else.
   - **(1) Two Celery beats can run at once.** The embedded beat of a `make worker -B` can outlive its
     worker: PID 2091604, reparented to `systemd --user`, holding the deleted `celerybeat-schedule.db`.
     After a restart, **every beat task is dispatched twice**. Measured: 1 duplicate signal and 4
-    duplicate pair signals on 09-29. `_has_active_signal` is read-then-insert with no unique
-    constraint behind it, so it cannot stop concurrent runs. ⇒ **Before `make worker`, check
+    duplicate pair signals on 09-29 (✅ orphan stopped and duplicates deleted the same night, on the
+    user's instruction). `_has_active_signal` is read-then-insert with no unique constraint behind
+    it, so it cannot stop concurrent runs. ⇒ **Before `make worker`, check
     `pgrep -af 'celery.*-B'`.**
   - **(2) "live_worker — last heartbeat never seen" is a false positive in every evening report.**
     The heartbeat has a 600 s TTL and live_worker exits at session end. Proof of a run is

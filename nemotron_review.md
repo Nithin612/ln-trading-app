@@ -630,8 +630,8 @@ quote. Assumptions are marked `[ASSUMED]`. **No outcome of any candidate strateg
 
 ## §0 — TL;DR
 
-1. ⛔ **Two Celery beat schedulers are live right now** — an orphan left by the 09-28 `make worker`
-   plus tonight's. Tonight's nightly generation and the pair minter each **ran twice**: 1 duplicate
+1. ⛔ **Two Celery beat schedulers were live** (✅ fixed 23:20 IST, §A1) — an orphan left by the
+   09-28 `make worker` plus tonight's. Tonight's nightly generation and the pair minter each **ran twice**: 1 duplicate
    signal, 4 duplicate pair signals. Measured (§A1).
 2. ⛔ **Your "Known Questions from Claude Code" table lists six questions I never asked.** My six are
    §11 above; the status of each is §B3.
@@ -679,7 +679,12 @@ Consequences, queried:
   tomorrow, `materialise-universe` (the **single writer** of `is_active`), `apply-corporate-actions`
   and the 1-minute `monitor-positions` will each run **twice, concurrently**. That hits the one open
   position and the universe.
-- **Nothing was killed and nothing was deleted.** Both are the user's decision.
+- ✅ **RESOLVED 2026-09-29 ~23:20 IST, on the user's instruction.**
+  - The orphan (PID 2091604) was stopped with SIGTERM. It exited in ~1 s, and one beat remains.
+  - The 5 later duplicates were deleted in one transaction, after a field-by-field check against
+    each kept (earlier) twin. No order, position, outcome or ledger row referenced them.
+  - `corporate_filings`, written by the other 60-second task, was checked too: 0 duplicates, because
+    its poller dedups in code.
 - **Durable fix (proposed, not built):** run beat as its own process with a pidfile, so a second
   instance refuses to start, instead of `worker -B`.
 

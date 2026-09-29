@@ -24,8 +24,9 @@ Record: `nemotron_review.md` → **ROUND 2**. Everything below was measured read
   produced **1 duplicate signal** (COMPUSOFT, 120 ms apart) and **4 duplicate pair signals**.
 - `_has_active_signal` is a read-then-insert guard with no unique constraint behind it, so it cannot
   stop *concurrent* runs.
-- **Not killed and not deleted — both are the user's decision.** Durable fix proposed: beat as its
-  own process with a pidfile.
+- ✅ **Resolved the same night on the user's instruction:** the orphan was stopped, and the 5
+  duplicates were deleted after a field-by-field twin check (the earlier twin of each kept).
+  Durable fix still proposed: beat as its own process with a pidfile.
 
 ⛔ **The "live_worker — last heartbeat never seen" alarm is a FALSE POSITIVE after hours.**
 
@@ -2096,9 +2097,8 @@ which is what Phase-6 expectancy calibration is for.
 
 **▶ CONTINUE HERE — updated 2026-09-29 (Nemotron round 2 sent. Five user decisions pending.)**
 
-1. **Ops, before the 2026-09-30 session.** The orphaned beat (PID 2091604, §A1 of ROUND 2 in
-   `nemotron_review.md`) double-dispatches every beat task. Kill it and decide on the duplicate
-   rows: 1 in `signals`, 4 in `pair_signals`. **The user's call.**
+1. ✅ **Ops — DONE 2026-09-29 ~23:20 IST (user).** The orphaned beat (PID 2091604) was stopped and
+   the 5 duplicate rows were deleted. Still open: the durable fix (a standalone beat with a pidfile).
 2. **Wait for Nemotron's round-3 reply** to N1–N7 before turning PR-1 into a committed
    pre-registration. The pre-registration must be committed **before** any measurement code (item
    17's order).

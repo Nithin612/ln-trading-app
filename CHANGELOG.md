@@ -14,7 +14,8 @@ the DB, Redis and the code. **No code, config or data changed.**
 
 - ⛔ **Two Celery beats are live.** An orphaned embedded beat (PID 2091604, from the 09-28 worker)
   and the new worker's beat both dispatch every task. Measured duplicates on 09-29: **1** in
-  `signals` (COMPUSOFT) and **4** in `pair_signals`. Not killed, not deleted — the user's call.
+  `signals` (COMPUSOFT) and **4** in `pair_signals`. ✅ Resolved the same night on the user's
+  instruction: orphan stopped, and the 5 duplicates deleted after a field-by-field twin check.
 - ⛔ **The live_worker liveness alarm is a false positive after hours.** The heartbeat has a 600 s
   TTL and the worker exits at session end. Run proof lives in `tickmode:health:{day}`.
 - ⛔ **Seal breach recorded.** The M93 audit (09-21) computed returns on both sealed holdouts. An
