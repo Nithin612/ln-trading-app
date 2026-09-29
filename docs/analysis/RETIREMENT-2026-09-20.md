@@ -198,3 +198,20 @@ preserved precisely so a successor can still be tested honestly — which is onl
 because they were never touched.
 
 **The open problem is now a successor generator.** The apparatus to test one exists.
+
+---
+
+## Addendum 2026-09-29 — "never touched" is no longer true (W1)
+
+⛔ **The M93 audit (`scripts/m93_cluster_audit.py`, commit `b824ca5`, 2026-09-21 17:27 IST) computed
+returns on BOTH sealed blocks**, three days after `holdout-seals.json` recorded the seal
+(`sealed_at` 2026-09-18 19:03:47 UTC). Its SQL runs `generate_series(2020,2026)`, so it reads
+Holdout-2 (2020) and Holdout-1 (2021-01 → 2023-07-02). It published a full-sample session mean of
++0.4631% (t +8.65), noting *"the headline comes substantially from 2020–2022"* — exactly what the
+seal's first `forbidden` line prohibits. (`signed_displacement_study.py` read the same years 45
+minutes *before* the seal, which is pre-seal exposure, not a breach.)
+
+**Scope:** the overnight-gap → same-day open→close family is spent on both holdouts. Other
+families are not measured there, but the blocks can no longer be described as untouched. They
+remain sealed for everything else. Full record: `nemotron_review.md` ROUND 2 §C6, and the PHASES
+block dated 2026-09-29.

@@ -119,10 +119,11 @@ else.
   (2026-09-07 — none of its 3 preconditions holds). **D3 RESOLVED 2026-09-08: the `market_cap` writer
   needs NO vendor and NO XBRL scraper** — a free NSE-`/api/` `issuedSize × price` path exists (the
   surface the app already uses for FII/DII); build it only when a consumer appears
-  (`docs/analysis/market-cap-source-spike-2026-09-08.md`). ⛔ **The index backfill was DESTROYED with
-  the dev DB on 2026-09-07 and has NOT been redone — `index_ohlcv_1d` holds 51 rows and
-  `india_vix_daily` 17 (measured 2026-09-10). Every market-regime / sector-RS overlay is
-  therefore unevaluable until it is re-run.** Shadow→active flips need the R-track (§8-on-≥2y + sign-off). Plan in the phase-MCE doc.
+  (`docs/analysis/market-cap-source-spike-2026-09-08.md`). ✅ **The index history is RESTORED
+  (corrected 2026-09-29 — the "destroyed, 51 rows" line was stale from 09-17 on):
+  `index_ohlcv_1d` 21,600 rows / 27 indices / 800 sessions, `india_vix_daily` 800, both
+  2023-07-03 → 2026-09-29.** What blocks market-regime evidence is the SIDE confound (NIFTY 50 below
+  its 200-DMA on 51/51 sessions since 07-20), not missing data. Shadow→active flips need the R-track (§8-on-≥2y + sign-off). Plan in the phase-MCE doc.
 - **The provisional breadth-flood fix is MERGED on the Phase-6 branch (`c1b4752`,
   cherry-picked 2026-08-20 — the source branch had diverged so `--ff-only` was impossible).**
   `live-worker`'s hot set no longer floods with breadth alerts (near-trigger = signal-bound
@@ -402,11 +403,15 @@ else.
   Child-start AFTER flip-time ⇒ the live process holds the current value. Worked example
   2026-09-04: R:R revert committed 09-03 09:34, uvicorn reload child started 09-03 12:28, celery
   worker 09-04 08:37 ⇒ both live on `shadow`.
-- **⛔ WATCH MODE / CAS ACCRUAL WAS DESTROYED — restart it (corrected 2026-09-10).** Stage-1 accrual
-  did finish healthy on 2026-09-04 (1,664 rows / 8 sessions), but the 2026-09-07 dev-DB loss took it:
-  **`cas_daily` holds 43 rows across 1 session** (measured 2026-09-10). The Stage-2 overnight-reversal
-  result (ρ −0.272) is therefore **not currently reproducible**, and its "re-run at ≥30 sessions"
-  trigger restarts from zero. **CAS accrual is real-time-only and cannot be back-filled**, so every
+- **⛔ WATCH MODE / CAS ACCRUAL WAS DESTROYED AND HAS RESTARTED (updated 2026-09-29).** Stage-1
+  accrual finished healthy on 2026-09-04 (1,664 rows / 8 sessions); the 2026-09-07 dev-DB loss took
+  it. **`cas_daily` now holds 1,976 rows / 11 sessions (2026-09-10 → 09-29; 09-14, 09-24 and 09-25
+  lost to worker downtime), and their outcomes are UNREAD** — keep them so until a pre-registration
+  is committed. The Stage-2 result (ρ −0.272) is **not currently reproducible**, and its "re-run at
+  ≥30 sessions" trigger counts from 09-10. ⛔ **Stage 2's signal uses the FINAL auction print, which
+  a participant cannot know when bidding** — and `cas_capture.py` overwrites `indicative_close` on
+  every poll, so no executable decision-time signal is being kept (proposal in `nemotron_review.md`
+  ROUND 2 §C4). **CAS accrual is real-time-only and cannot be back-filled**, so every
   day `make worker` is not up across 15:15–15:33 IST is a session lost permanently. The capture remains a
   Celery-beat task, so if accrual resumes, `make worker` must be up across 15:15–15:33 IST and a
   missed window still cannot be back-filled.
@@ -424,6 +429,25 @@ else.
   pass/fail.** ⚠ H8 as specified in the findings doc was insufficient (it asked only "does the bar
   reject noise", which a bar that rejects everything passes trivially); the power arm is the half
   that made the verdict readable. Report: `docs/analysis/dsr-negative-control-2026-09-04.md`.
+- **⛔⛔ NEMOTRON ROUND 2 (2026-09-29) FOUND THREE THINGS THE RECORD DID NOT SAY.** Full record:
+  `nemotron_review.md` ROUND 2 + the PHASES block of that date.
+  - **(1) Two Celery beats can run at once.** The embedded beat of a `make worker -B` can outlive its
+    worker: PID 2091604, reparented to `systemd --user`, holding the deleted `celerybeat-schedule.db`.
+    After a restart, **every beat task is dispatched twice**. Measured: 1 duplicate signal and 4
+    duplicate pair signals on 09-29. `_has_active_signal` is read-then-insert with no unique
+    constraint behind it, so it cannot stop concurrent runs. ⇒ **Before `make worker`, check
+    `pgrep -af 'celery.*-B'`.**
+  - **(2) "live_worker — last heartbeat never seen" is a false positive in every evening report.**
+    The heartbeat has a 600 s TTL and live_worker exits at session end. Proof of a run is
+    `tickmode:health:{day}` / `provisional:health:{day}` (7-day TTL).
+  - **(3) ⛔ The holdout seal was breached on 09-21.** `m93_cluster_audit.py` reads
+    `generate_series(2020,2026)` and published returns on both sealed blocks. The overnight-gap →
+    open→close family is SPENT on them, and "never touched" is false. The seal file's digests
+    detect modification, never reads, so the only real guard is one in the loaders (proposed).
+  - Also measured: at N = 20 trials the bar is **net annual Sharpe ≥ 2.04 on the 763-session
+    pre-CAS 5-minute block** ⇒ only high-breadth designs are confirmable here.
+  - Lead successor **PROPOSAL** (not adopted): CAS liquidity provision. It is overnight CNC
+    long-only, so it conflicts with MIS.
 - **⭐⭐ THE CLUSTERED-SE SWEEP (Q1) IS DONE — THE RETIREMENT IS SAFE, 2026-09-24.** M93 showed an
   iid SE over session-clustered observations inflating a t **8.6×** and reversing a conclusion, so
   the repo was swept for the same defect class (`docs/analysis/clustered-se-sweep-2026-09-23.md`).
@@ -1140,9 +1164,12 @@ else.
   calendar day, let the archive's 404 decide.** `ohlcv_1d` = **1,727 sessions / 3,166,300 bars**.
   ⛔ **THE SAME FILTER IS STILL LIVE — every Celery beat is `day_of_week="1-5"`**, so a weekend
   session is invisible to EOD ingest, nightly generation and every health probe. Queued, not taken.
-  ⚠ **Owed:** four study scripts still hardcode `_CLEAN_SINCE = 2023-07-03` (`tp_geometry_study`,
-  `squeeze_study`, `confirmation_base_rate`, `rvol_factor_study`) — once the data boundary, now an
-  **undeclared truncation discarding 622 sessions**; `nse_holidays` has **no 2021-22 coverage**;
+  ⚠ **`_CLEAN_SINCE = 2023-07-03` is in SIX study scripts, not four** (`tp_geometry_study`,
+  `squeeze_study`, `confirmation_base_rate`, `entry_confirmation_study`, `overhead_supply_study`,
+  and `rvol_factor_study` via its import of `tp_geometry_study._load_frames`). ⭐ **Since the
+  2026-09-18 seal it IS the test-block boundary, so the "owed un-truncation" item is CLOSED
+  (corrected 2026-09-29) — widening it would read both sealed holdouts.** Re-source it from
+  `holdout-seals.json` rather than widening it. `nse_holidays` has **no 2021-22 coverage**;
   regenerating the walk-forward goldens would now produce different fixtures; and prices remain
   **CA-UNADJUSTED**, so the CA screen is now MORE load-bearing. Full record: PART 9 of
   `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md`. It explains

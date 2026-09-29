@@ -7,6 +7,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### ⛔ Nemotron round 2 — two live defects, one seal breach, a successor proposal (2026-09-29, docs only)
+
+Round 2 of the Nemotron review, in `nemotron_review.md`. Every claim was checked read-only against
+the DB, Redis and the code. **No code, config or data changed.**
+
+- ⛔ **Two Celery beats are live.** An orphaned embedded beat (PID 2091604, from the 09-28 worker)
+  and the new worker's beat both dispatch every task. Measured duplicates on 09-29: **1** in
+  `signals` (COMPUSOFT) and **4** in `pair_signals`. Not killed, not deleted — the user's call.
+- ⛔ **The live_worker liveness alarm is a false positive after hours.** The heartbeat has a 600 s
+  TTL and the worker exits at session end. Run proof lives in `tickmode:health:{day}`.
+- ⛔ **Seal breach recorded.** The M93 audit (09-21) computed returns on both sealed holdouts. An
+  addendum is on `RETIREMENT-2026-09-20.md`.
+- ✅ **Stale facts corrected** in CLAUDE.md and PHASES: index history restored (21,600 rows / 800
+  sessions); `cas_daily` holds 11 sessions (unread); `_CLEAN_SINCE` is in six scripts and is now the
+  seal boundary, which closes the "owed un-truncation" item.
+- ⭐ **Successor proposal** (not adopted): CAS liquidity provision. Three draft pre-registrations
+  with kill criteria first. ORB is killed by cost arithmetic; market intraday momentum is parked.
+
 ### ⭐⭐ Q1 — the clustered-SE sweep: the retirement is safe, and one defect confirmed (2026-09-23/24)
 
 After M93 — where `stddev/sqrt(count)` over stock-days that cluster by session inflated a t

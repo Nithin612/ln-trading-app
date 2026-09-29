@@ -10,6 +10,81 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
+## ▶ STATE AT A GLANCE (updated 2026-09-29) — Nemotron round 2: two live defects, one seal breach, a successor PROPOSAL
+
+Record: `nemotron_review.md` → **ROUND 2**. Everything below was measured read-only (a
+`SET TRANSACTION READ ONLY` session, Redis reads, the code). **No code and no data were changed.**
+
+⛔⛔ **LIVE DEFECT — two Celery beat schedulers since 2026-09-29 19:04 IST.**
+
+- The cause: the embedded beat of the 2026-09-28 `make worker` (**PID 2091604**, reparented to
+  `systemd --user`, holding the deleted `celerybeat-schedule.db`) outlived its worker. A new worker
+  added a second beat.
+- Measured: tonight's `nightly-signal-generation` and `mint-pair-signals` each **ran twice**. That
+  produced **1 duplicate signal** (COMPUSOFT, 120 ms apart) and **4 duplicate pair signals**.
+- `_has_active_signal` is a read-then-insert guard with no unique constraint behind it, so it cannot
+  stop *concurrent* runs.
+- **Not killed and not deleted — both are the user's decision.** Durable fix proposed: beat as its
+  own process with a pidfile.
+
+⛔ **The "live_worker — last heartbeat never seen" alarm is a FALSE POSITIVE after hours.**
+
+- The heartbeat key has a 600 s TTL and live_worker exits at session end, so every evening report
+  reads it as "never seen".
+- The durable proof is `tickmode:health:{day}`: the live path ran on **09-23, 09-28 and 09-29**
+  (2.4M / 5.3M / 3.0M ticks) and **not on 09-24 or 09-25**.
+
+⛔⛔ **SEAL BREACH.** `m93_cluster_audit.py` (`b824ca5`, 2026-09-21) computed returns on **both**
+sealed holdouts three days after the seal (`generate_series(2020,2026)`).
+
+- **Spent:** the overnight-gap → same-day open→close family, on both blocks.
+- The blocks are **no longer "untouched"**. The retirement record now carries an addendum.
+- Remedy proposed: a date-guard in the shared loaders. Digests detect modification, never reads.
+
+✅ **Corrected facts** (W1):
+
+- `index_ohlcv_1d` holds **21,600 rows / 27 indices / 800 sessions** (2023-07-03 → 2026-09-29). It
+  was restored by 09-17; the "destroyed, 51 rows" line was stale.
+- `cas_daily` holds **1,976 rows / 11 sessions** (09-10 → 09-29, three lost to downtime). ⭐ Their
+  outcomes are **UNREAD**.
+- `_CLEAN_SINCE = 2023-07-03` sits in **six** scripts, not four. Since the seal it **is** the
+  test-block boundary, so the "owed un-truncation" item is **closed**: widening it would read both
+  holdouts.
+- ⚠ CAS-era `ohlcv_5m` is inconsistent after 15:15 (3 names 08-03→08-25, none 08-26→09-14, all 209
+  from 09-15, and an off-grid 15:11 bar on 09-22) ⇒ CAS-era estimands read `cas_daily`.
+
+⭐ **The bar in Sharpe units** (repo DSR maths):
+
+- Required t = 1.65 / 2.17 / 2.84 / 3.23 / **3.55** at N = 1 / 2 / 5 / 10 / **20** trials. It is
+  flat in n and barely moved by kurtosis (3.55 → 3.58 at 11.46) ⇒ **"t ≈ 3.6" is the trial count,
+  not the tails.**
+- ⇒ On the 763-session pre-CAS 5-minute block, **net annual Sharpe ≥ 2.04** is needed. Only
+  high-breadth, cross-sectional designs can be confirmed here.
+- A 45-session profitable record carries a likelihood ratio ≤ **1.6** even for a true Sharpe-2
+  strategy ⇒ **paper and pilot trading test FIDELITY, not edge.**
+
+⭐ **Successor PROPOSAL — not adopted, not pre-registered: liquidity provision at the CAS.**
+
+- **Mechanism:** Bogousslavsky & Muravyev, *J. Financial Markets* 2023 — closing-price deviations
+  revert **85%** by the next morning. **In-house:** Stage 2, ρ −0.272 over 7 days.
+- **Three drafts, kill criteria first:**
+  - **PR-1** — pre-CAS late-session pressure → overnight reversal, 763 sessions, runnable now.
+  - **PR-2** — the CAS forward, executable version.
+  - **PR-3** — a Kite 5-minute backfill for 2019-10 → 2023-07, which would be the first intraday
+    holdout.
+- ⛔ **Stage 2's signal uses the FINAL auction print**, which is not executable. `cas_capture.py:118`
+  overwrites `indicative_close` on every poll, so the executable decision-time signal is being lost
+  daily. Capture change proposed.
+- ⚠ **It is an overnight CNC long-only strategy**, which conflicts with the intraday/MIS direction
+  (user, 09-20).
+- Also triaged **without reading data**: ORB-on-stocks-in-play is **killed by arithmetic** (a 10%-ATR
+  stop costs ≈ 0.33R per trade vs a published +0.08R). Market intraday momentum is **parked** (India
+  is in neither JFE sample; underpowered; its mechanism broke on 2024-11-20 and 2026-08-03).
+
+⛔ **NOTHING PUSHED.**
+
+---
+
 ## ▶ STATE AT A GLANCE (updated 2026-09-24) — ⭐⭐ Q1 SWEEP DONE: THE RETIREMENT IS SAFE.
 
 **M93 showed that an iid SE over clustered observations inflated a t by 8.6× and reversed a
@@ -2018,6 +2093,23 @@ which is what Phase-6 expectancy calibration is for.
 > single-gate consolidation** (test-first, equivalence-pinned) — it closes the
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
+
+**▶ CONTINUE HERE — updated 2026-09-29 (Nemotron round 2 sent. Five user decisions pending.)**
+
+1. **Ops, before the 2026-09-30 session.** The orphaned beat (PID 2091604, §A1 of ROUND 2 in
+   `nemotron_review.md`) double-dispatches every beat task. Kill it and decide on the duplicate
+   rows: 1 in `signals`, 4 in `pair_signals`. **The user's call.**
+2. **Wait for Nemotron's round-3 reply** to N1–N7 before turning PR-1 into a committed
+   pre-registration. The pre-registration must be committed **before** any measurement code (item
+   17's order).
+3. **Decisions only the user can make:**
+   - the CAS decision-time capture change (`cas_capture.py:118`) — every day without it loses the
+     executable signal;
+   - CNC long-only for this one strategy vs the MIS direction;
+   - whether hard constraint 2 / `entry_diversity` binds a non-confluence successor;
+   - how an auction-to-open hold is sized;
+   - the one-call Kite 5-minute depth probe for PR-3.
+4. ⛔ **Do not read the 11 accrued CAS sessions' outcomes.** They are PR-2's first observations.
 
 **▶ CONTINUE HERE — updated 2026-09-20 (SUCCESSOR PROGRAMME OPEN. Item 17 answered: BRANCH A.)**
 
