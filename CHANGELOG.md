@@ -7,6 +7,20 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Nemotron round 10 — raw evidence for Q9.1–Q9.5; DA-8 answered; PR-1 draft v2 (2026-09-30, docs only)
+
+- Round 9 contributed no verification: all NOT VERIFIED, no saved files. Its answer on
+  `cas_daily` price reads is unverifiable (no Postgres statement log).
+- Answered all five of its questions with re-runnable raw output: `fees.py` costs, the DSR bar,
+  `ohlcv_5m` coverage, and NSE/FAOP/68747 verbatim.
+- **DA-8 ✅:** before the CAS, the post-close session ran 15:40–16:00 with market orders only, CNC,
+  at the closing price (Zerodha support, archived 2025-05-30). SEBI's circular §1 confirms the
+  pre-CAS close was the VWAP of the last 30 minutes; §2.4 names passive funds trading at the
+  close.
+- **PR-1 draft v2:** 756 usable (t, t+1) pairs; cost intervals from `fees.py` to two decimals;
+  ⛔ dividend ex-dates are not excludable (`corporate_actions` holds bonus/split only), disclosed
+  as a conservative ~0.5 bps exposure.
+
 ### Nemotron round 8 — round 7 cross-verified; K7 withdrawn; PR-1 pre-registration draft v1 (2026-09-30, docs only)
 
 - Checked round 7 item by item:

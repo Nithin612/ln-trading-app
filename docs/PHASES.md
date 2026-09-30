@@ -2095,7 +2095,23 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE — updated 2026-09-30, latest (ROUND 8 sent: PR-1 pre-registration DRAFT v1 is out for its last attack.)**
+**▶ CONTINUE HERE — updated 2026-09-30, final (ROUND 10 sent: PR-1 DRAFT v2. The user decides how to finish.)**
+
+- **Round 9 verified nothing:** every item NOT VERIFIED, and no file saved. Its "no, I never read
+  `cas_daily` prices" cannot be checked (Postgres has no statement log), and if true, round 5's
+  weekday `[QUERY]` result was invented.
+- **Answered with raw output in §10.2:** costs 29.89 / 26.88 / 10.60 bps; t 3.5749;
+  `block_length` 10; coverage 760/763 sessions (the 3 misses are special short sessions);
+  **DA-8 ✅** (pre-CAS post-close 15:40–16:00, market orders, CNC, at the close — Zerodha,
+  archived 2025-05-30).
+- **Draft v2**, §10.4: usable pairs 756; ⛔ **dividends are missing from `corporate_actions`**
+  (bonus/split only) — a conservative ~0.5 bps exposure, with extending it to dividends
+  recommended.
+- **Next — the user picks:** (a) one mechanical Nemotron round, falling back to (b) if it is empty
+  again; or (b) the user is tie-breaker, and commits `docs/analysis/pr1-preregistration-2026-09-30.md`
+  → then code.
+
+**▶ CONTINUE HERE — 2026-09-30, latest (ROUND 8 sent: PR-1 pre-registration DRAFT v1 is out for its last attack.)**
 
 - **Round 7** signed C7″ and accepted the split rule (the larger component decides), but it saved
   no evidence, skipped the logic attack (A3), and its N3′ was refuted (it stated K6 as K7, and

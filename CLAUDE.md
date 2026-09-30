@@ -456,6 +456,13 @@ else.
     random close 15:28–15:30, one equilibrium fill = the official close, and a ±3% band.
     ⛔ **MIS positions in CAS stocks are squared off at 15:12**, not 15:25. A **pre-registered
     branch rule** (overnight ⇒ CNC, next-session ⇒ MIS) replaces the K5 kill.
+  - **Round 10 (2026-09-30):**
+    - ✅ pre-CAS post-close session = 15:40–16:00, market orders, CNC, at the close (Zerodha,
+      archived 2025-05-30);
+    - ⛔ **`corporate_actions` holds bonus/split only — NO dividends**, so ex-dividend R_on cannot
+      be filtered;
+    - PR-1 pre-registration **draft v2** is §10.4 of `nemotron_review.md`, awaiting the user's
+      finish decision.
   - **Round 6 (2026-09-30): Nemotron's round 5 failed its evidence audit.** 7 of ~10 items were
     false: fabricated circular quotes, a fabricated `cas_tasks.py` citation, a query result the table
     contradicts, and a forbidden read of `cas_daily` prices. ⇒ **Treat Nemotron as a design
