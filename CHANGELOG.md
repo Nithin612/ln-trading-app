@@ -49,6 +49,12 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
     parity-checked against the house functions to 1e-9.
 - **W1 fix:** `deflated_sharpe.py`'s independence caveat (docstring + the rendered report line) had
   the direction backwards. Correlated trials make the bar **conservative**.
+- **The final-round prompt carries an "ALREADY ESTABLISHED" brief:** the three defects, the
+  arithmetic, the design facts, the refuted claims and the verified external facts. It also has a
+  "where to spend your effort" list and a tagged, word-limited reply format, so a model with no
+  memory (Kimi via NVIDIA NIM) does not re-derive settled points.
+  `docs/analysis/pr1-review-packet-v3-2026-09-30.md` is the single paste-ready message (prompt +
+  extract); the rebuild command is in the prompt's header.
 - **Next:** one final verification round (`docs/analysis/pr1-review-prompt-v3-2026-09-30.md`) →
   three user decisions → commit the pre-registration → code → run once.
 
