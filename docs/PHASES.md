@@ -10,21 +10,23 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-09-30, evening) — READ THIS FIRST
+## ▶ STATE AT A GLANCE (updated 2026-09-30, late evening) — READ THIS FIRST
 
 **The one live thread: the successor to the retired scorer, "liquidity provision at NSE's closing
-auction (CAS)".** Nothing is on the money path. The design is converged and is waiting for one
-outside review pass. This block supersedes every older block below.
+auction (CAS)".** Nothing is on the money path. The outside review pass and an internal
+quant-verifier review are DONE. Between them they found **three** defects that would have decided
+PR-1 by construction; **draft v3** fixes them and waits for one final verification round. This
+block supersedes every older block below.
 
 | item | state (measured 2026-09-30) |
 |---|---|
 | **The candidate** | Buy the stocks pushed hardest DOWN into the close (against peers), sell at the next open. Mechanism: passive, derivative and NAV flows pay for immediacy at the close (SEBI CAS circular §2.2, §2.4). Literature: Bogousslavsky & Muravyev (*J. Financial Markets* 2023), 85% of closing-price deviations reversed by the next morning. In-house: CAS Stage 2, ρ −0.272 over 7 sessions (lead only) |
 | **Execution path** | ✅ Real. Retail CNC market orders fill **at the official close** in the post-close session: 15:50–16:00 now (SEBI §4.2.4), 15:40–16:00 before the CAS (Zerodha support, archived 2025-05-30) |
-| **PR-1** (historical mechanism test, 756 pairs, pre-CAS) | **Pre-registration draft v2** = `nemotron_review.md` §8.4 plus the §10.4 changes. The self-contained **two-page extract** for ONE outside pass is `docs/analysis/pr1-preregistration-extract-2026-09-30.md`. **Not committed as a pre-registration yet. No code written, nothing run.** |
+| **PR-1** (historical mechanism test, **754 pairs**, pre-CAS) | **Draft v3** = `docs/analysis/pr1-preregistration-extract-v3-2026-09-30.md` (every clause in full). ⛔ v2 had **three built-in defects**. (1) **The price tables are on different bases:** `ohlcv_5m` is back-adjusted, `ohlcv_1d` is traded prices (the two disagree by > 2% on 22.5% of name-days), and v2's intraday outcome divided one by the other ⇒ v3 computes every return inside the 5-minute table. (2) R_on started from the 30-min VWAP close: κ 0.71, a **−64 bps** built-in drag. (3) The session kill fired on 99% of genuine passes (P(PASS \| true t 3.6) **0.4%** vs v3 **47.4%**). Record: `docs/analysis/pr1-outside-pass-2026-09-30.md`. **Not committed as a pre-registration. No study code, nothing run.** |
 | **PR-2** (forward, CAS era) | `cas_daily` holds **11 sessions** (09-10 → 09-29), **unread**. ⛔ **Lost: 09-14, 09-24, 09-25 (worker down) and 09-30** (see below). Its decision read needs 30 sessions, so it cannot happen before the 2026-10-31 sunset |
 | **DA-7 post-close capture** | ✅ Built, reviewed, migrated (`7c3e9a1f5b2d`). The worker was restarted 2026-09-30 17:17 IST, so **the first capture day is 2026-10-01**. Verify after 16:05 IST that day |
 | **Workers** | One beat (PID 687469, started 17:17). The **`make worker` preflight** now refuses to start while any worker or beat is alive (two orphaned beats in two days had doubled every task) |
-| **The review loop** | Nemotron is **closed** (user decision 2026-09-30: round 5 was 7/10 false evidence, rounds 7 and 9 had none). **Next: one outside pass** on the extract (ChatGPT / a fresh Claude chat); Claude verifies every point before adoption |
+| **The review loop** | Nemotron is **closed**. ✅ **The outside pass is DONE** (5 independent reviews; the "Gemini" reply was ChatGPT's text pasted twice). Scores: Claude chat 2 decision-changing finds · Kimi and DeepSeek 1 each · ChatGPT 0 (7 valid) · Grok 0 (3 wrong). The internal quant-verifier found the third, the price-basis defect, which no outside reviewer saw. **Next: ONE final verification round** on v3 (prompt: `docs/analysis/pr1-review-prompt-v3-2026-09-30.md`), then only arithmetic fixes |
 | **Programme sunset** | **2026-10-31** — if nothing ships by then, the programme closes. PR-1 is the item that can ship before it |
 
 ⛔⛔ **2026-09-30's CAS session was LOST — caused by Claude's own deploy.**
@@ -41,13 +43,18 @@ outside review pass. This block supersedes every older block below.
   - ⇒ **Stop the worker before editing anything a task imports, or restart it the moment the edit
     lands.** Never "deploy at the next restart".
 
+⛔ **DATA FACT (2026-09-30): `ohlcv_5m` is BACK-ADJUSTED, `ohlcv_1d` is TRADED prices.** Never divide one by the other inside a return. A ratio within one table is safe, and the 09:15 bar's open equals the official open where the bases agree (98.7% exact). A sweep found no other study that mixes them inside a return.
+
 **NEXT, in order:**
 1. **2026-10-01 after 16:05 IST:** verify the first `cas_postclose_daily` day: ~210 rows,
    `first_polled_at` before 15:50, ~21 polls. Also check whether Kite's `volume` includes post-close
    trades (compare with that day's bhavcopy volume after the 18:40 EOD ingest).
-2. **The user runs the one outside pass** on the extract and brings the answers back.
-3. **The user approves draft v2** (tie-breaker) → Claude commits
-   `docs/analysis/pr1-preregistration-<date>.md` **before any code**.
+2. **The user runs the final verification round** on draft v3 (the prompt file above) and brings
+   the answers back; Claude verifies each before adoption.
+3. **The user decides three things before the freeze:** decide on demeaned (recommended) or raw ·
+   the mechanism label as a label (recommended) or a kill · v3 §9 (what a PR-1 KILL means for
+   PR-2, and PR-2's forward bar — C7″ asks t ≥ 3.575 AGAIN on fresh data, ≈3.2 years at Sharpe 2).
+   Then Claude commits `docs/analysis/pr1-preregistration-<date>.md` **before any code**.
 4. Write the PR-1 study script (read-only, window pinned) → quant-verifier on the code → **run
    once** → report → decide by the pre-registered rule.
 5. **Not blocking, waiting on the user:** add dividend ex-dates to `corporate_actions` (removes
@@ -2141,13 +2148,14 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE — updated 2026-09-30, evening (the NEXT list is in the top STATE block; this is the short form.)**
+**▶ CONTINUE HERE — updated 2026-09-30, late evening (the NEXT list is in the top STATE block; this is the short form.)**
 
 1. **2026-10-01 after 16:05 IST:** verify the first post-close capture day.
-2. **The user's outside pass** on `docs/analysis/pr1-preregistration-extract-2026-09-30.md` →
-   Claude verifies the answers.
-3. **The user approves draft v2** → commit the PR-1 pre-registration **before** code → study
-   script → quant-verifier → run once.
+2. ✅ **The outside pass + internal review are done** (`docs/analysis/pr1-outside-pass-2026-09-30.md`) → **draft v3**
+   (`docs/analysis/pr1-preregistration-extract-v3-2026-09-30.md`). **Next: the final verification
+   round** (`docs/analysis/pr1-review-prompt-v3-2026-09-30.md`).
+3. **The user's three decisions** (demeaned vs raw · label vs kill · v3 §9) → commit the PR-1
+   pre-registration **before** code → study script → quant-verifier → run once.
 
 ⛔ **2026-09-30's CAS session was lost to a mixed-version worker** (task code was edited under a
 running worker). **Stop the worker before editing task code.** The `make worker` preflight refuses a

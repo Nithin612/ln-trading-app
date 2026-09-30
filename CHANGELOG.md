@@ -7,6 +7,51 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### ⭐ PR-1 outside pass + internal review → draft v3, and one final verification round (2026-09-30)
+
+- **Five independent outside reviews** (the reply pasted as Gemini's was ChatGPT's text) and one
+  **internal `quant-verifier` review of the fixes** (verdict FAIL). Every point was re-measured
+  before adoption: `docs/analysis/pr1-outside-pass-2026-09-30.md`.
+- ⛔⛔ **Draft v2 would have decided PR-1 by construction, three ways.**
+  - **(1) The two price tables are on DIFFERENT BASES.** `ohlcv_5m` (the Kite backfill) is
+    back-adjusted for splits, bonuses, demergers, rights and some dividends; `ohlcv_1d` (the
+    bhavcopy) is traded prices. The same-session official open ÷ 09:15-bar open is > 2% from 1 on
+    **22.5% of 153,097 name-days**, and exactly equal on **98.7%** where the bases agree. v2's
+    intraday outcome divided one table by the other, and so did v3's first-draft overnight
+    outcome. **No outside reviewer found this one.**
+  - **(2) R_on started from the 30-minute VWAP close while the signal ends at the last trade.**
+    Measured κ = 0.712 (p10–p90 0.62–0.79), and the book's built-in drag is −64 bps against
+    ~35 bps of costs.
+  - **(3) The session-concentration kill fired on 99% of genuine passes:** P(PASS | true t 3.6) is
+    0.4% under v2 and 47.4% under v3, so the effective bar was t ≈ 6.3.
+- **Draft v3** (`docs/analysis/pr1-preregistration-extract-v3-2026-09-30.md`) writes every clause
+  in full.
+  - **Returns:** every return is computed inside the 5-minute table, whose 09:15 open IS the
+    official open. The daily file is used for sizing and fees only. R_on is measured from the last
+    trade.
+  - **Calendar:** the exchange calendar with five listed special sessions gives **754 pairs**
+    (756 silently spanned two muhurat sessions).
+  - **Kills:** K3 → leave-15-out, checked only on a would-be PASS · K2 keyed to the chosen branch.
+  - **Bar:** the branch chosen on the net t and charged as two trials (N = 22, t 3.5953) · DSR at
+    the REALIZED moments.
+  - **Costs:** ₹20,000/name, whole shares, sized on the traded close · every leg pays one
+    half-spread from the **book's own** bracket [1.76, 2.68] (CNC ≈ [33.93, 35.77] bps, MIS
+    [14.12, 15.96]).
+  - **New:** a mechanism label · a PROPOSED §9 with an alpha-spending forward bar.
+- **Refuted by measurement:**
+  - "the names kill has the same defect": it fires on 0.0–3.1% of passes and on 100% of 3-name
+    rescues;
+  - "the book tilts to wide spreads or low prices": 1.76 vs 1.74 bps, ₹1,161 vs ₹1,110.
+- **Two read-only scripts:**
+  - `backend/scripts/pr1_design_facts.py` reads same-session prices and dates only, in a READ
+    ONLY transaction;
+  - `backend/scripts/pr1_decision_oc.py` is synthetic, and its vectorised t and DSR are
+    parity-checked against the house functions to 1e-9.
+- **W1 fix:** `deflated_sharpe.py`'s independence caveat (docstring + the rendered report line) had
+  the direction backwards. Correlated trials make the bar **conservative**.
+- **Next:** one final verification round (`docs/analysis/pr1-review-prompt-v3-2026-09-30.md`) →
+  three user decisions → commit the pre-registration → code → run once.
+
 ### ⛔ 2026-09-30's CAS session was lost to a mixed-version worker — and a documentation audit (docs only)
 
 - **The loss.** `cas_daily` has 0 rows for 2026-09-30 although the Kite token was valid (created

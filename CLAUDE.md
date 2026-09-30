@@ -467,7 +467,31 @@ else.
     - ⛔ **`corporate_actions` holds bonus/split only — NO dividends**, so ex-dividend R_on cannot
       be filtered;
     - PR-1 pre-registration **draft v2** is §10.4 of `nemotron_review.md`, and the dialogue is CLOSED (user,
-      2026-09-30). Next: one outside pass on the extract → commit the pre-registration → PR-1.
+      2026-09-30).
+  - **⛔⛔ The outside pass (5 reviews) and an internal quant-verifier review (2026-09-30) found
+    that v2 would have decided PR-1 by construction, three ways**
+    (`docs/analysis/pr1-outside-pass-2026-09-30.md`):
+    - **the price tables are on different bases** (below), and v2's intraday outcome divided one by
+      the other. No outside reviewer saw this;
+    - R_on started from the 30-min VWAP close while s ends at the last trade: κ 0.71, a −64 bps
+      built-in drag toward KILL;
+    - the session-concentration kill fired on 99% of genuine passes (P(PASS | true t 3.6) = 0.4%,
+      against 47.4% after the fix).
+  - ⇒ **Draft v3** = `docs/analysis/pr1-preregistration-extract-v3-2026-09-30.md`. Next: ONE final
+    verification round (`docs/analysis/pr1-review-prompt-v3-2026-09-30.md`) → the user's three
+    decisions → commit the pre-registration → PR-1.
+  - ⭐ **RULE: an extract for review carries every clause in full.** The v2 extract dropped four
+    settled clauses, and a reviewer spent a point on them.
+  - ⭐ **RULE: every kill is run against a planted edge at the bar before the freeze.** The broken
+    kill takes three lines of arithmetic to see, and nobody had run it (`scripts/pr1_decision_oc.py`).
+  - ⛔⛔ **DATA FACT: `ohlcv_5m` (the Kite backfill) is BACK-ADJUSTED for splits, bonuses,
+    demergers, rights and some dividends; `ohlcv_1d` (the bhavcopy) is TRADED prices.**
+    - The same-session official open ÷ 09:15-bar open is > 2% from 1 on 22.5% of name-days,
+      stepping at corporate-action dates (e.g. KOTAKBANK 5.0 until its split).
+    - ⇒ **Never divide one table by the other inside a return.** A ratio within one table is safe.
+      Where the bases agree, the 09:15 bar's open IS the official open (98.7% exact).
+    - Size and cost trades on the traded (daily) price.
+    - A sweep on 2026-09-30 found no other study that mixes them inside a return.
   - **Round 6 (2026-09-30): Nemotron's round 5 failed its evidence audit.** 7 of ~10 items were
     false: fabricated circular quotes, a fabricated `cas_tasks.py` citation, a query result the table
     contradicts, and a forbidden read of `cas_daily` prices. ⇒ **Treat Nemotron as a design

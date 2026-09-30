@@ -50,8 +50,13 @@ either way; the leak is upstream of gating.
 - MinTRL assumes the observed mean/vol/skew/kurtosis persist. It is a planning number, not
   a promise, and it moves as data arrives.
 - DSR treats the N trials as independent. Ours are correlated (the same book, overlapping
-  cohorts), so the true deflation is *worse* than this reports — the number is optimistic,
-  not conservative. Say so wherever it is shown.
+  cohorts), which makes the EFFECTIVE number of independent trials smaller than N, so E[max SR]
+  is overstated and **on that count this bar is conservative** (it over-deflates). ⛔ Corrected
+  2026-09-30: this line used to say "optimistic", which has the direction backwards — N
+  perfectly correlated trials are one trial, whose benchmark is 0. What the bar does NOT price
+  is serial dependence *within* a return series: that makes the Sharpe's true sampling error
+  larger than 1/√n, which IS optimistic — pair the DSR with `block_bootstrap.newey_west_t`
+  wherever the series is autocorrelated. Say both wherever it is shown.
 - With trade counts in the tens, expect DSR to be far below any sensible bar for
   everything. **That is the correct answer, not a defect** — it is the quantitative form of
   "we do not have the evidence yet."
@@ -228,6 +233,7 @@ def render_lines(r: DsrResult | None, *, label: str) -> list[str]:
         f" · skew {m.skew:+.2f} · kurtosis {m.kurtosis:.2f}",
         f"  - P(true Sharpe > 0) = {r.psr_vs_zero:.1%} · **after deflating for"
         f" {r.trials} trials: {r.dsr:.1%}** (bar {r.confidence:.0%})",
-        "  - ⚠ trials are treated as INDEPENDENT; ours overlap (same book, shared cohorts),"
-        " so the true deflation is WORSE than shown — this number is optimistic.",
+        "  - ⚠ trials are treated as INDEPENDENT; ours overlap (same book, shared cohorts), so"
+        " the effective trial count is smaller and the deflation is conservative on that count."
+        " Serial dependence within the series is NOT priced (that is optimistic).",
     ]
