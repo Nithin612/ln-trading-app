@@ -449,6 +449,11 @@ else.
     pre-CAS 5-minute block** ⇒ only high-breadth designs are confirmable here.
   - Lead successor **PROPOSAL** (not adopted): CAS liquidity provision. It is overnight CNC
     long-only, so it conflicts with MIS.
+  - **Round 4 (2026-09-30) locked the scope to that one candidate.** Primary sources
+    (NSE/CMTR/73362, Zerodha) confirm that retail orders can enter the CAS: 15:20–15:30, with a
+    random close 15:28–15:30, one equilibrium fill = the official close, and a ±3% band.
+    ⛔ **MIS positions in CAS stocks are squared off at 15:12**, not 15:25. A **pre-registered
+    branch rule** (overnight ⇒ CNC, next-session ⇒ MIS) replaces the K5 kill.
 - **⭐⭐ THE CLUSTERED-SE SWEEP (Q1) IS DONE — THE RETIREMENT IS SAFE, 2026-09-24.** M93 showed an
   iid SE over session-clustered observations inflating a t **8.6×** and reversing a conclusion, so
   the repo was swept for the same defect class (`docs/analysis/clustered-se-sweep-2026-09-23.md`).

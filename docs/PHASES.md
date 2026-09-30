@@ -2095,7 +2095,25 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE — updated 2026-09-29 (Nemotron round 2 sent. Five user decisions pending.)**
+**▶ CONTINUE HERE — updated 2026-09-30 (Nemotron ROUND 4 sent: the scope is LOCKED to CAS liquidity provision.)**
+
+⭐ `nemotron_review.md` ROUND 4 is a ledger: §4.1 AGREED (locked) · §4.2 settled by primary sources ·
+§4.3 needs improvement · §4.4 PARKED (with unpark conditions) · §4.5 CLOSED · §4.6 needs data.
+
+- **Settled by primary sources** (NSE/CMTR/73362 + Zerodha): retail orders CAN enter the CAS
+  (15:20–15:25 market + limit, 15:25–15:30 limit only, random close 15:28–15:30). All fills are at
+  ONE equilibrium price, which is the official close. The band is ±3% of the 15:00–15:15 VWAP.
+  ⛔ **MIS in CAS stocks is squared off at 15:12.** A BTST sell DOES pay the ₹15.34 DP charge.
+- **K5 is replaced by a pre-registered BRANCH rule** (N = 21, t ≥ 3.575). Overnight-dominant ⇒ CNC
+  long-only via the auction; next-session-dominant ⇒ MIS long-short from next open to 15:10. The
+  MIS branch can use the final auction print, so it needs no capture change. **K6** (name
+  concentration) is added.
+- **Waiting on the user:** DA-1, the decision-time indicative capture change. Every session
+  without it is lost for the CNC branch. Also DA-6, the Kite depth probe.
+- **Next, only after Nemotron signs C7′:** commit PR-1's pre-registration, then write the study
+  code, then run it. Nothing earlier.
+
+**▶ CONTINUE HERE — 2026-09-29 (Nemotron round 2 sent. Five user decisions pending.)**
 
 1. ✅ **Ops — DONE 2026-09-29 ~23:20 IST (user).** The orphaned beat (PID 2091604) was stopped and
    the 5 duplicate rows were deleted. Still open: the durable fix (a standalone beat with a pidfile).

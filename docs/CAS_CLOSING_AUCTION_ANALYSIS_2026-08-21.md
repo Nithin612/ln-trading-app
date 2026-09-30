@@ -49,7 +49,11 @@ This is the important part, and it corrects the naive "predict the closing price
 - **The accessible, lower-frequency edge: the overnight REVERSAL of the auction move.** Multiple studies
   find **closing-auction returns are systematically reversed overnight (~14% of the auction return
   reverses, persisting >2h into the next session)** — i.e. part of the auction move is transient
-  order-pressure, not information, and it gives back. **This is exactly our timeframe** (buy near close,
+  order-pressure, not information, and it gives back. ⚠ *(2026-09-30: the ~14% figure is
+  **UNSOURCED** — no study was ever cited for it, and a reviewer misattributed it to a real paper.
+  The one primary source opened since, Bogousslavsky & Muravyev, *J. Financial Markets* 66 (2023),
+  reports closing-price deviations reversing **~85% by the next morning** (reversal coefficient
+  −0.85, their Table 7). Cite that, not this line.)* **This is exactly our timeframe** (buy near close,
   sell next day). It says: a stock *pushed up* into the CAS close tends to open softer; one *pushed
   down* tends to bounce.
 - **Auctions concentrate volume** (up to ~⅓ of daily volume in some markets) and can *raise* costs +
@@ -63,8 +67,8 @@ This is the important part, and it corrects the naive "predict the closing price
 
 | Angle | Feasible for us? | Why |
 |---|---|---|
-| Intraday CAS clearing-price prediction | **No** | No live imbalance feed (retail Kite almost certainly doesn't expose CAS imbalance/indicative price), no colocation/latency, institutions dominate. |
-| MOC / at-the-close participation | **No (yet)** | Needs live trading (our Phase 7, unbuilt), a close-auction order type, and the feed. |
+| Intraday CAS clearing-price prediction | **No** | No live imbalance feed (retail Kite almost certainly doesn't expose CAS imbalance/indicative price), no colocation/latency, institutions dominate. ⚠ *(corrected 2026-09-30: Stage 0 below shows Kite `/quote` DOES carry `indicative_close_price` + `total_imbalance_qty`; the colocation/latency point stands.)* |
+| MOC / at-the-close participation | **No (yet)** | Needs live trading (our Phase 7, unbuilt), a close-auction order type, and the feed. ⚠ *(2026-09-30: the EXCHANGE and BROKER allow it. Retail limit/market orders are taken 15:20–15:25, limit-only 15:25–15:30 with a random close 15:28–15:30; all matched orders fill at ONE equilibrium price = the official close; the band is ±3% of the 15:00–15:15 VWAP (NSE/CMTR/73362; Zerodha support). What is missing is only OUR order path, and paper can model the fill.)* |
 | **Overnight reversal of the CAS move** | **Plausibly yes** | Lower-frequency, uses only the 3:15 price + official close + next-day open — data we can capture. Fits our near-close→next-day style. Must be *measured on NSE*, not assumed. |
 | **Using the CAS move / official close as CONTEXT** | **Yes** | Feature for our existing next-day decisions; and a data-correctness fix (3:15 ≠ close for Cat-I). |
 

@@ -7,6 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Nemotron round 4 — the ledger; retail CAS participation confirmed (2026-09-30, docs only)
+
+Round 4 of the review, in `nemotron_review.md`. It **locks the scope** to CAS liquidity
+provision and lays out the dialogue as a ledger: agreed · settled · needs improvement · parked
+(each with its unpark condition) · closed · needs data.
+
+- ✅ **N2 answered from primary sources** (NSE circular NSE/CMTR/73362; Zerodha support and
+  Z-Connect):
+  - retail orders enter the CAS: 15:20–15:25 market + limit, 15:25–15:30 limit only, random close
+    15:28–15:30;
+  - every order fills at one equilibrium price, which is the official close;
+  - the band is ±3% of the 15:00–15:15 VWAP;
+  - **MIS in CAS stocks is squared off at 15:12**;
+  - a BTST sell pays the ₹15.34 DP charge.
+- ⛔ **Nemotron's N3 evidence was misattributed.** Its "~14% overnight" is an **uncited** line
+  in our own CAS doc, not Bogousslavsky & Muravyev (85%). That line is now marked UNSOURCED, and
+  the stale "retail Kite can't see the indicative price" row is corrected (W1).
+- **K5 → a pre-registered branch rule** (N = 21, t ≥ 3.575), and **K6** (name concentration)
+  is added.
+
 ### ⛔ Nemotron round 2 — two live defects, one seal breach, a successor proposal (2026-09-29, docs only)
 
 Round 2 of the Nemotron review, in `nemotron_review.md`. Every claim was checked read-only against
