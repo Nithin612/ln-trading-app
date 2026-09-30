@@ -65,13 +65,13 @@ KNOWN_UNWIRED: dict[str, str] = {
 #: ⭐ Public but reached only from INSIDE their own module — NOT debts. A separate category
 #: because the lint judges CROSS-module reachability (it excludes the module under test), so an
 #: internal helper would otherwise be filed as dead when it is reached on every call.
-INTERNAL_HELPERS: dict[str, str] = {
-    "current_commit": (
-        "ledger.py — called by `record()` itself, so it is reached in production through every "
-        "ledger write. Public because the tests assert the commit is stamped, and because a "
-        "future manifest writer will want it directly."
-    ),
-}
+#:
+#: ⭐ `current_commit` left this list on 2026-09-30: item 22 (d714a3e, 2026-09-19) gave it a direct
+#: production caller outside ledger.py — `gate_config_history.py:102` stamps every gate-config
+#: version with it — so it is wired, not an internal helper. Keeping it here left this test red
+#: from 09-19, which is the lint doing its job: a recorded exception must be removed when it is
+#: paid, or the list stops meaning anything.
+INTERNAL_HELPERS: dict[str, str] = {}
 
 
 def _public_functions(rel: str) -> set[str]:
