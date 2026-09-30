@@ -139,3 +139,101 @@ cd backend && uv run python scripts/pr1_decision_oc.py    # synthetic; parity-ch
   1. decide on demeaned (recommended) or raw;
   2. the mechanism label as a label (recommended) or a kill;
   3. §9 — what a PR-1 KILL means for PR-2, and PR-2's forward bar.
+
+---
+
+# Round 2 — verification of draft v3 (2026-09-30)
+
+**Replies:** ChatGPT, DeepSeek, Grok, Claude chat, Gemini, Kimi.
+- ⚠ **Kimi never received the document**: its words were "only your cover note reached me". It
+  reviewed the prompt alone. For NIM, send the packet file, not the prompt.
+- Every decision-relevant claim was re-checked by simulation or by an outcome-free query
+  (scratchpad `r2_sim.py`, `r2_data.py`) before a verdict.
+
+## The one decision-changing finding — K2 was the kill §7 said it had NOT simulated
+
+⭐ **K2's whole-cohort IC lets the side the book never trades decide** (Claude chat, with a
+simulation; ChatGPT row 6; Kimi §7 — three sources).
+- **Mechanism:** the reversal lives in the 5-name book, but the IC ranks all ~204 names. A mild
+  continuation of late UP-moves pushes the IC to ≥ 0.
+- **Re-simulated:** 204 names, reversal confined to the book and calibrated to a net t of 3.6.
+  Up-move continuation m = 0 / 0.02 / 0.03 / 0.04 (σ of R per σ of s) ⇒ the whole-cohort K2
+  fires on **0.0% / 10.2% / 69.7% / 98.2%** of genuine passes. Claude's figures were 0 / 8.7 /
+  62.9 / 98.7.
+- **Fix, verified:** compute K2 on names with s **below the session median**. It fires on
+  **0.0%** of passes in every cell, and on **49.7%** under the null, so it keeps its KILL role.
+- **Same root, smaller:** the cohort mean the book is demeaned against also absorbs the up side's
+  response (Claude: the book t falls by ≈ 25·m). ⇒ a middle-tercile-demeaned rerun, descriptive.
+- ⭐ **LESSON:** v3's §7 said "K2 is not simulated". Every reviewer who took that disclosure
+  seriously found the defect. A disclosed gap in the instrument validation is where the next
+  defect lives: **simulate every kill, including the cross-sectional ones, before the freeze.**
+
+## Material — verified
+
+| # | point | source | verdict | evidence |
+|--:|---|---|---|---|
+| M1 | PR-2's "same book rule" cannot run in the auction era | Claude | ✅ **CONFIRMED** | 2026-08-10: bars stamped 15:15–15:25 exist for **3 of 209** names (pre-auction 2026-07-10: 209 of 209). So P1530 is undefined, and "all 75 bars" fails. ⇒ **commit PR-2's translation WITH PR-1's freeze**, or PR-1's result can shape it |
+| M2 | Extend the night-drop to every ADJUSTED corporate action (demergers, rights, adjusted dividends) | DeepSeek, Claude; Kimi (dividends) | ✅ **CONFIRMED** | 554 name-nights on the 754 pairs have an overnight basis step, **18 of them book slots**. RELIANCE's JFS factor is **1.0491 = 1/0.9532**, the company's *tax cost-apportionment ratio*, not the market's split, so the adjusted return across a demerger night is wrong, not merely unrealizable. There is also no 09:15 bar on 2023-07-20 (special pre-open). ⇒ drop any name-night whose same-session basis steps overnight (> 0.3%), in addition to the split/bonus list |
+| M3 | The spread top 2.68 is not shown to bound the MEAN half-spread | ChatGPT | ◐ **answered with a number** | Book-slot mean **2.18 bps** (clamped windows as 0), window-cluster 90% CI **[1.91, 2.48]**. 2.68 > 2.48, so it IS conservative; §5 must state this |
+| M4 | §9 forward bar: 1.4 years is 50% power, not a plan; the alpha-spending looks must be exact | Claude, ChatGPT | ✅ | 80% power at one-sided 1% needs **2.51 y** at Sharpe 2 and 4.46 y at 1.5 (Claude, reproduced by formula). Plan on a SHRUNK effect (winner's curse), and decide PR-2 on a pre-registered fill rule from the post-close capture |
+| M5 | §7 does not model the two-branch max | ChatGPT, DeepSeek | ✅, no change to the verdict | Re-simulated: double null P(PASS) **0.07%**; (3.6, 0) → 51.5% with the true branch chosen **99.4%**; (2, 2) → 12.8% |
+
+## Refuted or answered
+
+- **DeepSeek row 4 ("K3 kills an expiry-concentrated edge"): REFUTED.** Edge on 36 or 150 expiry
+  sessions, with or without ordinary-day bleed ⇒ K3 fires on **0.0%** of passes.
+- **DeepSeek row 13 ("decide on raw")**: re-raised without a new argument. It stays user decision
+  #1; this round 4 of 6 accept demeaned.
+- **Kimi's main finding ("decide the overnight branch on the VWAP entry")**:
+  - Its premise is **factually wrong**. A post-close order is placed after the close is set, so
+    the fill price is known before ordering in BOTH regimes.
+  - The real question is which old-regime price stands for the auction price. The auction price
+    carries the forced flow's full impact at one print and IS executable post-close. The old
+    regime's full-impact print is P1530; the VWAP averages the impact.
+  - ⇒ keep P1530 for the decision, with ChatGPT's wording ("a synthetic signal-completion price",
+    not an "executable analog"). Keep Claude's thin-print disclosure and its descriptive variant:
+    s ending at P1525, so s and R_on share no print.
+  - **It remains a genuine judgment ⇒ user decision #4.**
+- **Grok and Gemini:** all ACCEPT, "no decision-changing flaw". Both ran the arithmetic correctly;
+  neither probed K2. Grok's "K2 cannot manufacture a false PASS" is true, and misses the false
+  KILL.
+
+## Cosmetic (to fix in v3.1)
+
+- cl. 3 ("R_day = 0") vs cl. 7 ("never entered") for a suspended MIS slot (Claude).
+- Pin N_prior = 20 to the programme ledger (A3) (Claude).
+- Define "the bases agree" (|A−1| < 2%). The facts script's "one-day mismatches (0.3–2%): 809"
+  label is wrong: most are dividend-adjustment offsets.
+- The simulation splits K4 by index, not the dated halves.
+- Add the K2 cross-section model, the two-branch rows and the expiry rows to
+  `scripts/pr1_decision_oc.py`.
+
+## Arithmetic
+
+ChatGPT, DeepSeek, Grok, Gemini and Claude all reproduced §5 and §6 (MATCH). The four that ran
+Appendix B got 0.5 / 47.5 and 10.2 / 90.7, the same as each other and consistent with §7.
+
+## Scorecard (round 2)
+
+| reviewer | decision-changing | material | wrong / refuted | note |
+|---|--:|--:|--:|---|
+| **Claude chat** | **1** (K2, simulated) | 3 (M1, M2, M4) | 0 | best again; ran code; sharp requests |
+| **ChatGPT** | 1 (K2, row 6, unquantified) | 2 (M3, M4) | 0 | ran Appendix B |
+| **DeepSeek** | 0 | 1 (M2) | 1 (K3-expiry) | re-raised row 13 |
+| **Kimi** | 1 (K2, flagged blind) | — | 1 (its row-2 premise) | reviewed without the document |
+| **Gemini** | 0 | 0 | 0 | arithmetic only |
+| **Grok** | 0 | 0 | 0 | rubber stamp |
+
+## Recommendation
+
+**No further external rounds.**
+- The remaining changes are specified fixes, each already verified by simulation or measurement.
+- **Next:** v3.1 (the freeze candidate):
+  - K2 on the lower half;
+  - the basis-step night-drop;
+  - the §5 mean-spread evidence;
+  - the PR-2 translation committed with PR-1;
+  - the §9 power wording;
+  - the cosmetics.
+- Then extend the OC script, run one internal `quant-verifier` pass on the diff, get the user's
+  four decisions, and commit.

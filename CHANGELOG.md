@@ -7,6 +7,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### PR-1 final verification round adjudicated — one more decision-changing defect (2026-09-30, docs only)
+
+- **Six replies** (Kimi never received the document), every decision-relevant claim re-checked by
+  simulation or an outcome-free query. Record: `docs/analysis/pr1-outside-pass-2026-09-30.md` →
+  Round 2.
+- ⭐ **K2's whole-cohort IC fires on 0.0 / 10.2 / 69.7 / 98.2% of genuine passes** as late UP-move
+  continuation rises from 0 to 0.04. The up side is never traded, so it should not decide. **K2 on
+  the lower half of s** fires 0.0% on passes and 49.7% under the null. This was the one kill §7
+  said it had not simulated.
+- **Verified material fixes:**
+  - the auction-era bars stop at 15:15 (3 of 209 names have later bars on 2026-08-10), so PR-2's
+    translation must be committed WITH PR-1;
+  - drop every name-night with an overnight basis step (554 name-nights, 18 book slots). RELIANCE's
+    demerger factor is the company's tax cost-apportionment ratio (0.9532), not the market's split;
+  - the book-slot mean half-spread is 2.18 bps, 90% CI [1.91, 2.48], so 2.68 is conservative.
+- **Refuted:**
+  - "K3 kills an expiry-concentrated edge" (0.0% of passes);
+  - Kimi's "decide on the VWAP entry" premise (a post-close fill price is known before ordering in
+    both regimes). The entry base stays a user decision.
+- **No further external rounds.** Next: v3.1 → the OC script with K2 in it → one internal review →
+  four user decisions → commit.
+
 ### ⭐ PR-1 outside pass + internal review → draft v3, and one final verification round (2026-09-30)
 
 - **Five independent outside reviews** (the reply pasted as Gemini's was ChatGPT's text) and one

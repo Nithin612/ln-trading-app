@@ -49,11 +49,20 @@ block supersedes every older block below.
 1. **2026-10-01 after 16:05 IST:** verify the first `cas_postclose_daily` day: ~210 rows,
    `first_polled_at` before 15:50, ~21 polls. Also check whether Kite's `volume` includes post-close
    trades (compare with that day's bhavcopy volume after the 18:40 EOD ingest).
-2. **The user runs the final verification round** on draft v3 (the prompt file above) and brings
-   the answers back; Claude verifies each before adoption.
-3. **The user decides three things before the freeze:** decide on demeaned (recommended) or raw ·
-   the mechanism label as a label (recommended) or a kill · v3 §9 (what a PR-1 KILL means for
-   PR-2, and PR-2's forward bar — C7″ asks t ≥ 3.575 AGAIN on fresh data, ≈3.2 years at Sharpe 2).
+2. ✅ **The final verification round is DONE** (6 replies; Kimi never received the document). It
+   found **one decision-changing defect**: K2's whole-cohort IC fires on ~70% of genuine passes
+   under a mild up-move continuation. The fix, K2 on the lower half of s, fires 0.0% on passes and
+   ~50% under the null. It also found 3 material fixes: PR-2's translation must be committed with
+   PR-1; drop every adjusted-CA night; the §5 mean-spread evidence (2.68 > the mean's 90% upper
+   bound, 2.48). All are verified: `docs/analysis/pr1-outside-pass-2026-09-30.md` → Round 2.
+   **No further external rounds** → v3.1, the freeze candidate.
+3. **The user decides four things before the freeze:**
+   - decide on demeaned (recommended) or raw;
+   - the mechanism label as a label (recommended) or a kill;
+   - v3 §9: what a PR-1 KILL means for PR-2, and PR-2's forward bar. C7″ asks t ≥ 3.575 AGAIN on
+     fresh data, ≈3.2 years at Sharpe 2;
+   - the overnight entry base: the last trade (recommended; the auction price's full-impact
+     analog) or the VWAP close (Kimi; old-regime executable, carrying the −64 bps drag).
    Then Claude commits `docs/analysis/pr1-preregistration-<date>.md` **before any code**.
 4. Write the PR-1 study script (read-only, window pinned) → quant-verifier on the code → **run
    once** → report → decide by the pre-registered rule.
@@ -2151,11 +2160,13 @@ which is what Phase-6 expectancy calibration is for.
 **▶ CONTINUE HERE — updated 2026-09-30, late evening (the NEXT list is in the top STATE block; this is the short form.)**
 
 1. **2026-10-01 after 16:05 IST:** verify the first post-close capture day.
-2. ✅ **The outside pass + internal review are done** (`docs/analysis/pr1-outside-pass-2026-09-30.md`) → **draft v3**
-   (`docs/analysis/pr1-preregistration-extract-v3-2026-09-30.md`). **Next: the final verification
-   round** (`docs/analysis/pr1-review-prompt-v3-2026-09-30.md`).
-3. **The user's three decisions** (demeaned vs raw · label vs kill · v3 §9) → commit the PR-1
-   pre-registration **before** code → study script → quant-verifier → run once.
+2. ✅ **Outside pass + internal review + the final verification round are all done**
+   (`docs/analysis/pr1-outside-pass-2026-09-30.md`). Round 2 found K2 (decision-changing) plus 3
+   material fixes, all verified. **Next: v3.1 (the freeze candidate)** → the OC script with K2
+   inside it → one internal quant-verifier pass.
+3. **The user's four decisions** (demeaned vs raw · label vs kill · v3 §9 · last-trade vs VWAP
+   entry) → commit the PR-1 pre-registration **before** code → study script → quant-verifier →
+   run once.
 
 ⛔ **2026-09-30's CAS session was lost to a mixed-version worker** (task code was edited under a
 running worker). **Stop the worker before editing task code.** The `make worker` preflight refuses a
