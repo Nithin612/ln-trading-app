@@ -466,8 +466,8 @@ else.
       archived 2025-05-30);
     - ⛔ **`corporate_actions` holds bonus/split only — NO dividends**, so ex-dividend R_on cannot
       be filtered;
-    - PR-1 pre-registration **draft v2** is §10.4 of `nemotron_review.md`, awaiting the user's
-      finish decision.
+    - PR-1 pre-registration **draft v2** is §10.4 of `nemotron_review.md`, and the dialogue is CLOSED (user,
+      2026-09-30). Next: one outside pass on the extract → commit the pre-registration → PR-1.
   - **Round 6 (2026-09-30): Nemotron's round 5 failed its evidence audit.** 7 of ~10 items were
     false: fabricated circular quotes, a fabricated `cas_tasks.py` citation, a query result the table
     contradicts, and a forbidden read of `cas_daily` prices. ⇒ **Treat Nemotron as a design
