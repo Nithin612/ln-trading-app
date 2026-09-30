@@ -91,7 +91,8 @@ celery_app.conf.beat_schedule = {
     },
     # CAS (Closing Auction Session) capture (Stage 1) — every minute over 09:00–10:59 UTC
     # (14:30–16:29 IST, a superset); the task self-guards to the exact CAS window 15:15–15:33 IST
-    # (= 09:45–10:03 UTC, which a single crontab can't express). Research-only; no order path.
+    # (= 09:45–10:03 UTC, which a single crontab can't express) AND to the post-close window
+    # 15:44–16:05 IST (DA-7, → cas_postclose_daily). Research-only; no order path.
     "capture-cas-window": {
         "task": "app.tasks.cas_tasks.capture_cas_window",
         "schedule": crontab(minute="*/1", hour="9,10", day_of_week="1-5"),

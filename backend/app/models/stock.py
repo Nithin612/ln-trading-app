@@ -233,6 +233,43 @@ class CasDaily(Base):
         )
 
 
+class CasPostCloseDaily(Base):
+    """Post-close session capture (DA-7) — one row per (stock, trade_date).
+
+    Captured from Kite /quote by the same market-hours task as `CasDaily` (cas_tasks.py), over
+    15:44–16:04 IST, which brackets the post-close session (15:50–16:00, trades at the closing
+    price — SEBI CAS circular clause 4.2.4). It records whether a buyer at the official close could
+    actually have been filled: the cumulative volume just after the auction (frozen on the first
+    poll), the peak pending buy/sell quantity during the session, and the latest volume after it.
+    Post-close volume = `volume_latest − volume_after_auction`, valid only when `first_polled_at`
+    is before 15:50 IST. Research only — never gates, sizes or trades."""
+
+    __tablename__ = "cas_postclose_daily"
+
+    stock_id: Mapped[int] = mapped_column(
+        BigInteger, ForeignKey("stocks.id", ondelete="CASCADE"), primary_key=True, nullable=False
+    )
+    trade_date: Mapped[date] = mapped_column(Date, primary_key=True)
+    volume_after_auction: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    first_polled_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+    volume_latest: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    last_price_latest: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
+    max_buy_qty: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    max_sell_qty: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    polls: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    captured_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    def __repr__(self) -> str:
+        return (
+            f"<CasPostCloseDaily stock_id={self.stock_id} {self.trade_date} "
+            f"vol_after_auction={self.volume_after_auction} vol_latest={self.volume_latest}>"
+        )
+
+
 class SavedScreen(Base):
     __tablename__ = "saved_screens"
 

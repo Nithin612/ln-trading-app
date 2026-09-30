@@ -114,6 +114,17 @@ backend:  ## Run FastAPI dev server (hot-reload)
 
 .PHONY: worker
 worker:  ## Celery worker + embedded beat (EOD ingestion, nightly signals). Part of the daily ritual — EOD tasks self-heal missed sessions (services/eod_catchup.py)
+	@# Preflight (2026-09-30): an embedded `-B` beat can OUTLIVE its worker (reparented to
+	@# systemd --user, holding a deleted celerybeat-schedule.db). Starting another worker then
+	@# gives TWO beats and every scheduled task runs twice — it happened 2026-09-29 AND 09-30
+	@# (duplicate signals + pair signals). Refuse to start while any worker/beat is alive.
+	@# The [c] keeps pgrep from matching this recipe's own shell.
+	@if pgrep -f "[c]elery -A app.celery_app worker" >/dev/null; then \
+		echo "$(YELLOW)✗ A Celery worker or beat for this app is already running. Stop it first — a second beat double-dispatches every task:$(NC)"; \
+		pgrep -af "[c]elery -A app.celery_app worker"; \
+		echo "   stop the worker in its terminal (Ctrl-C), then: kill <pid> for any leftover (e.g. an orphaned beat)"; \
+		exit 1; \
+	fi
 	@cd backend && uv run celery -A app.celery_app worker -B -l info -c 2
 
 .PHONY: live-worker

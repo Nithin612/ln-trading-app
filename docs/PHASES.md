@@ -2095,7 +2095,18 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE — updated 2026-09-30, final (ROUND 10 sent: PR-1 DRAFT v2. The user decides how to finish.)**
+**▶ CONTINUE HERE — updated 2026-09-30, afternoon (DA-7 capture BUILT; PR-1 extract written for ONE outside pass.)**
+
+- **The user chose:** no more Nemotron rounds; one outside pass on a two-page extract
+  (`docs/analysis/pr1-preregistration-extract-2026-09-30.md`); approve the capture extension.
+- ✅ **DA-7 is built:** `cas_postclose_daily` (migration `7c3e9a1f5b2d`) plus the CAS task's
+  15:44–16:05 window. ⚠ **To go live it needs `make migrate` on dev, then a `make worker`
+  restart** (before 15:44 IST to catch that day). Real-time only.
+- **Next:** the outside pass → the user approves draft v2 → commit
+  `docs/analysis/pr1-preregistration-2026-09-30.md` → write the PR-1 study code →
+  quant-verifier → run once.
+
+**▶ CONTINUE HERE — 2026-09-30, final (ROUND 10 sent: PR-1 DRAFT v2. The user decides how to finish.)**
 
 - **Round 9 verified nothing:** every item NOT VERIFIED, and no file saved. Its "no, I never read
   `cas_daily` prices" cannot be checked (Postgres has no statement log), and if true, round 5's

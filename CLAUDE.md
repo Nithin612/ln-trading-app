@@ -413,7 +413,10 @@ else.
   CAS circular §4.2.4 keeps a **post-close session 15:50–16:00 at the closing price**, and Zerodha
   accepts **CNC market orders** in it. The open risk is post-close **liquidity** (DA-7, unmeasured).
   `cas_capture.py` still overwrites `indicative_close` on every poll, so freezing a decision-time
-  value is now a BACKUP path (auction participation), not a blocker. **CAS accrual is real-time-only and cannot be back-filled**, so every
+  value is now a BACKUP path (auction participation), not a blocker. ✅ **DA-7 BUILT 2026-09-30:**
+  the same task captures the post-close window 15:44–16:05 into `cas_postclose_daily` (migration
+  `7c3e9a1f5b2d`): the frozen after-auction volume, the latest volume, and the peak pending
+  buy/sell inside [15:50, 16:00). It needs the dev migration plus a worker restart to go live. **CAS accrual is real-time-only and cannot be back-filled**, so every
   day `make worker` is not up across 15:15–15:33 IST is a session lost permanently. The capture remains a
   Celery-beat task, so if accrual resumes, `make worker` must be up across 15:15–15:33 IST and a
   missed window still cannot be back-filled.

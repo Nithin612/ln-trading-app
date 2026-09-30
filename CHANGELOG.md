@@ -7,6 +7,63 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### ⭐ DA-7 — post-close session capture (`cas_postclose_daily`) + the PR-1 review extract (2026-09-30)
+
+**User-approved.** The CAS beat task now also self-guards to **15:44–16:05 IST** and upserts
+**`cas_postclose_daily`** (migration `7c3e9a1f5b2d`, additive, reversible — upgrade → downgrade →
+upgrade proven on the test DB). It is the forward record the delivery version of the CAS successor
+depends on. SEBI §4.2.4 keeps a post-close session (15:50–16:00, at the closing price), and whether
+a retail CNC buy there would actually fill — and whether those fills are adversely selected — was
+unmeasured.
+
+- **Per (stock, day):**
+  - `volume_after_auction` — frozen on the first poll, like `cas_daily.pre_auction_price`;
+  - `first_polled_at`;
+  - `volume_latest` — the last non-null value;
+  - `last_price_latest`;
+  - `max_buy_qty` / `max_sell_qty` — the peak pending interest over polls **inside**
+    [15:50, 16:00) only;
+  - `polls`.
+- It uses only **documented** Kite /quote fields.
+- ⭐ **A separate table on purpose:** if the new code runs before its migration, only the
+  post-close write fails. The auction capture (`cas_daily`) cannot break, and a test pins that
+  the post-close poll never rewrites it.
+- **13 new tests (CAS suite 21/21), including the task SEAM (`_run_capture_cas`):**
+  - window routing, with the sub-second edges real beats land on;
+  - the half-open session;
+  - parsing: malformed, non-finite and out-of-range values are None, never a fabricated 0;
+  - the merge rules: frozen baseline, last non-null value, in-session peaks only, and
+    observation-time stamps.
+  - ⭐ Four mutants (branches swapped · empty reported as ok · in-session always true ·
+    `first_polled_at` not frozen) are all KILLED.
+- **bug-hunter review, findings fixed:**
+  - **MED:** a poll that writes nothing now returns `empty` (a WARNING, so it is pushed), not a
+    silent `ok`.
+  - **LOW:** the in-session decision and the timestamps are taken when the quote *arrives*,
+    not when the task starts.
+  - **LOW:** the universe query is `ORDER BY id`, so two concurrent duplicate polls cannot
+    deadlock.
+  - **LOW:** `_nonneg_int` rejects non-finite and BIGINT-overflow values.
+  - **Documented, not fixed:** `captured_at` is the last poll, not the time `volume_latest`
+    was seen (Kite always sends `volume` for NSE equities).
+- ⭐ **`make worker` preflight:** it now refuses to start while any Celery worker or beat for
+  the app is alive. An embedded `-B` beat that outlived its worker had doubled every scheduled
+  task on 2026-09-29 **and again on 09-30** (orphan PID 3186116, alive at deploy time). The
+  `[c]elery` pattern avoids pgrep self-matching, and the preflight was tested live (it refused,
+  listing every process).
+- **`docs/analysis/pr1-preregistration-extract-2026-09-30.md`** is a self-contained two-page
+  extract of PR-1 draft v2 for a single, time-boxed outside review. It asks three narrow
+  questions (bias, recompute costs and the bar, one missing kill) and gives every input needed to
+  recompute.
+
+### Fix — `test_backend_wiring` had been red since 2026-09-19 (found 2026-09-30)
+
+`test_no_unwired_function_beyond_the_recorded_debts` still listed `ledger.current_commit` as an
+internal helper reached only through `record()`. But item 22 (d714a3e) gave it a direct production
+caller, `gate_config_history.py:102`, so the recorded exception had been paid and the list had
+gone stale. The entry is removed, with a dated note saying why. This is the lint working as
+designed: a recorded debt must be deleted when it is paid, or the list stops meaning anything.
+
 ### Nemotron round 10 — raw evidence for Q9.1–Q9.5; DA-8 answered; PR-1 draft v2 (2026-09-30, docs only)
 
 - Round 9 contributed no verification: all NOT VERIFIED, no saved files. Its answer on

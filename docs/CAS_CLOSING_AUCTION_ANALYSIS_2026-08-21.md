@@ -135,6 +135,34 @@ daily whenever `make worker` is up. **bug-hunter HIGH fixed:** the imbalance kee
 value (a matched auction's final poll is 0, which was clobbering the real mid-auction imbalance — the
 predictor). Next-day return is NOT stored — computed at study time from `ohlcv_1d`. 8 tests.
 
+**Stage 1b — the post-close capture (DA-7), built 2026-09-30.**
+- **Why:** SEBI's CAS circular §4.2.4 keeps a post-close session **15:50–16:00 at the closing
+  price**, and Zerodha accepts CNC market orders in it. So a buy at the official close is possible
+  *after* the auction print is known — **if a seller is there**. Whether one is, and whether the
+  fills are adversely selected, is what the delivery version of the successor turns on.
+- **What:** the same beat task now also self-guards to **15:44–16:05 IST** and upserts
+  **`cas_postclose_daily`** (migration `7c3e9a1f5b2d`, a separate table, so a missing migration can
+  never break the auction capture). Per row:
+  - `volume_after_auction` — frozen on the first poll (~15:44);
+  - `first_polled_at`;
+  - `volume_latest` — keeps the last non-null value;
+  - `last_price_latest`;
+  - `max_buy_qty` / `max_sell_qty` — the peak pending interest over polls **inside** [15:50, 16:00)
+    only;
+  - `polls`.
+- It uses only **documented** /quote fields (`volume`, `buy_quantity`, `sell_quantity`,
+  `last_price`).
+- Post-close volume = `volume_latest − volume_after_auction`, valid only when `first_polled_at` <
+  15:50 IST.
+- Real-time only, like the auction capture: a session the worker misses is gone.
+- bug-hunter-reviewed:
+  - a poll that writes nothing reports `empty` (pushed);
+  - stamps and the in-session decision are taken at quote *arrival*;
+  - ⚠ known limit: `captured_at` is the last poll, not the time `volume_latest` was observed.
+- ⚠ **Check on the first captured days:** does Kite's `volume` include post-close trades?
+  Compare `volume_latest` with the day's bhavcopy volume. Does `sell_quantity` count only
+  closing-price orders? Until then, a zero difference cannot be told apart from "no seller".
+
 _Original plan:_
 For each Category-I stock, per day, record: **3:15 LTP** (last continuous price), **official close**,
 the **CAS move = (close − 3:15)/3:15**, next-day **open** and **first-hour / full-day return**. We
