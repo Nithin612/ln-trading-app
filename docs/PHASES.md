@@ -2099,9 +2099,11 @@ which is what Phase-6 expectancy calibration is for.
 
 - **The user chose:** no more Nemotron rounds; one outside pass on a two-page extract
   (`docs/analysis/pr1-preregistration-extract-2026-09-30.md`); approve the capture extension.
-- ✅ **DA-7 is built:** `cas_postclose_daily` (migration `7c3e9a1f5b2d`) plus the CAS task's
-  15:44–16:05 window. ⚠ **To go live it needs `make migrate` on dev, then a `make worker`
-  restart** (before 15:44 IST to catch that day). Real-time only.
+- ✅ **DA-7 is built and migrated:** `cas_postclose_daily` is on dev (`alembic_version =
+  7c3e9a1f5b2d`, 14:30 IST 2026-09-30), plus the CAS task's 15:44–16:05 window. The second orphan
+  beat (PID 3186116) was stopped at 14:34 IST on 09-30, leaving one beat. ⚠ **It goes live at the
+  next `make worker` restart.** The new preflight refuses while any worker or beat is alive.
+  Real-time only.
 - **Next:** the outside pass → the user approves draft v2 → commit
   `docs/analysis/pr1-preregistration-2026-09-30.md` → write the PR-1 study code →
   quant-verifier → run once.
