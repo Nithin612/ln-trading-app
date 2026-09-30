@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Nemotron round 8 — round 7 cross-verified; K7 withdrawn; PR-1 pre-registration draft v1 (2026-09-30, docs only)
+
+- Checked round 7 item by item:
+  - C7″ is **signed**, and the split rule is agreed (the larger component decides).
+  - **N3′ is refuted**: it stated K6 as K7, and claimed an expiry calendar in NSE/CMTR/73362,
+    which contains "expiry" 0 times.
+  - No evidence files were saved, and the logic attack was skipped.
+- ⛔ **K7 is withdrawn after cross-checking my own rule against the expiry calendar**
+  (NSE/FAOP/68747 and our `fo_bhavcopy`). Expiries fall on a fixed weekday that changed on
+  2025-09-01, so a weekday kill would treat the mechanism as fragility.
+- ⛔ **A new risk: post-close fills may be adversely selected.** PR-1's E2 is therefore an upper
+  bound, and DA-7 becomes a fill-conditional measurement.
+- Fixed the branch rule to compare like-for-like books (both long-only), added a 150-name
+  session floor, and named the repo's `newey_west_t` (lag 10) as the inference method.
+- Answered Q5.1–Q5.5, which went unanswered in round 6.
+- **PR-1 pre-registration draft v1** is out for its final attack.
+
 ### Nemotron round 6 — round 5 audited (7 of ~10 items false); the post-close path (2026-09-30, docs only)
 
 - ⛔ **Round 5's evidence failed the audit.** Its quotes attributed to NSE/CMTR/73362 §3.1, SEBI

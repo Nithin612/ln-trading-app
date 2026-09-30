@@ -2095,7 +2095,21 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE — updated 2026-09-30, later (ROUND 6 sent: round 5 audited; the post-close path found.)**
+**▶ CONTINUE HERE — updated 2026-09-30, latest (ROUND 8 sent: PR-1 pre-registration DRAFT v1 is out for its last attack.)**
+
+- **Round 7** signed C7″ and accepted the split rule (the larger component decides), but it saved
+  no evidence, skipped the logic attack (A3), and its N3′ was refuted (it stated K6 as K7, and
+  claimed an expiry calendar that NSE/CMTR/73362 does not contain).
+- **K7 is WITHDRAWN.** NSE/FAOP/68747 plus our `fo_bhavcopy` show that expiries sit on a fixed
+  weekday: Thursday up to 2025-08-31, Tuesday from 2025-09-01. So weekdays carry the mechanism,
+  and K3 already covers monthly-expiry concentration.
+- ⛔ **A new risk surfaced: adverse selection of post-close fills** (market orders only, at a fixed
+  price). ⇒ PR-1's E2 is an UPPER BOUND, and DA-7 must measure the *fill-conditional* reversal.
+- **PR-1 pre-registration DRAFT v1** is §8.4 of `nemotron_review.md`, consolidating rounds 2–8.
+  **Next:** round 9 attacks it clause by clause → the user approves → it is committed as
+  `docs/analysis/pr1-preregistration-<date>.md` → only then is code written.
+
+**▶ CONTINUE HERE — 2026-09-30, later (ROUND 6 sent: round 5 audited; the post-close path found.)**
 
 - ⛔ **Nemotron's round 5: 7 of ~10 evidence items were false** (`nemotron_review.md` §6.1): invented
   quotes from NSE/SEBI/Zerodha/Kite, a fabricated code citation, and a contradicted query result.
