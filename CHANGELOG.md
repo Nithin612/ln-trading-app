@@ -7,6 +7,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Nemotron round 6 — round 5 audited (7 of ~10 items false); the post-close path (2026-09-30, docs only)
+
+- ⛔ **Round 5's evidence failed the audit.** Its quotes attributed to NSE/CMTR/73362 §3.1, SEBI
+  clause 4.2, NSE circular 72394 "Annexure B" (claimed to mention the *Kite* API), a Z-Connect
+  article and the Kite docs were all checked against the published documents and **are not in
+  them**. Its `cas_tasks.py:18-20` citation points at import lines. Its `AVG(polls)` result is
+  contradicted by the table (19.91, not 20.3). One query read forbidden `cas_daily` price columns.
+- ⭐ **The post-close session makes the CNC branch executable:** SEBI §4.2.4 (15:50–16:00 at the
+  closing price) plus Zerodha (CNC market orders). This corrects round 2's claim that the
+  final-print signal "is not a trading rule". The open risk is post-close liquidity (DA-7). The
+  decision-time capture (DA-1) becomes a backup.
+- ⛔ **Timeline correction:** the double beat was already live during the 09-29 CAS window (36
+  polls vs 18).
+- K7 added (weekday concentration, with expiry sessions removed).
+
 ### Nemotron round 4 — the ledger; retail CAS participation confirmed (2026-09-30, docs only)
 
 Round 4 of the review, in `nemotron_review.md`. It **locks the scope** to CAS liquidity

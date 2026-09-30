@@ -408,10 +408,12 @@ else.
   it. **`cas_daily` now holds 1,976 rows / 11 sessions (2026-09-10 → 09-29; 09-14, 09-24 and 09-25
   lost to worker downtime), and their outcomes are UNREAD** — keep them so until a pre-registration
   is committed. The Stage-2 result (ρ −0.272) is **not currently reproducible**, and its "re-run at
-  ≥30 sessions" trigger counts from 09-10. ⛔ **Stage 2's signal uses the FINAL auction print, which
-  a participant cannot know when bidding** — and `cas_capture.py` overwrites `indicative_close` on
-  every poll, so no executable decision-time signal is being kept (proposal in `nemotron_review.md`
-  ROUND 2 §C4). **CAS accrual is real-time-only and cannot be back-filled**, so every
+  ≥30 sessions" trigger counts from 09-10. ⚠ **Stage 2's signal uses the FINAL auction print. That
+  cannot be used to *bid into* the auction, but it IS executable (corrected 2026-09-30):** SEBI's
+  CAS circular §4.2.4 keeps a **post-close session 15:50–16:00 at the closing price**, and Zerodha
+  accepts **CNC market orders** in it. The open risk is post-close **liquidity** (DA-7, unmeasured).
+  `cas_capture.py` still overwrites `indicative_close` on every poll, so freezing a decision-time
+  value is now a BACKUP path (auction participation), not a blocker. **CAS accrual is real-time-only and cannot be back-filled**, so every
   day `make worker` is not up across 15:15–15:33 IST is a session lost permanently. The capture remains a
   Celery-beat task, so if accrual resumes, `make worker` must be up across 15:15–15:33 IST and a
   missed window still cannot be back-filled.
@@ -454,6 +456,12 @@ else.
     random close 15:28–15:30, one equilibrium fill = the official close, and a ±3% band.
     ⛔ **MIS positions in CAS stocks are squared off at 15:12**, not 15:25. A **pre-registered
     branch rule** (overnight ⇒ CNC, next-session ⇒ MIS) replaces the K5 kill.
+  - **Round 6 (2026-09-30): Nemotron's round 5 failed its evidence audit.** 7 of ~10 items were
+    false: fabricated circular quotes, a fabricated `cas_tasks.py` citation, a query result the table
+    contradicts, and a forbidden read of `cas_daily` prices. ⇒ **Treat Nemotron as a design
+    critic, never as a source of facts — grep every quote it gives.** Checking its sources turned up
+    the post-close session (above): the CNC branch = a post-close buy at the close → sell in the next
+    pre-open.
 - **⭐⭐ THE CLUSTERED-SE SWEEP (Q1) IS DONE — THE RETIREMENT IS SAFE, 2026-09-24.** M93 showed an
   iid SE over session-clustered observations inflating a t **8.6×** and reversing a conclusion, so
   the repo was swept for the same defect class (`docs/analysis/clustered-se-sweep-2026-09-23.md`).

@@ -2095,7 +2095,21 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE — updated 2026-09-30 (Nemotron ROUND 4 sent: the scope is LOCKED to CAS liquidity provision.)**
+**▶ CONTINUE HERE — updated 2026-09-30, later (ROUND 6 sent: round 5 audited; the post-close path found.)**
+
+- ⛔ **Nemotron's round 5: 7 of ~10 evidence items were false** (`nemotron_review.md` §6.1): invented
+  quotes from NSE/SEBI/Zerodha/Kite, a fabricated code citation, and a contradicted query result.
+  ⇒ Grep every quote it gives; its role is design critic only.
+- ⭐ **The CNC branch is executable with the final auction print**, through the post-close session
+  (SEBI §4.2.4: 15:50–16:00 at the closing price; Zerodha: CNC market orders). The capture change
+  (DA-1) is demoted to a BACKUP.
+- ⏳ **The new critical unknown is DA-7, post-close liquidity.** Settle it with a forward capture at
+  15:55/16:00 (the user must approve) or one paper order.
+- ⛔ The double beat on 09-29 began **before 15:15 IST**, not at 19:04: CAS polls were 36 that day
+  vs 18 on every other session. No duplicate data rows were possible there.
+- **Round 7 = three questions:** sign C7″, the split number, and K7. Then the pre-registration.
+
+**▶ CONTINUE HERE — 2026-09-30 (Nemotron ROUND 4 sent: the scope is LOCKED to CAS liquidity provision.)**
 
 ⭐ `nemotron_review.md` ROUND 4 is a ledger: §4.1 AGREED (locked) · §4.2 settled by primary sources ·
 §4.3 needs improvement · §4.4 PARKED (with unpark conditions) · §4.5 CLOSED · §4.6 needs data.
