@@ -1,5 +1,11 @@
 # BUILD QUEUE — the only operational document
 
+> ⛔ **STALE AS AN OPERATIONAL DOC SINCE 2026-09-12 (W1 banner, 2026-09-30).** Its B-queue
+> finished 7/7 on 09-12, the scorer it served was retired on 09-20, and the live thread (the CAS
+> successor, PR-1) is not in it. **What to do next is the top STATE block of `docs/PHASES.md`.**
+> Kept unchanged below as the record of the B-queue.
+
+
 **Updated 2026-09-11 (round 10).** ⭐ **This file is what a working session reads. It is not the
 research record.**
 

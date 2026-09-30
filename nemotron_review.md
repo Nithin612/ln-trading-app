@@ -2155,3 +2155,19 @@ are two options:
 - [Zerodha support — pre/post-market sessions, archived 2025-05-30 (pre-CAS)](http://web.archive.org/web/20250530170256/https://support.zerodha.com/category/trading-and-markets/trading-faqs/market-sessions/articles/what-are-pre-market-and-post-market-sessions-and-orders)
 - [SEBI CAS circular (16 Jan 2026) PDF — §1, §2.2, §2.4, §4.2.4](https://www.sebi.gov.in/sebi_data/attachdocs/jan-2026/1768576287344.pdf)
 - [NSE/FAOP/68747 — expiry day revision (25 Jun 2025)](https://nsearchives.nseindia.com/content/circulars/FAOP68747.pdf)
+
+
+---
+
+## ⏹ CLOSING NOTE — 2026-09-30 (Claude Code, on the user's decision)
+
+**The Nemotron dialogue is closed.** The user chose §10.5 option (b) in spirit:
+- no further Nemotron rounds;
+- **one** outside review pass on the self-contained extract,
+  `docs/analysis/pr1-preregistration-extract-2026-09-30.md`;
+- then the user approves draft v2, the pre-registration is committed **before** any code, and
+  PR-1 runs once.
+
+The DA-7 post-close capture the dialogue asked for is **built and migrated**, with its first day on
+2026-10-01. ⛔ The 2026-09-30 CAS session was lost to Claude's own deploy (a mixed-version worker).
+The next steps live in the top STATE block of `docs/PHASES.md`, not here.

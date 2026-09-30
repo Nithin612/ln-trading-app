@@ -7,6 +7,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### ⛔ 2026-09-30's CAS session was lost to a mixed-version worker — and a documentation audit (docs only)
+
+- **The loss.** `cas_daily` has 0 rows for 2026-09-30 although the Kite token was valid (created
+  08:30) and the live path ran (9.87M ticks).
+  - Cause, reproduced offline: DA-7 was edited under a worker started at 09:50. Tasks import
+    lazily, so the 14:30 capture call loaded the new `cas_capture.py`, which imports
+    `CasPostCloseDaily` from the OLD `app.models.stock` still in memory. Every call raised
+    `ImportError`.
+  - It is real-time only and cannot be recovered. CAS sessions: 11, with 4 lost.
+  - Rule, now in CLAUDE.md beside `make worker`: stop the worker before editing task code;
+    never "deploy at the next restart".
+  - The worker was restarted at 17:17, so the first post-close capture day is 2026-10-01.
+- **The audit.**
+  - The PHASES top STATE block is rewritten as the single current view: the candidate, the
+    execution path, PR-1 and PR-2 status, the capture, workers, the review loop, the sunset, and
+    the NEXT list.
+  - W1 banners on the docs that still claimed to be current: `BUILD_QUEUE.md` ("the only
+    operational document", stale since 09-12), `CONSOLIDATED_STATE_AND_QUESTIONS.md`, and
+    `STATUS.html` (a mirror of 09-04, not rebuilt).
+  - The Nemotron review file gets a closing note, and memory is updated.
+
 ### ⭐ DA-7 — post-close session capture (`cas_postclose_daily`) + the PR-1 review extract (2026-09-30)
 
 **User-approved.** The CAS beat task now also self-guards to **15:44–16:05 IST** and upserts

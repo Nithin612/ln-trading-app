@@ -1,5 +1,10 @@
 # Consolidated state — what is DONE, what is PENDING, and what we are asking
 
+> ⛔ **HISTORICAL (W1 banner, 2026-09-30).** A snapshot of 2026-09-17. It was "the one doc
+> that says what is left" until the scorer was retired on 09-20. **Current state and the next
+> step are in the top STATE block of `docs/PHASES.md`.**
+
+
 **Combines:** `docs/UNIVERSE_REBUILD_PLAN.md` (3,698 lines, 5 review rounds, the live
 infrastructure thread) and `docs/SYSTEM_REVIEW_FOR_QUANT.md` (1,088 lines, the standalone
 strategy review) — plus their companions `POSITIONAL_REVIEW_FOR_QUANT.md`,

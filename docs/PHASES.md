@@ -10,7 +10,53 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-09-29) — Nemotron round 2: two live defects, one seal breach, a successor PROPOSAL
+## ▶ STATE AT A GLANCE (updated 2026-09-30, evening) — READ THIS FIRST
+
+**The one live thread: the successor to the retired scorer, "liquidity provision at NSE's closing
+auction (CAS)".** Nothing is on the money path. The design is converged and is waiting for one
+outside review pass. This block supersedes every older block below.
+
+| item | state (measured 2026-09-30) |
+|---|---|
+| **The candidate** | Buy the stocks pushed hardest DOWN into the close (against peers), sell at the next open. Mechanism: passive, derivative and NAV flows pay for immediacy at the close (SEBI CAS circular §2.2, §2.4). Literature: Bogousslavsky & Muravyev (*J. Financial Markets* 2023), 85% of closing-price deviations reversed by the next morning. In-house: CAS Stage 2, ρ −0.272 over 7 sessions (lead only) |
+| **Execution path** | ✅ Real. Retail CNC market orders fill **at the official close** in the post-close session: 15:50–16:00 now (SEBI §4.2.4), 15:40–16:00 before the CAS (Zerodha support, archived 2025-05-30) |
+| **PR-1** (historical mechanism test, 756 pairs, pre-CAS) | **Pre-registration draft v2** = `nemotron_review.md` §8.4 plus the §10.4 changes. The self-contained **two-page extract** for ONE outside pass is `docs/analysis/pr1-preregistration-extract-2026-09-30.md`. **Not committed as a pre-registration yet. No code written, nothing run.** |
+| **PR-2** (forward, CAS era) | `cas_daily` holds **11 sessions** (09-10 → 09-29), **unread**. ⛔ **Lost: 09-14, 09-24, 09-25 (worker down) and 09-30** (see below). Its decision read needs 30 sessions, so it cannot happen before the 2026-10-31 sunset |
+| **DA-7 post-close capture** | ✅ Built, reviewed, migrated (`7c3e9a1f5b2d`). The worker was restarted 2026-09-30 17:17 IST, so **the first capture day is 2026-10-01**. Verify after 16:05 IST that day |
+| **Workers** | One beat (PID 687469, started 17:17). The **`make worker` preflight** now refuses to start while any worker or beat is alive (two orphaned beats in two days had doubled every task) |
+| **The review loop** | Nemotron is **closed** (user decision 2026-09-30: round 5 was 7/10 false evidence, rounds 7 and 9 had none). **Next: one outside pass** on the extract (ChatGPT / a fresh Claude chat); Claude verifies every point before adoption |
+| **Programme sunset** | **2026-10-31** — if nothing ships by then, the programme closes. PR-1 is the item that can ship before it |
+
+⛔⛔ **2026-09-30's CAS session was LOST — caused by Claude's own deploy.**
+- **The mechanism:** the DA-7 code was edited under a worker that was already running (started
+  09:50). Celery tasks here import lazily, *inside* the task. So at 14:30 the first capture call
+  loaded the NEW `cas_capture.py` from disk, which imports `CasPostCloseDaily` from the OLD
+  `app.models.stock` already in memory.
+  - That raises `ImportError`, so every capture call 15:15–15:33 failed.
+  - Reproduced offline. The token was valid (created 08:30), the live path ran (9.87M ticks), and
+    `cas_daily` has 0 rows for 09-30.
+- ⭐ **RULE EARNED:** editing task code under a running worker is **not** "inert until restart".
+  - Modules a task imports lazily load the new code; modules loaded earlier stay old.
+  - The process then runs a mix of versions that never existed in any commit.
+  - ⇒ **Stop the worker before editing anything a task imports, or restart it the moment the edit
+    lands.** Never "deploy at the next restart".
+
+**NEXT, in order:**
+1. **2026-10-01 after 16:05 IST:** verify the first `cas_postclose_daily` day: ~210 rows,
+   `first_polled_at` before 15:50, ~21 polls. Also check whether Kite's `volume` includes post-close
+   trades (compare with that day's bhavcopy volume after the 18:40 EOD ingest).
+2. **The user runs the one outside pass** on the extract and brings the answers back.
+3. **The user approves draft v2** (tie-breaker) → Claude commits
+   `docs/analysis/pr1-preregistration-<date>.md` **before any code**.
+4. Write the PR-1 study script (read-only, window pinned) → quant-verifier on the code → **run
+   once** → report → decide by the pre-registered rule.
+5. **Not blocking, waiting on the user:** add dividend ex-dates to `corporate_actions` (removes
+   PR-1's disclosed ~0.5 bps exposure) · the DA-1 decision-time capture (backup path) · a
+   standalone beat with a pidfile (the preflight covers the restart case).
+
+---
+
+## ▶ (superseded) STATE AT A GLANCE (updated 2026-09-29) — Nemotron round 2: two live defects, one seal breach, a successor PROPOSAL
 
 Record: `nemotron_review.md` → **ROUND 2**. Everything below was measured read-only (a
 `SET TRANSACTION READ ONLY` session, Redis reads, the code). **No code and no data were changed.**
@@ -2095,7 +2141,19 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE — updated 2026-09-30, afternoon (DA-7 capture BUILT; PR-1 extract written for ONE outside pass.)**
+**▶ CONTINUE HERE — updated 2026-09-30, evening (the NEXT list is in the top STATE block; this is the short form.)**
+
+1. **2026-10-01 after 16:05 IST:** verify the first post-close capture day.
+2. **The user's outside pass** on `docs/analysis/pr1-preregistration-extract-2026-09-30.md` →
+   Claude verifies the answers.
+3. **The user approves draft v2** → commit the PR-1 pre-registration **before** code → study
+   script → quant-verifier → run once.
+
+⛔ **2026-09-30's CAS session was lost to a mixed-version worker** (task code was edited under a
+running worker). **Stop the worker before editing task code.** The `make worker` preflight refuses a
+second worker or beat. Nemotron is closed.
+
+**▶ CONTINUE HERE — 2026-09-30, afternoon (DA-7 capture BUILT; PR-1 extract written for ONE outside pass.)**
 
 - **The user chose:** no more Nemotron rounds; one outside pass on a two-page extract
   (`docs/analysis/pr1-preregistration-extract-2026-09-30.md`); approve the capture extension.

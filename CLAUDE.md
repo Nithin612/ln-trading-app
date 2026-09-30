@@ -403,10 +403,11 @@ else.
   Child-start AFTER flip-time ⇒ the live process holds the current value. Worked example
   2026-09-04: R:R revert committed 09-03 09:34, uvicorn reload child started 09-03 12:28, celery
   worker 09-04 08:37 ⇒ both live on `shadow`.
-- **⛔ WATCH MODE / CAS ACCRUAL WAS DESTROYED AND HAS RESTARTED (updated 2026-09-29).** Stage-1
+- **⛔ WATCH MODE / CAS ACCRUAL WAS DESTROYED AND HAS RESTARTED (updated 2026-09-30).** Stage-1
   accrual finished healthy on 2026-09-04 (1,664 rows / 8 sessions); the 2026-09-07 dev-DB loss took
   it. **`cas_daily` now holds 1,976 rows / 11 sessions (2026-09-10 → 09-29; 09-14, 09-24 and 09-25
-  lost to worker downtime), and their outcomes are UNREAD** — keep them so until a pre-registration
+  lost to worker downtime, and ⛔ 09-30 lost to a mixed-version worker — task code was edited under a
+  running worker; see the `make worker` note in Commands), and their outcomes are UNREAD** — keep them so until a pre-registration
   is committed. The Stage-2 result (ρ −0.272) is **not currently reproducible**, and its "re-run at
   ≥30 sessions" trigger counts from 09-10. ⚠ **Stage 2's signal uses the FINAL auction print. That
   cannot be used to *bid into* the auction, but it IS executable (corrected 2026-09-30):** SEBI's
@@ -416,7 +417,8 @@ else.
   value is now a BACKUP path (auction participation), not a blocker. ✅ **DA-7 BUILT 2026-09-30:**
   the same task captures the post-close window 15:44–16:05 into `cas_postclose_daily` (migration
   `7c3e9a1f5b2d`): the frozen after-auction volume, the latest volume, and the peak pending
-  buy/sell inside [15:50, 16:00). It needs the dev migration plus a worker restart to go live. **CAS accrual is real-time-only and cannot be back-filled**, so every
+  buy/sell inside [15:50, 16:00). Migrated 2026-09-30; the worker was restarted 17:17 IST ⇒ **the first
+  capture day is 2026-10-01**. **CAS accrual is real-time-only and cannot be back-filled**, so every
   day `make worker` is not up across 15:15–15:33 IST is a session lost permanently. The capture remains a
   Celery-beat task, so if accrual resumes, `make worker` must be up across 15:15–15:33 IST and a
   missed window still cannot be back-filled.
@@ -1438,7 +1440,13 @@ make up / down          postgres+redis (pg on 5433)
 make backend            uvicorn dev server      make frontend   vite dev
 make worker             celery worker+beat — REQUIRED for EOD ingestion +
                         nightly signals; EOD tasks self-heal ≤21d of missed
-                        sessions (stop it during soaks)
+                        sessions (stop it during soaks). Preflight REFUSES to
+                        start while any worker/beat is alive (an orphaned
+                        -B beat doubled every task 09-29 and 09-30).
+                        ⛔ STOP IT BEFORE EDITING TASK CODE: tasks import
+                        lazily, so a running worker loads NEW modules on
+                        top of OLD ones → ImportError (lost the 09-30 CAS
+                        session). Never "deploy at the next restart".
 make migrate            alembic upgrade head    make create-admin
 make test / lint / typecheck / check            (check = the full gate)
 cd backend && uv run pytest tests/<file> -q     (targeted)
