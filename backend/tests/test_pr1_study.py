@@ -325,7 +325,10 @@ class TestGuards:
         import json
 
         got = json.loads((tmp_path / "r.json").read_text())["guarded_sha256"]
-        assert len(got) == len(st.GUARDED) and any("fees.py" in k for k in got)
+        # every guarded file, plus every repo module imported and the lockfile (N4)
+        assert len(got) >= len(st.GUARDED)
+        for needle in ("fees.py", "pr1_design_facts.py", "uv.lock", "db/session.py"):
+            assert any(needle in k for k in got), needle
 
     def test_the_frozen_text_is_the_frozen_text(self) -> None:
         assert st._sha(st.FROZEN_TEXT) == st.FROZEN_SHA256
@@ -389,3 +392,97 @@ class TestDescriptives:
     def test_no_descriptive_is_pending_and_unavailable_ones_carry_a_reason(self) -> None:
         assert st.DESCRIPTIVES_PENDING == ()
         assert all(len(u) > 40 for u in st.DESCRIPTIVES_UNAVAILABLE)
+
+
+class TestRunOnceBody:
+    """N2: the run-once body is exercised BEFORE the one run — a defect there would otherwise
+    first appear after the receipt is written, and burn the run."""
+
+    @staticmethod
+    def _load() -> tuple[list[PairInput], dict[str, int], Any]:
+        pairs = st.synthetic_pairs(11, n_pairs=200, n_names=60, edge_bps=60.0)
+        return pairs, {"pairs": len(pairs)}, st.synthetic_context(11, pairs)
+
+    def test_execute_writes_the_output_the_json_and_the_receipt_in_order(
+        self, tmp_path: Any
+    ) -> None:
+        import json
+
+        out, res = tmp_path / "out.txt", tmp_path / "res.json"
+        order: list[str] = []
+
+        def receipt() -> None:
+            order.append("receipt" if out.exists() else "receipt-before-output")
+
+        d = st.execute(self._load, out, res, receipt)
+        assert order == ["receipt"]  # the output file existed before the receipt was written
+        got = json.loads(res.read_text())
+        assert got["verdict"] == d.verdict and got["branch"] == d.branch
+        assert set(got["reported_series"]) == {"cnc", "mis"}
+        assert "e1_ic" in got["reported_series"]["cnc"]
+        text = out.read_text()
+        assert "VERDICT:" in text and "cl. 14 descriptives" in text
+        assert "E1 (IC)" in text and "+0.0" in text  # E1 printed at 4 dp (N1)
+
+    def test_execute_records_a_crash_in_the_output_and_still_raises(
+        self, tmp_path: Any
+    ) -> None:
+        out = tmp_path / "out.txt"
+
+        def boom() -> Any:
+            raise RuntimeError("loader died")
+
+        with pytest.raises(RuntimeError):
+            st.execute(boom, out, tmp_path / "res.json", lambda: None)
+        assert "THE RUN RAISED" in out.read_text() and "loader died" in out.read_text()
+
+    def test_execute_never_overwrites_an_existing_run_output(self, tmp_path: Any) -> None:
+        out = tmp_path / "out.txt"
+        out.write_text("the one run")
+        with pytest.raises(FileExistsError):
+            st.execute(self._load, out, tmp_path / "res.json", lambda: None)
+        assert out.read_text() == "the one run"
+
+
+class TestGuardPaths:
+    def test_the_clean_tree_check_covers_app_scripts_and_the_lockfile(
+        self, monkeypatch: Any
+    ) -> None:
+        """N6: a real canary — the old pathspec named only the script and the text."""
+        seen: list[tuple[str, ...]] = []
+
+        def fake(*a: str) -> str:
+            seen.append(a)
+            return ""
+
+        monkeypatch.setattr(st, "_git", fake)
+        st.run_once_preflight()
+        status = next(a for a in seen
+                      if a[:2] == ("status", "--porcelain") and "--ignored" not in a)
+        for path in ("backend/app", "backend/scripts", "backend/uv.lock"):
+            assert path in status
+
+    @pytest.mark.parametrize("which", ["RUN_OUTPUT", "RUN_RESULT"])
+    def test_an_existing_output_file_refuses(self, monkeypatch: Any, tmp_path: Any,
+                                             which: str) -> None:
+        f = tmp_path / "x"
+        f.write_text("{}")
+        monkeypatch.setattr(st, which, f)
+        assert any("runs ONCE" in p for p in st.run_once_preflight())
+
+    def test_a_git_failure_refuses_rather_than_reading_clean(self, monkeypatch: Any) -> None:
+        """N3: a git error must never read as a clean tree."""
+        import subprocess
+
+        def fail(*a: str) -> str:
+            raise subprocess.CalledProcessError(128, ["git", *a])
+
+        monkeypatch.setattr(st, "_git", fail)
+        assert any("git failed" in p for p in st.run_once_preflight())
+
+    def test_an_ignored_extension_module_beside_reviewed_code_is_flagged(
+        self, monkeypatch: Any
+    ) -> None:
+        monkeypatch.setattr(st, "_git", lambda *a: "!! backend/app/trading/fees.cpython-312.so"
+                            if "--ignored" in a else "")
+        assert st._shadowing_files() == ["backend/app/trading/fees.cpython-312.so"]

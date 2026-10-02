@@ -39,7 +39,7 @@ import math
 import statistics
 import subprocess
 import sys
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime
 from decimal import Decimal
@@ -61,9 +61,9 @@ FREEZE_COMMIT = "6f61c9ec757a9c922eab44674f7be3f4de1ac3e5"
 RECEIPT = _ROOT / "docs/analysis/pr1-run-receipt.json"
 RUN_OUTPUT = _ROOT / "docs/analysis/pr1-run-output.txt"  # everything the run prints (tee)
 RUN_RESULT = _ROOT / "docs/analysis/pr1-run-result.json"  # the decision's numbers
-#: Every file whose content decides the run: this script, the frozen text, and every module the
-#: decision path imports. The run refuses on any local edit to these, and the receipt hashes
-#: each one, so the run is provably the reviewed code (quant-verifier 2026-10-02, #4).
+#: The files whose content decides the run, named explicitly. The receipt hashes these PLUS
+#: every repo module actually imported and the lockfile (`_hashed_files`), and the run refuses on
+#: any uncommitted change under `GUARDED_PATHSPEC` (quant-verifier 2026-10-02, #4 and N4).
 GUARDED = (
     Path(__file__).resolve(),
     FROZEN_TEXT,
@@ -563,11 +563,30 @@ def expiry_types(cal: Sequence[date]) -> dict[date, str]:
     return out
 
 
-def _fmt(st_: SeriesStats, scale: float = 1e4, unit: str = "bps") -> str:
+def _fmt(st_: SeriesStats, scale: float = 1e4, unit: str = "bps", dp: int = 2) -> str:
     t = "—" if st_.t is None else f"{st_.t:+.2f}"
     ci = ("—" if st_.ci is None
-          else f"[{st_.ci[0] * scale:+.2f}, {st_.ci[1] * scale:+.2f}]")
-    return f"n {st_.n} · mean {st_.mean * scale:+.2f} {unit} · NW t {t} · 90% CI {ci}"
+          else f"[{st_.ci[0] * scale:+.{dp}f}, {st_.ci[1] * scale:+.{dp}f}]")
+    return f"n {st_.n} · mean {st_.mean * scale:+.{dp}f} {unit} · NW t {t} · 90% CI {ci}"
+
+
+def _as_dict(st_: SeriesStats) -> dict[str, object]:
+    return {"n": st_.n, "mean": st_.mean, "t": st_.t, "ci90": st_.ci}
+
+
+def reported_series(records: Sequence[SessionRecord]) -> dict[str, dict[str, object]]:
+    """E1 and the whole-cohort / raw series of both branches — printed AND saved (N1)."""
+    out: dict[str, dict[str, object]] = {}
+    for b in ("cnc", "mis"):
+        out[b] = {
+            "e1_ic": _as_dict(series_stats(
+                [v for r in records if (v := r.ic_all[b]) is not None])),
+            "net_whole_cohort": _as_dict(series_stats(
+                [v for r in records if (v := r.net_whole[b]) is not None])),
+            "net_raw": _as_dict(series_stats(
+                [v for r in records if (v := r.net_raw[b]) is not None])),
+        }
+    return out
 
 
 def _tercile_report(label: str, pairs_: Sequence[tuple[float, float]]) -> None:
@@ -788,8 +807,8 @@ async def load_real() -> tuple[list[PairInput], dict[str, int], Context]:
         steps, _, kept_set = df._basis_steps(t, t1)
         strict += len(steps & cohort_ids)
         split_bonus += len({sid for sid, exs in ex_dates.items() if t1 in exs} & cohort_ids)
-        transient += len(kept_set & cohort_ids)
         kept = [x for x in per_day[t] if x.stock_id not in drop]
+        transient += len(kept_set & {x.stock_id for x in kept})  # the set the rerun drops (N5)
         drops += len(per_day[t]) - len(kept)
         tm1 = df._prev_session.get(t)
         out.append(PairInput(
@@ -832,8 +851,9 @@ def _sha(p: Path) -> str:
 
 
 def _git(*args: str) -> str:
+    """Fail CLOSED: a git error raises, so it can never read as a clean tree (N3)."""
     return subprocess.run(["git", *args], cwd=_ROOT, capture_output=True, text=True,
-                          check=False).stdout.strip()
+                          check=True).stdout.strip()
 
 
 def run_once_preflight() -> list[str]:
@@ -841,17 +861,77 @@ def run_once_preflight() -> list[str]:
     problems = []
     if _sha(FROZEN_TEXT) != FROZEN_SHA256:
         problems.append("the frozen text's sha256 does not match the freeze")
-    if _git("status", "--porcelain", "--", "backend/app", "backend/scripts", str(FROZEN_TEXT)):
-        problems.append("backend/app, backend/scripts or the frozen text has uncommitted "
-                        "changes — the run must be the committed, reviewed code")
-    if not _git("branch", "-r", "--contains", FREEZE_COMMIT):
+    try:
+        dirty = _git("status", "--porcelain", "--", *GUARDED_PATHSPEC)
+        shadows = _shadowing_files()
+        on_remote = _git("branch", "-r", "--contains", FREEZE_COMMIT)
+    except (subprocess.CalledProcessError, OSError) as exc:
+        return [f"git failed ({type(exc).__name__}) — refusing rather than guessing"]
+    if dirty:
+        problems.append("backend/app, backend/scripts, the lockfile or the frozen text has "
+                        "uncommitted changes — the run must be the committed, reviewed code")
+    if shadows:
+        problems.append(f"git-ignored files could shadow reviewed modules: {shadows[:5]}")
+    if not on_remote:
         problems.append("the freeze commit is not on any remote (push it: third-party timestamp)")
     if DESCRIPTIVES_PENDING:
         problems.append(f"{len(DESCRIPTIVES_PENDING)} cl. 14 descriptives are not implemented")
     for f in (RECEIPT, RUN_OUTPUT, RUN_RESULT):
         if f.exists():
             problems.append(f"{f.name} already exists: PR-1 runs ONCE")
+    untracked = _untracked_imported_modules()
+    if untracked:
+        problems.append(f"imported modules not tracked by git: {untracked[:5]}")
     return problems
+
+
+#: What the clean-tree check covers: all backend code, the lockfile and the pinned deps.
+GUARDED_PATHSPEC = ("backend/app", "backend/scripts", "backend/uv.lock",
+                    "backend/pyproject.toml",
+                    "docs/analysis/pr1-preregistration-v3.1-2026-10-02.md")
+
+
+def _shadowing_files() -> list[str]:
+    """git-IGNORED compiled files under backend/ that Python could import instead of the
+    reviewed source: an extension module (*.so) or a stray *.pyc outside __pycache__ (N4)."""
+    out = _git("status", "--porcelain", "--ignored", "--", "backend/app", "backend/scripts")
+    hits = []
+    for line in out.splitlines():
+        path = line[3:]
+        if line.startswith("!!") and (path.endswith(".so") or (
+                path.endswith((".pyc", ".pyo")) and "__pycache__" not in path)):
+            hits.append(path)
+    return hits
+
+
+def _untracked_imported_modules() -> list[str]:
+    """Every module loaded from inside the repo must be a git-tracked .py file (N4)."""
+    tracked = set(_git("ls-files", "backend").splitlines())
+    bad = []
+    for m in list(sys.modules.values()):
+        f = getattr(m, "__file__", None)
+        if not f:
+            continue
+        path = Path(f).resolve()
+        if _ROOT in path.parents and ".venv" not in path.parts:
+            rel = str(path.relative_to(_ROOT))
+            if rel not in tracked:
+                bad.append(rel)
+    return bad
+
+
+def _hashed_files() -> list[Path]:
+    """GUARDED plus every repo module actually imported, plus the lockfile — so the receipt
+    pins exactly the code that ran (N4: the static list missed app/db/session.py and config)."""
+    files = {f.resolve() for f in GUARDED}
+    files |= {_ROOT / "backend/uv.lock", _ROOT / "backend/pyproject.toml"}
+    for m in list(sys.modules.values()):
+        f = getattr(m, "__file__", None)
+        if f:
+            path = Path(f).resolve()
+            if _ROOT in path.parents and ".venv" not in path.parts:
+                files.add(path)
+    return sorted(files)
 
 
 def _write_receipt() -> None:
@@ -860,7 +940,7 @@ def _write_receipt() -> None:
         "head": _git("rev-parse", "HEAD"),
         "script_sha256": _sha(Path(__file__)),
         "frozen_text_sha256": FROZEN_SHA256,
-        "guarded_sha256": {str(f.relative_to(_ROOT)): _sha(f) for f in GUARDED},
+        "guarded_sha256": {str(f.relative_to(_ROOT)): _sha(f) for f in _hashed_files()},
         "freeze_commit": FREEZE_COMMIT,
     }, indent=2) + "\n")
 
@@ -878,7 +958,7 @@ def report(records: Sequence[SessionRecord]) -> Decision:
         e1 = series_stats([r.ic_all[b] for r in records if r.ic_all[b] is not None])  # type: ignore[misc]
         whole = series_stats([r.net_whole[b] for r in records if r.net_whole[b] is not None])  # type: ignore[misc]
         raw = series_stats([r.net_raw[b] for r in records if r.net_raw[b] is not None])  # type: ignore[misc]
-        print(f"  {b.upper()} E1 (IC): {_fmt(e1, scale=1.0, unit='')}")
+        print(f"  {b.upper()} E1 (IC): {_fmt(e1, scale=1.0, unit='', dp=4)}")
         print(f"  {b.upper()} whole-cohort-demeaned net: {_fmt(whole)}")
         print(f"  {b.upper()} raw net: {_fmt(raw)}")
     lab = mechanism_label(records, d.branch)
@@ -888,6 +968,42 @@ def report(records: Sequence[SessionRecord]) -> Decision:
         for k, v in r.counts.items():
             totals[k] = totals.get(k, 0) + v
     print(f"  counts: {totals}")
+    return d
+
+
+def execute(load: Callable[[], tuple[list[PairInput], dict[str, int], Context]],
+            out_path: Path, result_path: Path, write_receipt: Callable[[], None]) -> Decision:
+    """The run-once body, separated so tests exercise it end to end on synthetic data (N2).
+
+    Order: the output file is opened, THEN the receipt is written, THEN data is loaded — so a
+    crash at any later point still counts as the run and still leaves what it printed. A
+    traceback is written into the output file before re-raising (N7)."""
+    import contextlib
+    import traceback
+
+    with out_path.open("x") as fh:  # "x": never overwrite an existing run output
+        write_receipt()
+        tee = _Tee(sys.stdout, fh)
+        with contextlib.redirect_stdout(tee):
+            try:
+                pairs, meta, ctx = load()
+                print("counts:", meta, outcome_free_counts(pairs))
+                recs = [evaluate_session(p) for p in pairs]
+                d = report(recs)
+                result_path.write_text(json.dumps(
+                    {"verdict": d.verdict, "branch": d.branch, "reasons": d.reasons,
+                     "stats": d.stats, "reported_series": reported_series(recs),
+                     "counts": meta, "interpretations": list(INTERPRETATIONS),
+                     "unavailable": list(DESCRIPTIVES_UNAVAILABLE)},
+                    indent=2, default=str) + "\n")
+                tee.flush()
+                describe(pairs, recs, d, *_ctx(ctx))
+            except BaseException:
+                print("\n⛔ THE RUN RAISED — this still counts as the one run:\n"
+                      + traceback.format_exc())
+                tee.flush()
+                raise
+        tee.flush()
     return d
 
 
@@ -905,6 +1021,11 @@ class _Tee:
     def flush(self) -> None:
         for st_ in self._streams:
             st_.flush()  # type: ignore[attr-defined]
+
+    def isatty(self) -> bool:
+        return False
+
+    encoding = "utf-8"
 
 
 def _ctx(c: Context) -> tuple[dict[date, float], tuple[date, ...]]:
@@ -934,19 +1055,7 @@ def main() -> None:
     problems = run_once_preflight()
     if problems:
         raise SystemExit("refused:\n  - " + "\n  - ".join(problems))
-    import contextlib
-
-    with RUN_OUTPUT.open("w") as fh:  # opened BEFORE the receipt: nothing the run says is lost
-        _write_receipt()  # BEFORE any outcome is read: a crash still counts as the run
-        with contextlib.redirect_stdout(_Tee(sys.stdout, fh)):
-            pairs, meta, ctx = asyncio.run(load_real())
-            print("counts:", meta, outcome_free_counts(pairs))
-            recs = [evaluate_session(p) for p in pairs]
-            d = report(recs)
-            RUN_RESULT.write_text(json.dumps(
-                {"verdict": d.verdict, "branch": d.branch, "reasons": d.reasons,
-                 "stats": d.stats, "counts": meta}, indent=2, default=str) + "\n")
-            describe(pairs, recs, d, *_ctx(ctx))
+    execute(lambda: asyncio.run(load_real()), RUN_OUTPUT, RUN_RESULT, _write_receipt)
     print(f"\nwrote {RUN_OUTPUT.name}, {RUN_RESULT.name} and {RECEIPT.name} — commit all three")
 
 

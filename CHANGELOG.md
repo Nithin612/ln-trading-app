@@ -7,6 +7,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### PR-1 study — confirmation review (PASS-WITH-NOTES), notes fixed (2026-10-02, research)
+
+- **N1:** E1 prints at 4 dp (it printed `+0.00`), and E1 plus the whole-cohort / raw series of
+  both branches are saved in `pr1-run-result.json` (with the interpretations and the unavailable
+  item), so the run's information estimand cannot be lost.
+- **N2:** the run-once body is now `execute()`, and the tests run it end to end on synthetic data:
+  output opened before the receipt, the JSON parses with the verdict, a crash is written into
+  the output and still counts, an existing output is never overwritten (`open("x")`).
+- **N3:** `_git` fails closed — a git error refuses the run instead of reading as a clean tree.
+- **N4:** the clean-tree check adds `backend/uv.lock` and `backend/pyproject.toml`; git-ignored
+  `.so` / stray `.pyc` files that could shadow reviewed modules refuse the run; every imported repo
+  module must be tracked; the receipt hashes every imported repo module plus the lockfile.
+- N5 (transient count on the post-drop cohort), N6 (a real pathspec canary + output-file refusals),
+  N7 (traceback into the output file, flushes). Tests 37 → 45.
+
 ### PR-1 study — quant-verifier review (FAIL) fixed (2026-10-02, research)
 
 - **HIGH:** a non-book name with no 15:05 bar received the book-only "latest earlier bar" carry,
