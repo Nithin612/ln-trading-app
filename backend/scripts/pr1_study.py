@@ -59,6 +59,20 @@ FROZEN_TEXT = _ROOT / "docs/analysis/pr1-preregistration-v3.1-2026-10-02.md"
 FROZEN_SHA256 = "9a47dac0ac457c32d5708660e2bae4ad3e6f8946895e93772dd73f78573f258a"
 FREEZE_COMMIT = "6f61c9ec757a9c922eab44674f7be3f4de1ac3e5"
 RECEIPT = _ROOT / "docs/analysis/pr1-run-receipt.json"
+RUN_OUTPUT = _ROOT / "docs/analysis/pr1-run-output.txt"  # everything the run prints (tee)
+RUN_RESULT = _ROOT / "docs/analysis/pr1-run-result.json"  # the decision's numbers
+#: Every file whose content decides the run: this script, the frozen text, and every module the
+#: decision path imports. The run refuses on any local edit to these, and the receipt hashes
+#: each one, so the run is provably the reviewed code (quant-verifier 2026-10-02, #4).
+GUARDED = (
+    Path(__file__).resolve(),
+    FROZEN_TEXT,
+    _ROOT / "backend/scripts/pr1_design_facts.py",
+    _ROOT / "backend/scripts/holdout_seal.py",
+    _ROOT / "backend/app/trading/fees.py",
+    _ROOT / "backend/app/services/block_bootstrap.py",
+    _ROOT / "backend/app/services/deflated_sharpe.py",
+)
 
 # ── cl. 2, 6, 7, 9–12: the frozen numbers ────────────────────────────────────────────────────
 WINDOW_LO, WINDOW_HI = date(2023, 7, 3), date(2026, 7, 31)
@@ -107,6 +121,13 @@ INTERPRETATIONS: tuple[str, ...] = (
     "cohort outcome of the same branch; the alpha's t is the NW t (lag 10) of y − β·x.",
     "I12 (cl. 14): the VIX of session t is `india_vix_daily.close` on t; terciles over the "
     "sessions of the decision series.",
+    "I13 (cl. 13): the label's t−1 is the previous session that is neither special NOR one of "
+    "the three §10j mismatch sessions (the same neighbour rule as cl. 3's basis test); on "
+    "2024-02-06, 2024-05-15 and 2025-01-21 the gap regressor therefore spans two sessions.",
+    "I14 (cl. 14 variants): the variant books (executable, P1525, long-short) carry a name with "
+    "no outcome at 0 (CNC) or skip it (MIS) instead of the first-bar-open carry — descriptive "
+    "only; `--dry` shows no book slot needs a carry in this window.",
+    "I15 (cl. 9): an exact tie in the two branches' NW t goes to CNC (the first listed).",
 )
 
 #: cl. 14 descriptives still to write. `--run-once` refuses while any is listed, because the study
@@ -139,6 +160,7 @@ class Bars:
     p1530: float | None  # close of the bar stamped 15:25
     vol: float = 0.0  # the session's total volume (cl. 14 P3)
     vol_late: float = 0.0  # volume of the bars stamped 15:15–15:25 (cl. 14 P3)
+    p1505_exact: float | None = None  # close of the bar stamped EXACTLY 15:05 (no carry; I1)
 
 
 @dataclass(frozen=True)
@@ -220,8 +242,8 @@ def _outcomes(p: PairInput, c: Sequence[int]) -> dict[str, dict[int, float]]:
         if b1 is None or b1.o915 is None or p1530 is None:
             continue
         r_on[i] = b1.o915 / p1530 - 1.0
-        if b1.p1510 is not None:
-            r_day[i] = b1.p1510 / b1.o915 - 1.0
+        if b1.p1505_exact is not None:  # I1: a non-book outcome uses its own 15:05 bar only
+            r_day[i] = b1.p1505_exact / b1.o915 - 1.0
     return {"cnc": r_on, "mis": r_day}
 
 
@@ -230,7 +252,7 @@ def _slot(p: PairInput, i: int, branch: str, r: dict[int, float],
     """cl. 3, 6, 7 for ONE book slot: (raw outcome, fee fraction), or None if not taken."""
     qty = int(PER_NAME_INR // p.close_t[i])
     if qty == 0:
-        counts["qty0"] += 1
+        counts["qty0"] += branch == "cnc"  # once per SLOT (qty does not depend on the branch)
         return None
     b1 = p.bars_t1.get(i)
     p1530 = p.bars_t[i].p1530
@@ -257,6 +279,8 @@ def _slot(p: PairInput, i: int, branch: str, r: dict[int, float],
         return None
     if b1.o915 is None:
         counts["mis_carried_open"] += 1
+    if b1.p1505_exact is None:  # cl. 3: no 15:05 bar ⇒ the latest earlier bar — a carried slot
+        counts["mis_carried_1505"] += 1
     return b1.p1510 / o - 1.0, _fee_frac(p.close_t[i], qty, "intraday", p.t1, p.t1)
 
 
@@ -298,7 +322,8 @@ def evaluate_session(p: PairInput) -> SessionRecord:
     n = len(order)
     quint, mid, book = order[: n // 5], order[n // 3 : 2 * n // 3], order[:BOOK_K]
     counts = dict.fromkeys(("qty0", "cnc_carried_suspended", "cnc_carried_open",
-                            "mis_not_entered", "mis_carried_open", "cnc_k0", "mis_k0"), 0)
+                            "mis_not_entered", "mis_carried_open", "mis_carried_1505", "cnc_k0",
+                            "mis_k0", "cnc_mid_base_empty", "mis_mid_base_empty"), 0)
     outcome = _outcomes(p, c)
 
     def base(r: dict[int, float], names: Sequence[int]) -> float:
@@ -311,6 +336,8 @@ def evaluate_session(p: PairInput) -> SessionRecord:
     slot_net: dict[str, list[tuple[int, float, int]]] = {}
     for branch, r in outcome.items():
         mid_mean, whole_mean = base(r, mid), base(r, c)  # cl. 5 decision base / cl. 14
+        if not any(i in r for i in mid):
+            counts[f"{branch}_mid_base_empty"] = 1  # the base falls back to 0.0 — counted
         slots = [(i, *x) for i in book if (x := _slot(p, i, branch, r, counts)) is not None]
         k = len(slots)
         if k == 0:  # I3
@@ -536,9 +563,11 @@ def expiry_types(cal: Sequence[date]) -> dict[date, str]:
     return out
 
 
-def _fmt(st_: SeriesStats) -> str:
+def _fmt(st_: SeriesStats, scale: float = 1e4, unit: str = "bps") -> str:
     t = "—" if st_.t is None else f"{st_.t:+.2f}"
-    return f"n {st_.n} · mean {st_.mean * 1e4:+.2f} bps · NW t {t}"
+    ci = ("—" if st_.ci is None
+          else f"[{st_.ci[0] * scale:+.2f}, {st_.ci[1] * scale:+.2f}]")
+    return f"n {st_.n} · mean {st_.mean * scale:+.2f} {unit} · NW t {t} · 90% CI {ci}"
 
 
 def _tercile_report(label: str, pairs_: Sequence[tuple[float, float]]) -> None:
@@ -604,7 +633,8 @@ def describe(pairs: Sequence[PairInput], records: Sequence[SessionRecord], d: De
     tr = [evaluate_session(replace(p, cohort=tuple(i for i in p.cohort if i not in p.transient)))
           for p in pairs]
     print(f"  rerun without transient basis-step name-nights "
-          f"({sum(len(p.transient) for p in pairs)} dropped): {_fmt(series_stats(_vals(tr, b)))}")
+          f"({sum(len(p.transient & set(p.cohort)) for p in pairs)} dropped): "
+          f"{_fmt(series_stats(_vals(tr, b)))}")
     xy = [(e.cohort_ret[b], nets[e.t]) for e in ext
           if e.t in nets and e.cohort_ret[b] is not None]
     if len(xy) > LAG + 3:
@@ -641,7 +671,8 @@ def synthetic_pairs(seed: int, n_pairs: int = 748, n_names: int = 204,
         sessions.append({
             i: Bars(75, float(o[i]), float(o[i]), float(p1515[i] * 0.999), float(p1515[i]),
                     float(p1515[i] * math.exp(0.8 * late[i])), float(p1530[i]),
-                    float(vol[i]), float(vol[i] * rng.uniform(0.02, 0.12)))
+                    float(vol[i]), float(vol[i] * rng.uniform(0.02, 0.12)),
+                    float(p1515[i] * 0.999))
             for i in range(n_names)
         })
         closes.append({i: Decimal(str(round(float(p1530[i]), 2))) for i in range(n_names)})
@@ -688,7 +719,8 @@ async def _load_bars(lo: date, hi: date) -> dict[date, dict[int, Bars]]:
                max(close) FILTER (WHERE (time AT TIME ZONE 'Asia/Kolkata')::time = '15:20'),
                max(close) FILTER (WHERE (time AT TIME ZONE 'Asia/Kolkata')::time = '15:25'),
                sum(volume),
-               sum(volume) FILTER (WHERE (time AT TIME ZONE 'Asia/Kolkata')::time >= '15:15')
+               sum(volume) FILTER (WHERE (time AT TIME ZONE 'Asia/Kolkata')::time >= '15:15'),
+               max(close) FILTER (WHERE (time AT TIME ZONE 'Asia/Kolkata')::time = '15:05')
         FROM ohlcv_5m
         WHERE time >= (CAST(:lo AS date)::timestamp AT TIME ZONE 'Asia/Kolkata')
           AND time <  ((CAST(:hi AS date) + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')
@@ -696,13 +728,13 @@ async def _load_bars(lo: date, hi: date) -> dict[date, dict[int, Bars]]:
     out: dict[date, dict[int, Bars]] = {}
     async with AsyncSessionFactory() as s:
         await s.execute(text("SET TRANSACTION READ ONLY"))
-        for sid, d, nb, o915, fo, p1510, p1515, p1525, p1530, vol, vlate in (
+        for sid, d, nb, o915, fo, p1510, p1515, p1525, p1530, vol, vlate, p1505 in (
                 await s.execute(sql, {"lo": lo, "hi": hi})).all():
             def f(v: object) -> float | None:
                 return None if v is None else float(v)  # type: ignore[arg-type]
             out.setdefault(d, {})[int(sid)] = Bars(int(nb), f(o915), f(fo), f(p1510), f(p1515),
                                                     f(p1525), f(p1530), f(vol) or 0.0,
-                                                    f(vlate) or 0.0)
+                                                    f(vlate) or 0.0, f(p1505))
     return out
 
 
@@ -749,9 +781,14 @@ async def load_real() -> tuple[list[PairInput], dict[str, int], Context]:
     bars = await _load_bars(WINDOW_LO, WINDOW_HI)
     opens, vix = await _load_daily_open_and_vix(WINDOW_LO, WINDOW_HI)
     out: list[PairInput] = []
-    drops = 0
+    drops = strict = split_bonus = transient = 0
     for t, t1 in pairs:
         drop = df._drop(t, t1, ex_dates)
+        cohort_ids = {x.stock_id for x in per_day[t]}
+        steps, _, kept_set = df._basis_steps(t, t1)
+        strict += len(steps & cohort_ids)
+        split_bonus += len({sid for sid, exs in ex_dates.items() if t1 in exs} & cohort_ids)
+        transient += len(kept_set & cohort_ids)
         kept = [x for x in per_day[t] if x.stock_id not in drop]
         drops += len(per_day[t]) - len(kept)
         tm1 = df._prev_session.get(t)
@@ -764,12 +801,14 @@ async def load_real() -> tuple[list[PairInput], dict[str, int], Context]:
             frozenset(df._basis_steps(t, t1)[2]),
         ))
     cal = tuple(sorted(set(daily_cal) | {x for x in df._SPECIAL if WINDOW_LO <= x <= WINDOW_HI}))
-    return out, {"pairs": len(pairs), "cohort_drops": drops}, Context(vix, cal)
+    meta = {"pairs": len(pairs), "cohort_drops_union": drops, "strict_basis_steps": strict,
+            "split_bonus_ex_dates": split_bonus, "transient_or_mirror_steps_kept": transient}
+    return out, meta, Context(vix, cal)
 
 
 def outcome_free_counts(pairs: Sequence[PairInput]) -> dict[str, int]:
     """--dry: what can be counted WITHOUT forming a return. Must match §8 of the text."""
-    slots = qty0 = suspended = no915 = no1505 = 0
+    slots = qty0 = suspended = no915 = no1505 = carry1505 = 0
     for p in pairs:
         c = [i for i in p.cohort if p.bars_t[i].p1515 and p.bars_t[i].p1530]
         raw = {i: p.bars_t[i].p1530 / p.bars_t[i].p1515 - 1.0 for i in c}  # type: ignore[operator]
@@ -781,8 +820,10 @@ def outcome_free_counts(pairs: Sequence[PairInput]) -> dict[str, int]:
             suspended += b1 is None
             no915 += b1 is not None and b1.o915 is None
             no1505 += b1 is not None and b1.p1510 is None
+            carry1505 += b1 is not None and b1.p1510 is not None and b1.p1505_exact is None
     return {"book_slots": slots, "qty0": qty0, "suspended_t1": suspended,
-            "no_0915_bar_t1": no915, "no_bar_by_1505_t1": no1505}
+            "no_0915_bar_t1": no915, "no_bar_by_1505_t1": no1505,
+            "carried_1505_from_earlier_bar_t1": carry1505}
 
 
 # ── run-once guard ───────────────────────────────────────────────────────────────────────────
@@ -800,14 +841,16 @@ def run_once_preflight() -> list[str]:
     problems = []
     if _sha(FROZEN_TEXT) != FROZEN_SHA256:
         problems.append("the frozen text's sha256 does not match the freeze")
-    if _git("status", "--porcelain", "--", str(FROZEN_TEXT), __file__):
-        problems.append("this script or the frozen text has uncommitted changes")
+    if _git("status", "--porcelain", "--", "backend/app", "backend/scripts", str(FROZEN_TEXT)):
+        problems.append("backend/app, backend/scripts or the frozen text has uncommitted "
+                        "changes — the run must be the committed, reviewed code")
     if not _git("branch", "-r", "--contains", FREEZE_COMMIT):
         problems.append("the freeze commit is not on any remote (push it: third-party timestamp)")
     if DESCRIPTIVES_PENDING:
         problems.append(f"{len(DESCRIPTIVES_PENDING)} cl. 14 descriptives are not implemented")
-    if RECEIPT.exists():
-        problems.append(f"a run receipt already exists ({RECEIPT.name}): PR-1 runs ONCE")
+    for f in (RECEIPT, RUN_OUTPUT, RUN_RESULT):
+        if f.exists():
+            problems.append(f"{f.name} already exists: PR-1 runs ONCE")
     return problems
 
 
@@ -817,6 +860,7 @@ def _write_receipt() -> None:
         "head": _git("rev-parse", "HEAD"),
         "script_sha256": _sha(Path(__file__)),
         "frozen_text_sha256": FROZEN_SHA256,
+        "guarded_sha256": {str(f.relative_to(_ROOT)): _sha(f) for f in GUARDED},
         "freeze_commit": FREEZE_COMMIT,
     }, indent=2) + "\n")
 
@@ -834,8 +878,9 @@ def report(records: Sequence[SessionRecord]) -> Decision:
         e1 = series_stats([r.ic_all[b] for r in records if r.ic_all[b] is not None])  # type: ignore[misc]
         whole = series_stats([r.net_whole[b] for r in records if r.net_whole[b] is not None])  # type: ignore[misc]
         raw = series_stats([r.net_raw[b] for r in records if r.net_raw[b] is not None])  # type: ignore[misc]
-        print(f"  {b.upper()}: E1 mean IC {e1.mean:+.4f} (t {e1.t}) · whole-cohort-demeaned net "
-              f"t {whole.t} · raw net t {raw.t}")
+        print(f"  {b.upper()} E1 (IC): {_fmt(e1, scale=1.0, unit='')}")
+        print(f"  {b.upper()} whole-cohort-demeaned net: {_fmt(whole)}")
+        print(f"  {b.upper()} raw net: {_fmt(raw)}")
     lab = mechanism_label(records, d.branch)
     print(f"  mechanism label ({d.branch.upper()}): {lab['label']} over {lab['sessions']} sessions")
     totals: dict[str, int] = {}
@@ -844,6 +889,22 @@ def report(records: Sequence[SessionRecord]) -> Decision:
             totals[k] = totals.get(k, 0) + v
     print(f"  counts: {totals}")
     return d
+
+
+class _Tee:
+    """Write to the terminal AND the run's output file."""
+
+    def __init__(self, *streams: object) -> None:
+        self._streams = streams
+
+    def write(self, data: str) -> int:
+        for st_ in self._streams:
+            st_.write(data)  # type: ignore[attr-defined]
+        return len(data)
+
+    def flush(self) -> None:
+        for st_ in self._streams:
+            st_.flush()  # type: ignore[attr-defined]
 
 
 def _ctx(c: Context) -> tuple[dict[date, float], tuple[date, ...]]:
@@ -873,10 +934,20 @@ def main() -> None:
     problems = run_once_preflight()
     if problems:
         raise SystemExit("refused:\n  - " + "\n  - ".join(problems))
-    _write_receipt()  # BEFORE any outcome is read: a crash still counts as the run
-    pairs, _, ctx = asyncio.run(load_real())
-    recs = [evaluate_session(p) for p in pairs]
-    describe(pairs, recs, report(recs), *_ctx(ctx))
+    import contextlib
+
+    with RUN_OUTPUT.open("w") as fh:  # opened BEFORE the receipt: nothing the run says is lost
+        _write_receipt()  # BEFORE any outcome is read: a crash still counts as the run
+        with contextlib.redirect_stdout(_Tee(sys.stdout, fh)):
+            pairs, meta, ctx = asyncio.run(load_real())
+            print("counts:", meta, outcome_free_counts(pairs))
+            recs = [evaluate_session(p) for p in pairs]
+            d = report(recs)
+            RUN_RESULT.write_text(json.dumps(
+                {"verdict": d.verdict, "branch": d.branch, "reasons": d.reasons,
+                 "stats": d.stats, "counts": meta}, indent=2, default=str) + "\n")
+            describe(pairs, recs, d, *_ctx(ctx))
+    print(f"\nwrote {RUN_OUTPUT.name}, {RUN_RESULT.name} and {RECEIPT.name} — commit all three")
 
 
 if __name__ == "__main__":

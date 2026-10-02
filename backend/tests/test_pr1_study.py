@@ -24,7 +24,7 @@ T, T1, TM1 = date(2024, 3, 5), date(2024, 3, 6), date(2024, 3, 4)
 def _bars(p1515: float = 100.0, late: float = 0.0, o915: float | None = 100.0,
           p1510: float | None = 100.0, first_open: float | None = None) -> Bars:
     return Bars(75, o915, first_open if first_open is not None else o915, p1510, p1515,
-                p1515 * (1 + late), p1515 * (1 + late))
+                p1515 * (1 + late), p1515 * (1 + late), p1505_exact=p1510)
 
 
 def _pair(lates: list[float], next_open: list[float | None] | None = None,
@@ -66,12 +66,20 @@ class TestBookAndCuts:
         order = st._order(c, s, p.symbol)
         assert order[:5] == [0, 1, 2, 3, 5]  # "E" (5) beats "Z" (4) at the tie
 
-    def test_cut_points_are_zero_based_half_open(self) -> None:
-        """cl. 3: bottom quintile [0, ⌊n/5⌋), middle tercile [⌊n/3⌋, ⌊2n/3⌋)."""
-        n = 17
-        order = list(range(n))
-        assert order[: n // 5] == [0, 1, 2]
-        assert order[n // 3 : 2 * n // 3] == [5, 6, 7, 8, 9, 10]
+    def test_the_middle_tercile_base_uses_ranks_n3_to_2n3_through_evaluate_session(
+        self, no_fee: list[Any]
+    ) -> None:
+        """cl. 3, 5: with n = 17 the middle tercile is ranks [5, 11); ranks 0–4 are the book.
+        Moving a NON-book name outside [5, 11) — ranks 11, 16 — must leave the book's net
+        unchanged; moving rank 5 or 10 must move it."""
+        lates = [-0.05 + 0.005 * i for i in range(17)]
+        nxt: list[float | None] = [100.0] * 17
+        base = st.evaluate_session(_pair(lates, next_open=nxt)).net["cnc"][2.68]
+        for rank, moves in ((5, True), (10, True), (11, False), (16, False)):
+            bumped = list(nxt)
+            bumped[rank] = 103.0
+            got = st.evaluate_session(_pair(lates, next_open=bumped)).net["cnc"][2.68]
+            assert (got != pytest.approx(base, abs=1e-12)) is moves, rank
 
 
 class TestOutcomesAndCosts:
@@ -105,7 +113,7 @@ class TestOutcomesAndCosts:
         """cl. 6: a name priced above ₹20,000 cannot be bought; k_t drops, nobody steps in."""
         close = ["25000"] + ["500"] * 9
         rec = st.evaluate_session(_pair([-0.05 + 0.01 * i for i in range(10)], close=close))
-        assert rec.counts["qty0"] == 2  # once per branch
+        assert rec.counts["qty0"] == 1  # once per SLOT, not once per branch
         assert [k for _, _, k in rec.slot_net["cnc"]] == [4, 4, 4, 4]
         assert 0 not in {i for i, _, _ in rec.slot_net["cnc"]}
 
@@ -122,7 +130,7 @@ class TestOutcomesAndCosts:
 
     def test_missing_0915_bar_carries_the_first_bar_open(self, no_fee: list[Any]) -> None:
         p = _pair([-0.05 + 0.01 * i for i in range(10)])
-        p.bars_t1[0] = Bars(70, None, 99.0, 99.5, 99.5, 99.5, 99.5)
+        p.bars_t1[0] = Bars(70, None, 99.0, 99.5, 99.5, 99.5, 99.5, p1505_exact=99.5)
         rec = st.evaluate_session(p)
         assert rec.counts["cnc_carried_open"] == 1 and rec.counts["mis_carried_open"] == 1
         raw = 99.0 / (100 * 0.95) - 1
@@ -130,6 +138,37 @@ class TestOutcomesAndCosts:
         r_on = {i: 100 / (100 * (1 - 0.05 + 0.01 * i)) - 1 for i in range(1, 10)}
         mid = statistics.fmean(r_on[i] for i in range(3, 6))
         assert net0 == pytest.approx(raw - mid - 2 * 2.68 / 1e4, abs=1e-12)
+
+
+class TestNonBookOutcomes:
+    def test_a_non_book_name_without_its_own_1505_bar_is_out_of_the_mis_base(
+        self, no_fee: list[Any]
+    ) -> None:
+        """test_non_book_name_carried_into_the_base (quant-verifier HIGH, 2026-10-02): the carry
+        rules are for BOOK slots (cl. 3); a middle-tercile name with no 15:05 bar must not enter
+        the base through a carried 'latest earlier bar'."""
+        lates = [-0.05 + 0.005 * i for i in range(20)]
+        p = _pair(lates)
+        before = st.evaluate_session(p).net["mis"][2.68]
+        # n = 20: the book is ranks 0–4, the middle tercile [6, 13); name 8 is in the middle
+        # tercile and NOT in the book. Give it only an earlier bar, far away.
+        p.bars_t1[8] = Bars(60, 100.0, 100.0, 140.0, 140.0, 140.0, 140.0, p1505_exact=None)
+        after = st.evaluate_session(p).net["mis"][2.68]
+        p.bars_t1[8] = Bars(60, 100.0, 100.0, 140.0, 140.0, 140.0, 140.0, p1505_exact=140.0)
+        with_bar = st.evaluate_session(p).net["mis"][2.68]
+        assert after != pytest.approx(with_bar, abs=1e-9)  # canary: a real bar WOULD move it
+        # without its own 15:05 bar, name 8 has no defined R_day and leaves the base; every other
+        # middle name has R_day = 0, so the base is 0 — exactly as before name 8 changed
+        assert after == pytest.approx(before, abs=1e-12)
+
+    def test_a_book_slot_carrying_the_latest_earlier_bar_is_counted(
+        self, no_fee: list[Any]
+    ) -> None:
+        p = _pair([-0.05 + 0.01 * i for i in range(10)])
+        p.bars_t1[0] = Bars(60, 100.0, 100.0, 99.0, 99.0, 99.0, 99.0, p1505_exact=None)
+        rec = st.evaluate_session(p)
+        assert rec.counts["mis_carried_1505"] == 1
+        assert 0 in {i for i, _, _ in rec.slot_net["mis"]}
 
 
 def _rec(t: date, net: float, ic_q: float = -0.1, slots: list[tuple[int, float, int]] | None = None,
@@ -188,6 +227,18 @@ class TestDecision:
         d = st.decide(recs)
         assert d.stats["would_pass"] and d.stats["k6"] and d.verdict == "KILL"
 
+    def test_k3_kills_when_fifteen_sessions_carry_everything(self) -> None:
+        """cl. 12 K3: removing the 15 best sessions leaves the mean ≤ 0."""
+        days = _dates(748)
+        # t passes only near √15 ≈ 3.87 (the outliers' own variance caps it): 15 sessions at
+        # +100 bps, every other session −0.05 bps ⇒ NW t ≈ 4.24, DSR ≈ 0.9998, yet the mean
+        # without the 15 is negative
+        vals = [0.01 if k % 50 == 0 else -5e-6 + (1e-7 if k % 2 else -1e-7)
+                for k in range(748)]
+        assert sum(1 for v in vals if v >= 0.01) == 15
+        d = st.decide([_rec(day, v) for day, v in zip(days, vals, strict=True)])
+        assert d.stats["would_pass"] and d.stats["k3"] and d.verdict == "KILL"
+
     def test_robustness_kills_are_not_checked_when_there_is_no_pass(self) -> None:
         """cl. 12: they turn a PASS into a KILL, never a NULL into a KILL."""
         recs = [_rec(d, v) for d, v in zip(_dates(748), _strong(mean=0.0002), strict=True)]
@@ -199,6 +250,32 @@ class TestDecision:
         recs = [_rec(d, 0.0, branch_net={"cnc": v - 0.0015, "mis": v})
                 for d, v in zip(_dates(748), _strong(), strict=True)]
         assert st.decide(recs).branch == "mis"
+
+
+class TestMechanismLabel:
+    @staticmethod
+    def _labelled(slopes: list[tuple[float, float, float]]) -> list[SessionRecord]:
+        recs = [_rec(d, 0.001) for d in _dates(len(slopes))]
+        for r, sl in zip(recs, slopes, strict=True):
+            r.label["cnc"] = sl
+        return recs
+
+    def test_close_specific_needs_beta_s_and_beta_s_minus_pre_both_negative(self) -> None:
+        sl = [(-0.5 + 0.01 * math.sin(k), -0.1 + 0.01 * math.cos(k), 0.0) for k in range(400)]
+        assert st.mechanism_label(self._labelled(sl), "cnc")["label"] == "close-specific"
+
+    def test_generic_reversal_when_pre_is_as_negative_as_s(self) -> None:
+        sl = [(-0.5 + 0.01 * math.sin(k), -0.5 + 0.01 * math.cos(k), 0.0) for k in range(400)]
+        assert st.mechanism_label(self._labelled(sl), "cnc")["label"] == "generic reversal"
+
+    def test_none_when_beta_s_is_not_negative(self) -> None:
+        sl = [(0.01 * math.sin(k), -0.5, 0.0) for k in range(400)]
+        assert st.mechanism_label(self._labelled(sl), "cnc")["label"] == "none"
+
+    def test_the_first_session_has_no_label_row(self, no_fee: list[Any]) -> None:
+        """cl. 13: the first session's t−1 lies in a sealed block, so it is skipped."""
+        p = replace(_pair([-0.05 + 0.01 * i for i in range(10)]), bars_tm1=None)
+        assert st.evaluate_session(p).label == {"cnc": None, "mis": None}
 
 
 class TestEndToEndSynthetic:
@@ -230,6 +307,25 @@ class TestGuards:
         receipt.write_text("{}")
         monkeypatch.setattr(st, "RECEIPT", receipt)
         assert any("runs ONCE" in p for p in st.run_once_preflight())
+
+    def test_run_once_is_refused_on_a_dirty_tree(self, monkeypatch: Any) -> None:
+        monkeypatch.setattr(st, "_git", lambda *a: " M backend/app/trading/fees.py"
+                            if a[0] == "status" else "origin/x")
+        assert any("uncommitted" in p for p in st.run_once_preflight())
+
+    def test_run_once_is_refused_when_the_frozen_text_changed(self, monkeypatch: Any) -> None:
+        monkeypatch.setattr(st, "_sha", lambda p: "0" * 64)
+        assert any("sha256" in p for p in st.run_once_preflight())
+
+    def test_the_receipt_hashes_every_guarded_file(
+        self, monkeypatch: Any, tmp_path: Any
+    ) -> None:
+        monkeypatch.setattr(st, "RECEIPT", tmp_path / "r.json")
+        st._write_receipt()
+        import json
+
+        got = json.loads((tmp_path / "r.json").read_text())["guarded_sha256"]
+        assert len(got) == len(st.GUARDED) and any("fees.py" in k for k in got)
 
     def test_the_frozen_text_is_the_frozen_text(self) -> None:
         assert st._sha(st.FROZEN_TEXT) == st.FROZEN_SHA256

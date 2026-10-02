@@ -7,6 +7,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### PR-1 study — quant-verifier review (FAIL) fixed (2026-10-02, research)
+
+- **HIGH:** a non-book name with no 15:05 bar received the book-only "latest earlier bar" carry,
+  so it entered the middle-tercile base, K2 and E1 — contrary to cl. 3 and to I1's own text.
+  The loader now reads the EXACT 15:05 bar (`p1505_exact`); a non-book outcome uses it only, and
+  the carry stays for book slots, where it is now counted (`mis_carried_1505`).
+- **Run integrity:** the clean-tree check now covers all of `backend/app` and `backend/scripts`
+  plus the frozen text, and the receipt hashes every file the decision imports (`GUARDED`). The
+  run tees everything it prints to `pr1-run-output.txt` and writes `pr1-run-result.json`, both
+  opened before the receipt, so a lost terminal cannot lose the one run.
+- **Counts (cl. 14):** strict basis steps (187), split/bonus ex-dates (44), their union (188)
+  and transient/mirror steps kept (185, cohort-restricted) are reported separately; qty-0 is
+  counted once per slot; an empty middle-tercile base is counted.
+- E1 and the whole-cohort / raw series print mean, NW t and the 90% CI. Interpretations I13
+  (label t−1 skips mismatch sessions), I14 (variant carries) and I15 (branch tie → CNC) added.
+  The reviewer accepted the index-event tag as not computable.
+- Tests 27 → 37: the tautological cut-point test replaced by one through `evaluate_session`; new
+  tests for K3 firing, the three label classes and the first-session skip, the non-book exclusion
+  (a canary that fails on the old code), the counted 15:05 carry, and the dirty-tree / hash /
+  receipt guard paths.
+
 ### PR-1 study — all ten cl. 14 descriptives (2026-10-02, research)
 
 - `scripts/pr1_study.py` now reports every cl. 14 descriptive, on the chosen branch, never
