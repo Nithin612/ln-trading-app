@@ -7,6 +7,16 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### ⭐ PR-1 pre-registration FROZEN (2026-10-02)
+
+- `docs/analysis/pr1-preregistration-v3.1-2026-10-02.md` is frozen at `6f61c9e` (2026-10-02 22:04 IST; file sha256 `9a47dac0…f258a`),
+  together with PR-2's translation (§9a). The author accepted all four §11 recommendations:
+  middle-tercile demeaning · the mechanism as a label · PR-2 as a8 states it (K6 descriptive, the
+  10× fill rule, frozen boundary t 7.17 → 2.53) · the last-trade (P1530) entry base.
+- No outcome of the test window has been read. Next (cl. 15): code → review → run once → report.
+- ⚠ The commit is local and self-timestamped; pushing it before any study code is written gives
+  the freeze a third-party timestamp (push is the user's).
+
 ### `cas_postclose_daily.volume_latest_at` — when the stored post-close volume was seen (2026-10-02)
 
 - `volume_latest` keeps the last non-null volume, but `captured_at` advances on every poll, even

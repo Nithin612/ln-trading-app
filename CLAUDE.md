@@ -480,11 +480,11 @@ else.
       built-in drag toward KILL;
     - the session-concentration kill fired on 99% of genuine passes (P(PASS | true t 3.6) = 0.4%,
       against 47.4% after the fix).
-  - ⇒ **Draft v3.1 = the freeze candidate** (2026-10-02) =
-    `docs/analysis/pr1-preregistration-v3.1-2026-10-02.md`: round 2's fixes + two quant-verifier
-    passes. ⭐ K2 now on the bottom quintile; ⛔ whole-cohort demeaning lets a ZERO-EDGE book PASS
-    9–36% when up-movers revert ⇒ middle tercile recommended. Next: the user's FOUR decisions (§11)
-    → commit the pre-registration (with §9a, PR-2's translation) → PR-1.
+  - ⇒ ⭐ **PR-1 is FROZEN** at `6f61c9e` (2026-10-02 22:04 IST; file sha256 `9a47dac0…f258a`) =
+    `docs/analysis/pr1-preregistration-v3.1-2026-10-02.md` (+ PR-2's §9a). The user accepted all
+    four §11 recommendations. ⭐ K2 on the bottom quintile; ⛔ whole-cohort demeaning lets a
+    ZERO-EDGE book PASS 9–36% when up-movers revert ⇒ middle tercile. **No clause changes after
+    the freeze.** Next: push (third-party timestamp) → study code → review → run ONCE.
   - ⭐ **RULE: an extract for review carries every clause in full.** The v2 extract dropped four
     settled clauses, and a reviewer spent a point on them.
   - ⭐ **RULE: every kill is run against a planted edge at the bar before the freeze.** The broken
