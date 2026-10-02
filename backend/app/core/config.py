@@ -60,6 +60,10 @@ class Settings(BaseSettings):
     # messages also POST as JSON. Vendor-neutral on purpose — Slack/Discord accept the
     # shape directly, Telegram/ntfy want a small relay.
     notifier_webhook_url: str | None = None
+    # Also raise a local desktop notification (`notify-send`) for every admitted message.
+    # OFF by default (a headless worker has no desktop); the CAS watch cron turns it on
+    # inline, because until a webhook exists the desktop is the only channel a human sees.
+    notifier_desktop: bool = False
     # live-worker tick/pulse JSONL recording (Phase 3; empty = off)
     live_record_path: str | None = None
     # Per-candle Celery signal-regeneration dispatch. OFF by default: with

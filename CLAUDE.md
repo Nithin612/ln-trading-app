@@ -417,8 +417,11 @@ else.
   value is now a BACKUP path (auction participation), not a blocker. ✅ **DA-7 BUILT 2026-09-30:**
   the same task captures the post-close window 15:44–16:05 into `cas_postclose_daily` (migration
   `7c3e9a1f5b2d`): the frozen after-auction volume, the latest volume, and the peak pending
-  buy/sell inside [15:50, 16:00). Migrated 2026-09-30; the worker was restarted 17:17 IST ⇒ **the first
-  capture day is 2026-10-01**. **CAS accrual is real-time-only and cannot be back-filled**, so every
+  buy/sell inside [15:50, 16:00). Migrated 2026-09-30. ⛔ **2026-10-01 captured nothing — only `make live-worker` ran, `make worker`
+  (beat) never started** ⇒ the first capture day is now Mon 2026-10-05. ✅ **The CAS watch now runs from
+  CRON** (`scripts/cas_watch.py`, RUNBOOK §9c): a desktop toast at 14:45/15:05 if the `celery`
+  heartbeat is stale, and at 15:40/16:10 on a missed window — the old check was itself a beat task,
+  and `NOTIFIER_WEBHOOK_URL` has never been set, so before this no A11/A40 alarm reached a human. **CAS accrual is real-time-only and cannot be back-filled**, so every
   day `make worker` is not up across 15:15–15:33 IST is a session lost permanently. The capture remains a
   Celery-beat task, so if accrual resumes, `make worker` must be up across 15:15–15:33 IST and a
   missed window still cannot be back-filled.

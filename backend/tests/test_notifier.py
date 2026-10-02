@@ -327,3 +327,75 @@ class TestNegativeSpace:
         assert nf.notify(n) is True  # first admits and delivers
         assert nf.notify(n) is False  # second throttled → suppressed
         assert calls["n"] == 1  # the wire was hit exactly once, not twice
+
+
+class TestDesktopChannel:
+    """Added 2026-10-02: the webhook was never configured, so A40's alarm only ever reached
+    the log of the process that raised it. The desktop channel is how it reaches a human."""
+
+    def _capture(self, monkeypatch, rc: int = 0) -> list[list[str]]:
+        calls: list[list[str]] = []
+
+        def fake(argv: list[str]) -> int:
+            calls.append(argv)
+            return rc
+
+        monkeypatch.setattr(nf, "_run_desktop", fake)
+        monkeypatch.setattr(nf.settings, "notifier_webhook_url", None)
+        return calls
+
+    def test_off_by_default_never_runs_notify_send(self, monkeypatch) -> None:
+        calls = self._capture(monkeypatch)
+        monkeypatch.setattr(nf.settings, "notifier_desktop", False)
+        r = nf.dispatch(nf.Notification(event="d1", level=nf.Level.ERROR, title="t"))
+        assert r.notified is True and r.desktop_sent is False
+        assert calls == []
+
+    def test_an_error_is_a_critical_toast_with_title_and_body(self, monkeypatch) -> None:
+        calls = self._capture(monkeypatch)
+        monkeypatch.setattr(nf.settings, "notifier_desktop", True)
+        r = nf.dispatch(
+            nf.Notification(
+                event="d2", level=nf.Level.ERROR, title="worker down", lines=["start it"]
+            )
+        )
+        assert r.desktop_sent is True
+        assert calls == [
+            [
+                "notify-send",
+                "--urgency=critical",
+                "--app-name=trading-platform",
+                "--",
+                "[ERROR] worker down",
+                "start it",
+            ]
+        ]
+
+    def test_a_warning_is_normal_urgency(self, monkeypatch) -> None:
+        calls = self._capture(monkeypatch)
+        monkeypatch.setattr(nf.settings, "notifier_desktop", True)
+        nf.dispatch(nf.Notification(event="d3", level=nf.Level.WARNING, title="w"))
+        assert calls[0][1] == "--urgency=normal"
+
+    def test_info_never_reaches_the_desktop(self, monkeypatch) -> None:
+        calls = self._capture(monkeypatch)
+        monkeypatch.setattr(nf.settings, "notifier_desktop", True)
+        nf.dispatch(nf.Notification(event="d4", level=nf.Level.INFO, title="i"))
+        assert calls == []
+
+    def test_a_failing_notify_send_is_swallowed(self, monkeypatch) -> None:
+        self._capture(monkeypatch)
+        monkeypatch.setattr(nf.settings, "notifier_desktop", True)
+
+        def boom(argv: list[str]) -> int:
+            raise FileNotFoundError("notify-send")
+
+        monkeypatch.setattr(nf, "_run_desktop", boom)
+        r = nf.dispatch(nf.Notification(event="d5", level=nf.Level.ERROR, title="t"))
+        assert r.notified is True and r.desktop_sent is False
+
+    def test_a_nonzero_exit_is_not_sent(self, monkeypatch) -> None:
+        self._capture(monkeypatch, rc=1)
+        monkeypatch.setattr(nf.settings, "notifier_desktop", True)
+        r = nf.dispatch(nf.Notification(event="d6", level=nf.Level.ERROR, title="t"))
+        assert r.desktop_sent is False

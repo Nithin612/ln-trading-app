@@ -85,6 +85,19 @@ WEBHOOK_RETRY_BACKOFF_S = 0.5
 #: Test seam — patched in tests so the retry path costs no wall-clock. Real code sleeps.
 _sleep = time.sleep
 
+#: Seconds to wait on `notify-send`. It returns in milliseconds when a session bus exists;
+#: the bound only matters when one does not, and then a dropped toast beats a hung caller.
+DESKTOP_TIMEOUT_S = 5.0
+
+
+def _run_desktop(argv: list[str]) -> int:
+    """Test seam for the desktop channel — patched in tests. Returns the exit code."""
+    import subprocess
+
+    return subprocess.run(  # noqa: S603 — argv is built here, never from user input
+        argv, timeout=DESKTOP_TIMEOUT_S, check=False, capture_output=True
+    ).returncode
+
 
 class Level(StrEnum):
     """How loud, and — via the policy — whether it sends at all."""
@@ -158,13 +171,15 @@ class DispatchResult:
     questions and a caller might care about either. `delivery is None` when the policy or
     throttle suppressed the notification, so nothing was ever put on the wire.
 
-    One channel today (a generic webhook), so this wraps a single `DeliveryOutcome`; the
-    shape is a list-of-channels away from multi-channel without changing callers.
+    `delivery` is the webhook. `desktop_sent` is the optional local channel
+    (`notifier_desktop`), a plain bool because a toast has no retryable/permanent split —
+    it either reached the session bus or it did not.
     """
 
     notified: bool
     suppressed: int
     delivery: DeliveryOutcome | None
+    desktop_sent: bool = False
 
 
 def _classify_status(status_code: int) -> tuple[bool, bool]:
@@ -257,7 +272,10 @@ def dispatch(n: Notification) -> DispatchResult:
         _log_it(n, text)
         delivery = _post_webhook(n, text)
         _log_delivery(n, delivery)
-        return DispatchResult(notified=True, suppressed=suppressed, delivery=delivery)
+        desktop = _send_desktop(n, text)
+        return DispatchResult(
+            notified=True, suppressed=suppressed, delivery=delivery, desktop_sent=desktop
+        )
     except Exception:
         # Including the logging and the POST. Nothing here is worth failing a task over.
         log.debug("notifier failed (non-fatal)", exc_info=True)
@@ -332,6 +350,30 @@ def _post_webhook(n: Notification, text: str) -> DeliveryOutcome:
         sent=False, attempts=attempts, retryable=retryable,
         status_code=last_status, error=last_error,
     )
+
+
+def _send_desktop(n: Notification, text: str) -> bool:
+    """Raise a local desktop notification when `notifier_desktop` is on. NEVER raises.
+
+    Added 2026-10-02 because the webhook had never been configured: every A11/A40 message
+    since 2026-09-06 had gone to the log of the process that emitted it, so the one alarm
+    that mattered (the worker is down) printed into the terminal of the worker that was not
+    running. ERROR is `critical` urgency, which GNOME keeps on screen until dismissed.
+    """
+    if not settings.notifier_desktop:
+        return False
+    try:
+        title, _, body = text.partition("\n")
+        urgency = "critical" if n.level is Level.ERROR or n.exception else "normal"
+        # `--` ends option parsing: a body starting with "-" would otherwise be read as an
+        # unknown option, notify-send exits 1 and the toast is silently dropped.
+        argv = [
+            "notify-send", f"--urgency={urgency}", "--app-name=trading-platform", "--", title, body
+        ]
+        return _run_desktop(argv) == 0
+    except Exception:  # noqa: BLE001 — no binary / no session bus / timeout: drop the toast
+        log.debug("desktop notification failed (non-fatal)", exc_info=True)
+        return False
 
 
 def _log_delivery(n: Notification, d: DeliveryOutcome) -> None:

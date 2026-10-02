@@ -12,6 +12,7 @@ Start worker:
 Start beat scheduler:
     cd backend && celery -A app.celery_app beat -l info
 """
+
 from celery import Celery
 from celery.schedules import crontab
 
@@ -97,13 +98,8 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.cas_tasks.capture_cas_window",
         "schedule": crontab(minute="*/1", hour="9,10", day_of_week="1-5"),
     },
-    # A40 — the ABSENCE alarm. 10:10 UTC = 15:40 IST, seven minutes after the window closes,
-    # so a zero row-count is a MISS rather than "not finished yet". Runs a few times so a
-    # worker that comes back late still reports; the notifier's throttle collapses repeats.
-    "check-cas-coverage": {
-        "task": "app.tasks.cas_tasks.check_cas_coverage",
-        "schedule": crontab(minute="10,40", hour="10,11,12", day_of_week="1-5"),
-    },
+    # A40's CAS absence alarm is NOT here (moved 2026-10-02): a beat task cannot report that
+    # the beat is down. It runs from cron as `scripts/cas_watch.py` — see RUNBOOK §9.
     # A40 — role heartbeat. Absence of the key IS the signal, so this only has to be more
     # frequent than HEARTBEAT_TTL_S; it is deliberately cheap.
     "worker-heartbeat": {

@@ -33,6 +33,11 @@ paper-clock reset).
 | — | Soak (optional) | `make soak` | Live-worker + **recording**, quiet box | only for a recorded soak | — | No | mutually exclusive with D+F |
 
 **The normal paper-trading day = A + B + C + D + E + F + G running together.**
+⛔ **F and G are DIFFERENT processes — G running does NOT mean F is.** On 2026-10-01 only G ran:
+its 30 s heartbeat looked like "the worker is up", while F (beat) never started, so both CAS
+captures, the intraday shadow signals and nightly generation all produced nothing. Check F with
+`pgrep -af "[c]elery -A app.celery_app worker"`. The CAS watch (§9c) now pushes a desktop alarm
+at 14:45/15:05 if F is down.
 `make soak` is a *different* mode (see §8) — don't use it for a trading day.
 
 ---
@@ -383,6 +388,24 @@ Restore into a **new** database first and check it, then swap. Never restore ove
 ⚠ **The backup does not cover Redis** (`ltp:`, `depth:`, `circuit:`, the provisional health
 hashes). All of it is TTL'd cache rebuilt by the live worker, so that is deliberate — but it
 means a restore brings back the record, not the in-flight session state.
+
+## 9c. CAS watch — the worker-down alarm (cron, 2026-10-02)
+
+`backend/scripts/cas_watch.py`, run by **cron** (not Celery beat, so it fires when the worker is
+down) at **14:45 · 15:05 · 15:40 · 16:10 IST, Mon–Fri**. Holidays are skipped by the NSE calendar.
+
+| time | pushes when | means |
+|---|---|---|
+| 14:45, 15:05, 15:40 | `celery` heartbeat stale | **`make worker` is not running — start it now**; at 15:40 the auction is gone but the 15:44–16:05 post-close capture can still be saved |
+| 15:40, 16:10 | zero `cas_daily` rows today | auction window MISSED (unrecoverable) |
+| 16:10 | zero `cas_postclose_daily` rows today | post-close window MISSED (unrecoverable) |
+
+- Channel: a **desktop toast** (`notify-send`, critical urgency for errors), because
+  `NOTIFIER_WEBHOOK_URL` has never been set. Setting the webhook adds a push, nothing more.
+- Log: `/home/nithin/code/back_ups/trading_platform/cas_watch.log` (one line per run).
+- Replay a past moment: `cd backend && uv run python scripts/cas_watch.py --at 2026-10-01T15:40`
+  (row counts are faithful; the heartbeat is read as of NOW — a 600 s TTL cannot be replayed).
+- ⚠ Cron does not run while the laptop is asleep, and does not catch up afterwards.
 
 ---
 

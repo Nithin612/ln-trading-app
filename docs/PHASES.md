@@ -10,7 +10,7 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-09-30, late evening) — READ THIS FIRST
+## ▶ STATE AT A GLANCE (updated 2026-10-02) — READ THIS FIRST
 
 **The one live thread: the successor to the retired scorer, "liquidity provision at NSE's closing
 auction (CAS)".** Nothing is on the money path. The outside review pass and an internal
@@ -23,9 +23,9 @@ block supersedes every older block below.
 | **The candidate** | Buy the stocks pushed hardest DOWN into the close (against peers), sell at the next open. Mechanism: passive, derivative and NAV flows pay for immediacy at the close (SEBI CAS circular §2.2, §2.4). Literature: Bogousslavsky & Muravyev (*J. Financial Markets* 2023), 85% of closing-price deviations reversed by the next morning. In-house: CAS Stage 2, ρ −0.272 over 7 sessions (lead only) |
 | **Execution path** | ✅ Real. Retail CNC market orders fill **at the official close** in the post-close session: 15:50–16:00 now (SEBI §4.2.4), 15:40–16:00 before the CAS (Zerodha support, archived 2025-05-30) |
 | **PR-1** (historical mechanism test, **754 pairs**, pre-CAS) | **Draft v3** = `docs/analysis/pr1-preregistration-extract-v3-2026-09-30.md` (every clause in full). ⛔ v2 had **three built-in defects**. (1) **The price tables are on different bases:** `ohlcv_5m` is back-adjusted, `ohlcv_1d` is traded prices (the two disagree by > 2% on 22.5% of name-days), and v2's intraday outcome divided one by the other ⇒ v3 computes every return inside the 5-minute table. (2) R_on started from the 30-min VWAP close: κ 0.71, a **−64 bps** built-in drag. (3) The session kill fired on 99% of genuine passes (P(PASS \| true t 3.6) **0.4%** vs v3 **47.4%**). Record: `docs/analysis/pr1-outside-pass-2026-09-30.md`. **Not committed as a pre-registration. No study code, nothing run.** |
-| **PR-2** (forward, CAS era) | `cas_daily` holds **11 sessions** (09-10 → 09-29), **unread**. ⛔ **Lost: 09-14, 09-24, 09-25 (worker down) and 09-30** (see below). Its decision read needs 30 sessions, so it cannot happen before the 2026-10-31 sunset |
-| **DA-7 post-close capture** | ✅ Built, reviewed, migrated (`7c3e9a1f5b2d`). The worker was restarted 2026-09-30 17:17 IST, so **the first capture day is 2026-10-01**. Verify after 16:05 IST that day |
-| **Workers** | One beat (PID 687469, started 17:17). The **`make worker` preflight** now refuses to start while any worker or beat is alive (two orphaned beats in two days had doubled every task) |
+| **PR-2** (forward, CAS era) | `cas_daily` holds **11 sessions** (09-10 → 09-29), **unread**. ⛔ **Lost: 09-14, 09-24, 09-25 (worker down), 09-30 (mixed-version worker) and 10-01 (`make worker` never started)** (see below). Its decision read needs 30 sessions, so it cannot happen before the 2026-10-31 sunset |
+| **DA-7 post-close capture** | ✅ Built, reviewed, migrated (`7c3e9a1f5b2d`). ⛔ **2026-10-01 captured 0 rows** (no beat ran). 10-02 is a holiday ⇒ **the first capture day is now Mon 2026-10-05**; verify after 16:05 IST |
+| **Workers** | ⛔ **None running on 2026-10-01** — only `make live-worker` was up (`celerybeat-schedule.db` last written 09-30 17:18; zero beat output that day). The **`make worker` preflight** refuses a second worker/beat. ✅ **CAS watch now runs from CRON** (14:45/15:05 "worker down", 15:40/16:10 "window missed", desktop toast — RUNBOOK §9c), because the old check was itself a beat task and the webhook was never set |
 | **The review loop** | Nemotron is **closed**. ✅ **The outside pass is DONE** (5 independent reviews; the "Gemini" reply was ChatGPT's text pasted twice). Scores: Claude chat 2 decision-changing finds · Kimi and DeepSeek 1 each · ChatGPT 0 (7 valid) · Grok 0 (3 wrong). The internal quant-verifier found the third, the price-basis defect, which no outside reviewer saw. **Next: ONE final verification round** on v3 (prompt: `docs/analysis/pr1-review-prompt-v3-2026-09-30.md`), then only arithmetic fixes |
 | **Programme sunset** | **2026-10-31** — if nothing ships by then, the programme closes. PR-1 is the item that can ship before it |
 
@@ -2157,9 +2157,9 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE — updated 2026-09-30, late evening (the NEXT list is in the top STATE block; this is the short form.)**
+**▶ CONTINUE HERE — updated 2026-10-02 (the NEXT list is in the top STATE block; this is the short form.)**
 
-1. **2026-10-01 after 16:05 IST:** verify the first post-close capture day.
+1. **Mon 2026-10-05:** run BOTH `make live-worker` AND `make worker` (they are different processes — 10-01 was lost to running only the first). After 16:05 IST verify the first post-close capture day; the 14:45/15:05 cron toast will say if the worker is down. Check `cas_watch.log`.
 2. ✅ **Outside pass + internal review + the final verification round are all done**
    (`docs/analysis/pr1-outside-pass-2026-09-30.md`). Round 2 found K2 (decision-changing) plus 3
    material fixes, all verified. **Next: v3.1 (the freeze candidate)** → the OC script with K2

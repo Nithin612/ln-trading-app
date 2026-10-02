@@ -7,6 +7,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### CAS watch moves from Celery beat to cron, with a desktop channel (2026-10-02)
+
+- **Incident, 2026-10-01:** `make live-worker` ran all day and `make worker` (Celery worker + beat)
+  never did. Both CAS captures recorded nothing (`cas_daily` 0, `cas_postclose_daily` 0 — the DA-7
+  first capture day is lost), and so did every other beat job (no intraday shadow signals, no
+  nightly generation). Proof: `celerybeat-schedule.db` last written 2026-09-30 17:18, Celery queue
+  empty, while `tickmode:health:2026-10-01` shows 6.96M live ticks.
+- **Two defects in the alarm that should have caught it.** (1) `check-cas-coverage` was itself a
+  beat task, so it was down for exactly the reason it existed to report. (2)
+  `NOTIFIER_WEBHOOK_URL` has never been set, so every A11/A40 message went only to the log of the
+  process that raised it — the "worker is down" alarm would have printed into the terminal of the
+  worker that was not running.
+- **Fix:** `scripts/cas_watch.py`, run by **cron** at 14:45 · 15:05 · 15:40 · 16:10 IST Mon–Fri
+  (RUNBOOK §9c). The decision is a pure `worker_health.cas_watch_alerts`: from 14:30 until the
+  window closes a stale `celery` heartbeat pushes **"make worker is NOT running — start it now"**
+  with the minutes left (the only alarm that can still save a session); after 15:33 / 16:05 a zero
+  row count pushes an auction / post-close MISS. `cas_coverage` now also counts
+  `cas_postclose_daily`, and the daily report states the post-close outcome.
+- **Desktop channel** in the one notifier (W2): `notifier_desktop` → `notify-send`, critical
+  urgency for errors, never raises. Off by default; the cron line sets it inline. Verified from a
+  stripped cron environment (`desktop_sent=True`).
+- **Replayed on 2026-10-01's real rows** (`--at`): it would have pushed at 14:45 ("opens in 30
+  min") and 15:05, then both misses at 15:40/16:10. The beat entry and its Celery task are deleted;
+  a test pins that no beat entry schedules a CAS coverage check, and that the window constants
+  equal their owners in `cas_tasks` (W5). +19 tests.
+- **bug-hunter review (4 findings, all fixed):** the liveness alarm fell silent at 15:33 although
+  the post-close capture is still savable (now runs to 16:05, and the 15:40 miss says "start it
+  NOW"); days before the post-close capture existed (< 2026-10-01) read as "post-close MISSED"
+  (now `POSTCLOSE_FIRST_DAY`); `notify-send` lacked `--` (a body starting with `-` was dropped);
+  cron now uses `uv run --frozen --no-sync` so a lock change cannot stop the alarm starting.
+
 ### PR-1 final verification round adjudicated — one more decision-changing defect (2026-09-30, docs only)
 
 - **Six replies** (Kimi never received the document), every decision-relevant claim re-checked by
