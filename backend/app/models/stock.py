@@ -222,6 +222,12 @@ class CasDaily(Base):
     official_close: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
     total_imbalance_qty: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     polls: Mapped[int] = mapped_column(Integer, nullable=False, server_default="0")
+    #: The instant of the FIRST poll that wrote this row (quote arrival), frozen on insert —
+    #: unlike `captured_at`, which every poll overwrites (so it is the LAST poll). It is what
+    #: proves `pre_auction_price` was observed before the auction could print (< 15:28 IST),
+    #: which PR-2 §9a a1 requires. NULL on rows captured before 2026-10-02: unknown, never
+    #: back-filled.
+    first_polled_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     captured_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )

@@ -89,8 +89,9 @@ async def capture_cas(
 ) -> int:
     """Poll /quote for every symbol (EXCHANGE:SYMBOL → stock_id) and upsert into `cas_daily`.
     Returns rows written. Best-effort per batch (a failed batch logs and is skipped — fail open).
-    `pre_auction_price` is set only on the first insert and preserved thereafter; the other fields
-    update to the latest poll so the row converges to the final auction print."""
+    `pre_auction_price` and `first_polled_at` (when it was observed) are set only on the first
+    insert and preserved thereafter; the other fields update to the latest poll so the row
+    converges to the final auction print. `captured_at` is the LAST poll's time."""
     symbols = list(symbol_stock_map)
     written = 0
     for i in range(0, len(symbols), QUOTE_BATCH):
@@ -100,6 +101,7 @@ async def capture_cas(
         except Exception:
             log.exception("CAS capture quote() failed for a batch of %d", len(batch))
             continue
+        observed = _now()  # the quote's arrival — frozen into first_polled_at on insert
         rows: list[dict[str, object]] = []
         for sym in batch:
             p = parse_cas(quotes.get(sym))
@@ -110,6 +112,7 @@ async def capture_cas(
                     "stock_id": symbol_stock_map[sym],
                     "trade_date": trade_date,
                     "pre_auction_price": p.last_price,  # frozen on insert (see set_ below)
+                    "first_polled_at": observed,  # frozen on insert, with pre_auction_price
                     "reference_price": p.reference_price,
                     "indicative_close": p.indicative_close,
                     "official_close": p.last_price,  # latest last → clearing price after ~15:29
@@ -123,7 +126,8 @@ async def capture_cas(
         stmt = stmt.on_conflict_do_update(
             index_elements=["stock_id", "trade_date"],
             set_={
-                # pre_auction_price intentionally omitted → keeps the first (pre-auction) capture.
+                # pre_auction_price and first_polled_at intentionally omitted → both keep the
+                # first (pre-auction) capture.
                 "reference_price": stmt.excluded.reference_price,
                 "indicative_close": stmt.excluded.indicative_close,
                 "official_close": stmt.excluded.official_close,

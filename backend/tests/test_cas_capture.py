@@ -91,6 +91,31 @@ class TestCapture:
         assert row.official_close == D("1317") and row.indicative_close == D("1317")
         assert row.polls == 2  # incremented, one row (idempotent per (stock, date))
 
+    async def test_first_polled_at_is_frozen_while_captured_at_tracks_the_last_poll(
+        self, db: AsyncSession, monkeypatch: Any
+    ) -> None:
+        """test_captured_at_is_the_last_poll_not_the_first (2026-10-02): `captured_at` is
+        rewritten on every poll, so nothing recorded WHEN `pre_auction_price` was observed —
+        and PR-2 needs that to know the price predates the auction (< 15:28 IST). The canary:
+        the second poll writes the row (polls 2, a new official_close) but must not move
+        `first_polled_at`."""
+        stock = await make_stock(db, symbol="INFY")
+        await db.commit()
+        smap = {"NSE:INFY": stock.id}
+        t0 = datetime(2026, 10, 5, 9, 45, 3, tzinfo=UTC)  # 15:15:03 IST
+        for minutes, price in ((0, 1500), (16, 1504)):  # 15:15, then 15:31 after the match
+            monkeypatch.setattr(cc, "_now", lambda m=minutes: t0 + timedelta(minutes=m))
+            await cc.capture_cas(db, _FakeKite({"NSE:INFY": {
+                "last_price": price, "indicative_close_price": price,
+                "total_imbalance_qty": 0, "reference_limit_price": 1500}}), smap, trade_date=TD)
+
+        row = (await db.execute(select(CasDaily).where(CasDaily.stock_id == stock.id))).scalar_one()
+        assert row.first_polled_at == t0  # the quote-arrival instant of the FIRST poll
+        assert row.pre_auction_price == D("1500")  # observed at that instant
+        assert row.official_close == D("1504")
+        assert row.polls == 2  # the second poll DID write the row…
+        assert row.first_polled_at != t0 + timedelta(minutes=16)  # …and did not move the stamp
+
     async def test_imbalance_keeps_last_nonzero_not_post_match_zero(self, db: AsyncSession) -> None:
         # Regression (bug-hunter HIGH): a matched auction's final poll reports imbalance 0; that
         # post-execution 0 must NOT clobber the meaningful mid-auction imbalance (the Stage-2
