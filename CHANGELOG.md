@@ -7,6 +7,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### `cas_postclose_daily.volume_latest_at` — when the stored post-close volume was seen (2026-10-02)
+
+- `volume_latest` keeps the last non-null volume, but `captured_at` advances on every poll, even
+  one whose quote had no volume — so a row could look as if it saw the whole post-close session
+  while holding a 15:52 volume, and PR-2's fill rule would read that as an unfilled slot.
+- Nullable column (migration `4e8a6c2d9f1b`, reversible, applied to dev and round-tripped):
+  stamped with the observation instant only when the poll returned a volume, COALESCEd with
+  `volume_latest` so the two always describe the same observation. PR-2 §9a prerequisite 5.
+- Regression test: a volume-less 16:02 poll moves `captured_at` but not `volume_latest_at`; a
+  16:04 poll with a volume moves both. Edited with no worker running.
+
 ### `cas_daily.first_polled_at` — when the pre-auction price was observed (2026-10-02)
 
 - **Why:** `cas_daily.pre_auction_price` is frozen on the first poll inside the auction window,

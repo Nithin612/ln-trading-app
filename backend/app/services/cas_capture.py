@@ -223,7 +223,8 @@ async def capture_postclose(
         pattern as `cas_daily.pre_auction_price`). A late first poll is detectable from
         `first_polled_at`; it is never silently repaired.
       - `volume_latest` keeps the last NON-NULL volume, so a quote that omits it cannot erase
-        what earlier polls saw.
+        what earlier polls saw; `volume_latest_at` keeps WHEN that volume was seen (unlike
+        `captured_at`, which every poll advances).
       - `max_buy_qty` / `max_sell_qty` take the peak over polls INSIDE the post-close session
         (`in_session`); polls outside it contribute NULL, which GREATEST ignores.
     """
@@ -250,6 +251,8 @@ async def capture_postclose(
                     "volume_after_auction": p.volume,  # frozen on insert (see set_ below)
                     "first_polled_at": observed,  # frozen on insert
                     "volume_latest": p.volume,
+                    # dated only when this poll actually saw a volume (kept with it below)
+                    "volume_latest_at": observed if p.volume is not None else None,
                     "last_price_latest": p.last_price,
                     "max_buy_qty": p.buy_quantity if in_session else None,
                     "max_sell_qty": p.sell_quantity if in_session else None,
@@ -266,6 +269,9 @@ async def capture_postclose(
                 # volume_after_auction and first_polled_at intentionally omitted → frozen.
                 "volume_latest": func.coalesce(
                     stmt.excluded.volume_latest, CasPostCloseDaily.volume_latest
+                ),
+                "volume_latest_at": func.coalesce(
+                    stmt.excluded.volume_latest_at, CasPostCloseDaily.volume_latest_at
                 ),
                 "last_price_latest": stmt.excluded.last_price_latest,
                 "max_buy_qty": func.greatest(

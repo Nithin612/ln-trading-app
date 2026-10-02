@@ -304,6 +304,39 @@ class TestCapturePostClose:
         assert row.max_sell_qty is None and row.max_buy_qty is None  # nothing seen in session
         assert row.polls == 2
 
+    async def test_volume_latest_at_dates_the_volume_not_the_last_poll(
+        self, db: AsyncSession, monkeypatch: Any
+    ) -> None:
+        """test_captured_at_advances_on_a_volume_less_poll (2026-10-02): `captured_at` moves on
+        every poll, so a row whose last good volume is from 15:52 could look as if it saw the
+        whole session (last poll 16:02). PR-2 must know when the VOLUME was seen. Canary: a
+        volume-less 16:02 poll moves `captured_at` but not `volume_latest_at`."""
+        from app.models.stock import CasPostCloseDaily
+
+        stock = await make_stock(db, symbol="TCS")
+        await db.commit()
+        smap = {"NSE:TCS": stock.id}
+        t0 = datetime(2026, 10, 5, 10, 22, tzinfo=UTC)  # 15:52 IST
+        polls = ((0, {"last_price": 4000, "volume": 9_000}),  # 15:52, with volume
+                 (10, {"last_price": 4001}),  # 16:02, volume omitted
+                 (12, {"last_price": 4002, "volume": 9_600}))  # 16:04, with volume
+        seen: dict[int, tuple[object, object]] = {}
+        for minutes, quote in polls:
+            monkeypatch.setattr(cc, "_now", lambda m=minutes: t0 + timedelta(minutes=m))
+            await cc.capture_postclose(db, _FakeKite({"NSE:TCS": quote}), smap,
+                                       trade_date=TD, in_session_at=_never_in_session)
+            row = (await db.execute(
+                select(CasPostCloseDaily).where(CasPostCloseDaily.stock_id == stock.id)
+            )).scalar_one()
+            await db.refresh(row)
+            seen[minutes] = (row.volume_latest_at, row.captured_at)
+
+        assert seen[0] == (t0, t0)
+        # the volume-less poll advances captured_at, but the volume is still the 15:52 one
+        assert seen[10] == (t0, t0 + timedelta(minutes=10))
+        # a poll with a volume moves both
+        assert seen[12] == (t0 + timedelta(minutes=12), t0 + timedelta(minutes=12))
+
     async def test_never_touches_cas_daily(self, db: AsyncSession) -> None:
         # The auction record is the Stage-2 input; the post-close poll must not rewrite its close.
         stock = await make_stock(db, symbol="RELIANCE")

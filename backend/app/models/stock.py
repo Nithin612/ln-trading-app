@@ -261,6 +261,13 @@ class CasPostCloseDaily(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     volume_latest: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
+    #: When `volume_latest` was observed — stamped only by a poll that returned a volume, and
+    #: kept with it (both COALESCE together). `captured_at` advances on EVERY poll, including one
+    #: whose volume was NULL, so it cannot say whether the stored volume saw the whole session;
+    #: PR-2 §9a a5 requires this ≥ 16:00 IST. NULL on rows captured before 2026-10-02.
+    volume_latest_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True
+    )
     last_price_latest: Mapped[Decimal | None] = mapped_column(Numeric(12, 4), nullable=True)
     max_buy_qty: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
     max_sell_qty: Mapped[int | None] = mapped_column(BigInteger, nullable=True)
