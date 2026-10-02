@@ -40,9 +40,11 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - **Final §9a check (FAIL → fixed, row 32):** PR-2 had no runnable rule — cl. 11's kills applied at
   every read would KILL a genuine edge 11–15% of the time. a8 is now a complete sequential rule:
   reads every 126 sessions, at most 8 (fixed now), an O'Brien–Fleming-shape boundary at one-sided
-  1% (frozen t 6.94 → 2.45); K3/K4 only at a crossing, K2 and the cost-KILL only at the last read,
-  K6 descriptive. **Simulated before the freeze** (`pr1_decision_oc.py --only pr2`): null 0.9%,
-  Sharpe 2 → 94% PASS at a median 630 sessions. Plus: a1 window [15:15, 15:20); auction evidence;
+  1%, calibrated on a skew −0.85 null after the confirmation pass (frozen t 7.17 → 2.53; size
+  0.7–1.1% across normal / t₃ / skewed); K2/K3/K4 at a crossing, K2 and the cost-KILL also at the
+  last read, K6 descriptive; cap 2031-12-31 or a CAS design change ⇒ NULL. **Simulated before the
+  freeze** (`pr1_decision_oc.py --only pr2`): null 1.1%, Sharpe 2 → 93% PASS at a median 630
+  sessions. Confirmation pass: PASS-WITH-NOTES, all notes fixed (row 33). Plus: a1 window [15:15, 15:20); auction evidence;
   per-row validity; k_t = 0 excluded; a5 carry + demeaning; a 15:20 hashed snapshot for MIS;
   prerequisites 4 (validate post-close volume on ≥ 10 sessions) and 5 (`volume_latest_at`, needs
   a migration — not built).

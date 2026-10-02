@@ -364,19 +364,28 @@ def pr2_sequential_oc(
     looks = [PR2_READ_EVERY * k for k in range(1, PR2_MAX_READS + 1)]
     n_max = looks[-1]
     scale = np.sqrt(n_max / np.asarray(looks, dtype=np.float64))
-    z0 = _sequential_t(rng.standard_normal((sims, n_max)), looks)
+    # Calibrated on a NEGATIVELY SKEWED null (skew ≈ −0.85, the session series itself): a
+    # liquidity-provision book plausibly is, and on iid-normal calibration that shape's size was
+    # 1.3% (quant-verifier 2026-10-02). Size at the frozen bound is then printed per shape.
+    z0 = _sequential_t(noise(rng, "negskew", (sims, n_max)), looks)
     c = float(np.quantile((z0 / scale).max(axis=1), 1 - PR2_ALPHA))
     bound = c * scale
     print(f"\nPR-2 boundary (one-sided {PR2_ALPHA:.0%} over {PR2_MAX_READS} reads of "
-          f"{PR2_READ_EVERY}): " + " · ".join(f"n={n}: t {b:.2f}" for n, b in zip(looks, bound,
-                                                                                 strict=True)))
+          f"{PR2_READ_EVERY}, calibrated on skew −0.85): "
+          + " · ".join(f"n={n}: t {b:.2f}" for n, b in zip(looks, bound, strict=True)))
+    sizes = []
+    for kind in ("normal", "t3", "negskew"):
+        zz = _sequential_t(noise(rng, kind, (sims, n_max)), looks)
+        sizes.append(f"{kind} {float((zz >= bound).any(axis=1).mean()):.2%}")
+    print("size at this boundary (fresh null draws): " + " · ".join(sizes))
     counts = np.asarray(SLOT_COUNTS, dtype=np.float64)
     prob = counts / counts.sum()
     sig = (counts / np.median(counts)) ** gamma
     sig = sig / math.sqrt(float(np.sum(prob * sig**2)))
     print(f"\nvol ∝ count^{gamma:g}, flat cost = {cost:.0%} of gross")
     print("| annual Sharpe | PASS (K6 descriptive, a8) | PASS if K6 were a kill | median read "
-          "of the PASS | K3 / K4 / K6 fire on a crossing | NULL |")
+          "of the PASS | K3 / K4 / K6 fire on a crossing | no crossing (NULL or a final-read "
+          "K2 / cost KILL — not simulated) |")
     print("|--:|--:|--:|--:|--:|--:|")
     for sr in (0.0, 1.0, 1.5, 2.0, 3.0):
         # the SESSION series (mean of 5 unit-variance slots) has sd ≈ 1/√5, so its per-session
