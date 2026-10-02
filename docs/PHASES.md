@@ -10,7 +10,7 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-10-02, evening) — READ THIS FIRST
+## ▶ STATE AT A GLANCE (updated 2026-10-02, night — PR-1 NULL) — READ THIS FIRST
 
 **The one live thread: the successor to the retired scorer, "liquidity provision at NSE's closing
 auction (CAS)".** Nothing is on the money path. The outside review pass and an internal
@@ -22,7 +22,7 @@ block supersedes every older block below.
 |---|---|
 | **The candidate** | Buy the stocks pushed hardest DOWN into the close (against peers), sell at the next open. Mechanism: passive, derivative and NAV flows pay for immediacy at the close (SEBI CAS circular §2.2, §2.4). Literature: Bogousslavsky & Muravyev (*J. Financial Markets* 2023), 85% of closing-price deviations reversed by the next morning. In-house: CAS Stage 2, ρ −0.272 over 7 sessions (lead only) |
 | **Execution path** | ✅ Real. Retail CNC market orders fill **at the official close** in the post-close session: 15:50–16:00 now (SEBI §4.2.4), 15:40–16:00 before the CAS (Zerodha support, archived 2025-05-30) |
-| **PR-1** (historical mechanism test, **748 pairs**, pre-CAS) | ⭐ **PRE-REGISTRATION FROZEN** at `6f61c9e` (2026-10-02 22:04 IST; file sha256 `9a47dac0…f258a`): `docs/analysis/pr1-preregistration-v3.1-2026-10-02.md` + PR-2's translation (§9a). All four §11 recommendations accepted (middle-tercile demeaning · mechanism = label · PR-2 per a8 · last-trade entry). K2 on the bottom quintile; 754 → 748 pairs; PR-2 a sequential rule simulated before the freeze (null 1.1%, Sharpe 2 → 93%). **No outcome read. Next: the study code → review → run ONCE.** ⚠ Push before writing the code, so the freeze carries a third-party timestamp. |
+| **PR-1** (historical mechanism test, **748 pairs**, pre-CAS) | ⛔ **RAN ONCE 2026-10-02 — NULL.** Frozen at `6f61c9e` (pushed), run at `73ce980`, artefacts `8d08177`, report `docs/analysis/pr1-report-2026-10-02.md`. CNC chosen: net **+0.03 bps, NW t 0.017**, DSR 0.027; K2 and the cost KILL did not fire. **PR-1 stops; nothing re-specified.** Descriptive: the book's last print is 64 bps below its close; at the close the book nets −63.7 bps; with s ending at P1525 −14.5 bps (t −9) ⇒ the gross rebound is mostly last-print bounce. |
 | **PR-2** (forward, CAS era) | `cas_daily` holds **11 sessions** (09-10 → 09-29), **unread**. ⛔ **Lost: 09-14, 09-24, 09-25 (worker down), 09-30 (mixed-version worker) and 10-01 (`make worker` never started)** (see below). Its decision read needs 30 sessions, so it cannot happen before the 2026-10-31 sunset |
 | **DA-7 post-close capture** | ✅ Built, reviewed, migrated (`7c3e9a1f5b2d`). ⛔ **2026-10-01 captured 0 rows** (no beat ran). 10-02 is a holiday ⇒ **the first capture day is now Mon 2026-10-05**; verify after 16:05 IST |
 | **Workers** | ⛔ **None running on 2026-10-01** — only `make live-worker` was up (`celerybeat-schedule.db` last written 09-30 17:18; zero beat output that day). The **`make worker` preflight** refuses a second worker/beat. ✅ **CAS watch now runs from CRON** (14:45/15:05 "worker down", 15:40/16:10 "window missed", desktop toast — RUNBOOK §9c), because the old check was itself a beat task and the webhook was never set |
@@ -2159,7 +2159,7 @@ which is what Phase-6 expectancy calibration is for.
 
 **▶ CONTINUE HERE — updated 2026-10-02 (the NEXT list is in the top STATE block; this is the short form.)**
 
-0. **PR-1 is FROZEN** at `6f61c9e`. ✅ The study's decision path is written + tested (`scripts/pr1_study.py`, 21 tests; `--dry` reproduces §8). ✅ All ten cl. 14 descriptives written (one, the index-event tag, reported as not computable — no sourced calendar). Next: (a) quant-verifier review of the script against the frozen text, incl. interpretations I1–I12; (b) the user pushes (the run-once guard refuses until the freeze is on a remote); (c) `--run-once` → report.
+0. ⛔ **PR-1 RAN ONCE — NULL (2026-10-02)**; report `docs/analysis/pr1-report-2026-10-02.md`. PR-1 stops. **Open (the author's):** (a) PR-2 — build prerequisites 2/3/4/6 and accrue forward (first read ≥ 126 sessions, ≈ April 2027), or close the CAS thread; (b) the programme sunset 2026-10-31. Keep `cas_postclose_daily` capturing (free, from 10-05).
 1. **Mon 2026-10-05:** run BOTH `make live-worker` AND `make worker` (they are different processes — 10-01 was lost to running only the first). After 16:05 IST verify the first post-close capture day; the 14:45/15:05 cron toast will say if the worker is down. Check `cas_watch.log`.
 2. ✅ **Outside pass + internal review + the final verification round are all done**
    (`docs/analysis/pr1-outside-pass-2026-09-30.md`). Round 2 found K2 (decision-changing) plus 3

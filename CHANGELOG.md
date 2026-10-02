@@ -7,6 +7,19 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### ⛔ PR-1 RAN ONCE — verdict NULL (2026-10-02)
+
+- The single run (`pr1_study.py --run-once`, by the author, 23:01 IST, HEAD `73ce980`, after the
+  freeze `6f61c9e` was pushed). Artefacts committed unedited (`8d08177`); report
+  `docs/analysis/pr1-report-2026-10-02.md`.
+- **CNC chosen; net +0.03 bps/session, NW t 0.017, DSR 0.027; no kill fired** (K2 IC −0.169,
+  cost-KILL upper bound +4.74 bps) ⇒ **NULL: PR-1 stops, nothing is re-specified.**
+- Descriptive reading (never decisive): the book's last print sits 64 bps below its official
+  close (G); entering at the close nets −63.7 bps; ending s one bar earlier so s and R_on share no
+  print nets −14.5 bps (t −9.0) ⇒ the gross rebound is mostly the last print's bounce. MIS −23.8
+  bps (t −6.2). Raw +16.1 bps is cohort drift (β 0.14, alpha t −1.43).
+- Open (the author's): build PR-2's prerequisites or close the CAS thread; the 2026-10-31 sunset.
+
 ### PR-1 study — confirmation review (PASS-WITH-NOTES), notes fixed (2026-10-02, research)
 
 - **N1:** E1 prints at 4 dp (it printed `+0.00`), and E1 plus the whole-cohort / raw series of
