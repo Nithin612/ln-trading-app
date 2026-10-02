@@ -1,0 +1,21 @@
+{
+  "started_at": "2026-10-02T17:31:43.440678+00:00",
+  "head": "73ce9806051cf3c1f22a117366a1b3931b1190fd",
+  "script_sha256": "ef22f0d91a27a9a9954ebd209a16b3ff9a6a29137ddb12a5697f0d6dc94b3c6e",
+  "frozen_text_sha256": "9a47dac0ac457c32d5708660e2bae4ad3e6f8946895e93772dd73f78573f258a",
+  "guarded_sha256": {
+    "backend/app/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "backend/app/services/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "backend/app/services/block_bootstrap.py": "fb64c8b9538486ba7bbd0e46d83a11c4c85c437ce7b16f4f271fe0e3d6f9a134",
+    "backend/app/services/deflated_sharpe.py": "cb40cf509cf610e573761f70ec07c407a5be7af210da873b41f21f4e9cdd302a",
+    "backend/app/trading/__init__.py": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "backend/app/trading/fees.py": "7ceab4174cebf4363630384cc56da04264793e66087c97fc35c8ac29f2a8c13f",
+    "backend/pyproject.toml": "a99d4fc334847d98a5d631bf3400afa5cf9abfc0324e5caa9799928637fa9385",
+    "backend/scripts/holdout_seal.py": "97a59987634c743be877e6e2b04cbf0810711aa2894889637e8e07a25f657bed",
+    "backend/scripts/pr1_design_facts.py": "a29bb70e6876e99a5dfd9921bb31f70f8ca6225361e75ac06fcd32772db9f9bf",
+    "backend/scripts/pr1_study.py": "ef22f0d91a27a9a9954ebd209a16b3ff9a6a29137ddb12a5697f0d6dc94b3c6e",
+    "backend/uv.lock": "b021afd164be86d6ed1d2dd1e05be566c7f8e225e16f6a4dc917f438fa2f46ca",
+    "docs/analysis/pr1-preregistration-v3.1-2026-10-02.md": "9a47dac0ac457c32d5708660e2bae4ad3e6f8946895e93772dd73f78573f258a"
+  },
+  "freeze_commit": "6f61c9ec757a9c922eab44674f7be3f4de1ac3e5"
+}

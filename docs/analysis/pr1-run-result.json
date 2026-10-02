@@ -1,0 +1,117 @@
+{
+  "verdict": "NULL",
+  "branch": "cnc",
+  "reasons": [],
+  "stats": {
+    "t_by_branch": {
+      "cnc": 0.0170995030985781,
+      "mis": -5.76913610715852
+    },
+    "n": 748,
+    "mean": 2.987487981694585e-06,
+    "t": 0.0170995030985781,
+    "ci90": [
+      -0.00028438814006055484,
+      0.000290363116023944
+    ],
+    "ci90_h176": [
+      -0.00010038814006055487,
+      0.0004743631160239441
+    ],
+    "dsr": 0.02718454335880721,
+    "skew": -0.3210442700174012,
+    "kurtosis": 8.694311898734862,
+    "k2_mean_ic_quintile": -0.16936395421882425,
+    "would_pass": false,
+    "k3": false,
+    "k4": false,
+    "k6": false
+  },
+  "reported_series": {
+    "cnc": {
+      "e1_ic": {
+        "n": 748,
+        "mean": -0.24943116987202738,
+        "t": -54.432004205526205,
+        "ci90": [
+          -0.25696860617309786,
+          -0.24189373357095692
+        ]
+      },
+      "net_whole_cohort": {
+        "n": 748,
+        "mean": -0.00014019059650175616,
+        "t": -0.8229401666030075,
+        "ci90": [
+          -0.0004203968866774595,
+          0.0001400156936739472
+        ]
+      },
+      "net_raw": {
+        "n": 748,
+        "mean": 0.0016130136429566547,
+        "t": 5.464732082050272,
+        "ci90": [
+          0.0011275056068620402,
+          0.002098521679051269
+        ]
+      }
+    },
+    "mis": {
+      "e1_ic": {
+        "n": 748,
+        "mean": 0.031239555410490245,
+        "t": 9.846832156272507,
+        "ci90": [
+          0.026021177031961263,
+          0.03645793378901922
+        ]
+      },
+      "net_whole_cohort": {
+        "n": 748,
+        "mean": -0.0023829818322614435,
+        "t": -6.232125870780134,
+        "ci90": [
+          -0.0030119255331793517,
+          -0.001754038131343535
+        ]
+      },
+      "net_raw": {
+        "n": 748,
+        "mean": -0.0028534432647281463,
+        "t": -5.85625026382893,
+        "ci90": [
+          -0.0036548940722999595,
+          -0.002051992457156333
+        ]
+      }
+    }
+  },
+  "counts": {
+    "pairs": 748,
+    "cohort_drops_union": 188,
+    "strict_basis_steps": 187,
+    "split_bonus_ex_dates": 44,
+    "transient_or_mirror_steps_kept": 185
+  },
+  "interpretations": [
+    "I1 (cl. 3, 5): a NON-book cohort name's outcome is 'defined' only when its own prices exist (R_on: a 09:15 bar on t+1; R_day: a 09:15 and a 15:05 bar on t+1). The carry rules are applied to BOOK slots only, as cl. 3 states them ('a book name with missing t+1 data').",
+    "I2 (cl. 3, 7): an MIS book slot with bars on t+1 but none at or before 15:05 has no 'latest earlier bar'; it is treated as never entered (counted), like a suspended slot.",
+    "I3 (cl. 6): a session where no book slot is bought or entered (k_t = 0) has no session return; it is left out of that branch's series and counted (PR-1's text is silent; \u00a79a a5 states the same rule for PR-2).",
+    "I4 (cl. 8, 12): Spearman IC with average ranks for ties, over names with a defined outcome; a session with fewer than 3 such names contributes no IC (counted).",
+    "I5 (cl. 10\u201311): the 90% CI is mean \u00b1 1.645\u00b7SE with SE = |mean| \u00f7 |NW t| (the house Newey\u2013West at lag 10), so the CI and the t share one variance estimate.",
+    "I6 (cl. 13): the label's per-session OLS has an intercept, over cohort names with a defined chosen outcome and all three regressors; with an intercept, 'all demeaned' does not move the slopes. CI(\u03b2_s \u2212 \u03b2_pre) is the cl.-10 CI of the per-session difference series.",
+    "I7 (cl. 5, 14): G = P1530_t \u00f7 C_t \u2212 1 mixes the two tables, so it is computed only for book slots whose bases agree EXACTLY on t (official open = 09:15-bar open), where both are on the traded basis; the count of slots used is printed.",
+    "I8 (cl. 14 P6): expiry type of session t \u2014 'monthly' = the last nominal expiry weekday of the month (Thursday before 2025-09-01, Tuesday after), 'weekly' = any other nominal expiry weekday (Nifty weeklies), 'none' otherwise; a holiday moves it to the previous session.",
+    "I9 (cl. 14 P3): a slot's late volume = the volume of the bars stamped 15:15\u201315:25 \u00f7 the session's volume, on t; terciles are cut over all book slots of the chosen branch.",
+    "I10 (cl. 14): the long-short intraday variant = the MIS book (5 most negative s) plus a SHORT of the 5 most positive s, each slot \u20b920,000, middle-tercile demeaned, intraday fees per side; the session value is the mean over all slots entered.",
+    "I11 (cl. 14): the beta regression is OLS of the decision series on the equal-weight raw cohort outcome of the same branch; the alpha's t is the NW t (lag 10) of y \u2212 \u03b2\u00b7x.",
+    "I12 (cl. 14): the VIX of session t is `india_vix_daily.close` on t; terciles over the sessions of the decision series.",
+    "I13 (cl. 13): the label's t\u22121 is the previous session that is neither special NOR one of the three \u00a710j mismatch sessions (the same neighbour rule as cl. 3's basis test); on 2024-02-06, 2024-05-15 and 2025-01-21 the gap regressor therefore spans two sessions.",
+    "I14 (cl. 14 variants): the variant books (executable, P1525, long-short) carry a name with no outcome at 0 (CNC) or skip it (MIS) instead of the first-bar-open carry \u2014 descriptive only; `--dry` shows no book slot needs a carry in this window.",
+    "I15 (cl. 9): an exact tie in the two branches' NW t goes to CNC (the first listed)."
+  ],
+  "unavailable": [
+    "the index-event-day tag of the concentration panel: no index-event calendar exists in the data and the text names no source; inventing rebalancing dates would fabricate the tag"
+  ]
+}

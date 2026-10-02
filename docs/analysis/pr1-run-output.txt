@@ -1,0 +1,124 @@
+2026-10-02 23:01:43,692 INFO sqlalchemy.engine.Engine select pg_catalog.version()
+2026-10-02 23:01:43,692 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-10-02 23:01:43,698 INFO sqlalchemy.engine.Engine select current_schema()
+2026-10-02 23:01:43,699 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-10-02 23:01:43,700 INFO sqlalchemy.engine.Engine show standard_conforming_strings
+2026-10-02 23:01:43,700 INFO sqlalchemy.engine.Engine [raw sql] ()
+2026-10-02 23:01:43,702 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-10-02 23:01:43,702 INFO sqlalchemy.engine.Engine SET TRANSACTION READ ONLY
+2026-10-02 23:01:43,702 INFO sqlalchemy.engine.Engine [generated in 0.00014s] ()
+2026-10-02 23:01:43,704 INFO sqlalchemy.engine.Engine 
+        WITH b AS (
+          SELECT stock_id, (time AT TIME ZONE 'Asia/Kolkata')::date AS d,
+                 count(*) AS nb,
+                 max(open) FILTER (
+                   WHERE (time AT TIME ZONE 'Asia/Kolkata')::time = '09:15') AS o915,
+                 max(close) FILTER (
+                   WHERE (time AT TIME ZONE 'Asia/Kolkata')::time = '15:10') AS p1515,
+                 max(close) FILTER (
+                   WHERE (time AT TIME ZONE 'Asia/Kolkata')::time = '15:25') AS p1530
+          FROM ohlcv_5m
+          WHERE time >= (CAST($1 AS date)::timestamp AT TIME ZONE 'Asia/Kolkata')
+            AND time <  ((CAST($2 AS date) + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')
+          GROUP BY 1, 2)
+        SELECT b.stock_id, st.symbol, b.d, b.nb, b.o915, b.p1515, b.p1530, dd.open, dd.close
+        FROM b
+        JOIN ohlcv_1d dd ON dd.stock_id = b.stock_id
+                        AND dd.time >= (CAST($1 AS date)::timestamp AT TIME ZONE 'Asia/Kolkata')
+                        AND dd.time <  ((CAST($2 AS date) + 1)::timestamp
+                                        AT TIME ZONE 'Asia/Kolkata')
+                        AND (dd.time AT TIME ZONE 'Asia/Kolkata')::date = b.d
+        JOIN stocks st ON st.id = b.stock_id
+        
+2026-10-02 23:01:43,704 INFO sqlalchemy.engine.Engine [generated in 0.00024s] (datetime.date(2023, 7, 3), datetime.date(2026, 7, 31))
+2026-10-02 23:01:52,870 INFO sqlalchemy.engine.Engine 
+        SELECT DISTINCT (time AT TIME ZONE 'Asia/Kolkata')::date FROM ohlcv_1d
+        WHERE time >= (CAST($1 AS date)::timestamp AT TIME ZONE 'Asia/Kolkata')
+          AND time <  ((CAST($2 AS date) + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')
+        ORDER BY 1
+        
+2026-10-02 23:01:52,870 INFO sqlalchemy.engine.Engine [generated in 0.00016s] (datetime.date(2023, 7, 3), datetime.date(2026, 7, 31))
+2026-10-02 23:01:53,061 INFO sqlalchemy.engine.Engine SELECT stock_id, ex_date FROM corporate_actions WHERE ex_date >= $1 AND ex_date <= $2
+2026-10-02 23:01:53,061 INFO sqlalchemy.engine.Engine [generated in 0.00020s] (datetime.date(2023, 7, 3), datetime.date(2026, 7, 31))
+2026-10-02 23:01:53,073 INFO sqlalchemy.engine.Engine ROLLBACK
+2026-10-02 23:01:53,500 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-10-02 23:01:53,500 INFO sqlalchemy.engine.Engine SET TRANSACTION READ ONLY
+2026-10-02 23:01:53,500 INFO sqlalchemy.engine.Engine [cached since 9.798s ago] ()
+2026-10-02 23:01:53,500 INFO sqlalchemy.engine.Engine 
+        SELECT stock_id, (time AT TIME ZONE 'Asia/Kolkata')::date AS d, count(*) AS nb,
+               max(open)  FILTER (WHERE (time AT TIME ZONE 'Asia/Kolkata')::time = '09:15'),
+               (array_agg(open ORDER BY time))[1],
+               (array_agg(close ORDER BY time DESC)
+                  FILTER (WHERE (time AT TIME ZONE 'Asia/Kolkata')::time <= '15:05'))[1],
+               max(close) FILTER (WHERE (time AT TIME ZONE 'Asia/Kolkata')::time = '15:10'),
+               max(close) FILTER (WHERE (time AT TIME ZONE 'Asia/Kolkata')::time = '15:20'),
+               max(close) FILTER (WHERE (time AT TIME ZONE 'Asia/Kolkata')::time = '15:25'),
+               sum(volume),
+               sum(volume) FILTER (WHERE (time AT TIME ZONE 'Asia/Kolkata')::time >= '15:15'),
+               max(close) FILTER (WHERE (time AT TIME ZONE 'Asia/Kolkata')::time = '15:05')
+        FROM ohlcv_5m
+        WHERE time >= (CAST($1 AS date)::timestamp AT TIME ZONE 'Asia/Kolkata')
+          AND time <  ((CAST($2 AS date) + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')
+        GROUP BY 1, 2
+2026-10-02 23:01:53,500 INFO sqlalchemy.engine.Engine [generated in 0.00010s] (datetime.date(2023, 7, 3), datetime.date(2026, 7, 31))
+2026-10-02 23:02:14,000 INFO sqlalchemy.engine.Engine ROLLBACK
+2026-10-02 23:02:14,025 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2026-10-02 23:02:14,026 INFO sqlalchemy.engine.Engine SET TRANSACTION READ ONLY
+2026-10-02 23:02:14,026 INFO sqlalchemy.engine.Engine [cached since 30.32s ago] ()
+2026-10-02 23:02:14,027 INFO sqlalchemy.engine.Engine 
+            SELECT stock_id, (time AT TIME ZONE 'Asia/Kolkata')::date, open FROM ohlcv_1d
+            WHERE time >= (CAST($1 AS date)::timestamp AT TIME ZONE 'Asia/Kolkata')
+              AND time <  ((CAST($2 AS date) + 1)::timestamp AT TIME ZONE 'Asia/Kolkata')
+              AND open IS NOT NULL
+2026-10-02 23:02:14,027 INFO sqlalchemy.engine.Engine [generated in 0.00016s] (datetime.date(2023, 7, 3), datetime.date(2026, 7, 31))
+2026-10-02 23:02:16,377 INFO sqlalchemy.engine.Engine SELECT trade_date, close FROM india_vix_daily WHERE trade_date BETWEEN $1 AND $2
+2026-10-02 23:02:16,377 INFO sqlalchemy.engine.Engine [generated in 0.00015s] (datetime.date(2023, 7, 3), datetime.date(2026, 7, 31))
+2026-10-02 23:02:16,420 INFO sqlalchemy.engine.Engine ROLLBACK
+counts: {'pairs': 748, 'cohort_drops_union': 188, 'strict_basis_steps': 187, 'split_bonus_ex_dates': 44, 'transient_or_mirror_steps_kept': 185} {'book_slots': 3740, 'qty0': 87, 'suspended_t1': 0, 'no_0915_bar_t1': 0, 'no_bar_by_1505_t1': 0, 'carried_1505_from_earlier_bar_t1': 0}
+
+sessions 748 · chosen branch CNC (NW t: CNC 0.0170995030985781, MIS -5.76913610715852)
+VERDICT: NULL
+  n: 748
+  mean: 2.987487981694585e-06
+  t: 0.0170995030985781
+  ci90: (-0.00028438814006055484, 0.000290363116023944)
+  ci90_h176: (-0.00010038814006055487, 0.0004743631160239441)
+  dsr: 0.02718454335880721
+  skew: -0.3210442700174012
+  kurtosis: 8.694311898734862
+  k2_mean_ic_quintile: -0.16936395421882425
+  would_pass: False
+  k3: False
+  k4: False
+  k6: False
+  CNC E1 (IC): n 748 · mean -0.2494  · NW t -54.43 · 90% CI [-0.2570, -0.2419]
+  CNC whole-cohort-demeaned net: n 748 · mean -1.40 bps · NW t -0.82 · 90% CI [-4.20, +1.40]
+  CNC raw net: n 748 · mean +16.13 bps · NW t +5.46 · 90% CI [+11.28, +20.99]
+  MIS E1 (IC): n 748 · mean +0.0312  · NW t +9.85 · 90% CI [+0.0260, +0.0365]
+  MIS whole-cohort-demeaned net: n 748 · mean -23.83 bps · NW t -6.23 · 90% CI [-30.12, -17.54]
+  MIS raw net: n 748 · mean -28.53 bps · NW t -5.86 · 90% CI [-36.55, -20.52]
+  mechanism label (CNC): close-specific over 747 sessions
+  counts: {'qty0': 87, 'cnc_carried_suspended': 0, 'cnc_carried_open': 0, 'mis_not_entered': 0, 'mis_carried_open': 0, 'mis_carried_1505': 0, 'cnc_k0': 0, 'mis_k0': 0, 'cnc_mid_base_empty': 0, 'mis_mid_base_empty': 0}
+
+── cl. 14 descriptives (never decisive) ──
+  weekday × expiry type (P6), mean net bps (n):
+    Mon: monthly +53.5 (1) · weekly +36.3 (2) · none +4.2 (144)
+    Tue: monthly -16.9 (10) · weekly -5.9 (34) · none +6.4 (108)
+    Wed: monthly — (0) · weekly +18.5 (4) · none -6.2 (147)
+    Thu: monthly +3.1 (25) · weekly +3.3 (83) · none -13.7 (43)
+    Fri: monthly — (0) · weekly — (0) · none -0.4 (144)
+  VIX tercile (P4) low: n 248 · mean net -1.83 bps
+  VIX tercile (P4) mid: n 246 · mean net -2.10 bps
+  VIX tercile (P4) high: n 251 · mean net +3.54 bps
+  late-volume tercile (P3, per slot) low: n 1217 · mean net +0.64 bps
+  late-volume tercile (P3, per slot) mid: n 1218 · mean net +2.34 bps
+  late-volume tercile (P3, per slot) high: n 1218 · mean net -2.53 bps
+  long-short intraday (I10): n 748 · mean -22.91 bps · NW t -7.88 · 90% CI [-27.69, -18.13]
+  executable R_on from C_t (daily file): n 748 · mean -63.69 bps · NW t -33.11 · 90% CI [-66.86, -60.53]
+  G = P1530 ÷ C_t − 1 (I7): 3095 slots · mean -63.86 bps · median -56.13 bps
+  CNC with s ending at P1525: n 748 · mean -14.45 bps · NW t -9.00 · 90% CI [-17.09, -11.81]
+  concentration: best-5% sessions carry 18066.9% of net · expiry sessions 812.9% of net (159 sessions) · index-event days: NOT COMPUTABLE (see DESCRIPTIVES_UNAVAILABLE)
+  balanced subsample (116 names in every session): n 748 · mean -3.88 bps · NW t -2.01 · 90% CI [-7.06, -0.70]
+  rerun without transient basis-step name-nights (185 dropped): n 748 · mean +0.03 bps · NW t +0.02 · 90% CI [-2.84, +2.90]
+  on the equal-weight cohort return (I11): β +0.141 · alpha n 748 · mean -2.45 bps · NW t -1.43 · 90% CI [-5.27, +0.37]
+  unavailable: the index-event-day tag of the concentration panel: no index-event calendar exists in the data and the text names no source; inventing rebalancing dates would fabricate the tag
