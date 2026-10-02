@@ -42,6 +42,7 @@ Row 16 would have decided the result by construction.
 | 29 | §7 | **Like-for-like and the cost wedge.** The middle-tercile PASS column required t only, the whole-cohort one t and DSR; and the planted edge had no cost wedge, though K2 reads the GROSS outcome and a real net pass needs a gross edge ~4× larger — so the false-kill figures were upper bounds | Both bases now require t, DSR and the K2 clear; a gross ×4 cell less a flat cost is added; b is calibrated against a book-free benchmark |
 | 30 | §5, §7, §9, cl. 3 | Small: K6's range and the "3 names" t had moved (final run: 0.0–2.3%, 86.7%); four looks at 2.326 give 2.74%, not 2.8%; the quintile/tercile cuts were undefined; the spread CI used z with 37 clusters and did not state its coverage | Restated; the cuts are ranks after the cl. 3 drops, before any outcome filter, at ⌊n/5⌋, ⌊n/3⌋, ⌊2n/3⌋; CI with t₃₆ and coverage stated |
 | 31 | 3, 9a, §7, §8 | **Second quant-verifier pass (FAIL):** a1's guard read `captured_at`, which is the LAST poll time (the cohort would be empty); a6 dropped a name with no 15:05 bar, re-opening v3 row 7's t+1 selection; a2 said "t" where a4 says "t+1"; 89 of the 278 "persistent" drops were mirrors of a day-t outlier, not corporate actions; t+2 could be a special or mismatch session; a5 read `volume_latest` from a capture that may have died early; a6's "never re-backfilled" was uncheckable; the §7 calibration label; "388"; the §10j list had no rule | a1 reads a new `first_polled_at` (built 2026-10-02, migration `9b4d2f7a1c3e`); a6 carries the latest earlier bar and excludes a thin session, from a hashed snapshot; a2 → t+1; the strict rule adds "A_t clean against t−1" (**187** drops, 5 book slots); neighbours skip special and mismatch sessions; a5 requires a last poll ≥ 16:00; §10j is a stated rule (≥ 10 one-day outliers); labels fixed; a beta descriptive line added (cl. 14) |
+| 32 | 9a | **Final §9a check (FAIL):** a8 left PR-2 with no runnable rule — cl. 11's kills applied at every read would KILL a genuine edge 11–15% of the time (0.5–1.1% at one read); cl. 11 was deleted without restating PASS/NULL, h or a schedule; K3/K4/K6 were calibrated to n = 748; k_t = 0 undefined; the fill instrument unvalidated (`cas_postclose_daily` = 0 rows); a1's window trusted `last_price` up to 15:28; auction eligibility unchecked; validity per session not per row, with a stale-volume hole; no carry or demeaning rule in a5; the a6 snapshot untimed; the horizon to be planned from PR-1's estimate; `ohlcv_1d` rewrite risk; the label used 5-minute prices | a8 is now a complete sequential rule, **simulated before the freeze**; K3 scaled ⌈0.02·n⌉, K4 on the halves in hand, K6 descriptive; kills only at a crossing or the last read; k_t = 0 excluded; prerequisites 4–6; a1 window [15:15, 15:20); auction evidence in a2; per-row validity; a5 carry + demeaning; a6 15:20 snapshot as a bounded A3 exception; horizon fixed now (a0, a8); hashed evening snapshot; label translated |
 
 **Re-raised in round 2 and still NOT ADOPTED:** "decide on raw" (no new argument; it stays
 decision #1 — 4 of 6 reviewers accept demeaned) · "K3 kills an expiry-concentrated edge"
@@ -418,8 +419,9 @@ pinned 2023-07-03 → 2026-07-31). Figures that moved from v3 are marked.
   - **[v3.1] Power, stated as power:** a one-sided 1% single-test bar is reached with **50%**
     power after ((2.326 ÷ SR)²) ≈ **1.35 y** at SR 2, and with **80%** power after
     ((2.326 + 0.842) ÷ SR)² ≈ **2.51 y** at SR 2 and **4.46 y** at SR 1.5. A PR-1 PASS is a
-    selected result, so its point estimate is biased up (winner's curse): **plan PR-2's horizon on
-    a shrunk effect, not on PR-1's Sharpe.**
+    selected result, so its point estimate is biased up (winner's curse). **The horizon is
+    therefore fixed NOW (§9a a8: 8 reads × 126 sessions), never planned from PR-1's estimate**;
+    its simulated power is in §9a.
   - **[v3.1] PR-2 decides on a pre-registered FILL rule** from the post-close capture
     (`cas_postclose_daily`, first capture day 2026-10-05): a slot counts as filled only if the
     post-close session traded enough volume at the close to absorb it. The rule is part of §9a.
@@ -444,24 +446,67 @@ translation were written after PR-1's result, the result could shape it.
 capture, polled live from the exchange quote) or the exchange's daily file, both on the traded
 basis.
 
-| # | clause (auction era: sessions after 2026-09-29 and after this commit) |
+| # | clause (auction era) |
 |---|---|
-| a1 | **Prices.** P_pre,t = `cas_daily.pre_auction_price`: the last traded price at the first poll inside the auction window (frozen on insert). Category-I stocks print no continuous trade after 15:15, order entry closes at random between 15:28 and 15:30, and matching runs 15:30–15:35, so no auction print can precede 15:28: P_pre,t IS the last continuous trade — **valid only if `cas_daily.first_polled_at` ∈ [15:15:00, 15:28:00) IST**; otherwise the name is out of the cohort (counted). `first_polled_at` was added 2026-10-02 (migration `9b4d2f7a1c3e`) because `captured_at` is rewritten on every poll, so it holds the LAST poll time (quant-verifier); rows from before it are NULL ⇒ invalid ⇒ out of the cohort. C_t = the official close in the daily file = the auction's equilibrium price (not `cas_daily.official_close`, which can be a pre-match value at a 15:33 last poll). Open_{t+1} = the official open in the daily file. |
-| a2 | **Cohort on t:** the names with a valid P_pre,t, a daily bar carrying C_t, and **t+1 not an ex-date for them** (a4); a session qualifies with ≥ 150 such names. Pairs are consecutive in the exchange calendar; special sessions are excluded as in cl. 3. Quintile/tercile cuts as in cl. 3. |
-| a3 | **Signal:** s = (C_t − P_pre,t) ÷ P_pre,t, demeaned on the decision-#1 base. One basis (traded), one session. |
-| a4 | **Corporate actions.** The A-ratio detector of cl. 3 sees nothing here (both sources trade-basis), so **every name-night whose t+1 is an ex-date of ANY corporate action** (split, bonus, dividend, demerger, rights, …) **is dropped**, using NSE's corporate-action calendar **as published by the close of t** (ex-dates are announced in advance). ⚠ **Build prerequisite:** `corporate_actions` holds splits and bonuses only, so PR-2 cannot run until that calendar is ingested and archived as of each t. |
-| a5 | **CNC outcome:** R_on = (Open_{t+1} − C_t) ÷ C_t, both from the daily file. The entry is the post-close fill at C_t, which exists in this regime. **Fill rule:** a slot is filled only if the post-close volume (`cas_postclose_daily.volume_latest − volume_after_auction`) is at least **10×** the slot's quantity. The capture is valid only if it was first polled before 15:50 IST **and its last poll (`captured_at`) is at or after 16:00:00 IST**, i.e. it saw the whole session; **a session without a valid capture is EXCLUDED and counted — never read as "unfilled"** (worker uptime must not decide fills). An unfilled slot is skipped and counted. The 10× is a proposal; decision #3 sets it. |
-| a6 | **MIS outcome** (only if PR-1 chooses MIS): R_day = (P1510_{t+1} − Open_{t+1}) ÷ Open_{t+1}. P1510 = the close of the complete (`is_complete`) 5-minute bar stamped 15:05 written by the live candle aggregator, read from a **PR-2-owned snapshot of each session's 09:15–15:10 bars, archived with a hash before any backfill can run** (`ohlcv_5m` has no provenance column, so this is the only way to know the writer). Off-grid bars are ignored. A name that traded on t+1 but has no 15:05 bar takes **the close of the latest earlier bar** (cl. 3's carry rule — dropping it would re-open the t+1 selection v3 row 7 removed). A session where the snapshot covers fewer than 90% of the cohort at 15:05 is **excluded and counted**. |
-| a7 | **Book, sizing, costs, branch:** cl. 6, 7 and 9 (the branch is PR-1's chosen branch and is not re-chosen). **Kills:** cl. 12's K2, K3 and K6; **K4's halves are re-dated by PR-2's read schedule** (a8). |
-| a8 | **The bar replaces cl. 10–11:** decision #3 (§11) — proposed, an alpha-spending one-sided 1% boundary over a fixed read schedule, NW lag ⌈n^(1/3)⌉ at each read, and DSR is not re-applied (§9). |
+| a0 | **Sessions.** PR-2 reads only sessions **after 2026-09-29 and after the commit that freezes this pre-registration** (PR-1 + this §9a together). Nothing PR-1 produces can move any clause below. |
+| a1 | **Prices.** P_pre,t = `cas_daily.pre_auction_price`, the last traded price at the first poll inside the auction window, frozen on insert. Category-I stocks print no continuous trade after 15:15; auction order entry opens at 15:20, closes at random between 15:28 and 15:30, and matching runs 15:30–15:35. **Valid only if `cas_daily.first_polled_at` ∈ [15:15:00, 15:20:00) IST** — before order entry opens, so no indicative or auction value can stand in for the last trade (this is stricter than "before 15:28": it costs only uptime and reads no outcome). Otherwise the name is out of the cohort (counted). `first_polled_at` was added 2026-10-02 (migration `9b4d2f7a1c3e`) because `captured_at` is rewritten on every poll; rows from before it are NULL ⇒ invalid. C_t = the official close in the daily file (not `cas_daily.official_close`, which can be a pre-match value at a 15:33 last poll). Open_t, Open_{t+1} = the official opens in the daily file. |
+| a2 | **Cohort on t:** the names with a valid P_pre,t, a daily bar carrying C_t, **evidence that the name was in the auction on t** (non-null `reference_price`, `indicative_close` > 0 and a non-zero `total_imbalance_qty` on the row — met by 210 of 210 names on every session 09-15 → 09-29), and **t+1 not an ex-date for them** (a4). A name whose close fell back to a non-auction price (no price discovered) fails the evidence test when detectable, and is counted. A session qualifies with ≥ 150 names. Pairs are consecutive in the exchange calendar; special sessions are excluded as in cl. 3. Quintile/tercile cuts as in cl. 3. |
+| a3 | **Signal:** s = (C_t − P_pre,t) ÷ P_pre,t, demeaned across the cohort (cl. 4). One basis (traded), one session. |
+| a4 | **Corporate actions.** The A-ratio detector of cl. 3 sees nothing here (both sources are traded-basis), so **every name-night whose t+1 is an ex-date of ANY corporate action** (split, bonus, dividend, demerger, rights, …) **is dropped before ranking**, using NSE's corporate-action calendar **as published by the close of t** (ex-dates are announced in advance; prerequisite 2). |
+| a5 | **CNC outcome:** R_on = (Open_{t+1} − C_t) ÷ C_t, both from the daily file, **demeaned per cl. 5 on the decision-#1 base**, over the cohort names with a defined outcome. A book name with no daily bar on t+1 (suspended) is **carried at R_on = 0 and counted** (cl. 3). The entry is the post-close fill at C_t. **Fill rule:** a slot is filled only if its name's post-close volume (`cas_postclose_daily.volume_latest − volume_after_auction`) is at least **10×** its quantity. **Validity is per name-night:** the row must be first polled before 15:50 IST, and its volume must have been observed at or after 16:00:00 IST (prerequisite 5) — an invalid row is **excluded and counted, never read as "unfilled"**. A session with **k_t = 0** filled slots is excluded from the decision series and counted. The 10× is a proposal; decision #3 sets it. |
+| a6 | **MIS outcome** (only if PR-1 chooses MIS): R_day = (P1510_{t+1} − Open_{t+1}) ÷ Open_{t+1}, demeaned as a5. P1510 = the close of the complete (`is_complete`) 5-minute bar stamped 15:05 in a **snapshot taken at 15:20 IST on t+1 by a scheduled task, stored with its timestamp and a hash** (prerequisite 3). This is a stated, bounded **exception to ledger A3**: only bars ≤ 15:10, which precede the auction-era inconsistency, and only as frozen at 15:20 — the snapshot freezes same-session (traded-basis) state; it cannot prove the writer (`ohlcv_5m` has no provenance column), and a later gap-fill or an adjusted backfill cannot reach it. Off-grid bars are ignored. A name with snapshot bars but none stamped 15:05 takes **the close of the latest earlier bar** (cl. 3's carry rule); a name that traded on t+1 (daily bar) but has **no snapshot bar at all** is excluded and counted. A session whose snapshot is missing, late, or covers < 90% of the cohort is **excluded and counted**. |
+| a7 | **Book, sizing, costs, branch:** cl. 6, 7 and 9 (the branch is PR-1's chosen branch; it is not re-chosen). **Mechanism label** (cl. 13), translated: r_pre = (P_pre,t − Open_t) ÷ Open_t and gap = (Open_t − C_{t−1}) ÷ C_{t−1}, from `cas_daily` and the daily file; PR-2 inherits PR-1's label definitions and reports its own. |
+| a8 | **The decision rule (replaces cl. 10–12 for PR-2; decision #3 may change any number here, before the freeze):** reads after every **126** decision-series sessions, at most **8** reads (1,008 sessions ≈ 4 years) — **fixed now, not planned from PR-1's estimate**. At read l with n_l sessions: NW t with lag ⌈n_l^(1/3)⌉ of net(h = 2.68). **Boundary** c·√(1008 ÷ n_l), c set so that P(any crossing) = 1% one-sided under the null (O'Brien–Fleming shape). **Frozen values** (c from 20,000 null paths, seed 2042): **t ≥ 6.94 · 4.91 · 4.01 · 3.47 · 3.10 · 2.83 · 2.62 · 2.45** at n = 126 … 1,008 (a re-draw moves each by ≤ 0.03; the frozen numbers, not a re-draw, decide). **PASS** = the first crossing, provided no robustness kill fires **at that read**: K3 = mean net ≤ 0 after removing the best ⌈0.02·n_l⌉ sessions; K4 = the two halves of the sessions in hand differ in sign. **KILL** = a robustness kill at a crossing, **or, at the LAST read only**, K2 (bottom-quintile IC ≥ 0) or the 90% CI upper bound of net(h = 1.76) below 0. **Interim reads can only PASS or continue** — a kill evaluated at every read would KILL a genuine edge 11–15% of the time (quant-verifier, 2026-10-02). **NULL** = no crossing by the last read and no final-read KILL. **K6 is descriptive in PR-2** (proposed): PR-1 tests name concentration at n = 748; at PR-2's n it would kill 7–17% of genuine crossings in the high-cost cell (below). DSR is not re-applied (§9). |
+
+**Operating characteristics of a8, simulated before the freeze** (`pr1_decision_oc.py`, the PR-2
+section; slots drawn from the measured book distribution; "annual Sharpe" of the net session
+series):
+
+Reproduce: `cd backend && uv run python scripts/pr1_decision_oc.py --only pr2 --sims 20000` (seed
+2042; 2,000 paths per cell).
+
+**High-cost cell** (vol ∝ slot count^0.5, a flat cost eating 80% of gross — the realistic case
+for a ~35 bps delivery round trip):
+
+| annual Sharpe (net) | PASS, K6 descriptive (a8) | PASS if K6 were a kill | median deciding read (sessions) | K3 / K4 / K6 fire on a crossing | NULL |
+|--:|--:|--:|--:|--:|--:|
+| 0 | **0.9%** | 0.9% | 1,008 | 0.0 / 0.0 / 0.0% | 99.2% |
+| 1.0 | 34.9% | 28.8% | 882 | 0.0 / 0.1 / 17.3% | 65.0% |
+| 1.5 | 73.0% | 61.0% | 756 | 0.0 / 0.0 / 16.4% | 27.1% |
+| 2.0 | **94.2%** | 80.3% | 630 | 0.0 / 0.1 / 14.7% | 5.7% |
+| 3.0 | 100.0% | 92.8% | 504 | 0.0 / 0.0 / 7.1% | 0.1% |
+
+**Mild cell** (vol ∝ count^0.256, no cost): 0.9% on the null · 35.4% / 71.5% / 95.2% / 100% at
+Sharpe 1 / 1.5 / 2 / 3; K6 fires on ≤ 0.6% of crossings there, so it matters only when costs eat
+most of the gross.
+
+- **Size holds:** the null passes 0.9% against the 1% design (the boundary is calibrated on iid
+  noise; the slot structure's heavier tails do not inflate it).
+- **K3 and K4 almost never fire on a genuine edge** at a crossing (≤ 0.3%); K6 fires on 7–17% of
+  genuine crossings in the high-cost cell — the reason it is descriptive here (a8).
+- At a true Sharpe of 2 the rule decides at a median of **630 sessions (≈ 2.5 years)**; at 1.5 it
+  needs ≈ 3 years and passes 73% of the time. These horizons are why a8's schedule is fixed now.
+- Not simulated here: K2 and the cost-KILL, which a8 evaluates **only at the last read** — a
+  single read, calibrated in §7 (bottom-quintile K2 0.0–1.3% on genuine passes).
 
 **Build prerequisites — PR-2 cannot read a session until each exists:**
 1. ✅ **BUILT 2026-10-02:** `cas_daily.first_polled_at`, frozen on insert at the quote-arrival
-   instant (as `cas_postclose_daily.first_polled_at` is). Migration `9b4d2f7a1c3e` is applied to
-   dev; the capture task picks it up at the next `make worker` start, so the first stamped session
-   is the first trading day that worker runs (2026-10-05 at the earliest);
-2. NSE's corporate-action calendar (all action types), archived as published by each t (a4);
-3. the PR-2-owned, hashed snapshot of the live aggregator's 09:15–15:10 bars (a6, MIS only).
+   instant. Migration `9b4d2f7a1c3e` is applied to dev; the capture task picks it up at the next
+   `make worker` start, so the first stamped session is 2026-10-05 at the earliest.
+2. NSE's corporate-action calendar (all action types), archived as published by each t (a4).
+3. The 15:20-IST snapshot task for the 09:15–15:10 bars, with timestamp and hash (a6, MIS only),
+   and an evening snapshot (after EOD ingest) of each session's `cas_daily` rows, daily bars for t
+   and t+1, and `cas_postclose_daily` rows, also hashed — so a later rewrite of `ohlcv_1d` (for
+   example a corporate-action adjustment) cannot change a ratio already in the series.
+4. **A validation of the fill instrument, outcome-free, before the 10× threshold is frozen:** on
+   ≥ 10 sessions, `volume_latest − volume_after_auction > 0` for at least half the cohort. If it
+   fails, Kite's quote volume does not see post-close trades, the CNC fill rule is undefined, and
+   PR-2's CNC branch does not run (a re-specification is a new trial).
+5. `cas_postclose_daily.volume_latest_at`, stamped only when a poll returned a non-null volume —
+   `captured_at` advances even when the volume is NULL (it is COALESCEd), so today a row can "see
+   the whole session" with a stale volume. Needs a migration (author's approval).
+6. Reporting: every excluded session (a5, a6) is listed with that day's equal-weight daily-file
+   cohort return, so a feed outage that clusters on stress days stays visible.
 
 ## 10. Known weaknesses — disclosed; please go beyond them
 
@@ -540,7 +585,7 @@ for tt in (0, 2, 3.6, 5):
 |--:|---|---|---|
 | 1 | The **decision series** (cl. 5): demeaned against which base, or raw | middle tercile · whole cohort · raw | **Demeaned against the middle tercile.** The cohort mean is market beta, which the signal does not produce (4 of 6 round-2 reviewers accept demeaning). The whole-cohort base fails on SIZE: if late up-movers revert, a zero-edge book PASSES 9–36% of the time even after K2; the middle tercile holds that to ≤ 0.2% and keeps power at 33–42%, for ~3 pp less power when nothing on the up side moves (§7). Raw has no benchmark at all, so it carries the market's drift. Whole-cohort and raw are reported |
 | 2 | The mechanism (cl. 13) as a **label** or a **kill** | label · kill | **Label.** It asks *which* reversal, not *whether* the signal pays; a kill would make PR-1 a joint test of two claims |
-| 3 | **§9 / §9a:** what a PR-1 KILL means for PR-2; PR-2's bar, read schedule and fill threshold | as §9 proposes · something else | **As §9:** an alpha-spending one-sided 1% bar over a fixed read schedule, a horizon planned on a shrunk effect, the 10× fill rule; a PR-1 KILL ends the old-regime claim but not automatically the auction thread (§9, §10i) |
+| 3 | **§9 / §9a:** what a PR-1 KILL means for PR-2; PR-2's read schedule, boundary, kills and fill threshold | as §9a a8 proposes · something else | **As a8:** reads every 126 sessions, at most 8 (≈ 4 years, fixed now), an O'Brien–Fleming-shape boundary at one-sided 1% overall; K3/K4 only at a crossing, K2 and the cost-KILL only at the last read, **K6 descriptive** (it would kill 7–17% of genuine crossings at PR-2's n in the high-cost cell); the 10× fill rule, subject to prerequisite 4. A PR-1 KILL ends the old-regime claim but not automatically the auction thread (§9, §10i). Simulated operating characteristics are in §9a |
 | 4 | **The CNC entry base:** the last trade P1530 or the 15:00–15:30 VWAP | last trade · VWAP | **Last trade (P1530).** The auction price carries the forced flow's full impact at one print and is executable post-close; the old regime's full-impact print is P1530, while the VWAP averages the impact away (κ 0.71, a −64 bps built-in drag). Disclosed: P1530 is a thin print, and the P1525 variant (cl. 14) separates s from R_on |
 
 **After the four decisions:** this text + §9a are committed as the pre-registration, then the code

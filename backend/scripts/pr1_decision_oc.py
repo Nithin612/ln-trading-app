@@ -335,10 +335,99 @@ def k2_oc(rng: np.random.Generator, sims: int) -> None:
         print(f"| {label} | {m:+.2f} | {pass_whole / sims:.1%} | {pass_mid / sims:.1%} | "
               f"{rate(f_whole)} | {rate(f_lower)} | {rate(f_quin)} |")
 
+
+#: PR-2's proposed read schedule (§9a a8, decision #3): a read every 126 sessions (~6 months),
+#: at most 8 reads (~4 years). Fixed now, independent of PR-1's estimate.
+PR2_READ_EVERY = 126
+PR2_MAX_READS = 8
+PR2_ALPHA = 0.01
+
+
+def _sequential_t(x: F64, looks: list[int]) -> F64:
+    """NW t of the running mean at each look: (runs, looks)."""
+    return np.stack([nw_t(x[:, :n], lag=math.ceil(n ** (1 / 3))) for n in looks], axis=1)
+
+
+def pr2_sequential_oc(
+    rng: np.random.Generator, sims: int, gamma: float = 0.5, cost: float = 0.8
+) -> None:
+    """PR-2's decision rule, simulated BEFORE its freeze (§7's rule, quant-verifier 2026-10-02).
+
+    Boundary: c_l = c·√(n_max / n_l) (O'Brien–Fleming shape), c set on the null so that P(any
+    crossing) = 1% one-sided. PASS = the first crossing, then the robustness kills at THAT read
+    only (they can turn a PASS into a KILL, never stop the study early): K3 = the mean is ≤ 0
+    after removing the best ⌈0.02·n⌉ sessions; K4 = the two halves of the sessions in hand differ
+    in sign; K6 = the top 3 names carry > 50% of net (slots drawn from the measured distribution,
+    vol ∝ count^gamma and a flat cost eating `cost` of gross; the default is §7's hardest K6
+    cell, γ 0.5 with 80%, and main() also runs the mildest, γ 0.256 with 0%). NULL = no
+    crossing by the last read. Edges are stated as annual Sharpe, per session SR/√252."""
+    looks = [PR2_READ_EVERY * k for k in range(1, PR2_MAX_READS + 1)]
+    n_max = looks[-1]
+    scale = np.sqrt(n_max / np.asarray(looks, dtype=np.float64))
+    z0 = _sequential_t(rng.standard_normal((sims, n_max)), looks)
+    c = float(np.quantile((z0 / scale).max(axis=1), 1 - PR2_ALPHA))
+    bound = c * scale
+    print(f"\nPR-2 boundary (one-sided {PR2_ALPHA:.0%} over {PR2_MAX_READS} reads of "
+          f"{PR2_READ_EVERY}): " + " · ".join(f"n={n}: t {b:.2f}" for n, b in zip(looks, bound,
+                                                                                 strict=True)))
+    counts = np.asarray(SLOT_COUNTS, dtype=np.float64)
+    prob = counts / counts.sum()
+    sig = (counts / np.median(counts)) ** gamma
+    sig = sig / math.sqrt(float(np.sum(prob * sig**2)))
+    print(f"\nvol ∝ count^{gamma:g}, flat cost = {cost:.0%} of gross")
+    print("| annual Sharpe | PASS (K6 descriptive, a8) | PASS if K6 were a kill | median read "
+          "of the PASS | K3 / K4 / K6 fire on a crossing | NULL |")
+    print("|--:|--:|--:|--:|--:|--:|")
+    for sr in (0.0, 1.0, 1.5, 2.0, 3.0):
+        # the SESSION series (mean of 5 unit-variance slots) has sd ≈ 1/√5, so its per-session
+        # Sharpe is mu·√5: scale so that it equals sr/√252
+        mu = sr / math.sqrt(252) / math.sqrt(5)
+        n_pass = n_pass6 = n_null = k3 = k4 = k6 = 0
+        reads: list[int] = []
+        for _ in range(max(1, sims // 10)):
+            nm = rng.choice(len(counts), size=(n_max, 5), p=prob)
+            e = rng.standard_normal((n_max, 5))
+            # a flat cost eats `cost` of each slot's gross, so the NET session mean is mu
+            g = mu / (1.0 - cost) / float(np.sum(prob * sig))
+            r = sig[nm] * (e + g) - cost * g * sig[nm].mean()
+            sess = r.mean(axis=1)
+            tt = _sequential_t(sess[None, :], looks)[0]
+            hit = np.nonzero(tt >= bound)[0]
+            if not len(hit):
+                n_null += 1
+                continue
+            n = looks[int(hit[0])]
+            x = sess[:n]
+            best = np.sort(x)[::-1]
+            f3 = (x.sum() - best[: math.ceil(0.02 * n)].sum()) <= 0
+            f4 = np.sign(x[: n // 2].mean()) != np.sign(x[n // 2 :].mean())
+            byname = np.bincount(nm[:n].ravel(), weights=r[:n].ravel(), minlength=len(counts))
+            f6 = float(np.sort(byname)[-3:].sum()) > 0.5 * float(r[:n].sum())
+            k3, k4, k6 = k3 + f3, k4 + f4, k6 + f6
+            if not (f3 or f4):
+                n_pass += 1
+                reads.append(n)
+                n_pass6 += not f6
+        runs = max(1, sims // 10)
+        crossed = runs - n_null
+        med = f"{int(np.median(reads))}" if reads else "—"
+        fires = (f"{k3 / crossed:.1%} / {k4 / crossed:.1%} / {k6 / crossed:.1%}"
+                 if crossed else "—")
+        print(f"| {sr:.1f} | {n_pass / runs:.1%} | {n_pass6 / runs:.1%} | {med} | {fires} | "
+              f"{n_null / runs:.1%} |")
+
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--sims", type=int, default=20000)
+    ap.add_argument("--only", choices=("pr2",), default=None,
+                    help="run only the PR-2 sequential section (its own seed, 2042)")
     a = ap.parse_args()
+    if a.only == "pr2":
+        rng2 = np.random.default_rng(2042)
+        pr2_sequential_oc(rng2, a.sims)
+        pr2_sequential_oc(rng2, a.sims, gamma=0.256, cost=0.0)
+        return
     rng = np.random.default_rng(42)
     parity_check(rng)
     print("\nbar (Gaussian moments): "
@@ -356,6 +445,8 @@ def main() -> None:
     concentrated_sessions_oc(rng, a.sims)
     branch_oc(rng, a.sims)
     k2_oc(rng, max(1, a.sims // 10))
+    pr2_sequential_oc(rng, a.sims)
+    pr2_sequential_oc(rng, a.sims, gamma=0.256, cost=0.0)
 
 
 if __name__ == "__main__":
