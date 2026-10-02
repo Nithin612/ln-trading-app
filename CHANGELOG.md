@@ -7,6 +7,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### PR-1 study script — the decision path, written to the frozen text (2026-10-02, research)
+
+- `backend/scripts/pr1_study.py` implements cl. 3–13 of the pre-registration frozen at `6f61c9e`:
+  cohort (reusing `pr1_design_facts`' verified calendar and drop rules — W2), the late-move
+  signal, the 5-name book, the carry rules, both outcomes demeaned on the middle tercile, §5 fees
+  per leg date + two half-spreads, the branch choice, K2/K3/K4/K6, the cost KILL, PASS/KILL/NULL,
+  E1 and the cl. 13 mechanism label. Six reading-of-the-text choices are listed in
+  `INTERPRETATIONS` for review.
+- **No outcome has been read.** `--synthetic` runs the path on generated data (no edge → KILL on
+  cost; a planted 60 bps reversal → PASS, label close-specific); `--dry` reads the real window but
+  prints only outcome-free counts, which reproduce §8 (748 pairs · 3,740 slots · 87 qty-0).
+- **`--run-once` is guarded:** it refuses unless the frozen text's sha256 matches, the script and
+  text are committed, the freeze commit is on a remote, every cl. 14 descriptive exists (10 are
+  still pending), and no receipt exists; it writes the receipt BEFORE reading any outcome. The
+  loader refuses any window touching a sealed holdout block.
+- `tests/test_pr1_study.py` (21): each clause pinned on a constructed session with hand-computed
+  values (middle-tercile demeaning, fee-leg dates, qty 0, carry rules, every kill, the branch rule,
+  the guards).
+
 ### ⭐ PR-1 pre-registration FROZEN (2026-10-02)
 
 - `docs/analysis/pr1-preregistration-v3.1-2026-10-02.md` is frozen at `6f61c9e` (2026-10-02 22:04 IST; file sha256 `9a47dac0…f258a`),
