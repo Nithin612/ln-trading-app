@@ -44,6 +44,7 @@ import asyncio
 import math
 import statistics
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
@@ -89,6 +90,12 @@ class Row:
     #: so the honest treatment is to report the statistic BOTH ways and let the
     #: difference be the evidence.
     ca_tainted: bool = False
+    #: ⭐ ITEM 16: a CORPORATE ACTION THE AUTHORITY PUBLISHED lands in this panel's forward
+    #: window. Distinct from `ca_tainted`, which is the 25% gap SCREEN — measured 2026-09-19
+    #: at **36.9% false-positive and 13.1% false-negative** against this very set, with 9 of
+    #: the misses invisible by construction (a 1:10 bonus moves price -9.1%). Drop by this
+    #: one; the screen is kept only so the difference is visible rather than asserted.
+    ca_authority: bool = False
 
 
 def _fwd(closes: pd.Series, i: int, h: int) -> float:
@@ -146,6 +153,17 @@ async def main(
         sessions = await observed_session_index(db)
         grid = [d for d in sorted(sessions) if d >= TEST_BLOCK_START][::stride]
 
+        # ⭐ ITEM 16 — the authority's answers, keyed by (symbol, ex_date).
+        ca_rows = (await db.execute(text(
+            "SELECT s.symbol, ca.ex_date FROM corporate_actions ca "
+            "JOIN stocks s ON s.id = ca.stock_id"
+        ))).all()
+        authority: dict[str, set[date]] = {}
+        for sym, ex in ca_rows:
+            authority.setdefault(sym, set()).add(ex)
+        print(f"authority corporate actions loaded: {len(ca_rows)} across "
+              f"{len(authority)} names")
+
         cohort_by_day: dict[date, set[str]] | None = None
         if pit:
             # ⭐⭐ ITEM 5: the DYNAMIC point-in-time cohort, rebuilt per measurement date from
@@ -155,11 +173,11 @@ async def main(
             # `is_active` moved 1,322 -> 2,292 under the published runs.
             cohorts = await liquid_over(db, grid, n=n_stocks)
             ids = sorted({i for v in cohorts.values() for i in v})
-            sym_of = dict(
-                (await db.execute(
+            sym_of: dict[int, str] = {
+                int(i): str(sym) for i, sym in (await db.execute(
                     text("SELECT id, symbol FROM stocks WHERE id = ANY(:i)"), {"i": ids}
                 )).all()
-            )
+            }
             cohort_by_day = {
                 d: {sym_of[i] for i in v if i in sym_of} for d, v in cohorts.items()
             }
@@ -186,7 +204,7 @@ async def main(
     rows: list[Row] = []
     skipped_gap = 0
     skipped_cohort = 0
-    ca_fwd = ca_window = 0
+    ca_fwd = ca_window = ca_auth = 0
     for sym, df in frames.items():
         closes = df["close"]
         opens = df["open"]
@@ -231,6 +249,15 @@ async def main(
             tainted = any((i + d) in ca_idx for d in range(1, HORIZON + 1))
             if tainted:
                 ca_fwd += 1
+            # The authority's ex-dates inside the same forward window.
+            ex_dates = authority.get(sym, ())
+            fwd_days = {
+                df.index[k].date()
+                for k in range(i + 1, min(i + HORIZON + 1, len(df)))
+            }
+            auth_hit = bool(ex_dates) and bool(fwd_days & set(ex_dates))
+            if auth_hit:
+                ca_auth += 1
             # ...and one inside the 300-bar SCORING window corrupts the indicators that
             # produced the score. Counted separately: it is a different defect, and the
             # pre-registered estimand is about the forward return.
@@ -244,13 +271,16 @@ async def main(
                 logpx=math.log(float(closes.iloc[i])),
                 vol20=_realised_vol(closes, i),
                 ca_tainted=tainted,
+                ca_authority=auth_hit,
             ))
 
     print(f"panels scored {len(rows):,}   (window holes {skipped_gap:,}"
           f"{f' · outside the PIT cohort {skipped_cohort:,}' if cohort_by_day else ''})")
     print(f"CA candidates: {ca_fwd:,} panels have one in their {HORIZON}d FORWARD window "
           f"({100*ca_fwd/max(len(rows),1):.3f}%) · {ca_window:,} in their {WINDOW}-bar "
-          f"SCORING window — tagged, not dropped (M70: the screen is 62.5% false-positive)")
+          f"SCORING window — tagged, not dropped")
+    print(f"⭐ AUTHORITY corporate actions in a forward window: {ca_auth:,} panels "
+          f"({100*ca_auth/max(len(rows),1):.3f}%) — THIS is what 3b drops by")
     if len(rows) < 100:
         print("too few panels — aborting")
         return
@@ -383,37 +413,67 @@ def _report(by_day: dict[date, list[Row]], rows: list[Row]) -> None:
     print("\n" + "=" * 100)
     print("3. ⭐⭐ 3b — MATCHED-TAIL CONTRAST (the pre-registered estimand)")
     print("=" * 100)
-    n_ca = sum(1 for r in rows if r.ca_tainted)
-    print("  ⛔⛔ REPORTED, NOT DECIDED ON. 3b is a MEAN forward-return contrast, so one")
-    print(f"     split-induced -89.8% moves the mean by roughly 0.9/n. {n_ca:,} of "
-          f"{len(rows):,} rows carry a CA candidate in their forward window. Unlike 3a,")
-    print("     which is rank-based, this estimand is NOT robust to that, and the honest")
-    print("     resolution is item 16 (a CA source), not a 25% screen measured at 62.5%")
-    print("     false-positive. The numbers below are descriptive.")
-    diffs: list[float] = []
-    matched = 0
-    for v in by_day.values():
-        passers = [r for r in v if r.passed]
-        pool = [r for r in v if not r.passed and r.vol20 == r.vol20]
-        if not passers or len(pool) < 3:
-            continue
-        for p in passers:
-            if p.vol20 != p.vol20:
+    n_screen = sum(1 for r in rows if r.ca_tainted)
+    n_auth = sum(1 for r in rows if r.ca_authority)
+    print("  ⭐⭐ DECIDABLE SINCE ITEM 16. 3b is a MEAN forward-return contrast, so one")
+    print("     split-induced -89.8% moves it by roughly 0.9/n — unlike 3a, which is a")
+    print("     Spearman RANK correlation and barely notices. It therefore needed a REAL")
+    print("     corporate-action set, which `corporate_actions` now holds (348 rows).")
+    print(f"     authority hits in a forward window: {n_auth:,}   "
+          f"25%-screen candidates: {n_screen:,}")
+    print("  ⛔ DROP BY AUTHORITY, NOT BY SCREEN. Measured 2026-09-19 against this very set,")
+    print("     the 25% screen is 36.9% FALSE-POSITIVE (83 of 225 flagged events are genuine")
+    print("     price moves) and 13.1% false-negative, 9 of those invisible by construction.")
+    print("     Dropping by the screen would delete 83 of the most informative sessions.")
+
+    def _contrast(keep: Callable[[Row], bool]) -> tuple[int, float, float] | None:
+        """Passer minus date-and-characteristic-matched non-passer, over a filtered panel.
+
+        ⚠ The filter is applied to BOTH arms before matching, not to the passers alone: a
+        matched pair whose CONTROL is a split artifact is exactly as corrupted as one whose
+        treated unit is, and dropping only the treated side would bias the contrast rather
+        than clean it.
+        """
+        diffs: list[float] = []
+        for v in by_day.values():
+            vv = [r for r in v if keep(r)]
+            passers = [r for r in vv if r.passed]
+            pool = [r for r in vv if not r.passed and r.vol20 == r.vol20]
+            if not passers or len(pool) < 3:
                 continue
-            nn = min(pool, key=lambda q: (q.logpx - p.logpx) ** 2
-                     + ((q.vol20 - p.vol20) / max(p.vol20, 1e-6)) ** 2)
-            diffs.append(p.fwd - nn.fwd)
-            matched += 1
-    if len(diffs) > 5:
+            for q in passers:
+                if q.vol20 != q.vol20:
+                    continue
+                nn = min(pool, key=lambda z: (z.logpx - q.logpx) ** 2
+                         + ((z.vol20 - q.vol20) / max(q.vol20, 1e-6)) ** 2)
+                diffs.append(q.fwd - nn.fwd)
+        if len(diffs) <= 5:
+            return None
         n, m, se = _mean_se(diffs)
+        return n, m, se
+
+    print()
+    print("  | cohort | pairs | contrast % | SE | t | 90% CI | verdict |")
+    for label, keep in (
+        ("all rows (no CA handling)", lambda r: True),
+        ("25% SCREEN dropped (wrong tool)", lambda r: not r.ca_tainted),
+        ("⭐ AUTHORITY dropped (the estimand)", lambda r: not r.ca_authority),
+    ):
+        got = _contrast(keep)
+        if got is None:
+            print(f"  {label:<36} too few matched pairs")
+            continue
+        n, m, se = got
         lo, hi = m - 1.645 * se, m + 1.645 * se
-        print(f"  matched pairs {matched:,}")
-        print(f"  ⭐ passer MINUS matched non-passer, {HORIZON}d: {m:+.4f}%  SE {se:.4f}  "
-              f"t {m/se if se else float('nan'):+6.2f}  90% [{lo:+.4f}, {hi:+.4f}]")
-        print("     break-even needs > +0.255% (the explicit round-trip charge stack)")
-        print(f"     VERDICT: {'POSITIVE' if lo > 0.255 else ('NULL' if hi < 0.255 and lo < 0 < hi else 'INCONCLUSIVE')}")
-    else:
-        print("  too few matched pairs")
+        verdict = (
+            "POSITIVE" if lo > 0.255
+            else "NULL" if hi < 0.255 and lo < 0 < hi
+            else "INCONCLUSIVE"
+        )
+        print(f"  {label:<36} {n:>6} pairs  {m:+.4f}%  SE {se:.4f}  "
+              f"t {m/se if se else float('nan'):+6.2f}  "
+              f"90% [{lo:+.4f}, {hi:+.4f}]  {verdict}")
+    print("     break-even needs > +0.255% (the explicit round-trip charge stack)")
 
     # ── 3c ────────────────────────────────────────────────────────────────────────
     print("\n" + "=" * 100)
