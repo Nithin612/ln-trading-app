@@ -2159,7 +2159,7 @@ which is what Phase-6 expectancy calibration is for.
 
 **▶ CONTINUE HERE — updated 2026-10-02 (the NEXT list is in the top STATE block; this is the short form.)**
 
-0. **PR-1 is FROZEN** at `6f61c9e`. ✅ The study's decision path is written + tested (`scripts/pr1_study.py`, 21 tests; `--dry` reproduces §8). Next: (a) the 10 pending cl. 14 descriptives; (b) quant-verifier review of the script against the frozen text; (c) the user pushes (the run-once guard refuses until the freeze is on a remote); (d) `--run-once` → report.
+0. **PR-1 is FROZEN** at `6f61c9e`. ✅ The study's decision path is written + tested (`scripts/pr1_study.py`, 21 tests; `--dry` reproduces §8). ✅ All ten cl. 14 descriptives written (one, the index-event tag, reported as not computable — no sourced calendar). Next: (a) quant-verifier review of the script against the frozen text, incl. interpretations I1–I12; (b) the user pushes (the run-once guard refuses until the freeze is on a remote); (c) `--run-once` → report.
 1. **Mon 2026-10-05:** run BOTH `make live-worker` AND `make worker` (they are different processes — 10-01 was lost to running only the first). After 16:05 IST verify the first post-close capture day; the 14:45/15:05 cron toast will say if the worker is down. Check `cas_watch.log`.
 2. ✅ **Outside pass + internal review + the final verification round are all done**
    (`docs/analysis/pr1-outside-pass-2026-09-30.md`). Round 2 found K2 (decision-changing) plus 3

@@ -108,7 +108,7 @@ def _stepped(a: float | None, b: float | None) -> bool:
     return a is not None and b is not None and abs(b / a - 1.0) > BASIS_STEP
 
 
-def _basis_steps(t: date, t1: date) -> tuple[set[int], int, int]:
+def _basis_steps(t: date, t1: date) -> tuple[set[int], int, set[int]]:
     """Names whose adjustment factor changes overnight from t to t+1: a STRICT step.
 
     All three must hold (A = official open ÷ 09:15-bar open; t−1 / t+2 = the neighbouring
@@ -119,9 +119,11 @@ def _basis_steps(t: date, t1: date) -> tuple[set[int], int, int]:
         reverting — a mirror, and the night's R_on is clean; quant-verifier 2026-10-02, #4).
     A missing A on t+2 or t−1, or a t+2 / t−1 outside the window, counts as "no evidence of an
     outlier" (the step is kept as strict); nothing beyond the window is read. Also returns the
-    names not checkable (no 09:15 bar on t or t+1; kept) and the transient + mirror count."""
+    names not checkable (no 09:15 bar on t or t+1; kept) and the transient + mirror SET (kept;
+    the PR-1 study's cl. 14 rerun drops them)."""
     steps: set[int] = set()
-    unknown = kept = 0
+    unknown = 0
+    kept: set[int] = set()
     nxt = basis.get(t1, {})
     t2, tm1 = _next_session.get(t1), _prev_session.get(t)
     after = basis.get(t2, {}) if t2 is not None else {}
@@ -132,7 +134,7 @@ def _basis_steps(t: date, t1: date) -> tuple[set[int], int, int]:
             unknown += 1
         elif _stepped(a_t, a_t1):
             if _stepped(a_t1, after.get(sid)) or _stepped(before.get(sid), a_t):
-                kept += 1
+                kept.add(sid)
             else:
                 steps.add(sid)
     return steps, unknown, kept
@@ -278,7 +280,7 @@ def _print_basis_steps(
         steps, _, k = _basis_steps(t, t1)
         cohort = {x.stock_id for x in per_day[t]}
         nights += len(steps & cohort)
-        kept += k
+        kept += len(k)
         nxt, cur = basis.get(t1, {}), basis.get(t, {})
         unknown += sum(1 for sid in cohort if sid not in nxt or sid not in cur)
         split_only = {sid for sid, exs in ex_dates.items() if t1 in exs}

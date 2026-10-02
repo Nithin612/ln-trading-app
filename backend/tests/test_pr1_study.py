@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import math
 import statistics
+from dataclasses import replace
 from datetime import date
 from decimal import Decimal
 from typing import Any
@@ -47,7 +48,8 @@ def _pair(lates: list[float], next_open: list[float | None] | None = None,
 def no_fee(monkeypatch: Any) -> list[tuple[str, date, date]]:
     calls: list[tuple[str, date, date]] = []
 
-    def fake(price: Decimal, qty: int, product: str, entry_on: date, exit_on: date) -> float:
+    def fake(price: Decimal, qty: int, product: str, entry_on: date, exit_on: date,
+             side: str = "LONG") -> float:
         calls.append((product, entry_on, exit_on))
         return 0.0
 
@@ -217,8 +219,9 @@ class TestGuards:
             st._assert_outside_holdouts(date(2023, 6, 1), date(2024, 1, 1))
         st._assert_outside_holdouts(st.WINDOW_LO, st.WINDOW_HI)  # the test block is allowed
 
-    def test_run_once_is_refused_while_descriptives_are_pending(self) -> None:
-        assert any("descriptives" in p for p in st.run_once_preflight())
+    def test_run_once_is_refused_until_the_freeze_is_on_a_remote(self, monkeypatch: Any) -> None:
+        monkeypatch.setattr(st, "_git", lambda *a: "")
+        assert any("not on any remote" in p for p in st.run_once_preflight())
 
     def test_run_once_is_refused_when_a_receipt_exists(
         self, monkeypatch: Any, tmp_path: Any
@@ -230,3 +233,63 @@ class TestGuards:
 
     def test_the_frozen_text_is_the_frozen_text(self) -> None:
         assert st._sha(st.FROZEN_TEXT) == st.FROZEN_SHA256
+
+
+class TestDescriptives:
+    def test_expiry_calendar_follows_the_texts_weekday_switch_and_holiday_rule(self) -> None:
+        """I8 / §2 (NSE/FAOP/68747): Thursday before 2025-09-01, Tuesday after; the last one of
+        a month is 'monthly'; a holiday moves an expiry to the previous session."""
+        start = date(2025, 8, 1)
+        cal = [date.fromordinal(start.toordinal() + k) for k in range(61)]
+        cal = [d for d in cal if d.weekday() < 5 and d != date(2025, 8, 14)]  # a Thu holiday
+        exp = st.expiry_types(cal)
+        assert exp[date(2025, 8, 7)] == "weekly"
+        assert exp[date(2025, 8, 13)] == "weekly"  # the 14th is a holiday → Wednesday
+        assert date(2025, 8, 14) not in exp
+        assert exp[date(2025, 8, 28)] == "monthly"  # the last Thursday of August
+        assert exp[date(2025, 9, 2)] == "weekly"  # Tuesday regime
+        assert exp[date(2025, 9, 30)] == "monthly"  # the last Tuesday of September
+        assert date(2025, 9, 4) not in exp  # Thursdays are no longer expiries
+
+    def test_a_short_slot_earns_the_negative_of_the_demeaned_return(
+        self, no_fee: list[Any]
+    ) -> None:
+        p = _pair([0.0] * 10)
+        long_ = st._variant_net(p, [0], 0.001, {0: 0.004}, "intraday")
+        short = st._variant_net(p, [0], 0.001, {0: 0.004}, "intraday", side="SHORT")
+        assert long_[0] + 2 * 2.68 / 1e4 == pytest.approx(0.003, abs=1e-12)
+        assert short[0] < long_[0]
+
+    def test_g_uses_only_slots_whose_bases_agree_exactly(self) -> None:
+        """I7: G mixes the tables, so a name whose bases differ on t is left out."""
+        p = _pair([-0.05 + 0.01 * i for i in range(10)], close=["94"] * 10)
+        e = st.session_extras(replace(p, basis_exact=frozenset({0, 1})))
+        assert len(e.g_bps) == 2
+        assert e.g_bps[0] == pytest.approx((95.0 / 94.0 - 1) * 1e4, abs=1e-6)
+
+    def test_executable_variant_reads_the_daily_open_not_the_bar(
+        self, no_fee: list[Any]
+    ) -> None:
+        p = _pair([-0.05 + 0.01 * i for i in range(10)])
+        e_same = st.session_extras(replace(p, open1_daily={i: Decimal("500") for i in range(10)}))
+        e_up = st.session_extras(replace(
+            p, open1_daily={i: Decimal("510" if i == 0 else "500") for i in range(10)}))
+        assert e_up.exec_net is not None and e_same.exec_net is not None
+        assert e_up.exec_net > e_same.exec_net  # only the daily open moved
+
+    def test_describe_runs_every_descriptive_on_a_synthetic_window(
+        self, capsys: Any
+    ) -> None:
+        pairs = st.synthetic_pairs(5, n_pairs=120, n_names=60, edge_bps=40.0)
+        recs = [st.evaluate_session(p) for p in pairs]
+        ctx = st.synthetic_context(5, pairs)
+        st.describe(pairs, recs, st.decide(recs), ctx.vix, ctx.calendar)
+        out = capsys.readouterr().out
+        for needle in ("weekday × expiry", "VIX tercile", "late-volume tercile", "long-short",
+                       "executable R_on", "G = P1530", "P1525", "concentration",
+                       "balanced subsample", "transient", "equal-weight cohort", "unavailable"):
+            assert needle in out, needle
+
+    def test_no_descriptive_is_pending_and_unavailable_ones_carry_a_reason(self) -> None:
+        assert st.DESCRIPTIVES_PENDING == ()
+        assert all(len(u) > 40 for u in st.DESCRIPTIVES_UNAVAILABLE)

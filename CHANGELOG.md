@@ -7,6 +7,24 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### PR-1 study — all ten cl. 14 descriptives (2026-10-02, research)
+
+- `scripts/pr1_study.py` now reports every cl. 14 descriptive, on the chosen branch, never
+  decisive: weekday × expiry type (P6) · VIX terciles (P4) · late-volume terciles (P3) · the
+  long-short intraday variant · the executable R_on from C_t and G · the concentration panel ·
+  the balanced subsample · the transient-basis-step rerun · s ending at P1525 · the beta
+  regression on the equal-weight cohort return. Six more interpretations (I7–I12) are listed for
+  review.
+- **One item is reported as NOT COMPUTABLE rather than guessed:** the index-event-day tag — no
+  index-event calendar exists in the data and the text names none (`DESCRIPTIVES_UNAVAILABLE`;
+  the reviewer rules on it).
+- The expiry calendar uses the text's own §2 rule (NSE/FAOP/68747: Thursday → Tuesday on
+  2025-09-01; holiday ⇒ the previous session); `fo_bhavcopy` holds no history to read it from.
+- Every variant now prices fees through the one `_fee_frac` path (a direct `roundtrip_charges`
+  call in the variant helper was found by its own test). `pr1_design_facts._basis_steps` returns
+  the transient/mirror SET (its printed count is unchanged).
+- Tests 21 → 27. `--dry` still reproduces §8. `--run-once` now blocks only on the push.
+
 ### PR-1 study script — the decision path, written to the frozen text (2026-10-02, research)
 
 - `backend/scripts/pr1_study.py` implements cl. 3–13 of the pre-registration frozen at `6f61c9e`:
