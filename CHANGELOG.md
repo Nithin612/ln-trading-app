@@ -7,6 +7,37 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### `cas_daily.first_polled_at` — when the pre-auction price was observed (2026-10-02)
+
+- **Why:** `cas_daily.pre_auction_price` is frozen on the first poll inside the auction window,
+  but nothing recorded WHEN that poll happened — `captured_at` is overwritten on every poll, so it
+  holds the LAST poll's time. PR-2 (§9a a1 of the PR-1 v3.1 draft) needs to know the price was
+  observed before the auction could print (< 15:28 IST); without it the PR-2 cohort is empty.
+  Found by the quant-verifier on v3.1.
+- **Change:** a nullable `first_polled_at` (migration `9b4d2f7a1c3e`, reversible, applied to dev
+  and round-tripped down/up). `capture_cas` stamps the quote-arrival instant on insert and leaves
+  it out of the upsert, mirroring `cas_postclose_daily.first_polled_at`. The 1,976 existing rows
+  stay NULL — the instant was never stored and is not reconstructed.
+- Regression test: a second poll writes the row but does not move the stamp. Edited with no worker
+  running; the next `make worker` start loads it (first stamped session ≥ 2026-10-05).
+
+### PR-1 pre-registration draft v3.1 — the freeze candidate (2026-10-02, research only)
+
+- `docs/analysis/pr1-preregistration-v3.1-2026-10-02.md`: round 2's verified fixes plus two
+  internal quant-verifier passes (both FAIL, every finding taken; §0a rows 16–31).
+- **K2 on the bottom quintile of s** (v3's whole-cohort IC false-killed 14% of genuine passes at
+  no continuation, ~100% at 0.02σ; the bottom quintile fires 0.0–1.3% on passes, ~50% on the null).
+- **Decision #1 sharpened:** demeaning against the whole cohort lets a ZERO-EDGE book PASS 9–36%
+  of the time when late up-movers revert, even after K2; the middle tercile holds it to ≤ 0.2%.
+- **Cohort:** STRICT basis-step nights dropped (persists into t+2, A_t clean against t−1: 187),
+  and three source-mismatch sessions excluded whole by a stated rule (≥ 10 one-day outliers):
+  754 → 748 pairs, bar t 3.5954.
+- **PR-2's translation (§9a)** rebuilt so it can run: the CNC branch reads `cas_daily` and the
+  daily file only (ledger A3 forbids auction-era `ohlcv_5m`); build prerequisites listed.
+- Probes extended and re-run: `scripts/pr1_design_facts.py` (read-only, outcome-free) and
+  `scripts/pr1_decision_oc.py` (synthetic; K2 cross-section, two-branch max, expiry edges).
+- Not frozen: the author's four decisions (§11) come first.
+
 ### CAS watch moves from Celery beat to cron, with a desktop channel (2026-10-02)
 
 - **Incident, 2026-10-01:** `make live-worker` ran all day and `make worker` (Celery worker + beat)

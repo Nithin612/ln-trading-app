@@ -480,9 +480,11 @@ else.
       built-in drag toward KILL;
     - the session-concentration kill fired on 99% of genuine passes (P(PASS | true t 3.6) = 0.4%,
       against 47.4% after the fix).
-  - ⇒ **Draft v3** = `docs/analysis/pr1-preregistration-extract-v3-2026-09-30.md`. Next: ONE final
-    verification round (`docs/analysis/pr1-review-prompt-v3-2026-09-30.md`) → the user's three
-    decisions → commit the pre-registration → PR-1.
+  - ⇒ **Draft v3.1 = the freeze candidate** (2026-10-02) =
+    `docs/analysis/pr1-preregistration-v3.1-2026-10-02.md`: round 2's fixes + two quant-verifier
+    passes. ⭐ K2 now on the bottom quintile; ⛔ whole-cohort demeaning lets a ZERO-EDGE book PASS
+    9–36% when up-movers revert ⇒ middle tercile recommended. Next: the user's FOUR decisions (§11)
+    → commit the pre-registration (with §9a, PR-2's translation) → PR-1.
   - ⭐ **RULE: an extract for review carries every clause in full.** The v2 extract dropped four
     settled clauses, and a reviewer spent a point on them.
   - ⭐ **RULE: every kill is run against a planted edge at the bar before the freeze.** The broken
