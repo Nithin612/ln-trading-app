@@ -67,8 +67,8 @@ from sqlalchemy import text  # noqa: E402
 from swing_dependence_probe import load_frames  # noqa: E402
 
 WINDOW = 300
-HORIZON = 5            # ⛔ PRE-REGISTERED. 20d is descriptive only — at 20d the test can
-SECONDARY = 20         #    only return INCONCLUSIVE (SE(IC) 0.0159 ⇒ t 1.26 at IC 0.02).
+HORIZON = 5  # ⛔ PRE-REGISTERED. 20d is descriptive only — at 20d the test can
+SECONDARY = 20  #    only return INCONCLUSIVE (SE(IC) 0.0159 ⇒ t 1.26 at IC 0.02).
 GATE = 70
 PRICE_FLOOR = 1.0
 
@@ -77,10 +77,10 @@ PRICE_FLOOR = 1.0
 class Row:
     day: date
     sym: str
-    score: float          # signed normalized_score, THE predictor
-    conf: int             # |normalized| * 100, the deployed sort key
-    passed: bool          # cleared the ADX-adjusted gate
-    fwd: float            # h=5d forward return %
+    score: float  # signed normalized_score, THE predictor
+    conf: int  # |normalized| * 100, the deployed sort key
+    passed: bool  # cleared the ADX-adjusted gate
+    fwd: float  # h=5d forward return %
     fwd20: float
     logpx: float
     vol20: float
@@ -146,23 +146,24 @@ CA_GAP = 0.25
 TEST_BLOCK_START = date(2023, 7, 3)
 
 
-async def main(
-    n_stocks: int, stride: int, dump: str | None, *, pit: bool = False
-) -> None:
+async def main(n_stocks: int, stride: int, dump: str | None, *, pit: bool = False) -> None:  # noqa: C901 — script of record
     async with AsyncSessionFactory() as db:
         sessions = await observed_session_index(db)
         grid = [d for d in sorted(sessions) if d >= TEST_BLOCK_START][::stride]
 
         # ⭐ ITEM 16 — the authority's answers, keyed by (symbol, ex_date).
-        ca_rows = (await db.execute(text(
-            "SELECT s.symbol, ca.ex_date FROM corporate_actions ca "
-            "JOIN stocks s ON s.id = ca.stock_id"
-        ))).all()
+        ca_rows = (
+            await db.execute(
+                text(
+                    "SELECT s.symbol, ca.ex_date FROM corporate_actions ca "
+                    "JOIN stocks s ON s.id = ca.stock_id"
+                )
+            )
+        ).all()
         authority: dict[str, set[date]] = {}
         for sym, ex in ca_rows:
             authority.setdefault(sym, set()).add(ex)
-        print(f"authority corporate actions loaded: {len(ca_rows)} across "
-              f"{len(authority)} names")
+        print(f"authority corporate actions loaded: {len(ca_rows)} across {len(authority)} names")
 
         cohort_by_day: dict[date, set[str]] | None = None
         if pit:
@@ -174,23 +175,28 @@ async def main(
             cohorts = await liquid_over(db, grid, n=n_stocks)
             ids = sorted({i for v in cohorts.values() for i in v})
             sym_of: dict[int, str] = {
-                int(i): str(sym) for i, sym in (await db.execute(
-                    text("SELECT id, symbol FROM stocks WHERE id = ANY(:i)"), {"i": ids}
-                )).all()
+                int(i): str(sym)
+                for i, sym in (
+                    await db.execute(
+                        text("SELECT id, symbol FROM stocks WHERE id = ANY(:i)"), {"i": ids}
+                    )
+                ).all()
             }
-            cohort_by_day = {
-                d: {sym_of[i] for i in v if i in sym_of} for d, v in cohorts.items()
-            }
+            cohort_by_day = {d: {sym_of[i] for i in v if i in sym_of} for d, v in cohorts.items()}
             missing = len(grid) - len(cohort_by_day)
-            print(f"PIT cohort: {len(ids)} distinct names over {len(cohort_by_day)} of "
-                  f"{len(grid)} grid sessions ({missing} had no prior window)")
+            print(
+                f"PIT cohort: {len(ids)} distinct names over {len(cohort_by_day)} of "
+                f"{len(grid)} grid sessions ({missing} had no prior window)"
+            )
             frames = await load_frames(n_stocks, stock_ids=ids)
         else:
             frames = await load_frames(n_stocks)
 
-    print(f"names {len(frames)}   observed sessions {len(sessions):,}   "
-          f"horizon {HORIZON}d (pre-registered)   stride {stride}   "
-          f"cohort {'PIT (item 14)' if pit else 'load_frames (LOOK-AHEAD, M62)'}")
+    print(
+        f"names {len(frames)}   observed sessions {len(sessions):,}   "
+        f"horizon {HORIZON}d (pre-registered)   stride {stride}   "
+        f"cohort {'PIT (item 14)' if pit else 'load_frames (LOOK-AHEAD, M62)'}"
+    )
 
     # ⭐ A CROSS-SECTIONAL IC REQUIRES EVERY NAME SCORED ON THE SAME SESSION.
     # The obvious loop — walk each name from its own bar 300 by `stride` — samples a
@@ -198,8 +204,10 @@ async def main(
     # two names and the IC is noise by construction. (Caught by the smoke run, which
     # reported a median cross-section of 1.) So the decision dates come from the market's
     # own calendar, and each name is looked up ON those dates.
-    print(f"decision sessions on the test-block grid: {len(grid):,} "
-          f"(from {TEST_BLOCK_START}; holdouts are sealed)")
+    print(
+        f"decision sessions on the test-block grid: {len(grid):,} "
+        f"(from {TEST_BLOCK_START}; holdouts are sealed)"
+    )
 
     rows: list[Row] = []
     skipped_gap = 0
@@ -213,7 +221,8 @@ async def main(
         # re-queried, and from `open` against the PREVIOUS close — a close-to-close screen
         # misses every one of them, which is how a first pass found zero.
         ca_idx = {
-            k for k in range(1, len(df))
+            k
+            for k in range(1, len(df))
             if float(closes.iloc[k - 1]) > 0
             and abs(float(opens.iloc[k]) / float(closes.iloc[k - 1]) - 1.0) > CA_GAP
         }
@@ -229,9 +238,7 @@ async def main(
             if float(closes.iloc[i]) <= PRICE_FLOOR:
                 continue
             window = df.iloc[i - WINDOW + 1 : i + 1]
-            if window_has_holes(
-                sessions, window.index[0].date(), window.index[-1].date(), WINDOW
-            ):
+            if window_has_holes(sessions, window.index[0].date(), window.index[-1].date(), WINDOW):
                 skipped_gap += 1
                 continue
             factors = run_all_factors(window)
@@ -239,8 +246,10 @@ async def main(
             res = score_from_factors(factors, window, min_confidence=0)
             if res is None:
                 continue
-            eff = GATE + 5 if adx_is_weak(window) else (
-                max(65, GATE - 5) if adx_is_strong(window) else GATE
+            eff = (
+                GATE + 5
+                if adx_is_weak(window)
+                else (max(65, GATE - 5) if adx_is_strong(window) else GATE)
             )
             fwd = _fwd(closes, i, HORIZON)
             if fwd != fwd:
@@ -251,10 +260,7 @@ async def main(
                 ca_fwd += 1
             # The authority's ex-dates inside the same forward window.
             ex_dates = authority.get(sym, ())
-            fwd_days = {
-                df.index[k].date()
-                for k in range(i + 1, min(i + HORIZON + 1, len(df)))
-            }
+            fwd_days = {df.index[k].date() for k in range(i + 1, min(i + HORIZON + 1, len(df)))}
             auth_hit = bool(ex_dates) and bool(fwd_days & set(ex_dates))
             if auth_hit:
                 ca_auth += 1
@@ -263,24 +269,35 @@ async def main(
             # pre-registered estimand is about the forward return.
             if any(k in ca_idx for k in range(i - WINDOW + 1, i + 1)):
                 ca_window += 1
-            rows.append(Row(
-                day=day, sym=sym,
-                score=float(res.normalized_score), conf=int(res.confidence_pct),
-                passed=bool(res.confidence_pct >= eff),
-                fwd=fwd, fwd20=_fwd(closes, i, SECONDARY),
-                logpx=math.log(float(closes.iloc[i])),
-                vol20=_realised_vol(closes, i),
-                ca_tainted=tainted,
-                ca_authority=auth_hit,
-            ))
+            rows.append(
+                Row(
+                    day=day,
+                    sym=sym,
+                    score=float(res.normalized_score),
+                    conf=int(res.confidence_pct),
+                    passed=bool(res.confidence_pct >= eff),
+                    fwd=fwd,
+                    fwd20=_fwd(closes, i, SECONDARY),
+                    logpx=math.log(float(closes.iloc[i])),
+                    vol20=_realised_vol(closes, i),
+                    ca_tainted=tainted,
+                    ca_authority=auth_hit,
+                )
+            )
 
-    print(f"panels scored {len(rows):,}   (window holes {skipped_gap:,}"
-          f"{f' · outside the PIT cohort {skipped_cohort:,}' if cohort_by_day else ''})")
-    print(f"CA candidates: {ca_fwd:,} panels have one in their {HORIZON}d FORWARD window "
-          f"({100*ca_fwd/max(len(rows),1):.3f}%) · {ca_window:,} in their {WINDOW}-bar "
-          f"SCORING window — tagged, not dropped")
-    print(f"⭐ AUTHORITY corporate actions in a forward window: {ca_auth:,} panels "
-          f"({100*ca_auth/max(len(rows),1):.3f}%) — THIS is what 3b drops by")
+    print(
+        f"panels scored {len(rows):,}   (window holes {skipped_gap:,}"
+        f"{f' · outside the PIT cohort {skipped_cohort:,}' if cohort_by_day else ''})"
+    )
+    print(
+        f"CA candidates: {ca_fwd:,} panels have one in their {HORIZON}d FORWARD window "
+        f"({100 * ca_fwd / max(len(rows), 1):.3f}%) · {ca_window:,} in their {WINDOW}-bar "
+        f"SCORING window — tagged, not dropped"
+    )
+    print(
+        f"⭐ AUTHORITY corporate actions in a forward window: {ca_auth:,} panels "
+        f"({100 * ca_auth / max(len(rows), 1):.3f}%) — THIS is what 3b drops by"
+    )
     if len(rows) < 100:
         print("too few panels — aborting")
         return
@@ -293,28 +310,35 @@ async def main(
     _report(by_day, rows)
     if dump:
         import csv
+
         with open(dump, "w", newline="") as fh:
             w = csv.writer(fh)
-            w.writerow(["day", "sym", "score", "conf", "passed", "fwd", "fwd20",
-                        "logpx", "vol20"])
+            w.writerow(["day", "sym", "score", "conf", "passed", "fwd", "fwd20", "logpx", "vol20"])
             for r in rows:
-                w.writerow([r.day, r.sym, r.score, r.conf, int(r.passed), r.fwd,
-                            r.fwd20, r.logpx, r.vol20])
+                w.writerow(
+                    [r.day, r.sym, r.score, r.conf, int(r.passed), r.fwd, r.fwd20, r.logpx, r.vol20]
+                )
         print(f"\n== dumped {len(rows):,} panel rows -> {dump} ==")
 
 
-def _report(by_day: dict[date, list[Row]], rows: list[Row]) -> None:
+def _report(by_day: dict[date, list[Row]], rows: list[Row]) -> None:  # noqa: C901 — script of record
     print("\n" + "=" * 100)
     print("0. COVERAGE — power must be weighted by it (§3)")
     print("=" * 100)
     sizes = sorted(len(v) for v in by_day.values())
     n_med = sizes[len(sizes) // 2]
-    print(f"  names per session: min {sizes[0]}  p10 {sizes[len(sizes)//10]}  "
-          f"median {n_med}  max {sizes[-1]}")
-    print(f"  pure-noise IC floor at the MEDIAN cross-section 1/sqrt({n_med}) = "
-          f"{1/math.sqrt(n_med):.4f}")
-    print(f"  ...at the SMALLEST 1/sqrt({sizes[0]}) = {1/math.sqrt(sizes[0]):.4f}   "
-          f"⚠ compare against the break-even band below")
+    print(
+        f"  names per session: min {sizes[0]}  p10 {sizes[len(sizes) // 10]}  "
+        f"median {n_med}  max {sizes[-1]}"
+    )
+    print(
+        f"  pure-noise IC floor at the MEDIAN cross-section 1/sqrt({n_med}) = "
+        f"{1 / math.sqrt(n_med):.4f}"
+    )
+    print(
+        f"  ...at the SMALLEST 1/sqrt({sizes[0]}) = {1 / math.sqrt(sizes[0]):.4f}   "
+        f"⚠ compare against the break-even band below"
+    )
 
     # ── σ_cs and E[z|selected]: the two constants this run must RETIRE ────────────
     sig_cs = [statistics.stdev([r.fwd for r in v]) for v in by_day.values() if len(v) > 2]
@@ -338,12 +362,16 @@ def _report(by_day: dict[date, list[Row]], rows: list[Row]) -> None:
     print("\n" + "=" * 100)
     print("1. THE TWO ASSUMED CONSTANTS, MEASURED (§3) — these supersede §16.1")
     print("=" * 100)
-    print(f"  sigma_cs (cross-sectional sd of {HORIZON}d forward return): "
-          f"median {statistics.median(sig_cs):.3f}%  mean {statistics.mean(sig_cs):.3f}%")
+    print(
+        f"  sigma_cs (cross-sectional sd of {HORIZON}d forward return): "
+        f"median {statistics.median(sig_cs):.3f}%  mean {statistics.mean(sig_cs):.3f}%"
+    )
     if zsel:
         nz, mz, sez = _mean_se(zsel)
-        print(f"  ⭐ E[z | selected]  MEASURED {mz:+.4f}  SE {sez:.4f}  (n={nz} sessions)"
-              f"   vs the ASSUMED 2.268")
+        print(
+            f"  ⭐ E[z | selected]  MEASURED {mz:+.4f}  SE {sez:.4f}  (n={nz} sessions)"
+            f"   vs the ASSUMED 2.268"
+        )
     sel_rate = 100 * sum(1 for r in rows if r.passed) / len(rows)
     print(f"  gate pass rate {sel_rate:.2f}%   passers {sum(1 for r in rows if r.passed):,}")
 
@@ -351,15 +379,16 @@ def _report(by_day: dict[date, list[Row]], rows: list[Row]) -> None:
     ez = statistics.mean(zsel) if zsel else 2.268
     scs = statistics.median(sig_cs)
     be = 0.255 / (scs * ez) if scs * ez else float("nan")
-    print(f"  ⇒ break-even IC = 25.5bps / (sigma_cs {scs:.3f}% x E[z|sel] {ez:.3f}) "
-          f"= {be:.4f}")
+    print(f"  ⇒ break-even IC = 25.5bps / (sigma_cs {scs:.3f}% x E[z|sel] {ez:.3f}) = {be:.4f}")
 
     # ── 3a ────────────────────────────────────────────────────────────────────────
     print("\n" + "=" * 100)
     print("2. ⭐ 3a — UNCONDITIONAL IC. THE DECISION READS THIS.")
     print("=" * 100)
-    for key, lab in (("score", "signed normalized_score  <- PRE-REGISTERED"),
-                     ("conf", "confidence_pct (the deployed sort key; secondary)")):
+    for key, lab in (
+        ("score", "signed normalized_score  <- PRE-REGISTERED"),
+        ("conf", "confidence_pct (the deployed sort key; secondary)"),
+    ):
         for h, hl in (("fwd", f"{HORIZON}d"), ("fwd20", f"{SECONDARY}d (descriptive only)")):
             ics = []
             for v in by_day.values():
@@ -378,12 +407,15 @@ def _report(by_day: dict[date, list[Row]], rows: list[Row]) -> None:
             n, m, se = _mean_se(ics)
             sd_ic = statistics.stdev(ics)
             verdict = _band(m, se, be) if key == "score" and h == "fwd" else ""
-            print(f"  {lab:<52} {hl:<22} IC {m:+.4f}  sd(IC_t) {sd_ic:.4f}  "
-                  f"SE {se:.4f}  t {m/se if se else float('nan'):+6.2f}  "
-                  f"90% [{m-1.645*se:+.4f}, {m+1.645*se:+.4f}]  {verdict}")
+            print(
+                f"  {lab:<52} {hl:<22} IC {m:+.4f}  sd(IC_t) {sd_ic:.4f}  "
+                f"SE {se:.4f}  t {m / se if se else float('nan'):+6.2f}  "
+                f"90% [{m - 1.645 * se:+.4f}, {m + 1.645 * se:+.4f}]  {verdict}"
+            )
             if key == "score" and h == "fwd":
-                print(f"      ⭐ sd(IC_t) MEASURED {sd_ic:.4f} vs the ASSUMED 0.10 "
-                      f"(n={n} sessions)")
+                print(
+                    f"      ⭐ sd(IC_t) MEASURED {sd_ic:.4f} vs the ASSUMED 0.10 (n={n} sessions)"
+                )
                 # ⭐⭐ THE CA ROBUSTNESS CHECK, inline rather than as a separate run.
                 # 3a is a SPEARMAN RANK correlation, so a split-induced -90% only moves a
                 # name to last place on its session — the magnitude never enters. The claim
@@ -402,12 +434,16 @@ def _report(by_day: dict[date, list[Row]], rows: list[Row]) -> None:
                         clean_ics.append(icc)
                 if len(clean_ics) >= 5:
                     cn, cm, cse = _mean_se(clean_ics)
-                    print(f"      ⭐ CA-ROBUSTNESS: dropping CA-tainted rows gives "
-                          f"IC {cm:+.4f}  SE {cse:.4f}  t {cm/cse if cse else float('nan'):+.2f}"
-                          f"  90% [{cm-1.645*cse:+.4f}, {cm+1.645*cse:+.4f}]  (n={cn})")
-                    print(f"        => the IC moves {cm-m:+.4f}; a rank statistic should "
-                          f"barely notice, and if it does NOT barely notice, that is the "
-                          f"finding")
+                    print(
+                        f"      ⭐ CA-ROBUSTNESS: dropping CA-tainted rows gives "
+                        f"IC {cm:+.4f}  SE {cse:.4f}  t {cm / cse if cse else float('nan'):+.2f}"
+                        f"  90% [{cm - 1.645 * cse:+.4f}, {cm + 1.645 * cse:+.4f}]  (n={cn})"
+                    )
+                    print(
+                        f"        => the IC moves {cm - m:+.4f}; a rank statistic should "
+                        f"barely notice, and if it does NOT barely notice, that is the "
+                        f"finding"
+                    )
 
     # ── 3b ────────────────────────────────────────────────────────────────────────
     print("\n" + "=" * 100)
@@ -419,8 +455,9 @@ def _report(by_day: dict[date, list[Row]], rows: list[Row]) -> None:
     print("     split-induced -89.8% moves it by roughly 0.9/n — unlike 3a, which is a")
     print("     Spearman RANK correlation and barely notices. It therefore needed a REAL")
     print("     corporate-action set, which `corporate_actions` now holds (348 rows).")
-    print(f"     authority hits in a forward window: {n_auth:,}   "
-          f"25%-screen candidates: {n_screen:,}")
+    print(
+        f"     authority hits in a forward window: {n_auth:,}   25%-screen candidates: {n_screen:,}"
+    )
     print("  ⛔ DROP BY AUTHORITY, NOT BY SCREEN. Measured 2026-09-19 against this very set,")
     print("     the 25% screen is 36.9% FALSE-POSITIVE (83 of 225 flagged events are genuine")
     print("     price moves) and 13.1% false-negative, 9 of those invisible by construction.")
@@ -444,8 +481,12 @@ def _report(by_day: dict[date, list[Row]], rows: list[Row]) -> None:
             for q in passers:
                 if q.vol20 != q.vol20:
                     continue
-                nn = min(pool, key=lambda z: (z.logpx - q.logpx) ** 2
-                         + ((z.vol20 - q.vol20) / max(q.vol20, 1e-6)) ** 2)
+                nn = min(
+                    pool,
+                    key=lambda z: (
+                        (z.logpx - q.logpx) ** 2 + ((z.vol20 - q.vol20) / max(q.vol20, 1e-6)) ** 2
+                    ),
+                )
                 diffs.append(q.fwd - nn.fwd)
         if len(diffs) <= 5:
             return None
@@ -466,13 +507,13 @@ def _report(by_day: dict[date, list[Row]], rows: list[Row]) -> None:
         n, m, se = got
         lo, hi = m - 1.645 * se, m + 1.645 * se
         verdict = (
-            "POSITIVE" if lo > 0.255
-            else "NULL" if hi < 0.255 and lo < 0 < hi
-            else "INCONCLUSIVE"
+            "POSITIVE" if lo > 0.255 else "NULL" if hi < 0.255 and lo < 0 < hi else "INCONCLUSIVE"
         )
-        print(f"  {label:<36} {n:>6} pairs  {m:+.4f}%  SE {se:.4f}  "
-              f"t {m/se if se else float('nan'):+6.2f}  "
-              f"90% [{lo:+.4f}, {hi:+.4f}]  {verdict}")
+        print(
+            f"  {label:<36} {n:>6} pairs  {m:+.4f}%  SE {se:.4f}  "
+            f"t {m / se if se else float('nan'):+6.2f}  "
+            f"90% [{lo:+.4f}, {hi:+.4f}]  {verdict}"
+        )
     print("     break-even needs > +0.255% (the explicit round-trip charge stack)")
 
     # ── 3c ────────────────────────────────────────────────────────────────────────
@@ -489,8 +530,10 @@ def _report(by_day: dict[date, list[Row]], rows: list[Row]) -> None:
             ics.append(ic)
     if len(ics) >= 5:
         n, m, se = _mean_se(ics)
-        print(f"  within passers: IC {m:+.4f}  SE {se:.4f}  t {m/se if se else 0:+6.2f}  "
-              f"(n={n} sessions)")
+        print(
+            f"  within passers: IC {m:+.4f}  SE {se:.4f}  t {m / se if se else 0:+6.2f}  "
+            f"(n={n} sessions)"
+        )
     print("  ⚠ gate passage is a threshold on the same weighted sum the score IS, so this")
     print("     number is conditioned on the estimator's own output. It cannot license a")
     print("     conclusion in either direction (ChatGPT R4-15, adopted round 4).")
@@ -499,11 +542,18 @@ def _report(by_day: dict[date, list[Row]], rows: list[Row]) -> None:
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--stocks", type=int, default=250)
-    ap.add_argument("--stride", type=int, default=HORIZON,
-                    help="sample every Nth session; default = horizon (non-overlapping)")
+    ap.add_argument(
+        "--stride",
+        type=int,
+        default=HORIZON,
+        help="sample every Nth session; default = horizon (non-overlapping)",
+    )
     ap.add_argument("--dump", default=None, help="write the panel to this CSV")
-    ap.add_argument("--pit", action="store_true",
-                    help="ITEM 5: build the cohort per session from app.services.pit_cohort "
-                         "instead of load_frames' look-ahead ranking (M62)")
+    ap.add_argument(
+        "--pit",
+        action="store_true",
+        help="ITEM 5: build the cohort per session from app.services.pit_cohort "
+        "instead of load_frames' look-ahead ranking (M62)",
+    )
     a = ap.parse_args()
     asyncio.run(main(a.stocks, a.stride, a.dump, pit=a.pit))

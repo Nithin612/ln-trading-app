@@ -65,10 +65,10 @@ from app.backtest.engine import BacktestConfig, BacktestEngine
 from app.core.ratios import WINSOR_R, clamp_ratio_f
 from app.db.session import AsyncSessionFactory
 from app.services.block_bootstrap import moving_block_bootstrap, render_lines
+from app.services.market_calendar import observed_session_index, window_has_holes
 from app.signals.classifier import classify_signal
 from app.signals.entry_quality import factor_diversity
 from app.signals.risk_guards import safe_levels
-from app.services.market_calendar import observed_session_index, window_has_holes
 
 # ⭐ B5 / W2: the basket, its matched-window helper and the ATR are DEFINED ONCE in the swing
 # probe and imported here. Re-deriving an "equal-weight universe return" in a second file is
@@ -84,8 +84,8 @@ from swing_dependence_probe import (  # noqa: E402
 WINDOW = 300
 CAPITAL = Decimal("100000")
 RISK_PCT = Decimal("2.0")
-CA_JUMP = 0.25          # |close-to-close| above this = an unadjusted corporate action
-POSITIONAL_DAYS = 30    # SIGNAL_ENGINE.md 5 validity, in trading days
+CA_JUMP = 0.25  # |close-to-close| above this = an unadjusted corporate action
+POSITIONAL_DAYS = 30  # SIGNAL_ENGINE.md 5 validity, in trading days
 SWING_DAYS = 5
 
 
@@ -224,13 +224,13 @@ async def main(n_stocks: int, swing_stride: int, dump: str | None = None) -> Non
     r_flat_cap: list[float] = []
     r_swing: list[float] = []
     swing_seen = swing_pass = 0
-    tight: list[tuple[float, float]] = []   # (stop width %, R) on the EMA20 rule
-    div_single = div_dominant = div_blocked = 0   # what the ONE active gate would do
-    mb_share: list[float] = []              # multibagger's share of the confluence
+    tight: list[tuple[float, float]] = []  # (stop width %, R) on the EMA20 rule
+    div_single = div_dominant = div_blocked = 0  # what the ONE active gate would do
+    mb_share: list[float] = []  # multibagger's share of the confluence
     paired: list[tuple[float, float]] = []  # (R under EMA20, R under flat-5%) same panel
     paired_swing: list[tuple[float, float]] = []  # (R as positional, R if it were a swing)
-    swing_rule_reject = 0                   # same panel, rejected by the 8% SWING cap
-    through_stop = 0                        # fill already at/through the stop — see below
+    swing_rule_reject = 0  # same panel, rejected by the 8% SWING cap
+    through_stop = 0  # fill already at/through the stop — see below
 
     for sym, df in frames.items():
         closes = df["close"]
@@ -269,8 +269,15 @@ async def main(n_stocks: int, swing_stride: int, dump: str | None = None) -> Non
             total_contrib = sum(abs(f.weight * f.score) for f in result.factors)
             if total_contrib:
                 mb_share.append(
-                    100 * abs(next(f.weight * f.score for f in result.factors
-                                   if f.name == "MULTIBAGGER_EMA")) / total_contrib
+                    100
+                    * abs(
+                        next(
+                            f.weight * f.score
+                            for f in result.factors
+                            if f.name == "MULTIBAGGER_EMA"
+                        )
+                    )
+                    / total_contrib
                 )
 
             entry = Decimal(str(closes.iloc[i]))
@@ -306,7 +313,8 @@ async def main(n_stocks: int, swing_stride: int, dump: str | None = None) -> Non
                 # Exclude it here so the corpus measures what the system would trade.
                 fill_open = float(df["open"].iloc[i + 1])
                 through = (
-                    fill_open <= float(stop) if result.direction == "BUY"
+                    fill_open <= float(stop)
+                    if result.direction == "BUY"
                     else fill_open >= float(stop)
                 )
                 if through:
@@ -322,10 +330,16 @@ async def main(n_stocks: int, swing_stride: int, dump: str | None = None) -> Non
                             continue
                         sl_flags[stop_bar] = True
                     rec = engine._simulate_trade(  # noqa: SLF001 — frozen walker, called not copied
-                        stock=sym, signal_candle_idx=i, direction=result.direction,
-                        classification="positional", confidence_pct=result.confidence_pct,
-                        stop_loss=float(stop), take_profit=float(target), qty=qty,
-                        candles=df, session_last=sl_flags,
+                        stock=sym,
+                        signal_candle_idx=i,
+                        direction=result.direction,
+                        classification="positional",
+                        confidence_pct=result.confidence_pct,
+                        stop_loss=float(stop),
+                        take_profit=float(target),
+                        qty=qty,
+                        candles=df,
+                        session_last=sl_flags,
                     )
                     if rec is None or rec.exit_date is None:
                         continue
@@ -350,19 +364,34 @@ async def main(n_stocks: int, swing_stride: int, dump: str | None = None) -> Non
                     _bench, _T = basket_window(bser, _e_d, _x_d)
                     _a = atr20(df, i)
                     _px = rec.entry_price
-                    trades.append({
-                        "sym": sym, "entry": _e_d, "exit": _x_d, "T": _T,
-                        "rule": tag, "capped": capped, "dir": result.direction,
-                        "w": width, "R": rr, "Rw": clamp_ratio_f(rr, WINSOR_R),
-                        "ret_pct": float(_pnl), "bench": _bench,
-                        "excess": float(_pnl) - _bench,
-                        "ret_atr": (float(_pnl) / 100 * _px / _a)
-                        if _a and _a == _a else float("nan"),
-                        "cash": float(_pnl) / 100.0 * _px * qty,
-                        "conf": result.confidence_pct, "straddle": straddles,
-                        "atr_pct": (_a / _px * 100) if _a and _a == _a and _px else float("nan"),
-                        "entry_px": _px, "qty": qty,
-                    })
+                    trades.append(
+                        {
+                            "sym": sym,
+                            "entry": _e_d,
+                            "exit": _x_d,
+                            "T": _T,
+                            "rule": tag,
+                            "capped": capped,
+                            "dir": result.direction,
+                            "w": width,
+                            "R": rr,
+                            "Rw": clamp_ratio_f(rr, WINSOR_R),
+                            "ret_pct": float(_pnl),
+                            "bench": _bench,
+                            "excess": float(_pnl) - _bench,
+                            "ret_atr": (float(_pnl) / 100 * _px / _a)
+                            if _a and _a == _a
+                            else float("nan"),
+                            "cash": float(_pnl) / 100.0 * _px * qty,
+                            "conf": result.confidence_pct,
+                            "straddle": straddles,
+                            "atr_pct": (_a / _px * 100)
+                            if _a and _a == _a and _px
+                            else float("nan"),
+                            "entry_px": _px,
+                            "qty": qty,
+                        }
+                    )
 
                     if tag == "ema" and not capped:
                         r_ema.append(rr)
@@ -393,17 +422,24 @@ async def main(n_stocks: int, swing_stride: int, dump: str | None = None) -> Non
                 stop_bar = i + 1 + SWING_DAYS
                 s_open = float(df["open"].iloc[i + 1])
                 s_through = (
-                    s_open <= float(s_stop) if result.direction == "BUY"
+                    s_open <= float(s_stop)
+                    if result.direction == "BUY"
                     else s_open >= float(s_stop)
                 )
                 if s_qty and not s_through and stop_bar < len(df):
                     flags = [False] * len(df)
                     flags[stop_bar] = True
                     srec = engine._simulate_trade(  # noqa: SLF001
-                        stock=sym, signal_candle_idx=i, direction=result.direction,
-                        classification="swing", confidence_pct=result.confidence_pct,
-                        stop_loss=float(s_stop), take_profit=float(s_target), qty=s_qty,
-                        candles=df, session_last=flags,
+                        stock=sym,
+                        signal_candle_idx=i,
+                        direction=result.direction,
+                        classification="swing",
+                        confidence_pct=result.confidence_pct,
+                        stop_loss=float(s_stop),
+                        take_profit=float(s_target),
+                        qty=s_qty,
+                        candles=df,
+                        session_last=flags,
                     )
                     if srec is not None and srec.exit_date is not None:
                         sxi = int(df.index.get_loc(srec.exit_date))
@@ -432,16 +468,20 @@ async def main(n_stocks: int, swing_stride: int, dump: str | None = None) -> Non
                 continue
             swing_pass += 1
             stop, target = lv
-            qty = volatility_adjusted_qty(
-                compute_quantity(CAPITAL, RISK_PCT, entry, stop), window
-            )
+            qty = volatility_adjusted_qty(compute_quantity(CAPITAL, RISK_PCT, entry, stop), window)
             if qty == 0:
                 continue
             rec = engine._simulate_trade(  # noqa: SLF001
-                stock=sym, signal_candle_idx=i, direction=result.direction,
-                classification="swing", confidence_pct=result.confidence_pct,
-                stop_loss=float(stop), take_profit=float(target), qty=qty,
-                candles=df, session_last=None,
+                stock=sym,
+                signal_candle_idx=i,
+                direction=result.direction,
+                classification="swing",
+                confidence_pct=result.confidence_pct,
+                stop_loss=float(stop),
+                take_profit=float(target),
+                qty=qty,
+                candles=df,
+                session_last=None,
             )
             if rec is None or rec.exit_date is None:
                 continue
@@ -454,14 +494,22 @@ async def main(n_stocks: int, swing_stride: int, dump: str | None = None) -> Non
 
     print("\n== population ==")
     print(f"  bars meeting the full multibagger condition : {mb_bars:,}")
-    print(f"  of those, clearing the >=70% gate           : {gate_pass:,} "
-          f"({100 * gate_pass / mb_bars:.1f}%)" if mb_bars else "")
+    print(
+        f"  of those, clearing the >=70% gate           : {gate_pass:,} "
+        f"({100 * gate_pass / mb_bars:.1f}%)"
+        if mb_bars
+        else ""
+    )
     print(f"  direction split                             : {dict(dirs)}")
     if conf:
-        print(f"  confidence  p10 {q(conf, 0.1):.0f} · median {statistics.median(conf):.0f} "
-              f"· p90 {q(conf, 0.9):.0f}")
-        print(f"  scoring factors per signal  p10 {q(n_scoring, 0.1):.0f} · "
-              f"median {statistics.median(n_scoring):.0f} · p90 {q(n_scoring, 0.9):.0f}")
+        print(
+            f"  confidence  p10 {q(conf, 0.1):.0f} · median {statistics.median(conf):.0f} "
+            f"· p90 {q(conf, 0.9):.0f}"
+        )
+        print(
+            f"  scoring factors per signal  p10 {q(n_scoring, 0.1):.0f} · "
+            f"median {statistics.median(n_scoring):.0f} · p90 {q(n_scoring, 0.9):.0f}"
+        )
     print("\n== which factors actually score on a POSITIONAL panel ==")
     for name, c in part.most_common():
         print(f"  {name:<20} {100 * c / gate_pass:5.1f}%")
@@ -469,46 +517,67 @@ async def main(n_stocks: int, swing_stride: int, dump: str | None = None) -> Non
     if gate_pass:
         blocked = div_blocked
         print("\n== the ONE active gate (entry_diversity) applied to positional ==")
-        print(f"  < 2 scoring factors            : {div_single} "
-              f"({100 * div_single / gate_pass:.1f}%)")
-        print(f"  one factor > 90% of confluence : {div_dominant} "
-              f"({100 * div_dominant / gate_pass:.1f}%)")
-        print(f"  would be BLOCKED at order time : {blocked} "
-              f"({100 * blocked / gate_pass:.1f}%)")
+        print(
+            f"  < 2 scoring factors            : {div_single} ({100 * div_single / gate_pass:.1f}%)"
+        )
+        print(
+            f"  one factor > 90% of confluence : {div_dominant} "
+            f"({100 * div_dominant / gate_pass:.1f}%)"
+        )
+        print(f"  would be BLOCKED at order time : {blocked} ({100 * blocked / gate_pass:.1f}%)")
     if mb_share:
-        print(f"  MULTIBAGGER_EMA share of the confluence: p10 {q(mb_share, 0.1):.0f}% · "
-              f"median {statistics.median(mb_share):.0f}% · p90 {q(mb_share, 0.9):.0f}%")
+        print(
+            f"  MULTIBAGGER_EMA share of the confluence: p10 {q(mb_share, 0.1):.0f}% · "
+            f"median {statistics.median(mb_share):.0f}% · p90 {q(mb_share, 0.9):.0f}%"
+        )
 
     print("\n== level geometry, the two rules that both exist in the codebase ==")
-    print(f"  EMA20 rule (signal_service): rejected wrong-side {ema_reject} "
-          f"of {gate_pass} ({100 * ema_reject / gate_pass:.1f}%)" if gate_pass else "")
+    print(
+        f"  EMA20 rule (signal_service): rejected wrong-side {ema_reject} "
+        f"of {gate_pass} ({100 * ema_reject / gate_pass:.1f}%)"
+        if gate_pass
+        else ""
+    )
     print(f"  flat-5% rule (profiles + backtest): rejected {flat_reject}")
     if ema_sl:
-        print(f"  EMA20 stop width %: p10 {q(ema_sl, 0.1):.2f} · median "
-              f"{statistics.median(ema_sl):.2f} · p90 {q(ema_sl, 0.9):.2f} · max {max(ema_sl):.2f}")
+        print(
+            f"  EMA20 stop width %: p10 {q(ema_sl, 0.1):.2f} · median "
+            f"{statistics.median(ema_sl):.2f} · p90 {q(ema_sl, 0.9):.2f} · max {max(ema_sl):.2f}"
+        )
         u2 = 100 * sum(1 for x in ema_sl if x < 2) / len(ema_sl)
         o8 = 100 * sum(1 for x in ema_sl if x > 8) / len(ema_sl)
         print(f"    under 2% of price: {u2:.1f}% · beyond the 8% SWING cap: {o8:.1f}%")
-        print(f"  EMA20 R:R: p10 {q(ema_rr, 0.1):.2f} · median {statistics.median(ema_rr):.2f} "
-              f"· p90 {q(ema_rr, 0.9):.2f} · below 1.0: "
-              f"{100 * sum(1 for x in ema_rr if x < 1) / len(ema_rr):.1f}%")
+        print(
+            f"  EMA20 R:R: p10 {q(ema_rr, 0.1):.2f} · median {statistics.median(ema_rr):.2f} "
+            f"· p90 {q(ema_rr, 0.9):.2f} · below 1.0: "
+            f"{100 * sum(1 for x in ema_rr if x < 1) / len(ema_rr):.1f}%"
+        )
         print("  flat-5% R:R is exactly 3.00 by construction (15% target / 5% stop)")
         over = 100 * sum(1 for x in ema_notional if x > float(CAPITAL)) / len(ema_notional)
-        print(f"  notional at Rs1L/2%: median Rs{q(ema_notional, 0.5):,.0f} · "
-              f"p90 Rs{q(ema_notional, 0.9):,.0f} · over the 1.0x cap: {over:.1f}%")
+        print(
+            f"  notional at Rs1L/2%: median Rs{q(ema_notional, 0.5):,.0f} · "
+            f"p90 Rs{q(ema_notional, 0.9):,.0f} · over the 1.0x cap: {over:.1f}%"
+        )
 
-    print(f"\n  fills already AT/THROUGH the stop, excluded (the live broker rejects these; "
-          f"the frozen walker mis-scores them as ~+1R): {through_stop}")
-    print(f"\n== forward outcome (frozen walker; fill at next open; "
-          f"{ca_dropped} trades dropped as unadjusted corporate actions) ==")
+    print(
+        f"\n  fills already AT/THROUGH the stop, excluded (the live broker rejects these; "
+        f"the frozen walker mis-scores them as ~+1R): {through_stop}"
+    )
+    print(
+        f"\n== forward outcome (frozen walker; fill at next open; "
+        f"{ca_dropped} trades dropped as unadjusted corporate actions) =="
+    )
     summarize(r_ema, "positional, EMA20 stop, no horizon")
     summarize(r_ema_cap, f"positional, EMA20 stop, {POSITIONAL_DAYS}d cap")
     summarize(r_flat, "positional, flat-5% stop, no horizon")
     summarize(r_flat_cap, f"positional, flat-5% stop, {POSITIONAL_DAYS}d cap")
     summarize(r_swing, "swing baseline (same names)")
 
-    for label, series in (("positional EMA20", r_ema), ("positional flat-5%", r_flat),
-                          ("swing baseline", r_swing)):
+    for label, series in (
+        ("positional EMA20", r_ema),
+        ("positional flat-5%", r_flat),
+        ("swing baseline", r_swing),
+    ):
         for line in render_lines(moving_block_bootstrap(series), label=label):
             print(line)
 
@@ -518,8 +587,10 @@ async def main(n_stocks: int, swing_stride: int, dump: str | None = None) -> Non
         sd = statistics.stdev(d)
         t = mean_d / (sd / (len(d) ** 0.5)) if sd else float("nan")
         print("\n== EMA20 vs flat-5% on the SAME panels (paired — the right instrument) ==")
-        print(f"  n={len(d)}  mean dR {mean_d:+.3f}  median dR "
-              f"{statistics.median(d):+.3f}  t={t:+.2f}")
+        print(
+            f"  n={len(d)}  mean dR {mean_d:+.3f}  median dR "
+            f"{statistics.median(d):+.3f}  t={t:+.2f}"
+        )
         print("  (dR > 0 would mean the EMA20 stop beats the flat 5% stop on identical signals)")
 
     if len(paired_swing) > 2:
@@ -528,12 +599,16 @@ async def main(n_stocks: int, swing_stride: int, dump: str | None = None) -> Non
         sd = statistics.stdev(d)
         t = mean_d / (sd / (len(d) ** 0.5)) if sd else float("nan")
         print("\n== should the class exist? SAME panels, positional rules vs swing rules ==")
-        print(f"  rejected by the 8% swing cap that positional does not apply: "
-              f"{swing_rule_reject} of {gate_pass} ({100 * swing_rule_reject / gate_pass:.1f}%)")
+        print(
+            f"  rejected by the 8% swing cap that positional does not apply: "
+            f"{swing_rule_reject} of {gate_pass} ({100 * swing_rule_reject / gate_pass:.1f}%)"
+        )
         summarize([a for a, _ in paired_swing], "as POSITIONAL (EMA20, 30d)")
         summarize([b for _, b in paired_swing], "as SWING (pivot stop, +6%, 5d)")
-        print(f"  paired n={len(d)}  mean dR {mean_d:+.3f}  median dR "
-              f"{statistics.median(d):+.3f}  t={t:+.2f}")
+        print(
+            f"  paired n={len(d)}  mean dR {mean_d:+.3f}  median dR "
+            f"{statistics.median(d):+.3f}  t={t:+.2f}"
+        )
         print("  (dR > 0 would mean the positional relabelling BEATS leaving it a swing)")
 
     if tight:
@@ -546,9 +621,29 @@ async def main(n_stocks: int, swing_stride: int, dump: str | None = None) -> Non
     _e1_report(trades)
     if dump:
         import csv
-        cols = ["sym", "entry", "exit", "T", "rule", "capped", "dir", "w", "R", "Rw",
-                "ret_pct", "bench", "excess", "ret_atr", "cash", "conf", "straddle",
-                "atr_pct", "entry_px", "qty"]
+
+        cols = [
+            "sym",
+            "entry",
+            "exit",
+            "T",
+            "rule",
+            "capped",
+            "dir",
+            "w",
+            "R",
+            "Rw",
+            "ret_pct",
+            "bench",
+            "excess",
+            "ret_atr",
+            "cash",
+            "conf",
+            "straddle",
+            "atr_pct",
+            "entry_px",
+            "qty",
+        ]
         with open(dump, "w", newline="") as fh:
             wtr = csv.DictWriter(fh, fieldnames=cols, extrasaction="ignore")
             wtr.writeheader()
@@ -579,8 +674,10 @@ def _contrast(a: list[float], b: list[float], label: str, na: str, nb: str) -> N
         return
     d, se = ma - mb, math.hypot(sa, sb)
     t = d / se if se else float("nan")
-    print(f"  {label:<46} {na} {ma:+8.4f}(n{na_})  {nb} {mb:+8.4f}(n{nb_})  "
-          f"diff {d:+8.4f}  SE {se:.4f}  t {t:+6.2f}  MDE@80% {2.8016*se:+.3f}")
+    print(
+        f"  {label:<46} {na} {ma:+8.4f}(n{na_})  {nb} {mb:+8.4f}(n{nb_})  "
+        f"diff {d:+8.4f}  SE {se:.4f}  t {t:+6.2f}  MDE@80% {2.8016 * se:+.3f}"
+    )
 
 
 def _e1_report(trades: list[dict[str, Any]]) -> None:
@@ -602,47 +699,72 @@ def _e1_report(trades: list[dict[str, Any]]) -> None:
     print("=" * 104)
     print("  `rule=ema, capped=False` is the LIVE minter's rule (signal_service passes")
     print("  ema20_daily); `flat` is what profiles/pipeline and the backtest actually run.")
-    for cohort, rows in (("ALL windows", live),
-                         ("gap-clean only", [t for t in live if not t["straddle"]])):
+    for cohort, rows in (
+        ("ALL windows", live),
+        ("gap-clean only", [t for t in live if not t["straddle"]]),
+    ):
         if len(rows) < 4:
             continue
         print(f"\n  ── {cohort} (n={len(rows)}) ──")
-        print(f"  {'bucket':<12} {'n':>4} {'meanT':>6} {'E[1/w]':>7} "
-              f"{'R':>9} {'raw %':>9} {'excess %':>9} {'ret/ATR':>9} {'net Rs':>10}")
+        print(
+            f"  {'bucket':<12} {'n':>4} {'meanT':>6} {'E[1/w]':>7} "
+            f"{'R':>9} {'raw %':>9} {'excess %':>9} {'ret/ATR':>9} {'net Rs':>10}"
+        )
         for lo, hi in ((0, 2), (2, 4), (4, 6), (6, 10), (10, 1e9)):
             b = [t for t in rows if lo <= t["w"] < hi]
             if len(b) < 2:
                 continue
             at = [t["ret_atr"] for t in b if t["ret_atr"] == t["ret_atr"]]
-            print(f"  {f'{lo}-{hi if hi < 1e8 else 999}%':<12} {len(b):>4} "
-                  f"{statistics.mean([t['T'] for t in b]):>6.2f} "
-                  f"{statistics.mean([1 / t['w'] for t in b]):>7.3f} "
-                  f"{statistics.mean([t['Rw'] for t in b]):>+9.4f} "
-                  f"{statistics.mean([t['ret_pct'] for t in b]):>+9.4f} "
-                  f"{statistics.mean([t['excess'] for t in b]):>+9.4f} "
-                  f"{statistics.mean(at) if at else float('nan'):>+9.4f} "
-                  f"{statistics.mean([t['cash'] for t in b]):>+10.0f}")
+            print(
+                f"  {f'{lo}-{hi if hi < 1e8 else 999}%':<12} {len(b):>4} "
+                f"{statistics.mean([t['T'] for t in b]):>6.2f} "
+                f"{statistics.mean([1 / t['w'] for t in b]):>7.3f} "
+                f"{statistics.mean([t['Rw'] for t in b]):>+9.4f} "
+                f"{statistics.mean([t['ret_pct'] for t in b]):>+9.4f} "
+                f"{statistics.mean([t['excess'] for t in b]):>+9.4f} "
+                f"{statistics.mean(at) if at else float('nan'):>+9.4f} "
+                f"{statistics.mean([t['cash'] for t in b]):>+10.0f}"
+            )
         lo_ = [t for t in rows if t["w"] < 2.0]
         hi_ = [t for t in rows if t["w"] >= 2.0]
-        for key, nm in (("Rw", "R"), ("ret_pct", "raw %"),
-                        ("excess", "excess vs basket %"), ("ret_atr", "ret/ATR20"),
-                        ("cash", "net Rs")):
-            _contrast([t[key] for t in lo_ if t[key] == t[key]],
-                      [t[key] for t in hi_ if t[key] == t[key]],
-                      f"  tight(<2%) vs wide(>=2%) in {nm}", "tight", "wide")
+        for key, nm in (
+            ("Rw", "R"),
+            ("ret_pct", "raw %"),
+            ("excess", "excess vs basket %"),
+            ("ret_atr", "ret/ATR20"),
+            ("cash", "net Rs"),
+        ):
+            _contrast(
+                [t[key] for t in lo_ if t[key] == t[key]],
+                [t[key] for t in hi_ if t[key] == t[key]],
+                f"  tight(<2%) vs wide(>=2%) in {nm}",
+                "tight",
+                "wide",
+            )
     print("\n  ── the gap filter itself, as a contrast ──")
-    _contrast([t["Rw"] for t in live if not t["straddle"]],
-              [t["Rw"] for t in live if t["straddle"]],
-              "  clean vs straddling in R", "clean", "strdl")
+    _contrast(
+        [t["Rw"] for t in live if not t["straddle"]],
+        [t["Rw"] for t in live if t["straddle"]],
+        "  clean vs straddling in R",
+        "clean",
+        "strdl",
+    )
 
 
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--stocks", type=int, default=250)
-    ap.add_argument("--swing-stride", type=int, default=25,
-                    help="0 skips the swing baseline (positional numbers are unchanged)")
-    ap.add_argument("--dump-trades", default=None,
-                    help="write the per-trade table to this CSV (the B5/round-9 convention: "
-                         "one expensive pass, then every contrast is a cheap read)")
+    ap.add_argument(
+        "--swing-stride",
+        type=int,
+        default=25,
+        help="0 skips the swing baseline (positional numbers are unchanged)",
+    )
+    ap.add_argument(
+        "--dump-trades",
+        default=None,
+        help="write the per-trade table to this CSV (the B5/round-9 convention: "
+        "one expensive pass, then every contrast is a cheap read)",
+    )
     args = ap.parse_args()
     asyncio.run(main(args.stocks, args.swing_stride, args.dump_trades))

@@ -7,6 +7,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Bucket C #10 — research-script lint debt, and `make lint` now covers `scripts/` (2026-10-03)
+
+- **Root cause.** `make lint` ran `ruff check app/ tests/` and never looked at `scripts/`, while
+  `make typecheck` already covered it. So debt piled up unseen: 93 errors in 4 research scripts.
+  `make lint` now includes `scripts/`.
+- **93 → 0, and every edit is proven behaviour-preserving.** Each file's syntax tree after the
+  edit equals the original's. The comparison normalises only what cannot change behaviour: import
+  order within a block, `import a, b` ≡ two imports, how a string literal is split, and an
+  explicit `zip(strict=False)` (the default). These are scripts of record (`e2_score_ic.py`
+  underlies the 2026-09-20 retirement), so "looks equivalent" was not enough.
+- **The M62 cohort SQL** in `swing_dependence_probe.py` moved, byte-identical (asserted: 236
+  chars), into a module constant, because its first line could not be wrapped without changing
+  the query text. The AST check inlines the constant back and still matches.
+- **Not changed, on purpose.** The math notation (`R`, `T`, `X`) is allowed for `scripts/*` so
+  the names match the documents that cite them. The 5 long `main`/`_report` functions are
+  annotated `noqa: C901`; restructuring audited text to satisfy a complexity counter would be
+  churn.
+- **The A41 cutover was run by the author the same day.** On :6380: stream 10,019 entries
+  (last id, group position and 0 pending identical to :6379), universe baseline 2,314, health
+  records identical, `noeviction`. A fresh `settings` load reads durable → 6380/0, broker →
+  6380/1, results → 6379/2.
+
 ### One pytest session at a time on the test DB, enforced (2026-10-03)
 
 - `make replay` hit its 300 s timebox (it normally takes 29 s). It was not a code fault: it re-ran

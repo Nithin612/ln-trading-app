@@ -87,8 +87,13 @@ def clustered_se(vals: list[float], groups: list[Any]) -> float:
     return math.sqrt(sum(s * s for s in by.values())) / n
 
 
-def cell(label: str, vals: list[float], groups: list[Any] | None = None,
-         unit: str = "R", quiet: bool = False) -> dict[str, float]:
+def cell(
+    label: str,
+    vals: list[float],
+    groups: list[Any] | None = None,
+    unit: str = "R",
+    quiet: bool = False,
+) -> dict[str, float]:
     if len(vals) < 2:
         if not quiet:
             print(f"  {label:<44} n={len(vals):>4}   (too few)")
@@ -97,12 +102,21 @@ def cell(label: str, vals: list[float], groups: list[Any] | None = None,
     m, sd = statistics.mean(vals), statistics.stdev(vals)
     se = sd / math.sqrt(n)
     cse = clustered_se(vals, groups) if groups else float("nan")
-    out = {"n": n, "mean": m, "sd": sd, "se": se, "t": m / se if se else float("nan"),
-           "cse": cse, "ct": (m / cse) if cse and cse == cse else float("nan")}
+    out = {
+        "n": n,
+        "mean": m,
+        "sd": sd,
+        "se": se,
+        "t": m / se if se else float("nan"),
+        "cse": cse,
+        "ct": (m / cse) if cse and cse == cse else float("nan"),
+    }
     if not quiet:
         extra = f"  clust SE {cse:7.4f} t {out['ct']:+6.2f}" if groups else ""
-        print(f"  {label:<44} n={n:>4}  mean {m:+9.4f}  sd {sd:7.4f}  "
-              f"SE {se:7.4f}  t {out['t']:+6.2f}{extra}   [{unit}]")
+        print(
+            f"  {label:<44} n={n:>4}  mean {m:+9.4f}  sd {sd:7.4f}  "
+            f"SE {se:7.4f}  t {out['t']:+6.2f}{extra}   [{unit}]"
+        )
     return out
 
 
@@ -116,9 +130,11 @@ def contrast(label: str, a: list[float], b: list[float], na: str, nb: str) -> No
     sb = statistics.stdev(b) / math.sqrt(len(b))
     d, sd_ = ma - mb, math.hypot(sa, sb)
     t = d / sd_ if sd_ else float("nan")
-    print(f"  {label:<44} {na} {ma:+8.4f} (n{len(a)})  {nb} {mb:+8.4f} (n{len(b)})  "
-          f"diff {d:+8.4f}  SE {sd_:.4f}  t {t:+6.2f}  p {2*(1-phi(abs(t))):.3f}  "
-          f"MDE@80% {2.8016*sd_:+.4f}")
+    print(
+        f"  {label:<44} {na} {ma:+8.4f} (n{len(a)})  {nb} {mb:+8.4f} (n{len(b)})  "
+        f"diff {d:+8.4f}  SE {sd_:.4f}  t {t:+6.2f}  p {2 * (1 - phi(abs(t))):.3f}  "
+        f"MDE@80% {2.8016 * sd_:+.4f}"
+    )
 
 
 def load(path: str) -> list[dict[str, Any]]:
@@ -155,9 +171,13 @@ def net_units(t: dict[str, Any], slip_bps: float) -> dict[str, float]:
     return {
         "R": t["Rw"] - cost_pct / w,
         "pct": t["ret_pct"] - cost_pct,
-        "excess": t["excess"] - cost_pct,          # paired vs the basket, then costed
-        "atr": t["ret_atr"] - (cost_pct / t["atr_pct"] if t["atr_pct"] == t["atr_pct"]
-                               and t["atr_pct"] else float("nan")),
+        "excess": t["excess"] - cost_pct,  # paired vs the basket, then costed
+        "atr": t["ret_atr"]
+        - (
+            cost_pct / t["atr_pct"]
+            if t["atr_pct"] == t["atr_pct"] and t["atr_pct"]
+            else float("nan")
+        ),
         "cash": t["cash"] - cost_pct / 100.0 * t["entry_px"] * t["qty"],
         "cost_R": cost_pct / w,
     }
@@ -174,7 +194,7 @@ def cohorts(tr: list[dict[str, Any]]) -> dict[str, list[dict[str, Any]]]:
     }
 
 
-def main(path: str) -> None:
+def main(path: str) -> None:  # noqa: C901 — script of record; a refactor would churn audited text
     tr = load(path)
     print(f"loaded {len(tr)} trades from {path}\n")
     co = cohorts(tr)
@@ -189,10 +209,13 @@ def main(path: str) -> None:
         if not v:
             continue
         Ts = [t["T"] for t in v]
-        print(f"  {k:<30} n={len(v):>4}  mean T {statistics.mean(Ts):5.2f}  median {statistics.median(Ts):4.1f}"
-              f"  T=0 (same-session exit) {100*sum(1 for x in Ts if x == 0)/len(Ts):5.1f}%"
-              f"  mean w {statistics.mean([t['w'] for t in v]):5.2f}%"
-              f"  E[1/w] {statistics.mean([1/t['w'] for t in v]):6.3f}")
+        print(
+            f"  {k:<30} n={len(v):>4}  mean T {statistics.mean(Ts):5.2f}  median "
+            f"{statistics.median(Ts):4.1f}"
+            f"  T=0 (same-session exit) {100 * sum(1 for x in Ts if x == 0) / len(Ts):5.1f}%"
+            f"  mean w {statistics.mean([t['w'] for t in v]):5.2f}%"
+            f"  E[1/w] {statistics.mean([1 / t['w'] for t in v]):6.3f}"
+        )
 
     print("\n" + "=" * 108)
     print("1.  E3 + PART B — the net question in FIVE units x FIVE cohorts (explicit charges only)")
@@ -236,24 +259,33 @@ def main(path: str) -> None:
     for ck in ("ALL", "clean x BUY"):
         cv = co[ck]
         print(f"\n  --- {ck} ---")
-        print(f"  {'bucket':<12} {'n':>4} {'meanT':>6} {'E[1/w]':>7} "
-              f"{'R':>9} {'raw %':>9} {'excess %':>9} {'ret/ATR':>9}")
+        print(
+            f"  {'bucket':<12} {'n':>4} {'meanT':>6} {'E[1/w]':>7} "
+            f"{'R':>9} {'raw %':>9} {'excess %':>9} {'ret/ATR':>9}"
+        )
         for lo, hi in buckets:
             b = [t for t in cv if lo <= t["w"] < hi]
             if len(b) < 2:
                 continue
             at = [t["ret_atr"] for t in b if t["ret_atr"] == t["ret_atr"]]
-            print(f"  {f'{lo}-{hi if hi<1e8 else 999}%':<12} {len(b):>4} "
-                  f"{statistics.mean([t['T'] for t in b]):>6.2f} "
-                  f"{statistics.mean([1/t['w'] for t in b]):>7.3f} "
-                  f"{statistics.mean([t['Rw'] for t in b]):>+9.4f} "
-                  f"{statistics.mean([t['ret_pct'] for t in b]):>+9.4f} "
-                  f"{statistics.mean([t['excess'] for t in b]):>+9.4f} "
-                  f"{statistics.mean(at) if at else float('nan'):>+9.4f}")
+            print(
+                f"  {f'{lo}-{hi if hi < 1e8 else 999}%':<12} {len(b):>4} "
+                f"{statistics.mean([t['T'] for t in b]):>6.2f} "
+                f"{statistics.mean([1 / t['w'] for t in b]):>7.3f} "
+                f"{statistics.mean([t['Rw'] for t in b]):>+9.4f} "
+                f"{statistics.mean([t['ret_pct'] for t in b]):>+9.4f} "
+                f"{statistics.mean([t['excess'] for t in b]):>+9.4f} "
+                f"{statistics.mean(at) if at else float('nan'):>+9.4f}"
+            )
         lo_, hi_ = [t for t in cv if t["w"] < 2], [t for t in cv if t["w"] >= 2]
         for key, nm in (("Rw", "R"), ("ret_pct", "raw %"), ("excess", "excess vs basket %")):
-            contrast(f"  tight vs wide in {nm}", [t[key] for t in lo_], [t[key] for t in hi_],
-                     "tight", "wide")
+            contrast(
+                f"  tight vs wide in {nm}",
+                [t[key] for t in lo_],
+                [t[key] for t in hi_],
+                "tight",
+                "wide",
+            )
 
     print("\n" + "=" * 108)
     print("4.  Is `ret ⟂ w` really independence, or is it the drift x T slope?")
@@ -276,7 +308,7 @@ def main(path: str) -> None:
             resid = [y - (my + b1 * (x - mx)) for x, y in zip(ws, ys, strict=True)]
             s2 = sum(r * r for r in resid) / (len(cv) - 2)
             se = math.sqrt(s2 / sxx)
-            print(f"  {ck:<14} d({nm})/dw = {b1:+8.5f}  SE {se:.5f}  t {b1/se:+6.2f}")
+            print(f"  {ck:<14} d({nm})/dw = {b1:+8.5f}  SE {se:.5f}  t {b1 / se:+6.2f}")
 
     print("\n" + "=" * 108)
     print("5.  G5 — the PAIRED drift null (12.20 computed it unpaired)")
@@ -285,16 +317,21 @@ def main(path: str) -> None:
         if len(cv) < 3:
             continue
         g = [t["entry"] for t in cv]
-        cell(f"{ck}: basket over the trade's own window", [t["bench"] for t in cv], g, "%",
-             quiet=False)
+        cell(
+            f"{ck}: basket over the trade's own window",
+            [t["bench"] for t in cv],
+            g,
+            "%",
+            quiet=False,
+        )
         cell(f"{ck}: PAIRED excess (trade - basket)", [t["excess"] for t in cv], g, "%")
 
     print("\n" + "=" * 108)
     print("6.  G6 / plan item 22 — the account earns Rs/day, not R (at the MEASURED hold)")
     print("=" * 108)
     allT = [max(t["T"], 1) for t in tr]
-    print(f"  basket drift, full span of this artifact: see the probe log (regime-dependent;")
-    print(f"  12.20's +0.0816%/day is the POST-GAP block only -- do not reuse it as a constant)")
+    print("  basket drift, full span of this artifact: see the probe log (regime-dependent;")
+    print("  12.20's +0.0816%/day is the POST-GAP block only -- do not reuse it as a constant)")
     for ck, cv in co.items():
         if len(cv) < 3:
             continue
@@ -302,12 +339,15 @@ def main(path: str) -> None:
         bday = statistics.mean([t["bench"] / max(t["T"], 1) for t in cv])
         for s in (0.0, 15.0):
             n_ = [net_units(t, s) for t in cv]
-            perday = statistics.mean([x["pct"] / max(t["T"], 1)
-                                      for x, t in zip(n_, cv, strict=True)])
-            print(f"  {ck:<30} slip {s:>4.0f} bps  mean T {mt:4.2f}  "
-                  f"net {statistics.mean([x['pct'] for x in n_]):+7.3f}%/trade  "
-                  f"{perday:+7.4f}%/day   basket {bday:+7.4f}%/day   "
-                  f"gap {(perday-bday)*TRADING_DAYS:+7.1f} pp/yr")
+            perday = statistics.mean(
+                [x["pct"] / max(t["T"], 1) for x, t in zip(n_, cv, strict=True)]
+            )
+            print(
+                f"  {ck:<30} slip {s:>4.0f} bps  mean T {mt:4.2f}  "
+                f"net {statistics.mean([x['pct'] for x in n_]):+7.3f}%/trade  "
+                f"{perday:+7.4f}%/day   basket {bday:+7.4f}%/day   "
+                f"gap {(perday - bday) * TRADING_DAYS:+7.1f} pp/yr"
+            )
     _ = allT
 
     print("\n" + "=" * 108)
@@ -323,8 +363,13 @@ def main(path: str) -> None:
         hi_ = [t for t in cv if t["er"] >= 0.30]
         print(f"\n  --- {ck} (n={len(cv)} with an ER) ---")
         for key, nm in (("Rw", "R"), ("ret_pct", "raw %"), ("excess", "excess vs basket %")):
-            contrast(f"  ER<0.30 (HIDDEN) vs >=0.30 in {nm}",
-                     [t[key] for t in lo_], [t[key] for t in hi_], "hidden", "shown")
+            contrast(
+                f"  ER<0.30 (HIDDEN) vs >=0.30 in {nm}",
+                [t[key] for t in lo_],
+                [t[key] for t in hi_],
+                "hidden",
+                "shown",
+            )
 
     print("\n" + "=" * 108)
     print("8.  C3 — the confidence NORMALIZER: four rival ranking keys, same panels")
@@ -340,22 +385,33 @@ def main(path: str) -> None:
         ys = [t["Rw"] for t in cv]
         yp = [t["ret_pct"] for t in cv]
         print(f"\n  --- {ck} (n={len(cv)}) ---")
-        for key, nm in (("conf", "confidence_pct  <- DEPLOYED"), ("wsum", "raw weighted sum"),
-                        ("nsc", "breadth (# scoring factors)"), ("wsc", "weight that scored"),
-                        ("top", "concentration (top share)")):
+        for key, nm in (
+            ("conf", "confidence_pct  <- DEPLOYED"),
+            ("wsum", "raw weighted sum"),
+            ("nsc", "breadth (# scoring factors)"),
+            ("wsc", "weight that scored"),
+            ("top", "concentration (top share)"),
+        ):
             xs = [abs(t[key]) if key == "wsum" else t[key] for t in cv]
             if len({x for x in xs if x == x}) < 3:
                 continue
             r1 = spearman(xs, ys)
             r2 = spearman(xs, yp)
-            print(f"  rho({nm:<28}, R) {r1:+.4f}  p {perm_p(xs, ys, r1):.3f}"
-                  f"   |  vs raw % {r2:+.4f}  p {perm_p(xs, yp, r2):.3f}")
+            print(
+                f"  rho({nm:<28}, R) {r1:+.4f}  p {perm_p(xs, ys, r1):.3f}"
+                f"   |  vs raw % {r2:+.4f}  p {perm_p(xs, yp, r2):.3f}"
+            )
         nb: dict[int, list[float]] = collections.defaultdict(list)
         for t in cv:
             nb[int(t["nsc"])].append(t["Rw"])
-        print("    breadth buckets:  " + "  ".join(
-            f"{k} factors n={len(v)} R {statistics.mean(v):+.3f}" for k, v in sorted(nb.items())
-            if len(v) >= 3))
+        print(
+            "    breadth buckets:  "
+            + "  ".join(
+                f"{k} factors n={len(v)} R {statistics.mean(v):+.3f}"
+                for k, v in sorted(nb.items())
+                if len(v) >= 3
+            )
+        )
 
     print("=" * 108)
     print("9.  D4 — the posterior, done correctly: the prior belongs on the GROSS mean")
@@ -378,20 +434,30 @@ def main(path: str) -> None:
         bask = statistics.mean([t["bench"] / t["w"] for t in cv])
         print(f"\n  --- {ck} (n={len(cv)}) ---")
         print(f"  gross mean {m:+.4f}R   iid SE {se_i:.4f}   clustered SE {se_c:.4f}")
-        print(f"  hurdles: cost(explicit) {cost:+.4f}R   cost(+15bps/leg) {cost15:+.4f}R   "
-              f"PAIRED basket {bask:+.4f}R")
-        print(f"           break-even {cost:+.4f}   BE+basket {cost+bask:+.4f}   "
-              f"BE+basket @15bps {cost15+bask:+.4f}")
+        print(
+            f"  hurdles: cost(explicit) {cost:+.4f}R   cost(+15bps/leg) {cost15:+.4f}R   "
+            f"PAIRED basket {bask:+.4f}R"
+        )
+        print(
+            f"           break-even {cost:+.4f}   BE+basket {cost + bask:+.4f}   "
+            f"BE+basket @15bps {cost15 + bask:+.4f}"
+        )
         for se_lbl, se in (("iid", se_i), ("date-clustered", se_c)):
             if not (se == se and se > 0):
                 continue
             print(f"  SE = {se_lbl} {se:.4f}")
             for tau in (0.03, 0.05, 0.10, 0.20):
-                pm = m * tau ** 2 / (tau ** 2 + se ** 2)
-                ps = math.sqrt(tau ** 2 * se ** 2 / (tau ** 2 + se ** 2))
-                cells = [f"{hl} {100*(1-phi((h-pm)/ps)):6.2f}%" for h, hl in
-                         ((0.0, "P(>0)"), (cost, "P(>BE)"), (cost + bask, "P(>BE+basket)"),
-                          (cost15 + bask, "P(>BE+basket@15bps)"))]
+                pm = m * tau**2 / (tau**2 + se**2)
+                ps = math.sqrt(tau**2 * se**2 / (tau**2 + se**2))
+                cells = [
+                    f"{hl} {100 * (1 - phi((h - pm) / ps)):6.2f}%"
+                    for h, hl in (
+                        (0.0, "P(>0)"),
+                        (cost, "P(>BE)"),
+                        (cost + bask, "P(>BE+basket)"),
+                        (cost15 + bask, "P(>BE+basket@15bps)"),
+                    )
+                ]
                 print(f"    prior sd {tau:.2f}: post {pm:+.4f}+-{ps:.4f}  " + "  ".join(cells))
 
     print("\n" + "=" * 108)
@@ -409,10 +475,12 @@ def main(path: str) -> None:
             rom = sum(x["pct"] for x in n_) / sum(Ts)
             bmor = statistics.mean([t["bench"] / T for t, T in zip(cv, Ts, strict=True)])
             brom = sum(t["bench"] for t in cv) / sum(Ts)
-            print(f"  {ck:<30} slip {s_:>4.0f}  mean-of-ratios {mor:+7.4f}%/d vs "
-                  f"{bmor:+7.4f} = {(mor-bmor)*TRADING_DAYS:+7.1f} pp/yr  |  "
-                  f"ratio-of-means {rom:+7.4f}%/d vs {brom:+7.4f} = "
-                  f"{(rom-brom)*TRADING_DAYS:+7.1f} pp/yr")
+            print(
+                f"  {ck:<30} slip {s_:>4.0f}  mean-of-ratios {mor:+7.4f}%/d vs "
+                f"{bmor:+7.4f} = {(mor - bmor) * TRADING_DAYS:+7.1f} pp/yr  |  "
+                f"ratio-of-means {rom:+7.4f}%/d vs {brom:+7.4f} = "
+                f"{(rom - brom) * TRADING_DAYS:+7.1f} pp/yr"
+            )
 
 
 if __name__ == "__main__":

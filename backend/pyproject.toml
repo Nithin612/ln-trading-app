@@ -51,6 +51,9 @@ ignore = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/*" = ["S101"]   # allow assert in tests
+# Research scripts use the analysis documents' math notation — R (R-multiple), T (holding
+# period), X (design matrix) — so the names match the docs that cite them (2026-10-03).
+"scripts/*" = ["N803", "N806"]
 
 [tool.mypy]
 python_version = "3.12"

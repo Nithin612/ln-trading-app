@@ -232,7 +232,7 @@ test:  ## Run all tests (backend + frontend)
 .PHONY: lint
 lint:  ## Lint backend (ruff) + frontend (eslint)
 	@echo "$(BLUE)▶ Ruff$(NC)"
-	@cd backend && $(TB) ruff 300 8 -- uv run ruff check app/ tests/
+	@cd backend && $(TB) ruff 300 8 -- uv run ruff check app/ tests/ scripts/
 	@echo "$(BLUE)▶ ESLint$(NC)"
 	@cd frontend && $(TB) eslint 300 8 -- pnpm lint
 
