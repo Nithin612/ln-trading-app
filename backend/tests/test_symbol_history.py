@@ -19,7 +19,7 @@ evidence. Hence record-and-refuse rather than restructure.
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import UTC, date, datetime
 
 from app.services import symbol_history as sh
 from sqlalchemy import text
@@ -120,6 +120,10 @@ class TestRenameIsNowVisible:
         """The AMIRCHAND → AEROPLANE shape. The row keeps its id (and its bars);
         what changes is that the old ticker is now recoverable."""
         s = await make_stock(db, symbol="AMIRCHAND", isin="INE05TO01019")
+        # The seed dates a row from `stocks.created_at` (falling back to `on`). Left at the
+        # wall clock, `created_at` overtook the fixed LATER (2026-10-01) on 2026-10-02 and the
+        # seed interval sorted AFTER the rename — a test that broke on a date, not on code.
+        s.created_at = datetime(DAY.year, DAY.month, DAY.day, tzinfo=UTC)
         await db.commit()
         await sh.seed_from_stocks(db, on=DAY)
         await db.commit()
