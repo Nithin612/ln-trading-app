@@ -201,6 +201,30 @@ Two findings worth carrying forward:
    refactor (hoist the lookup so the argument is non-optional) silently inverts that. Caught
    by the pin, not by review.
 
+### ▶ Bucket C queue — 2026-10-03 (cycle 2 PAUSED; built one item at a time)
+
+The author paused cycle 2 until a strategy exists and chose to build Bucket C one by one meanwhile.
+Every row below was checked against the code on 2026-10-03 (W1). **None attacks profitability.**
+
+| # | item | what (verified state) | size |
+|--:|---|---|---|
+| 1 | **Weekend sessions** (queued 09-17) | all **21** Celery beats are `day_of_week="1-5"`, but NSE holds weekend sessions (2024-03-02, 2025-02-01, 2026-02-01 …) — invisible to EOD ingest, nightly jobs and every health probe | ~½ day |
+| 2 | **Directional entry zone** (reading study 09-10) | `live_levels._signal_levels` still emits a SYMMETRIC ±0.5% zone, so a BUY drifting DOWN into entry fires "Entered zone"; the direction-aware cross machinery is already in the file | ~½ day |
+| 3 | **U16** chunked WS subscription | `live_worker` subscribes every token in ONE `ws.subscribe` call; Kite caps a connection at 3,000 and the universe is 2,291 (76%) | ~½ day |
+| 4 | **A4** constraint pre-validation endpoints | what ranges / classifications / sessions are legal, queryable before submit | ~1 day |
+| 5 | **A14** measured, layered timeouts | the `make check` walk-forward stall has no bound | ~½ day |
+| 6 | **U11** benchmark as a second series on every equity/P&L curve | UI | ~½ day |
+| 7 | **U19** horizon/lag correlation chart | UI; we grade multi-day trades on a one-day clock | ~½ day |
+| 8 | **U20** would-block cohort as charts in the shadow sidecars | design-sensitive — with the author | ~1 day |
+| 9 | **A41** split Redis (volatile-lru cache vs noeviction durable) | deployment; low priority | ~½ day |
+| 10 | Lint debt in research scripts | 93 ruff errors across 4 old scripts | ~½ day |
+
+**Out of scope now:** A1 / A17 (no LLM step in the research loop) · D6 (reconciliation key —
+decide before a `KiteBrokerAdapter`, which waits on a strategy) · T4/T5/T6/T8, A5/A7/A12 (already
+satisfied — the 09-09 honest read). **Already done (record was stale):** F-1 `StockDetailPage`
+direction colour (fixed 2026-09-19) · U4″ Nifty-50-weighted coverage (`feed_health` reads the
+Nifty-50 set).
+
 ### Q2 — the Phase 6 / 6.8 research track
 
 | # | item | state |

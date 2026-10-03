@@ -1,5 +1,12 @@
 # Phase 7 — Live-trading hardening, and the TWO-CYCLE paper plan
 
+> ⏸ **CYCLE 2 IS PAUSED UNTIL A STRATEGY EXISTS (the author, 2026-10-03).** The daily-swing scorer
+> that would generate cycle 2's trades was retired 2026-09-20 (null IC), and the successor
+> programme closes 2026-10-31 with nothing shipped (PR-1 NULL). Cycle 2 rehearses going live, and
+> a "profitable" 30 days on a null generator would be luck. **Nothing below is lost:** 7.0–7.4 are
+> built; the post-cycle-2 slices wait for a strategy with pre-registered evidence. Meanwhile
+> Bucket C is built one item at a time (`pre-cycle2-queue.md`, §"Bucket C queue 2026-10-03").
+
 **Status: QUEUED TO BUILD (2026-09-06)** — on branch `feature/pre-cycle2-hardening`, whose
 ordered queue is [`pre-cycle2-queue.md`](pre-cycle2-queue.md). **7.1–7.4 are the long pole and
 are fully unblocked**, so they start first. ⚠ Per the external review, **7.0 is a DESIGN PASS
@@ -79,13 +86,11 @@ are done. Nothing auto-advances.
       ⚠ **NOT a promotion signal**: 7 independent days cannot clear t ≈ 3.6, and that
       hurdle is flat in n. Keep capturing; re-run at ≥30 days.
       Report: `docs/analysis/cas-stage2-2026-09-07.md`
-- [ ] MCE slice 5b (`market_cap` writer) and slice 6 (news veto)
-- [ ] The deflated-Sharpe / multiple-testing bar **built and applied** — two gates already
-      sit at a ✅ READY banner that should not be trusted without it
-- [ ] Shadow-gate promotions decided under that bar (`sl_atr` 17/20 is closest)
-- [ ] The `compute_levels` payoff-geometry fix, or a conscious decision to keep the R:R
-      overlay as the permanent tourniquet (§6 spec change + §8 regression)
-- [ ] Reading-derived candidates tested or explicitly dropped (Minervini trend template)
+- [x] ~~MCE slice 5b and slice 6~~ — **5b DROPPED** (F1, 2026-09-07: no size signal) · **6 DEFERRED** (none of its 3 preconditions holds)
+- [x] The deflated-Sharpe bar — **BUILT + VALIDATED 2026-09-04 (H8)**: t ≈ 3.6, flat in n
+- [x] Shadow-gate promotions — **decided: none** (gating closed as a programme 2026-09-04; `sl_atr` t 0.41 vs 3.6 ⇒ NO)
+- [x] `compute_levels` — **D5 CLOSED 2026-09-08: keep the tourniquet** (geometry is not the lever)
+- [x] Minervini trend template — **TESTED 2026-09-07: 0 of 91 entries pass** (not a gate)
 
 **Runtime (Phase 7 slices — see §3)**
 - [x] **7.1 RiskEngine single-gate — DONE 2026-09-06** (equivalence-pinned; heat cap built,
@@ -99,7 +104,7 @@ are done. Nothing auto-advances.
 - [x] **The portfolio heat cap — BUILT inside the RiskEngine 2026-09-06** (see §4). Ships
       `heat_cap_mode=off`; the remaining step is the FLIP at the cycle-2 reset, not a build.
 
-**Then:** reset the paper clock, set the heat cap to enforce, run 45–50 trading days.
+**Then:** reset the paper clock, set the heat cap to enforce, run 45–50 trading days. ⏸ **Every box above is now ticked except the one this list never had: a strategy with edge.** Cycle 2 is paused on that (2026-10-03).
 
 ---
 

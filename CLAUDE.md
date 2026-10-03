@@ -485,7 +485,8 @@ else.
     PR-1 stops; **nothing is re-specified**. Descriptively the gross rebound was last-print bounce
     (G −64 bps; at the close −63.7; s ending at P1525 −14.5, t −9). ⛔ **CLOSURE DECIDED 2026-10-03 (the author): the programme
     closes 2026-10-31, the CAS thread with it, PR-2 not run** — `docs/analysis/PROGRAMME-CLOSURE-2026-10-31.md`
-    holds the checklist Claude runs that day. Holdouts stay sealed. No new research builds before then.
+    holds the checklist Claude runs that day. Holdouts stay sealed. No new research builds before then. ⏸ **Cycle 2 PAUSED until a strategy exists (2026-10-03)**; Bucket C is
+    built one item at a time meanwhile (queue: `docs/phases/pre-cycle2-queue.md`).
   - ⭐ **RULE: an extract for review carries every clause in full.** The v2 extract dropped four
     settled clauses, and a reviewer spent a point on them.
   - ⭐ **RULE: every kill is run against a planted edge at the bar before the freeze.** The broken
