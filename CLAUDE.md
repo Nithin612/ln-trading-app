@@ -1481,7 +1481,9 @@ make worker             celery worker+beat — REQUIRED for EOD ingestion +
                         top of OLD ones → ImportError (lost the 09-30 CAS
                         session). Never "deploy at the next restart".
 make migrate            alembic upgrade head    make create-admin
-make test / lint / typecheck / check            (check = the full gate)
+make test / lint / typecheck / check            (check = the full gate — preflight
+                        refuses a starved box; every leg timeboxed at ~2× its
+                        measured worst, docs/PERFORMANCE.md 2026-10-03)
 cd backend && uv run pytest tests/<file> -q     (targeted)
 ```
 

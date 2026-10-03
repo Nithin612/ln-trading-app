@@ -181,14 +181,14 @@ engine-build:  ## Build tradecore wheel into the backend venv (maturin develop -
 
 .PHONY: engine-test
 engine-test:  ## Run Rust unit + golden tests
-	@cd engine && cargo test --workspace
+	@cd engine && $(TB) engine-test 300 12 -- cargo test --workspace
 
 .PHONY: engine-lint
 engine-lint:  ## cargo fmt --check + clippy -D warnings
 	@echo "$(BLUE)▶ cargo fmt$(NC)"
-	@cd engine && cargo fmt --all --check
+	@cd engine && $(TB) cargo-fmt 300 5 -- cargo fmt --all --check
 	@echo "$(BLUE)▶ cargo clippy$(NC)"
-	@cd engine && cargo clippy --workspace --all-targets -- -D warnings
+	@cd engine && $(TB) cargo-clippy 600 5 -- cargo clippy --workspace --all-targets -- -D warnings
 
 .PHONY: engine-audit
 engine-audit:  ## A39 supply-chain gate: cargo-deny (advisories + licenses + sources)
@@ -204,12 +204,17 @@ engine-bench:  ## Run criterion benches (record results in docs/PERFORMANCE.md)
 .PHONY: parity
 parity:  ## Python-vs-Rust parity suite (golden fixtures; arrives with P1 task 22)
 	@if [ -d backend/tests/parity ]; then \
-		cd backend && uv run pytest tests/parity -q; \
+		cd backend && $(TB) parity 2700 1377 -- uv run pytest tests/parity -q; \
 	else \
 		echo "$(YELLOW)Parity suite not generated yet (P1: after adjudication + goldens).$(NC)"; \
 	fi
 
 # ════════════════════════ Quality ══════════════════════════════
+
+# A14 (Bucket C #5, 2026-10-03): every `make check` leg runs under a bound of ~2× its MEASURED
+# worst (seconds; measured 2026-10-03 on the dev box) — a stalled leg fails with a reason
+# instead of hanging for hours. `scripts/timebox.sh LEG BOUND MEASURED -- cmd`.
+TB := $(CURDIR)/scripts/timebox.sh
 
 .PHONY: test
 test:  ## Run all tests (backend + frontend)
@@ -222,9 +227,9 @@ test:  ## Run all tests (backend + frontend)
 .PHONY: lint
 lint:  ## Lint backend (ruff) + frontend (eslint)
 	@echo "$(BLUE)▶ Ruff$(NC)"
-	@cd backend && uv run ruff check app/ tests/
+	@cd backend && $(TB) ruff 300 8 -- uv run ruff check app/ tests/
 	@echo "$(BLUE)▶ ESLint$(NC)"
-	@cd frontend && pnpm lint
+	@cd frontend && $(TB) eslint 300 8 -- pnpm lint
 
 .PHONY: config-check
 config-check:  ## A27: what does .env say, and which live process has heard it?
@@ -233,20 +238,31 @@ config-check:  ## A27: what does .env say, and which live process has heard it?
 .PHONY: typecheck
 typecheck:  ## Type-check backend (mypy) + frontend (tsc)
 	@echo "$(BLUE)▶ Mypy$(NC)"
-	@cd backend && uv run mypy app/ scripts/
+	@cd backend && $(TB) mypy 300 8 -- uv run mypy app/ scripts/
 	@echo "$(BLUE)▶ TypeScript$(NC)"
-	@cd frontend && pnpm typecheck
+	@cd frontend && $(TB) tsc 300 8 -- pnpm typecheck
 
 .PHONY: replay
 replay:  ## Live-engine record/replay goldens (byte-identical event streams)
-	@cd backend && uv run pytest -m replay -q
+	@cd backend && $(TB) replay 300 29 -- uv run pytest -m replay -q
 
 .PHONY: walkforward
 walkforward:  ## Walk-forward golden harness (§8 drift gate; skips cleanly without goldens/DB)
-	@cd backend && uv run pytest tests/goldens -q
+	@cd backend && $(TB) walkforward 1200 407 -- uv run pytest tests/goldens -q
+
+.PHONY: check-preflight
+check-preflight:  ## Refuse to start the gate on a starved box (RAM < 1 GiB or disk < 2 GiB)
+	@./scripts/check_preflight.sh
+
+.PHONY: check-tests
+check-tests:  ## The gate's test leg: backend WITHOUT the heavy markers (they have their own legs) + frontend
+	@echo "$(BLUE)▶ Backend tests (unit/integration — parity, walkforward, replay run as their own legs)$(NC)"
+	@cd backend && $(TB) backend-tests 6000 3110 -- uv run pytest tests/ -q -m "not walkforward and not parity and not replay"
+	@echo "$(BLUE)▶ Frontend tests$(NC)"
+	@cd frontend && $(TB) frontend-tests 300 19 -- pnpm test
 
 .PHONY: check
-check: lint typecheck engine-lint engine-test test parity walkforward replay  ## Full CI gate (python + rust + frontend)
+check: check-preflight lint typecheck engine-lint engine-test check-tests parity walkforward replay  ## Full CI gate (python + rust + frontend)
 
 .PHONY: backup-critical
 backup-critical:  ## Dump ONLY the irreplaceable tables (~11MB) — small enough to put off-box

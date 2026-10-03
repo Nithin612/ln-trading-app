@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Bucket C #5 — A14: measured, layered timeouts on `make check` (2026-10-03)
+
+- **Layer 1 — per test:** `faulthandler_timeout = 900` (pytest built-in, no plugin) dumps every
+  thread's traceback when one test passes 15 min, so a stall says WHERE.
+- **Layer 2 — per leg:** `scripts/timebox.sh` runs each leg under ~2× its measured worst
+  (`timeout --kill-after=30`) and names the leg, the bound and the measured time when it fires.
+  Bounds and the measurements behind them: `docs/PERFORMANCE.md` (2026-10-03).
+- **Layer 3 — before the gate:** `scripts/check_preflight.sh` refuses below 1 GiB RAM / 2 GiB disk
+  (the 2026-08-12 walk-forward stall's regime) and warns on low RAM or a concurrent pytest.
+  `CHECK_PREFLIGHT=warn` overrides.
+- The gate's test leg no longer runs parity / walk-forward / replay inline AND again as their own
+  legs (`check-tests`, ~30 min saved); `make test` is unchanged.
+- ⛔ **Found while measuring: the §8 walk-forward gate has been RED since 2026-09-17.** All 8
+  goldens drift (`row_count` 738 → 741, trades 427 → 445): the 09-17 back-fill recovered three
+  weekend sessions inside the golden window. No code change caused it. Regeneration needs the
+  author's §8 sign-off — not done.
+
 ### Bucket C #4 — A4: what is legal NOW, queryable before a submit (2026-10-03)
 
 - `GET /api/v1/calendar/constraints` — the session (trading day? regular hours? in session?

@@ -88,6 +88,10 @@ ignore_errors = true
 asyncio_mode = "auto"
 asyncio_default_fixture_loop_scope = "function"
 testpaths = ["tests"]
+# A14 layer 1: a single test running past 15 min dumps every thread's traceback (built in, no
+# plugin) — so a stall says WHERE it is. The heaviest test (the gainer_925 walk-forward golden)
+# measures ~6–8 min; the per-leg `make check` bounds (scripts/timebox.sh) are the kill layer.
+faulthandler_timeout = 900
 markers = [
     "parity: cross-language Python-vs-Rust parity tests (real-DB golden corpus)",
     "walkforward: walk-forward golden replay against the dev-DB corpus (§8 drift gate)",

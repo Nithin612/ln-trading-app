@@ -212,7 +212,7 @@ Every row below was checked against the code on 2026-10-03 (W1). **None attacks 
 | 2 ✅ **DONE 2026-10-03** | **Directional entry zone** (reading study 09-10) | `live_levels._signal_levels` still emits a SYMMETRIC ±0.5% zone, so a BUY drifting DOWN into entry fires "Entered zone"; the direction-aware cross machinery is already in the file | ~½ day |
 | 3 ✅ **DONE 2026-10-03 (rescoped)** | **U16** subscription ceiling | ⚠ The row was STALE: both protective halves shipped 2026-09-13/15 (the worker refuses >3,000; `apply_to_stocks` refuses to write >3,000). What was missing was an EARLY WARNING — `universe_health` now pushes at ≥90% of `live_universe_max_count` and the daily report shows the headroom (2,291 of 3,000, 76%). **Sharding across connections is DEFERRED to that alarm.** | done |
 | 4 ✅ **DONE 2026-10-03** | **A4** constraint pre-validation endpoints | what ranges / classifications / sessions are legal, queryable before submit | ~1 day |
-| 5 | **A14** measured, layered timeouts | the `make check` walk-forward stall has no bound | ~½ day |
+| 5 ✅ **DONE 2026-10-03** | **A14** measured, layered timeouts | the `make check` walk-forward stall has no bound | ~½ day |
 | 6 | **U11** benchmark as a second series on every equity/P&L curve | UI | ~½ day |
 | 7 | **U19** horizon/lag correlation chart | UI; we grade multi-day trades on a one-day clock | ~½ day |
 | 8 | **U20** would-block cohort as charts in the shadow sidecars | design-sensitive — with the author | ~1 day |

@@ -218,3 +218,26 @@ Caveats, stated rather than buried:
   measured over four soaks (see §Budgets).
 - Run on a contended box (a `make check` was running), so if anything these are
   pessimistic.
+
+## 2026-10-03 — `make check` leg durations, and the timeboxes derived from them (A14)
+
+Measured sequentially on the dev box (6.8 GiB RAM available, 83.6 GiB disk free, load ~1.5), one
+leg at a time. Each leg now runs under `scripts/timebox.sh` at ~2× its measured worst
+(`timeout --kill-after=30`), and `make check` first runs `scripts/check_preflight.sh` (refuses
+below 1 GiB RAM / 2 GiB disk — the regime of the 2026-08-12 walk-forward stall). pytest's
+`faulthandler_timeout = 900` dumps every thread's traceback for a single test past 15 min.
+
+| leg | measured (s) | bound (s) |
+|---|--:|--:|
+| ruff / eslint / mypy / tsc | 8 each pair | 300 each |
+| cargo fmt + clippy (`engine-lint`) | 5 | 300 / 600 |
+| `engine-test` | 12 | 300 |
+| backend tests, heavy markers excluded (`check-tests`) | 3,110 | 6,000 |
+| frontend tests | 19 | 300 |
+| `parity` | 1,377 | 2,700 |
+| `walkforward` | 383–407 | 1,200 |
+| `replay` | 29 | 300 |
+
+The gate's test leg used to run the parity / walk-forward / replay suites INLINE and then again as
+their own legs; `check-tests` now excludes them (saves ~30 min per `make check`). `make test` is
+unchanged. Total ≈ 82 min of measured leg time.
