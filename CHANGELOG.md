@@ -7,6 +7,50 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Bucket C #6 — the table sparklines were invented data; now real closes (2026-10-03)
+
+- **Defect:** three tables drew a per-row sparkline from data that did not exist:
+  - Stocks and Screener used `seededSpark(stock.id)`, a PRNG seeded by the row id, under a header
+    reading **"7d"**;
+  - the Dashboard used `generateFakeSpark(entry, sl, tp)`, a path built from the signal's own levels.
+
+  Each was coloured green or red by the direction of its invented path, so a random number decided
+  which names looked like they were rising.
+- **Fix:**
+  - `GET /stocks/sparklines?ids=…` returns the last 20 completed daily closes per stock in one
+    windowed query (500 ids in 94 ms on dev). A stock with fewer than 2 closes is absent, not zero.
+    Capped at 500 ids per request.
+  - The `useSparklines` hook makes one `useQueries` request per 500-id chunk, with
+    `keepPreviousData` so a filter toggle does not blank every row.
+  - `Sparkline` renders four distinct states (A24): **loading** (skeleton), **unavailable** (the
+    request failed), **no recent history**, and **measured**. A measured line carries an aria-label
+    with its session count, direction and size; "flat" is its own state.
+  - Headers now read **"20 sess."**.
+- **ui-reviewer PASS-WITH-NOTES, all MEDIUMs fixed:**
+  - the first cut said "No recent price history" while loading or after an error, which is false;
+  - recharts' accessibility layer made every row's SVG a focusable `role="application"`. Fixed with
+    `accessibilityLayer={false}` and a fixed-size `LineChart`;
+  - the "—" moved from `--color-text-muted` (2.29–4.18:1) to `--color-text-secondary`.
+- Incidental: Screener `toLocaleString` → `formatInt`. `lib/sparkline.ts` deleted.
+- **U11, U19 and U20 were already built 2026-09-09.** The queue rows were stale; corrected (W1).
+- Tests: backend `test_stock_sparklines.py` (4); frontend `Sparklines.test.tsx` (7: states,
+  direction/flat, no tab stops, chunking, error, page wiring).
+
+### §8 walk-forward goldens, part 2 — multibagger + intraday (2026-10-03)
+
+- **multibagger:** the 8 newly qualifying names were accepted via the new
+  `gen_walkforward_goldens.py --allow-run-set-move`, which is explicit and prints the move.
+- **Intraday:** `backfill_intraday.py --symbols` (explicit universe; unknown names raise; no
+  partial-manifest write) re-fetched 8 names lost on 09-07.
+  - Row counts are now **exactly** July's.
+  - 3,975 bars from the 07-07 parity fixture match to the paisa.
+  - There are no seams at the partial-fill boundaries.
+  - The ~0.1% trade residual is Kite's dividend re-basing (HEROMOTOCO 09:15-open/daily-open
+    **0.9755**), so the July bytes are unrecoverable.
+  - gainer_925, orb_15m and pdh_pdl were regenerated `--pinned`.
+- ⚠ The intraday goldens are now pinned to Kite's current adjustment basis.
+- Record: `docs/analysis/walkforward-golden-regen-2026-10-03.md` Part 2.
+
 ### §8 walk-forward goldens — data-only regeneration with sign-off (2026-10-03)
 
 - **Proved before overwriting** (read-only harness that drops dates at the loader): on the 5 daily

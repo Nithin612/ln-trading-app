@@ -28,6 +28,11 @@ export interface StockEligibility {
   scannable: boolean
 }
 
+export interface SparklinesResponse {
+  points: number
+  series: Record<string, number[]>
+}
+
 export interface Stock {
   id: number
   symbol: string
@@ -160,6 +165,11 @@ export interface StockSearchResponse {
 }
 
 export const stocksApi = {
+  /** Last completed daily closes per stock (oldest → newest). A stock with < 2 closes is
+   *  ABSENT from `series` — render "not assessable", never a placeholder line. */
+  sparklines: (ids: number[], token: string) =>
+    api.get<SparklinesResponse>(`/stocks/sparklines?ids=${ids.join(',')}`, token),
+
   list: (params: StockListParams, token: string) =>
     api.get<StockListResponse>(
       `/stocks${buildQuery(params as Record<string, unknown>)}`,

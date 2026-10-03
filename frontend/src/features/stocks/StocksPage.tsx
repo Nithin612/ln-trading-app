@@ -25,7 +25,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger,
 } from '@/components/ui/select'
 import { cn } from '@/lib/utils'
-import { seededSpark } from '@/lib/sparkline'
+import { sparkStatus, useSparklines } from '@/hooks/useSparklines'
 import { formatINR, formatInt } from '@/lib/format'
 
 type SortField = 'symbol' | 'company_name' | 'sector' | 'lot_size' | 'market_cap_cr'
@@ -43,7 +43,7 @@ const COLUMNS: ColDef[] = [
   { key: 'indices',      label: 'Indices', sortable: false },
   { key: 'lot_size',     label: 'Lot',     sortable: true  },
   { key: 'isin',         label: 'ISIN',    sortable: false },
-  { key: 'sparkline',    label: '7d',      sortable: false },
+  { key: 'sparkline',    label: '20 sess.', sortable: false },
   { key: 'actions',      label: '',        sortable: false },
 ]
 
@@ -150,6 +150,7 @@ export function StocksPage() {
   })
 
   const symbols = data?.items.map(s => s.symbol) ?? []
+  const sparks = useSparklines(data?.items.map(s => s.id) ?? [])
   const { quotes, connected } = useLiveQuotes(symbols)
 
   const sectors = [
@@ -526,7 +527,7 @@ export function StocksPage() {
                   {showCol('sparkline') && (
                     <TableCell className={cn('text-right w-20', rowPy)}>
                       <div className="flex justify-end">
-                        <Sparkline data={seededSpark(stock.id)} width={60} height={24} />
+                        <Sparkline data={sparks.series[stock.id]} status={sparkStatus(sparks, stock.id)} width={60} height={24} />
                       </div>
                     </TableCell>
                   )}

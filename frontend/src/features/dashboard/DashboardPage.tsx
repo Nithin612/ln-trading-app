@@ -17,7 +17,8 @@ import { useTradingHaltStore } from '@/store/tradingHaltStore'
 import { Skeleton, SkeletonCard } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { ScanScope } from '@/components/ui/ScanScope'
-import { Sparkline } from '@/components/ui/sparkline'
+import { Sparkline, type SparkStatus } from '@/components/ui/sparkline'
+import { sparkStatus, useSparklines } from '@/hooks/useSparklines'
 import { PriceCell } from '@/components/ui/PriceCell'
 import { formatCurrency, formatINR, formatInt } from '@/lib/format'
 import { Slider } from '@/components/ui/slider'
@@ -73,10 +74,13 @@ function DirectionBadge({ dir }: { dir: string }) {
 /** Memoized signal row — only re-renders when its own `ltp`/state changes, so a
     per-tick live-quote update to one symbol doesn't re-render the whole table. */
 const SignalRow = memo(function SignalRow({
-  sig, ltp, isTrading, halted, onSelect, onTrade, onCopy,
+  sig, ltp, spark, sparkState, isTrading, halted, onSelect, onTrade, onCopy,
 }: {
   sig: SignalOut
   ltp: number | undefined
+  /** Real recent daily closes (`useSparklines`); undefined renders "not assessable". */
+  spark: number[] | undefined
+  sparkState: SparkStatus
   isTrading: boolean
   halted: boolean
   onSelect: (sig: SignalOut) => void
@@ -124,7 +128,7 @@ const SignalRow = memo(function SignalRow({
       </td>
       <td className="px-3 py-2" style={{ textAlign: 'right' }}>
         <div className="flex justify-end">
-          <Sparkline data={generateFakeSpark(sig.entry_price, sig.stop_loss, sig.take_profit)} width={60} height={24} />
+          <Sparkline data={spark} status={sparkState} width={60} height={24} />
         </div>
       </td>
       <td className="px-3 py-2 text-right font-mono text-(--color-text)">
@@ -339,6 +343,7 @@ export function DashboardPage() {
     : 0
 
   // Filter by segment (client-side since signal data is already fetched)
+  const sparks = useSparklines(signals.map((s) => s.stock_id))
   const filteredSignals = useMemo(() => {
     if (segment === 'ALL') return signals
     if (segment === 'F&O') return signals.filter((s) => s.classification === 'scalp' || s.timeframe === '5m' || s.timeframe === '15m')
@@ -528,7 +533,7 @@ export function DashboardPage() {
                     {/* static header list — index keys are stable here; the
                         two trailing action columns share the "" label, so
                         label keys duplicated (React duplicate-key warning) */}
-                    {['Symbol', 'Sparkline', 'LTP', 'Dir', 'Class', 'Conf', 'Entry', 'SL', 'TP', 'Qty', 'Valid until', '', ''].map((h, i) => (
+                    {['Symbol', '20 sess.', 'LTP', 'Dir', 'Class', 'Conf', 'Entry', 'SL', 'TP', 'Qty', 'Valid until', '', ''].map((h, i) => (
                       <th
                         key={i}
                         className="px-3 py-2 text-[10px] uppercase tracking-wide font-medium whitespace-nowrap"
@@ -545,6 +550,8 @@ export function DashboardPage() {
                       key={sig.id}
                       sig={sig}
                       ltp={liveQuotes[sig.symbol]?.ltp}
+                      spark={sparks.series[sig.stock_id]}
+                      sparkState={sparkStatus(sparks, sig.stock_id)}
                       isTrading={tradingSignalId === sig.id}
                       halted={halted}
                       onSelect={setSelectedSignal}
@@ -622,10 +629,3 @@ export function DashboardPage() {
   )
 }
 
-function generateFakeSpark(entry: string, sl: string, tp: string): number[] {
-  const e = parseFloat(entry)
-  const s = parseFloat(sl)
-  const t = parseFloat(tp)
-  const mid = (s + t) / 2
-  return [s + (mid - s) * 0.3, s + (e - s) * 0.6, e, e + (t - e) * 0.2, e + (t - e) * 0.4, e, e + (t - e) * 0.3]
-}

@@ -213,9 +213,9 @@ Every row below was checked against the code on 2026-10-03 (W1). **None attacks 
 | 3 ✅ **DONE 2026-10-03 (rescoped)** | **U16** subscription ceiling | ⚠ The row was STALE: both protective halves shipped 2026-09-13/15 (the worker refuses >3,000; `apply_to_stocks` refuses to write >3,000). What was missing was an EARLY WARNING — `universe_health` now pushes at ≥90% of `live_universe_max_count` and the daily report shows the headroom (2,291 of 3,000, 76%). **Sharding across connections is DEFERRED to that alarm.** | done |
 | 4 ✅ **DONE 2026-10-03** | **A4** constraint pre-validation endpoints | what ranges / classifications / sessions are legal, queryable before submit | ~1 day |
 | 5 ✅ **DONE 2026-10-03** | **A14** measured, layered timeouts | the `make check` walk-forward stall has no bound | ~½ day |
-| 6 | **U11** benchmark as a second series on every equity/P&L curve | UI | ~½ day |
-| 7 | **U19** horizon/lag correlation chart | UI; we grade multi-day trades on a one-day clock | ~½ day |
-| 8 | **U20** would-block cohort as charts in the shadow sidecars | design-sensitive — with the author | ~1 day |
+| 6 ✅ **DONE 2026-10-03 (row STALE → slot reused)** | **U11** benchmark as a second series on every equity/P&L curve | ⚠ Already built 2026-09-09 (`benchmark_curve.py` + the dashed series on `EquityCurveChart`, the app's ONLY equity/P&L curve). Checking it surfaced a real defect, fixed in this slot: **the table sparklines were INVENTED** — `seededSpark(stock.id)` (a PRNG seeded by row id) on Stocks/Screener and `generateFakeSpark(entry, sl, tp)` on the Dashboard, coloured green/red by the fake path and headed "7d". Now `GET /stocks/sparklines` (last 20 completed daily closes, one batched query) + `useSparklines`; loading / unavailable / no-history / measured render distinctly | done |
+| 7 ✅ **already DONE 2026-09-09 (row was STALE)** | **U19** horizon/lag correlation chart | `gate_horizon.py` + `GET /analytics/cohort/{gate_key}/horizon` + `HorizonChart` on `CohortPage` (verified in code 2026-10-03) | done |
+| 8 ✅ **already DONE 2026-09-09 (row was STALE)** | **U20** would-block cohort as charts | `gate_cohort.py` + `GET /analytics/cohort/{gate_key}` + the `CohortPage` contact sheet at `/analytics/registry/:gateKey` — the findings doc's target was "sidecar output / registry page" (verified in code 2026-10-03) | done |
 | 9 | **A41** split Redis (volatile-lru cache vs noeviction durable) | deployment; low priority | ~½ day |
 | 10 | Lint debt in research scripts | 93 ruff errors across 4 old scripts | ~½ day |
 

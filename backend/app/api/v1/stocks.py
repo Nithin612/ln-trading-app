@@ -8,6 +8,7 @@ from app.models.user import User
 from app.schemas.stock import (
     DataCoverageOut,
     ResolvedStockOut,
+    SparklinesOut,
     StockDetailOut,
     StockEligibilityOut,
     StockListParams,
@@ -20,7 +21,7 @@ from app.services.stock_resolve import (
     resolve_one,
     resolve_search,
 )
-from app.services.stock_service import get_stock, list_stocks
+from app.services.stock_service import get_stock, list_stocks, load_sparklines
 
 router = APIRouter(prefix="/stocks", tags=["stocks"])
 
@@ -114,6 +115,30 @@ async def search_stocks_endpoint(
         ],
         matched_former_symbol=resolution.matched_former_symbol,
     )
+
+
+#: Upper bound on ids per sparkline request — the largest table page the UI renders.
+SPARKLINE_MAX_IDS = 500
+SPARKLINE_POINTS = 20
+
+
+@router.get("/sparklines", response_model=SparklinesOut)
+async def sparklines_endpoint(
+    ids: str = Query(..., description="comma-separated stock ids"),
+    db: AsyncSession = Depends(get_db),
+    _: User = Depends(get_current_user),
+) -> SparklinesOut:
+    """Real recent closes for the table sparklines (declared before `/{stock_id}`)."""
+    try:
+        stock_ids = sorted({int(x) for x in ids.split(",") if x.strip()})
+    except ValueError as exc:
+        raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, "ids must be integers") from exc
+    if len(stock_ids) > SPARKLINE_MAX_IDS:
+        raise HTTPException(
+            status.HTTP_422_UNPROCESSABLE_CONTENT, f"at most {SPARKLINE_MAX_IDS} ids per request"
+        )
+    series = await load_sparklines(db, stock_ids, SPARKLINE_POINTS)
+    return SparklinesOut(points=SPARKLINE_POINTS, series=series)
 
 
 @router.get("/{stock_id}", response_model=StockDetailOut)

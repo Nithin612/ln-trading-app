@@ -115,3 +115,15 @@ class StockDetailOut(StockRead):
     endpoint's `StockRead` is untouched — a list has no business paying for a bar count."""
 
     eligibility: StockEligibilityOut | None = None
+
+
+class SparklinesOut(BaseModel):
+    """Recent completed daily closes per stock, for the table sparklines.
+
+    A stock with fewer than two completed closes in the lookback is ABSENT from `series`
+    — the client renders "not assessable", never a placeholder line. Display payload only:
+    floats, oldest → newest.
+    """
+
+    points: int
+    series: dict[int, list[float]]

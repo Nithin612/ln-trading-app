@@ -18,7 +18,8 @@ import { useToast } from '@/hooks/useToast'
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table'
-import { seededSpark } from '@/lib/sparkline'
+import { sparkStatus, useSparklines } from '@/hooks/useSparklines'
+import { formatInt } from '@/lib/format'
 
 const STARTER_SCREENS = [
   { name: 'Nifty 50 only', filters: [{ field: 'is_nifty50', op: 'eq', value: true }] },
@@ -130,6 +131,7 @@ export function ScreenerPage() {
   }
 
   const result = store.result
+  const sparks = useSparklines(result?.items.map((s) => s.id) ?? [])
   const isRunning = runMutation.isPending
   const activeFilterCount = store.filters.filter((f) => f.field).length
 
@@ -327,7 +329,7 @@ export function ScreenerPage() {
               <div className="h-full flex flex-col overflow-hidden">
                 <div className="flex-shrink-0 px-3 py-2 border-b border-(--color-border) bg-(--color-surface-2)">
                   <p className="text-sm text-(--color-text-muted)">
-                    {result.total.toLocaleString()} stocks matched
+                    {formatInt(result.total)} stocks matched
                     {result.total > result.limit && ` — showing first ${result.limit}`}
                   </p>
                 </div>
@@ -340,7 +342,7 @@ export function ScreenerPage() {
                         <TableHead className="w-36">Sector</TableHead>
                         <TableHead className="w-24">Indices</TableHead>
                         <TableHead numeric className="w-20">Lot</TableHead>
-                        <TableHead numeric className="w-16">7d</TableHead>
+                        <TableHead numeric className="w-16" title="Last 20 completed daily closes">20 sess.</TableHead>
                       </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -369,11 +371,11 @@ export function ScreenerPage() {
                             </div>
                           </TableCell>
                           <TableCell numeric className="text-sm text-(--color-text-muted)">
-                            {stock.lot_size > 1 ? stock.lot_size.toLocaleString() : '—'}
+                            {stock.lot_size > 1 ? formatInt(stock.lot_size) : '—'}
                           </TableCell>
                           <TableCell numeric>
                             <div className="flex justify-end">
-                              <Sparkline data={seededSpark(stock.id)} width={50} height={20} />
+                              <Sparkline data={sparks.series[stock.id]} status={sparkStatus(sparks, stock.id)} width={50} height={20} />
                             </div>
                           </TableCell>
                         </TableRow>

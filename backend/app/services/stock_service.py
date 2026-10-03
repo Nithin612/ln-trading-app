@@ -13,6 +13,7 @@ matches, so the looser 0.1 only added noise (typing "tata" dredged up TRENT/ATAM
 from __future__ import annotations
 
 import math
+from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import case, func, or_, select, text
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -119,3 +120,49 @@ async def list_stocks(db: AsyncSession, params: StockListParams) -> StockListRes
         page_size=params.page_size,
         pages=max(1, math.ceil(total / params.page_size)),
     )
+
+
+#: Calendar-day bound on the sparkline scan. 20 sessions span ~28 calendar days; the margin
+#: covers holiday clusters (Diwali week) while keeping the hypertable scan to ~2 chunks.
+SPARKLINE_LOOKBACK_DAYS = 45
+
+
+async def load_sparklines(
+    db: AsyncSession, stock_ids: list[int], points: int, *, now: datetime | None = None
+) -> dict[int, list[float]]:
+    """The last `points` COMPLETED daily closes per stock, oldest first, in ONE query.
+
+    Replaces placeholder lines that were invented client-side (seeded by stock id, or drawn
+    from a signal's own entry/SL/TP) and coloured as if they were real price direction.
+    Stocks with < 2 closes are omitted — absent, not zero.
+    """
+    from app.models.market_data import OhlcvDaily  # local: keeps the list path's imports lean
+
+    if not stock_ids:
+        return {}
+    rn = (
+        func.row_number()
+        .over(partition_by=OhlcvDaily.stock_id, order_by=OhlcvDaily.time.desc())
+        .label("rn")
+    )
+    recent = (
+        select(OhlcvDaily.stock_id, OhlcvDaily.time, OhlcvDaily.close, rn)
+        .where(
+            OhlcvDaily.stock_id.in_(stock_ids),
+            OhlcvDaily.is_complete.is_(True),
+            OhlcvDaily.time
+            >= (now or datetime.now(tz=UTC)) - timedelta(days=SPARKLINE_LOOKBACK_DAYS),
+        )
+        .subquery()
+    )
+    rows = (
+        await db.execute(
+            select(recent.c.stock_id, recent.c.close)
+            .where(recent.c.rn <= points)
+            .order_by(recent.c.stock_id, recent.c.time)
+        )
+    ).all()
+    out: dict[int, list[float]] = {}
+    for stock_id, close in rows:
+        out.setdefault(stock_id, []).append(float(close))
+    return {sid: closes for sid, closes in out.items() if len(closes) >= 2}
