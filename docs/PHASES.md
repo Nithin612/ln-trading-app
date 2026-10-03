@@ -10,7 +10,7 @@ working demo + agent reviews before the next phase starts (`/phase-gate`).
 
 ---
 
-## ▶ STATE AT A GLANCE (updated 2026-10-02, night — PR-1 NULL) — READ THIS FIRST
+## ▶ STATE AT A GLANCE (updated 2026-10-03 — closure decided, executes 10-31) — READ THIS FIRST
 
 **The one live thread: the successor to the retired scorer, "liquidity provision at NSE's closing
 auction (CAS)".** Nothing is on the money path. The outside review pass and an internal
@@ -27,7 +27,7 @@ block supersedes every older block below.
 | **DA-7 post-close capture** | ✅ Built, reviewed, migrated (`7c3e9a1f5b2d`). ⛔ **2026-10-01 captured 0 rows** (no beat ran). 10-02 is a holiday ⇒ **the first capture day is now Mon 2026-10-05**; verify after 16:05 IST |
 | **Workers** | ⛔ **None running on 2026-10-01** — only `make live-worker` was up (`celerybeat-schedule.db` last written 09-30 17:18; zero beat output that day). The **`make worker` preflight** refuses a second worker/beat. ✅ **CAS watch now runs from CRON** (14:45/15:05 "worker down", 15:40/16:10 "window missed", desktop toast — RUNBOOK §9c), because the old check was itself a beat task and the webhook was never set |
 | **The review loop** | Nemotron is **closed**. ✅ **The outside pass is DONE** (5 independent reviews; the "Gemini" reply was ChatGPT's text pasted twice). Scores: Claude chat 2 decision-changing finds · Kimi and DeepSeek 1 each · ChatGPT 0 (7 valid) · Grok 0 (3 wrong). The internal quant-verifier found the third, the price-basis defect, which no outside reviewer saw. **Next: ONE final verification round** on v3 (prompt: `docs/analysis/pr1-review-prompt-v3-2026-09-30.md`), then only arithmetic fixes |
-| **Programme sunset** | **2026-10-31** — if nothing ships by then, the programme closes. PR-1 is the item that can ship before it |
+| **Programme sunset** | ⛔ **CLOSURE DECIDED 2026-10-03 (the author), EXECUTES 2026-10-31** — the pre-committed rule fires: nothing shipped (PR-1 NULL), nothing can ship before the date. CAS thread closes; **PR-2 is not run**. Record + the 10-31 checklist: `docs/analysis/PROGRAMME-CLOSURE-2026-10-31.md`. Holdouts stay SEALED. |
 
 ⛔⛔ **2026-09-30's CAS session was LOST — caused by Claude's own deploy.**
 - **The mechanism:** the DA-7 code was edited under a worker that was already running (started
@@ -2159,7 +2159,7 @@ which is what Phase-6 expectancy calibration is for.
 
 **▶ CONTINUE HERE — updated 2026-10-02 (the NEXT list is in the top STATE block; this is the short form.)**
 
-0. ⛔ **PR-1 RAN ONCE — NULL (2026-10-02)**; report `docs/analysis/pr1-report-2026-10-02.md`. PR-1 stops. **Open (the author's):** (a) PR-2 — build prerequisites 2/3/4/6 and accrue forward (first read ≥ 126 sessions, ≈ April 2027), or close the CAS thread; (b) the programme sunset 2026-10-31. Keep `cas_postclose_daily` capturing (free, from 10-05).
+0. ⛔ **PROGRAMME CLOSES 2026-10-31** (decided 2026-10-03; `docs/analysis/PROGRAMME-CLOSURE-2026-10-31.md`). PR-1 ran once — NULL. PR-2 is not run. **📅 2026-10-31 — Claude raises and runs the closure checklist:** re-confirm nothing shipped · archive the ledger + research record (sha256 manifest; the off-box copy is the author's) · stop the CAS capture (worker STOPPED first; remove `capture-cas-window` beat + the 4 `cas_watch` cron lines; keep tables) · final status. Until then: no new research builds.
 1. **Mon 2026-10-05:** run BOTH `make live-worker` AND `make worker` (they are different processes — 10-01 was lost to running only the first). After 16:05 IST verify the first post-close capture day; the 14:45/15:05 cron toast will say if the worker is down. Check `cas_watch.log`.
 2. ✅ **Outside pass + internal review + the final verification round are all done**
    (`docs/analysis/pr1-outside-pass-2026-09-30.md`). Round 2 found K2 (decision-changing) plus 3

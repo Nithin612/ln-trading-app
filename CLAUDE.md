@@ -483,8 +483,9 @@ else.
   - ⇒ ⛔ **PR-1 RAN ONCE 2026-10-02 — NULL** (`docs/analysis/pr1-report-2026-10-02.md`; frozen
     `6f61c9e`, run at `73ce980`, artefacts `8d08177`). CNC net +0.03 bps, t 0.017; no kill fired.
     PR-1 stops; **nothing is re-specified**. Descriptively the gross rebound was last-print bounce
-    (G −64 bps; at the close −63.7; s ending at P1525 −14.5, t −9). Open: PR-2 or close CAS; the
-    2026-10-31 sunset.
+    (G −64 bps; at the close −63.7; s ending at P1525 −14.5, t −9). ⛔ **CLOSURE DECIDED 2026-10-03 (the author): the programme
+    closes 2026-10-31, the CAS thread with it, PR-2 not run** — `docs/analysis/PROGRAMME-CLOSURE-2026-10-31.md`
+    holds the checklist Claude runs that day. Holdouts stay sealed. No new research builds before then.
   - ⭐ **RULE: an extract for review carries every clause in full.** The v2 extract dropped four
     settled clauses, and a reviewer spent a point on them.
   - ⭐ **RULE: every kill is run against a planted edge at the bar before the freeze.** The broken

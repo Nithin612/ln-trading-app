@@ -7,6 +7,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### ⛔ Programme closure decided — executes 2026-10-31 (2026-10-03)
+
+- The author: end the successor programme cleanly at the sunset if the data allows. It does:
+  nothing shipped (PR-1 NULL), nothing can ship before 10-31 (PR-2's first read ≈ June 2027 at
+  the measured 73% capture uptime), and no result argues for continuing. The pre-committed rule
+  ("if zero Week-0 items ship by 2026-10-31 the programme CLOSES, ledger archived as the
+  deliverable") fires.
+- The CAS thread closes and PR-2 is not run (its frozen pre-registration stays on record).
+  Tables, artefacts and the two SEALED holdouts are kept. Record + the 10-31 checklist:
+  `docs/analysis/PROGRAMME-CLOSURE-2026-10-31.md`.
+
 ### ⛔ PR-1 RAN ONCE — verdict NULL (2026-10-02)
 
 - The single run (`pr1_study.py --run-once`, by the author, 23:01 IST, HEAD `73ce980`, after the
