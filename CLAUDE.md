@@ -1229,7 +1229,8 @@ else.
   2026-09-18 seal it IS the test-block boundary, so the "owed un-truncation" item is CLOSED
   (corrected 2026-09-29) — widening it would read both sealed holdouts.** Re-source it from
   `holdout-seals.json` rather than widening it. `nse_holidays` has **no 2021-22 coverage**;
-  regenerating the walk-forward goldens would now produce different fixtures; and prices remain
+  the 4 daily walk-forward goldens were regenerated DATA-ONLY 2026-10-03 (`--pinned`; multibagger +
+  the 3 intraday goldens stay red, attributed — `walkforward-golden-regen-2026-10-03.md`); and prices remain
   **CA-UNADJUSTED**, so the CA screen is now MORE load-bearing. Full record: PART 9 of
   `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md`. It explains
   `_CLEAN_SINCE = 2023-07-03` — **not a CA-clean choice, just the first date of the contiguous modern

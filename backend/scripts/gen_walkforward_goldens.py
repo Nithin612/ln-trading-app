@@ -17,6 +17,15 @@ Usage:
   uv run python scripts/gen_walkforward_goldens.py --profile dc1  # dry-run, one profile
   uv run python scripts/gen_walkforward_goldens.py --write        # persist (tolerance-gated)
   uv run python scripts/gen_walkforward_goldens.py --write --i-have-approval
+  uv run python scripts/gen_walkforward_goldens.py --pinned --profile dc1  # data-only refresh
+
+`--pinned` re-runs a golden on ITS OWN bounds and resolved universe (run symbols +
+the exclusion manifest) instead of resolving the universe fresh. That is the only
+honest way to refresh a golden after a DATA change: a fresh resolve reads today's
+`is_active`/liquidity, so it would silently move the universe too (the 2026-09-14
+repair moved the active set 1,322 → 2,291). It REFUSES if the set that actually
+runs differs from the pinned one — that is a universe change, not a data refresh,
+and needs its own sign-off.
 """
 
 from __future__ import annotations
@@ -29,6 +38,7 @@ import time
 from datetime import date
 from decimal import Decimal
 from pathlib import Path
+from typing import Any
 
 # Runnable from any cwd: backend/ (the `app` package root) onto sys.path.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
@@ -38,6 +48,7 @@ from app.backtest.walkforward import (  # noqa: E402
     build_golden,
     compare_against_existing,
     run_walkforward,
+    spec_from_golden,
 )
 from app.db.session import AsyncSessionFactory  # noqa: E402
 from app.models.profile import StrategyProfile  # noqa: E402
@@ -54,6 +65,32 @@ DEFAULT_EVAL_START = date(2024, 10, 1)
 DEFAULT_EVAL_END = date(2026, 6, 30)
 
 
+def pinned_universe(golden: dict[str, Any]) -> list[str]:
+    """The universe a golden was RESOLVED to: the symbols that ran plus the ones it excluded.
+
+    Re-running on this (not a fresh resolve) is what makes `--pinned` a data-only refresh.
+    """
+    return sorted(set(golden["symbols"]) | {e["symbol"] for e in golden["exclusions"]})
+
+
+def _load_pinned(path: Path) -> dict[str, Any] | None:
+    return json.loads(path.read_text()) if path.exists() else None
+
+
+def run_set_moved(
+    pinned: dict[str, Any], fresh: dict[str, Any]
+) -> tuple[list[str], list[str]] | None:
+    """(gained, lost) when the set that actually RAN differs, else None.
+
+    A moved run set is a universe change — a name crossing the 300-bar canon, say — and is
+    refused under `--pinned`: it is not covered by a data-refresh sign-off.
+    """
+    old, new = set(pinned["symbols"]), set(fresh["symbols"])
+    if old == new:
+        return None
+    return sorted(new - old), sorted(old - new)
+
+
 async def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--write", action="store_true", help="persist goldens (default: dry-run)")
@@ -68,6 +105,12 @@ async def main() -> int:
     ap.add_argument("--eval-end", type=date.fromisoformat, default=DEFAULT_EVAL_END)
     ap.add_argument("--capital", default="500000")
     ap.add_argument("--risk-pct", default="2")
+    ap.add_argument(
+        "--pinned",
+        action="store_true",
+        help="re-run each EXISTING golden on its own bounds + universe (data-only refresh); "
+        "the bound/capital flags are ignored",
+    )
     args = ap.parse_args()
 
     spec = WalkForwardSpec(
@@ -97,11 +140,28 @@ async def main() -> int:
         refused: list[str] = []
         written: list[str] = []
         for profile in profiles:
-            t0 = time.perf_counter()
-            report = await run_walkforward(db, profile, spec)
-            wall = time.perf_counter() - t0
-            golden = build_golden(profile, spec, report)
             path = GOLDEN_DIR / f"{profile.key}.json"
+            pinned = _load_pinned(path) if args.pinned else None
+            if args.pinned and pinned is None:
+                print(f"\n── {profile.key}: --pinned needs a committed golden — skipped")
+                refused.append(profile.key)
+                continue
+            run_spec = spec_from_golden(pinned) if pinned else spec
+            universe = pinned_universe(pinned) if pinned else None
+            t0 = time.perf_counter()
+            report = await run_walkforward(db, profile, run_spec, universe)
+            wall = time.perf_counter() - t0
+            golden = build_golden(profile, run_spec, report)
+            moved = run_set_moved(pinned, golden) if pinned else None
+            if moved is not None:
+                gained, lost = moved
+                print(
+                    f"\n── {profile.key}: ✗ REFUSED (--pinned): the run set moved "
+                    f"(gained {gained or '—'}, lost {lost or '—'}) — a universe change, "
+                    "not a data refresh"
+                )
+                refused.append(profile.key)
+                continue
 
             agg = report.aggregate
             print(

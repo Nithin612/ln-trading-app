@@ -27,7 +27,7 @@ block supersedes every older block below.
 | **DA-7 post-close capture** | ✅ Built, reviewed, migrated (`7c3e9a1f5b2d`). ⛔ **2026-10-01 captured 0 rows** (no beat ran). 10-02 is a holiday ⇒ **the first capture day is now Mon 2026-10-05**; verify after 16:05 IST |
 | **Workers** | ⛔ **None running on 2026-10-01** — only `make live-worker` was up (`celerybeat-schedule.db` last written 09-30 17:18; zero beat output that day). The **`make worker` preflight** refuses a second worker/beat. ✅ **CAS watch now runs from CRON** (14:45/15:05 "worker down", 15:40/16:10 "window missed", desktop toast — RUNBOOK §9c), because the old check was itself a beat task and the webhook was never set |
 | **The review loop** | Nemotron is **closed**. ✅ **The outside pass is DONE** (5 independent reviews; the "Gemini" reply was ChatGPT's text pasted twice). Scores: Claude chat 2 decision-changing finds · Kimi and DeepSeek 1 each · ChatGPT 0 (7 valid) · Grok 0 (3 wrong). The internal quant-verifier found the third, the price-basis defect, which no outside reviewer saw. **Next: ONE final verification round** on v3 (prompt: `docs/analysis/pr1-review-prompt-v3-2026-09-30.md`), then only arithmetic fixes |
-| **§8 walk-forward gate** | ⛔ **RED since 2026-09-17 — found 2026-10-03 (Bucket C #5).** All 8 goldens drift: `row_count` 738 → 741 per name, pre-gate trades 427 → 445 (dc1). **Cause, pinned:** the 09-17 back-fill recovered three NSE weekend sessions inside the golden window (2024-03-02, 2025-02-01, 2026-02-01) into `ohlcv_1d`; the goldens date from 2026-07-06. **No code change caused it** (the walk-forward reads no calendar). Regenerating via `scripts/gen_walkforward_goldens.py` needs the author's sign-off (§8). |
+| **§8 walk-forward gate** | 🟡 **5 of 9 green after a DATA-ONLY regeneration, 2026-10-03 (signed off by the author).** It had been red since the 09-17 back-fill. Proof: on the 5 daily goldens the drift is EXACTLY the three recovered weekend sessions (2024-03-02, 2025-02-01, 2026-02-01); dropping them reproduces the July digests byte-for-byte. Regenerated with the new `--pinned` flag (same universe, refuses if the run set moves): dc1 · dc2 · rrbo_basic · rrbo_trailing. ⛔ **Still red, attributed:** multibagger (8 excluded names now pass the 300-bar canon after U3 ⇒ a universe change, a separate sign-off) · gainer_925 / orb_15m / pdh_pdl (intraday corpus PARTLY LOST 09-07 — 4 names have no 5m/15m in the window ⇒ re-back-fill first, never regenerate over a loss). ⚠ dc1's P&L flipped −52% → +46% on 3 bars ⇒ a drift detector, not evidence. Record: `docs/analysis/walkforward-golden-regen-2026-10-03.md` |
 | **Cycle 2** | ⏸ **PAUSED until a strategy exists (the author, 2026-10-03).** Phase 7.0–7.4 are built; no strategy with edge exists to rehearse (scorer retired 09-20; PR-1 NULL). Meanwhile **Bucket C is built one item at a time** — ordered queue in `docs/phases/pre-cycle2-queue.md` (2026-10-03). |
 | **Programme sunset** | ⛔ **CLOSURE DECIDED 2026-10-03 (the author), EXECUTES 2026-10-31** — the pre-committed rule fires: nothing shipped (PR-1 NULL), nothing can ship before the date. CAS thread closes; **PR-2 is not run**. Record + the 10-31 checklist: `docs/analysis/PROGRAMME-CLOSURE-2026-10-31.md`. Holdouts stay SEALED. |
 
@@ -368,7 +368,7 @@ UNTOUCHED holdout** — no study or reviewer has ever seen it.
 are benign-regime numbers.** ⚠ It did NOT buy a bear market (2021 is a strong bull).
 ⚠ **OWED:** `_CLEAN_SINCE = 2023-07-03` in 4 study scripts is now an **undeclared truncation
 discarding 622 sessions** · `nse_holidays` has no 2021-22 rows · regenerating walk-forward goldens
-would now differ · prices remain **CA-UNADJUSTED**, so the CA screen is MORE load-bearing.
+would now differ (✅ 4 daily goldens regenerated data-only 2026-10-03, `walkforward-golden-regen-2026-10-03.md`) · prices remain **CA-UNADJUSTED**, so the CA screen is MORE load-bearing.
 ✅ The gap guard self-heals (`observed_session_index` reads live, no cache).
 Full record: PART 9 of `docs/CONSOLIDATED_STATE_AND_QUESTIONS.md`. ⛔ **NOTHING PUSHED.**
 
@@ -2159,7 +2159,9 @@ which is what Phase-6 expectancy calibration is for.
 > caller-side circuit-breaker seam before the live-order path exists (the exact
 > class of bug that gave v1 Phase 7 its four integration defects).
 
-**▶ CONTINUE HERE — updated 2026-10-02 (the NEXT list is in the top STATE block; this is the short form.)**
+**▶ CONTINUE HERE — updated 2026-10-03 (the NEXT list is in the top STATE block; this is the short form.)**
+
+- **§8 gate:** 4 daily goldens regenerated data-only (signed off 10-03). 4 stay red BY DESIGN until a decision: multibagger (universe change, 8 names) · the 3 intraday goldens (re-back-fill `ohlcv_5m/15m` first). Do not regenerate over them without that. Bucket C next = #6 U11 on the author's go-ahead.
 
 0. ⛔ **PROGRAMME CLOSES 2026-10-31** (decided 2026-10-03; `docs/analysis/PROGRAMME-CLOSURE-2026-10-31.md`). PR-1 ran once — NULL. PR-2 is not run. **📅 2026-10-31 — Claude raises and runs the closure checklist:** re-confirm nothing shipped · archive the ledger + research record (sha256 manifest; the off-box copy is the author's) · stop the CAS capture (worker STOPPED first; remove `capture-cas-window` beat + the 4 `cas_watch` cron lines; keep tables) · final status. Until then: no new research builds.
 1. **Mon 2026-10-05:** run BOTH `make live-worker` AND `make worker` (they are different processes — 10-01 was lost to running only the first). After 16:05 IST verify the first post-close capture day; the 14:45/15:05 cron toast will say if the worker is down. Check `cas_watch.log`.

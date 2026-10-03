@@ -7,6 +7,23 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### §8 walk-forward goldens — data-only regeneration with sign-off (2026-10-03)
+
+- **Proved before overwriting** (read-only harness that drops dates at the loader): on the 5 daily
+  goldens the drift is exactly the three NSE weekend sessions the 09-17 back-fill recovered. With
+  them removed, the July row counts and trade digests reproduce exactly.
+- **`gen_walkforward_goldens.py --pinned`** reruns a golden on its own bounds and resolved universe,
+  and refuses if the run set moves. The default path re-resolves the universe from live state, so
+  after the 09-14 universe repair a plain regenerate would have moved names too. Tested in
+  `tests/test_gen_walkforward_pinned.py` (4).
+- **Regenerated: dc1, dc2, rrbo_basic, rrbo_trailing** (signed off by the author).
+- **Left red, by design:**
+  - multibagger, which `--pinned` refused: 8 previously excluded names now qualify, a universe
+    change;
+  - gainer_925, orb_15m and pdh_pdl: the intraday corpus was partly lost on 09-07, and four names
+    have no 5m/15m bars in the window.
+- `make walkforward` 5 passed / 4 failed. Record: `docs/analysis/walkforward-golden-regen-2026-10-03.md`.
+
 ### Bucket C #5 — A14: measured, layered timeouts on `make check` (2026-10-03)
 
 - **Layer 1 — per test:** `faulthandler_timeout = 900` (pytest built-in, no plugin) dumps every
