@@ -1,5 +1,8 @@
 # §8 walk-forward goldens — data-only regeneration, 2026-10-03
 
+> **Outcome (end of day): all 9 goldens regenerated or re-pinned — see Part 2 at the bottom,
+> which supersedes the "State after" section of Part 1.**
+
 **Sign-off:** the author, 2026-10-03 ("proceed with the recommendation and record it"). The
 recommendation was: prove that the drift is data before overwriting anything, and regenerate
 **only** where the proof holds.
@@ -85,3 +88,47 @@ and neither has been taken:
   admit them, or a fresh regenerate);
 - **intraday:** re-back-fill `ohlcv_5m`/`ohlcv_15m` for the pinned names over 2023-07-03 → 2026-06-30
   first. That costs Kite REST time and needs the token. Then regenerate `--pinned`.
+
+---
+
+## Part 2, the same day: the remaining four (the author accepted both decisions)
+
+### multibagger: universe change accepted
+
+The 8 names (AJMERA, BAJAJELEC, BOROLTD, LLOYDSME, PASUPTAC, RAYMOND, SANOFI, SAREGAMA) were
+regenerated with the new **`--allow-run-set-move`**. A moved run set is never silent: the flag is
+explicit and the move is printed. Trades went 1,425 → 1,442, total P&L −1,491% → −1,454%, and
+Sharpe −2.07 → −1.99. The universe gained 8 names and lost none; config hash and run bounds are
+unchanged.
+
+### Intraday: re-back-filled, then regenerated
+
+1. **Repair.** `backfill_intraday.py` gained **`--symbols`**: an explicit universe resolved
+   regardless of today's membership flags. Unknown names raise, and the QA manifest is not
+   rewritten from a partial universe. 8 names were re-fetched `--full` from Kite over 2023-07-03 →
+   2026-06-30, on both 5m and 15m: DALBHARAT, SAMMAANCAP, EXIDEIND and NUVAMA (absent), FORCEMOT
+   (5m), and 360ONE, ABB and HEROMOTOCO (15m, partial). PREMIERENE, IREDA and JIOFIN are short
+   because of their **listing dates**, which is genuine. They were left alone.
+2. **Shape restored exactly.** All 8 now match the July golden's `row_counts` to the bar, on both
+   timeframes. The regenerated goldens' `row_counts` are **unchanged** from July.
+3. **No seams.** At each partial-fill boundary, the old 15m segment and today's fill both agree
+   with the 5m 09:15 bar to the paisa. The largest overnight gaps are real moves: 2025-04-07 is the
+   market-wide tariff Monday, and FORCEMOT 2024-02-14 +31% is a single print.
+4. **Values match July wherever a July record exists.** The committed 2026-07-07 parity fixture
+   `python_backtest_intraday_reference.json` (5 cases, 3,975 bars) matches the current DB **exactly
+   on every close**.
+5. **The digests still moved by about 0.1% of trades.** gainer_925 went 12,935 → 12,942 trades;
+   orb_15m and pdh_pdl each moved by 1–2 trades. Attribution: **Kite back-adjusts intraday history
+   for some dividends.** Measured as the 2024 ratio of the 09:15 5m open to the official daily open:
+   HEROMOTOCO **0.9755**, INFY 0.979, ITC 0.825 (ITC Hotels demerger), RELIANCE 0.5 and NUVAMA 0.2
+   (bonus/split), against 1.0000 for TCS, LT and ABB. A re-fetch reproduces July bytes only for
+   names whose adjustment did not move after July. **The July corpus itself was destroyed on
+   2026-09-07**, so those bytes exist nowhere. The only metric beyond tolerance sits on a
+   near-zero denominator (pdh_pdl total P&L −0.33% → −1.29%).
+6. Regenerated with `--pinned --write --i-have-approval`: gainer_925, orb_15m and pdh_pdl. The run
+   sets are identical.
+
+⚠ **Carry-forward: the intraday goldens are now pinned to the CURRENT Kite adjustment basis.** A
+future dividend adjustment by Kite will move them again with no code change. The §8 gate on these
+three is therefore a detector of (code change ∪ vendor re-basing), and a red here needs the
+row-count + fixture + ratio checks above before anyone suspects code.

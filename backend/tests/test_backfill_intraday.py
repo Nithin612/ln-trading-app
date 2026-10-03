@@ -22,6 +22,7 @@ from app.models.market_data import Ohlcv5m
 from kiteconnect.exceptions import NetworkException
 from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from tests.helpers import make_stock
 
@@ -333,3 +334,31 @@ class TestHourlyTimeframe:
             selected = list(TF) if args.timeframe in {"all", "both"} else [args.timeframe]
             assert selected == list(TF)
         assert ap.parse_args([]).timeframe == "all"
+
+
+class TestNamedUniverse:
+    """`--symbols` repairs a PINNED corpus (a §8 golden's list, 2026-10-03). Membership-based
+    selection reads today's flags, so a golden name that left the F&O list would silently be
+    skipped — and a silent subset is a hole the caller believes is filled."""
+
+    def test_symbols_flag_parses_dedupes_and_sorts(self) -> None:
+        from scripts.backfill_intraday import build_arg_parser
+
+        args = build_arg_parser().parse_args(["--symbols", "TCS, ABB,TCS,,"])
+        assert args.symbols == ["ABB", "TCS"]
+        assert build_arg_parser().parse_args([]).symbols is None
+
+    async def test_resolves_names_outside_todays_membership(self, db: AsyncSession) -> None:
+        from scripts.backfill_intraday import _named_universe
+
+        s = await make_stock(db, symbol="OFFLIST")  # not nifty50, not F&O
+        await db.commit()
+        assert await _named_universe(db, ["OFFLIST"]) == [(s.id, "OFFLIST")]
+
+    async def test_unknown_symbol_raises_not_a_silent_subset(self, db: AsyncSession) -> None:
+        from scripts.backfill_intraday import _named_universe
+
+        await make_stock(db, symbol="KNOWN")
+        await db.commit()
+        with pytest.raises(SystemExit, match="NOPE"):
+            await _named_universe(db, ["KNOWN", "NOPE"])

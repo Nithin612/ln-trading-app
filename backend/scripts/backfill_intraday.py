@@ -186,6 +186,25 @@ async def _universe(db: AsyncSession) -> list[tuple[int, str]]:
     return [(r[0], r[1]) for r in rows]
 
 
+async def _named_universe(db: AsyncSession, symbols: list[str]) -> list[tuple[int, str]]:
+    """An explicit symbol list, resolved regardless of today's index/F&O membership.
+
+    For repairing a PINNED corpus (a §8 golden's symbols): membership-based selection reads
+    today's flags, which drift, while the golden's list is frozen. Unknown symbols raise —
+    a silent subset would leave a hole the caller believes is filled."""
+    rows = (
+        await db.execute(
+            select(Stock.id, Stock.symbol)
+            .where(Stock.symbol.in_(symbols), Stock.exchange == "NSE")
+            .order_by(Stock.symbol)
+        )
+    ).fetchall()
+    missing = sorted(set(symbols) - {r[1] for r in rows})
+    if missing:
+        raise SystemExit(f"--symbols: not in the stock master: {', '.join(missing)}")
+    return [(r[0], r[1]) for r in rows]
+
+
 async def _instrument_tokens(db: AsyncSession, symbols: list[str]) -> dict[str, int]:
     rows = (
         await db.execute(
@@ -408,6 +427,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
     ap.add_argument("--full", action="store_true", help="ignore resume points, refetch all")
     ap.add_argument("--manifest-only", action="store_true", help="skip fetching, QA only")
     ap.add_argument("--limit", type=int, default=0, help="first N symbols (smoke runs)")
+    ap.add_argument(
+        "--symbols",
+        type=lambda v: sorted({x.strip() for x in v.split(",") if x.strip()}),
+        default=None,
+        help="comma-separated explicit universe (e.g. a golden's pinned list); "
+        "skips the QA-manifest write, which describes the whole universe",
+    )
     return ap
 
 
@@ -422,7 +448,9 @@ async def main() -> int:
         args.until = yesterday
 
     async with AsyncSessionFactory() as db:
-        universe = await _universe(db)
+        universe = (
+            await _named_universe(db, args.symbols) if args.symbols else await _universe(db)
+        )
         if args.limit:
             universe = universe[: args.limit]
         print(f"universe: {len(universe)} stocks · {timeframes} · "
@@ -432,6 +460,10 @@ async def main() -> int:
             rc = await _run_backfill(db, universe, timeframes, args)
             if rc:
                 return rc
+
+        if args.symbols:
+            print("--symbols: partial universe — QA manifest NOT rewritten")
+            return 0
 
         manifest = await build_manifest(db, universe, timeframes, args.until, args.gap_threshold)
         MANIFEST_PATH.parent.mkdir(parents=True, exist_ok=True)

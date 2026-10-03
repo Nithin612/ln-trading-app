@@ -30,3 +30,12 @@ def test_an_excluded_name_now_running_is_refused() -> None:
 
 def test_a_lost_name_is_refused() -> None:
     assert run_set_moved(GOLDEN, {"symbols": ["ABB"]}) == ([], ["TCS"])
+
+
+def test_refusal_needs_an_explicit_sign_off_flag() -> None:
+    from scripts.gen_walkforward_goldens import refuse_run_set_move
+
+    moved = {"symbols": ["ABB", "JIOFIN", "TCS"]}
+    assert refuse_run_set_move("k", GOLDEN, moved, allow=False) is True
+    assert refuse_run_set_move("k", GOLDEN, moved, allow=True) is False
+    assert refuse_run_set_move("k", GOLDEN, {"symbols": ["ABB", "TCS"]}, allow=False) is False

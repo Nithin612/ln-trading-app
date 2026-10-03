@@ -1,16 +1,16 @@
 {
   "aggregate": {
     "avg_holding_days": 0.0,
-    "avg_pnl_pct": 0.01,
+    "avg_pnl_pct": 0.009,
     "avg_rr": 2.0,
-    "losing_trades": 595,
-    "max_drawdown_pct": 7.629,
-    "sharpe": -0.602,
-    "sortino": -1.563,
-    "total_pnl_pct": 10.353,
+    "losing_trades": 596,
+    "max_drawdown_pct": 7.702,
+    "sharpe": -0.62,
+    "sortino": -1.611,
+    "total_pnl_pct": 9.908,
     "total_trades": 1045,
-    "win_rate_pct": 43.06,
-    "winning_trades": 450
+    "win_rate_pct": 42.97,
+    "winning_trades": 449
   },
   "config_hash": "34718a1d37d54cca2f778968111ab0de95c14e369806249735f434d8936d8234",
   "exclusions": [
@@ -48,10 +48,10 @@
         "avg_pnl_pct": -0.001,
         "avg_rr": 2.0,
         "losing_trades": 83,
-        "max_drawdown_pct": 5.015,
-        "sharpe": -1.04,
-        "sortino": -2.784,
-        "total_pnl_pct": -0.105,
+        "max_drawdown_pct": 5.018,
+        "sharpe": -1.041,
+        "sortino": -2.787,
+        "total_pnl_pct": -0.108,
         "total_trades": 151,
         "win_rate_pct": 45.03,
         "winning_trades": 68
@@ -80,9 +80,9 @@
         "avg_pnl_pct": -0.007,
         "avg_rr": 2.0,
         "losing_trades": 89,
-        "max_drawdown_pct": 4.111,
-        "sharpe": -1.432,
-        "sortino": -3.381,
+        "max_drawdown_pct": 4.104,
+        "sharpe": -1.433,
+        "sortino": -3.382,
         "total_pnl_pct": -1.088,
         "total_trades": 146,
         "win_rate_pct": 39.04,
@@ -96,28 +96,28 @@
         "avg_pnl_pct": 0.005,
         "avg_rr": 2.0,
         "losing_trades": 125,
-        "max_drawdown_pct": 4.532,
-        "sharpe": -0.881,
-        "sortino": -2.149,
-        "total_pnl_pct": 1.21,
-        "total_trades": 229,
-        "win_rate_pct": 45.41,
-        "winning_trades": 104
+        "max_drawdown_pct": 4.533,
+        "sharpe": -0.897,
+        "sortino": -2.193,
+        "total_pnl_pct": 1.118,
+        "total_trades": 228,
+        "win_rate_pct": 45.18,
+        "winning_trades": 103
       }
     },
     {
       "fold": "2025Q4",
       "metrics": {
         "avg_holding_days": 0.0,
-        "avg_pnl_pct": -0.002,
+        "avg_pnl_pct": -0.004,
         "avg_rr": 2.0,
-        "losing_trades": 122,
-        "max_drawdown_pct": 6.135,
-        "sharpe": -1.188,
-        "sortino": -2.893,
-        "total_pnl_pct": -0.504,
-        "total_trades": 207,
-        "win_rate_pct": 41.06,
+        "losing_trades": 123,
+        "max_drawdown_pct": 6.386,
+        "sharpe": -1.248,
+        "sortino": -3.047,
+        "total_pnl_pct": -0.774,
+        "total_trades": 208,
+        "win_rate_pct": 40.87,
         "winning_trades": 85
       }
     },
@@ -125,15 +125,15 @@
       "fold": "2026Q1",
       "metrics": {
         "avg_holding_days": 0.0,
-        "avg_pnl_pct": 0.06,
+        "avg_pnl_pct": 0.055,
         "avg_rr": 2.0,
-        "losing_trades": 56,
-        "max_drawdown_pct": 2.922,
-        "sharpe": 1.412,
-        "sortino": 3.741,
-        "total_pnl_pct": 6.453,
-        "total_trades": 107,
-        "win_rate_pct": 47.66,
+        "losing_trades": 57,
+        "max_drawdown_pct": 3.404,
+        "sharpe": 1.205,
+        "sortino": 3.167,
+        "total_pnl_pct": 5.948,
+        "total_trades": 108,
+        "win_rate_pct": 47.22,
         "winning_trades": 51
       }
     },
@@ -141,21 +141,21 @@
       "fold": "2026Q2",
       "metrics": {
         "avg_holding_days": 0.0,
-        "avg_pnl_pct": 0.041,
+        "avg_pnl_pct": 0.045,
         "avg_rr": 2.0,
-        "losing_trades": 61,
-        "max_drawdown_pct": 3.554,
-        "sharpe": 0.696,
-        "sortino": 1.926,
-        "total_pnl_pct": 4.479,
-        "total_trades": 110,
-        "win_rate_pct": 44.55,
+        "losing_trades": 60,
+        "max_drawdown_pct": 3.287,
+        "sharpe": 0.875,
+        "sortino": 2.426,
+        "total_pnl_pct": 4.906,
+        "total_trades": 109,
+        "win_rate_pct": 44.95,
         "winning_trades": 49
       }
     }
   ],
-  "generated_at": "2026-07-07T05:28:49+00:00",
-  "pre_filter_trade_count": 8684,
+  "generated_at": "2026-10-03T10:58:58+00:00",
+  "pre_filter_trade_count": 8683,
   "profile": {
     "key": "orb_15m",
     "min_confidence": 70,
@@ -610,5 +610,5 @@
     "ZYDUSLIFE"
   ],
   "tradecore_version": "tradecore 0.1.0 (engine-core 0.1.0)",
-  "trades_digest": "970c436e86fe820061078f52e51cb73f4a651f4c39beaac88abb2c3922e239f0"
+  "trades_digest": "58fa33cdb8f04f944227715d7048d0af64c5204c217b9acee4c46a2aa237d565"
 }

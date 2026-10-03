@@ -73,6 +73,24 @@ def pinned_universe(golden: dict[str, Any]) -> list[str]:
     return sorted(set(golden["symbols"]) | {e["symbol"] for e in golden["exclusions"]})
 
 
+def refuse_run_set_move(
+    key: str, pinned: dict[str, Any], fresh: dict[str, Any], allow: bool
+) -> bool:
+    """True when `--pinned` must refuse this golden: the run set moved and no sign-off
+    (`--allow-run-set-move`) was given. The move is printed either way."""
+    moved = run_set_moved(pinned, fresh)
+    if moved is None:
+        return False
+    gained, lost = moved
+    what = f"gained {gained or '—'}, lost {lost or '—'}"
+    if allow:
+        print(f"\n── {key}: ⚠ run set moved and ACCEPTED (--allow-run-set-move): {what}")
+        return False
+    print(f"\n── {key}: ✗ REFUSED (--pinned): the run set moved ({what}) — a universe change, "
+          "not a data refresh")
+    return True
+
+
 def _load_pinned(path: Path) -> dict[str, Any] | None:
     return json.loads(path.read_text()) if path.exists() else None
 
@@ -110,6 +128,12 @@ async def main() -> int:
         action="store_true",
         help="re-run each EXISTING golden on its own bounds + universe (data-only refresh); "
         "the bound/capital flags are ignored",
+    )
+    ap.add_argument(
+        "--allow-run-set-move",
+        action="store_true",
+        help="with --pinned: accept a moved run set (a universe change) — needs its own "
+        "sign-off; the move is printed either way",
     )
     args = ap.parse_args()
 
@@ -152,14 +176,7 @@ async def main() -> int:
             report = await run_walkforward(db, profile, run_spec, universe)
             wall = time.perf_counter() - t0
             golden = build_golden(profile, run_spec, report)
-            moved = run_set_moved(pinned, golden) if pinned else None
-            if moved is not None:
-                gained, lost = moved
-                print(
-                    f"\n── {profile.key}: ✗ REFUSED (--pinned): the run set moved "
-                    f"(gained {gained or '—'}, lost {lost or '—'}) — a universe change, "
-                    "not a data refresh"
-                )
+            if pinned and refuse_run_set_move(profile.key, pinned, golden, args.allow_run_set_move):
                 refused.append(profile.key)
                 continue
 
