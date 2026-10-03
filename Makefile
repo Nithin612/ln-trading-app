@@ -37,7 +37,7 @@ help:  ## Show this help
 
 .PHONY: up
 up:  ## Start postgres + redis in background
-	@$(DC) up -d postgres redis
+	@$(DC) up -d postgres redis redis-durable
 	@echo ""
 	@echo "$(GREEN)✓ Services running$(NC)"
 	@echo "  Postgres: localhost:5433  (user: tpuser, db: trading_platform)"
@@ -84,6 +84,10 @@ db-extensions:  ## Verify TimescaleDB and helper extensions are loaded
 .PHONY: redis-shell
 redis-shell:  ## Open redis-cli inside redis container
 	@$(DC) exec redis redis-cli
+
+.PHONY: redis-durable-shell
+redis-durable-shell:  ## Open redis-cli inside the durable (noeviction) redis container (A41)
+	@$(DC) exec redis-durable redis-cli
 
 # ════════════════════════ Destructive ═════════════════════════
 
@@ -150,7 +154,8 @@ soak:  ## Quiet-box soak: abs record path + self-log + clears stale broker queue
 	@echo "$(YELLOW)Pre-flight: backend API should be DOWN and the box quiet (no pytest/cargo, stop 'make worker').$(NC)"
 	@echo "$(YELLOW)EOD beat tasks self-heal missed sessions on the next worker evening (services/eod_catchup.py).$(NC)"
 	@echo "Clearing stale Celery broker list (no consumer runs during a soak)…"
-	@docker exec tp_redis redis-cli -n 1 DEL celery >/dev/null 2>&1 || true
+	@# Read the broker URL from its owner (W5) — after the A41 split it lives on :6380.
+	@cd backend && uv run python -c "import redis; from app.core.config import settings; redis.from_url(settings.celery_broker_url).delete('celery')" >/dev/null 2>&1 || true
 	@ts=$$(date +%Y-%m-%d); \
 		rec="$(CURDIR)/recordings/soak-$$ts.jsonl"; logf="$(CURDIR)/recordings/soak-$$ts.log"; \
 		echo "$(BLUE)recording → $$rec$(NC)"; echo "$(BLUE)log       → $$logf$(NC)"; \

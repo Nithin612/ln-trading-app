@@ -1049,6 +1049,52 @@ class TestTickModeAssertion:
         assert spy.hset_calls == []
         assert spy.expire_calls == []
 
+    def test_split_deployment_routes_health_to_the_durable_instance(self, tmp_path) -> None:
+        """A41: under `volatile-lru` a 7-day-TTL health record is as evictable as an
+        `ltp:` key, so a split deployment sends it to the `noeviction` instance — and the
+        LTP set stays on the cache one. The clean-feed zero-cost guarantee still holds on
+        BOTH clients."""
+        state, cache, _ = _state(tmp_path)
+        durable = _SyncRedisSpy()
+        state.durable_redis = durable
+        state.session_day = "2026-07-09"
+        _watch_all(state)
+        clean = _full_tick(9, 20, "100.00", 1000)
+        clean["mode"] = "full"
+        state.process_item(("ticks", [clean], None))
+        assert durable.hset_calls == [] and durable.set_calls == []
+
+        degraded = _tick(9, 21, "100.50", 1100)
+        degraded["mode"] = "quote"
+        state.process_item(("ticks", [degraded], None))
+        assert [k for k, _ in durable.hset_calls] == ["tickmode:health:2026-07-09"]
+        assert durable.expire_calls[0][0] == "tickmode:health:2026-07-09"
+        assert cache.hset_calls == []  # never on the evictable instance
+        assert any(k.startswith("ltp:") for k, _, _ in cache.set_calls)
+        assert not any(k.startswith("ltp:") for k, _, _ in durable.set_calls)
+
+    def test_split_mode_health_write_is_throttled_and_never_ahead_of_the_price(
+        self, tmp_path
+    ) -> None:
+        """bug-hunter 2026-10-03: on the real feed `depth_missing` is never 0, so a split-mode
+        health write per batch was one synchronous round trip per batch, AHEAD of the LTP.
+        Now: after the price, at most every _SPLIT_HEALTH_FLUSH_S, and the tail flushed at
+        shutdown. Canary: 5 rapid degraded batches used to give 5 durable writes."""
+        state, cache, _ = _state(tmp_path)
+        durable = _SyncRedisSpy()
+        state.durable_redis = durable
+        state.session_day = "2026-07-09"
+        _watch_all(state)
+        for i in range(5):
+            t = _tick(9, 21 + i, f"{100 + i}.00", 1000 + i)
+            t["mode"] = "quote"
+            state.process_item(("ticks", [t], None))
+        assert len(durable.hset_calls) == 1  # throttled, not one per batch
+        assert sum(1 for k, _, _ in cache.set_calls if k.startswith("ltp:")) == 5
+        state._flush_mode_health(force=True)  # the consumer's shutdown flush
+        assert len(durable.hset_calls) == 2
+        assert durable.hset_calls[-1][1]["degraded"] == 5  # the cumulative tail landed
+
     def test_mode_less_ticks_are_visible_but_never_alarm(self, tmp_path) -> None:
         """Recorded/replayed ticks carry no mode. They count in the heartbeat so
         a mode-less LIVE feed is visible, but they must not write the day hash —

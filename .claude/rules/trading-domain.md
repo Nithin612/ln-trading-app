@@ -71,3 +71,8 @@ Phase-3 shadow week.
   the DB — never bare pub/sub.
 - Every cache key gets a TTL (eviction policy is volatile-lru: TTL-less keys
   are treated as broker-critical and never evicted).
+- Anything that must not be lost — a stream with a consumer group, an evidence
+  record, a safety baseline, queued work — is DURABLE-class: open its client on
+  `settings.durable_redis_url`, never `settings.redis_url` (A41). A TTL does not
+  make a key cache-class; under volatile-lru a TTL'd record is evictable. Pub/sub
+  stays on `redis_url` (a publisher and its subscribers must share an instance).

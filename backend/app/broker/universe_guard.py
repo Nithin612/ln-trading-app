@@ -71,7 +71,7 @@ UNIVERSE_TTL_S = 30 * 86_400
 
 _RESET_CMD = (
     "cd backend && uv run python -c \"import redis; from app.core.config import "
-    f"settings; redis.from_url(settings.redis_url).delete('{UNIVERSE_KEY}')\""
+    f"settings; redis.from_url(settings.durable_redis_url).delete('{UNIVERSE_KEY}')\""
 )
 
 

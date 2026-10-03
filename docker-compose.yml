@@ -50,6 +50,29 @@ services:
     networks:
       - tp_network
 
+  # A41 — the DURABLE-class instance: the Celery broker queue, the alerts stream + its
+  # outcome-recorder consumer group, the 7-day health records and the universe-guard
+  # baseline. `noeviction`: at maxmemory a write FAILS LOUDLY instead of a record
+  # silently vanishing (under the cache instance's volatile-lru, a TTL'd durable record
+  # is exactly as evictable as an ltp: key). Opt-in: the app uses it only when
+  # REDIS_DURABLE_URL (+ CELERY_BROKER_URL / CELERY_RESULT_BACKEND) point at :6380.
+  redis-durable:
+    image: redis:7-alpine
+    container_name: tp_redis_durable
+    restart: unless-stopped
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_durable_data:/data
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "1gb", "--maxmemory-policy", "noeviction"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - tp_network
+
   # Lightweight DB UI for visual inspection during development.
   # Comment this out in production.
   pgadmin:
@@ -75,6 +98,8 @@ volumes:
     name: tp_postgres_data
   redis_data:
     name: tp_redis_data
+  redis_durable_data:
+    name: tp_redis_durable_data
 
 networks:
   tp_network:

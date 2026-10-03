@@ -71,6 +71,10 @@ _refuse_non_test_database()
 # already gets; without it a leaked `ltp:{id}` poisons a later test once
 # RESTART IDENTITY recycles the stock id — the 2026-08-06 full-suite flake.)
 os.environ.setdefault("REDIS_URL", "redis://localhost:6379/15")
+# A41: durable-class keys follow the test DB too — FORCED, not setdefault, so a split
+# deployment's REDIS_DURABLE_URL in a developer's shell can never aim the suite (which
+# flushes its DB per test) at a real durable instance.
+os.environ["REDIS_DURABLE_URL"] = os.environ["REDIS_URL"]
 
 # ── Ensure the test database exists ──────────────────────────────────────────
 def _ensure_test_db() -> None:

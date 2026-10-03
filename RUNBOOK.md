@@ -389,6 +389,51 @@ Restore into a **new** database first and check it, then swap. Never restore ove
 hashes). All of it is TTL'd cache rebuilt by the live worker, so that is deliberate — but it
 means a restore brings back the record, not the in-flight session state.
 
+## 9e. Split Redis by durability — the cutover (A41, 2026-10-03)
+
+**What it is.** One Redis (`:6379`, `volatile-lru`) holds two kinds of data. **Cache**: `ltp:`,
+`depth:`, `circuit:`, the provisional leaderboard, the heartbeats, all pub/sub and Celery
+results; losing any of it degrades gracefully. **Durable**: the `alerts:live` stream plus its
+`outcome-recorder` consumer group (the pending list = outcomes not yet in the DB), the 7-day
+`tickmode:health:*` / `provisional:health:*` records, the 30-day `liveworker:universe:last`
+baseline, and the Celery queue. Under `volatile-lru` **a TTL'd durable record is exactly as
+evictable as an `ltp:` key.** The split moves the durable class to `redis-durable` (`:6380`,
+`noeviction`: at maxmemory a write fails loudly instead of a record vanishing).
+
+**It is opt-in.** With `REDIS_DURABLE_URL` empty, everything stays on one instance as before
+(`settings.durable_redis_url` falls back to `REDIS_URL`).
+
+**Cutover** (any time the market is shut). Skipping the copy loses no DB data, but it does lose
+the last 7 days of health records from the report, and it disarms the universe-collapse guard for
+one start (no baseline, so the guard fails open). Run it.
+
+1. Stop **every** process: `make worker`, `make live-worker` **and the backend**. All three
+   cache `settings` (`lru_cache`), and `uvicorn --reload` watches `*.py` only, so an `.env` edit
+   never reaches a backend left running. Its WebSocket would keep `XREAD`ing the OLD stream while
+   the live worker writes the new one, and the AlertBell would go silent without any error.
+   `pgrep -af "[c]elery|[l]ive_worker|[u]vicorn"` must print nothing.
+2. `make up` starts `redis-durable` alongside the others (`docker ps` shows `tp_redis_durable`).
+3. Dry run, then apply. It refuses on a fresh heartbeat, so wait out the 600 s TTL if a worker
+   only just stopped:
+   ```
+   cd backend && uv run python scripts/redis_split_cutover.py --target redis://localhost:6380/0
+   cd backend && uv run python scripts/redis_split_cutover.py --target redis://localhost:6380/0 --apply
+   ```
+   **Run it BEFORE editing `.env`.** It prints the queue length on BOTH brokers and refuses if
+   either is non-zero. It also refuses (exit 4) when any durable key already exists on the
+   target, for example because a worker was started early and created an empty consumer group
+   there. `--replace` overwrites those keys after you have checked them.
+4. In `.env`: `REDIS_DURABLE_URL=redis://localhost:6380/0` and
+   `CELERY_BROKER_URL=redis://localhost:6380/1`. Leave `CELERY_RESULT_BACKEND` on `:6379`.
+5. Start the backend and the workers again. Verify in the LIVE process, not the file (`settings` is an
+   `lru_cache` singleton): `uv run python -c "from app.core.config import settings;
+   print(settings.durable_redis_url)"` and `make redis-durable-shell` → `XINFO GROUPS alerts:live`.
+
+**Rollback:** empty `REDIS_DURABLE_URL` and restore `CELERY_BROKER_URL`, then restart
+everything. The source keys were copied, not moved. The health records expire on their own;
+**`alerts:live` has no TTL** (MAXLEN ~10k), so the old copy stays on :6379 until you
+`DEL alerts:live` there once the split is verified.
+
 ## 9d. Weekend (special) sessions — the calendar's third table (2026-10-03)
 
 NSE sometimes trades on a Saturday or Sunday (Budget days, DR drills, muhurat). The calendar

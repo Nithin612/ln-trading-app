@@ -93,6 +93,12 @@ _QUEUE_MAX = 10_000
 # exiting — caps a WS-death backlog replay so the supervisor can restart
 # (clean EOD has an empty queue and exits immediately).
 _SHUTDOWN_DRAIN_S = 45.0
+# A41 split mode: the durable tick-mode health write at most this often (cumulative
+# HSET-overwrite counters ⇒ throttling loses only the tail; the final flush covers it).
+_SPLIT_HEALTH_FLUSH_S = 5.0
+_HEALTH_WARN_EVERY_S = 60.0
+# A hung (not refused) durable instance must never stall the tick loop.
+_DURABLE_SOCKET_TIMEOUT_S = 0.5
 # In-run heartbeat cadence (queue depths + counters + latency).
 _MONITOR_INTERVAL_S = 30.0
 # Bound on the shutdown sentinel put (see run_consumer's finally).
@@ -248,6 +254,17 @@ class WorkerState:
     # the upsert would clobber it. Ticks older than this are skipped.
     min_tick_ts: int = 0
     writer_alive: Any = None  # () -> bool; None = assume alive (tests)
+    # A41 — the durable-class client (alerts stream, tick-mode health). None = the same
+    # instance as `redis` (one-instance deployment), and then durable writes keep riding
+    # the cache pipeline: zero extra round trips. Read it through `durable`.
+    durable_redis: Any = None
+    # Split mode throttles the durable health write (bug-hunter 2026-10-03: on the real
+    # feed `depth_missing` is never 0, so "costs nothing on a clean feed" did not hold —
+    # every batch paid a synchronous round trip). The counters are CUMULATIVE and
+    # HSET-overwrite, so writing at most every few seconds loses only the tail, which the
+    # consumer's final flush covers.
+    _mode_health_flushed_at: float = float("-inf")
+    _mode_health_warned_at: float = float("-inf")
     stop_event: Any = None  # threading.Event for fail-loud escalation
     stats: dict[str, int] = field(
         default_factory=lambda: {
@@ -408,7 +425,21 @@ class WorkerState:
             log.exception("recorder flush failed — disabling recording for this run")
             self.recorder = None
 
-    def _flush_mode_health(self) -> None:
+    @property
+    def durable(self) -> Any:
+        """The client for durable-class keys — never evicted under memory pressure."""
+        return self.redis if self.durable_redis is None else self.durable_redis
+
+    def _queue_mode_health(self, pipe: Any) -> bool:
+        """Tick-mode health for the batch path, ONE-instance mode only: onto the caller's
+        cache pipeline (no extra round trip) → True when queued. In split mode (A41) it
+        returns False and `_publish_ltp` flushes to the durable instance AFTER the LTP is
+        out, throttled — the durable write never sits ahead of the price on the hot path."""
+        if self.durable_redis is not None:
+            return False
+        return record_tick_mode_health(pipe, self.session_day, self.mode_monitor.counters())
+
+    def _flush_mode_health(self, *, force: bool = False) -> None:
         """Durable tick-mode counters on their OWN pipeline, for the empty-batch
         path only (the normal path rides _publish_ltp's). No-op on a clean feed,
         so this costs a dict build and nothing else. Best-effort: the warning has
@@ -417,12 +448,25 @@ class WorkerState:
         counters = self.mode_monitor.counters()
         if not counters:
             return
+        now = time_mod.monotonic()
+        if (
+            self.durable_redis is not None
+            and not force
+            and now - self._mode_health_flushed_at < _SPLIT_HEALTH_FLUSH_S
+        ):
+            return
+        self._mode_health_flushed_at = now
         try:
-            pipe = self.redis.pipeline(transaction=False)
+            pipe = self.durable.pipeline(transaction=False)
             if record_tick_mode_health(pipe, self.session_day, counters):
                 pipe.execute()
         except Exception:
-            log.debug("tick-mode health write failed (non-fatal)", exc_info=True)
+            # WARNING, rate-limited: on a `noeviction` instance at maxmemory every write
+            # fails, and a debug line would let the record stop silently — the report
+            # would then read a missing day as a clean feed (bug-hunter 2026-10-03).
+            if now - self._mode_health_warned_at >= _HEALTH_WARN_EVERY_S:
+                self._mode_health_warned_at = now
+                log.warning("tick-mode health write failed (non-fatal)", exc_info=True)
 
     def _publish_ltp(self, batch: list[tuple[int, int, str, int | None, int]]) -> None:
         """Latest-price key + fan-out, one pipeline round trip per batch.
@@ -496,10 +540,19 @@ class WorkerState:
         # on THIS pipeline, and only when there is something to record: a clean
         # feed costs zero extra round trips. A log line alone is how the
         # provisional hot-set flood hid for weeks (A26).
-        if record_tick_mode_health(pipe, self.session_day, self.mode_monitor.counters()):
+        if self._queue_mode_health(pipe):
             queued = True
-        if not queued:
-            return
+        if queued:
+            self._execute_ltp(pipe, cache, pending)
+        if self.durable_redis is not None:
+            self._flush_mode_health()  # split mode: after the price is out, throttled
+
+    def _execute_ltp(
+        self,
+        pipe: Any,
+        cache: dict[int, tuple[str, float]],
+        pending: dict[int, tuple[str, float]],
+    ) -> None:
         try:
             pipe.execute()
         except Exception:
@@ -659,7 +712,7 @@ class WorkerState:
             all_fields.append(fields)
         for attempt in (0, 1):
             try:
-                pipe = self.redis.pipeline(transaction=False)
+                pipe = self.durable.pipeline(transaction=False)
                 for fields in all_fields:
                     pipe.xadd(
                         settings.live_alert_stream,
@@ -851,6 +904,7 @@ def run_consumer(  # noqa: C901 — the bounded-drain shutdown branch is worth t
             state.process_item(("pulse", int(time_mod.time()), None))
         except Exception:
             log.exception("consumer: final flush failed")
+        state._flush_mode_health(force=True)  # the throttled tail (A41 split mode)
     finally:
         # The consumer owns the downstream lifecycle: recorder closes here
         # (main must not close it under a live consumer), and the writer's
@@ -1106,7 +1160,8 @@ def _preflight(
     lost and unrecoverable). Both checks belong here because both mean the same
     thing operationally — do not open the socket.
     """
-    client = redis_sync.from_url(settings.redis_url, decode_responses=True)
+    # The universe baseline is durable-class (A41): evicted, the collapse guard is disarmed.
+    client = redis_sync.from_url(settings.durable_redis_url, decode_responses=True)
 
     def _check(count: int) -> str | None:
         return check_and_record_universe(
@@ -1191,6 +1246,16 @@ def main(argv: list[str] | None = None) -> int:
         book=book,
         token_map=token_map,
         redis=redis_sync.from_url(settings.redis_url, decode_responses=True),
+        durable_redis=(
+            None
+            if settings.durable_redis_url == settings.redis_url
+            else redis_sync.from_url(
+                settings.durable_redis_url,
+                decode_responses=True,
+                socket_timeout=_DURABLE_SOCKET_TIMEOUT_S,
+                socket_connect_timeout=_DURABLE_SOCKET_TIMEOUT_S,
+            )
+        ),
         writer_q=writer_q,
         recorder=recorder,
         # Kite's subscribe snapshot echoes each instrument's LAST tick,

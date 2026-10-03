@@ -7,6 +7,45 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Bucket C #9 — A41: split Redis by durability (opt-in) (2026-10-03)
+
+- **Why.** One Redis (`volatile-lru`) held cache and durable data together. The old rule was
+  "TTL-less keys are never evicted". It protected the Celery queue and the alerts stream, but
+  **not durable records that carry a TTL**. Under memory pressure these were exactly as
+  evictable as an `ltp:` key: the 7-day `tickmode:health:*` / `provisional:health:*` evidence,
+  and the 30-day `liveworker:universe:last` baseline (losing that silently disarms the
+  universe-collapse guard).
+- **What.**
+  - `settings.durable_redis_url` is the one owner. It falls back to `REDIS_URL`, so with
+    `REDIS_DURABLE_URL` unset behaviour is unchanged: same client, same pipeline, zero extra
+    round trips.
+  - Routed through it: live_worker alerts XADD, tick-mode health, the preflight universe guard,
+    the outcome recorder, the provisional health record and hot-set stream read, the ws alert
+    XREAD, the tick-mode reader and `provisional_health.py`. Pub/sub, `ltp:`, `depth:`,
+    `circuit:`, heartbeats and the leaderboard stay on the cache instance.
+  - A new `redis-durable` compose service (:6380, `noeviction`, AOF) is started by `make up`;
+    `make redis-durable-shell` opens it.
+  - `scripts/redis_split_cutover.py` copies the durable families with DUMP/RESTORE, carrying the
+    stream's **consumer group and pending list** and each key's remaining TTL. It is a dry run by
+    default and refuses on a fresh heartbeat, a non-empty queue on either broker, or an existing
+    target key.
+  - RUNBOOK §9e documents the cutover and rollback.
+- **bug-hunter: 9 findings, all fixed.**
+  - (MED) In split mode the health write was a synchronous round trip on every batch, ahead of
+    the LTP. `depth_missing` is never 0 on the real feed (106k–117k per session). It now runs
+    after the price, throttled to once per 5 s, with a forced flush at shutdown and a 0.5 s
+    socket timeout.
+  - (MED) The runbook made the backend restart optional, which would silently orphan the
+    AlertBell's XREAD.
+  - (MED) `make soak` hard-coded `tp_redis` for the broker purge.
+  - Smaller items: the cutover's queue check, a silent skip turned into a refusal, the PTTL-0
+    edge, a debug-level failure raised to a rate-limited warning, doc mismatches.
+- **Smoke test.** `redis-durable` is up; a dry run on dev found 10 durable keys and both queues
+  empty. **No cutover was run and `.env` was not touched.**
+- Tests: `test_redis_split_cutover.py` (5), `test_redis_durable_routing.py` (3), and split-mode
+  routing and throttle tests in the live-worker and trigger suites. 223 tests across the touched
+  areas pass.
+
 ### Bucket C #6 — the table sparklines were invented data; now real closes (2026-10-03)
 
 - **Defect:** three tables drew a per-row sparkline from data that did not exist:

@@ -157,7 +157,8 @@ async def main() -> None:
     ap.add_argument("--days", type=int, default=7)
     args = ap.parse_args()
 
-    redis = redis_sync.from_url(settings.redis_url, decode_responses=True)
+    # Health records + the alerts stream are durable-class (A41).
+    redis = redis_sync.from_url(settings.durable_redis_url, decode_responses=True)
     engine = create_async_engine(settings.database_url, pool_size=1, max_overflow=0)
     now_utc = datetime.now(tz=UTC)
     today = now_utc.astimezone(_IST).date()

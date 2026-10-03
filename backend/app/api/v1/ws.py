@@ -98,6 +98,13 @@ async def ws_live(websocket: WebSocket) -> None:  # noqa: C901
     await websocket.accept()
     r = aioredis.from_url(settings.redis_url, decode_responses=True)
     pubsub = r.pubsub()
+    # A41: the alerts stream is durable-class; pub/sub stays on the cache instance
+    # (a publisher and its subscribers must share an instance).
+    rd = (
+        r
+        if settings.durable_redis_url == settings.redis_url
+        else aioredis.from_url(settings.durable_redis_url, decode_responses=True)
+    )
 
     # symbol → instrument_token and stock_id lookups (populated on subscribe msg)
     subscribed_tokens: dict[str, int] = {}   # symbol → instrument_token
@@ -151,7 +158,7 @@ async def ws_live(websocket: WebSocket) -> None:  # noqa: C901
         last_id = "$"
         while True:
             try:
-                resp = await r.xread(
+                resp = await rd.xread(
                     {settings.live_alert_stream: last_id}, block=5000, count=100
                 )
             except asyncio.CancelledError:
@@ -303,6 +310,8 @@ async def ws_live(websocket: WebSocket) -> None:  # noqa: C901
             alert_task.cancel()
         await pubsub.reset()
         await r.aclose()
+        if rd is not r:
+            await rd.aclose()
 
 
 async def _ws_iter(ws: WebSocket) -> AsyncIterator[str]:

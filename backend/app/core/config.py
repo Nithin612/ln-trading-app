@@ -24,6 +24,18 @@ class Settings(BaseSettings):
 
     # ── Redis ───────────────────────────────────────────────────────────────
     redis_url: str = "redis://localhost:6379/0"
+    # A41 — the DURABLE-class instance: what must never be evicted (the alerts stream +
+    # its outcome-recorder consumer group, the 7-day health records, the universe-guard
+    # baseline). Empty ⇒ the same instance as `redis_url` (one-instance deployment,
+    # behaviour unchanged). Point it at a `noeviction` Redis — `make up` starts one on
+    # :6380 — because the main instance is `volatile-lru`, under which a TTL'd durable
+    # record is as evictable as an `ltp:` key. Read through `durable_redis_url`, never this.
+    redis_durable_url: str = ""
+
+    @property
+    def durable_redis_url(self) -> str:
+        """The ONE owner of "which Redis holds durable state" (W2/W5)."""
+        return self.redis_durable_url or self.redis_url
 
     # U1 — live_worker refuses to start when its subscription universe falls
     # below this fraction of the previous session's. Mirrors kite_client's
@@ -130,6 +142,9 @@ class Settings(BaseSettings):
     # Durable alerts-stream consumer persisting first entry/SL/TP touches
     # per signal — Phase-6 outcome data. Observability only.
     live_outcome_recorder_enabled: bool = True
+    # A41: in a split deployment point the BROKER at the durable instance (a queued task
+    # is durable by definition), e.g. redis://localhost:6380/1. Leave the result backend
+    # on the cache instance — results expire in a day and nothing in the app reads them.
     celery_broker_url: str = "redis://localhost:6379/1"
     celery_result_backend: str = "redis://localhost:6379/2"
 

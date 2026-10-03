@@ -204,6 +204,17 @@ class TestWorkerAlertSeam:
         )
         return state, spy
 
+    def test_split_deployment_sends_alerts_to_the_durable_instance(self, tmp_path) -> None:
+        """A41: the alerts stream (and its outcome-recorder consumer group) is queued
+        work — in a split deployment it lives on the `noeviction` instance."""
+        state, cache = self._state(tmp_path)
+        durable = _AlertRedisSpy()
+        state.durable_redis = durable
+        state.process_item(("levels", [(42, [ZONE], {1001: {"source": "entry_zone"}})], None))
+        state.process_item(_tick_item(OPEN_TS + 5, "101.55"))
+        assert len(durable.xadd_calls) == 1
+        assert cache.xadd_calls == []
+
     def test_levels_apply_record_and_alert_fields(self, tmp_path) -> None:
         state, spy = self._state(tmp_path)
         meta = {

@@ -752,10 +752,13 @@ async def score_pair(
 
 
 async def run_cycle(
-    db: Any, redis: Any, book: Any, now_utc: datetime
+    db: Any, redis: Any, book: Any, now_utc: datetime, *, durable: Any = None
 ) -> dict[str, Any]:
     """One provisional pass: hot set → snapshot → rescore → per-style
-    leaderboards. Returns cycle stats (logged by the thread loop)."""
+    leaderboards. Returns cycle stats (logged by the thread loop).
+
+    `redis` carries the cache-class writes (leaderboards + their pub/sub); `durable`
+    (A41; None = the same client) is where the alerts stream lives."""
     from app.models.profile import StrategyProfile
 
     cache: _Cache = run_cycle.__dict__.setdefault("_cache", _Cache())
@@ -768,7 +771,9 @@ async def run_cycle(
     now_mono = time_mod.monotonic()
     session_day = now_utc.astimezone(_IST).date()
 
-    hot, signal_pairs, hot_stats = await load_hot_set(db, redis, now_utc)
+    hot, signal_pairs, hot_stats = await load_hot_set(
+        db, redis if durable is None else durable, now_utc
+    )
     profiles = (
         (
             await db.execute(
@@ -1151,6 +1156,24 @@ def publish_cycle_stats(
         log.warning("provisional: cycle-stats publish failed", exc_info=True)
 
 
+def _durable_client(redis: Any) -> Any:
+    """A41: the health record and the alerts stream are durable-class. One-instance
+    deployment ⇒ the same client (no second connection)."""
+    import redis as redis_sync
+
+    if settings.durable_redis_url == settings.redis_url:
+        return redis
+    return redis_sync.from_url(settings.durable_redis_url, decode_responses=True)
+
+
+def _close_clients(*clients: Any) -> None:
+    for client in {id(c): c for c in clients}.values():
+        try:
+            client.close()
+        except Exception:
+            log.debug("provisional: redis close raised; ignoring")
+
+
 def run_provisional(book: Any, stop: threading.Event) -> None:
     """Provisional refresher thread: own event loop + own engine + own
     redis client (the run_refresher pattern — pooled connections never
@@ -1162,10 +1185,11 @@ def run_provisional(book: Any, stop: threading.Event) -> None:
     loop_holder = asyncio.new_event_loop()
     engine = create_async_engine(settings.database_url, pool_size=1, max_overflow=0)
     redis = redis_sync.from_url(settings.redis_url, decode_responses=True)
+    durable = _durable_client(redis)
 
     async def _one_cycle() -> dict[str, Any]:
         async with AsyncSession(engine) as db:
-            return await run_cycle(db, redis, book, datetime.now(tz=UTC))
+            return await run_cycle(db, redis, book, datetime.now(tz=UTC), durable=durable)
 
     cadence = float(settings.live_provisional_refresh_s)
     # One process = one session day (`_run_until_done` bounds it), so the day
@@ -1179,7 +1203,7 @@ def run_provisional(book: Any, stop: threading.Event) -> None:
         elapsed_max_ms,
         restarts,
         seed_failed,
-    ) = _seed_counters(redis, day)
+    ) = _seed_counters(durable, day)
     # `cycles` is CUMULATIVE across restarts, so it cannot throttle this
     # process's own log line — after a restart seeded at 4000 the first
     # liveness line would wait up to 30 cycles (bug-hunter LOW 2026-08-19).
@@ -1212,7 +1236,7 @@ def run_provisional(book: Any, stop: threading.Event) -> None:
             if stats.get("clipped"):
                 clip_cycles += 1
             publish_cycle_stats(
-                redis,
+                durable,
                 day=day,
                 now_utc=datetime.now(tz=UTC),
                 cadence_s=cadence,
@@ -1238,7 +1262,4 @@ def run_provisional(book: Any, stop: threading.Event) -> None:
     finally:
         loop_holder.run_until_complete(engine.dispose())
         loop_holder.close()
-        try:
-            redis.close()
-        except Exception:
-            log.debug("provisional: redis close raised; ignoring")
+        _close_clients(redis, durable)

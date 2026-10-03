@@ -125,7 +125,8 @@ def run_outcome_recorder(stop: threading.Event) -> None:
 
     loop = asyncio.new_event_loop()
     engine = create_async_engine(settings.database_url, pool_size=1, max_overflow=0)
-    redis = redis_sync.from_url(settings.redis_url, decode_responses=True)
+    # The stream + its consumer group (the at-least-once state) are durable-class (A41).
+    redis = redis_sync.from_url(settings.durable_redis_url, decode_responses=True)
 
     async def _drain(start_id: str) -> int:
         async with AsyncSession(engine) as db:

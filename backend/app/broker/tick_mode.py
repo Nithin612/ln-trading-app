@@ -218,7 +218,7 @@ async def read_tick_mode_health(day: str) -> dict[str, int]:
 
         # Any-typed client: redis-py's async HGETALL is declared as a
         # sync-or-awaitable union, which mypy cannot await through.
-        r: Any = aioredis.from_url(settings.redis_url, decode_responses=True)
+        r: Any = aioredis.from_url(settings.durable_redis_url, decode_responses=True)
         try:
             raw: dict[str, str] = await r.hgetall(TICK_MODE_HEALTH_KEY.format(day=day))
         finally:
