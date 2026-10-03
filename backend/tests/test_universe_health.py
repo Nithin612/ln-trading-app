@@ -336,3 +336,50 @@ class TestInputsAreCorrelatedNotMaximised:
         assert h.snapshot_as_of == MON and h.inputs_as_of == TUE
         assert h.inputs_match_snapshot is True  # MON's inputs ARE on record
         assert "Rule inputs NOT captured" not in "\n".join(render_lines(h))
+
+
+class TestSubscriptionHeadroom:
+    """U16 early warning (Bucket C #3, 2026-10-03): the worker REFUSES a universe above one
+    Kite connection's cap, so the first symptom of growth used to be an outage of every feed.
+    The ceiling is the guard's own knob, patched small here so 3 stocks can reach 90% of it."""
+
+    async def _current(self, db: AsyncSession, n: int) -> None:
+        ids = [(await make_stock(db, symbol=f"S{i:02d}")).id for i in range(n)]
+        await _snapshot(db, TUE, ids)
+        await _inputs(db, TUE)
+        await db.commit()
+
+    async def test_below_90_percent_is_quiet_but_the_report_states_the_headroom(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("app.core.config.settings.live_universe_max_count", 10)
+        await self._current(db, 8)
+        h = await read_universe_health(db, now=TUE_1000)
+        assert h.ceiling == 10 and not h.near_ceiling
+        assert to_notification(h) is None
+        assert "Subscription headroom: 8 of 10 (80%; warn at 90%) — ok." in "\n".join(
+            render_lines(h))
+
+    async def test_at_90_percent_it_warns_and_names_the_fix(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """test_universe_growth_has_no_early_warning: the canary — no notification existed."""
+        monkeypatch.setattr("app.core.config.settings.live_universe_max_count", 10)
+        await self._current(db, 9)
+        h = await read_universe_health(db, now=TUE_1000)
+        assert h.near_ceiling and not h.is_alarming
+        n = to_notification(h)
+        assert n is not None and n.event == "universe_near_ceiling"
+        assert n.level.value == "warning" and "9 of 10 (90%)" in n.title
+        assert any("U16 sharding" in line for line in n.lines)
+        assert "NEAR THE CEILING" in "\n".join(render_lines(h))
+
+    async def test_a_stale_universe_still_raises_the_error_not_the_warning(
+        self, db: AsyncSession, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr("app.core.config.settings.live_universe_max_count", 10)
+        for i in range(9):
+            await make_stock(db, symbol=f"T{i:02d}")
+        await db.commit()  # never evaluated ⇒ stale
+        n = to_notification(await read_universe_health(db, now=TUE_1000))
+        assert n is not None and n.event == "universe_stale" and n.level.value == "error"

@@ -35,6 +35,7 @@ from zoneinfo import ZoneInfo
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.core.config import settings
 from app.services.feed_health import expected_latest_trading_day, trading_days_missing
 
 if TYPE_CHECKING:  # pragma: no cover - annotation only
@@ -48,6 +49,12 @@ _UNIVERSE_DUE_IST = time(9, 0)
 #: Beyond this many trading days behind, the universe is not merely late — every
 #: downstream consumer is acting on a decision nobody re-took.
 STALE_ALARM_DAYS = 2
+#: U16 early warning (Bucket C #3, 2026-10-03). The worker REFUSES a universe above one Kite
+#: WebSocket's 3,000 instruments (`live_universe_max_count`) and the materialiser refuses to
+#: apply one — both correct, both silent until the day they fire, which is an outage of every
+#: live feed. Sharding across connections is the real fix and is deliberately NOT built while
+#: the headroom is large (2,291 of 3,000 on 2026-10-03); this warns early enough to build it.
+CEILING_WARN_FRACTION = 0.90
 
 
 @dataclass(frozen=True)
@@ -72,6 +79,15 @@ class UniverseHealth:
     #: Is there an inputs row for the snapshot being judged? Answered by the query, not
     #: by comparing maxima — see the note on `_SQL`.
     inputs_for_snapshot: bool = False
+    #: One Kite connection's instrument cap — `settings.live_universe_max_count`, the same
+    #: knob the worker's guard and the materialiser's rail read (W5).
+    ceiling: int = 3000
+
+    @property
+    def near_ceiling(self) -> bool:
+        """The ACTIVE universe is within 10% of what one connection can carry — time to build
+        sharding (U16), before a growth step makes the worker refuse every subscription."""
+        return self.active_stocks >= CEILING_WARN_FRACTION * self.ceiling
 
     @property
     def inputs_match_snapshot(self) -> bool:
@@ -168,6 +184,7 @@ async def read_universe_health(
         inputs_days_behind=in_behind,
         active_stocks=int(row.active or 0),
         inputs_for_snapshot=bool(row.in_for_snapshot),
+        ceiling=settings.live_universe_max_count,
     )
     if health.is_alarming:
         log.warning(
@@ -184,6 +201,23 @@ def to_notification(health: UniverseHealth) -> Notification | None:
     from app.services.notifier import Level, Notification
 
     if not health.is_alarming:
+        if health.near_ceiling:
+            return Notification(
+                event="universe_near_ceiling",
+                level=Level.WARNING,
+                title=(
+                    f"UNIVERSE NEAR THE SUBSCRIPTION CEILING — {health.active_stocks:,} of "
+                    f"{health.ceiling:,} ({health.active_stocks / health.ceiling:.0%})"
+                ),
+                lines=[
+                    f"one Kite WebSocket carries {health.ceiling:,} instruments; held "
+                    "positions are subscribed ON TOP of the active universe",
+                    "above the cap the worker REFUSES to start (no feed for anything, open "
+                    "positions included) and the materialiser refuses to apply the universe",
+                    "REMEDY: build U16 sharding across connections (Kite allows several per "
+                    "key) — or narrow the universe rule — before the next growth step",
+                ],
+            )
         return None
     # ⭐ Two failures, two remedies, so two messages. "The beat stopped" sends you to the
     # scheduler; "the rule ran and its verdict was refused" sends you to the rail and its
@@ -271,6 +305,13 @@ def render_lines(health: UniverseHealth) -> list[str]:
             f"({members} members, {health.active_stocks:,} active).",
             "",
         ]
+    if health.ceiling:
+        share = health.active_stocks / health.ceiling
+        flag = "⚠ **NEAR THE CEILING** — build U16 sharding" if health.near_ceiling else "ok"
+        out.append(
+            f"> ↳ Subscription headroom: {health.active_stocks:,} of {health.ceiling:,} "
+            f"({share:.0%}; warn at {CEILING_WARN_FRACTION:.0%}) — {flag}."
+        )
     if health.inputs_match_snapshot:
         out.append(
             f"> ↳ Rule inputs on record for {health.inputs_as_of} "

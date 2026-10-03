@@ -26,8 +26,10 @@ conditions:
     server-side behaviour we would discover in production. ⭐ **Refusing is the
     only honest response: truncating to the first N is a silent SELECTION
     decision, and this project does not make those without evidence.** Measured
-    2026-09-13: today's subscription is 1,178 (39 % of the cap) but the
-    post-universe-repair ceiling is **2,655 — 88 %, headroom 345**.
+    2026-10-03 (after the universe repair): **2,291 — 76 %, headroom 709** (the
+    2,655 / 88 % projected on 2026-09-13 used a looser join; §42c). The early
+    warning at 90 % lives in `universe_health` (Bucket C #3); sharding across
+    connections is the fix it points at.
   * **COLLAPSE** — a universe below `min_fraction` of the **high-water** size.
     This mirrors `_SWEEP_MIN_FRACTION` in `kite_client`, which protects the
     instrument sweep from a truncated dump for the same reason.

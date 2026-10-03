@@ -7,6 +7,21 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Bucket C #3 — U16 subscription headroom, an early warning (2026-10-03)
+
+- ⚠ **The queue row was stale (W1).** It said `live_worker` subscribes in one unchecked call; the
+  protective halves of U16 shipped 2026-09-13/15 — the worker REFUSES a universe above one Kite
+  connection's 3,000 instruments, and `apply_to_stocks` refuses to write one. Correct, and silent
+  until the day they fire, which is an outage of every live feed (open positions included).
+- **Built:** `universe_health` pushes a WARNING (`universe_near_ceiling`) when the active universe
+  reaches 90% of `live_universe_max_count` — the same knob the guard reads (W5) — and the daily
+  report states the headroom every day (today 2,291 of 3,000, 76%). A stale or refused universe
+  still raises its ERROR first.
+- **Deferred, with a trigger:** sharding across WebSocket connections, a risky live-path change for
+  a limit 709 names away. The new alarm is its trigger. `universe_guard`'s docstring numbers
+  (2,655 / 88%) corrected to the measured 2,291 / 76%.
+- +3 tests.
+
 ### Bucket C #2 — the entry alert is directional (2026-10-03)
 
 - **The defect:** the user-facing "Entered zone" alert was a symmetric ±0.5% band, so a BUY
