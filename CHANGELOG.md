@@ -7,6 +7,17 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### One pytest session at a time on the test DB, enforced (2026-10-03)
+
+- `make replay` hit its 300 s timebox (it normally takes 29 s). It was not a code fault: it re-ran
+  green in 19 s. Postgres logged the test tables "lock not available" across exactly the window
+  in which two pytest sessions overlapped, and each test's TRUNCATE waits on the other session's
+  locks, so the second run **hangs** instead of failing.
+- `tests/conftest.py` now takes a session-level Postgres advisory lock on `trading_platform_test`
+  before migrations. A second concurrent session exits in under 1 s with code 4 and names the
+  holder's pid. The lock dies with the connection, so a killed pytest never leaves it stale. The
+  "run one long task at a time" rule was a promise; it is now enforced.
+
 ### Bucket C #9 — A41: split Redis by durability (opt-in) (2026-10-03)
 
 - **Why.** One Redis (`volatile-lru`) held cache and durable data together. The old rule was

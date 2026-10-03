@@ -86,6 +86,41 @@ def _ensure_test_db() -> None:
 
 _ensure_test_db()
 
+
+# ── ONE pytest session at a time on the test DB ──────────────────────────────
+# Two concurrent sessions do not fail — they WAIT: each test's `clean_tables` TRUNCATE
+# needs ACCESS EXCLUSIVE locks the other session holds, so the second run hangs until a
+# timebox kills it (`make replay` 2026-10-03: ⛔ exceeded 300s, measured 29s — Postgres
+# logged the test tables "lock not available" across exactly the window two runs
+# overlapped). The rule "run one long task at a time" was a promise; this enforces it.
+# A session-level advisory lock is released by Postgres when the connection closes, so a
+# killed pytest can never leave it stale. Held on a module-level connection for the
+# whole process.
+_SESSION_LOCK_KEY = 7_340_212_026  # arbitrary, fixed: "the test-DB pytest session"
+
+
+def _take_session_lock() -> psycopg.Connection:
+    conn = psycopg.connect(f"{_SYNC_BASE}/trading_platform_test", autocommit=True)
+    got = conn.execute("SELECT pg_try_advisory_lock(%s)", (_SESSION_LOCK_KEY,)).fetchone()
+    if got and got[0]:
+        return conn
+    holder = conn.execute(
+        """SELECT a.pid, a.application_name, a.backend_start
+           FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
+           WHERE l.locktype = 'advisory' AND l.objid = %s LIMIT 1""",
+        (_SESSION_LOCK_KEY & 0xFFFFFFFF,),
+    ).fetchone()
+    conn.close()
+    pytest.exit(
+        "another pytest session is already using trading_platform_test"
+        + (f" (postgres pid {holder[0]}, connected {holder[2]:%H:%M:%S})" if holder else "")
+        + " — wait for it to finish; concurrent runs deadlock on the per-test TRUNCATE.",
+        returncode=4,
+    )
+
+
+_session_lock_conn = _take_session_lock()
+
 # ── Run migrations against the test DB ───────────────────────────────────────
 subprocess.run(
     [sys.executable, "-m", "alembic", "upgrade", "head"],
