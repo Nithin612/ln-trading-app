@@ -7,6 +7,25 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Fix: every pytest leg of `make check` froze in an interactive terminal (2026-10-03)
+
+- **Symptom.** `make replay` hit its 300 s timebox in the author's terminal twice, while passing
+  in about 19 s in every non-interactive run. The first diagnosis, a concurrent pytest collision,
+  was real (and is now enforced against) but was **not** the cause of the second failure.
+- **Root cause, reproduced under a real pty (`script -qec`).** `scripts/timebox.sh` (A14, added
+  the same day) called `timeout` without `--foreground`, so the command ran in a **background
+  process group**. `uv run pytest` reads stdin, and a background process that reads the TTY is
+  frozen by SIGTTIN. `ps` showed the pytest processes in state **`T`** (stopped), not running.
+  Every pytest leg (backend, parity, walkforward, replay) was affected in a terminal; lint and
+  typecheck were not.
+- **Fix: `</dev/null` on the bounded command.** Not `--foreground`: that would unfreeze it but
+  signal only the direct child (`uv`), so a hung python grandchild could outlive the bound, which
+  is the opposite of a timebox. Output still goes to the terminal.
+- **Verified under a pty.** `make replay`: 19 passed in 29 s. A hung `uv → python` tree is still
+  killed at the bound (rc 124 in 3 s). `tests/test_timebox.py` drives the script through
+  `script(1)`, because a non-TTY test passes on the broken version too, which is exactly how this
+  shipped. Canary: on the old script the stdin test fails.
+
 ### Bucket C #10 — research-script lint debt, and `make lint` now covers `scripts/` (2026-10-03)
 
 - **Root cause.** `make lint` ran `ruff check app/ tests/` and never looked at `scripts/`, while

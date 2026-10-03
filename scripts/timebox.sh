@@ -8,7 +8,14 @@ set -uo pipefail
 leg=$1 bound=$2 measured=$3
 shift 3
 [[ "${1:-}" == "--" ]] && shift
-timeout --kill-after=30 "$bound" "$@"
+# stdin from /dev/null, NOT --foreground (2026-10-03). Without --foreground, `timeout` runs the
+# command in a BACKGROUND process group; in an interactive terminal anything in it that reads the
+# TTY is frozen by SIGTTIN (state `T`) until the bound kills it. Every pytest leg did exactly that
+# — `uv run pytest` touches stdin — so `make replay` "timed out" at 300 s in a terminal while
+# passing in 19 s anywhere without one. --foreground would fix the freeze but signals only the
+# direct child (`uv`), leaving a hung python grandchild alive past the bound — the opposite of a
+# timebox. No leg is interactive; output still goes to the terminal (colours kept).
+timeout --kill-after=30 "$bound" "$@" </dev/null
 rc=$?
 if (( rc == 124 || rc == 137 )); then
   echo "⛔ timebox: '$leg' exceeded ${bound}s (measured worst ${measured}s) and was stopped."
