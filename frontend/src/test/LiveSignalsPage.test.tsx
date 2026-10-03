@@ -37,9 +37,9 @@ vi.mock('@/hooks/useAlertStream', () => ({
 
 function makeAlert(o: Partial<LiveAlert> = {}): LiveAlert {
   return {
-    id: '1752212345678-0', sid: 42, levelId: '1001', tag: 'zone_enter',
+    id: '1752212345678-0', sid: 42, levelId: '1001', tag: 'cross_up',
     price: '2850.5000', ts: 1752212345, day: '2026-08-06',
-    source: 'entry_zone', style: 'swing', signalId: 'sig-1', shadow: false,
+    source: 'entry_trigger', style: 'swing', signalId: 'sig-1', shadow: false,
     ...o,
   }
 }
@@ -99,8 +99,8 @@ describe('LiveSignalsPage', () => {
     renderPage()
     const feed = within(await screen.findByRole('table', { name: /live alert feed/i }))
     await waitFor(() => expect(feed.getByText('RELIANCE')).toBeInTheDocument())
-    expect(feed.getByText('Entered zone')).toBeInTheDocument()
-    expect(feed.getByText('Entry zone')).toBeInTheDocument()
+    expect(feed.getByText('Crossed above')).toBeInTheDocument()
+    expect(feed.getByText('Entry')).toBeInTheDocument()
     expect(feed.getByText('₹2,850.50')).toBeInTheDocument()
     expect(feed.getByText('swing')).toBeInTheDocument()
   })
@@ -202,18 +202,23 @@ describe('LiveSignalsPage', () => {
 
   it('defaults to entry signals only; switching to All reveals the rest', async () => {
     streamState.alerts = [
-      makeAlert({ id: 'a1', source: 'entry_zone', tag: 'zone_enter' }),
-      makeAlert({ id: 'a2', source: 'pdh', tag: 'cross_up', signalId: null }),
+      makeAlert({ id: 'a1', source: 'entry_trigger', tag: 'cross_up' }),
+      makeAlert({ id: 'a2', source: 'pdl', tag: 'cross_down', signalId: null }),
+      // the direction-free band touch (a BUY drifting DOWN into its entry): not an entry
+      makeAlert({ id: 'a3', source: 'entry_zone', tag: 'zone_enter' }),
     ]
     renderPage()
-    // Default = entry-only → only the entry_zone alert is shown (user request 2026-08-21).
+    // Default = entry-only → only the directional entry trigger is shown.
     await waitFor(() => expect(screen.getByText('1 alert this session')).toBeInTheDocument())
-    expect(screen.queryByText('Crossed above')).not.toBeInTheDocument()
+    expect(screen.queryByText('Crossed below')).not.toBeInTheDocument()
+    expect(screen.queryByText('Entered zone')).not.toBeInTheDocument()
 
     await userEvent.click(screen.getByRole('combobox', { name: /Alert type/i }))
     await userEvent.click(await screen.findByRole('option', { name: /All alerts/i }))
-    await waitFor(() => expect(screen.getByText('2 alerts this session')).toBeInTheDocument())
-    expect(screen.getByText('Crossed above')).toBeInTheDocument()
+    await waitFor(() => expect(screen.getByText('3 alerts this session')).toBeInTheDocument())
+    expect(screen.getByText('Crossed below')).toBeInTheDocument()
+    expect(screen.getByText('Entered zone')).toBeInTheDocument()
+    expect(screen.getByText('Entry band · any side')).toBeInTheDocument()
   })
 
   it('surfaces the trade plan column: SL, TP, R:R and confidence', async () => {

@@ -523,6 +523,9 @@ Three things worth keeping regardless:
 
 ### 7.1 One correctness fix, and it is not a P&L claim
 
+> ✅ **BUILT 2026-10-03 (Bucket C #2):** the user-facing entry alert is now `entry_trigger`, a
+> directional cross at the entry; the symmetric zone stays as the outcome record. See the CHANGELOG.
+
 **Make the entry zone directional.** `live_levels._signal_levels` emits one symmetric `zone`
 level per signal, so a BUY drifting *down* into the band raises the same "Entered zone" alert as
 a BUY breaking *up* through it. That is wrong on its own terms — the alert claims something about

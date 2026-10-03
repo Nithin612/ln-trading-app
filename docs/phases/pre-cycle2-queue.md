@@ -209,7 +209,7 @@ Every row below was checked against the code on 2026-10-03 (W1). **None attacks 
 | # | item | what (verified state) | size |
 |--:|---|---|---|
 | 1 ✅ **DONE 2026-10-03** | **Weekend sessions** (queued 09-17) | all **21** Celery beats are `day_of_week="1-5"`, but NSE holds weekend sessions (2024-03-02, 2025-02-01, 2026-02-01 …) — invisible to EOD ingest, nightly jobs and every health probe | ~½ day |
-| 2 | **Directional entry zone** (reading study 09-10) | `live_levels._signal_levels` still emits a SYMMETRIC ±0.5% zone, so a BUY drifting DOWN into entry fires "Entered zone"; the direction-aware cross machinery is already in the file | ~½ day |
+| 2 ✅ **DONE 2026-10-03** | **Directional entry zone** (reading study 09-10) | `live_levels._signal_levels` still emits a SYMMETRIC ±0.5% zone, so a BUY drifting DOWN into entry fires "Entered zone"; the direction-aware cross machinery is already in the file | ~½ day |
 | 3 | **U16** chunked WS subscription | `live_worker` subscribes every token in ONE `ws.subscribe` call; Kite caps a connection at 3,000 and the universe is 2,291 (76%) | ~½ day |
 | 4 | **A4** constraint pre-validation endpoints | what ranges / classifications / sessions are legal, queryable before submit | ~1 day |
 | 5 | **A14** measured, layered timeouts | the `make check` walk-forward stall has no bound | ~½ day |

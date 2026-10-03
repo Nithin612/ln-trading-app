@@ -7,6 +7,28 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Bucket C #2 — the entry alert is directional (2026-10-03)
+
+- **The defect:** the user-facing "Entered zone" alert was a symmetric ±0.5% band, so a BUY
+  drifting DOWN into its entry raised the same alert as one breaking UP through it — an alert
+  claiming a direction it never checked. A correctness fix to an alert, **not a P&L claim** (the
+  reading study measured a confirmation entry worse than entering at the open).
+- **The fix:** `live_levels._signal_levels` adds `entry_trigger` — `cross_up` at the entry for a
+  BUY, `cross_down` for a SELL (slot 5, `entry_trigger_level_id`; re-arm
+  `live_entry_trigger_rearm_bp` = 50 bp, new in `.env.example`). The symmetric zone is UNCHANGED
+  and still feeds `signal_outcomes.entry_touched_at`, so **no recorded number moves**. The bell's
+  entry-only default, the Live page's entry filter and the signal lookup key on `entry_trigger`;
+  the band touch reads "Entered zone · Entry band · any side" and is never pushed to the desktop.
+- **Semantics, documented and pinned:** "crossed on our watch" — a BUY opening AT or above its
+  entry and rising raises no entry alert (the anti-chase case); the exact entry tick is
+  asymmetric (BUY fires at it, SELL a tick below), as for the SL/TP touches.
+- **Reviews:** ui-reviewer PASS-WITH-NOTES (notifications skip the band touch; label shortened);
+  bug-hunter (re-arm chatter 4× → 1×; open-at-entry and tick asymmetry documented; id-layout docs).
+- Tests: backend +11 through the real tick engine (`tests/test_entry_trigger.py`); frontend 497
+  (entry-view tests rewritten; the default-view and notification canaries fail on the old code).
+- ⚠ Live after the next `live_worker` restart — until then no `entry_trigger` alert exists and
+  the entry-only views are empty.
+
 ### Bucket C #1 — NSE weekend sessions are trading days (2026-10-03)
 
 - **The defect:** the calendar was "a weekday that is not a holiday", so `is_trading_day` was False

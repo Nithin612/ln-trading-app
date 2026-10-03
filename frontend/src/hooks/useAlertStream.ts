@@ -21,7 +21,7 @@ export interface LiveAlert {
   price: string; // Decimal string from the backend — display only
   ts: number; // epoch seconds, exchange time
   day: string;
-  source: string; // pdh | pdl | entry_zone | sl_near | tp_near | sr_* | vburst
+  source: string; // pdh | pdl | entry_trigger | entry_zone | sl_near | tp_near | sr_* | vburst
   style: string; // market | scalp | intraday | swing | positional
   signalId: string | null;
   /**

@@ -30,7 +30,8 @@ preserves armed-state; kept < 2^53 so JSON consumers never lose bits):
     the re-arm band, and break consumer (id, day) dedupe — bug-hunter LOW
     2026-07-10). Same-stock hash collisions (~1e-4) skip the weaker zone.
     signal levels: SIGNAL_BASE_ID + (sha256(signal uuid) & 48 bits)·8 +
-    slot (0=entry zone, 1=SL near, 2=TP near, 3=SL touch, 4=TP touch) —
+    slot (0=entry zone, 1=SL near, 2=TP near, 3=SL touch, 4=TP touch,
+    5=entry trigger — the directional cross at the entry, `entry_trigger_level_id`) —
     signals.id is a UUID, so the id is a stable truncated hash, not
     arithmetic on the key. Slots 3/4 (slice 3.6): direction-aware CROSS
     levels at the exact SL/TP prices — the signal-outcome recorder needs
@@ -91,10 +92,17 @@ def _q4(value: Decimal | float) -> str:
 def signal_level_ids(signal_id: str) -> tuple[int, int, int, int, int]:
     """Stable per-signal level ids from the signal UUID (48-bit hash ×8 +
     slot, offset past the static/S&R ranges; < 2^53 for JSON safety).
-    Slots: 0=entry zone · 1=SL near · 2=TP near · 3=SL touch · 4=TP touch."""
+    Slots: 0=entry zone · 1=SL near · 2=TP near · 3=SL touch · 4=TP touch · 5=entry trigger
+    (not returned here — `entry_trigger_level_id`, so the five-tuple callers are untouched)."""
     h = int.from_bytes(hashlib.sha256(signal_id.encode()).digest()[:6], "big")
     base = SIGNAL_BASE_ID + h * 8
     return base, base + 1, base + 2, base + 3, base + 4
+
+
+def entry_trigger_level_id(signal_id: str) -> int:
+    """Slot 5 of the same per-signal block: the DIRECTIONAL entry trigger (2026-10-03). Kept
+    out of `signal_level_ids` so its five-tuple callers are untouched."""
+    return signal_level_ids(signal_id)[0] + 5
 
 
 async def load_static_levels(
@@ -199,7 +207,29 @@ async def _active_signals(db: Any) -> list[dict[str, Any]]:
 
 
 def _signal_levels(sig: dict[str, Any]) -> tuple[list[LevelDict], LevelMeta]:
-    """Entry zone + SL/TP proximity + SL/TP TOUCH for one active signal.
+    """Entry zone + entry TRIGGER + SL/TP proximity + SL/TP TOUCH for one active signal.
+
+    ⭐ Two entry levels, two jobs (Bucket C #2, 2026-10-03). The symmetric `zone`
+    (source `entry_zone`) records whether the entry price TRADED — direction-free, as an
+    outcome should be — and feeds `signal_outcomes.entry_touched_at` unchanged. It was also
+    the user-facing "Entered zone" alert, which fired for a BUY drifting DOWN into the band:
+    the alert claimed something about the signal's direction it had never checked. The
+    user-facing entry alert is now `entry_trigger`: a BUY crossing UP through its entry (a
+    SELL crossing DOWN). A correctness fix to an alert, NOT a P&L claim — the reading study
+    measured a confirmation entry WORSE than entering at the open
+    (`docs/reading/security-analysis-folder-takeaways-2026-09-09.md` §6.1, §7.1).
+
+    What "crossed" means, exactly (bug-hunter, 2026-10-03 — each pinned by a test):
+      - **Crossed ON OUR WATCH.** A cross fires on an observed side transition; the first tick
+        of the day only arms the side. So a BUY that opens AT or above its entry and rises never
+        fires — including an open exactly at the prior close (the entry). That is the
+        definition, not a gap: price never traded below the entry this session, and buying a
+        name already through its level is what the anti-chase overlay is for. The zone alert
+        still records that the entry traded.
+      - **The exact entry tick is asymmetric**, as for the SL/TP touches above: `side_of` reads
+        price == level as AboveOrAt, so a BUY fires AT the entry and a SELL needs a tick below.
+      - **Re-arm** is `live_entry_trigger_rearm_bp` (50 bp), not the 10 bp level-cross band, so
+        chop around the entry does not re-fire the alert on every wiggle.
 
     Touch levels (slice 3.6, signal-outcome recording): direction-aware
     crosses at the exact SL/TP prices. A BUY's TP is hit crossing UP and
@@ -241,6 +271,16 @@ def _signal_levels(sig: dict[str, Any]) -> tuple[list[LevelDict], LevelMeta]:
         }
     ]
     meta: LevelMeta = {zone_id: {**meta_common, "source": "entry_zone"}}
+    trigger_id = entry_trigger_level_id(sig["id"])
+    levels.append(
+        {
+            "id": trigger_id,
+            "kind": "cross_up" if is_buy else "cross_down",
+            "price": _q4(entry),
+            "rearm_bp": settings.live_entry_trigger_rearm_bp,
+        }
+    )
+    meta[trigger_id] = {**meta_common, "source": "entry_trigger"}
     if sig["sl"] and sig["sl"] > 0:
         levels.append(
             {"id": sl_id, "kind": "near", "price": _q4(sig["sl"]), "within_bp": within}

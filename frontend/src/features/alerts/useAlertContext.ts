@@ -21,8 +21,15 @@ import type { LiveAlert } from "@/hooks/useAlertStream";
 import { signalsApi, type SignalOut } from "@/lib/api/signals";
 import { stocksApi } from "@/lib/api/stocks";
 
-/** Alert source that carries an originating signal (and thus a trade plan). */
-export const ENTRY_SOURCE = "entry_zone";
+/**
+ * The user-facing ENTRY alert: a BUY crossing UP through its entry (a SELL crossing DOWN).
+ *
+ * It was `entry_zone` — a symmetric ±0.5% band that also fired for a BUY drifting DOWN into
+ * its entry, i.e. an alert claiming a direction it never checked (Bucket C #2, 2026-10-03).
+ * `entry_zone` still streams (outcome recording consumes it) and is labelled as a
+ * direction-free band touch. Only entry alerts carry a signal, so only they look one up.
+ */
+export const ENTRY_SOURCE = "entry_trigger";
 
 /** How long a fetched signal row (plan + eligibility verdict) stays fresh. */
 export const SIGNAL_STALE_MS = 60_000;

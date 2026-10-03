@@ -157,7 +157,8 @@ export const TAG_META: Record<string, TagMeta> = {
 export const SOURCE_LABEL: Record<string, string> = {
   pdh: "PDH",
   pdl: "PDL",
-  entry_zone: "Entry zone",
+  entry_trigger: "Entry",
+  entry_zone: "Entry band · any side",
   sl_near: "Stop loss",
   tp_near: "Target",
   sr_support: "Support",

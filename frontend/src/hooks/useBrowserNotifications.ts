@@ -24,6 +24,14 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type { LiveAlert } from "@/hooks/useAlertStream";
 import { SOURCE_LABEL, TAG_META } from "@/features/alerts/alertPresentation";
 
+/**
+ * Streamed for the RECORD, never pushed to the desktop. `entry_zone` is the direction-free
+ * band touch that outcome recording reads; a BUY drifting DOWN into its entry raises it, so
+ * popping it would deliver on the most intrusive surface exactly the event the directional
+ * entry trigger replaced (Bucket C #2, ui-reviewer 2026-10-03). It stays visible in the feeds.
+ */
+export const NOT_NOTIFIED_SOURCES = new Set(["entry_zone"]);
+
 const ENABLED_KEY = "alerts:notify";
 
 /** More than this many new alerts in one batch collapses to a summary. */
@@ -102,7 +110,9 @@ export function useBrowserNotifications(alerts: LiveAlert[]): UseBrowserNotifica
 
     // Newest-first from useAlertStream; notify oldest-first so the newest
     // popup is the one left on top.
-    const fresh = alerts.filter((a) => !seenRef.current.has(a.id)).reverse();
+    const fresh = alerts
+      .filter((a) => !seenRef.current.has(a.id) && !NOT_NOTIFIED_SOURCES.has(a.source))
+      .reverse();
     for (const a of fresh) seenRef.current.add(a.id);
 
     // Bound the set so a long session can't grow it without limit; the stream

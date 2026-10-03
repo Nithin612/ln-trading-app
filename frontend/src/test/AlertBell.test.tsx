@@ -103,7 +103,10 @@ describe('AlertBell', () => {
     haltState.halted = false
   })
 
-  const ENTRY_ALERT: LiveAlert = { ...ALERT, tag: 'zone_enter', source: 'entry_zone' }
+  // the user-facing entry alert: a directional cross THROUGH the entry (Bucket C #2)
+  const ENTRY_ALERT: LiveAlert = { ...ALERT, tag: 'cross_up', source: 'entry_trigger' }
+  // the direction-free band touch: still streamed (outcome recording), never an 'entry'
+  const BAND_TOUCH: LiveAlert = { ...ALERT, tag: 'zone_enter', source: 'entry_zone' }
 
   // A BUY signal at ₹100 with SL ₹96 → 1R = ₹4, so the don't-chase ceiling is
   // 100 + 0.33·4 = ₹101.32.
@@ -197,19 +200,22 @@ describe('AlertBell', () => {
     expect(screen.getByTestId('alert-unseen')).toHaveTextContent('99+')
   })
 
-  it('defaults to entry-only: shows entry-zone triggers, hides other alerts', () => {
+  it('defaults to entry-only: shows the directional entry trigger, hides everything else', () => {
     stream.alerts = [
       { ...ENTRY_ALERT, id: 'e', price: '111.0000' },
       { ...ALERT, id: 'p', tag: 'cross_up', source: 'pdh', price: '222.0000' },
+      // test_buy_drifting_down_reads_as_an_entry: a BUY falling INTO its band used to show
+      // as "Entered zone" in this default view. It must not be offered as an entry.
+      { ...BAND_TOUCH, id: 'b', price: '333.0000' },
     ]
     vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
     setup()
     fireEvent.click(screen.getByTestId('alert-bell'))
-    expect(screen.getByText('Entered zone')).toBeInTheDocument()
+    expect(screen.getByText('Crossed above')).toBeInTheDocument()
     expect(screen.getByText(/111\.00/)).toBeInTheDocument()
-    // the PDH cross is hidden by default
-    expect(screen.queryByText('Crossed above')).not.toBeInTheDocument()
-    expect(screen.queryByText(/222\.00/)).not.toBeInTheDocument()
+    expect(screen.queryByText(/222\.00/)).not.toBeInTheDocument() // the PDH cross
+    expect(screen.queryByText('Entered zone')).not.toBeInTheDocument() // the band touch
+    expect(screen.queryByText(/333\.00/)).not.toBeInTheDocument()
   })
 
   it('toggling entry-only off reveals all triggers and persists the choice', () => {
@@ -221,8 +227,8 @@ describe('AlertBell', () => {
     setup()
     fireEvent.click(screen.getByTestId('alert-bell'))
     fireEvent.click(screen.getByRole('checkbox'))
-    expect(screen.getByText('Entered zone')).toBeInTheDocument()
-    expect(screen.getByText('Crossed above')).toBeInTheDocument()
+    expect(screen.getByText(/111\.00/)).toBeInTheDocument()
+    expect(screen.getByText(/222\.00/)).toBeInTheDocument()
     expect(localStorage.getItem('alertbell:entryOnly')).toBe('0')
   })
 
@@ -279,7 +285,7 @@ describe('AlertBell', () => {
     vi.mocked(stocksApi.get).mockResolvedValue({ id: 42, symbol: 'RELIANCE' } as never)
     setup()
     fireEvent.click(screen.getByTestId('alert-bell'))
-    expect(screen.getByText('Entered zone')).toBeInTheDocument()
+    expect(screen.getByText('Crossed above')).toBeInTheDocument()
     expect(screen.queryByText('BUY')).not.toBeInTheDocument()
     expect(vi.mocked(signalsApi.getById)).not.toHaveBeenCalled()
   })

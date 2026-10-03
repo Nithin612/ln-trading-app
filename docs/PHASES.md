@@ -1359,7 +1359,7 @@ all had 0.23–0.86% stops and contributed +128.4R of a −89.7R total). ⚠⚠ 
 and `rvol_factor_study.py` (closed D1) carry the SAME false CA claim and have NOT been re-run — check before
 either is cited again.** **Nothing built, no gate flipped, no knob touched, no recorded number changed, no
 clock reset.** Only actionable item = make the entry zone DIRECTIONAL (a correctness fix to an alert,
-explicitly NOT a P&L claim) — **NOT BUILT**. 3 commits, UNPUSHED: `b143a4f` · `b7bad49` · `7680f23` (+ this
+explicitly NOT a P&L claim) — ✅ **BUILT 2026-10-03 (Bucket C #2)**. 3 commits, UNPUSHED: `b143a4f` · `b7bad49` · `7680f23` (+ this
 doc-sync).
 
 **▶▶ 2026-09-09 (latest) — BUCKET C OPERATIONAL-SAFETY + TESTS/INVARIANTS + U1 BATCH: 12 items shipped, none touching a recorded number.**

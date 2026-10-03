@@ -88,6 +88,11 @@ class Settings(BaseSettings):
     live_entry_zone_pct: float = 0.5     # entry-zone half-width, % of entry
     live_sltp_within_bp: int = 25        # SL/TP proximity band (0.25%)
     live_cross_rearm_bp: int = 10        # PDH/PDL/S&R cross re-arm band
+    # Re-arm band of the DIRECTIONAL entry trigger (Bucket C #2). Wider than a level cross on
+    # purpose: price chops around a signal's entry (= the prior close) at the open, and at 10 bp
+    # the user-facing entry alert re-fired ~4× per excursion; 50 bp = the entry zone's half-width,
+    # so it fires about as often as the zone alert it replaced.
+    live_entry_trigger_rearm_bp: int = 50
     live_vburst_mult: float = 3.0        # forming 5m vol ≥ mult × 20d avg
     live_alert_stream: str = "alerts:live"   # Redis Stream (at-least-once)
     live_alert_maxlen: int = 10_000      # stream MAXLEN ~ cap

@@ -751,7 +751,8 @@ else.
   a prerequisite and accrues only in real time, so start it BEFORE cycle 2.
   **Only actionable item: make the entry zone DIRECTIONAL** (`live_levels._signal_levels`; the
   direction-aware PDH/PDL `cross_up`/`cross_down` machinery is already in that file, just unwired) — a
-  **correctness fix to an alert, explicitly NOT a P&L claim. NOT BUILT.** Scripts (read-only, SELECT-only,
+  **correctness fix to an alert, explicitly NOT a P&L claim. ✅ BUILT 2026-10-03 (Bucket C #2)** — a
+  directional `entry_trigger` is the user-facing entry alert; the symmetric zone stays for outcomes. Scripts (read-only, SELECT-only,
   frozen engine untouched): `entry_confirmation_study.py` (its walker is asserted trade-for-trade against
   `_simulate_trade` on 400 trades) · `confirmation_base_rate.py` · `squeeze_study.py` ·
   `overhead_supply_study.py`. The source PDFs are **gitignored** (158MB, copyrighted).

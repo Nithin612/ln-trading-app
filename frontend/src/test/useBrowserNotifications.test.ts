@@ -6,8 +6,8 @@ import { BURST_CAP, useBrowserNotifications } from '@/hooks/useBrowserNotificati
 
 function alert(id: string, o: Partial<LiveAlert> = {}): LiveAlert {
   return {
-    id, sid: 42, levelId: '1', tag: 'zone_enter', price: '2850.5000',
-    ts: 1752212345, day: '2026-08-06', source: 'entry_zone', style: 'swing',
+    id, sid: 42, levelId: '1', tag: 'cross_up', price: '2850.5000',
+    ts: 1752212345, day: '2026-08-06', source: 'entry_trigger', style: 'swing',
     signalId: 'sig-1', shadow: false,
     ...o,
   }
@@ -84,8 +84,24 @@ describe('useBrowserNotifications', () => {
 
     rerender({ alerts: [alert('a2'), alert('a1')] })   // newest-first
     expect(ctor).toHaveBeenCalledTimes(1)
-    expect(ctor.mock.calls[0][0]).toContain('Entered zone')
+    expect(ctor.mock.calls[0][0]).toBe('Crossed above · Entry')
     expect(ctor.mock.calls[0][1]).toMatchObject({ tag: 'alert-a2' })
+  })
+
+  it('never pushes the direction-free entry-band touch to the desktop', () => {
+    // A BUY drifting DOWN into its entry raises `entry_zone`; that is a record for outcomes,
+    // not an entry — the canary for Bucket C #2 on the most intrusive surface.
+    localStorage.setItem('alerts:notify', '1')
+    const { ctor } = stubNotification('granted')
+    const { rerender } = renderHook(({ alerts }) => useBrowserNotifications(alerts), {
+      initialProps: { alerts: [alert('a1')] },
+    })
+    rerender({ alerts: [alert('b1', { source: 'entry_zone', tag: 'zone_enter' }), alert('a1')] })
+    expect(ctor).not.toHaveBeenCalled()
+    rerender({ alerts: [alert('a2'), alert('b1', { source: 'entry_zone', tag: 'zone_enter' }),
+                        alert('a1')] })
+    expect(ctor).toHaveBeenCalledTimes(1)
+    expect(ctor.mock.calls[0][0]).toBe('Crossed above · Entry')
   })
 
   it('collapses a burst into ONE summary notification', () => {

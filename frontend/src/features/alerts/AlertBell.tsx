@@ -37,10 +37,11 @@ import {
 } from './alertPresentation'
 import { ENTRY_SOURCE, useAlertContext } from './useAlertContext'
 
-// "Entered zone" (source `entry_zone`) is the actionable buy/sell trigger:
-// price re-entered the entry band of a signal the confluence engine already
-// generated. The bell defaults to showing ONLY these — level crosses, S/R
-// zone entries and volume bursts are context, hidden until the user opts in.
+// The entry alert (source `entry_trigger`) is the actionable buy/sell trigger:
+// price crossed THROUGH a signal's entry in the signal's direction (a BUY up, a
+// SELL down). The bell defaults to showing ONLY these — the direction-free
+// entry-band touch, level crosses, S/R zones and volume bursts are context,
+// hidden until the user opts in.
 const ENTRY_ONLY_KEY = 'alertbell:entryOnly'
 
 function loadEntryOnly(): boolean {
