@@ -1,8 +1,12 @@
 """NSE market-calendar service (Phase 2 slice 1).
 
 All trading-day arithmetic goes through here — calendar-day approximations
-are a bug (.claude/rules/trading-domain.md). A trading day is a weekday
-that is not an `nse_holidays` row.
+are a bug (.claude/rules/trading-domain.md). **A trading day is an
+`nse_special_sessions` row, or a weekday that is not an `nse_holidays` row**
+(`_is_session` — the ONE predicate every helper below uses). Before 2026-10-03
+it was "a weekday that is not a holiday", which could not represent a session
+held on a Saturday or Sunday (8 in the archive), so every scheduled task and
+the EOD catch-up healer were blind to them.
 
 Coverage honesty: the table is seeded from bhavcopy session gaps (past,
 ground truth) plus published NSE circulars (future). Queries beyond the
@@ -11,12 +15,13 @@ add the new year's circular via the admin endpoint when NSE publishes it.
 """
 
 import logging
+from dataclasses import dataclass
 from datetime import UTC, date, datetime, time, timedelta
 
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models.market_calendar import NseHoliday
+from app.models.market_calendar import NseHoliday, NseSpecialSession
 
 log = logging.getLogger(__name__)
 
@@ -38,6 +43,75 @@ async def _holidays_between(db: AsyncSession, start: date, end: date) -> set[dat
     return set(result.scalars().all())
 
 
+@dataclass(frozen=True)
+class _Closures:
+    holidays: frozenset[date]
+    specials: frozenset[date]
+
+
+async def _closures_between(db: AsyncSession, start: date, end: date) -> _Closures:
+    """Holidays AND special sessions in [start, end] — what `_is_session` needs."""
+    specials = await db.execute(
+        select(NseSpecialSession.session_date).where(
+            NseSpecialSession.session_date >= start, NseSpecialSession.session_date <= end
+        )
+    )
+    return _Closures(frozenset(await _holidays_between(db, start, end)),
+                     frozenset(specials.scalars().all()))
+
+
+def _is_session(d: date, c: _Closures) -> bool:
+    """THE trading-day predicate: a special session, or a weekday that is not a holiday."""
+    return d in c.specials or (d.weekday() <= 4 and d not in c.holidays)
+
+
+async def session_hours(db: AsyncSession, d: date) -> tuple[time, time] | None:
+    """The session's IST hours on `d`, or None when `d` is not a trading day. A special
+    session with recorded hours (e.g. an evening muhurat) uses them; otherwise 09:15–15:30."""
+    special = await db.get(NseSpecialSession, d)
+    if special is not None:
+        return (special.open_ist or SESSION_OPEN_IST, special.close_ist or SESSION_CLOSE_IST)
+    return (SESSION_OPEN_IST, SESSION_CLOSE_IST) if await is_trading_day(db, d) else None
+
+
+REGULAR_HOURS = (SESSION_OPEN_IST, SESSION_CLOSE_IST)
+
+
+async def is_regular_session(db: AsyncSession, d: date) -> bool:
+    """A trading day held at the regular 09:15–15:30 hours. False for a closed day AND for a
+    special session with other hours (an evening muhurat, a partial DR drill): jobs built on
+    the regular day's shape — the closing auction, intraday profiles, the post-close EOD file
+    — must not run on those (bug-hunter, 2026-10-03)."""
+    return await session_hours(db, d) == REGULAR_HOURS
+
+
+async def in_market_session(db: AsyncSession, now_utc: datetime) -> bool:
+    """Is ``now_utc`` inside today's session per the CALENDAR — weekend special sessions and
+    holidays included, the special session's own hours when recorded. The one guard every
+    scheduled intraday task uses (replaces a weekday wall-clock check + `is_trading_day`)."""
+    from zoneinfo import ZoneInfo
+
+    from app.trading import market_hours  # module reference: test patches still apply
+
+    today = now_utc.astimezone(ZoneInfo("Asia/Kolkata")).date()
+    return market_hours.is_market_session(now_utc, await session_hours(db, today))
+
+
+async def skip_unless_trading_day(
+    db: AsyncSession, now_utc: datetime | None = None
+) -> dict[str, object] | None:
+    """The guard for a beat that now fires EVERY day (2026-10-03): None on a trading day —
+    weekend special sessions included — else the task's 'skipped' result. Keeps ordinary
+    weekends exactly as quiet as the old Mon–Fri crontab while letting a Saturday or Sunday
+    session run."""
+    from zoneinfo import ZoneInfo
+
+    today = (now_utc or datetime.now(UTC)).astimezone(ZoneInfo("Asia/Kolkata")).date()
+    if await is_trading_day(db, today):
+        return None
+    return {"status": "skipped", "message": f"{today} is not a trading day"}
+
+
 async def coverage_end(db: AsyncSession) -> date | None:
     """Last seeded holiday — the honesty horizon of the calendar."""
     result = await db.execute(
@@ -57,11 +131,8 @@ def _warn_if_uncovered(last_seeded: date | None, queried_up_to: date) -> None:
 
 
 async def is_trading_day(db: AsyncSession, d: date) -> bool:
-    """Weekday and not an NSE holiday."""
-    if d.weekday() > 4:
-        return False
-    holidays = await _holidays_between(db, d, d)
-    return d not in holidays
+    """A special session, or a weekday that is not an NSE holiday (`_is_session`)."""
+    return _is_session(d, await _closures_between(db, d, d))
 
 
 async def add_trading_days(db: AsyncSession, start: datetime, n: int) -> datetime:
@@ -75,14 +146,14 @@ async def add_trading_days(db: AsyncSession, start: datetime, n: int) -> datetim
         raise ValueError("n must be >= 1")
     # window: n trading days can span at most ~2.5x calendar days + slack
     span = timedelta(days=n * 3 + 10)
-    holidays = await _holidays_between(db, start.date(), (start + span).date())
+    closed = await _closures_between(db, start.date(), (start + span).date())
     _warn_if_uncovered(await coverage_end(db), (start + span).date())
 
     d = start.date()
     remaining = n
     while remaining > 0:
         d = d + timedelta(days=1)
-        if d.weekday() <= 4 and d not in holidays:
+        if _is_session(d, closed):
             remaining -= 1
     return datetime.combine(d, start.timetz())
 
@@ -93,9 +164,9 @@ async def next_trading_day(db: AsyncSession, d: date) -> date:
 
 
 async def prev_trading_day(db: AsyncSession, d: date) -> date:
-    holidays = await _holidays_between(db, d - timedelta(days=30), d)
+    closed = await _closures_between(db, d - timedelta(days=30), d)
     cur = d - timedelta(days=1)
-    while cur.weekday() > 4 or cur in holidays:
+    while not _is_session(cur, closed):
         cur = cur - timedelta(days=1)
     return cur
 
@@ -103,11 +174,11 @@ async def prev_trading_day(db: AsyncSession, d: date) -> date:
 async def last_n_trading_days(db: AsyncSession, end: date, n: int) -> list[date]:
     """The n most recent trading days ending AT `end` (inclusive if it
     trades). Used by the FII/DII 5-trading-day rollup."""
-    holidays = await _holidays_between(db, end - timedelta(days=n * 3 + 10), end)
+    closed = await _closures_between(db, end - timedelta(days=n * 3 + 10), end)
     days: list[date] = []
     cur = end
     while len(days) < n:
-        if cur.weekday() <= 4 and cur not in holidays:
+        if _is_session(cur, closed):
             days.append(cur)
         cur = cur - timedelta(days=1)
     days.reverse()
@@ -120,12 +191,12 @@ async def trading_days_between(db: AsyncSession, start: date, end: date) -> list
     Backbone of the EOD catch-up healer (services/eod_catchup.py)."""
     if start > end:
         return []
-    holidays = await _holidays_between(db, start, end)
+    closed = await _closures_between(db, start, end)
     _warn_if_uncovered(await coverage_end(db), end)
     days: list[date] = []
     cur = start
     while cur <= end:
-        if cur.weekday() <= 4 and cur not in holidays:
+        if _is_session(cur, closed):
             days.append(cur)
         cur = cur + timedelta(days=1)
     return days

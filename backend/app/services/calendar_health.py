@@ -134,6 +134,8 @@ def _crosscheck(start: date, end: date, our_trading_days: set[date]) -> str | No
         disagreements: list[date] = []
         cur = start + timedelta(days=1)
         while cur <= end:
+            # weekdays only: XNSE does not model weekend special sessions, so including them
+            # would report every one as a disagreement (bug-hunter #6)
             if cur.weekday() <= 4 and cur in our_trading_days:
                 if not xnse.is_session(pd.Timestamp(cur)):
                     disagreements.append(cur)

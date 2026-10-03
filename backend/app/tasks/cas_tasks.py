@@ -105,7 +105,7 @@ async def _run_capture_cas() -> dict[str, object]:
     from app.models.stock import Stock
     from app.services.cas_capture import capture_cas, capture_postclose
     from app.services.chain_recorder import get_any_active_admin_token
-    from app.services.market_calendar import is_trading_day
+    from app.services.market_calendar import is_regular_session
 
     if not settings.cas_capture_enabled:
         return {"status": "skipped", "message": "cas_capture_enabled is False"}
@@ -116,7 +116,7 @@ async def _run_capture_cas() -> dict[str, object]:
         return {"status": "skipped", "message": "outside the CAS and post-close windows"}
 
     async with AsyncSessionFactory() as db:
-        if not await is_trading_day(db, now_ist.date()):
+        if not await is_regular_session(db, now_ist.date()):  # no auction on a special session
             return {"status": "skipped", "message": "market holiday"}
         token = await get_any_active_admin_token(db)
         if token is None:

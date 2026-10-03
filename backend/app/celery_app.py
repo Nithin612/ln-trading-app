@@ -1,10 +1,8 @@
 """Celery application factory — Phase 6.
 
-Two scheduled tasks:
-  - nightly_signal_generation: runs at 18:00 IST (12:30 UTC) on weekdays,
-    after bhavcopy is ingested and EOD data is settled.
-  - poll_filings: runs every 60 seconds during market hours to ingest NSE/BSE
-    corporate announcements.
+The beat schedule is `celery_app.conf.beat_schedule` below — every entry carries its own
+timing comment. Session-dependent tasks fire every day and check the NSE calendar themselves
+(see the WEEKEND SESSIONS note above the schedule).
 
 Start worker:
     cd backend && celery -A app.celery_app worker -l info
@@ -49,20 +47,29 @@ celery_app.conf.update(
     worker_prefetch_multiplier=1,
 )
 
+# ⭐ WEEKEND SESSIONS (2026-10-03): every session-dependent beat fires EVERY day
+# (`day_of_week="*"`) and the task decides from the NSE calendar whether today is a session
+# (`market_calendar.in_market_session` / `skip_unless_trading_day` / `trading_days_between`).
+# NSE holds Saturday and Sunday sessions (Budget days, DR drills, muhurat — 8 in the archive);
+# a Mon–Fri crontab made all of them invisible. Ordinary weekends stay quiet because every
+# task skips on a non-trading day. Only `check-calendar-coverage` (not about sessions) stays
+# Mon–Fri. The position monitor, option chains and circuit bands fire 03:00–14:59 UTC
+# (08:30–20:29 IST), wider than the regular session, so an EVENING special session (a muhurat)
+# is covered; their `in_market_session` guard is authoritative for the exact hours.
 celery_app.conf.beat_schedule = {
     # 19:15 IST = 13:45 UTC — AFTER FII/DII (18:30) and equities EOD (18:40)
     # so generation scores same-day candles + flows. (Was 18:00 IST, which
     # always consumed stale data — no EOD ingestion even existed then.)
     "nightly-signal-generation": {
         "task": "app.tasks.signal_tasks.nightly_signal_generation",
-        "schedule": crontab(hour=13, minute=45, day_of_week="1-5"),
+        "schedule": crontab(hour=13, minute=45, day_of_week="*"),
     },
     # Pair-trading shadow minter (Phase 6.5b) — 19:25 IST = 13:55 UTC, AFTER EOD bar
     # ingestion (18:40 IST) + nightly generation (19:15 IST), so it screens fresh daily
     # bars. Shadow-only (writes pair_signals, mints no order).
     "mint-pair-signals": {
         "task": "app.tasks.pair_tasks.mint_pair_signals",
-        "schedule": crontab(hour=13, minute=55, day_of_week="1-5"),
+        "schedule": crontab(hour=13, minute=55, day_of_week="*"),
     },
     # Poll filings every 60 seconds (Celery beat minimum granularity is seconds)
     "poll-filings": {
@@ -80,15 +87,15 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.position_monitor.monitor_positions",
         "schedule": crontab(
             minute="*/1",
-            hour="3-10",
-            day_of_week="1-5",
+            hour="3-14",
+            day_of_week="*",
         ),
     },
     # F&O EOD recorders: bhavcopy + India VIX after NSE publishes (~18:30 IST)
     # 18:45 IST = 13:15 UTC
     "fo-eod-ingestion": {
         "task": "app.tasks.fo_tasks.fo_eod_ingestion",
-        "schedule": crontab(hour=13, minute=15, day_of_week="1-5"),
+        "schedule": crontab(hour=13, minute=15, day_of_week="*"),
     },
     # CAS (Closing Auction Session) capture (Stage 1) — every minute over 09:00–10:59 UTC
     # (14:30–16:29 IST, a superset); the task self-guards to the exact CAS window 15:15–15:33 IST
@@ -96,7 +103,7 @@ celery_app.conf.beat_schedule = {
     # 15:44–16:05 IST (DA-7, → cas_postclose_daily). Research-only; no order path.
     "capture-cas-window": {
         "task": "app.tasks.cas_tasks.capture_cas_window",
-        "schedule": crontab(minute="*/1", hour="9,10", day_of_week="1-5"),
+        "schedule": crontab(minute="*/1", hour="9,10", day_of_week="*"),
     },
     # A40's CAS absence alarm is NOT here (moved 2026-10-02): a beat task cannot report that
     # the beat is down. It runs from cron as `scripts/cas_watch.py` — see RUNBOOK §9.
@@ -112,7 +119,7 @@ celery_app.conf.beat_schedule = {
     # subscription universe is fresh. Token-free by design — see the task's docstring.
     "sync-kite-instruments": {
         "task": "app.tasks.market_data_tasks.sync_kite_instruments",
-        "schedule": crontab(hour=2, minute=30, day_of_week="1-5"),
+        "schedule": crontab(hour=2, minute=30, day_of_week="*"),
     },
     # D2′a/b — evaluate the universe rule, record it, and APPLY it. 03:05 UTC = 08:35
     # IST, AFTER sync-kite-instruments (02:30 UTC) because the rule reads
@@ -121,7 +128,7 @@ celery_app.conf.beat_schedule = {
     # snapshot is refused rather than applied.
     "materialise-universe": {
         "task": "app.tasks.market_data_tasks.materialise_universe",
-        "schedule": crontab(hour=3, minute=5, day_of_week="1-5"),
+        "schedule": crontab(hour=3, minute=5, day_of_week="*"),
     },
     # A36 — calendar-coverage expiry alarm. Once per trading morning (4:00 UTC = 9:30 IST);
     # the horizon moves slowly, so a daily read with lead time is enough, and the notifier's
@@ -136,7 +143,7 @@ celery_app.conf.beat_schedule = {
     # per date, so this never observes a half-written session.
     "check-feed-coverage": {
         "task": "app.tasks.health_tasks.check_feed_coverage",
-        "schedule": crontab(hour=13, minute=40, day_of_week="1-5"),
+        "schedule": crontab(hour=13, minute=40, day_of_week="*"),
     },
     # §77 — universe-rule staleness. 04:10 UTC = 09:40 IST, AFTER materialise-universe
     # (03:05 UTC) so a healthy morning is quiet and only a genuinely missed run alarms.
@@ -144,21 +151,21 @@ celery_app.conf.beat_schedule = {
     # scheduled absence check rather than something a failing job would report itself.
     "check-universe-health": {
         "task": "app.tasks.health_tasks.check_universe_health",
-        "schedule": crontab(hour=4, minute=10, day_of_week="1-5"),
+        "schedule": crontab(hour=4, minute=10, day_of_week="*"),
     },
     # Q-R6 — the daily report's own heartbeat. 14:20 UTC = 19:50 IST, AFTER the report
     # would normally be generated for the session, so a same-day run is not reported
     # missing. It must live out here: a report that did not run cannot tell you so.
     "check-report-health": {
         "task": "app.tasks.health_tasks.check_report_health",
-        "schedule": crontab(hour=14, minute=20, day_of_week="1-5"),
+        "schedule": crontab(hour=14, minute=20, day_of_week="*"),
     },
     # V6/A5 — starved-table alarm. 04:25 UTC = 09:55 IST, after the universe check, so a
     # morning that repaired its own data is not reported as starved. Its own entry rather
     # than a rider on another beat: separate remedies want separate alarms.
     "check-starved-tables": {
         "task": "app.tasks.health_tasks.check_starved_tables",
-        "schedule": crontab(hour=4, minute=25, day_of_week="1-5"),
+        "schedule": crontab(hour=4, minute=25, day_of_week="*"),
     },
     # Option-chain snapshots every minute in the market window (task itself
     # re-checks 9:15–15:30 IST and idles without a Kite token)
@@ -166,8 +173,8 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.fo_tasks.record_option_chains",
         "schedule": crontab(
             minute="*/1",
-            hour="3-10",
-            day_of_week="1-5",
+            hour="3-14",
+            day_of_week="*",
         ),
     },
     # Circuit-band cache (Phase 6.8.3) — refresh lower/upper circuit limits for
@@ -180,8 +187,8 @@ celery_app.conf.beat_schedule = {
         "task": "app.tasks.circuit_tasks.refresh_circuit_bands",
         "schedule": crontab(
             minute="*/15",
-            hour="3-10",
-            day_of_week="1-5",
+            hour="3-14",
+            day_of_week="*",
         ),
     },
     # Corporate-action adjustment of OPEN paper positions (Phase 6.8.5). Pre-market
@@ -190,31 +197,31 @@ celery_app.conf.beat_schedule = {
     # Idempotent (ledger) — a re-run is a no-op.
     "apply-corporate-actions": {
         "task": "app.tasks.corporate_action_tasks.apply_corporate_actions",
-        "schedule": crontab(hour=2, minute=45, day_of_week="1-5"),
+        "schedule": crontab(hour=2, minute=45, day_of_week="*"),
     },
     # Signal expiry sweeper (SIGNAL_ENGINE.md §5: every 5 minutes). Weekday
     # window covers intraday cutoffs through post-close swing expiries;
     # scalp signals minted off-hours expire on the next sweep.
     "sweep-expired-signals": {
         "task": "app.tasks.expiry_tasks.sweep_expired_signals",
-        "schedule": crontab(minute="*/5", day_of_week="1-5"),
+        "schedule": crontab(minute="*/5", day_of_week="*"),
     },
     # FII/DII daily flows — NSE publishes EOD; 18:30 IST = 13:00 UTC.
     "ingest-fii-dii": {
         "task": "app.tasks.market_data_tasks.ingest_fii_dii",
-        "schedule": crontab(hour=13, minute=0, day_of_week="1-5"),
+        "schedule": crontab(hour=13, minute=0, day_of_week="*"),
     },
     # Equities bhavcopy → ohlcv_1d; 18:40 IST = 13:10 UTC (before nightly
     # generation at 19:15 IST).
     "ingest-equities-eod": {
         "task": "app.tasks.market_data_tasks.ingest_equities_eod",
-        "schedule": crontab(hour=13, minute=10, day_of_week="1-5"),
+        "schedule": crontab(hour=13, minute=10, day_of_week="*"),
     },
     # Per-profile suggestion pipelines — 19:25 IST = 13:55 UTC, after the
     # legacy nightly generation so both consume the same fresh EOD data.
     "nightly-profile-suggestions": {
         "task": "app.tasks.profile_tasks.nightly_suggestions",
-        "schedule": crontab(hour=13, minute=55, day_of_week="1-5"),
+        "schedule": crontab(hour=13, minute=55, day_of_week="*"),
     },
     # ── Intraday profile schedules ───────────────────────────────────────────
     # These had NO caller. `nightly_suggestions` only ever ran the 'eod'
@@ -243,14 +250,14 @@ celery_app.conf.beat_schedule = {
     # cannot express :15-minute precision across an hour range.
     "intraday-15m-suggestions": {
         "task": "app.tasks.profile_tasks.intraday_suggestions",
-        "schedule": crontab(minute="1,16,31,46", hour="4-9", day_of_week="1-5"),
+        "schedule": crontab(minute="1,16,31,46", hour="4-9", day_of_week="*"),
         "kwargs": {"schedule": "intraday_15m"},
     },
     # 09:25 IST = 03:55 UTC — the top-gainer screen fires ONCE, on the bar that
     # closes at 09:25, and the profile is built around that single decision point.
     "intraday-0925-suggestions": {
         "task": "app.tasks.profile_tasks.intraday_suggestions",
-        "schedule": crontab(hour=3, minute=56, day_of_week="1-5"),
+        "schedule": crontab(hour=3, minute=56, day_of_week="*"),
         "kwargs": {"schedule": "time_0925"},
     },
 }

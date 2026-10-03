@@ -34,13 +34,15 @@ async def _run_generation() -> dict[str, int]:
     from zoneinfo import ZoneInfo
 
     from app.db.session import AsyncSessionFactory
-    from app.services.market_calendar import is_trading_day
+    from app.services.market_calendar import is_regular_session
     from app.services.signal_service import run_nightly_signal_generation
 
     async with AsyncSessionFactory() as db:
         today_ist = datetime.now(UTC).astimezone(ZoneInfo("Asia/Kolkata")).date()
-        if not await is_trading_day(db, today_ist):
-            log.info("Nightly signal generation skipped: %s is a market holiday", today_ist)
+        # Regular sessions only: an evening special session closes after the 18:40 IST EOD
+        # ingest, so generation would re-score the PREVIOUS session's bars (bug-hunter #3).
+        if not await is_regular_session(db, today_ist):
+            log.info("Nightly signal generation skipped: %s is not a regular session", today_ist)
             return {"signals_generated": 0}
         capital, risk_pct = _default_risk_params()
         signals = await run_nightly_signal_generation(db, capital, risk_pct)

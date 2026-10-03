@@ -25,13 +25,12 @@ from app.services.bhavcopy_service import ingest_bhavcopy_date  # noqa: E402
 
 async def backfill(from_date: date, to_date: date, delay: float) -> int:
     ok = skipped = rows = 0
-    sessions = [
-        from_date + timedelta(days=i)
-        for i in range((to_date - from_date).days + 1)
-        if (from_date + timedelta(days=i)).weekday() < 5
-    ]
+    # EVERY calendar day is offered and the archive's 404 decides (the rule earned 2026-09-17):
+    # NSE holds weekend sessions, and a weekday filter made all of them unreachable.
+    sessions = [from_date + timedelta(days=i) for i in range((to_date - from_date).days + 1)]
     total = len(sessions)
-    print(f"Backfilling {total} weekday sessions {from_date} → {to_date}", flush=True)
+    print(f"Backfilling {total} calendar days {from_date} → {to_date} (404 = no session)",
+          flush=True)
 
     async with AsyncSessionFactory() as db:
         for i, d in enumerate(sessions, 1):

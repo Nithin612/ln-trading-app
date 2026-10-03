@@ -47,7 +47,6 @@ from app.broker.kite_client import sync_instruments  # noqa: E402
 from app.broker.kite_rest import KiteException, ThrottledKite, TokenException  # noqa: E402
 from app.db.session import AsyncSessionFactory  # noqa: E402
 from app.models.broker import BrokerToken, KiteInstrument  # noqa: E402
-from app.models.market_calendar import NseHoliday  # noqa: E402
 from app.models.market_data import Ohlcv1h, Ohlcv5m, Ohlcv15m  # noqa: E402
 from app.models.stock import Stock  # noqa: E402
 from sqlalchemy import func, select, text  # noqa: E402
@@ -202,23 +201,10 @@ async def _instrument_tokens(db: AsyncSession, symbols: list[str]) -> dict[str, 
 
 async def _trading_days(db: AsyncSession, start: date, end: date) -> set[date]:
     """NSE sessions in [start, end]: weekdays minus the holiday table."""
-    holidays = {
-        r[0]
-        for r in (
-            await db.execute(
-                select(NseHoliday.holiday_date).where(
-                    NseHoliday.holiday_date >= start, NseHoliday.holiday_date <= end
-                )
-            )
-        ).fetchall()
-    }
-    out: set[date] = set()
-    d = start
-    while d <= end:
-        if d.weekday() < 5 and d not in holidays:
-            out.add(d)
-        d += timedelta(days=1)
-    return out
+    # The calendar owns which days are sessions (weekend special sessions included) — W2/W5.
+    from app.services.market_calendar import trading_days_between
+
+    return set(await trading_days_between(db, start, end))
 
 
 async def _last_stored(db: AsyncSession, model: Any, stock_id: int, until: date) -> date | None:

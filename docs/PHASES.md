@@ -327,8 +327,8 @@ code find out?* Covers M31/M52 and M43; predicts `EQ_LISTED`, the F&O flags, `ns
 missing 3 special sessions. ⛔ **Confirmed: `_weekdays()` filtered `weekday() < 5`, so NSE's
 Saturday sessions were structurally unreachable** — the request was never made. ⛔⛔ **The same
 filter is live: every Celery beat is `day_of_week="1-5"`** ⇒ a weekend session is invisible to EOD
-ingest, nightly generation and every health probe. **Queued (item 13), not taken — it is a
-scheduling change on a running system.**
+ingest, nightly generation and every health probe. ✅ **FIXED 2026-10-03 (Bucket C #1)** — see the
+CHANGELOG.
 ⛔⛔ **THEN MY FIX REPRODUCED THE DEFECT: I asserted "Sunday stays excluded — NSE has never held
 one" AND PINNED IT IN A TEST. 2026-02-01 is a Sunday NSE session already sitting in our own
 `ohlcv_5m` (15,675 rows).** ⭐ The enumerator now **asserts nothing** — every calendar day is
@@ -2518,7 +2518,7 @@ in the module it was judging. **A green test proves nothing until it has been se
 2. **Run the re-seed against dev** — `uv run python scripts/seed_strategy_profiles.py`. Dry run
    confirms **all 10 profiles missing**; it is additive, `ON CONFLICT DO NOTHING`, and revives four
    dead consumers. CLAUDE.md says ask before writing live data, so it has NOT been run.
-3. **Item 13** — Celery beats off `day_of_week="1-5"` is a scheduling change on a running system
+3. ~~**Item 13**~~ ✅ **DONE 2026-10-03 (Bucket C #1)** — Celery beats off `day_of_week="1-5"`
 4. **Item 21** — one real contract note; it is item 5's ONLY cost blocker
 
 **▶ CONTINUE HERE (next session, any account) — updated 2026-09-18 (round 11).**

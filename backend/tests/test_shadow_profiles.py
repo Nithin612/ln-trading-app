@@ -349,10 +349,12 @@ class TestIntradayTaskGuards:
         """
         from app.tasks import profile_tasks
 
-        monkeypatch.setattr(profile_tasks, "_IST", profile_tasks._IST)
-        monkeypatch.setattr(
-            "app.trading.market_hours.is_market_session", lambda _now: False
-        )
+        async def closed(_db: object, _now: object) -> bool:
+            return False
+
+        # The guard is the calendar's `in_market_session` since 2026-10-03 (weekend
+        # sessions); patched so no query runs on the pooled engine.
+        monkeypatch.setattr("app.services.market_calendar.in_market_session", closed)
         out = await profile_tasks._run_intraday("intraday_15m")
         assert out["status"] == "skipped"
         assert "session" in str(out["message"])

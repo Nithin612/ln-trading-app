@@ -16,7 +16,6 @@ from zoneinfo import ZoneInfo
 from app.celery_app import celery_app
 from app.core.config import settings
 from app.tasks._runner import run_db_task
-from app.tasks.fo_tasks import _within_market_hours  # shared wall-clock guard
 
 log = logging.getLogger(__name__)
 _IST = ZoneInfo("Asia/Kolkata")
@@ -38,16 +37,13 @@ async def _run_refresh_circuit_bands() -> dict[str, object]:
     from app.broker.tick_consumer import _build_token_stock_map
     from app.db.session import AsyncSessionFactory
     from app.services.chain_recorder import get_any_active_admin_token
-    from app.services.market_calendar import is_trading_day
+    from app.services.market_calendar import in_market_session
 
     if not settings.circuit_bands_enabled:
         return {"status": "skipped", "message": "circuit_bands_enabled is False"}
-    if not _within_market_hours():
-        return {"status": "skipped", "message": "outside market hours"}
-
     async with AsyncSessionFactory() as db:
-        if not await is_trading_day(db, datetime.now(UTC).astimezone(_IST).date()):
-            return {"status": "skipped", "message": "market holiday"}
+        if not await in_market_session(db, datetime.now(UTC)):
+            return {"status": "skipped", "message": "outside market session"}
         access_token = await get_any_active_admin_token(db)
         if access_token is None:
             # Normal without a Kite subscription active — stay quiet.

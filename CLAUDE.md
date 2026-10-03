@@ -1219,8 +1219,9 @@ else.
   "NSE has never held one" **and pinning it in a test**, while our `ohlcv_5m` already held 15,675
   rows for it. ⭐ **The enumerator now asserts NOTHING about which days are sessions: offer every
   calendar day, let the archive's 404 decide.** `ohlcv_1d` = **1,727 sessions / 3,166,300 bars**.
-  ⛔ **THE SAME FILTER IS STILL LIVE — every Celery beat is `day_of_week="1-5"`**, so a weekend
-  session is invisible to EOD ingest, nightly generation and every health probe. Queued, not taken.
+  ✅ **FIXED 2026-10-03 (Bucket C #1):** the calendar now counts `nse_special_sessions` (8 weekend
+  sessions seeded from the bhavcopy), every session-dependent beat fires daily and guards on the
+  calendar, and jobs built on the regular day's shape skip a special session with other hours.
   ⚠ **`_CLEAN_SINCE = 2023-07-03` is in SIX study scripts, not four** (`tp_geometry_study`,
   `squeeze_study`, `confirmation_base_rate`, `entry_confirmation_study`, `overhead_supply_study`,
   and `rvol_factor_study` via its import of `tp_geometry_study._load_frames`). ⭐ **Since the

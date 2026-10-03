@@ -28,9 +28,12 @@ def apply_corporate_actions(self: object) -> dict[str, object]:  # noqa: ARG001
 async def _run_apply_corporate_actions() -> dict[str, object]:
     from app.db.session import AsyncSessionFactory
     from app.services.ca_adjust import apply_ex_date_corporate_actions
+    from app.services.market_calendar import skip_unless_trading_day
 
     today_ist = datetime.now(UTC).astimezone(_IST).date()
     async with AsyncSessionFactory() as db:
+        if (skip := await skip_unless_trading_day(db)) is not None:
+            return skip
         # Matches ex-date ≤ today (catch-up) and commits per position internally.
         applied = await apply_ex_date_corporate_actions(db, today_ist)
     if applied:

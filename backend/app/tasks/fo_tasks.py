@@ -23,16 +23,13 @@ _IST = ZoneInfo("Asia/Kolkata")
 
 
 def _within_market_hours(now_utc: datetime | None = None) -> bool:
-    """True during NSE cash-market hours (9:15–15:30 IST, Mon–Fri).
+    """Calendar-free wall-clock check (09:15–15:30 IST, Mon–Fri) — a thin alias of
+    `market_hours.is_market_session`, kept for callers without a DB (W2: one
+    implementation). Tasks with a DB use `market_calendar.in_market_session`, which
+    also sees weekend special sessions and holidays."""
+    from app.trading.market_hours import is_market_session
 
-    Pure wall-clock check; holiday awareness is a separate async
-    market_calendar.is_trading_day() check inside the task bodies.
-    """
-    now_ist = (now_utc or datetime.now(UTC)).astimezone(_IST)
-    if now_ist.weekday() > 4:  # Sat/Sun
-        return False
-    minutes = now_ist.hour * 60 + now_ist.minute
-    return (9 * 60 + 15) <= minutes <= (15 * 60 + 30)
+    return is_market_session(now_utc or datetime.now(UTC))
 
 
 @celery_app.task(name="app.tasks.fo_tasks.fo_eod_ingestion", bind=True, max_retries=2)  # type: ignore[untyped-decorator]
@@ -65,14 +62,11 @@ async def _run_chain_snapshot() -> dict[str, object]:
         record_chain_snapshots,
     )
 
-    if not _within_market_hours():
-        return {"status": "skipped", "message": "outside market hours"}
-
     async with AsyncSessionFactory() as db:
-        from app.services.market_calendar import is_trading_day
+        from app.services.market_calendar import in_market_session
 
-        if not await is_trading_day(db, datetime.now(UTC).astimezone(_IST).date()):
-            return {"status": "skipped", "message": "market holiday"}
+        if not await in_market_session(db, datetime.now(UTC)):
+            return {"status": "skipped", "message": "outside market session"}
         access_token = await get_any_active_admin_token(db)
         if access_token is None:
             # Normal in Phases 0–2 (no Kite subscription yet) — stay quiet.

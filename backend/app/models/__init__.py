@@ -5,7 +5,7 @@ from app.models.fo_data import FoBhavcopy, IndiaVixDaily, OptionChainSnapshot
 from app.models.gate_config import GateConfigVersion
 from app.models.journal import JournalEntry
 from app.models.ledger import LedgerEntry
-from app.models.market_calendar import NseHoliday
+from app.models.market_calendar import NseHoliday, NseSpecialSession
 from app.models.market_data import (
     BulkBlockDeal,
     FiiDiiDaily,
@@ -54,6 +54,7 @@ __all__ = [
     "FiiDiiDaily",
     "BulkBlockDeal",
     "NseHoliday",
+    "NseSpecialSession",
     "SrLevel",
     "Signal",
     "SignalOutcome",

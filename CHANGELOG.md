@@ -7,6 +7,27 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Bucket C #1 — NSE weekend sessions are trading days (2026-10-03)
+
+- **The defect:** the calendar was "a weekday that is not a holiday", so `is_trading_day` was False
+  for every Saturday/Sunday session (8 in the archive: 2019-10-27 … 2026-02-01), and 21 Celery
+  beats were Mon–Fri — EOD ingest, the catch-up healer, generation and every health probe were
+  blind to them.
+- **The fix:** `nse_special_sessions` (migration `5f2a8c1e7d3b`, applied to dev, seeded with the 8
+  bhavcopy-derived sessions by `scripts/seed_nse_special_sessions.py`); ONE predicate
+  `_is_session` behind every `market_calendar` helper; `session_hours` / `in_market_session` /
+  `is_regular_session` / `skip_unless_trading_day`; 20 beats → every day, each task guarding on
+  the calendar so ordinary weekends stay quiet; admin `GET/POST/DELETE /calendar/special-sessions`.
+  `fo_tasks._within_market_hours` is now an alias of `is_market_session` (a W2 duplicate removed).
+- **bug-hunter (7 findings, all fixed or recorded):** the position monitor, chains and circuit
+  beats widened to 08:30–20:29 IST so an evening session is watched; the CAS capture, its absence
+  alarm, intraday profiles and nightly generation / pairs / suggestions run on REGULAR sessions
+  only; a weekday muhurat can be recorded with its hours; the XNSE cross-check keeps its weekday
+  filter; both backfill scripts lose their weekday filters; four follow-ups recorded in the queue.
+- Two tests that pinned the old premise ("NSE does not trade at the weekend") rewritten; +23
+  tests (`tests/test_weekend_sessions.py` + a beat-schedule canary). Unrelated, found by the full
+  suite: `test_symbol_history` was date-dependent and broke on 2026-10-02 (`2916688`).
+
 ### ⛔ Programme closure decided — executes 2026-10-31 (2026-10-03)
 
 - The author: end the successor programme cleanly at the sunset if the data allows. It does:

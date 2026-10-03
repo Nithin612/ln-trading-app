@@ -274,13 +274,13 @@ async def trigger_bhavcopy_backfill(
             detail=f"Backfill range exceeds {max_days} days",
         )
 
+    # The CALENDAR decides which dates are sessions (weekend special sessions included) —
+    # not a weekday filter, which made every Saturday/Sunday session unreachable here.
+    from app.services.market_calendar import trading_days_between
+
     results: list[IngestionResult] = []
-    current = req.from_date
-    while current <= req.to_date:
-        if current.weekday() < 5:  # skip weekends
-            result = await ingest_bhavcopy_date(db, current)
-            results.append(result)
-        current += timedelta(days=1)
+    for current in await trading_days_between(db, req.from_date, req.to_date):
+        results.append(await ingest_bhavcopy_date(db, current))
 
     return results
 

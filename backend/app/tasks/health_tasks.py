@@ -103,8 +103,11 @@ def check_feed_coverage(self: object) -> dict[str, object]:  # noqa: ARG001
 
 async def _run_check_feed_coverage() -> dict[str, object]:
     from app.db.session import AsyncSessionFactory
+    from app.services.market_calendar import skip_unless_trading_day
 
     async with AsyncSessionFactory() as db:
+        if (skip := await skip_unless_trading_day(db)) is not None:
+            return skip
         return await _coverage_alert_payload(db)
 
 
@@ -193,8 +196,11 @@ def check_universe_health(self: object) -> dict[str, object]:  # noqa: ARG001
 
 async def _run_check_universe_health() -> dict[str, object]:
     from app.db.session import AsyncSessionFactory
+    from app.services.market_calendar import skip_unless_trading_day
 
     async with AsyncSessionFactory() as db:
+        if (skip := await skip_unless_trading_day(db)) is not None:
+            return skip
         return await _universe_health_payload(db)
 
 
@@ -238,8 +244,11 @@ def check_report_health(self: object) -> dict[str, object]:  # noqa: ARG001
 
 async def _run_check_report_health() -> dict[str, object]:
     from app.db.session import AsyncSessionFactory
+    from app.services.market_calendar import skip_unless_trading_day
 
     async with AsyncSessionFactory() as db:
+        if (skip := await skip_unless_trading_day(db)) is not None:
+            return skip
         return await _report_health_payload(db)
 
 
@@ -285,8 +294,11 @@ def check_starved_tables(self: object) -> dict[str, object]:  # noqa: ARG001
 
 async def _run_check_starved_tables() -> dict[str, object]:
     from app.db.session import AsyncSessionFactory
+    from app.services.market_calendar import skip_unless_trading_day
 
     async with AsyncSessionFactory() as db:
+        if (skip := await skip_unless_trading_day(db)) is not None:
+            return skip
         return await _starvation_payload(db)
 
 

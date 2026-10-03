@@ -27,14 +27,14 @@ async def _run_mint() -> dict[str, int]:
     from zoneinfo import ZoneInfo
 
     from app.db.session import AsyncSessionFactory
-    from app.services.market_calendar import is_trading_day
+    from app.services.market_calendar import is_regular_session
     from app.services.pair_minter import mint_pair_signals as _mint
     from app.services.pair_outcome import track_pair_outcomes
 
     async with AsyncSessionFactory() as db:
         today_ist = datetime.now(UTC).astimezone(ZoneInfo("Asia/Kolkata")).date()
-        if not await is_trading_day(db, today_ist):
-            log.info("Pair task skipped: %s is a market holiday", today_ist)
+        if not await is_regular_session(db, today_ist):  # see nightly generation
+            log.info("Pair task skipped: %s is not a regular session", today_ist)
             return {"pairs_minted": 0, "pairs_resolved": 0}
         resolved = await track_pair_outcomes(db)  # resolve open signals from the fresh tape
         minted = await _mint(db)  # then mint today's new extremes

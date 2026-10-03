@@ -29,14 +29,14 @@ def nightly_suggestions(self: object) -> dict[str, object]:  # noqa: ARG001
 async def _run_nightly() -> dict[str, object]:
     from app.db.session import AsyncSessionFactory
     from app.profiles.pipeline import run_scheduled_profiles
-    from app.services.market_calendar import is_trading_day
+    from app.services.market_calendar import is_regular_session
     from app.tasks.signal_tasks import _default_risk_params
 
     today_ist = datetime.now(UTC).astimezone(_IST).date()
     async with AsyncSessionFactory() as db:
-        if not await is_trading_day(db, today_ist):
-            log.info("nightly suggestions skipped: %s is not a trading day", today_ist)
-            return {"status": "skipped", "message": "not a trading day"}
+        if not await is_regular_session(db, today_ist):  # see nightly generation
+            log.info("nightly suggestions skipped: %s is not a regular session", today_ist)
+            return {"status": "skipped", "message": "not a regular session"}
         capital, risk_pct = _default_risk_params()
         counts = await run_scheduled_profiles(db, "eod", capital, risk_pct)
     return {"status": "ok", "profiles": counts}
@@ -59,9 +59,8 @@ def intraday_suggestions(self: object, schedule: str) -> dict[str, object]:  # n
 async def _run_intraday(schedule: str) -> dict[str, object]:
     from app.db.session import AsyncSessionFactory
     from app.profiles.pipeline import run_scheduled_profiles
-    from app.services.market_calendar import is_trading_day
+    from app.services.market_calendar import in_market_session, is_regular_session
     from app.tasks.signal_tasks import _default_risk_params
-    from app.trading.market_hours import is_market_session
 
     now_utc = datetime.now(UTC)
     # Authoritative session guard. The crontab window is deliberately coarse
@@ -69,12 +68,13 @@ async def _run_intraday(schedule: str) -> dict[str, object]:
     # exact 09:15–15:30 IST boundary is enforced here — the same split the
     # position monitor uses after its 08:30 pre-open beat closed positions on a
     # stale previous-session close.
-    if not is_market_session(now_utc):
-        return {"status": "skipped", "message": "outside market session"}
-
     async with AsyncSessionFactory() as db:
-        if not await is_trading_day(db, now_utc.astimezone(_IST).date()):
-            return {"status": "skipped", "message": "not a trading day"}
+        if not await in_market_session(db, now_utc):
+            return {"status": "skipped", "message": "outside market session"}
+        # The intraday profiles are built on the regular day's shape (an opening range, a
+        # 09:25 gainer list); a special session with other hours is not that day.
+        if not await is_regular_session(db, now_utc.astimezone(_IST).date()):
+            return {"status": "skipped", "message": "not a regular session"}
         capital, risk_pct = _default_risk_params()
         counts = await run_scheduled_profiles(db, schedule, capital, risk_pct)
     log.info("intraday suggestions (%s): %s", schedule, counts)

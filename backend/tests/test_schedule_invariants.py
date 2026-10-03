@@ -107,10 +107,12 @@ def test_instrument_sync_runs_before_the_session_opens() -> None:
     assert max(hours) < 3
 
 
-def test_instrument_sync_is_weekdays_only() -> None:
-    """NSE does not trade at the weekend; a dump fetched then is the Friday one."""
+def test_instrument_sync_fires_every_day_so_a_weekend_session_gets_a_fresh_dump() -> None:
+    """test_weekday_only_beat_misses_weekend_sessions (2026-10-03): this used to pin Mon–Fri
+    on the premise "NSE does not trade at the weekend" — false, 8 times in the archive. The
+    beat fires daily; the task skips any non-trading day via the NSE calendar."""
     cron = _entry_for("app.tasks.market_data_tasks.sync_kite_instruments")["schedule"]
-    assert {int(d) for d in cron.day_of_week} == {1, 2, 3, 4, 5}
+    assert {int(d) for d in cron.day_of_week} == set(range(7))
 
 
 def test_the_universe_materialiser_runs_after_the_instrument_sync() -> None:
@@ -163,8 +165,25 @@ def test_the_coverage_alarm_runs_after_both_eod_ingests_and_before_generation() 
     assert coverage < generation, "a thin feed must be flagged before the scan uses it"
 
 
-def test_the_coverage_alarm_is_weekdays_only() -> None:
-    """NSE does not trade at the weekend, so there is no new session to judge and the
-    trailing median would be compared against a feed nobody wrote."""
+def test_the_coverage_alarm_fires_every_day_and_guards_on_the_calendar() -> None:
+    """A weekend SESSION must be judged; an ordinary weekend must not be (there is no new
+    session, and the trailing median would be compared against a feed nobody wrote). The beat
+    fires daily and `skip_unless_trading_day` makes that distinction (2026-10-03)."""
     cron = _entry_for("app.tasks.health_tasks.check_feed_coverage")["schedule"]
-    assert {int(d) for d in cron.day_of_week} == {1, 2, 3, 4, 5}
+    assert {int(d) for d in cron.day_of_week} == set(range(7))
+
+
+def test_no_session_dependent_beat_is_restricted_to_weekdays() -> None:
+    """test_weekday_only_beat_misses_weekend_sessions (2026-10-03): 21 beats were
+    `day_of_week="1-5"`, so every Saturday/Sunday NSE session (Budget days, DR drills,
+    muhurat — 8 in the archive) was invisible to ingestion, generation and every health
+    probe. Only the calendar-runway check, which is not about sessions, may stay Mon–Fri."""
+    allowed_weekday_only = {"app.tasks.health_tasks.check_calendar_coverage"}
+    restricted = []
+    for name, entry in celery_app.conf.beat_schedule.items():
+        cron = entry["schedule"]
+        dow = getattr(cron, "day_of_week", None)
+        if dow is not None and {int(d) for d in dow} != set(range(7)):
+            if entry["task"] not in allowed_weekday_only:
+                restricted.append(name)
+    assert restricted == []

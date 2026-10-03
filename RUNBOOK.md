@@ -389,6 +389,20 @@ Restore into a **new** database first and check it, then swap. Never restore ove
 hashes). All of it is TTL'd cache rebuilt by the live worker, so that is deliberate — but it
 means a restore brings back the record, not the in-flight session state.
 
+## 9d. Weekend (special) sessions — the calendar's third table (2026-10-03)
+
+NSE sometimes trades on a Saturday or Sunday (Budget days, DR drills, muhurat). The calendar
+counts a day as a session if it is in `nse_special_sessions`, or is a weekday that is not in
+`nse_holidays`. Every session-dependent beat now fires daily and asks the calendar.
+
+- **History:** `cd backend && uv run python scripts/seed_nse_special_sessions.py [--dry-run]`
+  derives weekend sessions from the bhavcopy (idempotent; 8 rows as of 2026-10-03).
+- **An announced future session:** `POST /api/v1/calendar/special-sessions` (admin) with
+  `session_date`, `name`, and — if not 09:15–15:30 — `open_ist`/`close_ist`. A weekday is accepted
+  only WITH its hours (a muhurat). A session with non-regular hours runs the position monitor,
+  chains and circuit bands, but NOT the CAS capture, the intraday profiles or nightly generation.
+- ⚠ Record it BEFORE the day: the beats read the calendar when they fire.
+
 ## 9c. CAS watch — the worker-down alarm (cron, 2026-10-02)
 
 `backend/scripts/cas_watch.py`, run by **cron** (not Celery beat, so it fires when the worker is

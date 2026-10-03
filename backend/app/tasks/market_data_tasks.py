@@ -86,8 +86,11 @@ def sync_kite_instruments(self: object) -> dict[str, object]:  # noqa: ARG001
 async def _run_sync_instruments() -> dict[str, object]:
     from app.broker.kite_client import sync_instruments
     from app.db.session import AsyncSessionFactory
+    from app.services.market_calendar import skip_unless_trading_day
 
     async with AsyncSessionFactory() as db:
+        if (skip := await skip_unless_trading_day(db)) is not None:
+            return skip
         synced = await sync_instruments(db)
     log.info("kite_instruments refreshed: %d rows", synced)
     return {"synced": synced}
@@ -117,6 +120,7 @@ def materialise_universe(self: object) -> dict[str, object]:  # noqa: ARG001
 
 async def _run_materialise_universe() -> dict[str, object]:
     from app.db.session import AsyncSessionFactory
+    from app.services.market_calendar import skip_unless_trading_day
     from app.services.notifier import Level, Notification, notify
     from app.services.universe_materialiser import (
         apply_to_stocks,
@@ -130,6 +134,8 @@ async def _run_materialise_universe() -> dict[str, object]:
 
     today_ist = datetime.now(UTC).astimezone(_IST).date()
     async with AsyncSessionFactory() as db:
+        if (skip := await skip_unless_trading_day(db)) is not None:
+            return skip
         # ⭐ The raw source is fetched HERE rather than inside `load_inputs` so the exact
         # bytes can be recorded. §73: the artifact is contents, not a hash — a hash gives
         # you `H(input)` while every consumer needs `input`, and `kite_instruments` is

@@ -198,10 +198,12 @@ async def cas_coverage(db: Any, *, day: date, now: datetime | None = None) -> Ca
     from sqlalchemy import func, select
 
     from app.models.stock import CasDaily, CasPostCloseDaily
-    from app.services.market_calendar import is_trading_day
+    from app.services.market_calendar import is_regular_session
 
     at_ist = (now or datetime.now(tz=UTC)).astimezone(_IST)
-    trading = await is_trading_day(db, day)
+    # A CAS window is expected only on a REGULAR session — the capture skips special sessions
+    # (no closing auction), so the absence alarm must agree (bug-hunter #2, 2026-10-03).
+    trading = await is_regular_session(db, day)
     rows = (
         await db.execute(
             select(func.count()).select_from(CasDaily).where(CasDaily.trade_date == day)

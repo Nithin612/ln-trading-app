@@ -56,8 +56,8 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
     from app.models.trading import Position
     from app.models.user import User
     from app.services.journal_service import auto_create_journal_entry
+    from app.services.market_calendar import in_market_session
     from app.trading.atr import atr_timeframe_for, latest_atr
-    from app.trading.market_hours import is_market_session
     from app.trading.profit_lock import absolute_ladder_stop, ladder_params_from_settings
     from app.trading.trail_sl import (
         advance_trail,
@@ -72,7 +72,7 @@ async def scan_positions(  # noqa: C901 — linear SL/TP/trail branches per posi
 
     # Off-market: do nothing. This is the primary guard against the pre-open
     # (08:30 IST) beat auto-closing positions on the previous session's close.
-    if not is_market_session(now):
+    if not await in_market_session(db, now):
         log.debug("Position monitor: outside market session (%s) — skipping", now.isoformat())
         return {"closed": 0, "updated": 0, "skipped": 0}
 
