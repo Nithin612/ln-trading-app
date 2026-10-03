@@ -7,6 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### Bucket C #4 — A4: what is legal NOW, queryable before a submit (2026-10-03)
+
+- `GET /api/v1/calendar/constraints` — the session (trading day? regular hours? in session?
+  today's hours, next open, today's close; weekend special sessions and holidays included), the
+  validity a signal created now would get per classification (the same `compute_validity_until`
+  path generation uses), the user's off-market rule, and per-timeframe data limits
+  (`?data_limits=false` skips those scans). Every answer comes from its owner (W2/W5); `_now()` is
+  the clock seam.
+- **The top-bar market pill reads it** (`useMarketStatus` + `MarketStatusChip`). It used to guess
+  from the browser clock with a weekday rule, so it read **OPEN on a weekday holiday**, was blind
+  to weekend sessions, and — found by ui-reviewer — **showed PRE-MARKET 09:15–09:30 and OPEN only
+  from 09:30** (555/570 minutes are 09:15/09:30). Now PRE-MARKET 09:00–09:15 (regular sessions),
+  OPEN in the calendar's hours, "opens Thu 09:15" across closures, and **UNKNOWN** (dashed, with a
+  reason) until the calendar answers. Closes #1's banner follow-up.
+- ui-reviewer PASS-WITH-NOTES, all taken: exact "Thu 09:15" (built from Intl parts — `format()`
+  gives "Thu, 09:15" on some ICU builds); a stale past `next_open` says nothing instead of "0h 0m";
+  countdowns round up; the query key is per user and per IST day; the per-second tick lives in the
+  chip, not the whole shell; new `formatIstClock` / `formatIstWeekdayTime` in `lib/format.ts`.
+- Tests: backend +11 (`tests/test_market_constraints.py`), frontend +7.
+
 ### Bucket C #3 — U16 subscription headroom, an early warning (2026-10-03)
 
 - ⚠ **The queue row was stale (W1).** It said `live_worker` subscribes in one unchecked call; the

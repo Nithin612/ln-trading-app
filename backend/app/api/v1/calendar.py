@@ -7,9 +7,10 @@ GET  /calendar/special-sessions    — list weekend sessions (Budget / DR drill 
 POST /calendar/special-sessions    — (admin) add one announced by NSE circular
 DELETE /calendar/special-sessions/{date} — (admin) remove a wrong entry
 GET  /calendar/trading-day         — is a date a trading day (+ neighbours)
+GET  /calendar/constraints         — A4: what is legal NOW, queryable before any submit
 """
 
-from datetime import date, datetime, time
+from datetime import UTC, date, datetime, time
 from typing import Annotated
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status
@@ -182,6 +183,126 @@ async def delete_special_session(
                             detail="Not a recorded special session")
     await db.delete(row)
     await db.commit()
+
+
+class SessionNowOut(BaseModel):
+    as_of: datetime
+    today_ist: date
+    is_trading_day: bool
+    is_regular_session: bool
+    open_ist: time | None
+    close_ist: time | None
+    in_session: bool
+    next_open: datetime | None  # the next session's open (UTC), when not in session
+    session_close: datetime | None  # today's close (UTC), when today is a session not yet closed
+
+
+class ValidityOut(BaseModel):
+    classification: str
+    rule: str
+    valid_until: datetime  # a signal created NOW, by the same path signal generation uses
+
+
+class DataLimitOut(BaseModel):
+    timeframe: str
+    earliest: datetime | None
+    latest: datetime | None
+
+
+class ConstraintsOut(BaseModel):
+    session: SessionNowOut
+    validity: list[ValidityOut]
+    offmarket_entry_allowed: bool
+    offmarket_rule: str
+    data_limits: list[DataLimitOut]
+
+
+_VALIDITY_RULES = {
+    "scalp": "30 minutes from creation",
+    "intraday": "15:15 IST the same day (the next day once 15:15 has passed)",
+    "swing": "5 trading days (NSE calendar)",
+    "positional": "30 trading days (NSE calendar)",
+}
+
+
+def _now() -> datetime:
+    """The clock seam — patched in tests so a weekday, a weekend and a holiday can be pinned."""
+    return datetime.now(tz=UTC)
+
+
+def _at_ist(d: date, t: time) -> datetime:
+    from zoneinfo import ZoneInfo
+
+    return datetime.combine(d, t, tzinfo=ZoneInfo("Asia/Kolkata")).astimezone(UTC)
+
+
+@router.get("/constraints", response_model=ConstraintsOut)
+async def constraints(
+    db: Annotated[AsyncSession, Depends(get_db)],
+    user: Annotated[User, Depends(get_current_user)],
+    data_limits: bool = Query(
+        default=True,
+        description="include per-timeframe earliest/latest bars (a min/max scan per table) — "
+        "the top-bar pill polls with false",
+    ),
+) -> ConstraintsOut:
+    """A4 — the session and calendar constraints, queryable BEFORE a submit, the way
+    `eligibility.py` made the gate answers queryable. Every answer comes from its owner (W2/W5):
+    the calendar (sessions, incl. weekend specials), `compute_validity_until` (the path signal
+    generation takes), the user's `allow_offmarket_entry`, and the candle tables themselves.
+    It replaces guessing — the top-bar banner read OPEN on a weekday holiday."""
+    from zoneinfo import ZoneInfo
+
+    from sqlalchemy import text
+
+    from app.broker.candle_aggregator import TIMEFRAME_TABLE
+    from app.signals.expiry import compute_validity_until
+
+    now = _now()
+    today = now.astimezone(ZoneInfo("Asia/Kolkata")).date()
+    hours = await market_calendar.session_hours(db, today)
+    in_session = await market_calendar.in_market_session(db, now)
+    session_close = None
+    next_open = None
+    if hours is not None and now < _at_ist(today, hours[1]):
+        session_close = _at_ist(today, hours[1])
+        if now < _at_ist(today, hours[0]):
+            next_open = _at_ist(today, hours[0])
+    if next_open is None and not in_session:
+        nxt = await market_calendar.next_trading_day(db, today)
+        nxt_hours = await market_calendar.session_hours(db, nxt)
+        if nxt_hours is not None:
+            next_open = _at_ist(nxt, nxt_hours[0])
+
+    validity = []
+    for cls, rule in _VALIDITY_RULES.items():
+        offset = await market_calendar.validity_offset_days(db, cls, now)
+        validity.append(ValidityOut(classification=cls, rule=rule,
+                                    valid_until=compute_validity_until(cls, now, offset)))
+
+    tables = {**TIMEFRAME_TABLE, "1d": "ohlcv_1d"}  # the whitelist; names never come from input
+    limits = []
+    for tf, table in (tables.items() if data_limits else ()):
+        row = (await db.execute(text(
+            f"SELECT min(time), max(time) FROM {table}"  # noqa: S608 — whitelisted table
+        ))).one()
+        limits.append(DataLimitOut(timeframe=tf, earliest=row[0], latest=row[1]))
+
+    return ConstraintsOut(
+        session=SessionNowOut(
+            as_of=now, today_ist=today, is_trading_day=hours is not None,
+            is_regular_session=await market_calendar.is_regular_session(db, today),
+            open_ist=hours[0] if hours else None, close_ist=hours[1] if hours else None,
+            in_session=in_session, next_open=next_open, session_close=session_close,
+        ),
+        validity=validity,
+        offmarket_entry_allowed=bool(user.allow_offmarket_entry),
+        offmarket_rule=(
+            "a paper order on a stock with no live price is refused unless off-market entry "
+            "is allowed in your profile"
+        ),
+        data_limits=limits,
+    )
 
 
 @router.get("/trading-day", response_model=TradingDayOut)

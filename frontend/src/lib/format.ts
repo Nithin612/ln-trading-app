@@ -71,6 +71,27 @@ export const formatIstDateTime = (iso: string) => {
   return Number.isNaN(d.getTime()) ? "—" : `${IST_DATETIME.format(d)} IST`
 }
 
+const IST_CLOCK = new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+})
+const IST_WEEKDAY_TIME = new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata", weekday: "short", hour: "2-digit", minute: "2-digit", hour12: false,
+})
+
+/** "14:05:09" — the IST wall clock (the top-bar session pill). */
+export const formatIstClock = (d: Date) => IST_CLOCK.format(d)
+
+/**
+ * "Mon 09:15" — when the next session opens, IST. "—" for an unparseable value.
+ * Built from parts: `format()` yields "Mon, 09:15" on some ICU builds and not others.
+ */
+export const formatIstWeekdayTime = (iso: string) => {
+  const d = new Date(iso)
+  if (Number.isNaN(d.getTime())) return "—"
+  const p = Object.fromEntries(IST_WEEKDAY_TIME.formatToParts(d).map((x) => [x.type, x.value]))
+  return `${p.weekday} ${p.hour}:${p.minute}`
+}
+
 /**
  * Greeks and other small analytical values: fixed decimals, no grouping.
  * Delta/gamma need 4 dp (index gamma is ~1e-4); vega/theta read better at 2.

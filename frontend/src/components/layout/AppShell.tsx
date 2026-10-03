@@ -8,54 +8,12 @@ import { useUiPrefsStore } from '@/store/uiPrefsStore'
 import { useTradingHaltStore } from '@/store/tradingHaltStore'
 import { ProfileDropdown } from '@/components/ui/profile-dropdown'
 import { AlertBell } from '@/features/alerts/AlertBell'
+import { MarketStatusChip } from './MarketStatusChip'
 import { SidebarNav } from './Sidebar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 
 const SIDEBAR_KEY = 'sidebar-collapsed'
-
-function useMarketStatus() {
-  const [now, setNow] = useState(new Date())
-  useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000)
-    return () => clearInterval(t)
-  }, [])
-
-  const ist = new Date(now.toLocaleString('en-US', { timeZone: 'Asia/Kolkata' }))
-  const h = ist.getHours()
-  const m = ist.getMinutes()
-  const day = ist.getDay()
-  const isWeekend = day === 0 || day === 6
-  const mins = h * 60 + m
-
-  let status: 'OPEN' | 'CLOSED' | 'PRE-MARKET'
-  if (isWeekend) {
-    status = 'CLOSED'
-  } else if (mins >= 555 && mins < 570) {
-    status = 'PRE-MARKET'
-  } else if (mins >= 570 && mins < 930) {
-    status = 'OPEN'
-  } else {
-    status = 'CLOSED'
-  }
-
-  let nextEvent = ''
-  if (!isWeekend) {
-    if (mins < 570) {
-      const rem = 570 - mins
-      nextEvent = `opens in ${Math.floor(rem / 60)}h ${rem % 60}m`
-    } else if (mins < 930) {
-      const rem = 930 - mins
-      nextEvent = `closes in ${Math.floor(rem / 60)}h ${rem % 60}m`
-    }
-  }
-
-  const timeIST = ist.toLocaleTimeString('en-IN', {
-    hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false,
-  })
-
-  return { status, timeIST, nextEvent }
-}
 
 /* Applies theme + font prefs as data-attributes / CSS vars on <html> */
 function ThemeApplicator() {
@@ -96,8 +54,6 @@ export function AppShell() {
       return next
     })
   }
-
-  const { status: marketStatus, timeIST, nextEvent } = useMarketStatus()
 
   const banner: 'not-connected' | 'expiring' | null = isAdmin
     ? !kite.connected
@@ -182,25 +138,8 @@ export function AppShell() {
             <h1 className="text-sm font-semibold text-(--color-text)">{pageTitle}</h1>
 
             <div className="flex items-center gap-2">
-              {/* Market status chip + clock */}
-              <div className="flex items-center gap-2">
-                <span
-                  className={cn(
-                    'text-xs font-semibold px-2 py-0.5 rounded-full border',
-                    marketStatus === 'OPEN'
-                      ? 'bg-(--color-profit-bg) text-(--color-profit) border-(--color-profit)/20'
-                      : marketStatus === 'PRE-MARKET'
-                        ? 'bg-(--color-warning-bg) text-(--color-warning) border-(--color-warning)/20'
-                        : 'bg-(--color-surface-3) text-(--color-text-muted) border-(--color-border)',
-                  )}
-                >
-                  {marketStatus}
-                </span>
-                <span className="text-xs font-mono text-(--color-text-muted)">{timeIST} IST</span>
-                {nextEvent && (
-                  <span className="text-xs text-(--color-text-muted) hidden xl:block">• {nextEvent}</span>
-                )}
-              </div>
+              {/* Market status chip + clock — from the calendar (A4) */}
+              <MarketStatusChip />
 
               <div className="w-px h-4 bg-(--color-border)" />
 
