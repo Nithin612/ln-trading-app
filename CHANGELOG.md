@@ -7,6 +7,26 @@ Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+### The provisional layer follows the calendar, not the weekday (2026-10-04)
+
+- **The gap:** `provisional._in_session` was a Mon–Fri 09:15–15:35 wall-clock rule. It was the
+  last loose end of Bucket C #1. The live leaderboard therefore stayed **dark through NSE
+  weekend sessions** (2026-02-01 budget Sunday, 2024-03-02 DR drill) and **ran on weekday
+  holidays** (2026-10-02, Gandhi Jayanti).
+- **Now:** the run window comes from `market_calendar.session_hours` for the run's day, plus the
+  existing 5-minute drain grace, resolved once per run. If the calendar is unreadable it falls
+  back to the old rule with a WARNING. Checked against the real dev calendar for all five cases
+  above.
+- **bug-hunter fixes:**
+  - a window whose close falls near midnight wrapped around (23:57 + 5 min → 00:02) and became
+    inverted; it is now clamped;
+  - half-recorded special-session hours resolved to an inverted window that was silently dark;
+    they now warn and use the regular window.
+- ⚠ **Recorded limit, not fixed:** the host `live_worker` still runs the regular session shape,
+  so an **evening muhurat** stays dark end to end. A weekend session at regular hours works.
+- Tests: `test_provisional_session_window.py` (10, through the real calendar tables);
+  `TestSessionGate` updated to the new contract.
+
 ### Fix: every pytest leg of `make check` froze in an interactive terminal (2026-10-03)
 
 - **Symptom.** `make replay` hit its 300 s timebox in the author's terminal twice, while passing

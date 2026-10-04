@@ -44,6 +44,7 @@ from app.broker.provisional import (
     publish_leaderboards,
     read_cycle_stats,
     run_cycle,
+    run_window,
     score_pair,
 )
 from app.core.config import settings
@@ -180,11 +181,16 @@ class TestSessionGate:
         def at(h: int, m: int, day: date = DAY) -> datetime:
             return datetime.combine(day, time(h, m), tzinfo=UTC) - ist
 
-        assert not _in_session(at(9, 14))
-        assert _in_session(at(9, 15))
-        assert _in_session(at(15, 35))  # +5 min drain grace
-        assert not _in_session(at(15, 36))
-        assert not _in_session(at(11, 0, date(2026, 7, 18)))  # Saturday
+        w = run_window((time(9, 15), time(15, 30)))  # a regular session's hours
+        assert not _in_session(at(9, 14), DAY, w)
+        assert _in_session(at(9, 15), DAY, w)
+        assert _in_session(at(15, 35), DAY, w)  # +5 min drain grace
+        assert not _in_session(at(15, 36), DAY, w)
+        # A plain Saturday has no session, so the CALENDAR gives no window (2026-10-04: this
+        # used to be a weekday rule — see test_provisional_session_window.py for the real
+        # calendar cases, incl. a weekend session that RUNS).
+        sat = date(2026, 7, 18)
+        assert not _in_session(at(11, 0, sat), sat, run_window(None))
 
 
 # ── Forming daily bar (own-bars principle) ────────────────────────────────────

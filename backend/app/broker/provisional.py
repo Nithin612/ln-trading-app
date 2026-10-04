@@ -80,7 +80,7 @@ import logging
 import threading
 import time as time_mod
 from dataclasses import dataclass, field
-from datetime import UTC, date, datetime, time
+from datetime import UTC, date, datetime, time, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Any
 from zoneinfo import ZoneInfo
@@ -97,8 +97,12 @@ log = logging.getLogger(__name__)
 
 _IST = ZoneInfo("Asia/Kolkata")
 
-# Session window for provisional cycles (worker-local canon; +5 min drain
-# grace past close so the last forming bars still converge on screen).
+# The run window is the CALENDAR's session for the day (open → close + a drain grace, so the
+# last forming bars still converge on screen) — resolved once per run, since one process is
+# one session day. It used to be a weekday wall-clock rule, so the layer stayed dark through
+# NSE weekend sessions (2026-02-01 was a Sunday) and ran on weekday holidays (2026-10-04).
+_DRAIN_GRACE = timedelta(minutes=5)
+# The regular window — used ONLY as the fallback when the calendar cannot be read.
 _RUN_FROM = time(9, 15)
 _RUN_UNTIL = time(15, 35)
 
@@ -135,11 +139,50 @@ _UNIVERSE_TTL_S = 600.0
 _FLOWS_TTL_S = 60.0
 
 
-def _in_session(now_utc: datetime) -> bool:
-    now_ist = now_utc.astimezone(_IST)
-    if now_ist.weekday() > 4:
+def run_window(hours: tuple[time, time] | None) -> tuple[time, time] | None:
+    """Session hours (`market_calendar.session_hours`) → the provisional run window.
+    None = not a trading day = the layer stays dark.
+
+    ⚠ The window is only as wide as the HOST lets it be: `live_worker` still runs the regular
+    09:15–15:30 shape (its book bounds and `_run_until_done`), so a weekend session at regular
+    hours runs end to end but an evening muhurat does not yet (bug-hunter 2026-10-04)."""
+    if hours is None:
+        return None
+    open_ist, close_ist = hours
+    if open_ist >= close_ist:
+        # A special session recorded with only ONE of its hours resolves to e.g. 18:00→15:30 —
+        # an inverted window that would be silently dark. Say so, and run the regular shape.
+        log.warning("provisional: inverted session hours %s — using the regular window", hours)
+        return (_RUN_FROM, _RUN_UNTIL)
+    until = datetime.combine(date(2000, 1, 1), close_ist) + _DRAIN_GRACE
+    # Clamp at midnight: `time` arithmetic would WRAP (23:57 + 5 min = 00:02, open > until).
+    return open_ist, until.time() if until.date() == date(2000, 1, 1) else time.max
+
+
+def _fallback_window(day: date) -> tuple[time, time] | None:
+    """The old weekday rule — only when the calendar is unreadable, so a DB blip at start
+    never silently darkens a regular session."""
+    return (_RUN_FROM, _RUN_UNTIL) if day.weekday() < 5 else None
+
+
+def _in_session(now_utc: datetime, day: date, window: tuple[time, time] | None) -> bool:
+    """Inside THIS run's session day and its window. A different IST date is outside by
+    definition — the window was resolved for `day` only."""
+    if window is None:
         return False
-    return _RUN_FROM <= now_ist.timetz().replace(tzinfo=None) <= _RUN_UNTIL
+    now_ist = now_utc.astimezone(_IST)
+    if now_ist.date() != day:
+        return False
+    return window[0] <= now_ist.time() <= window[1]
+
+
+async def _todays_window(engine: Any, day: date) -> tuple[time, time] | None:
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    from app.services.market_calendar import session_hours
+
+    async with AsyncSession(engine) as db:
+        return run_window(await session_hours(db, day))
 
 
 def _money_f(raw: int) -> float:
@@ -1194,7 +1237,16 @@ def run_provisional(book: Any, stop: threading.Event) -> None:
     cadence = float(settings.live_provisional_refresh_s)
     # One process = one session day (`_run_until_done` bounds it), so the day
     # is resolved once; a restart resumes the SAME key's counters.
-    day = datetime.now(tz=UTC).astimezone(_IST).date().isoformat()
+    session_day = datetime.now(tz=UTC).astimezone(_IST).date()
+    day = session_day.isoformat()
+    try:
+        window = loop_holder.run_until_complete(_todays_window(engine, session_day))
+    except Exception:
+        log.warning(
+            "provisional: calendar unreadable — falling back to the weekday rule", exc_info=True
+        )
+        window = _fallback_window(session_day)
+    log.info("provisional: session window for %s: %s", day, window)
     (
         cycles,
         overruns,
@@ -1214,7 +1266,7 @@ def run_provisional(book: Any, stop: threading.Event) -> None:
         # is between cycle STARTS (the documented contract); an overrun
         # clamps to 0 and the next cycle simply starts late — never queued.
         while not stop.wait(delay):
-            if not _in_session(datetime.now(tz=UTC)):
+            if not _in_session(datetime.now(tz=UTC), session_day, window):
                 delay = cadence
                 continue
             started = time_mod.monotonic()
